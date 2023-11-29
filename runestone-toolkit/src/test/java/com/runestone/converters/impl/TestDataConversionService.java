@@ -4,7 +4,6 @@ import com.runestone.converters.DataConversionService;
 import com.runestone.converters.NoDataConverterFoundException;
 import org.assertj.core.api.Assertions;
 import org.assertj.core.api.Condition;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -48,7 +47,6 @@ public class TestDataConversionService {
     }
 
     @Test
-    @Disabled("This test needs the VM parameters '-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true' on JDK 21")
     public void testDelegateDataConversionService() {
         DataConversionService delegate = Mockito.mock(DataConversionService.class);
         Mockito.when(delegate.convert(delegate.getClass(), Integer.class)).thenReturn(123);
