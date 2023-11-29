@@ -1,0 +1,169 @@
+package com.runestone.expeval.operation.values;
+
+import com.runestone.expeval.expression.Expression;
+import com.runestone.expeval.tools.VerifyExpressionsTools;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZonedDateTime;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Supplier;
+
+public class TestOperationsWithVariables {
+
+    @Test
+    public void testNumberVariables() {
+        Expression expression = new Expression("a + 2");
+        VerifyExpressionsTools.checkWarmUpCache(expression, 1);
+        Assertions.assertThat(expression.toString()).isEqualTo("a + 2");
+        expression.setVariable("a", 1);
+        Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("3");
+        Assertions.assertThat(expression.toString()).isEqualTo("1 + 2");
+        VerifyExpressionsTools.commonVerifications(expression);
+        VerifyExpressionsTools.checkCache(expression, 4);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 4);
+    }
+
+    @Test
+    public void testNegativeNumberVariables() {
+        Expression expression = new Expression("-a + 2");
+        VerifyExpressionsTools.checkWarmUpCache(expression, 1);
+        Assertions.assertThat(expression.toString()).isEqualTo("-a + 2");
+        expression.setVariable("a", 1);
+        Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("1");
+        Assertions.assertThat(expression.toString()).isEqualTo("-1 + 2");
+        VerifyExpressionsTools.commonVerifications(expression);
+        VerifyExpressionsTools.checkCache(expression, 5);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 5);
+    }
+
+    @Test
+    public void testBooleanVariables() {
+        Expression expression = new Expression("a and false");
+        VerifyExpressionsTools.checkWarmUpCache(expression, 1);
+        Assertions.assertThat(expression.toString()).isEqualTo("a and false");
+        expression.setVariable("a", true);
+        Assertions.assertThat(expression.<Boolean>evaluate()).isFalse();
+        Assertions.assertThat(expression.toString()).isEqualTo("true and false");
+        VerifyExpressionsTools.commonVerifications(expression);
+        VerifyExpressionsTools.checkCache(expression, 4);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 4);
+    }
+
+    @Test
+    public void testStringVariables() {
+        Expression expression = new Expression("a = 'b'");
+        VerifyExpressionsTools.checkWarmUpCache(expression, 1);
+        Assertions.assertThat(expression.toString()).isEqualTo("a = 'b'");
+        expression.setVariable("a", "1");
+        Assertions.assertThat(expression.<Boolean>evaluate()).isFalse();
+        Assertions.assertThat(expression.toString()).isEqualTo("'1' = 'b'");
+        VerifyExpressionsTools.commonVerifications(expression);
+        VerifyExpressionsTools.checkCache(expression, 4);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 4);
+    }
+
+    @Test
+    public void testDateVariables() {
+        Expression expression = new Expression("a = 2000-01-01");
+        VerifyExpressionsTools.checkWarmUpCache(expression, 1);
+        Assertions.assertThat(expression.toString()).isEqualTo("a = 2000-01-01");
+        expression.setVariable("a", "2000-01-01");
+        Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
+        Assertions.assertThat(expression.toString()).isEqualTo("2000-01-01 = 2000-01-01");
+        VerifyExpressionsTools.commonVerifications(expression);
+        VerifyExpressionsTools.checkCache(expression, 4);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 4);
+    }
+
+    @Test
+    public void testTimeVariables() {
+        Expression expression = new Expression("a = 12:00:00");
+        VerifyExpressionsTools.checkWarmUpCache(expression, 1);
+        Assertions.assertThat(expression.toString()).isEqualTo("a = 12:00:00");
+        expression.setVariable("a", "12:00:00");
+        Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
+        Assertions.assertThat(expression.toString()).isEqualTo("12:00 = 12:00");
+        VerifyExpressionsTools.commonVerifications(expression);
+        VerifyExpressionsTools.checkCache(expression, 4);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 4);
+    }
+
+    @Test
+    public void testDateTimeVariables() {
+        Expression expression = new Expression("a = 2000-01-01T12:00:00");
+        VerifyExpressionsTools.checkWarmUpCache(expression, 1);
+        Assertions.assertThat(expression.toString()).isEqualTo("a = 2000-01-01T12:00:00");
+        expression.setVariable("a", ZonedDateTime.of(LocalDate.parse("2000-01-01"), LocalTime.parse("12:00:00"), expression.getOptions().zoneId()));
+        Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
+        Assertions.assertThat(expression.toString()).isEqualTo("2000-01-01T12:00:00 = 2000-01-01T12:00:00");
+        VerifyExpressionsTools.commonVerifications(expression);
+        VerifyExpressionsTools.checkCache(expression, 4);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 4);
+    }
+
+    @Test
+    public void testSupplierVariable() {
+        Expression exp1 = new Expression("a + 2");
+        VerifyExpressionsTools.checkWarmUpCache(exp1, 1);
+        exp1.setVariableProvider("a", () -> 1);
+        Assertions.assertThat(exp1.<BigDecimal>evaluate()).isEqualByComparingTo("3");
+        Assertions.assertThat(exp1.toString()).isEqualTo("1 + 2");
+        VerifyExpressionsTools.commonVerifications(exp1);
+        VerifyExpressionsTools.checkCache(exp1, 4);
+        VerifyExpressionsTools.checkWarmUpCache(exp1, 4);
+
+        Expression exp2 = new Expression("a + 2");
+        VerifyExpressionsTools.checkWarmUpCache(exp2, 1);
+        exp2.setVariableProvider("a", c -> 1);
+        Assertions.assertThat(exp2.<BigDecimal>evaluate()).isEqualByComparingTo("3");
+        Assertions.assertThat(exp2.toString()).isEqualTo("1 + 2");
+        VerifyExpressionsTools.commonVerifications(exp2);
+        VerifyExpressionsTools.checkCache(exp2, 4);
+        VerifyExpressionsTools.checkWarmUpCache(exp2, 4);
+    }
+
+    @Test
+    public void testVariableMapWithSuppliers() {
+        Expression expression = new Expression("a + b + c + 4");
+        VerifyExpressionsTools.checkWarmUpCache(expression, 1);
+
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("a", 1);
+        variables.put("b", (Supplier<Object>) () -> 2);
+        variables.put("c", (VariableProvider) c -> 3);
+        expression.setVariables(variables);
+
+        Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("10");
+        Assertions.assertThat(expression.toString()).isEqualTo("1 + 2 + 3 + 4");
+        VerifyExpressionsTools.commonVerifications(expression);
+        VerifyExpressionsTools.checkCache(expression, 8);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 8);
+    }
+
+    @Test
+    public void testVariableArray() {
+        Expression exp1 = new Expression("max(array)");
+        VerifyExpressionsTools.checkWarmUpCache(exp1, 0);
+        exp1.setVariable("array", new BigDecimal[]{BigDecimal.valueOf(1), BigDecimal.valueOf(2), BigDecimal.valueOf(3)});
+        Assertions.assertThat(exp1.<BigDecimal>evaluate()).isEqualByComparingTo("3");
+        Assertions.assertThat(exp1.toString()).isEqualTo("max([1, 2, 3])");
+        VerifyExpressionsTools.commonVerifications(exp1);
+        VerifyExpressionsTools.checkCache(exp1, 3);
+        VerifyExpressionsTools.checkWarmUpCache(exp1, 3);
+
+        Expression exp2 = new Expression("max(array)");
+        VerifyExpressionsTools.checkWarmUpCache(exp2, 0);
+        exp2.setVariable("array", new BigDecimal[]{BigDecimal.valueOf(1), BigDecimal.valueOf(2), BigDecimal.valueOf(3), BigDecimal.valueOf(4), BigDecimal.valueOf(5)});
+        Assertions.assertThat(exp2.<BigDecimal>evaluate()).isEqualByComparingTo("5");
+        Assertions.assertThat(exp2.toString()).isEqualTo("max([1, 2 .. 4, 5])");
+        VerifyExpressionsTools.commonVerifications(exp2);
+        VerifyExpressionsTools.checkCache(exp2, 3);
+        VerifyExpressionsTools.checkWarmUpCache(exp2, 3);
+    }
+
+}
