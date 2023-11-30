@@ -11,7 +11,7 @@ import java.math.MathContext;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
-public class TestOperationCallSiteFactory {
+public class TestOperationCallSite {
 
     private static final DataConversionService cs = new DefaultDataConversionService();
     private static final CallSiteContext context = new CallSiteContext(MathContext.DECIMAL64, null, ZoneId.systemDefault(), ZonedDateTime::now);
