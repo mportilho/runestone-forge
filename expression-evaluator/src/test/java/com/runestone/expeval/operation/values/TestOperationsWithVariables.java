@@ -149,7 +149,7 @@ public class TestOperationsWithVariables {
     public void testVariableArray() {
         Expression exp1 = new Expression("max(array)");
         VerifyExpressionsTools.checkWarmUpCache(exp1, 0);
-        exp1.setVariable("array", new BigDecimal[]{BigDecimal.valueOf(1), BigDecimal.valueOf(2), BigDecimal.valueOf(3)});
+        exp1.setVariable("array", new int[]{1, 2, 3});
         Assertions.assertThat(exp1.<BigDecimal>evaluate()).isEqualByComparingTo("3");
         Assertions.assertThat(exp1.toString()).isEqualTo("max([1, 2, 3])");
         VerifyExpressionsTools.commonVerifications(exp1);

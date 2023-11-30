@@ -58,7 +58,7 @@ public class OperationCallSite {
         Object[] params;
         Objects.requireNonNull(context, "CallSite context cannot be null");
         if (methodType.parameterCount() == 1 && methodType.lastParameterType().getComponentType() != null
-                && (parameters.length > 1 || (parameters.length == 1 && !(parameters[0] instanceof Object[])))) {
+                && (parameters.length > 1 || (parameters.length == 1 && !(parameters[0].getClass().isArray())))) {
             params = new Object[]{parameters};
         } else {
             params = parameters;
