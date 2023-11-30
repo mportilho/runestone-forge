@@ -2,6 +2,7 @@ package com.runestone.expeval.support.callsite;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.expeval.support.functions.others.ComparableFunctions;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -56,6 +57,12 @@ public class TestOperationCallSite {
         MethodType methodType = MethodType.methodType(BigDecimal.class, BigDecimal[].class, BigDecimal.class, BigDecimal.class);
         OperationCallSite callSite = new OperationCallSite("adder", methodType, p -> ((BigDecimal[]) p[0])[0].add(((BigDecimal[]) p[0])[1]).add((BigDecimal) p[1]).add((BigDecimal) p[2]));
         Assertions.assertThat(callSite.<BigDecimal>call(context, new Object[]{new float[]{1, 2}, 3, 4}, cs::convert)).isEqualByComparingTo("10");
+    }
+
+    @Test
+    public void testConversionWithVargs() {
+        OperationCallSite callSite = OperationCallSiteFactory.createLambdaCallSites(ComparableFunctions.class, "max").values().stream().findFirst().orElseThrow();
+        Assertions.assertThat(callSite.<Float>call(context, new Object[]{new float[]{1, 2, 3, 4}}, cs::convert)).isEqualTo(4);
     }
 
 }
