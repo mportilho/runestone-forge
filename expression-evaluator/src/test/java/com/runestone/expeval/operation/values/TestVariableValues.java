@@ -13,7 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
-public class TestOperationsWithVariables {
+public class TestVariableValues {
 
     @Test
     public void testNumberVariables() {
@@ -107,24 +107,27 @@ public class TestOperationsWithVariables {
     }
 
     @Test
-    public void testSupplierVariable() {
-        Expression exp1 = new Expression("a + 2");
-        VerifyExpressionsTools.checkWarmUpCache(exp1, 1);
-        exp1.setVariableProvider("a", () -> 1);
-        Assertions.assertThat(exp1.<BigDecimal>evaluate()).isEqualByComparingTo("3");
-        Assertions.assertThat(exp1.toString()).isEqualTo("1 + 2");
-        VerifyExpressionsTools.commonVerifications(exp1);
-        VerifyExpressionsTools.checkCache(exp1, 4);
-        VerifyExpressionsTools.checkWarmUpCache(exp1, 4);
+    public void testVariableSupplier() {
+        Expression expression = new Expression("a + 2");
+        VerifyExpressionsTools.checkWarmUpCache(expression, 1);
+        expression.setVariableProvider("a", c -> 1);
+        Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("3");
+        Assertions.assertThat(expression.toString()).isEqualTo("1 + 2");
+        VerifyExpressionsTools.commonVerifications(expression);
+        VerifyExpressionsTools.checkCache(expression, 4);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 4);
+    }
 
-        Expression exp2 = new Expression("a + 2");
-        VerifyExpressionsTools.checkWarmUpCache(exp2, 1);
-        exp2.setVariableProvider("a", c -> 1);
-        Assertions.assertThat(exp2.<BigDecimal>evaluate()).isEqualByComparingTo("3");
-        Assertions.assertThat(exp2.toString()).isEqualTo("1 + 2");
-        VerifyExpressionsTools.commonVerifications(exp2);
-        VerifyExpressionsTools.checkCache(exp2, 4);
-        VerifyExpressionsTools.checkWarmUpCache(exp2, 4);
+    @Test
+    public void testGenericVariableSupplier() {
+        Expression expression = new Expression("a + 2");
+        VerifyExpressionsTools.checkWarmUpCache(expression, 1);
+        expression.setVariableProvider("a", () -> 1);
+        Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("3");
+        Assertions.assertThat(expression.toString()).isEqualTo("1 + 2");
+        VerifyExpressionsTools.commonVerifications(expression);
+        VerifyExpressionsTools.checkCache(expression, 4);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 4);
     }
 
     @Test
