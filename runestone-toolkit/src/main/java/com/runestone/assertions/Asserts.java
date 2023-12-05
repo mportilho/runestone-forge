@@ -138,18 +138,18 @@ public class Asserts {
     }
 
     /**
-     * Compares two values and return true if they are both null or non null
+     * Compares two values and return true if they are both null or non-null
      *
      * @param first  the first value
      * @param second the second value
-     * @return true if they are both null or non null
+     * @return true if they are both null or non-null
      */
     public static boolean isBothNullOrNonNUll(Object first, Object second) {
         return (first == null && second == null) || (first != null && second != null);
     }
 
     /**
-     * Asserts a array of objects and returns true if only one of them is not null
+     * Asserts an array of objects and returns true if only one of them is not null
      *
      * @param array array of objects
      * @return true if only one of them is not null

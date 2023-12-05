@@ -101,7 +101,7 @@ public class TestMemoizedExpiringFunction {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
 
         Assertions.assertThatThrownBy(() -> function.apply("123")).isInstanceOf(RuntimeException.class);
@@ -135,7 +135,7 @@ public class TestMemoizedExpiringFunction {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
         Assertions.assertThat(function.apply("123")).isEqualTo(123);
         Assertions.assertThat(counter.get()).isEqualTo(2);
@@ -145,7 +145,7 @@ public class TestMemoizedExpiringFunction {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
 
         Assertions.assertThat(function.apply("123")).isEqualTo(123);
@@ -186,7 +186,7 @@ public class TestMemoizedExpiringFunction {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
         Assertions.assertThat(function.apply("123")).isEqualTo(123);
         Assertions.assertThat(counter.get()).isEqualTo(5);
@@ -207,7 +207,7 @@ public class TestMemoizedExpiringFunction {
             try {
                 Thread.sleep(800);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                throw new RuntimeException("Error on test", e);
             }
             return Integer.parseInt(s);
         }, 2, TimeUnit.SECONDS);
@@ -225,7 +225,7 @@ public class TestMemoizedExpiringFunction {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
 
         Assertions.assertThat(function.apply("123")).isEqualTo(123);

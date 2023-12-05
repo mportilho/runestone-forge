@@ -56,15 +56,6 @@ public class TestSpreadFunction {
                 BigDecimal.ONE,
                 new BigDecimal[]{new BigDecimal("10"), new BigDecimal("114.22"), new BigDecimal("1053.25")});
         Assertions.assertThat(result).containsExactly(new BigDecimal("8.08"), new BigDecimal("92.29"), new BigDecimal("851.04"));
-
-
-//        BigDecimal[] valoresDistribuidos = CalculoUtils.distribuirSaldo(new BigDecimal("951.41"),
-//                new BigDecimal[]{new BigDecimal("10"), new BigDecimal("114.22"), new BigDecimal("1053.25")});
-//
-//        Assertions.assertThat(valoresDistribuidos[0]).as("principal").isEqualTo(new BigDecimal("8.08"));
-//        Assertions.assertThat(valoresDistribuidos[1]).as("correcao").isEqualTo(new BigDecimal("92.29"));
-//        Assertions.assertThat(valoresDistribuidos[2]).as("juros").isEqualTo(new BigDecimal("851.04"));
-//        Assertions.assertThat(valoresDistribuidos[3]).as("resto").isEqualTo(new BigDecimal("0.00"));
     }
 
     @Test

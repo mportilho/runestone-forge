@@ -105,7 +105,7 @@ public class TestMemoizedExpiringBiFunction {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
 
         Assertions.assertThatThrownBy(() -> function.apply("123", "456")).isInstanceOf(RuntimeException.class);
@@ -138,7 +138,7 @@ public class TestMemoizedExpiringBiFunction {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
         Assertions.assertThat(function.apply("123", "456")).isEqualTo("123456");
         Assertions.assertThat(counter.get()).isEqualTo(2);
@@ -148,7 +148,7 @@ public class TestMemoizedExpiringBiFunction {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
 
         Assertions.assertThat(function.apply("123", "456")).isEqualTo("123456");
@@ -188,7 +188,7 @@ public class TestMemoizedExpiringBiFunction {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
         Assertions.assertThat(function.apply("123", "456")).isEqualTo("123456");
         Assertions.assertThat(counter.get()).isEqualTo(5);
@@ -209,7 +209,7 @@ public class TestMemoizedExpiringBiFunction {
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                throw new RuntimeException("Error on test", e);
             }
             return s1 + s2;
         }, 2, TimeUnit.SECONDS);
@@ -225,7 +225,7 @@ public class TestMemoizedExpiringBiFunction {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
         Assertions.assertThat(function.apply("123", "456")).isEqualTo("123456");
         Assertions.assertThat(counter.get()).isEqualTo(2);
@@ -235,7 +235,7 @@ public class TestMemoizedExpiringBiFunction {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
 
         Assertions.assertThat(function.apply("123", "456")).isEqualTo("123456");

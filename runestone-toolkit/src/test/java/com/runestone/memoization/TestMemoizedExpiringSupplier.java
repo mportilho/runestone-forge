@@ -50,7 +50,7 @@ public class TestMemoizedExpiringSupplier {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
         Assertions.assertThat(supplier.get()).isEqualTo("Hello World");
         Assertions.assertThat(counter.get()).isEqualTo(2);
@@ -60,7 +60,7 @@ public class TestMemoizedExpiringSupplier {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
 
         Assertions.assertThat(supplier.get()).isEqualTo("Hello World");
@@ -93,7 +93,7 @@ public class TestMemoizedExpiringSupplier {
         try {
             Thread.sleep(1500);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
         Assertions.assertThat(supplier.get()).isEqualTo("Hello World");
         Assertions.assertThat(counter.get()).isEqualTo(5);
@@ -109,7 +109,7 @@ public class TestMemoizedExpiringSupplier {
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                throw new RuntimeException("Error on test", e);
             }
             return "Hello World";
         }, 2, TimeUnit.SECONDS);
@@ -127,7 +127,7 @@ public class TestMemoizedExpiringSupplier {
         try {
             Thread.sleep(2100);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Error on test", e);
         }
 
         Assertions.assertThat(supplier.get()).isEqualTo("Hello World");

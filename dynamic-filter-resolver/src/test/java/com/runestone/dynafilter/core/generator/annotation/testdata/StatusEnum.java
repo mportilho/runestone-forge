@@ -26,6 +26,6 @@ package com.runestone.dynafilter.core.generator.annotation.testdata;
 
 public enum StatusEnum {
 
-	OK, ERROR;
-	
+    OK, ERROR
+
 }

@@ -33,8 +33,8 @@ import java.util.Objects;
 
 public class MultiArgsConstructorFilterDecorator implements FilterDecorator<String> {
 
-    private ApplicationContext applicationContext;
-    private BeanFactory beanFactory;
+    private final ApplicationContext applicationContext;
+    private final BeanFactory beanFactory;
 
     public MultiArgsConstructorFilterDecorator(ApplicationContext applicationContext, BeanFactory beanFactory) {
         this.applicationContext = Objects.requireNonNull(applicationContext);

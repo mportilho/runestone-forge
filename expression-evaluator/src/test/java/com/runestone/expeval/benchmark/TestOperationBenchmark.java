@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit;
 public class TestOperationBenchmark {
 
     private Expression expression;
-    ExpressionContext context = new ExpressionContext();
+    private final ExpressionContext context = new ExpressionContext();
     private final Random random = new Random(System.nanoTime());
 
     @Param({"10", "100", "1000"})
@@ -66,8 +66,8 @@ public class TestOperationBenchmark {
     @Benchmark
     @BenchmarkMode(Mode.Throughput)
     @Fork(warmups = 1, value = 1)
-    @Warmup(batchSize = -1, iterations = 3, time = 50, timeUnit = TimeUnit.SECONDS)
-    @Measurement(batchSize = -1, iterations = 5, time = 100, timeUnit = TimeUnit.SECONDS)
+    @Warmup(iterations = 3, time = 50)
+    @Measurement(iterations = 5, time = 100)
     @OutputTimeUnit(TimeUnit.SECONDS)
     public void invocation() {
         expression.evaluate();

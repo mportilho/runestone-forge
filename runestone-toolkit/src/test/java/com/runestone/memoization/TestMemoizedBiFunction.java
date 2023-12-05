@@ -108,7 +108,7 @@ public class TestMemoizedBiFunction {
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                throw new RuntimeException("Error on test", e);
             }
             return s1 + s2;
         });
