@@ -2,8 +2,6 @@ package com.runestone.expeval.support.callsite.extensions;
 
 import com.runestone.expeval.support.callsite.OperationCallSite;
 import com.runestone.expeval.support.functions.math.ExcelFinancialFunctions;
-import com.runestone.expeval.support.functions.math.xirr.Transaction;
-import com.runestone.expeval.support.functions.math.xirr.Xirr;
 
 import java.lang.invoke.MethodType;
 import java.math.BigDecimal;
@@ -304,20 +302,6 @@ class FinancialFormulasExtension {
                         (BigDecimal) parameters[2],
                         context.mathContext()
                 ));
-        extensions.put(callSite.getKeyName(), callSite);
-
-        callSite = new OperationCallSite("xirr",
-                MethodType.methodType(BigDecimal.class, BigDecimal[].class, ZonedDateTime[].class, BigDecimal.class),
-                (context, parameters) -> {
-                    BigDecimal[] values = (BigDecimal[]) parameters[0];
-                    ZonedDateTime[] dates = (ZonedDateTime[]) parameters[1];
-                    Transaction[] transactions = new Transaction[values.length];
-                    for (int i = 0; i < transactions.length; i++) {
-                        transactions[i] = new Transaction(values[i].doubleValue(), dates[i].toInstant());
-                    }
-                    return Xirr.builder().withTransactions(transactions)
-                            .withGuess(((BigDecimal) parameters[2]).doubleValue()).xirr();
-                });
         extensions.put(callSite.getKeyName(), callSite);
 
         return extensions;
