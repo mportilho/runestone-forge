@@ -18,7 +18,7 @@ public class MemoizedExpiringSupplier<T> implements Supplier<T> {
     private transient T cache;
     private final long durationNanos;
     private transient volatile long expirationNanos;
-    private final ReentrantLock lock = new ReentrantLock();
+    private volatile ReentrantLock reentrantLock;
 
     /**
      * Creates a new {@link MemoizedExpiringSupplier} instance that caches the result of the delegate supplier for the
@@ -41,6 +41,7 @@ public class MemoizedExpiringSupplier<T> implements Supplier<T> {
         long nanos = expirationNanos;
         long now = System.nanoTime();
         if (nanos == 0 || now - nanos >= 0) {
+            ReentrantLock lock = getReentrantLock();
             lock.lock();
             try {
                 if (nanos == expirationNanos) {
@@ -55,6 +56,17 @@ public class MemoizedExpiringSupplier<T> implements Supplier<T> {
             }
         }
         return cache;
+    }
+
+    private ReentrantLock getReentrantLock() {
+        if (reentrantLock == null) {
+            synchronized (this) {
+                if (reentrantLock == null) {
+                    reentrantLock = new ReentrantLock();
+                }
+            }
+        }
+        return reentrantLock;
     }
 
 }

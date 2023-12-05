@@ -2,6 +2,7 @@ package com.runestone.memoization;
 
 import java.util.Objects;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 /**
@@ -16,7 +17,8 @@ import java.util.function.Function;
 public class MemoizedFunction<T, R> implements Function<T, R> {
 
     private final Function<T, R> delegate;
-    private final ConcurrentMap<T, Future<R>> cache = new ConcurrentHashMap<>(128);
+    private ConcurrentMap<T, Future<R>> cache;
+    private final ReentrantLock lock = new ReentrantLock();
     private final boolean retryOnError;
 
     /**
@@ -41,6 +43,16 @@ public class MemoizedFunction<T, R> implements Function<T, R> {
 
     @Override
     public R apply(T t) {
+        if (cache == null) {
+            lock.lock();
+            try {
+                if (cache == null) {
+                    cache = new ConcurrentHashMap<>(128);
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
         try {
             return applyAsync(t);
         } catch (InterruptedException e) {

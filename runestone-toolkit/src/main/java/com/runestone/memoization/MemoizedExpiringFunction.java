@@ -2,6 +2,7 @@ package com.runestone.memoization;
 
 import java.util.Objects;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 /**
@@ -15,9 +16,10 @@ import java.util.function.Function;
 public class MemoizedExpiringFunction<T, R> implements Function<T, R> {
 
     private final Function<T, R> delegate;
-    private final ConcurrentMap<T, CacheEntry<R>> cache = new ConcurrentHashMap<>(128);
+    private ConcurrentMap<T, CacheEntry<R>> cache;
     private final long durationMillis;
     private final boolean retryOnError;
+    private final ReentrantLock lock = new ReentrantLock();
 
     /**
      * Creates a new {@link MemoizedExpiringFunction} instance.
@@ -49,6 +51,16 @@ public class MemoizedExpiringFunction<T, R> implements Function<T, R> {
 
     @Override
     public R apply(T t) {
+        if (cache == null) {
+            lock.lock();
+            try {
+                if (cache == null) {
+                    cache = new ConcurrentHashMap<>(128);
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
         try {
             return applyWithExpiry(t);
         } catch (InterruptedException e) {

@@ -16,7 +16,7 @@ public class MemoizedSupplier<T> implements Supplier<T> {
     private Supplier<T> delegate;
     private volatile boolean initialized;
     private T cache;
-    private final ReentrantLock lock = new ReentrantLock();
+    private volatile ReentrantLock reentrantLock;
 
     /**
      * Creates a new {@link MemoizedSupplier} instance that caches the result of the delegate supplier.
@@ -30,6 +30,7 @@ public class MemoizedSupplier<T> implements Supplier<T> {
     @Override
     public T get() {
         if (!initialized) {
+            ReentrantLock lock = getReentrantLock();
             lock.lock();
             try {
                 if (!initialized) {
@@ -41,9 +42,21 @@ public class MemoizedSupplier<T> implements Supplier<T> {
                 }
             } finally {
                 lock.unlock();
+                this.reentrantLock = null; // to GC
             }
         }
         return cache;
+    }
+
+    private ReentrantLock getReentrantLock() {
+        if (reentrantLock == null) {
+            synchronized (this) {
+                if (reentrantLock == null) {
+                    reentrantLock = new ReentrantLock();
+                }
+            }
+        }
+        return reentrantLock;
     }
 
 }

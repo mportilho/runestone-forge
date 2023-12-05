@@ -1,6 +1,7 @@
 package com.runestone.memoization;
 
 import java.util.concurrent.*;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
 
 /**
@@ -15,8 +16,9 @@ import java.util.function.BiFunction;
 public class MemoizedBiFunction<T, U, R> implements BiFunction<T, U, R> {
 
     private final BiFunction<T, U, R> delegate;
-    private final ConcurrentMap<BiParameter, Future<R>> cache = new ConcurrentHashMap<>(128);
+    private ConcurrentMap<BiParameter, Future<R>> cache;
     private final boolean retryOnError;
+    private final ReentrantLock lock = new ReentrantLock();
 
     /**
      * Creates a new {@link MemoizedBiFunction} instance that caches the result of the delegate function.
@@ -40,6 +42,16 @@ public class MemoizedBiFunction<T, U, R> implements BiFunction<T, U, R> {
 
     @Override
     public R apply(T t, U u) {
+        if (cache == null) {
+            lock.lock();
+            try {
+                if (cache == null) {
+                    cache = new ConcurrentHashMap<>(128);
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
         try {
             return applyAsync(t, u);
         } catch (InterruptedException e) {

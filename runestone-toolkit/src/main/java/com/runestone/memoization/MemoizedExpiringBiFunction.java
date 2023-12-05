@@ -2,6 +2,7 @@ package com.runestone.memoization;
 
 import java.util.Objects;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
 
 /**
@@ -17,9 +18,10 @@ import java.util.function.BiFunction;
 public class MemoizedExpiringBiFunction<T, U, R> implements BiFunction<T, U, R> {
 
     private final BiFunction<T, U, R> delegate;
-    private final ConcurrentMap<BiParameter, CacheEntry<R>> cache = new ConcurrentHashMap<>(128);
+    private ConcurrentMap<BiParameter, CacheEntry<R>> cache;
     private final long durationMillis;
     private final boolean retryOnError;
+    private final ReentrantLock lock = new ReentrantLock();
 
     /**
      * Creates a new {@link MemoizedExpiringBiFunction} instance.
@@ -51,6 +53,16 @@ public class MemoizedExpiringBiFunction<T, U, R> implements BiFunction<T, U, R> 
 
     @Override
     public R apply(T t, U u) {
+        if (cache == null) {
+            lock.lock();
+            try {
+                if (cache == null) {
+                    cache = new ConcurrentHashMap<>(128);
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
         try {
             return applyAsync(t, u);
         } catch (InterruptedException e) {
