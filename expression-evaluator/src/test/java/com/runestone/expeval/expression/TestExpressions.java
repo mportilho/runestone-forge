@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.invoke.MethodType;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Map;
 
 public class TestExpressions {
@@ -55,11 +56,36 @@ public class TestExpressions {
     }
 
     @Test
-    public void test() {
+    public void testUnknownTypeWithNumbers() {
         Expression expression = new Expression("a = b");
         expression.setVariable("a", 1);
         expression.setVariable("b", 2);
         Assertions.assertThat(expression.<Boolean>evaluate()).isFalse();
+    }
+
+    @Test
+    public void testUnknownTypeWithBooleans() {
+        Expression expression = new Expression("a = b");
+        expression.setVariable("a", true);
+        expression.setVariable("b", true);
+        Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
+    }
+
+    @Test
+    public void testUnknownTypeWithStrings() {
+        Expression expression = new Expression("a = b");
+        expression.setVariable("a", "abc");
+        expression.setVariable("b", "abc");
+        Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
+    }
+
+    @Test
+    public void testUnknownTypeWithLocalDate() {
+        LocalDate now = LocalDate.now();
+        Expression expression = new Expression("a = b");
+        expression.setVariable("a", now);
+        expression.setVariable("b", now);
+        Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
     }
 
 }

@@ -41,7 +41,7 @@ import java.time.ZoneId;
  */
 public record ExpressionOptions(MathContext mathContext, Integer scale, DataConversionService conversionService, ZoneId zoneId) {
 
-    private static final DataConversionService DEFAULT_CONVERSION_SERVICE = new DefaultDataConversionService();
+    private static final DataConversionService DEFAULT_CONVERSION_SERVICE = new DefaultDataConversionService(false);
 
     /**
      * Creates a new expression options with the given math context, scale, conversion service and zone id.

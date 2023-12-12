@@ -118,7 +118,20 @@ public abstract class AbstractOperation {
         if (this instanceof BaseOperation) {
             this.expectedTypeByValue(result, expectedType);
         } else if (result != null && !result.getClass().isArray() && !getExpectedType().isArray() && !getExpectedType().equals(result.getClass())) {
-            return context.conversionService().convert(result, getExpectedType());
+            Object convertedValue;
+            try {
+                convertedValue = context.conversionService().convert(result, getExpectedType());
+            } catch (Exception e) {
+                convertedValue = null;
+            }
+            if (convertedValue == null) {
+                expectedTypeByValue(result, expectedType);
+                convertedValue = context.conversionService().convert(result, getExpectedType());
+                if (convertedValue == null) {
+                    throw new ExpressionEvaluatorException(String.format("Cannot convert [%s] to [%s]", result.getClass(), getExpectedType()));
+                }
+            }
+            return convertedValue;
         }
         return result;
     }
@@ -204,20 +217,22 @@ public abstract class AbstractOperation {
      * @param value the current value
      */
     protected final void expectedTypeByValue(Object value, Class<?> defaultType) {
-        if (value instanceof Number) {
-            expectedType(BigDecimal.class);
-        } else if (value instanceof Boolean) {
-            expectedType(Boolean.class);
-        } else if (value instanceof String) {
-            expectedType(String.class);
-        } else if (value instanceof LocalDate) {
-            expectedType(LocalDate.class);
-        } else if (value instanceof LocalTime) {
-            expectedType(LocalTime.class);
-        } else if (value instanceof LocalDateTime || value instanceof ZonedDateTime) {
-            expectedType(ZonedDateTime.class);
-        } else {
-            expectedType(defaultType);
+        if (!this.expectedType.isInstance(value)) {
+            if (value instanceof Number) {
+                expectedType(BigDecimal.class);
+            } else if (value instanceof Boolean) {
+                expectedType(Boolean.class);
+            } else if (value instanceof String) {
+                expectedType(String.class);
+            } else if (value instanceof LocalDate) {
+                expectedType(LocalDate.class);
+            } else if (value instanceof LocalTime) {
+                expectedType(LocalTime.class);
+            } else if (value instanceof LocalDateTime || value instanceof ZonedDateTime) {
+                expectedType(ZonedDateTime.class);
+            } else {
+                expectedType(defaultType);
+            }
         }
     }
 

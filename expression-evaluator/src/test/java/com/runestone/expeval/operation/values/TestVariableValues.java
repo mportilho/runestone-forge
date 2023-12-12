@@ -92,7 +92,7 @@ public class TestVariableValues {
     }
 
     @Test
-    public void testDateVariables() {
+    public void testDateVariablesWithImplicitTypeConversion() {
         Expression expression = new Expression("a = 2000-01-01");
         VerifyExpressionsTools.checkWarmUpCache(expression, 1);
         Assertions.assertThat(expression.toString()).isEqualTo("a = 2000-01-01");
