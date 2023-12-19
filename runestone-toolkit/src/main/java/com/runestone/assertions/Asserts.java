@@ -144,7 +144,7 @@ public class Asserts {
      * @param second the second value
      * @return true if they are both null or non-null
      */
-    public static boolean isBothNullOrNonNUll(Object first, Object second) {
+    public static boolean isBothNullOrNonNull(Object first, Object second) {
         return (first == null && second == null) || (first != null && second != null);
     }
 

@@ -113,10 +113,10 @@ public class TestAsserts {
 
     @Test
     public void testIsBothNullOrNonNUll() {
-        Assertions.assertThat(Asserts.isBothNullOrNonNUll(null, null)).isTrue();
-        Assertions.assertThat(Asserts.isBothNullOrNonNUll(null, BigDecimal.ZERO)).isFalse();
-        Assertions.assertThat(Asserts.isBothNullOrNonNUll(BigDecimal.ZERO, null)).isFalse();
-        Assertions.assertThat(Asserts.isBothNullOrNonNUll(BigDecimal.ZERO, BigDecimal.ZERO)).isTrue();
+        Assertions.assertThat(Asserts.isBothNullOrNonNull(null, null)).isTrue();
+        Assertions.assertThat(Asserts.isBothNullOrNonNull(null, BigDecimal.ZERO)).isFalse();
+        Assertions.assertThat(Asserts.isBothNullOrNonNull(BigDecimal.ZERO, null)).isFalse();
+        Assertions.assertThat(Asserts.isBothNullOrNonNull(BigDecimal.ZERO, BigDecimal.ZERO)).isTrue();
     }
 
     @Test
