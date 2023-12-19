@@ -47,13 +47,6 @@ public class ExpressionContext {
     private Map<String, OperationCallSite> functions;
 
     /**
-     * Creates a empty expression context
-     */
-    public ExpressionContext() {
-        this(null, null, null);
-    }
-
-    /**
      * Creates an expression context. Null can be passed when a parameter is not required.
      *
      * @param variablesSupplier a supplier for variables by name
@@ -64,6 +57,17 @@ public class ExpressionContext {
         this.variablesSupplier = variablesSupplier;
         this.dictionary = dictionary;
         this.functions = functions == null ? null : functions.stream().collect(Collectors.toMap(OperationCallSite::getKeyName, Function.identity()));
+    }
+
+    /**
+     * Creates a empty expression context
+     */
+    public ExpressionContext() {
+        this(null, null, null);
+    }
+
+    public ExpressionContext(Map<String, OperationCallSite> functions) {
+        this.functions = functions;
     }
 
     /**

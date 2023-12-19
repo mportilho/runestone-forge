@@ -140,4 +140,30 @@ public class TestAssignedVectors {
                 3 + 6 + 9 + 2 + 2 + 3 + 5 + 20 + 1""");
     }
 
+    @Test
+    public void testAssignedVectorAsParameter() {
+        Expression expression = new Expression("""
+                [a, b, c] := spread(10, 1, [1, 2, 3]);
+                [x, y, z] := spread(20, 2, [a, b, c]);
+                """);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 17);
+        expression.evaluate();
+        Assertions.assertThat(expression.getVariables()).isEmpty();
+        Assertions.assertThat(expression.getAssignedVariables()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "a", BigDecimal.valueOf(2),
+                "b", BigDecimal.valueOf(3),
+                "c", BigDecimal.valueOf(5),
+                "x", BigDecimal.valueOf(4),
+                "y", BigDecimal.valueOf(6),
+                "z", BigDecimal.valueOf(10))
+
+        );
+        VerifyExpressionsTools.commonVerifications(expression);
+        VerifyExpressionsTools.checkCache(expression, 18);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 18);
+        Assertions.assertThat(expression.toString()).isEqualTo("""
+                [a, b, c] := spread(10, 1, [1, 2, 3]);
+                [x, y, z] := spread(20, 2, [2, 3, 5]);""");
+    }
+
 }

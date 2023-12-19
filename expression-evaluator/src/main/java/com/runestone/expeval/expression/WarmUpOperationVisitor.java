@@ -121,7 +121,11 @@ public class WarmUpOperationVisitor implements OperationVisitor<Object> {
 
     @Override
     public Object visit(AbstractVariableValueOperation operation) {
-        return operation.evaluate(context);
+        try {
+            return operation.evaluate(context);
+        } catch (NullPointerException e) {
+            return null;
+        }
     }
 
 }
