@@ -112,27 +112,33 @@ public class Expression {
      *
      * @param key   the name of the entry
      * @param value the value of the entry
+     * @return this expression
      */
-    public void addDictionaryEntry(String key, Object value) {
+    public Expression addDictionaryEntry(String key, Object value) {
         evaluator.getExpressionContext().putDictionaryEntry(key, value);
+        return this;
     }
 
     /**
      * Adds a dictionary of entries to the expression context. The dictionary cannot be null.
      *
      * @param dictionary the dictionary of entries
+     * @return this expression
      */
-    public void addDictionary(Map<String, Object> dictionary) {
+    public Expression addDictionary(Map<String, Object> dictionary) {
         evaluator.getExpressionContext().putDictionary(dictionary);
+        return this;
     }
 
     /**
      * Adds a new function to the expression context.
      *
      * @param function the function to be added
+     * @return this expression
      */
-    public void addFunction(OperationCallSite function) {
+    public Expression addFunction(OperationCallSite function) {
         evaluator.getExpressionContext().putFunction(function);
+        return this;
     }
 
     /**
@@ -149,9 +155,11 @@ public class Expression {
      * @param functionName the name of the function to be used in the expression
      * @param methodType   the method type of the function
      * @param function     the function implementation
+     * @return this expression
      */
-    public void addFunction(String functionName, MethodType methodType, Function<Object[], Object> function) {
+    public Expression addFunction(String functionName, MethodType methodType, Function<Object[], Object> function) {
         evaluator.getExpressionContext().putFunction(functionName, methodType, function);
+        return this;
     }
 
     /**
@@ -162,9 +170,11 @@ public class Expression {
      * If the provider is a {@link Class}, all public static methods will be added as functions.
      *
      * @param functionProvider the object containing the functions
+     * @return this expression
      */
-    public void addFunctionFromObject(Object functionProvider) {
+    public Expression addFunctionFromObject(Object functionProvider) {
         evaluator.getExpressionContext().putFunctionsFromProvider(functionProvider);
+        return this;
     }
 
     /**
@@ -172,17 +182,20 @@ public class Expression {
      *
      * @param variableName variable name
      * @param value        variable value
+     * @return this expression
      */
-    public void setVariable(String variableName, Object value) {
+    public Expression setVariable(String variableName, Object value) {
         evaluator.setVariable(variableName, value);
+        return this;
     }
 
     /**
      * Sets the variables to be used during the expression evaluation.
      *
      * @param variables variables to be set
+     * @return this expression
      */
-    public void setVariables(Map<String, Object> variables) {
+    public Expression setVariables(Map<String, Object> variables) {
         variables.forEach((name, value) -> {
             if (value instanceof VariableProvider variableProvider) {
                 setVariableProvider(name, variableProvider);
@@ -192,6 +205,7 @@ public class Expression {
                 setVariable(name, value);
             }
         });
+        return this;
     }
 
     /**
@@ -199,9 +213,10 @@ public class Expression {
      *
      * @param variableName variable name
      * @param provider     variable provider
+     * @return this expression
      */
-    public void setVariableProvider(String variableName, VariableProvider provider) {
-        setVariable(variableName, provider);
+    public Expression setVariableProvider(String variableName, VariableProvider provider) {
+        return setVariable(variableName, provider);
     }
 
     /**
@@ -209,9 +224,10 @@ public class Expression {
      *
      * @param variableName variable name
      * @param supplier     variable supplier
+     * @return this expression
      */
-    public void setVariableProvider(String variableName, Supplier<?> supplier) {
-        setVariable(variableName, (VariableProvider) context -> supplier.get());
+    public Expression setVariableProvider(String variableName, Supplier<?> supplier) {
+        return setVariable(variableName, (VariableProvider) context -> supplier.get());
     }
 
     /**
