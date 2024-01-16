@@ -64,7 +64,7 @@ public class TestJpaPredicateUtils {
             if (path instanceof AbstractSqmPath<Object> abstractSqmPath) {
                 Assertions.assertThat(abstractSqmPath.getLhs().getNodeType().getBindableJavaType()).isEqualTo(Person.class);
                 Assertions.assertThat(abstractSqmPath.getExpressible().getBindableJavaType()).isEqualTo(String.class);
-                Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces("name:String");
+                Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces(".name");
             }
             return builder.equal(root.get("name"), "John");
         };
@@ -81,7 +81,7 @@ public class TestJpaPredicateUtils {
             if (path instanceof AbstractSqmPath<Object> abstractSqmPath) {
                 Assertions.assertThat(abstractSqmPath.getLhs().getNodeType().getBindableJavaType()).isEqualTo(Person.class);
                 Assertions.assertThat(abstractSqmPath.getExpressible().getBindableJavaType()).isEqualTo(BigDecimal.class);
-                Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces("height:BigDecimal");
+                Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces(".height");
             }
             return builder.equal(root.get("street"), "John");
         };
@@ -103,7 +103,7 @@ public class TestJpaPredicateUtils {
             if (pathHeight instanceof AbstractSqmPath<Object> abstractSqmPath) {
                 Assertions.assertThat(abstractSqmPath.getLhs().getNodeType().getBindableJavaType()).isEqualTo(Person.class);
                 Assertions.assertThat(abstractSqmPath.getExpressible().getBindableJavaType()).isEqualTo(BigDecimal.class);
-                Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces("height:BigDecimal");
+                Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces(".height");
             }
 
             var pathWeight = JpaPredicateUtils.computeAttributePath(filterDataWeight, root);
@@ -111,7 +111,7 @@ public class TestJpaPredicateUtils {
             if (pathWeight instanceof AbstractSqmPath<Object> abstractSqmPath) {
                 Assertions.assertThat(abstractSqmPath.getLhs().getNodeType().getBindableJavaType()).isEqualTo(Person.class);
                 Assertions.assertThat(abstractSqmPath.getExpressible().getBindableJavaType()).isEqualTo(BigDecimal.class);
-                Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces("weight:BigDecimal");
+                Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces(".weight");
             }
 
             var pathState = JpaPredicateUtils.computeAttributePath(filterDataState, root);
@@ -119,7 +119,7 @@ public class TestJpaPredicateUtils {
             if (pathState instanceof AbstractSqmPath<Object> abstractSqmPath) {
                 Assertions.assertThat(abstractSqmPath.getLhs().getNodeType().getBindableJavaType()).isEqualTo(Location.class);
                 Assertions.assertThat(abstractSqmPath.getExpressible().getBindableJavaType()).isEqualTo(String.class);
-                Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces("state:String");
+                Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces(".state");
             }
 
             return builder.equal(root.get("street"), "John");
