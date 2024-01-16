@@ -30,11 +30,12 @@ public class NumberToFloatConverter implements DataConverter<Number, Float> {
 
     @Override
     public Float convert(Number data) {
-        return switch (data) {
-            case Float f -> f;
-            case Number n -> n.floatValue();
-            case null -> throw new IllegalArgumentException("Cannot convert null to Float");
-        };
+        if (data instanceof Float b) {
+            return b;
+        } else if (data != null) {
+            return data.floatValue();
+        }
+        throw new IllegalArgumentException("Cannot convert null to Float");
     }
 
 }

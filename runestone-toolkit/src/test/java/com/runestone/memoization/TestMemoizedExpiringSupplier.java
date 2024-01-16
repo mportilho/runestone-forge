@@ -29,6 +29,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -114,9 +116,10 @@ public class TestMemoizedExpiringSupplier {
             return "Hello World";
         }, 2, TimeUnit.SECONDS);
 
-        Thread.ofVirtual().start(supplier::get);
-        Thread.ofVirtual().start(supplier::get);
-        Thread.ofVirtual().start(supplier::get);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        executor.submit(supplier::get);
+        executor.submit(supplier::get);
+        executor.submit(supplier::get);
 
         Assertions.assertThat(supplier.get()).isEqualTo("Hello World");
         Assertions.assertThat(supplier.get()).isEqualTo("Hello World");

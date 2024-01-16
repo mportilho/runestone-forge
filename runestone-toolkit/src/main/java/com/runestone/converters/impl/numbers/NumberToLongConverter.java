@@ -30,11 +30,12 @@ public class NumberToLongConverter implements DataConverter<Number, Long> {
 
     @Override
     public Long convert(Number data) {
-        return switch (data) {
-            case Long l -> l;
-            case Number n -> n.longValue();
-            case null -> throw new IllegalArgumentException("Cannot convert null to Long");
-        };
+        if (data instanceof Long b) {
+            return b;
+        } else if (data != null) {
+            return data.longValue();
+        }
+        throw new IllegalArgumentException("Cannot convert null to Long");
     }
 
 }

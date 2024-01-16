@@ -30,11 +30,12 @@ public class NumberToIntConverter implements DataConverter<Number, Integer> {
 
     @Override
     public Integer convert(Number data) {
-        return switch (data) {
-            case Integer i -> i;
-            case Number n -> n.intValue();
-            case null -> throw new IllegalArgumentException("Cannot convert null to Integer");
-        };
+        if (data instanceof Integer b) {
+            return b;
+        } else if (data != null) {
+            return data.intValue();
+        }
+        throw new IllegalArgumentException("Cannot convert null to Integer");
     }
 
 }

@@ -28,18 +28,20 @@ import com.runestone.converters.DataConverter;
 
 import java.time.*;
 import java.time.temporal.Temporal;
+import java.util.Objects;
 
 public class TemporalToZonedDateTimeConverter implements DataConverter<Temporal, ZonedDateTime> {
 
     @Override
     public ZonedDateTime convert(Temporal data) {
-        return switch (data) {
-            case LocalDateTime src -> localDateTimeToZonedDateTime(src, null);
-            case LocalDate src -> localDateToZonedDateTime(src, null);
-            case OffsetDateTime src -> offsetDateTimeToZonedDateTime(src, null);
-            default -> throw new IllegalArgumentException(String.format("Unsupported conversion from [%s] to [%s].",
-                    data.getClass(), ZonedDateTime.class));
-        };
+        if (Objects.requireNonNull(data) instanceof LocalDateTime src) {
+            return localDateTimeToZonedDateTime(src, null);
+        } else if (data instanceof LocalDate src) {
+            return localDateToZonedDateTime(src, null);
+        } else if (data instanceof OffsetDateTime src) {
+            return offsetDateTimeToZonedDateTime(src, null);
+        }
+        throw new IllegalArgumentException(String.format("Unsupported conversion from [%s] to [%s].", data.getClass(), ZonedDateTime.class));
     }
 
     public ZonedDateTime localDateTimeToZonedDateTime(LocalDateTime source, String format) {

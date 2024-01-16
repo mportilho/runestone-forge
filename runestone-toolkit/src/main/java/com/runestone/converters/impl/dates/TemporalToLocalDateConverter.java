@@ -31,18 +31,21 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.time.temporal.Temporal;
+import java.util.Objects;
 
 public class TemporalToLocalDateConverter implements DataConverter<Temporal, LocalDate> {
 
     @Override
     public LocalDate convert(Temporal data) {
-        return switch (data) {
-            case ZonedDateTime zonedDateTime -> zonedDateTime.toLocalDate();
-            case LocalDateTime localDateTime -> localDateTime.toLocalDate();
-            case OffsetDateTime offsetDateTime -> offsetDateTime.toLocalDate();
-            case LocalDate localDate -> localDate;
-            default -> throw new IllegalArgumentException(String.format("Unsupported conversion from [%s] to [%s].",
-                    data.getClass(), LocalDate.class));
-        };
+        if (Objects.requireNonNull(data) instanceof ZonedDateTime zonedDateTime) {
+            return zonedDateTime.toLocalDate();
+        } else if (data instanceof LocalDateTime localDateTime) {
+            return localDateTime.toLocalDate();
+        } else if (data instanceof OffsetDateTime offsetDateTime) {
+            return offsetDateTime.toLocalDate();
+        } else if (data instanceof LocalDate localDate) {
+            return localDate;
+        }
+        throw new IllegalArgumentException(String.format("Unsupported conversion from [%s] to [%s].", data.getClass(), LocalDate.class));
     }
 }
