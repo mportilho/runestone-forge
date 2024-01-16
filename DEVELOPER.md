@@ -1,5 +1,13 @@
 # Runestone-forge Development
 
+## Version
+
+Use the following command to update the version of the project:
+
+```shell
+mvn versions:set -DnewVersion=1.0.0 versions:commit
+```
+
 ## Tests
 
 Unit tests must be run with the VM parameters `-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true` on JDK
@@ -8,7 +16,6 @@ Unit tests must be run with the VM parameters `-XX:+EnableDynamicAgentLoading -D
 On pom.xml file, add the following lines to the build/plugins section:
 
 ```xml
-
 <plugin>
     <groupId>org.apache.maven.plugins</groupId>
     <artifactId>maven-surefire-plugin</artifactId>
