@@ -193,4 +193,17 @@ public class TestVariableValues {
         VerifyExpressionsTools.checkWarmUpCache(exp2, 3);
     }
 
+    @Test
+    public void testUndefinedTypeVariables() {
+        Expression expression = new Expression("a = b");
+        VerifyExpressionsTools.checkWarmUpCache(expression, 0);
+        expression.setVariable("a", "value");
+        expression.setVariable("b", "value");
+        Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
+        Assertions.assertThat(expression.toString()).isEqualTo("'value' = 'value'");
+        VerifyExpressionsTools.commonVerifications(expression);
+        VerifyExpressionsTools.checkCache(expression, 4);
+        VerifyExpressionsTools.checkWarmUpCache(expression, 4);
+    }
+
 }
