@@ -32,4 +32,8 @@ public interface StatementVisitor {
 
     void visit(LogicalStatement logicalStatement);
 
+    default void visit(NoOpStatement noOpStatement) {
+        // Do nothing
+    }
+
 }

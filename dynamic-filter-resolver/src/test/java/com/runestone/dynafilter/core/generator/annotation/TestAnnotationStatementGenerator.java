@@ -36,6 +36,7 @@ import com.runestone.dynafilter.core.generator.annotation.tool.StatementTypeCoun
 import com.runestone.dynafilter.core.generator.annotation.tool.ValueFinderVisitor;
 import com.runestone.dynafilter.core.model.statement.AbstractStatement;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
+import com.runestone.dynafilter.core.model.statement.NoOpStatement;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -73,7 +74,7 @@ public class TestAnnotationStatementGenerator {
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator();
 
         StatementWrapper statementWrapper = generator.generateStatements(annotationStatementInput, null);
-        Assertions.assertThat(statementWrapper).isNull();
+        Assertions.assertThat(statementWrapper.statement()).isInstanceOf(NoOpStatement.class);
     }
 
     @Test
@@ -82,7 +83,7 @@ public class TestAnnotationStatementGenerator {
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator();
 
         StatementWrapper statementWrapper = generator.generateStatements(annotationStatementInput, null);
-        Assertions.assertThat(statementWrapper).isNull();
+        Assertions.assertThat(statementWrapper.statement()).isInstanceOf(NoOpStatement.class);
     }
 
     @Test

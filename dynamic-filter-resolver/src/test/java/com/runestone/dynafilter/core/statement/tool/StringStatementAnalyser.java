@@ -24,10 +24,7 @@
 
 package com.runestone.dynafilter.core.statement.tool;
 
-import com.runestone.dynafilter.core.model.statement.CompoundStatement;
-import com.runestone.dynafilter.core.model.statement.LogicalStatement;
-import com.runestone.dynafilter.core.model.statement.NegatedStatement;
-import com.runestone.dynafilter.core.model.statement.StatementAnalyser;
+import com.runestone.dynafilter.core.model.statement.*;
 
 public class StringStatementAnalyser implements StatementAnalyser<String> {
 
@@ -52,5 +49,10 @@ public class StringStatementAnalyser implements StatementAnalyser<String> {
                 " " +
                 compoundStatement.getRightStatement().acceptAnalyser(this) +
                 ")";
+    }
+
+    @Override
+    public String analyseNoOpStatement(NoOpStatement noOpStatement) {
+        return "[emptyStatement]";
     }
 }

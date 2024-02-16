@@ -37,15 +37,15 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.List;
 
-class SpecificationDynaFilterWebMvcConfigurer implements WebMvcConfigurer {
+class SpecificationDynamicFilterWebMvcConfigurer implements WebMvcConfigurer {
 
     private final ApplicationContext applicationContext;
     private final DataConversionService dataConversionService;
     private final StringValueResolver stringValueResolver;
     private final ValueExpressionResolver<String> valueExpressionResolver;
 
-    public SpecificationDynaFilterWebMvcConfigurer(ApplicationContext applicationContext, DataConversionService dataConversionService,
-                                                   StringValueResolver stringValueResolver, ValueExpressionResolver<String> valueExpressionResolver) {
+    public SpecificationDynamicFilterWebMvcConfigurer(ApplicationContext applicationContext, DataConversionService dataConversionService,
+                                                      StringValueResolver stringValueResolver, ValueExpressionResolver<String> valueExpressionResolver) {
         this.applicationContext = applicationContext;
         this.dataConversionService = dataConversionService;
         this.stringValueResolver = stringValueResolver;
@@ -58,7 +58,7 @@ class SpecificationDynaFilterWebMvcConfigurer implements WebMvcConfigurer {
         SpecificationFilterOperationService service = new SpecificationFilterOperationService(dataConversionService);
         SpecificationDynamicFilterResolver resolver = new SpecificationDynamicFilterResolver(service);
         FilterDecoratorSpringFactory filterDecoratorFactory = new FilterDecoratorSpringFactory((GenericApplicationContext) applicationContext);
-        resolvers.add(new SpecificationDynaFilterArgumentResolver(generator, resolver, filterDecoratorFactory));
+        resolvers.add(new SpecificationDynamicFilterArgumentResolver(generator, resolver, filterDecoratorFactory));
     }
 
     protected ValueExpressionResolver<String> getValueExpressionResolver() {

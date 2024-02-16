@@ -43,6 +43,11 @@ public interface StatementGenerator<T> {
     /**
      * Creates a new instance of {@link AbstractStatement} that will be used to build a filter.
      *
+     * <p>
+     * This method <b>should not</b> return null. If no filters are to be generated, the method should return an instance of
+     * StatementWrapper with {@link com.runestone.dynafilter.core.model.statement.NoOpStatement}
+     * </p>
+     *
      * @param filterInputs     inputs containing enough information to build the filter
      * @param filterParameters map of parameters providing values to be used to build the filter
      * @return a new instance of {@link AbstractStatement}

@@ -31,11 +31,11 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.util.StringValueResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-public class TestServletDynaFilterAutoConfiguration {
+public class TestServletDynamicFilterAutoConfiguration {
 
     @Test
     public void testServletConfigurationCreation() {
-        ServletDynaFilterAutoConfiguration servletConfig = new ServletDynaFilterAutoConfiguration();
+        ServletDynamicFilterAutoConfiguration servletConfig = new ServletDynamicFilterAutoConfiguration();
         servletConfig.setApplicationContext(Mockito.mock(ApplicationContext.class));
         servletConfig.setEmbeddedValueResolver(Mockito.mock(StringValueResolver.class));
         WebMvcConfigurer webMvcConfigurer = servletConfig.webMvcConfigurer(servletConfig.dataConversionService(), null);

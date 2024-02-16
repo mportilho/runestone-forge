@@ -44,29 +44,29 @@ import java.util.Map;
 
 public class TestSpecDynaFilterArgumentResolver {
 
-    private SpecificationDynaFilterArgumentResolver createSpecificationDynaFilterArgumentResolver() {
+    private SpecificationDynamicFilterArgumentResolver createSpecificationDynaFilterArgumentResolver() {
         GenericApplicationContext applicationContext = Mockito.mock(GenericApplicationContext.class);
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null);
         SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
         SpecificationDynamicFilterResolver resolver = new SpecificationDynamicFilterResolver(service);
         FilterDecoratorSpringFactory filterDecoratorFactory = new FilterDecoratorSpringFactory(applicationContext);
-        return new SpecificationDynaFilterArgumentResolver(generator, resolver, filterDecoratorFactory);
+        return new SpecificationDynamicFilterArgumentResolver(generator, resolver, filterDecoratorFactory);
     }
 
     @Test
     public void testNullConstructorParameters() {
-        Assertions.assertThatThrownBy(() -> new SpecificationDynaFilterArgumentResolver(null, null, null))
+        Assertions.assertThatThrownBy(() -> new SpecificationDynamicFilterArgumentResolver(null, null, null))
                 .isExactlyInstanceOf(NullPointerException.class)
                 .hasMessageContaining("Statement generator");
 
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null);
-        Assertions.assertThatThrownBy(() -> new SpecificationDynaFilterArgumentResolver(generator, null, null))
+        Assertions.assertThatThrownBy(() -> new SpecificationDynamicFilterArgumentResolver(generator, null, null))
                 .isExactlyInstanceOf(NullPointerException.class)
                 .hasMessageContaining("Dynamic filter resolver");
 
         SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
         SpecificationDynamicFilterResolver resolver = new SpecificationDynamicFilterResolver(service);
-        Assertions.assertThatThrownBy(() -> new SpecificationDynaFilterArgumentResolver(generator, resolver, null))
+        Assertions.assertThatThrownBy(() -> new SpecificationDynamicFilterArgumentResolver(generator, resolver, null))
                 .isExactlyInstanceOf(NullPointerException.class)
                 .hasMessageContaining("Filter decorator factory");
     }

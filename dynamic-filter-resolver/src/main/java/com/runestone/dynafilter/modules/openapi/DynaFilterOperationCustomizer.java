@@ -73,7 +73,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
 
             List<Filter> parameterAnnotations = TypeAnnotationUtils
                     .retrieveFilterAnnotations(new AnnotationStatementInput(methodParameter.getParameterType(), methodParameter.getParameterAnnotations()));
-            parameterAnnotations.removeIf(filter -> !Decorated.class.equals(filter.operation()));
+            parameterAnnotations.removeIf(filter -> Decorated.class.equals(filter.operation()));
 
             if (!parameterAnnotations.isEmpty()) {
                 operation.getParameters().removeIf(p -> p.getName().equals(parameterName));

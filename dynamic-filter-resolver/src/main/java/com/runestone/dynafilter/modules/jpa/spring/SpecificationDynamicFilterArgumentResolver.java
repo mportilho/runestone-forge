@@ -45,15 +45,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-public class SpecificationDynaFilterArgumentResolver implements HandlerMethodArgumentResolver {
+public class SpecificationDynamicFilterArgumentResolver implements HandlerMethodArgumentResolver {
 
     private final AnnotationStatementGenerator statementGenerator;
     private final DynamicFilterResolver<Specification<?>> dynamicFilterResolver;
     private final FilterDecoratorSpringFactory filterDecoratorFactory;
 
-    public SpecificationDynaFilterArgumentResolver(AnnotationStatementGenerator statementGenerator,
-                                                   DynamicFilterResolver<Specification<?>> dynamicFilterResolver,
-                                                   FilterDecoratorSpringFactory filterDecoratorFactory) {
+    public SpecificationDynamicFilterArgumentResolver(AnnotationStatementGenerator statementGenerator,
+                                                      DynamicFilterResolver<Specification<?>> dynamicFilterResolver,
+                                                      FilterDecoratorSpringFactory filterDecoratorFactory) {
         this.statementGenerator = Objects.requireNonNull(statementGenerator, "Statement generator cannot be null");
         this.dynamicFilterResolver = Objects.requireNonNull(dynamicFilterResolver, "Dynamic filter resolver cannot be null");
         this.filterDecoratorFactory = Objects.requireNonNull(filterDecoratorFactory, "Filter decorator factory cannot be null");

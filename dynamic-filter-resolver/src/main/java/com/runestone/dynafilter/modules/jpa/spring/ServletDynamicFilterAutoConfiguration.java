@@ -36,7 +36,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.util.StringValueResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-public class ServletDynaFilterAutoConfiguration implements EmbeddedValueResolverAware, ApplicationContextAware {
+public class ServletDynamicFilterAutoConfiguration implements EmbeddedValueResolverAware, ApplicationContextAware {
 
     private ApplicationContext applicationContext;
     private StringValueResolver stringValueResolver;
@@ -60,7 +60,7 @@ public class ServletDynaFilterAutoConfiguration implements EmbeddedValueResolver
     @Bean
     public WebMvcConfigurer webMvcConfigurer(@Autowired(required = false) final DataConversionService dataConversionService,
                                              @Autowired(required = false) final ValueExpressionResolver<String> valueExpressionResolver) {
-        return new SpecificationDynaFilterWebMvcConfigurer(applicationContext, dataConversionService, stringValueResolver, valueExpressionResolver);
+        return new SpecificationDynamicFilterWebMvcConfigurer(applicationContext, dataConversionService, stringValueResolver, valueExpressionResolver);
     }
 
 }

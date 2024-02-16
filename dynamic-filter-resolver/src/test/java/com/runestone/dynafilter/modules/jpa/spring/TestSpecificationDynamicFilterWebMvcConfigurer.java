@@ -35,21 +35,21 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 
 import java.util.List;
 
-public class TestSpecificationDynaFilterWebMvcConfigurer {
+public class TestSpecificationDynamicFilterWebMvcConfigurer {
 
     @Test
     @SuppressWarnings({"unchecked"})
     public void test() {
-        SpecificationDynaFilterWebMvcConfigurer configurer = new SpecificationDynaFilterWebMvcConfigurer(
+        SpecificationDynamicFilterWebMvcConfigurer configurer = new SpecificationDynamicFilterWebMvcConfigurer(
                 Mockito.mock(GenericApplicationContext.class), Mockito.mock(DataConversionService.class), null, null);
         List<HandlerMethodArgumentResolver> resolvers = Mockito.mock(List.class);
         configurer.addArgumentResolvers(resolvers);
-        Mockito.verify(resolvers, Mockito.times(1)).add(Mockito.any(SpecificationDynaFilterArgumentResolver.class));
+        Mockito.verify(resolvers, Mockito.times(1)).add(Mockito.any(SpecificationDynamicFilterArgumentResolver.class));
     }
 
     @Test
     public void testCreatingNullValueExpressionResolver() {
-        SpecificationDynaFilterWebMvcConfigurer configurer = new SpecificationDynaFilterWebMvcConfigurer(
+        SpecificationDynamicFilterWebMvcConfigurer configurer = new SpecificationDynamicFilterWebMvcConfigurer(
                 Mockito.mock(GenericApplicationContext.class), Mockito.mock(DataConversionService.class), null, null);
         ValueExpressionResolver<String> valueExpressionResolver = configurer.getValueExpressionResolver();
         Assertions.assertThat(valueExpressionResolver).isNull();
@@ -57,7 +57,7 @@ public class TestSpecificationDynaFilterWebMvcConfigurer {
 
     @Test
     public void testCreatingWithValueExpressionResolver() {
-        SpecificationDynaFilterWebMvcConfigurer configurer = new SpecificationDynaFilterWebMvcConfigurer(
+        SpecificationDynamicFilterWebMvcConfigurer configurer = new SpecificationDynamicFilterWebMvcConfigurer(
                 Mockito.mock(GenericApplicationContext.class), Mockito.mock(DataConversionService.class), null, value -> value);
         ValueExpressionResolver<String> valueExpressionResolver = configurer.getValueExpressionResolver();
         Assertions.assertThat(valueExpressionResolver).isInstanceOf(ValueExpressionResolver.class);
@@ -65,7 +65,7 @@ public class TestSpecificationDynaFilterWebMvcConfigurer {
 
     @Test
     public void testCreatingWithStringValueResolver() {
-        SpecificationDynaFilterWebMvcConfigurer configurer = new SpecificationDynaFilterWebMvcConfigurer(
+        SpecificationDynamicFilterWebMvcConfigurer configurer = new SpecificationDynamicFilterWebMvcConfigurer(
                 Mockito.mock(GenericApplicationContext.class), Mockito.mock(DataConversionService.class), Mockito.mock(StringValueResolver.class), null);
         ValueExpressionResolver<String> valueExpressionResolver = configurer.getValueExpressionResolver();
         Assertions.assertThat(valueExpressionResolver).isInstanceOf(ValueExpressionResolver.class);
@@ -84,7 +84,7 @@ public class TestSpecificationDynaFilterWebMvcConfigurer {
         Mockito.when(valueExpressionResolver.resolveValue(Mockito.eq("test02"))).thenReturn("valueExpressionResolver");
         Mockito.when(valueExpressionResolver.resolveValue(Mockito.eq("test-null-02"))).thenReturn(null);
 
-        SpecificationDynaFilterWebMvcConfigurer configurer = new SpecificationDynaFilterWebMvcConfigurer(
+        SpecificationDynamicFilterWebMvcConfigurer configurer = new SpecificationDynamicFilterWebMvcConfigurer(
                 Mockito.mock(GenericApplicationContext.class), Mockito.mock(DataConversionService.class), stringValueResolver, valueExpressionResolver);
         ValueExpressionResolver<String> resolver = configurer.getValueExpressionResolver();
         Assertions.assertThat(resolver).isInstanceOf(ValueExpressionResolver.class);

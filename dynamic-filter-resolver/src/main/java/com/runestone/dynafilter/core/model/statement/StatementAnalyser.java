@@ -32,4 +32,6 @@ public interface StatementAnalyser<R> {
 
     R analyseCompoundStatement(CompoundStatement compoundStatement);
 
+    R analyseNoOpStatement(NoOpStatement noOpStatement);
+
 }

@@ -24,10 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.resolver;
 
-import com.runestone.dynafilter.core.model.statement.CompoundStatement;
-import com.runestone.dynafilter.core.model.statement.LogicalStatement;
-import com.runestone.dynafilter.core.model.statement.NegatedStatement;
-import com.runestone.dynafilter.core.model.statement.StatementAnalyser;
+import com.runestone.dynafilter.core.model.statement.*;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -58,4 +55,8 @@ public class SpecificationStatementAnalyser implements StatementAnalyser<Specifi
         return compoundStatement.getLogicOperator().isConjunction() ? leftSpecification.and(rightSpecification) : leftSpecification.or(rightSpecification);
     }
 
+    @Override
+    public Specification<?> analyseNoOpStatement(NoOpStatement noOpStatement) {
+        return Specification.where(null);
+    }
 }

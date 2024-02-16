@@ -28,10 +28,7 @@ import com.runestone.dynafilter.core.generator.DefaultStatementGenerator;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
 import com.runestone.dynafilter.core.model.FilterData;
-import com.runestone.dynafilter.core.model.statement.AbstractStatement;
-import com.runestone.dynafilter.core.model.statement.CompoundStatement;
-import com.runestone.dynafilter.core.model.statement.LogicOperator;
-import com.runestone.dynafilter.core.model.statement.NegatedStatement;
+import com.runestone.dynafilter.core.model.statement.*;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 
 import java.lang.annotation.Annotation;
@@ -42,6 +39,7 @@ import java.util.stream.Collectors;
 public class AnnotationStatementGenerator extends DefaultStatementGenerator<AnnotationStatementInput> {
 
     private static final FilterData[] EMPTY_FILTER_DATA = {};
+    private static final StatementWrapper EMPTY_STATEMENT_WRAPPER = new StatementWrapper(new NoOpStatement(), Collections.emptyMap());
 
     public AnnotationStatementGenerator() {
         super();
@@ -66,7 +64,7 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
         Map<String, FilterData> decoratedFilters = createDecoratedFiltersData(filterInputs, parametersMap);
 
         if (statementList.isEmpty()) {
-            return null;
+            return EMPTY_STATEMENT_WRAPPER;
         } else if (statementList.size() == 1) {
             return new StatementWrapper(statementList.get(0), decoratedFilters);
         } else {
