@@ -25,7 +25,7 @@
 package com.runestone.dynafilter.modules.jpa.operation.specification;
 
 import com.runestone.dynafilter.core.model.FilterData;
-import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeInner;
+import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeLeft;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeRight;
 import jakarta.persistence.criteria.*;
 import jakarta.persistence.metamodel.Attribute;
@@ -76,15 +76,15 @@ class JpaPredicateUtils {
      * Obtains the actual JPA JoinType object to the desired path defined on {@link FilterData} object.
      *
      * @param filterData the {@link FilterData} object to get the join type from
-     * @return will never be {@literal null}. Defaults to {@link JoinType#LEFT} if no join type is defined
+     * @return will never be {@literal null}. Defaults to {@link JoinType#INNER} if no join type is defined
      */
     private static JoinType getJoinType(FilterData filterData) {
         if (filterData.hasModifier(ModJoinTypeRight.class)) {
             return JoinType.RIGHT;
-        } else if (filterData.hasModifier(ModJoinTypeInner.class)) {
-            return JoinType.INNER;
+        } else if (filterData.hasModifier(ModJoinTypeLeft.class)) {
+            return JoinType.LEFT;
         }
-        return JoinType.LEFT;
+        return JoinType.INNER;
     }
 
     /**
