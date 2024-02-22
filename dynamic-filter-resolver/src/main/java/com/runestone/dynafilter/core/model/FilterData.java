@@ -59,13 +59,13 @@ public record FilterData(
 
     public FilterData {
         if (parameters == null || parameters.length == 0) {
-            throw new IllegalArgumentException("Parameters cannot be null or empty");
+            throw new IllegalArgumentException("On path [%s], parameters cannot be null or empty".formatted(path));
         }
         if (values == null || values.length == 0) {
-            throw new IllegalArgumentException("Values cannot be null or empty");
+            throw new IllegalArgumentException("On path [%s], values cannot be null or empty".formatted(path));
         }
         if (parameters.length != values.length) {
-            throw new IllegalArgumentException("Parameters and values must have the same length, as each parameter must have a corresponding value");
+            throw new IllegalArgumentException("On path [%s], parameters and values must have the same length, as each parameter must have a corresponding value".formatted(path));
         }
     }
 
