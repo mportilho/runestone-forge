@@ -31,7 +31,6 @@ import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.statement.*;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 
-import java.lang.annotation.Annotation;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -54,14 +53,15 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
         Map<String, Object> parametersMap = filterParameters != null ? filterParameters : Collections.emptyMap();
         List<AbstractStatement> statementList = new ArrayList<>();
 
-        for (Annotation ann : TypeAnnotationUtils.findStatementAnnotations(filterInputs)) {
-            AbstractStatement statements = createStatements(ann, parametersMap);
+        List<FilterAnnotationData> filterAnnotationDataList = TypeAnnotationUtils.findAnnotationData(filterInputs);
+        for (FilterAnnotationData data : filterAnnotationDataList) {
+            AbstractStatement statements = createStatements(data, parametersMap);
             if (statements != null) {
                 statementList.add(statements);
             }
         }
 
-        Map<String, FilterData> decoratedFilters = createDecoratedFiltersData(filterInputs, parametersMap);
+        Map<String, FilterData> decoratedFilters = createDecoratedFiltersData(filterAnnotationDataList, parametersMap);
 
         if (statementList.isEmpty()) {
             return EMPTY_STATEMENT_WRAPPER;
@@ -76,9 +76,10 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
         }
     }
 
-    private Map<String, FilterData> createDecoratedFiltersData(AnnotationStatementInput filterInputs, Map<String, Object> parametersMap) {
-        return TypeAnnotationUtils.retrieveFilterAnnotations(filterInputs)
+    private Map<String, FilterData> createDecoratedFiltersData(List<FilterAnnotationData> filterAnnotationDataList, Map<String, Object> parametersMap) {
+        return filterAnnotationDataList
                 .stream()
+                .flatMap(data -> data.filters().stream())
                 .filter(filter -> Decorated.class.equals(filter.operation()))
                 .map(filter -> {
                     Object[] values = computeValues(filter.parameters(), filter.defaultValues(), filter.constantValues(), parametersMap);
@@ -91,8 +92,7 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
     /**
      *
      */
-    private AbstractStatement createStatements(Annotation annotation, Map<String, Object> userParameters) {
-        AnnotationData data = createAnnotationData(annotation);
+    private AbstractStatement createStatements(FilterAnnotationData data, Map<String, Object> userParameters) {
         boolean negate = computeNegatingParameter(data.negate());
 
         FilterData[] clauses = processFilterAnnotations(data.filters(), userParameters);
@@ -112,24 +112,11 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
         }
     }
 
-    private AnnotationData createAnnotationData(Annotation annotation) {
-        Conjunction conjunction = Conjunction.class.equals(annotation.annotationType()) ? (Conjunction) annotation : null;
-        Disjunction disjunction = Disjunction.class.equals(annotation.annotationType()) ? (Disjunction) annotation : null;
-        if (conjunction != null || disjunction != null) {
-            LogicOperator logicType = conjunction != null ? LogicOperator.CONJUNCTION : LogicOperator.DISJUNCTION;
-            Filter[] filters = conjunction != null ? conjunction.value() : disjunction.value();
-            Statement[] filterStatements = conjunction != null ? conjunction.disjunctions() : disjunction.conjunctions();
-            String strNegate = conjunction != null ? conjunction.negate() : disjunction.negate();
-            return new AnnotationData(logicType, filters, filterStatements, strNegate);
-        }
-        throw new IllegalArgumentException("Filter Annotation is not a conjunction or disjunction");
-    }
-
-    private AbstractStatement createStatementFromFilterStatements(Statement[] statements, LogicOperator logicType, Map<String, Object> userParameters) {
+    private AbstractStatement createStatementFromFilterStatements(List<FilterAnnotationStatement> statements, LogicOperator logicType, Map<String, Object> userParameters) {
         AbstractStatement resultStatement = null;
-        for (Statement filterStatement : statements) {
+        for (FilterAnnotationStatement filterStatement : statements) {
             boolean negate = computeNegatingParameter(filterStatement.negate());
-            FilterData[] params = processFilterAnnotations(filterStatement.value(), userParameters);
+            FilterData[] params = processFilterAnnotations(filterStatement.filters(), userParameters);
             AbstractStatement currStatement = createStatements(params, logicType.opposite());
             currStatement = negate ? new NegatedStatement(currStatement) : currStatement;
 
@@ -145,15 +132,15 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
     /**
      *
      */
-    private FilterData[] processFilterAnnotations(Filter[] filters, Map<String, Object> userParameters) {
-        if (filters == null || filters.length == 0) {
+    private FilterData[] processFilterAnnotations(List<Filter> filters, Map<String, Object> userParameters) {
+        if (filters == null || filters.isEmpty()) {
             return EMPTY_FILTER_DATA;
         }
         for (Filter filter : filters) { // fail fast
             validateFilter(filter);
         }
 
-        List<FilterData> filterParameters = new ArrayList<>(filters.length);
+        List<FilterData> filterParameters = new ArrayList<>(filters.size());
         for (Filter filter : filters) {
             if (Decorated.class.equals(filter.operation())) {
                 continue;
@@ -188,8 +175,5 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
             throw new IllegalArgumentException(String.format("Parameters and default values have different sizes. Parameters required: '%s'",
                     String.join(", ", Arrays.asList(filter.parameters()))));
         }
-    }
-
-    private record AnnotationData(LogicOperator logicOperator, Filter[] filters, Statement[] filterStatements, String negate) {
     }
 }

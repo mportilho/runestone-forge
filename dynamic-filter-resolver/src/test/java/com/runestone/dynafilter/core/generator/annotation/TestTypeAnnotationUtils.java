@@ -24,9 +24,9 @@
 
 package com.runestone.dynafilter.core.generator.annotation;
 
-import com.runestone.dynafilter.core.generator.annotation.testdata.interfaces.CombinedAnnotations;
-import com.runestone.dynafilter.core.generator.annotation.testdata.interfaces.NoDeleteInterface;
-import com.runestone.dynafilter.core.generator.annotation.testdata.interfaces.StatusOkInterface;
+import com.runestone.dynafilter.core.generator.annotation.testdata.annotations.FilterByConjunctionFromAnnotation;
+import com.runestone.dynafilter.core.generator.annotation.testdata.annotations.FilterByDisjunctionFromAnnotation;
+import com.runestone.dynafilter.core.generator.annotation.testdata.interfaces.*;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -35,44 +35,100 @@ public class TestTypeAnnotationUtils {
     @Test
     public void testNullValuedInput() {
         var annotationStatementInput = new AnnotationStatementInput(null, null);
-        var annotations = TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput);
+        var annotations = TypeAnnotationUtils.findAnnotationData(annotationStatementInput);
         Assertions.assertThat(annotations).isEmpty();
     }
 
     @Test
     public void testWithSingleAnnotation() {
         var annotationStatementInput = new AnnotationStatementInput(null, StatusOkInterface.class.getAnnotations());
-        var annotations = TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput);
+        var annotations = TypeAnnotationUtils.findAnnotationData(annotationStatementInput);
         Assertions.assertThat(annotations).hasSize(1);
-        Assertions.assertThat(annotations.stream().filter(a -> a.annotationType().equals(Conjunction.class)).count()).isEqualTo(1);
-        Assertions.assertThat(annotations.stream().filter(a -> a.annotationType().equals(Disjunction.class)).count()).isEqualTo(0);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isConjunction()).count()).isEqualTo(1);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isDisjunction()).count()).isEqualTo(0);
     }
 
     @Test
     public void testWithSingleInterface() {
         var annotationStatementInput = new AnnotationStatementInput(StatusOkInterface.class, null);
-        var annotations = TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput);
+        var annotations = TypeAnnotationUtils.findAnnotationData(annotationStatementInput);
         Assertions.assertThat(annotations).hasSize(1);
-        Assertions.assertThat(annotations.stream().filter(a -> a.annotationType().equals(Conjunction.class)).count()).isEqualTo(1);
-        Assertions.assertThat(annotations.stream().filter(a -> a.annotationType().equals(Disjunction.class)).count()).isEqualTo(0);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isConjunction()).count()).isEqualTo(1);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isDisjunction()).count()).isEqualTo(0);
     }
 
     @Test
     public void testWithAnnotationAndType() {
         var annotationStatementInput = new AnnotationStatementInput(NoDeleteInterface.class, StatusOkInterface.class.getAnnotations());
-        var annotations = TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput);
+        var annotations = TypeAnnotationUtils.findAnnotationData(annotationStatementInput);
         Assertions.assertThat(annotations).hasSize(2);
-        Assertions.assertThat(annotations.stream().filter(a -> a.annotationType().equals(Conjunction.class)).count()).isEqualTo(2);
-        Assertions.assertThat(annotations.stream().filter(a -> a.annotationType().equals(Disjunction.class)).count()).isEqualTo(0);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isConjunction()).count()).isEqualTo(2);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isDisjunction()).count()).isEqualTo(0);
     }
 
     @Test
     public void testWithAnnotationAndTypeCombinedAndRepeatedFilters() {
         var annotationStatementInput = new AnnotationStatementInput(CombinedAnnotations.class, StatusOkInterface.class.getAnnotations());
-        var annotations = TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput);
+        var annotations = TypeAnnotationUtils.findAnnotationData(annotationStatementInput);
         Assertions.assertThat(annotations).hasSize(4);
-        Assertions.assertThat(annotations.stream().filter(a -> a.annotationType().equals(Conjunction.class)).count()).isEqualTo(3);
-        Assertions.assertThat(annotations.stream().filter(a -> a.annotationType().equals(Disjunction.class)).count()).isEqualTo(1);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isConjunction()).count()).isEqualTo(3);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isDisjunction()).count()).isEqualTo(1);
+        Assertions.assertThat(annotations.stream()
+                .mapToLong(f -> f.filters().size()).sum()).isEqualTo(5);
+        Assertions.assertThat(annotations.stream().flatMap(filterAnnotationData -> filterAnnotationData.filterStatements().stream())
+                .mapToLong(stmt -> stmt.filters().size()).sum()).isEqualTo(4);
+    }
+
+    @Test
+    public void testWithInterfaceAndConjunctionFromAnnotation() {
+        var annotationStatementInput = new AnnotationStatementInput(FilterByConjunctionFromInterface.class, null);
+        var annotations = TypeAnnotationUtils.findAnnotationData(annotationStatementInput);
+        Assertions.assertThat(annotations).hasSize(1);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isConjunction()).count()).isEqualTo(1);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isDisjunction()).count()).isEqualTo(0);
+        Assertions.assertThat(annotations.stream()
+                .mapToLong(f -> f.filters().size()).sum()).isEqualTo(2);
+        Assertions.assertThat(annotations.stream().flatMap(filterAnnotationData -> filterAnnotationData.filterStatements().stream())
+                .mapToLong(stmt -> stmt.filters().size()).sum()).isEqualTo(2);
+    }
+
+    @Test
+    public void testWithInterfaceAndDisjunctionFromAnnotation() {
+        var annotationStatementInput = new AnnotationStatementInput(FilterByDisjunctionFromInterface.class, null);
+        var annotations = TypeAnnotationUtils.findAnnotationData(annotationStatementInput);
+        Assertions.assertThat(annotations).hasSize(1);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isConjunction()).count()).isEqualTo(0);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isDisjunction()).count()).isEqualTo(1);
+        Assertions.assertThat(annotations.stream()
+                .mapToLong(f -> f.filters().size()).sum()).isEqualTo(2);
+        Assertions.assertThat(annotations.stream().flatMap(filterAnnotationData -> filterAnnotationData.filterStatements().stream())
+                .mapToLong(stmt -> stmt.filters().size()).sum()).isEqualTo(2);
+    }
+
+    @Test
+    public void testWithAnnotationAndConjunctionFromAnnotation() {
+        var annotationStatementInput = new AnnotationStatementInput(null, FilterByConjunctionFromAnnotation.class.getAnnotations());
+        var annotations = TypeAnnotationUtils.findAnnotationData(annotationStatementInput);
+        Assertions.assertThat(annotations).hasSize(1);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isConjunction()).count()).isEqualTo(1);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isDisjunction()).count()).isEqualTo(0);
+        Assertions.assertThat(annotations.stream()
+                .mapToLong(f -> f.filters().size()).sum()).isEqualTo(2);
+        Assertions.assertThat(annotations.stream().flatMap(filterAnnotationData -> filterAnnotationData.filterStatements().stream())
+                .mapToLong(stmt -> stmt.filters().size()).sum()).isEqualTo(2);
+    }
+
+    @Test
+    public void testWithAnnotationAndDisjunctionFromAnnotation() {
+        var annotationStatementInput = new AnnotationStatementInput(null, FilterByDisjunctionFromAnnotation.class.getAnnotations());
+        var annotations = TypeAnnotationUtils.findAnnotationData(annotationStatementInput);
+        Assertions.assertThat(annotations).hasSize(1);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isConjunction()).count()).isEqualTo(0);
+        Assertions.assertThat(annotations.stream().filter(a -> a.logicOperator().isDisjunction()).count()).isEqualTo(1);
+        Assertions.assertThat(annotations.stream()
+                .mapToLong(f -> f.filters().size()).sum()).isEqualTo(2);
+        Assertions.assertThat(annotations.stream().flatMap(filterAnnotationData -> filterAnnotationData.filterStatements().stream())
+                .mapToLong(stmt -> stmt.filters().size()).sum()).isEqualTo(2);
     }
 
 }

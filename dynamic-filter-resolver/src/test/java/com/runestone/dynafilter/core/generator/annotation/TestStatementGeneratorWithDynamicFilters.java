@@ -205,7 +205,7 @@ public class TestStatementGeneratorWithDynamicFilters {
 
         Assertions.assertThatThrownBy(() -> generator.generateStatements(annotationStatementInput, map))
                 .isExactlyInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Values cannot be null or empty");
+                .hasMessageContaining("On path 'age', values cannot be null or empty");
     }
 
     @Test
@@ -219,7 +219,7 @@ public class TestStatementGeneratorWithDynamicFilters {
 
         Assertions.assertThatThrownBy(() -> generator.generateStatements(annotationStatementInput, map))
                 .isExactlyInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Parameters and values must have the same length");
+                .hasMessageContaining("On path 'age', parameters and values must have the same length, as each parameter must have a corresponding value");
     }
 
     @Test

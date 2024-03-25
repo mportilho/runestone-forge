@@ -40,6 +40,7 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 import org.springframework.web.servlet.HandlerMapping;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.Map;
@@ -70,7 +71,7 @@ public class SpecificationDynamicFilterArgumentResolver implements HandlerMethod
         Map<String, Object> userParameters = createParametersMap(webRequest);
         AnnotationStatementInput input = new AnnotationStatementInput(parameter.getParameterType(), parameter.getParameterAnnotations());
 
-        var fetchingAnnotations = parameter.getParameterAnnotations();
+        Annotation[] fetchingAnnotations = parameter.getParameterAnnotations();
         FilterDecorators parameterAnnotation = parameter.getParameterAnnotation(FilterDecorators.class);
         var decoratorClasses = parameterAnnotation != null ? parameterAnnotation.value() : null;
         FilterDecorator<Specification<?>> filterDecorator = filterDecoratorFactory.createFilterDecorators(fetchingAnnotations, decoratorClasses);

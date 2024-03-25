@@ -45,15 +45,6 @@ import java.util.Map;
 
 public class TestAnnotationStatementGenerator {
 
-    private static ValueExpressionResolver<String> getValueExpressionResolver() {
-        return value -> {
-            if (value != null) {
-                return value.startsWith("${") && value.endsWith("}") ? value.substring(2, value.length() - 1) + "-Resolved" : value;
-            }
-            return null;
-        };
-    }
-
     private static ValueExpressionResolver<Object> getValueExpressionResolver(Map<String, Object> valueMapper) {
         return value -> {
             if (value != null) {

@@ -22,12 +22,16 @@
  * SOFTWARE.
  */
 
-package com.runestone.dynafilter.core.generator.annotation.tool;
+package com.runestone.dynafilter.core.generator.annotation;
 
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
 import com.runestone.dynafilter.core.generator.annotation.testdata.interfaces.SearchWithFilters;
+import com.runestone.dynafilter.core.generator.annotation.tool.FilterDataCounterVisitor;
+import com.runestone.dynafilter.core.generator.annotation.tool.NegatedStmtCounterVisitor;
+import com.runestone.dynafilter.core.generator.annotation.tool.StatementTypeCounterVisitor;
+import com.runestone.dynafilter.core.generator.annotation.tool.ValueFinderVisitor;
 import com.runestone.dynafilter.core.model.statement.AbstractStatement;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
 import org.assertj.core.api.Assertions;

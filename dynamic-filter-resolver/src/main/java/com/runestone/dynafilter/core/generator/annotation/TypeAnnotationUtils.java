@@ -24,56 +24,87 @@
 
 package com.runestone.dynafilter.core.generator.annotation;
 
+import com.runestone.dynafilter.core.model.statement.LogicOperator;
+
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
 import java.util.*;
 
 public class TypeAnnotationUtils {
 
-    private static final Map<AnnotationStatementInput, List<Annotation>> cache = new WeakHashMap<>();
+    private static final Map<AnnotationStatementInput, List<FilterAnnotationData>> cacheAnnData = new WeakHashMap<>();
 
     private TypeAnnotationUtils() {
     }
 
-    /**
-     *
-     */
-    public static List<Annotation> findStatementAnnotations(AnnotationStatementInput annotationStatementInput) {
-        return cache.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::findStatementAnnotationsInternal);
-    }
-
     public static List<Filter> retrieveFilterAnnotations(AnnotationStatementInput annotationStatementInput) {
         List<Filter> filters = new ArrayList<>(20);
-        for (Annotation annotation : TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput)) {
-            filters.addAll(TypeAnnotationUtils.flattenFilterAnnotations(annotation));
+        for (FilterAnnotationData data : TypeAnnotationUtils.findAnnotationData(annotationStatementInput)) {
+            filters.addAll(data.filters());
+            data.filterStatements().forEach(v -> filters.addAll(v.filters()));
         }
         return filters;
     }
 
-    /**
-     * Creates a list of parameter's filters from the annotation
-     */
-    private static List<Filter> flattenFilterAnnotations(Annotation annotation) {
-        List<Filter> specsList = new ArrayList<>();
-        if (annotation instanceof Conjunction conjunction) {
-            specsList.addAll(Arrays.asList(conjunction.value()));
-            for (Statement v : conjunction.disjunctions()) {
-                specsList.addAll(Arrays.asList(v.value()));
-            }
-        } else if (annotation instanceof Disjunction disjunction) {
-            specsList.addAll(Arrays.asList(disjunction.value()));
-            for (Statement v : disjunction.conjunctions()) {
-                specsList.addAll(Arrays.asList(v.value()));
-            }
-        } else if (annotation instanceof Statement statement) {
-            specsList.addAll(Arrays.asList(statement.value()));
-        }
-        return specsList;
+    public static List<FilterAnnotationData> findAnnotationData(AnnotationStatementInput annotationStatementInput) {
+        return cacheAnnData.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::findAnnotationDataInternal);
     }
 
-    /**
-     *
-     */
-    private static List<Annotation> findStatementAnnotationsInternal(AnnotationStatementInput annotationStatementInput) {
+    private static List<FilterAnnotationData> findAnnotationDataInternal(AnnotationStatementInput annotationStatementInput) {
+        List<FilterAnnotationData> filterAnnotationData = new ArrayList<>();
+        for (Annotation annotation : TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput)) {
+            if (annotation.annotationType() == Conjunction.class) {
+                Conjunction ann = (Conjunction) annotation;
+                List<FilterAnnotationStatement> statements = getFilterAnnotationFromStatements(ann.disjunctions());
+                filterAnnotationData.add(new FilterAnnotationData(LogicOperator.CONJUNCTION, Arrays.asList(ann.value()), statements, ann.negate()));
+            } else if (annotation.annotationType() == Disjunction.class) {
+                Disjunction ann = (Disjunction) annotation;
+                List<FilterAnnotationStatement> statements = getFilterAnnotationFromStatements(ann.conjunctions());
+                filterAnnotationData.add(new FilterAnnotationData(LogicOperator.DISJUNCTION, Arrays.asList(ann.value()), statements, ann.negate()));
+            } else if (annotation.annotationType() == ConjunctionFrom.class) {
+                ConjunctionFrom ann = (ConjunctionFrom) annotation;
+                List<Filter> filters = getFiltersFromClass(ann.value());
+                List<FilterAnnotationStatement> statements = Arrays.stream(ann.disjunctions())
+                        .map(stmt -> new FilterAnnotationStatement(getFiltersFromClass(stmt.value()), stmt.negate()))
+                        .toList();
+                filterAnnotationData.add(new FilterAnnotationData(LogicOperator.CONJUNCTION, filters, statements, ann.negate()));
+            } else if (annotation.annotationType() == DisjunctionFrom.class) {
+                DisjunctionFrom ann = (DisjunctionFrom) annotation;
+                List<Filter> filters = getFiltersFromClass(ann.value());
+                List<FilterAnnotationStatement> statements = Arrays.stream(ann.conjunctions())
+                        .map(stmt -> new FilterAnnotationStatement(getFiltersFromClass(stmt.value()), stmt.negate()))
+                        .toList();
+                filterAnnotationData.add(new FilterAnnotationData(LogicOperator.DISJUNCTION, filters, statements, ann.negate()));
+            }
+        }
+        return filterAnnotationData;
+    }
+
+    private static List<Filter> getFiltersFromClass(Class<?> clazz) {
+        List<Filter> filters = new ArrayList<>();
+        for (Field declaredField : clazz.getDeclaredFields()) {
+            Filter filter = declaredField.getAnnotation(Filter.class);
+            if (filter != null) {
+                filters.add(filter);
+            }
+        }
+        return filters;
+    }
+
+    private static List<FilterAnnotationStatement> getFilterAnnotationFromStatements(Statement[] ann) {
+        List<FilterAnnotationStatement> statements;
+        if (ann.length == 0) {
+            statements = Collections.emptyList();
+        } else {
+            statements = new ArrayList<>(ann.length);
+            for (Statement statement : ann) {
+                statements.add(new FilterAnnotationStatement(Arrays.asList(statement.value()), statement.negate()));
+            }
+        }
+        return statements;
+    }
+
+    private static List<Annotation> findStatementAnnotations(AnnotationStatementInput annotationStatementInput) {
         List<Annotation> statementAnnotations = new ArrayList<>();
         for (Class<?> anInterface : extractProcessableInterfaces(annotationStatementInput.type())) {
             statementAnnotations.addAll(extractFilterAnnotations(anInterface));
@@ -83,9 +114,6 @@ public class TypeAnnotationUtils {
     }
 
 
-    /**
-     *
-     */
     protected static List<Class<?>> extractProcessableInterfaces(Class<?> clazz) {
         if (clazz == null) {
             return Collections.emptyList();
@@ -96,9 +124,6 @@ public class TypeAnnotationUtils {
         return interfacesFound;
     }
 
-    /**
-     *
-     */
     private static void getAllInterfaces(Class<?> clazz, List<Class<?>> interfacesFound) {
         while (clazz != null) {
             Class<?>[] interfaces = clazz.getInterfaces();
@@ -112,9 +137,6 @@ public class TypeAnnotationUtils {
         }
     }
 
-    /**
-     *
-     */
     protected static List<Annotation> extractFilterAnnotations(Class<?> type) {
         if (type == null) {
             return Collections.emptyList();
@@ -129,9 +151,6 @@ public class TypeAnnotationUtils {
         return annotationsFound;
     }
 
-    /**
-     *
-     */
     protected static List<Annotation> extractFilterAnnotations(Annotation[] annotations) {
         if (annotations == null || annotations.length == 0) {
             return Collections.emptyList();
@@ -146,9 +165,6 @@ public class TypeAnnotationUtils {
         return annotationsFound;
     }
 
-    /**
-     *
-     */
     private static boolean getAllAnnotations(Annotation annotation, List<Annotation> annotationsFound, Set<Annotation> seenAnnotations) {
         List<Annotation> annotations;
         if (annotation instanceof VirtualAnnotationHolder virtualAnnotationHolder) {
@@ -167,7 +183,10 @@ public class TypeAnnotationUtils {
                 }
             }
         }
-        return annotation.annotationType() == Conjunction.class || annotation.annotationType() == Disjunction.class;
+        return annotation.annotationType() == Conjunction.class
+                || annotation.annotationType() == ConjunctionFrom.class
+                || annotation.annotationType() == Disjunction.class
+                || annotation.annotationType() == DisjunctionFrom.class;
     }
 
 }

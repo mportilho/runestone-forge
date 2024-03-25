@@ -36,4 +36,8 @@ public enum LogicOperator {
         return CONJUNCTION.equals(this);
     }
 
+    public boolean isDisjunction() {
+        return DISJUNCTION.equals(this);
+    }
+
 }
