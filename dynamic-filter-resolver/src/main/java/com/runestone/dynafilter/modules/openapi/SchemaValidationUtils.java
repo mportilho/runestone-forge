@@ -39,6 +39,9 @@ public class SchemaValidationUtils {
      * annotated attribute located on the {@link com.runestone.dynafilter.core.generator.annotation.Filter#path()}
      */
     public static void applyValidations(Schema<?> schema, AnnotatedElement annotatedElement) {
+        if (annotatedElement == null) {
+            return;
+        }
         if (isNumberType(schema)) {
             if (AnnotationUtils.findAnnotation(annotatedElement, PositiveOrZero.class) != null) {
                 schema.setMaximum(BigDecimal.valueOf(Long.MAX_VALUE));

@@ -22,24 +22,27 @@
  * SOFTWARE.
  */
 
-package com.runestone.dynafilter.modules.jpa.spring;
+package com.runestone.dynafilter.modules.jpa.repository;
 
-import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.springframework.context.ApplicationContext;
-import org.springframework.util.StringValueResolver;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.data.jpa.domain.Specification;
 
-public class TestServletDynamicFilterAutoConfiguration {
+public class DynamicFilterJpaRepositoryBeanPostProcessor implements BeanPostProcessor {
 
-    @Test
-    public void testServletConfigurationCreation() {
-        ServletDynamicFilterAutoConfiguration servletConfig = new ServletDynamicFilterAutoConfiguration();
-        servletConfig.setApplicationContext(Mockito.mock(ApplicationContext.class));
-        servletConfig.setEmbeddedValueResolver(Mockito.mock(StringValueResolver.class));
-        WebMvcConfigurer webMvcConfigurer = servletConfig.webMvcConfigurer(servletConfig.dataConversionService(), null);
-        Assertions.assertThat(webMvcConfigurer).isNotNull();
+    private final DynamicFilterResolver<Specification<?>> dynamicFilterResolver;
+
+    public DynamicFilterJpaRepositoryBeanPostProcessor(DynamicFilterResolver<Specification<?>> dynamicFilterResolver) {
+        this.dynamicFilterResolver = dynamicFilterResolver;
     }
 
+    @Override
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+        if (DynamicFilterJpaRepository.class.isAssignableFrom(bean.getClass())) {
+            ((DynamicFilterJpaRepository) bean).setDynamicFilterResolver(dynamicFilterResolver);
+        }
+        return bean;
+    }
 }

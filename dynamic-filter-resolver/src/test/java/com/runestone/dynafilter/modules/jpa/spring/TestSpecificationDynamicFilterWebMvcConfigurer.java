@@ -24,8 +24,8 @@
 
 package com.runestone.dynafilter.modules.jpa.spring;
 
-import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
+import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -40,8 +40,9 @@ public class TestSpecificationDynamicFilterWebMvcConfigurer {
     @Test
     @SuppressWarnings({"unchecked"})
     public void test() {
+        SpecificationDynamicFilterResolver dynamicFilterResolver = Mockito.mock(SpecificationDynamicFilterResolver.class);
         SpecificationDynamicFilterWebMvcConfigurer configurer = new SpecificationDynamicFilterWebMvcConfigurer(
-                Mockito.mock(GenericApplicationContext.class), Mockito.mock(DataConversionService.class), null, null);
+                Mockito.mock(GenericApplicationContext.class), null, null, dynamicFilterResolver);
         List<HandlerMethodArgumentResolver> resolvers = Mockito.mock(List.class);
         configurer.addArgumentResolvers(resolvers);
         Mockito.verify(resolvers, Mockito.times(1)).add(Mockito.any(SpecificationDynamicFilterArgumentResolver.class));
@@ -49,24 +50,27 @@ public class TestSpecificationDynamicFilterWebMvcConfigurer {
 
     @Test
     public void testCreatingNullValueExpressionResolver() {
+        SpecificationDynamicFilterResolver dynamicFilterResolver = Mockito.mock(SpecificationDynamicFilterResolver.class);
         SpecificationDynamicFilterWebMvcConfigurer configurer = new SpecificationDynamicFilterWebMvcConfigurer(
-                Mockito.mock(GenericApplicationContext.class), Mockito.mock(DataConversionService.class), null, null);
+                Mockito.mock(GenericApplicationContext.class), null, null, dynamicFilterResolver);
         ValueExpressionResolver<String> valueExpressionResolver = configurer.getValueExpressionResolver();
         Assertions.assertThat(valueExpressionResolver).isNull();
     }
 
     @Test
     public void testCreatingWithValueExpressionResolver() {
+        SpecificationDynamicFilterResolver dynamicFilterResolver = Mockito.mock(SpecificationDynamicFilterResolver.class);
         SpecificationDynamicFilterWebMvcConfigurer configurer = new SpecificationDynamicFilterWebMvcConfigurer(
-                Mockito.mock(GenericApplicationContext.class), Mockito.mock(DataConversionService.class), null, value -> value);
+                Mockito.mock(GenericApplicationContext.class), null, value -> value, dynamicFilterResolver);
         ValueExpressionResolver<String> valueExpressionResolver = configurer.getValueExpressionResolver();
         Assertions.assertThat(valueExpressionResolver).isInstanceOf(ValueExpressionResolver.class);
     }
 
     @Test
     public void testCreatingWithStringValueResolver() {
+        SpecificationDynamicFilterResolver dynamicFilterResolver = Mockito.mock(SpecificationDynamicFilterResolver.class);
         SpecificationDynamicFilterWebMvcConfigurer configurer = new SpecificationDynamicFilterWebMvcConfigurer(
-                Mockito.mock(GenericApplicationContext.class), Mockito.mock(DataConversionService.class), Mockito.mock(StringValueResolver.class), null);
+                Mockito.mock(GenericApplicationContext.class), Mockito.mock(StringValueResolver.class), null, dynamicFilterResolver);
         ValueExpressionResolver<String> valueExpressionResolver = configurer.getValueExpressionResolver();
         Assertions.assertThat(valueExpressionResolver).isInstanceOf(ValueExpressionResolver.class);
     }
@@ -84,8 +88,9 @@ public class TestSpecificationDynamicFilterWebMvcConfigurer {
         Mockito.when(valueExpressionResolver.resolveValue(Mockito.eq("test02"))).thenReturn("valueExpressionResolver");
         Mockito.when(valueExpressionResolver.resolveValue(Mockito.eq("test-null-02"))).thenReturn(null);
 
+        SpecificationDynamicFilterResolver dynamicFilterResolver = Mockito.mock(SpecificationDynamicFilterResolver.class);
         SpecificationDynamicFilterWebMvcConfigurer configurer = new SpecificationDynamicFilterWebMvcConfigurer(
-                Mockito.mock(GenericApplicationContext.class), Mockito.mock(DataConversionService.class), stringValueResolver, valueExpressionResolver);
+                Mockito.mock(GenericApplicationContext.class), stringValueResolver, valueExpressionResolver, dynamicFilterResolver);
         ValueExpressionResolver<String> resolver = configurer.getValueExpressionResolver();
         Assertions.assertThat(resolver).isInstanceOf(ValueExpressionResolver.class);
 

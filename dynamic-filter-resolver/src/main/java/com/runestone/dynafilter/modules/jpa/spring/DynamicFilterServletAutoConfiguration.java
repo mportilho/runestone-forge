@@ -27,16 +27,20 @@ package com.runestone.dynafilter.modules.jpa.spring;
 import com.runestone.converters.DataConversionService;
 import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
+import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
+import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
+import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.EmbeddedValueResolverAware;
 import org.springframework.context.annotation.Bean;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringValueResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-public class ServletDynamicFilterAutoConfiguration implements EmbeddedValueResolverAware, ApplicationContextAware {
+public class DynamicFilterServletAutoConfiguration implements EmbeddedValueResolverAware, ApplicationContextAware {
 
     private ApplicationContext applicationContext;
     private StringValueResolver stringValueResolver;
@@ -58,9 +62,16 @@ public class ServletDynamicFilterAutoConfiguration implements EmbeddedValueResol
     }
 
     @Bean
-    public WebMvcConfigurer webMvcConfigurer(@Autowired(required = false) final DataConversionService dataConversionService,
+    @ConditionalOnMissingBean
+    public DynamicFilterResolver<Specification<?>> dynamicFilterResolver(DataConversionService dataConversionService) {
+        SpecificationFilterOperationService service = new SpecificationFilterOperationService(dataConversionService);
+        return new SpecificationDynamicFilterResolver(service);
+    }
+
+    @Bean
+    public WebMvcConfigurer webMvcConfigurer(DynamicFilterResolver<Specification<?>> dynamicFilterResolver,
                                              @Autowired(required = false) final ValueExpressionResolver<String> valueExpressionResolver) {
-        return new SpecificationDynamicFilterWebMvcConfigurer(applicationContext, dataConversionService, stringValueResolver, valueExpressionResolver);
+        return new SpecificationDynamicFilterWebMvcConfigurer(applicationContext, stringValueResolver, valueExpressionResolver, dynamicFilterResolver);
     }
 
 }

@@ -26,9 +26,8 @@ package com.runestone.dynafilter.modules.openapi;
 
 import com.fasterxml.jackson.annotation.JsonView;
 import com.runestone.assertions.Asserts;
-import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
-import com.runestone.dynafilter.core.generator.annotation.Filter;
-import com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils;
+import com.runestone.dynafilter.core.generator.ConditionalStatement;
+import com.runestone.dynafilter.core.generator.annotation.*;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.operation.types.IsIn;
@@ -44,6 +43,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.ParameterNameDiscoverer;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.method.HandlerMethod;
 
 import java.lang.reflect.Field;
@@ -81,7 +81,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
                     try {
                         customizeParameter(operation, methodParameter, spec);
                     } catch (Exception e) {
-                        throw new IllegalStateException("Cannot build custom OpenAPI parameters from specification-args-resolver", e);
+                        throw new IllegalStateException("Cannot build custom OpenAPI parameters from dynamic filter parameter", e);
                     }
                 }
             }
@@ -94,10 +94,30 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
      * representation
      */
     @SuppressWarnings({"rawtypes"})
-    private void customizeParameter(
-            Operation operation, MethodParameter methodParameter, Filter filter) throws Exception {
-        ParameterizedType parameterizedType = (ParameterizedType) methodParameter.getParameter().getParameterizedType();
-        Class<?> parameterizedClassType = Class.forName(parameterizedType.getActualTypeArguments()[0].getTypeName());
+    private void customizeParameter(Operation operation, MethodParameter methodParameter, Filter filter) throws Exception {
+        Field field = null;
+        Class<?> type = methodParameter.getParameter().getType();
+        if (Specification.class.isAssignableFrom(type)) {
+            ParameterizedType parameterizedType = (ParameterizedType) methodParameter.getParameter().getParameterizedType();
+            Class<?> parameterizedClassType = Class.forName(parameterizedType.getActualTypeArguments()[0].getTypeName());
+            field = findParameterField(operation, filter.path(), parameterizedClassType);
+        } else if (ConditionalStatement.class.isAssignableFrom(type)) {
+            ConjunctionFrom conjunctionFrom = methodParameter.getParameterAnnotation(ConjunctionFrom.class);
+            DisjunctionFrom disjunctionFrom = methodParameter.getParameterAnnotation(DisjunctionFrom.class);
+            Class<?> clazz = conjunctionFrom != null ? conjunctionFrom.value() : null;
+            clazz = clazz == null && disjunctionFrom != null ? disjunctionFrom.value() : clazz;
+            if (clazz != null) {
+                for (Field declaredField : clazz.getDeclaredFields()) {
+                    Filter fieldFilter = declaredField.getAnnotation(Filter.class);
+                    if (fieldFilter != null && fieldFilter.path().equals(filter.path())) {
+                        field = declaredField;
+                        break;
+                    }
+                }
+            }
+        } else {
+            throw new IllegalStateException("Dynamic filter cannot be used with types other than Specification or ConditionalStatement");
+        }
 
         if (Decorated.class.equals(filter.operation())) {
             var parameter = new io.swagger.v3.oas.models.parameters.Parameter();
@@ -110,14 +130,10 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             return;
         }
 
-        Field field = findParameterField(operation, filter, parameterizedClassType);
-        Class<?> fieldClass = field.getType();
-
         if (Dynamic.class.equals(filter.operation()) && filter.parameters().length > 1) {
             throw new IllegalStateException("Dynamic filter operation cannot have two parameters");
         }
 
-        Schema schemaFromType = AnnotationsUtils.resolveSchemaFromType(fieldClass, null, getJsonViewFromMethod(methodParameter));
         for (String parameterName : filter.parameters()) {
             Optional<io.swagger.v3.oas.models.parameters.Parameter> optParameter = operation.getParameters().stream()
                     .filter(p -> p.getName().equals(parameterName)).findFirst();
@@ -135,10 +151,10 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             } else if (IsIn.class.equals(filter.operation())) {
                 ArraySchema arraySchema = new ArraySchema();
                 arraySchema.type("array");
-                arraySchema.items(Optional.ofNullable(parameter.getSchema()).orElse(new StringSchema()));
+                arraySchema.items(parameter.getSchema() != null ? parameter.getSchema() : new StringSchema());
                 parameter.setSchema(arraySchema);
             } else {
-                createCommonSchema(filter, field, schemaFromType, parameter);
+                createCommonSchema(filter, field, methodParameter, parameter);
             }
 
             parameter.required(filter.required());
@@ -156,33 +172,40 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private void createCommonSchema(Filter filter, Field field, Schema schemaFromType,
-                                    io.swagger.v3.oas.models.parameters.Parameter parameter) {
-        Optional<Schema> optSchema = Optional.ofNullable(parameter.getSchema());
-        boolean schemaExists = optSchema.isPresent();
-        Schema schema = optSchema.orElse(new Schema<>());
-
-        if (IsNull.class.equals(filter.operation())) {
-            schema = new BooleanSchema();
-        } else if (schemaExists) {
-            schema.setType(schemaFromType.getType());
-            schema.setEnum(schemaFromType.getEnum());
+    private void createCommonSchema(Filter filter, Field field, MethodParameter methodParameter, io.swagger.v3.oas.models.parameters.Parameter parameter) {
+        Schema schemaFromType;
+        if (field != null) {
+            Class<?> fieldClass = field.getType();
+            schemaFromType = AnnotationsUtils.resolveSchemaFromType(fieldClass, null, getJsonViewFromMethod(methodParameter));
         } else {
-            schema = schemaFromType;
+            schemaFromType = new StringSchema();
         }
-        parameter.setSchema(schema);
+
+        Schema currentSchema = parameter.getSchema();
+        Schema newSchema;
+        if (IsNull.class.equals(filter.operation())) {
+            newSchema = new BooleanSchema();
+        } else if (currentSchema != null) {
+            newSchema = new Schema();
+            newSchema.setType(schemaFromType.getType());
+            newSchema.setEnum(schemaFromType.getEnum());
+        } else {
+            newSchema = schemaFromType;
+        }
+
+        parameter.setSchema(newSchema);
         parameter.setDescription(filter.description());
 
         if (filter.defaultValues() != null && filter.defaultValues().length == 1) {
-            schema.setDefault(filter.defaultValues()[0]);
+            newSchema.setDefault(filter.defaultValues()[0]);
         }
-        SchemaValidationUtils.applyValidations(schema, field);
+        SchemaValidationUtils.applyValidations(newSchema, field);
     }
 
-    private static Field findParameterField(Operation operation, Filter filter, Class<?> parameterizedClassType) {
+    private static Field findParameterField(Operation operation, String pathToAttribute, Class<?> parameterizedClassType) {
         Field field;
         try {
-            field = findFilterField(parameterizedClassType, filter.path());
+            field = findFilterField(parameterizedClassType, pathToAttribute);
         } catch (IllegalStateException e) {
             String location = Asserts.isNotEmpty(operation.getTags()) ? operation.getTags().get(0) + "." : "";
             location += operation.getOperationId();

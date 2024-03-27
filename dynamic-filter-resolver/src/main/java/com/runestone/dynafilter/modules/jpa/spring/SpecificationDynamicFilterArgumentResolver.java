@@ -24,6 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.spring;
 
+import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
@@ -63,7 +64,7 @@ public class SpecificationDynamicFilterArgumentResolver implements HandlerMethod
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
         Class<?> parameterType = parameter.getParameterType();
-        return parameterType.isInterface() && Specification.class.isAssignableFrom(parameterType);
+        return ConditionalStatement.class.equals(parameterType) || (parameterType.isInterface() && Specification.class.isAssignableFrom(parameterType));
     }
 
     @Override
@@ -71,12 +72,16 @@ public class SpecificationDynamicFilterArgumentResolver implements HandlerMethod
         Map<String, Object> userParameters = createParametersMap(webRequest);
         AnnotationStatementInput input = new AnnotationStatementInput(parameter.getParameterType(), parameter.getParameterAnnotations());
 
-        Annotation[] fetchingAnnotations = parameter.getParameterAnnotations();
-        FilterDecorators parameterAnnotation = parameter.getParameterAnnotation(FilterDecorators.class);
-        var decoratorClasses = parameterAnnotation != null ? parameterAnnotation.value() : null;
-        FilterDecorator<Specification<?>> filterDecorator = filterDecoratorFactory.createFilterDecorators(fetchingAnnotations, decoratorClasses);
-
+        Annotation[] parameterAnnotations = parameter.getParameterAnnotations();
+        FilterDecorators filterDecorators = parameter.getParameterAnnotation(FilterDecorators.class);
+        var decoratorClasses = filterDecorators != null ? filterDecorators.value() : null;
+        FilterDecorator<Specification<?>> filterDecorator = filterDecoratorFactory.createFilterDecorators(parameterAnnotations, decoratorClasses);
         StatementWrapper statementWrapper = statementGenerator.generateStatements(input, userParameters);
+
+        if (ConditionalStatement.class.equals(parameter.getParameterType())) {
+            return new ConditionalStatement(statementWrapper, filterDecorator);
+        }
+
         Specification<?> specification = dynamicFilterResolver.createFilter(statementWrapper, filterDecorator);
         return specification != null ? createProxy(specification, parameter.getParameterType()) : null;
     }

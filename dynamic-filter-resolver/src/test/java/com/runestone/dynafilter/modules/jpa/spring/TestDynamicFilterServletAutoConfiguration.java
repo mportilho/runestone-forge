@@ -22,18 +22,27 @@
  * SOFTWARE.
  */
 
-package com.runestone.dynafilter.core.resolver;
+package com.runestone.dynafilter.modules.jpa.spring;
 
-import com.runestone.dynafilter.core.generator.ConditionalStatement;
-import com.runestone.dynafilter.core.generator.StatementWrapper;
+import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.context.ApplicationContext;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.util.StringValueResolver;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-public interface DynamicFilterResolver<T> {
+public class TestDynamicFilterServletAutoConfiguration {
 
-    <R extends T> R createFilter(StatementWrapper statementWrapper, FilterDecorator<T> decorator);
-
-    @SuppressWarnings("unchecked")
-    default <R extends T> R createFilter(ConditionalStatement conditionalStatement) {
-        return createFilter(conditionalStatement.statementWrapper(), (FilterDecorator<T>) conditionalStatement.filterDecorator());
+    @Test
+    public void testServletConfigurationCreation() {
+        DynamicFilterServletAutoConfiguration servletConfig = new DynamicFilterServletAutoConfiguration();
+        servletConfig.setApplicationContext(Mockito.mock(ApplicationContext.class));
+        servletConfig.setEmbeddedValueResolver(Mockito.mock(StringValueResolver.class));
+        DynamicFilterResolver<Specification<?>> dynamicFilterResolver = Mockito.mock(DynamicFilterResolver.class);
+        WebMvcConfigurer webMvcConfigurer = servletConfig.webMvcConfigurer(dynamicFilterResolver, null);
+        Assertions.assertThat(webMvcConfigurer).isNotNull();
     }
 
 }
