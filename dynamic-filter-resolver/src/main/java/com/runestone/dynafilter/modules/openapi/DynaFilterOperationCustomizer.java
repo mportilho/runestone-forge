@@ -40,6 +40,8 @@ import io.swagger.v3.oas.models.media.BooleanSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.ParameterNameDiscoverer;
@@ -56,6 +58,8 @@ import static java.util.Objects.requireNonNull;
 
 public class DynaFilterOperationCustomizer implements OperationCustomizer {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(DynaFilterOperationCustomizer.class);
+
     private final ParameterNameDiscoverer parameterNameDiscoverer;
 
     public DynaFilterOperationCustomizer(ParameterNameDiscoverer parameterNameDiscoverer) {
@@ -65,8 +69,18 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
     @Override
     public Operation customize(Operation operation, HandlerMethod handlerMethod) {
         for (MethodParameter methodParameter : handlerMethod.getMethodParameters()) {
-            String parameterName = getParameterName(methodParameter);
+            if (!methodParameter.hasParameterAnnotation(Conjunction.class) && !methodParameter.hasParameterAnnotation(ConjunctionFrom.class)
+                    && !methodParameter.hasParameterAnnotation(Disjunction.class) && !methodParameter.hasParameterAnnotation(Disjunction.class)) {
+                continue;
+            }
 
+            Class<?> clazz = findExternalFilterDefinitionClass(methodParameter);
+            FilterTarget filterTarget = clazz != null ? clazz.getAnnotation(FilterTarget.class) : null;
+            if (clazz != null && filterTarget == null) {
+                LOGGER.warn("Consider adding the @{} annotation to class '{}' to validate the filter's path", FilterTarget.class.getSimpleName(), clazz.getSimpleName());
+            }
+
+            String parameterName = getParameterName(methodParameter);
             List<Filter> parameterAnnotations = TypeAnnotationUtils
                     .retrieveFilterAnnotations(new AnnotationStatementInput(methodParameter.getParameterType(), methodParameter.getParameterAnnotations()));
             parameterAnnotations.removeIf(filter -> Decorated.class.equals(filter.operation()));
@@ -190,17 +204,14 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
                 throw new IllegalStateException(String.format("Fail to get Schema data from Operation '%s'", location), e);
             }
         } else if (ConditionalStatement.class.isAssignableFrom(type)) {
-            ConjunctionFrom conjunctionFrom = methodParameter.getParameterAnnotation(ConjunctionFrom.class);
-            DisjunctionFrom disjunctionFrom = methodParameter.getParameterAnnotation(DisjunctionFrom.class);
-            Class<?> clazz = conjunctionFrom != null ? conjunctionFrom.value() : null;
-            clazz = clazz == null && disjunctionFrom != null ? disjunctionFrom.value() : clazz;
+            Class<?> clazz = findExternalFilterDefinitionClass(methodParameter);
             if (clazz != null) {
+                FilterTarget filterTarget = clazz.getAnnotation(FilterTarget.class);
                 for (Field declaredField : clazz.getDeclaredFields()) {
                     Filter fieldFilter = declaredField.getAnnotation(Filter.class);
                     if (fieldFilter != null && fieldFilter.path().equals(filter.path())) {
-                        FilterTarget filterTarget = clazz.getAnnotation(FilterTarget.class);
                         if (filterTarget != null) {
-                            findFilterField(filterTarget.value(), filter.path());
+                            findFilterField(filterTarget.value(), filter.path()); // just validate the path, don't need the field
                         }
                         field = declaredField;
                         break;
@@ -273,6 +284,14 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             return methodParameter.getParameterName();
         }
         return methodParameter.getParameter().getName();
+    }
+
+    private static Class<?> findExternalFilterDefinitionClass(MethodParameter methodParameter) {
+        ConjunctionFrom conjunctionFrom = methodParameter.getParameterAnnotation(ConjunctionFrom.class);
+        DisjunctionFrom disjunctionFrom = methodParameter.getParameterAnnotation(DisjunctionFrom.class);
+        Class<?> clazz = conjunctionFrom != null ? conjunctionFrom.value() : null;
+        clazz = clazz == null && disjunctionFrom != null ? disjunctionFrom.value() : clazz;
+        return clazz;
     }
 
 }
