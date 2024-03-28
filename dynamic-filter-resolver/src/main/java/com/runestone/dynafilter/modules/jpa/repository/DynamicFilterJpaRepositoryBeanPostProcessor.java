@@ -27,12 +27,14 @@ package com.runestone.dynafilter.modules.jpa.repository;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.jpa.domain.Specification;
 
 public class DynamicFilterJpaRepositoryBeanPostProcessor implements BeanPostProcessor {
 
     private final DynamicFilterResolver<Specification<?>> dynamicFilterResolver;
 
+    @Lazy
     public DynamicFilterJpaRepositoryBeanPostProcessor(DynamicFilterResolver<Specification<?>> dynamicFilterResolver) {
         this.dynamicFilterResolver = dynamicFilterResolver;
     }
