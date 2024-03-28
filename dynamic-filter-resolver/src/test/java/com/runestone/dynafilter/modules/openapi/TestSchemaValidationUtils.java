@@ -46,7 +46,6 @@ public class TestSchemaValidationUtils {
         assertThat(schema.getMaximum()).isEqualByComparingTo("-1");
         assertThat(schema.getMinimum()).isEqualByComparingTo("-10");
         assertThat(schema.getName()).isEqualTo("numeroDiasValidade");
-        assertThat(SchemaValidationUtils.isFieldRequired(field)).isTrue();
     }
 
     @Test
@@ -70,7 +69,6 @@ public class TestSchemaValidationUtils {
         schema.setType("string");
 
         SchemaValidationUtils.applyValidations(schema, ObjectValidations.class.getDeclaredField("participantName"));
-        assertThat(SchemaValidationUtils.isFieldRequired(field)).isTrue();
         assertThat(schema.getPattern()).isEqualTo("\\w*\\W*");
         assertThat(schema.getMaxLength()).isEqualTo(150);
         assertThat(schema.getMinLength()).isEqualTo(0);
@@ -91,7 +89,6 @@ public class TestSchemaValidationUtils {
         schema.setType("number");
 
         SchemaValidationUtils.applyValidations(schema, ObjectValidations.class.getDeclaredField("limitedBigDecimal"));
-        assertThat(SchemaValidationUtils.isFieldRequired(field)).isFalse();
         assertThat(schema.getPattern()).isNull();
         assertThat(schema.getMaxLength()).isNull();
         assertThat(schema.getMinLength()).isNull();
@@ -112,7 +109,6 @@ public class TestSchemaValidationUtils {
         schema.setType("array");
 
         SchemaValidationUtils.applyValidations(schema, ObjectValidations.class.getDeclaredField("schedule"));
-        assertThat(SchemaValidationUtils.isFieldRequired(field)).isTrue();
         assertThat(schema.getMaxLength()).isNull();
         assertThat(schema.getMinLength()).isNull();
         assertThat(schema.getMaximum()).isNull();

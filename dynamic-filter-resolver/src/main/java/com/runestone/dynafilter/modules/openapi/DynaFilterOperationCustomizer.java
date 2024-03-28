@@ -58,10 +58,6 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
 
     private final ParameterNameDiscoverer parameterNameDiscoverer;
 
-    public DynaFilterOperationCustomizer() {
-        this(null);
-    }
-
     public DynaFilterOperationCustomizer(ParameterNameDiscoverer parameterNameDiscoverer) {
         this.parameterNameDiscoverer = parameterNameDiscoverer;
     }
@@ -95,29 +91,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
      */
     @SuppressWarnings({"rawtypes"})
     private void customizeParameter(Operation operation, MethodParameter methodParameter, Filter filter) throws Exception {
-        Field field = null;
-        Class<?> type = methodParameter.getParameter().getType();
-        if (Specification.class.isAssignableFrom(type)) {
-            ParameterizedType parameterizedType = (ParameterizedType) methodParameter.getParameter().getParameterizedType();
-            Class<?> parameterizedClassType = Class.forName(parameterizedType.getActualTypeArguments()[0].getTypeName());
-            field = findParameterField(operation, filter.path(), parameterizedClassType);
-        } else if (ConditionalStatement.class.isAssignableFrom(type)) {
-            ConjunctionFrom conjunctionFrom = methodParameter.getParameterAnnotation(ConjunctionFrom.class);
-            DisjunctionFrom disjunctionFrom = methodParameter.getParameterAnnotation(DisjunctionFrom.class);
-            Class<?> clazz = conjunctionFrom != null ? conjunctionFrom.value() : null;
-            clazz = clazz == null && disjunctionFrom != null ? disjunctionFrom.value() : clazz;
-            if (clazz != null) {
-                for (Field declaredField : clazz.getDeclaredFields()) {
-                    Filter fieldFilter = declaredField.getAnnotation(Filter.class);
-                    if (fieldFilter != null && fieldFilter.path().equals(filter.path())) {
-                        field = declaredField;
-                        break;
-                    }
-                }
-            }
-        } else {
-            throw new IllegalStateException("Dynamic filter cannot be used with types other than Specification or ConditionalStatement");
-        }
+        Field field = getParameterField(operation, methodParameter, filter);
 
         if (Decorated.class.equals(filter.operation())) {
             var parameter = new io.swagger.v3.oas.models.parameters.Parameter();
@@ -202,43 +176,41 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
         SchemaValidationUtils.applyValidations(newSchema, field);
     }
 
-    private static Field findParameterField(Operation operation, String pathToAttribute, Class<?> parameterizedClassType) {
-        Field field;
-        try {
-            field = findFilterField(parameterizedClassType, pathToAttribute);
-        } catch (IllegalStateException e) {
-            String location = Asserts.isNotEmpty(operation.getTags()) ? operation.getTags().get(0) + "." : "";
-            location += operation.getOperationId();
-            throw new IllegalStateException(String.format("Fail to get Schema data from Operation '%s'", location), e);
+    private static Field getParameterField(Operation operation, MethodParameter methodParameter, Filter filter) throws ClassNotFoundException {
+        Field field = null;
+        Class<?> type = methodParameter.getParameter().getType();
+        if (Specification.class.isAssignableFrom(type)) {
+            ParameterizedType parameterizedType = (ParameterizedType) methodParameter.getParameter().getParameterizedType();
+            Class<?> parameterizedClassType = Class.forName(parameterizedType.getActualTypeArguments()[0].getTypeName());
+            try {
+                field = findFilterField(parameterizedClassType, filter.path());
+            } catch (IllegalStateException e) {
+                String location = Asserts.isNotEmpty(operation.getTags()) ? operation.getTags().get(0) + "." : "";
+                location += operation.getOperationId();
+                throw new IllegalStateException(String.format("Fail to get Schema data from Operation '%s'", location), e);
+            }
+        } else if (ConditionalStatement.class.isAssignableFrom(type)) {
+            ConjunctionFrom conjunctionFrom = methodParameter.getParameterAnnotation(ConjunctionFrom.class);
+            DisjunctionFrom disjunctionFrom = methodParameter.getParameterAnnotation(DisjunctionFrom.class);
+            Class<?> clazz = conjunctionFrom != null ? conjunctionFrom.value() : null;
+            clazz = clazz == null && disjunctionFrom != null ? disjunctionFrom.value() : clazz;
+            if (clazz != null) {
+                for (Field declaredField : clazz.getDeclaredFields()) {
+                    Filter fieldFilter = declaredField.getAnnotation(Filter.class);
+                    if (fieldFilter != null && fieldFilter.path().equals(filter.path())) {
+                        FilterTarget filterTarget = clazz.getAnnotation(FilterTarget.class);
+                        if (filterTarget != null) {
+                            findFilterField(filterTarget.value(), filter.path());
+                        }
+                        field = declaredField;
+                        break;
+                    }
+                }
+            }
+        } else {
+            throw new IllegalStateException("Dynamic filter cannot be used with types other than Specification or ConditionalStatement");
         }
         return field;
-    }
-
-    /**
-     * Extracts a {@link JsonView} configuration from a {@link MethodParameter} for
-     * additional customization
-     */
-    private static JsonView getJsonViewFromMethod(MethodParameter methodParameter) {
-        JsonView[] jsonViews = requireNonNull(methodParameter.getMethod()).getAnnotationsByType(JsonView.class);
-        JsonView jsonView = null;
-        if (jsonViews != null && jsonViews.length > 0) {
-            jsonView = jsonViews[0];
-        }
-        return jsonView;
-    }
-
-    /**
-     * Defines the request parameter's name
-     */
-    private String getParameterName(MethodParameter methodParameter) {
-        io.swagger.v3.oas.annotations.Parameter parameterAnnotation = methodParameter.getParameter().getAnnotation(io.swagger.v3.oas.annotations.Parameter.class);
-        if (parameterAnnotation != null) {
-            return parameterAnnotation.name();
-        } else if (parameterNameDiscoverer != null) {
-            methodParameter.initParameterNameDiscovery(parameterNameDiscoverer);
-            return methodParameter.getParameterName();
-        }
-        return methodParameter.getParameter().getName();
     }
 
     /**
@@ -274,6 +246,33 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             }
             throw new IllegalStateException(String.format("Field '%s' does not exist in type '%s'", fieldName, clazz.getCanonicalName()));
         }
+    }
+
+    /**
+     * Extracts a {@link JsonView} configuration from a {@link MethodParameter} for
+     * additional customization
+     */
+    private static JsonView getJsonViewFromMethod(MethodParameter methodParameter) {
+        JsonView[] jsonViews = requireNonNull(methodParameter.getMethod()).getAnnotationsByType(JsonView.class);
+        JsonView jsonView = null;
+        if (jsonViews != null && jsonViews.length > 0) {
+            jsonView = jsonViews[0];
+        }
+        return jsonView;
+    }
+
+    /**
+     * Defines the request parameter's name
+     */
+    private String getParameterName(MethodParameter methodParameter) {
+        io.swagger.v3.oas.annotations.Parameter parameterAnnotation = methodParameter.getParameter().getAnnotation(io.swagger.v3.oas.annotations.Parameter.class);
+        if (parameterAnnotation != null) {
+            return parameterAnnotation.name();
+        } else if (parameterNameDiscoverer != null) {
+            methodParameter.initParameterNameDiscovery(parameterNameDiscoverer);
+            return methodParameter.getParameterName();
+        }
+        return methodParameter.getParameter().getName();
     }
 
 }

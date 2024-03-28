@@ -29,7 +29,6 @@ import jakarta.validation.constraints.*;
 import org.springframework.core.annotation.AnnotationUtils;
 
 import java.lang.reflect.AnnotatedElement;
-import java.lang.reflect.Field;
 import java.math.BigDecimal;
 
 public class SchemaValidationUtils {
@@ -103,12 +102,6 @@ public class SchemaValidationUtils {
 
     private static boolean isArrayType(Schema<?> schema) {
         return "array".equals(schema.getType());
-    }
-
-    public static boolean isFieldRequired(Field field) {
-        return AnnotationUtils.findAnnotation(field, NotNull.class) != null
-                || AnnotationUtils.findAnnotation(field, NotBlank.class) != null
-                || AnnotationUtils.findAnnotation(field, NotEmpty.class) != null;
     }
 
 }
