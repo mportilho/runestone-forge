@@ -210,10 +210,11 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
                 for (Field declaredField : clazz.getDeclaredFields()) {
                     Filter fieldFilter = declaredField.getAnnotation(Filter.class);
                     if (fieldFilter != null && fieldFilter.path().equals(filter.path())) {
+                        Field targetField = null;
                         if (filterTarget != null) {
-                            findFilterField(filterTarget.value(), filter.path()); // just validate the path, don't need the field
+                            targetField = findFilterField(filterTarget.value(), filter.path()); // just validate the path, don't need the field
                         }
-                        field = declaredField;
+                        field = filterTarget != null && filterTarget.useTargetFieldsMetadata() ? targetField : declaredField;
                         break;
                     }
                 }
