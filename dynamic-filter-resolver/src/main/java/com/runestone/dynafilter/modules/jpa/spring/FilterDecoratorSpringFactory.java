@@ -24,6 +24,8 @@
 
 package com.runestone.dynafilter.modules.jpa.spring;
 
+import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
+import com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils;
 import com.runestone.dynafilter.core.resolver.CompositeFilterDecorator;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
 import com.runestone.dynafilter.modules.jpa.resolver.Fetches;
@@ -44,11 +46,15 @@ public class FilterDecoratorSpringFactory {
     }
 
     @SuppressWarnings({"unchecked"})
-    public FilterDecorator<Specification<?>> createFilterDecorators(Annotation[] fetchingAnnotations,
-                                                                    Class<? extends FilterDecorator<?>>[] decoratorClasses) {
+    public FilterDecorator<Specification<?>> createFilterDecorators(AnnotationStatementInput input) {
+        if (input == null) {
+            return null;
+        }
+        Annotation[] fetchingAnnotations = input.annotations();
+        Class<? extends FilterDecorator<?>>[] decoratorClasses = TypeAnnotationUtils.findFilterDecorators(input);
         List<FilterDecorator<Specification<?>>> decoratorList = null;
         FetchingFilterDecorator fetchingDecorator = createFetchingDecorator(fetchingAnnotations);
-        if (decoratorClasses != null) {
+        if (decoratorClasses.length > 0) {
             decoratorList = new ArrayList<>(decoratorClasses.length + 1);
             for (Class<? extends FilterDecorator<?>> aClass : decoratorClasses) {
                 Map<String, ? extends FilterDecorator<?>> beansOfType = applicationContext.getBeansOfType(aClass);

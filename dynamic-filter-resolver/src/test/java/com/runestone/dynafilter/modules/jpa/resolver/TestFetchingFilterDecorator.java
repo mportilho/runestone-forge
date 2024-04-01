@@ -83,7 +83,7 @@ public class TestFetchingFilterDecorator {
     @Test
     @SuppressWarnings({"unchecked", "rawtypes"})
     public void testWithFetchingAnnotations() {
-        var argumentResolver = createSpecificationDynaFilterArgumentResolver();
+        SpecificationDynamicFilterArgumentResolver argumentResolver = createSpecificationDynaFilterArgumentResolver();
         MethodParameter parameter = Mockito.mock(MethodParameter.class);
         NativeWebRequest webRequest = Mockito.mock(NativeWebRequest.class);
         HttpServletRequest httpServletRequest = Mockito.mock(HttpServletRequest.class);
@@ -103,7 +103,7 @@ public class TestFetchingFilterDecorator {
         assert specification != null;
         personRepository.findAll(specification);
 
-        Mockito.verify(filterDecoratorFactory, Mockito.times(1)).createFilterDecorators(Mockito.any(), Mockito.any());
+        Mockito.verify(filterDecoratorFactory, Mockito.times(1)).createFilterDecorators(Mockito.any());
         Mockito.verify(resolver, Mockito.times(1)).createFilter(Mockito.any(), Mockito.argThat(filterDecor -> {
             if (filterDecor instanceof FetchingFilterDecorator fetchingFilterDecorator) {
                 Collection<Fetching> fetches = fetchingFilterDecorator.getFetches();
@@ -138,7 +138,7 @@ public class TestFetchingFilterDecorator {
         assert specification != null;
         personRepository.findAll(specification);
 
-        Mockito.verify(filterDecoratorFactory, Mockito.times(1)).createFilterDecorators(Mockito.any(), Mockito.any());
+        Mockito.verify(filterDecoratorFactory, Mockito.times(1)).createFilterDecorators(Mockito.any());
         Mockito.verify(resolver, Mockito.times(1)).createFilter(Mockito.any(), Mockito.argThat(filterDecor -> {
             if (filterDecor instanceof FetchingFilterDecorator fetchingFilterDecorator) {
                 Collection<Fetching> fetches = fetchingFilterDecorator.getFetches();

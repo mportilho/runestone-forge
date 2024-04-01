@@ -25,6 +25,7 @@
 package com.runestone.dynafilter.core.generator.annotation;
 
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
+import com.runestone.dynafilter.core.resolver.FilterDecorator;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -32,9 +33,41 @@ import java.util.*;
 
 public class TypeAnnotationUtils {
 
-    private static final Map<AnnotationStatementInput, List<FilterAnnotationData>> cacheAnnData = new WeakHashMap<>();
+    private static final Map<AnnotationStatementInput, List<FilterAnnotationData>> CACHE_FILTERS = new WeakHashMap<>();
 
     private TypeAnnotationUtils() {
+    }
+
+    @SuppressWarnings("unchecked")
+    public static Class<? extends FilterDecorator<?>>[] findFilterDecorators(AnnotationStatementInput annotationStatementInput) {
+        List<Class<? extends FilterDecorator<?>>> decorators = new ArrayList<>();
+
+        if (annotationStatementInput.annotations() != null) {
+            for (Annotation annotation : annotationStatementInput.annotations()) {
+                if (annotation.annotationType().equals(FilterDecorators.class)) {
+                    FilterDecorators filterDecorators = (FilterDecorators) annotation;
+                    decorators.addAll(Arrays.asList(filterDecorators.value()));
+                }
+            }
+        }
+
+        for (Annotation annotation : TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput)) {
+            if (annotation.annotationType() == ConjunctionFrom.class) {
+                ConjunctionFrom ann = (ConjunctionFrom) annotation;
+                FilterDecorators filterDecorators = ann.value().getAnnotation(FilterDecorators.class);
+                if (filterDecorators != null) {
+                    decorators.addAll(Arrays.asList(filterDecorators.value()));
+                }
+            } else if (annotation.annotationType() == DisjunctionFrom.class) {
+                DisjunctionFrom ann = (DisjunctionFrom) annotation;
+                FilterDecorators filterDecorators = ann.value().getAnnotation(FilterDecorators.class);
+                if (filterDecorators != null) {
+                    decorators.addAll(Arrays.asList(filterDecorators.value()));
+                }
+            }
+        }
+
+        return decorators.toArray(new Class[0]);
     }
 
     public static List<Filter> retrieveFilterAnnotations(AnnotationStatementInput annotationStatementInput) {
@@ -47,7 +80,7 @@ public class TypeAnnotationUtils {
     }
 
     public static List<FilterAnnotationData> findAnnotationData(AnnotationStatementInput annotationStatementInput) {
-        return cacheAnnData.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::findAnnotationDataInternal);
+        return CACHE_FILTERS.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::findAnnotationDataInternal);
     }
 
     private static List<FilterAnnotationData> findAnnotationDataInternal(AnnotationStatementInput annotationStatementInput) {

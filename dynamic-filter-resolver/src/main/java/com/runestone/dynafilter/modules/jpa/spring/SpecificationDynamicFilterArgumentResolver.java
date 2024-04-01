@@ -28,7 +28,6 @@ import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
-import com.runestone.dynafilter.core.generator.annotation.FilterDecorators;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,7 +40,6 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.method.support.ModelAndViewContainer;
 import org.springframework.web.servlet.HandlerMapping;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.Map;
@@ -71,11 +69,7 @@ public class SpecificationDynamicFilterArgumentResolver implements HandlerMethod
     public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer, NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
         Map<String, Object> userParameters = createParametersMap(webRequest);
         AnnotationStatementInput input = new AnnotationStatementInput(parameter.getParameterType(), parameter.getParameterAnnotations());
-
-        Annotation[] parameterAnnotations = parameter.getParameterAnnotations();
-        FilterDecorators filterDecorators = parameter.getParameterAnnotation(FilterDecorators.class);
-        var decoratorClasses = filterDecorators != null ? filterDecorators.value() : null;
-        FilterDecorator<Specification<?>> filterDecorator = filterDecoratorFactory.createFilterDecorators(parameterAnnotations, decoratorClasses);
+        FilterDecorator<Specification<?>> filterDecorator = filterDecoratorFactory.createFilterDecorators(input);
         StatementWrapper statementWrapper = statementGenerator.generateStatements(input, userParameters);
 
         if (ConditionalStatement.class.equals(parameter.getParameterType())) {
