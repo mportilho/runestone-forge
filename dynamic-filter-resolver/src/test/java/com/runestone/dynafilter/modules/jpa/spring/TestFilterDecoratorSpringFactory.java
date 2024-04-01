@@ -25,6 +25,7 @@
 package com.runestone.dynafilter.modules.jpa.spring;
 
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
+import com.runestone.dynafilter.core.generator.annotation.FilterDecorators;
 import com.runestone.dynafilter.core.resolver.CompositeFilterDecorator;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
 import com.runestone.dynafilter.modules.jpa.resolver.FetchingFilterDecorator;
@@ -45,6 +46,18 @@ public class TestFilterDecoratorSpringFactory {
 
     @Autowired
     private GenericApplicationContext applicationContext;
+
+    @FilterDecorators(NoArgsConstructorFilterDecorator.class)
+    class NoArgsFilterDecorClassContainer {
+    }
+
+    @FilterDecorators(MultiArgsConstructorFilterDecorator.class)
+    class MultiArgsFilterDecorClassContainer {
+    }
+
+    @FilterDecorators({NoArgsConstructorFilterDecorator.class, MultiArgsConstructorFilterDecorator.class})
+    class MultipleFilterDecorClassContainer {
+    }
 
     @Test
     public void testNullParameters() {
@@ -79,30 +92,29 @@ public class TestFilterDecoratorSpringFactory {
     @Test
     public void testWithNoArgsFilterDecorators() {
         FilterDecoratorSpringFactory factory = new FilterDecoratorSpringFactory(applicationContext);
-        Class<? extends FilterDecorator<?>>[] decoratorClasses = new Class[]{NoArgsConstructorFilterDecorator.class};
-        AnnotationStatementInput input = new AnnotationStatementInput(null, decoratorClasses);
-        CompositeFilterDecorator<?> filterDecorators = (CompositeFilterDecorator<?>) factory.createFilterDecorators(null, decoratorClasses);
+        AnnotationStatementInput input = new AnnotationStatementInput(NoArgsFilterDecorClassContainer.class, null);
+        CompositeFilterDecorator<?> filterDecorators = (CompositeFilterDecorator<?>) factory.createFilterDecorators(input);
         Assertions.assertThat(filterDecorators).isNotNull();
         Assertions.assertThat(filterDecorators.getDecorators()).hasSize(1);
     }
 
-//    @Test
-//    public void testWithMultiArgsFilterDecorators() {
-//        FilterDecoratorSpringFactory factory = new FilterDecoratorSpringFactory(applicationContext);
-//        Class<? extends FilterDecorator<?>>[] decoratorClasses = new Class[]{MultiArgsConstructorFilterDecorator.class};
-//        CompositeFilterDecorator<?> filterDecorators = (CompositeFilterDecorator<?>) factory.createFilterDecorators(null, decoratorClasses);
-//        Assertions.assertThat(filterDecorators).isNotNull();
-//        Assertions.assertThat(filterDecorators.getDecorators()).hasSize(1);
-//    }
-//
-//    @Test
-//    public void testWithMultiOriginFilters() {
-//        FilterDecoratorSpringFactory factory = new FilterDecoratorSpringFactory(applicationContext);
-//        var annotations = FetchingAnnotationHolder.class.getAnnotations();
-//        Class<? extends FilterDecorator<?>>[] decoratorClasses = new Class[]{NoArgsConstructorFilterDecorator.class, MultiArgsConstructorFilterDecorator.class};
-//        CompositeFilterDecorator<?> filterDecorators = (CompositeFilterDecorator<?>) factory.createFilterDecorators(annotations, decoratorClasses);
-//        Assertions.assertThat(filterDecorators).isNotNull();
-//        Assertions.assertThat(filterDecorators.getDecorators()).hasSize(3);
-//    }
+    @Test
+    public void testWithMultiArgsFilterDecorators() {
+        FilterDecoratorSpringFactory factory = new FilterDecoratorSpringFactory(applicationContext);
+        AnnotationStatementInput input = new AnnotationStatementInput(MultiArgsFilterDecorClassContainer.class, null);
+        CompositeFilterDecorator<?> filterDecorators = (CompositeFilterDecorator<?>) factory.createFilterDecorators(input);
+        Assertions.assertThat(filterDecorators).isNotNull();
+        Assertions.assertThat(filterDecorators.getDecorators()).hasSize(1);
+    }
+
+    @Test
+    public void testWithMultiOriginFilters() {
+        FilterDecoratorSpringFactory factory = new FilterDecoratorSpringFactory(applicationContext);
+        var annotations = FetchingAnnotationHolder.class.getAnnotations();
+        AnnotationStatementInput input = new AnnotationStatementInput(MultipleFilterDecorClassContainer.class, annotations);
+        CompositeFilterDecorator<?> filterDecorators = (CompositeFilterDecorator<?>) factory.createFilterDecorators(input);
+        Assertions.assertThat(filterDecorators).isNotNull();
+        Assertions.assertThat(filterDecorators.getDecorators()).hasSize(3);
+    }
 
 }

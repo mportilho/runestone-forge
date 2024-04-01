@@ -42,6 +42,13 @@ public class TypeAnnotationUtils {
     public static Class<? extends FilterDecorator<?>>[] findFilterDecorators(AnnotationStatementInput annotationStatementInput) {
         List<Class<? extends FilterDecorator<?>>> decorators = new ArrayList<>();
 
+        if (annotationStatementInput.type() != null) {
+            FilterDecorators decors = annotationStatementInput.type().getAnnotation(FilterDecorators.class);
+            if (decors != null) {
+                decorators.addAll(Arrays.asList(decors.value()));
+            }
+        }
+
         if (annotationStatementInput.annotations() != null) {
             for (Annotation annotation : annotationStatementInput.annotations()) {
                 if (annotation.annotationType().equals(FilterDecorators.class)) {
