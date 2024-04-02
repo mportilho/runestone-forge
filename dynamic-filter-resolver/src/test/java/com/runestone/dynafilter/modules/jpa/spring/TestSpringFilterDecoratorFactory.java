@@ -42,26 +42,26 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
 @SpringJUnitConfig(SimpleApplication.class)
-public class TestFilterDecoratorSpringFactory {
+public class TestSpringFilterDecoratorFactory {
 
     @Autowired
     private GenericApplicationContext applicationContext;
 
     @FilterDecorators(NoArgsConstructorFilterDecorator.class)
-    class NoArgsFilterDecorClassContainer {
+    static class NoArgsFilterDecorClassContainer {
     }
 
     @FilterDecorators(MultiArgsConstructorFilterDecorator.class)
-    class MultiArgsFilterDecorClassContainer {
+    static class MultiArgsFilterDecorClassContainer {
     }
 
     @FilterDecorators({NoArgsConstructorFilterDecorator.class, MultiArgsConstructorFilterDecorator.class})
-    class MultipleFilterDecorClassContainer {
+    static class MultipleFilterDecorClassContainer {
     }
 
     @Test
     public void testNullParameters() {
-        FilterDecoratorSpringFactory factory = new FilterDecoratorSpringFactory(applicationContext);
+        SpringFilterDecoratorFactory factory = new SpringFilterDecoratorFactory(applicationContext);
         FilterDecorator<Specification<?>> filterDecorators = factory.createFilterDecorators(null);
         Assertions.assertThat(filterDecorators).isNull();
 
@@ -71,7 +71,7 @@ public class TestFilterDecoratorSpringFactory {
 
     @Test
     public void testWithFetchingAnnotations() {
-        FilterDecoratorSpringFactory factory = new FilterDecoratorSpringFactory(applicationContext);
+        SpringFilterDecoratorFactory factory = new SpringFilterDecoratorFactory(applicationContext);
         var annotations = FetchingAnnotationHolder.class.getAnnotations();
         AnnotationStatementInput input = new AnnotationStatementInput(null, annotations);
         FetchingFilterDecorator filterDecorators = (FetchingFilterDecorator) factory.createFilterDecorators(input);
@@ -81,7 +81,7 @@ public class TestFilterDecoratorSpringFactory {
 
     @Test
     public void testWithFetchingMultiAnnotations() {
-        FilterDecoratorSpringFactory factory = new FilterDecoratorSpringFactory(applicationContext);
+        SpringFilterDecoratorFactory factory = new SpringFilterDecoratorFactory(applicationContext);
         var annotations = FetchingMultiAnnotationHolder.class.getAnnotations();
         AnnotationStatementInput input = new AnnotationStatementInput(null, annotations);
         FetchingFilterDecorator filterDecorators = (FetchingFilterDecorator) factory.createFilterDecorators(input);
@@ -91,7 +91,7 @@ public class TestFilterDecoratorSpringFactory {
 
     @Test
     public void testWithNoArgsFilterDecorators() {
-        FilterDecoratorSpringFactory factory = new FilterDecoratorSpringFactory(applicationContext);
+        SpringFilterDecoratorFactory factory = new SpringFilterDecoratorFactory(applicationContext);
         AnnotationStatementInput input = new AnnotationStatementInput(NoArgsFilterDecorClassContainer.class, null);
         CompositeFilterDecorator<?> filterDecorators = (CompositeFilterDecorator<?>) factory.createFilterDecorators(input);
         Assertions.assertThat(filterDecorators).isNotNull();
@@ -100,7 +100,7 @@ public class TestFilterDecoratorSpringFactory {
 
     @Test
     public void testWithMultiArgsFilterDecorators() {
-        FilterDecoratorSpringFactory factory = new FilterDecoratorSpringFactory(applicationContext);
+        SpringFilterDecoratorFactory factory = new SpringFilterDecoratorFactory(applicationContext);
         AnnotationStatementInput input = new AnnotationStatementInput(MultiArgsFilterDecorClassContainer.class, null);
         CompositeFilterDecorator<?> filterDecorators = (CompositeFilterDecorator<?>) factory.createFilterDecorators(input);
         Assertions.assertThat(filterDecorators).isNotNull();
@@ -109,7 +109,7 @@ public class TestFilterDecoratorSpringFactory {
 
     @Test
     public void testWithMultiOriginFilters() {
-        FilterDecoratorSpringFactory factory = new FilterDecoratorSpringFactory(applicationContext);
+        SpringFilterDecoratorFactory factory = new SpringFilterDecoratorFactory(applicationContext);
         var annotations = FetchingAnnotationHolder.class.getAnnotations();
         AnnotationStatementInput input = new AnnotationStatementInput(MultipleFilterDecorClassContainer.class, annotations);
         CompositeFilterDecorator<?> filterDecorators = (CompositeFilterDecorator<?>) factory.createFilterDecorators(input);

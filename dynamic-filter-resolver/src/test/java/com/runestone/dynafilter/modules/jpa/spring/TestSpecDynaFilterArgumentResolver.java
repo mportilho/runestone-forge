@@ -49,7 +49,7 @@ public class TestSpecDynaFilterArgumentResolver {
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null);
         SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
         SpecificationDynamicFilterResolver resolver = new SpecificationDynamicFilterResolver(service);
-        FilterDecoratorSpringFactory filterDecoratorFactory = new FilterDecoratorSpringFactory(applicationContext);
+        SpringFilterDecoratorFactory filterDecoratorFactory = new SpringFilterDecoratorFactory(applicationContext);
         return new SpecificationDynamicFilterArgumentResolver(generator, resolver, filterDecoratorFactory);
     }
 

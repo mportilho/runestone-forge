@@ -28,6 +28,7 @@ import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInp
 import com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils;
 import com.runestone.dynafilter.core.resolver.CompositeFilterDecorator;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
+import com.runestone.dynafilter.core.resolver.FilterDecoratorFactory;
 import com.runestone.dynafilter.modules.jpa.resolver.Fetches;
 import com.runestone.dynafilter.modules.jpa.resolver.Fetching;
 import com.runestone.dynafilter.modules.jpa.resolver.FetchingFilterDecorator;
@@ -37,25 +38,26 @@ import org.springframework.data.jpa.domain.Specification;
 import java.lang.annotation.Annotation;
 import java.util.*;
 
-public class FilterDecoratorSpringFactory {
+public class SpringFilterDecoratorFactory implements FilterDecoratorFactory<Specification<?>> {
 
     private final GenericApplicationContext applicationContext;
 
-    public FilterDecoratorSpringFactory(GenericApplicationContext applicationContext) {
+    public SpringFilterDecoratorFactory(GenericApplicationContext applicationContext) {
         this.applicationContext = Objects.requireNonNull(applicationContext, "applicationContext is required");
     }
 
     @SuppressWarnings({"unchecked"})
+    @Override
     public FilterDecorator<Specification<?>> createFilterDecorators(AnnotationStatementInput input) {
         if (input == null) {
             return null;
         }
         Annotation[] fetchingAnnotations = input.annotations();
-        Class<? extends FilterDecorator<?>>[] decoratorClasses = TypeAnnotationUtils.findFilterDecorators(input);
+        List<Class<? extends FilterDecorator<?>>> decoratorClasses = TypeAnnotationUtils.findFilterDecorators(input);
         List<FilterDecorator<Specification<?>>> decoratorList = null;
         FetchingFilterDecorator fetchingDecorator = createFetchingDecorator(fetchingAnnotations);
-        if (decoratorClasses.length > 0) {
-            decoratorList = new ArrayList<>(decoratorClasses.length + 1);
+        if (!decoratorClasses.isEmpty()) {
+            decoratorList = new ArrayList<>(decoratorClasses.size() + 1);
             for (Class<? extends FilterDecorator<?>> aClass : decoratorClasses) {
                 Map<String, ? extends FilterDecorator<?>> beansOfType = applicationContext.getBeansOfType(aClass);
                 if (beansOfType.isEmpty()) {

@@ -29,7 +29,7 @@ import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGen
 import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.resolver.tools.SearchEmployees;
 import com.runestone.dynafilter.modules.jpa.resolver.tools.SearchMultiDataEmployees;
-import com.runestone.dynafilter.modules.jpa.spring.FilterDecoratorSpringFactory;
+import com.runestone.dynafilter.modules.jpa.spring.SpringFilterDecoratorFactory;
 import com.runestone.dynafilter.modules.jpa.spring.SpecificationDynamicFilterArgumentResolver;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.InMemoryDatabaseApplication;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.PersonRepository;
@@ -53,7 +53,7 @@ import java.util.Map;
 @SpringJUnitConfig(InMemoryDatabaseApplication.class)
 public class TestFetchingFilterDecorator {
 
-    private FilterDecoratorSpringFactory filterDecoratorFactory;
+    private SpringFilterDecoratorFactory filterDecoratorFactory;
     private SpecificationDynamicFilterResolver resolver;
 
     @Autowired
@@ -66,7 +66,7 @@ public class TestFetchingFilterDecorator {
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null);
         SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
         resolver = Mockito.spy(new SpecificationDynamicFilterResolver(service));
-        filterDecoratorFactory = Mockito.spy(new FilterDecoratorSpringFactory(applicationContext));
+        filterDecoratorFactory = Mockito.spy(new SpringFilterDecoratorFactory(applicationContext));
         return new SpecificationDynamicFilterArgumentResolver(generator, resolver, filterDecoratorFactory);
     }
 

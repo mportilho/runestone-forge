@@ -3,9 +3,11 @@ package com.runestone.dynafilter.modules.jpa.resolver;
 import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.core.generator.annotation.ConjunctionFrom;
+import com.runestone.dynafilter.core.resolver.CompositeFilterDecorator;
 import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.resolver.tools.GetPerson;
-import com.runestone.dynafilter.modules.jpa.spring.FilterDecoratorSpringFactory;
+import com.runestone.dynafilter.modules.jpa.resolver.tools.PersonFilterDecorador;
+import com.runestone.dynafilter.modules.jpa.spring.SpringFilterDecoratorFactory;
 import com.runestone.dynafilter.modules.jpa.spring.SpecificationDynamicFilterArgumentResolver;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.InMemoryDatabaseApplication;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.PersonRepository;
@@ -27,7 +29,7 @@ import java.util.Map;
 @SpringJUnitConfig(InMemoryDatabaseApplication.class)
 public class TestGenericJpaFilterDecorator {
 
-    private FilterDecoratorSpringFactory filterDecoratorFactory;
+    private SpringFilterDecoratorFactory filterDecoratorFactory;
     private SpecificationDynamicFilterResolver resolver;
 
     @Autowired
@@ -44,14 +46,14 @@ public class TestGenericJpaFilterDecorator {
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null);
         SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
         resolver = Mockito.spy(new SpecificationDynamicFilterResolver(service));
-        filterDecoratorFactory = Mockito.spy(new FilterDecoratorSpringFactory(applicationContext));
+        filterDecoratorFactory = Mockito.spy(new SpringFilterDecoratorFactory(applicationContext));
         return new SpecificationDynamicFilterArgumentResolver(generator, resolver, filterDecoratorFactory);
     }
 
     @Test
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public void testFilterDecorator() {
-        var argumentResolver = createSpecificationDynaFilterArgumentResolver();
+    public void testFilterDecoratorWithDecoratedAttribute() {
+        SpecificationDynamicFilterArgumentResolver argumentResolver = createSpecificationDynaFilterArgumentResolver();
         MethodParameter parameter = Mockito.mock(MethodParameter.class);
         NativeWebRequest webRequest = Mockito.mock(NativeWebRequest.class);
         HttpServletRequest httpServletRequest = Mockito.mock(HttpServletRequest.class);
@@ -68,6 +70,19 @@ public class TestGenericJpaFilterDecorator {
         Specification<Person> specification = (Specification<Person>) argumentResolver.resolveArgument(parameter, null, webRequest, null);
 
         Assertions.assertThat(specification).isNotNull();
+        personRepository.findAll(specification);
+
+        Mockito.verify(filterDecoratorFactory, Mockito.times(1)).createFilterDecorators(Mockito.any());
+        Mockito.verify(resolver, Mockito.times(1)).createFilter(Mockito.any(), Mockito.argThat(filterDecor -> {
+            if (filterDecor instanceof CompositeFilterDecorator<Specification<?>> compositeFilterDecorator) {
+                Assertions.assertThat(compositeFilterDecorator.getDecorators()).hasSize(1);
+                compositeFilterDecorator.getDecorators().stream().findFirst().ifPresent(decorator -> {
+                    Assertions.assertThat(decorator.getClass().equals(PersonFilterDecorador.class)).isTrue();
+                });
+                return true;
+            }
+            return false;
+        }));
     }
 
 }

@@ -30,6 +30,7 @@ import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGen
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
+import com.runestone.dynafilter.core.resolver.FilterDecoratorFactory;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.MethodParameter;
 import org.springframework.data.jpa.domain.Specification;
@@ -49,11 +50,11 @@ public class SpecificationDynamicFilterArgumentResolver implements HandlerMethod
 
     private final AnnotationStatementGenerator statementGenerator;
     private final DynamicFilterResolver<Specification<?>> dynamicFilterResolver;
-    private final FilterDecoratorSpringFactory filterDecoratorFactory;
+    private final FilterDecoratorFactory<Specification<?>> filterDecoratorFactory;
 
     public SpecificationDynamicFilterArgumentResolver(AnnotationStatementGenerator statementGenerator,
                                                       DynamicFilterResolver<Specification<?>> dynamicFilterResolver,
-                                                      FilterDecoratorSpringFactory filterDecoratorFactory) {
+                                                      FilterDecoratorFactory<Specification<?>> filterDecoratorFactory) {
         this.statementGenerator = Objects.requireNonNull(statementGenerator, "Statement generator cannot be null");
         this.dynamicFilterResolver = Objects.requireNonNull(dynamicFilterResolver, "Dynamic filter resolver cannot be null");
         this.filterDecoratorFactory = Objects.requireNonNull(filterDecoratorFactory, "Filter decorator factory cannot be null");
@@ -88,13 +89,15 @@ public class SpecificationDynamicFilterArgumentResolver implements HandlerMethod
         }
 
         Map<String, Object> parametersMap = new HashMap<>(15);
-        webRequest.getParameterMap().forEach((key, value) -> {
+        for (Map.Entry<String, String[]> entry : webRequest.getParameterMap().entrySet()) {
+            String key = entry.getKey();
+            String[] value = entry.getValue();
             if (value.length == 1) {
                 parametersMap.put(key, value[0]);
             } else if (value.length > 1) {
                 parametersMap.put(key, value);
             }
-        });
+        }
 
         Map<String, Object> pathVariables = (Map<String, Object>) httpServletRequest.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
         if (pathVariables != null) {

@@ -34,12 +34,16 @@ import java.util.*;
 public class TypeAnnotationUtils {
 
     private static final Map<AnnotationStatementInput, List<FilterAnnotationData>> CACHE_FILTERS = new WeakHashMap<>();
+    private static final Map<AnnotationStatementInput, List<Class<? extends FilterDecorator<?>>>> CACHE_DECORATORS = new WeakHashMap<>();
 
     private TypeAnnotationUtils() {
     }
 
-    @SuppressWarnings("unchecked")
-    public static Class<? extends FilterDecorator<?>>[] findFilterDecorators(AnnotationStatementInput annotationStatementInput) {
+    public static List<Class<? extends FilterDecorator<?>>> findFilterDecorators(AnnotationStatementInput annotationStatementInput) {
+        return CACHE_DECORATORS.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::findFilterDecoratorsInternal);
+    }
+
+    public static List<Class<? extends FilterDecorator<?>>> findFilterDecoratorsInternal(AnnotationStatementInput annotationStatementInput) {
         List<Class<? extends FilterDecorator<?>>> decorators = new ArrayList<>();
 
         if (annotationStatementInput.type() != null) {
@@ -74,7 +78,7 @@ public class TypeAnnotationUtils {
             }
         }
 
-        return decorators.toArray(new Class[0]);
+        return decorators.isEmpty() ? Collections.emptyList() : decorators;
     }
 
     public static List<Filter> retrieveFilterAnnotations(AnnotationStatementInput annotationStatementInput) {

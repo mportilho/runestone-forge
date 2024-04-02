@@ -24,12 +24,9 @@
 
 package com.runestone.dynafilter.modules.jpa.spring;
 
-import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
-import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.data.jpa.domain.Specification;
@@ -58,7 +55,7 @@ class SpecificationDynamicFilterWebMvcConfigurer implements WebMvcConfigurer {
     @Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator(getValueExpressionResolver());
-        FilterDecoratorSpringFactory filterDecoratorFactory = new FilterDecoratorSpringFactory((GenericApplicationContext) applicationContext);
+        SpringFilterDecoratorFactory filterDecoratorFactory = new SpringFilterDecoratorFactory((GenericApplicationContext) applicationContext);
         resolvers.add(new SpecificationDynamicFilterArgumentResolver(generator, dynamicFilterResolver, filterDecoratorFactory));
     }
 
