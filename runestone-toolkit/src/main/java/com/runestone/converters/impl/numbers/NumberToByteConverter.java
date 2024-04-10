@@ -30,11 +30,10 @@ public class NumberToByteConverter implements DataConverter<Number, Byte> {
 
     @Override
     public Byte convert(Number data) {
-        if (data instanceof Byte b) {
-            return b;
-        } else if (data != null) {
-            return data.byteValue();
-        }
-        throw new IllegalArgumentException("Cannot convert null to Byte");
+        return switch (data) {
+            case Byte b -> b;
+            case Number n -> n.byteValue();
+            case null -> throw new IllegalArgumentException("Cannot convert null to Byte");
+        };
     }
 }

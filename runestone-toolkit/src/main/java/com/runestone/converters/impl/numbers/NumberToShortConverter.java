@@ -30,12 +30,11 @@ public class NumberToShortConverter implements DataConverter<Number, Short> {
 
     @Override
     public Short convert(Number data) {
-        if (data instanceof Short s) {
-            return s;
-        } else if (data != null) {
-            return data.shortValue();
-        }
-        throw new IllegalArgumentException("Cannot convert null to Short");
+        return switch (data) {
+            case Short s -> s;
+            case Number n -> n.shortValue();
+            case null -> throw new IllegalArgumentException("Cannot convert null to Short");
+        };
     }
 
 }

@@ -28,34 +28,18 @@ import com.runestone.converters.DataConverter;
 
 import java.time.*;
 import java.time.temporal.Temporal;
-import java.util.Objects;
 
 public class TemporalToZonedDateTimeConverter implements DataConverter<Temporal, ZonedDateTime> {
 
     @Override
     public ZonedDateTime convert(Temporal data) {
-        if (Objects.requireNonNull(data) instanceof LocalDateTime src) {
-            return localDateTimeToZonedDateTime(src, null);
-        } else if (data instanceof LocalDate src) {
-            return localDateToZonedDateTime(src, null);
-        } else if (data instanceof OffsetDateTime src) {
-            return offsetDateTimeToZonedDateTime(src, null);
-        }
-        throw new IllegalArgumentException(String.format("Unsupported conversion from [%s] to [%s].", data.getClass(), ZonedDateTime.class));
+        return switch (data) {
+            case LocalDateTime src -> ZonedDateTime.of(src, ZoneId.systemDefault());
+            case LocalDate src -> ZonedDateTime.of(src, LocalTime.MIDNIGHT, ZoneId.systemDefault());
+            case OffsetDateTime src -> src.atZoneSameInstant(ZoneId.systemDefault());
+            default -> throw new IllegalArgumentException(String.format("Unsupported conversion from [%s] to [%s].",
+                    data.getClass(), ZonedDateTime.class));
+        };
     }
 
-    public ZonedDateTime localDateTimeToZonedDateTime(LocalDateTime source, String format) {
-        ZoneId zone = format == null || format.isBlank() ? ZoneId.systemDefault() : ZoneId.of(format);
-        return ZonedDateTime.of(source, zone);
-    }
-
-    public ZonedDateTime localDateToZonedDateTime(LocalDate source, String format) {
-        ZoneId zone = format == null || format.isBlank() ? ZoneId.systemDefault() : ZoneId.of(format);
-        return ZonedDateTime.of(source, LocalTime.MIDNIGHT, zone);
-    }
-
-    public ZonedDateTime offsetDateTimeToZonedDateTime(OffsetDateTime source, String format) {
-        ZoneId zone = format == null || format.isBlank() ? ZoneId.systemDefault() : ZoneId.of(format);
-        return source.atZoneSameInstant(zone);
-    }
 }

@@ -199,30 +199,20 @@ public class OperationCallSiteFactory {
     }
 
     private static CallSiteInvoker createCallSiteInvoker(Object lambda) {
-        if (Objects.requireNonNull(lambda) instanceof InterfaceWrappers.Function1 f) {
-            return (c, p) -> f.call(p[0]);
-        } else if (lambda instanceof InterfaceWrappers.Function2 f) {
-            return (c, p) -> f.call(p[0], p[1]);
-        } else if (lambda instanceof InterfaceWrappers.Function3 f) {
-            return (c, p) -> f.call(p[0], p[1], p[2]);
-        } else if (lambda instanceof InterfaceWrappers.Function4 f) {
-            return (c, p) -> f.call(p[0], p[1], p[2], p[3]);
-        } else if (lambda instanceof InterfaceWrappers.Function5 f) {
-            return (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4]);
-        } else if (lambda instanceof InterfaceWrappers.Function6 f) {
-            return (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5]);
-        } else if (lambda instanceof InterfaceWrappers.Function7 f) {
-            return (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5], p[6]);
-        } else if (lambda instanceof InterfaceWrappers.Function8 f) {
-            return (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
-        } else if (lambda instanceof InterfaceWrappers.Function9 f) {
-            return (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8]);
-        } else if (lambda instanceof InterfaceWrappers.Function10 f) {
-            return (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9]);
-        } else if (lambda instanceof InterfaceWrappers.Function11 f) {
-            return (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10]);
-        }
-        return null;
+        return switch (lambda) {
+            case InterfaceWrappers.Function1 f -> (c, p) -> f.call(p[0]);
+            case InterfaceWrappers.Function2 f -> (c, p) -> f.call(p[0], p[1]);
+            case InterfaceWrappers.Function3 f -> (c, p) -> f.call(p[0], p[1], p[2]);
+            case InterfaceWrappers.Function4 f -> (c, p) -> f.call(p[0], p[1], p[2], p[3]);
+            case InterfaceWrappers.Function5 f -> (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4]);
+            case InterfaceWrappers.Function6 f -> (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5]);
+            case InterfaceWrappers.Function7 f -> (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5], p[6]);
+            case InterfaceWrappers.Function8 f -> (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
+            case InterfaceWrappers.Function9 f -> (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8]);
+            case InterfaceWrappers.Function10 f -> (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9]);
+            case InterfaceWrappers.Function11 f -> (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10]);
+            default -> null;
+        };
     }
 
 }

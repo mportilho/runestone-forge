@@ -30,11 +30,10 @@ public class NumberToDoubleConverter implements DataConverter<Number, Double> {
 
     @Override
     public Double convert(Number data) {
-        if (data instanceof Double b) {
-            return b;
-        } else if (data != null) {
-            return data.doubleValue();
-        }
-        throw new IllegalArgumentException("Cannot convert null to Double");
+        return switch (data) {
+            case Double d -> d;
+            case Number n -> n.doubleValue();
+            case null -> throw new IllegalArgumentException("Cannot convert null to Double");
+        };
     }
 }

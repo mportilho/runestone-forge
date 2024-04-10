@@ -29,8 +29,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Execution(ExecutionMode.CONCURRENT)
@@ -84,10 +82,9 @@ public class TestMemoizedSupplier {
             return "Hello World";
         });
 
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.submit(supplier::get);
-        executor.submit(supplier::get);
-        executor.submit(supplier::get);
+        Thread.ofVirtual().start(supplier::get);
+        Thread.ofVirtual().start(supplier::get);
+        Thread.ofVirtual().start(supplier::get);
 
         Assertions.assertThat(supplier.get()).isEqualTo("Hello World");
         Assertions.assertThat(supplier.get()).isEqualTo("Hello World");

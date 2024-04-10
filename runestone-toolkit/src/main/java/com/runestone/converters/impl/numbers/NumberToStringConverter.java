@@ -27,15 +27,14 @@ package com.runestone.converters.impl.numbers;
 import com.runestone.converters.DataConverter;
 
 import java.math.BigDecimal;
-import java.util.Objects;
 
 public class NumberToStringConverter implements DataConverter<Number, String> {
 
     @Override
     public String convert(Number data) {
-        if (Objects.requireNonNull(data) instanceof BigDecimal n) {
-            return n.toPlainString();
-        }
-        return data.toString();
+        return switch (data) {
+            case BigDecimal n -> n.toPlainString();
+            case Number n -> n.toString();
+        };
     }
 }
