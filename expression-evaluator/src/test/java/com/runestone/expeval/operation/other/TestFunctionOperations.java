@@ -40,7 +40,7 @@ public class TestFunctionOperations {
     public void testNumberFunctionOperationsWithoutCache() {
         Expression expression = new Expression("$.extractedNumber() + 2");
         VerifyExpressionsTools.checkWarmUpCache(expression, 1);
-        expression.addFunctionFromObject(new FunctionProviderClass());
+        expression.addFunctionsFrom(new FunctionProviderClass());
         Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("3");
         Assertions.assertThat(expression.toString()).isEqualTo("$.extractedNumber() + 2");
         VerifyExpressionsTools.commonVerifications(expression);
@@ -52,7 +52,7 @@ public class TestFunctionOperations {
     void testNumberFunctionOperationsWithCache() {
         Expression expression = new Expression("extractedNumber() + 2");
         VerifyExpressionsTools.checkWarmUpCache(expression, 1);
-        expression.addFunctionFromObject(new FunctionProviderClass());
+        expression.addFunctionsFrom(new FunctionProviderClass());
         Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("3");
         Assertions.assertThat(expression.toString()).isEqualTo("extractedNumber() + 2");
         VerifyExpressionsTools.commonVerifications(expression);
@@ -64,7 +64,7 @@ public class TestFunctionOperations {
     void testStringFunctionOperations() {
         Expression expression = new Expression("extractedString() = 'food'");
         VerifyExpressionsTools.checkWarmUpCache(expression, 1);
-        expression.addFunctionFromObject(new FunctionProviderClass());
+        expression.addFunctionsFrom(new FunctionProviderClass());
         Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
         Assertions.assertThat(expression.toString()).isEqualTo("extractedString() = 'food'");
         VerifyExpressionsTools.commonVerifications(expression);
@@ -76,7 +76,7 @@ public class TestFunctionOperations {
     void testDateFunctionOperations() {
         Expression expression = new Expression("$.extractedDate() = currDate");
         VerifyExpressionsTools.checkWarmUpCache(expression, 0);
-        expression.addFunctionFromObject(new FunctionProviderClass());
+        expression.addFunctionsFrom(new FunctionProviderClass());
         Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
         Assertions.assertThat(expression.toString()).isEqualTo("$.extractedDate() = currDate");
         VerifyExpressionsTools.commonVerifications(expression);
@@ -88,7 +88,7 @@ public class TestFunctionOperations {
     void testTimeFunctionOperations() {
         Expression expression = new Expression("extractedTime() = 02:03:00");
         VerifyExpressionsTools.checkWarmUpCache(expression, 1);
-        expression.addFunctionFromObject(new FunctionProviderClass());
+        expression.addFunctionsFrom(new FunctionProviderClass());
         Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
         Assertions.assertThat(expression.toString()).isEqualTo("extractedTime() = 02:03");
         VerifyExpressionsTools.commonVerifications(expression);
@@ -100,7 +100,7 @@ public class TestFunctionOperations {
     void testDateTimeFunctionOperations() {
         Expression expression = new Expression("$.extractedDateTime() = (currDateTime setHours 2 setMinutes 3 setSeconds 0)");
         VerifyExpressionsTools.checkWarmUpCache(expression, 3);
-        expression.addFunctionFromObject(new FunctionProviderClass());
+        expression.addFunctionsFrom(new FunctionProviderClass());
         Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
         Assertions.assertThat(expression.toString()).isEqualTo("$.extractedDateTime() = (currDateTime setHours 2 setMinutes 3 setSeconds 0)");
         VerifyExpressionsTools.commonVerifications(expression);
@@ -112,7 +112,7 @@ public class TestFunctionOperations {
     void testBooleanFunctionOperations() {
         Expression expression = new Expression("extractedBoolean()");
         VerifyExpressionsTools.checkWarmUpCache(expression, 0);
-        expression.addFunctionFromObject(new FunctionProviderClass());
+        expression.addFunctionsFrom(new FunctionProviderClass());
         Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
         Assertions.assertThat(expression.toString()).isEqualTo("extractedBoolean()");
         VerifyExpressionsTools.commonVerifications(expression);
@@ -124,7 +124,7 @@ public class TestFunctionOperations {
     void testFunctionOperationsWithMultipleParameters() {
         Expression expression = new Expression("add(3, 4 + 2 - $.extractedNumber())");
         VerifyExpressionsTools.checkWarmUpCache(expression, 4);
-        expression.addFunctionFromObject(new FunctionProviderClass());
+        expression.addFunctionsFrom(new FunctionProviderClass());
         Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("8");
         Assertions.assertThat(expression.toString()).isEqualTo("add(3, 4 + 2 - $.extractedNumber())");
         VerifyExpressionsTools.commonVerifications(expression);

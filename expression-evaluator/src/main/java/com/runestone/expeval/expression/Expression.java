@@ -172,7 +172,7 @@ public class Expression {
      * @param functionProvider the object containing the functions
      * @return this expression
      */
-    public Expression addFunctionFromObject(Object functionProvider) {
+    public Expression addFunctionsFrom(Object functionProvider) {
         evaluator.getExpressionContext().putFunctionsFromProvider(functionProvider);
         return this;
     }
