@@ -91,7 +91,8 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
                     try {
                         customizeParameter(operation, methodParameter, spec);
                     } catch (Exception e) {
-                        throw new IllegalStateException("Cannot build custom OpenAPI parameters from dynamic filter parameter", e);
+                        throw new IllegalStateException("Cannot build custom OpenAPI parameters from dynamic filter parameter on method: %s"
+                                .formatted(handlerMethod.getMethod().toString()), e);
                     }
                 }
             }
@@ -261,8 +262,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
     }
 
     /**
-     * Extracts a {@link JsonView} configuration from a {@link MethodParameter} for
-     * additional customization
+     * Extracts a {@link JsonView} configuration from a {@link MethodParameter} for additional customization
      */
     private static JsonView getJsonViewFromMethod(MethodParameter methodParameter) {
         JsonView[] jsonViews = requireNonNull(methodParameter.getMethod()).getAnnotationsByType(JsonView.class);
