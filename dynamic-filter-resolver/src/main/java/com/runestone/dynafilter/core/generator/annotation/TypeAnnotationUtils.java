@@ -26,9 +26,11 @@ package com.runestone.dynafilter.core.generator.annotation;
 
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
+import org.apache.commons.lang3.StringUtils;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
 import java.util.*;
 
 public class TypeAnnotationUtils {
@@ -231,6 +233,46 @@ public class TypeAnnotationUtils {
                 || annotation.annotationType() == ConjunctionFrom.class
                 || annotation.annotationType() == Disjunction.class
                 || annotation.annotationType() == DisjunctionFrom.class;
+    }
+
+    /**
+     * Find a field in a class using dot notation to navigate through classes.
+     *
+     * @param clazz     Class to search for the field
+     * @param fieldName Field name to search
+     * @return Field object
+     * @throws IllegalStateException if the field does not exist in the class
+     */
+    public static Field findFilterField(Class<?> clazz, String fieldName) {
+        final String[] fieldNames = fieldName.split("\\.", -1);
+        // if using dot notation to navigate for classes
+        if (fieldNames.length > 1) {
+            final String firstProperty = fieldNames[0];
+            final String otherProperties = StringUtils.join(fieldNames, '.', 1, fieldNames.length);
+            final Field firstPropertyType = findFilterField(clazz, firstProperty);
+
+            Class<?> actualClass = null;
+            if (!Object.class.equals(firstPropertyType.getType())) {
+                if (Collection.class.isAssignableFrom(firstPropertyType.getType())) {
+                    actualClass = (Class<?>) ((ParameterizedType) firstPropertyType.getGenericType()).getActualTypeArguments()[0];
+                } else {
+                    actualClass = firstPropertyType.getType();
+                }
+            }
+
+            if (actualClass != null) {
+                return findFilterField(actualClass, otherProperties);
+            }
+        }
+
+        try {
+            return clazz.getDeclaredField(fieldName);
+        } catch (final NoSuchFieldException e) {
+            if (!clazz.getSuperclass().equals(Object.class)) {
+                return findFilterField(clazz.getSuperclass(), fieldName);
+            }
+            throw new IllegalStateException(String.format("Field '%s' does not exist in type '%s'", fieldName, clazz.getCanonicalName()));
+        }
     }
 
 }

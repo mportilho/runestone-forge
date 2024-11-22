@@ -92,11 +92,21 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
     }
 
     @Override
+    public Page<T> findAll(ConditionalStatement conditionalStatement, Pageable pageable, String entityGraphName) {
+        return findAll(conditionalStatement, pageable, EntityGraph.EntityGraphType.FETCH, entityGraphName);
+    }
+
+    @Override
     public List<T> findAll(ConditionalStatement conditionalStatement, Sort sort, EntityGraph.EntityGraphType entityGraphType, String entityGraphName) {
         Specification<T> spec = dynamicFilterResolver.createFilter(conditionalStatement);
         TypedQuery<T> query = getQuery(spec, sort);
         query.setHint(entityGraphType.getKey(), em.getEntityGraph(entityGraphName));
         return query.getResultList();
+    }
+
+    @Override
+    public List<T> findAll(ConditionalStatement conditionalStatement, Sort sort, String entityGraphName) {
+        return findAll(conditionalStatement, sort, EntityGraph.EntityGraphType.FETCH, entityGraphName);
     }
 
     @Override

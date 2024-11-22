@@ -39,7 +39,6 @@ import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.BooleanSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springdoc.core.customizers.OperationCustomizer;
@@ -50,7 +49,6 @@ import org.springframework.web.method.HandlerMethod;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -198,7 +196,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             ParameterizedType parameterizedType = (ParameterizedType) methodParameter.getParameter().getParameterizedType();
             Class<?> parameterizedClassType = Class.forName(parameterizedType.getActualTypeArguments()[0].getTypeName());
             try {
-                field = findFilterField(parameterizedClassType, filter.path());
+                field = TypeAnnotationUtils.findFilterField(parameterizedClassType, filter.path());
             } catch (IllegalStateException e) {
                 String location = Asserts.isNotEmpty(operation.getTags()) ? operation.getTags().get(0) + "." : "";
                 location += operation.getOperationId();
@@ -213,7 +211,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
                     if (fieldFilter != null && fieldFilter.path().equals(filter.path())) {
                         Field targetField = null;
                         if (filterTarget != null) {
-                            targetField = findFilterField(filterTarget.value(), filter.path()); // just validate the path, don't need the field
+                            targetField = TypeAnnotationUtils.findFilterField(filterTarget.value(), filter.path()); // just validate the path, don't need the field
                         }
                         field = filterTarget != null && filterTarget.useTargetFieldsMetadata() ? targetField : declaredField;
                         break;
@@ -226,40 +224,6 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
         return field;
     }
 
-    /**
-     * Gets the {@link Field}'s representation on the specific type
-     */
-    private static Field findFilterField(Class<?> clazz, String fieldName) {
-        final String[] fieldNames = fieldName.split("\\.", -1);
-        // if using dot notation to navigate for classes
-        if (fieldNames.length > 1) {
-            final String firstProperty = fieldNames[0];
-            final String otherProperties = StringUtils.join(fieldNames, '.', 1, fieldNames.length);
-            final Field firstPropertyType = findFilterField(clazz, firstProperty);
-
-            Class<?> actualClass = null;
-            if (!Object.class.equals(firstPropertyType.getType())) {
-                if (Collection.class.isAssignableFrom(firstPropertyType.getType())) {
-                    actualClass = (Class<?>) ((ParameterizedType) firstPropertyType.getGenericType()).getActualTypeArguments()[0];
-                } else {
-                    actualClass = firstPropertyType.getType();
-                }
-            }
-
-            if (actualClass != null) {
-                return findFilterField(actualClass, otherProperties);
-            }
-        }
-
-        try {
-            return clazz.getDeclaredField(fieldName);
-        } catch (final NoSuchFieldException e) {
-            if (!clazz.getSuperclass().equals(Object.class)) {
-                return findFilterField(clazz.getSuperclass(), fieldName);
-            }
-            throw new IllegalStateException(String.format("Field '%s' does not exist in type '%s'", fieldName, clazz.getCanonicalName()));
-        }
-    }
 
     /**
      * Extracts a {@link JsonView} configuration from a {@link MethodParameter} for additional customization

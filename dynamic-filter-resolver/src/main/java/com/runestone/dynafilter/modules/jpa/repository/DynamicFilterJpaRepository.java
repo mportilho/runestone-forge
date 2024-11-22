@@ -105,6 +105,28 @@ public interface DynamicFilterJpaRepository<T, I> extends JpaRepository<T, I>, J
     Page<T> findAll(ConditionalStatement conditionalStatement, Pageable pageable, EntityGraph.EntityGraphType entityGraphType, String entityGraphName);
 
     /**
+     * Find all entities by the given conditional statement, pageable and entity graph defined on the entity. The default entityGraphType
+     * used on this method is EntityGraphType.FETCH.
+     *
+     * @param conditionalStatement Conditional statement
+     * @param pageable             Pageable
+     * @param entityGraphName      Entity graph name
+     * @return Page of entities
+     */
+    Page<T> findAll(ConditionalStatement conditionalStatement, Pageable pageable, String entityGraphName);
+
+    /**
+     * Find all entities by the given conditional statement, sort and entity graph defined on the entity. The default entityGraphType
+     * used on this method is EntityGraphType.FETCH.
+     *
+     * @param conditionalStatement Conditional statement
+     * @param sort                 Sort
+     * @param entityGraphName      Entity graph name
+     * @return List of entities
+     */
+    List<T> findAll(ConditionalStatement conditionalStatement, Sort sort, String entityGraphName);
+
+    /**
      * Find all entities by the given conditional statement, sort and entity graph defined on the entity.
      *
      * @param conditionalStatement Conditional statement

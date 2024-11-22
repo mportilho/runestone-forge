@@ -13,6 +13,6 @@ import java.lang.annotation.*;
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})
-@Import({DynamicFilterServletAutoConfiguration.class, DynamicFilterJpaRepositoryBeanPostProcessor.class})
+@Import({DynamicFilterServletAutoConfiguration.class, DynamicFilterJpaRepositoryBeanPostProcessor.class, FilterConfigurationAnalyserBeanPostProcessor.class})
 public @interface EnableDynamicFilterServletConfiguration {
 }
