@@ -24,12 +24,15 @@
 
 package com.runestone.dynafilter.core.generator.annotation;
 
+import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.util.*;
 
@@ -271,8 +274,36 @@ public class TypeAnnotationUtils {
             if (!clazz.getSuperclass().equals(Object.class)) {
                 return findFilterField(clazz.getSuperclass(), fieldName);
             }
-            throw new IllegalStateException(String.format("Field '%s' does not exist in type '%s'", fieldName, clazz.getCanonicalName()));
+            throw new DynamicFilterConfigurationException(String.format("Field '%s' does not exist in type '%s'", fieldName, clazz.getCanonicalName()));
         }
+    }
+
+    public static Class<?> findEntityClass(Parameter parameter) {
+        Class<?> filterClass;
+        Class<?> entityClass = null;
+
+        ConjunctionFrom conjunctionFrom = parameter.getAnnotation(ConjunctionFrom.class);
+        if (conjunctionFrom != null) {
+            filterClass = conjunctionFrom.value();
+        } else {
+            DisjunctionFrom disjunctionFrom = parameter.getAnnotation(DisjunctionFrom.class);
+            filterClass = disjunctionFrom != null ? disjunctionFrom.value() : null;
+        }
+        if (filterClass != null) {
+            FilterTarget filterTargetAnnotation = filterClass.getAnnotation(FilterTarget.class);
+            if (filterTargetAnnotation == null) {
+                throw new DynamicFilterConfigurationException("FilterTarget annotation is required for adding filter configuration from an external class");
+            }
+            entityClass = filterTargetAnnotation.value();
+        }
+
+        if (entityClass == null
+                && (parameter.isAnnotationPresent(Conjunction.class) || parameter.isAnnotationPresent(Disjunction.class))
+                && parameter.getType().isAssignableFrom(Specification.class)) {
+            entityClass = (Class<?>) ((ParameterizedType) parameter.getParameterizedType()).getActualTypeArguments()[0];
+        }
+
+        return entityClass;
     }
 
 }
