@@ -50,7 +50,7 @@ public class TestSpecificationDynamicFilterResolver {
     public void testSpecResolverWithoutDecorator() {
         SpecificationDynamicFilterResolver resolver = new SpecificationDynamicFilterResolver(filterOperationService);
         var logicalStatementOnName = MockStatementFactory.createLogicalStatementOnName();
-        Specification<?> specification = resolver.createFilter(new StatementWrapper(logicalStatementOnName, null), null);
+        Specification<?> specification = resolver.createFilter(new StatementWrapper(logicalStatementOnName, null, null), null);
 
         Assertions.assertThat(specification).isNotNull();
         Mockito.verify(filterOperationService, Mockito.times(1)).createFilter(Mockito.eq(logicalStatementOnName.getFilterData()));
@@ -66,7 +66,7 @@ public class TestSpecificationDynamicFilterResolver {
             return spec.and((root, query, builder) -> builder.equal(root.get("name"), "TestValue"));
         };
 
-        Specification<?> specification = resolver.createFilter(new StatementWrapper(logicalStatementOnName, null), decorator);
+        Specification<?> specification = resolver.createFilter(new StatementWrapper(logicalStatementOnName, null, null), decorator);
 
         Assertions.assertThat(specification).isNotNull();
         Mockito.verify(filterOperationService, Mockito.times(1)).createFilter(Mockito.eq(logicalStatementOnName.getFilterData()));

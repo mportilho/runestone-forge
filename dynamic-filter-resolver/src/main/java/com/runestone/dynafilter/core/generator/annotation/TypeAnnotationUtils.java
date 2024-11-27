@@ -40,6 +40,7 @@ public class TypeAnnotationUtils {
 
     private static final Map<AnnotationStatementInput, List<FilterAnnotationData>> CACHE_FILTERS = new WeakHashMap<>();
     private static final Map<AnnotationStatementInput, List<Class<? extends FilterDecorator<?>>>> CACHE_DECORATORS = new WeakHashMap<>();
+    private static final Map<AnnotationStatementInput, List<Filter>> CACHE_FILTER_ANNOTATIONS = new WeakHashMap<>();
 
     private TypeAnnotationUtils() {
     }
@@ -87,6 +88,10 @@ public class TypeAnnotationUtils {
     }
 
     public static List<Filter> retrieveFilterAnnotations(AnnotationStatementInput annotationStatementInput) {
+        return CACHE_FILTER_ANNOTATIONS.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::retrieveFilterAnnotationsInternal);
+    }
+
+    private static List<Filter> retrieveFilterAnnotationsInternal(AnnotationStatementInput annotationStatementInput) {
         List<Filter> filters = new ArrayList<>(20);
         for (FilterAnnotationData data : TypeAnnotationUtils.findAnnotationData(annotationStatementInput)) {
             filters.addAll(data.filters());

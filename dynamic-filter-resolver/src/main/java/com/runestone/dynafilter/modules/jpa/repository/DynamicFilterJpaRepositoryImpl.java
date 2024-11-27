@@ -25,10 +25,12 @@
 package com.runestone.dynafilter.modules.jpa.repository;
 
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
+import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -70,12 +72,12 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
 
     @Override
     public Page<T> findAll(ConditionalStatement conditionalStatement, Pageable pageable) {
-        return findAll(dynamicFilterResolver.<Specification<T>>createFilter(conditionalStatement), pageable);
+        return findAll(dynamicFilterResolver.<Specification<T>>createFilter(conditionalStatement), updatePageableFilterPath(conditionalStatement, pageable));
     }
 
     @Override
     public List<T> findAll(ConditionalStatement conditionalStatement, Sort sort) {
-        return findAll(dynamicFilterResolver.<Specification<T>>createFilter(conditionalStatement), sort);
+        return findAll(dynamicFilterResolver.<Specification<T>>createFilter(conditionalStatement), updateSortFilterPath(conditionalStatement, sort));
     }
 
     @Override
@@ -85,28 +87,29 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
 
     @Override
     public Page<T> findAll(ConditionalStatement conditionalStatement, Pageable pageable, EntityGraph.EntityGraphType entityGraphType, String entityGraphName) {
+        Pageable updatedPageable = updatePageableFilterPath(conditionalStatement, pageable);
         Specification<T> spec = dynamicFilterResolver.createFilter(conditionalStatement);
-        TypedQuery<T> query = getQuery(spec, pageable.getSort());
+        TypedQuery<T> query = getQuery(spec, updatedPageable.getSort());
         query.setHint(entityGraphType.getKey(), em.getEntityGraph(entityGraphName));
-        return readPage(query, getDomainClass(), pageable, spec);
+        return readPage(query, getDomainClass(), updatedPageable, spec);
     }
 
     @Override
     public Page<T> findAll(ConditionalStatement conditionalStatement, Pageable pageable, String entityGraphName) {
-        return findAll(conditionalStatement, pageable, EntityGraph.EntityGraphType.FETCH, entityGraphName);
+        return findAll(conditionalStatement, updatePageableFilterPath(conditionalStatement, pageable), EntityGraph.EntityGraphType.FETCH, entityGraphName);
     }
 
     @Override
     public List<T> findAll(ConditionalStatement conditionalStatement, Sort sort, EntityGraph.EntityGraphType entityGraphType, String entityGraphName) {
         Specification<T> spec = dynamicFilterResolver.createFilter(conditionalStatement);
-        TypedQuery<T> query = getQuery(spec, sort);
+        TypedQuery<T> query = getQuery(spec, updateSortFilterPath(conditionalStatement, sort));
         query.setHint(entityGraphType.getKey(), em.getEntityGraph(entityGraphName));
         return query.getResultList();
     }
 
     @Override
     public List<T> findAll(ConditionalStatement conditionalStatement, Sort sort, String entityGraphName) {
-        return findAll(conditionalStatement, sort, EntityGraph.EntityGraphType.FETCH, entityGraphName);
+        return findAll(conditionalStatement, updateSortFilterPath(conditionalStatement, sort), EntityGraph.EntityGraphType.FETCH, entityGraphName);
     }
 
     @Override
@@ -140,5 +143,27 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
     @Override
     public void setDynamicFilterResolver(DynamicFilterResolver<Specification<T>> dynamicFilterResolver) {
         this.dynamicFilterResolver = dynamicFilterResolver;
+    }
+
+    private Pageable updatePageableFilterPath(ConditionalStatement conditionalStatement, Pageable pageable) {
+        if (!pageable.getSort().isSorted()) {
+            return pageable;
+        }
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), updateSortFilterPath(conditionalStatement, pageable.getSort()));
+    }
+
+    private Sort updateSortFilterPath(ConditionalStatement conditionalStatement, Sort sort) {
+        if (!sort.isSorted()) {
+            return sort;
+        }
+        List<Sort.Order> orderList = sort.stream().map(order -> {
+            for (Filter filter : conditionalStatement.statementWrapper().allFilters()) {
+                if (order.getProperty().equals(filter.parameters()[0]) && !order.getProperty().equals(filter.path())) {
+                    return order.withProperty(filter.path());
+                }
+            }
+            return order;
+        }).toList();
+        return Sort.by(orderList);
     }
 }

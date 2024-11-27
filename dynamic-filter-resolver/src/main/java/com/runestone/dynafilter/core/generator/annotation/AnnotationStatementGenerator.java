@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 public class AnnotationStatementGenerator extends DefaultStatementGenerator<AnnotationStatementInput> {
 
     private static final FilterData[] EMPTY_FILTER_DATA = {};
-    private static final StatementWrapper EMPTY_STATEMENT_WRAPPER = new StatementWrapper(new NoOpStatement(), Collections.emptyMap());
+    private static final NoOpStatement NO_OP_STATEMENT = new NoOpStatement();
 
     public AnnotationStatementGenerator() {
         super();
@@ -62,17 +62,18 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
         }
 
         Map<String, FilterData> decoratedFilters = createDecoratedFiltersData(filterAnnotationDataList, parametersMap);
+        List<Filter> allFilters = TypeAnnotationUtils.retrieveFilterAnnotations(filterInputs);
 
         if (statementList.isEmpty()) {
-            return EMPTY_STATEMENT_WRAPPER;
+            return new StatementWrapper(NO_OP_STATEMENT, Collections.emptyMap(), allFilters);
         } else if (statementList.size() == 1) {
-            return new StatementWrapper(statementList.get(0), decoratedFilters);
+            return new StatementWrapper(statementList.getFirst(), decoratedFilters, allFilters);
         } else {
-            AbstractStatement finalStatement = statementList.get(0);
+            AbstractStatement finalStatement = statementList.getFirst();
             for (int i = 1; i < statementList.size(); i++) {
                 finalStatement = new CompoundStatement(finalStatement, statementList.get(i), LogicOperator.CONJUNCTION);
             }
-            return new StatementWrapper(finalStatement, decoratedFilters);
+            return new StatementWrapper(finalStatement, decoratedFilters, allFilters);
         }
     }
 
@@ -94,7 +95,6 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
      */
     private AbstractStatement createStatements(FilterAnnotationData data, Map<String, Object> userParameters) {
         boolean negate = computeNegatingParameter(data.negate());
-
         FilterData[] clauses = processFilterAnnotations(data.filters(), userParameters);
         AbstractStatement statement = createStatements(clauses, data.logicOperator());
         AbstractStatement statementFromStatements = createStatementFromFilterStatements(data.filterStatements(), data.logicOperator(), userParameters);

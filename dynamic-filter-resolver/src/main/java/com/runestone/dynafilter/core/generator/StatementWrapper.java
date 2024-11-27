@@ -24,9 +24,11 @@
 
 package com.runestone.dynafilter.core.generator;
 
+import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.statement.AbstractStatement;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -37,14 +39,16 @@ import java.util.Optional;
  * @param decoratedFilters the map of decorated filters
  * @author Marcelo Portilho
  */
-public record StatementWrapper(AbstractStatement statement, Map<String, FilterData> decoratedFilters) {
+public record StatementWrapper(AbstractStatement statement, Map<String, FilterData> decoratedFilters,
+                               List<Filter> allFilters) {
 
-    public StatementWrapper(AbstractStatement statement, Map<String, FilterData> decoratedFilters) {
+    public StatementWrapper(AbstractStatement statement, Map<String, FilterData> decoratedFilters, List<Filter> allFilters) {
         if (statement == null) {
             throw new IllegalArgumentException("Statement cannot be null");
         }
         this.statement = statement;
         this.decoratedFilters = decoratedFilters != null ? decoratedFilters : Map.of();
+        this.allFilters = allFilters != null ? allFilters : List.of();
     }
 
     public Optional<FilterData> findDecoratedFilterByPath(String path) {
