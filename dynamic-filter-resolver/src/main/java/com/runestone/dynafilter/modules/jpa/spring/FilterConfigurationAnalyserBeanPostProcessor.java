@@ -10,6 +10,9 @@ import org.springframework.web.bind.annotation.RestController;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 
+import static com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils.findFilterField;
+import static com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils.retrieveFilterAnnotations;
+
 public class FilterConfigurationAnalyserBeanPostProcessor implements BeanPostProcessor {
 
     @Override
@@ -28,9 +31,7 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanPostPro
         Class<?> entityClass = TypeAnnotationUtils.findEntityClass(parameter);
         if (entityClass != null) {
             AnnotationStatementInput input = new AnnotationStatementInput(parameter.getType(), parameter.getAnnotations());
-            TypeAnnotationUtils.findAnnotationData(input).stream()
-                    .flatMap(data -> data.filters().stream())
-                    .forEach(filter -> TypeAnnotationUtils.findFilterField(entityClass, filter.path()));
+            retrieveFilterAnnotations(input).forEach(filter -> findFilterField(entityClass, filter.path()));
         }
     }
 }
