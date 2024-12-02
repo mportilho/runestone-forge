@@ -42,7 +42,7 @@ import java.util.List;
  * @param targetType  the target type of the attribute to be filtered
  * @param operation   the operation that will be used to build the filter
  * @param negate      if the filter's result should be negated
- * @param values      the values that will be used to build the filter and that will be used to filter the attribute
+ * @param values      The values used to construct and apply the filter to the attribute
  * @param modifiers   the modifiers that will be used to build the filter
  * @param description the user readable description of the filter
  */
