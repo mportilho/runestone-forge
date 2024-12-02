@@ -25,6 +25,8 @@
 package com.runestone.dynafilter.core.generator.annotation;
 
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
+import com.runestone.dynafilter.core.generator.ConditionalStatement;
+import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
 import org.apache.commons.lang3.StringUtils;
@@ -40,7 +42,7 @@ public class TypeAnnotationUtils {
 
     private static final Map<AnnotationStatementInput, List<FilterAnnotationData>> CACHE_FILTERS = new WeakHashMap<>();
     private static final Map<AnnotationStatementInput, List<Class<? extends FilterDecorator<?>>>> CACHE_DECORATORS = new WeakHashMap<>();
-    private static final Map<AnnotationStatementInput, List<Filter>> CACHE_FILTER_ANNOTATIONS = new WeakHashMap<>();
+    private static final Map<AnnotationStatementInput, List<FilterRequestData>> CACHE_FILTER_REQUEST_DATA = new WeakHashMap<>();
 
     private TypeAnnotationUtils() {
     }
@@ -87,15 +89,21 @@ public class TypeAnnotationUtils {
         return decorators.isEmpty() ? Collections.emptyList() : decorators;
     }
 
-    public static List<Filter> retrieveFilterAnnotations(AnnotationStatementInput annotationStatementInput) {
-        return CACHE_FILTER_ANNOTATIONS.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::retrieveFilterAnnotationsInternal);
+    /**
+     * List all filter request data from the annotation statement input
+     *
+     * @param annotationStatementInput the annotation statement input
+     * @return a list of filter request data
+     */
+    public static List<FilterRequestData> listAllFilterRequestData(AnnotationStatementInput annotationStatementInput) {
+        return CACHE_FILTER_REQUEST_DATA.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::listAllFilterRequestDataInternal);
     }
 
-    private static List<Filter> retrieveFilterAnnotationsInternal(AnnotationStatementInput annotationStatementInput) {
-        List<Filter> filters = new ArrayList<>(20);
+    private static List<FilterRequestData> listAllFilterRequestDataInternal(AnnotationStatementInput annotationStatementInput) {
+        List<FilterRequestData> filters = new ArrayList<>(20);
         for (FilterAnnotationData data : TypeAnnotationUtils.findAnnotationData(annotationStatementInput)) {
-            filters.addAll(data.filters());
-            data.filterStatements().forEach(v -> filters.addAll(v.filters()));
+            filters.addAll(data.filters().stream().map(FilterRequestData::of).toList());
+            data.filterStatements().forEach(v -> filters.addAll(v.filters().stream().map(FilterRequestData::of).toList()));
         }
         return filters;
     }
@@ -283,9 +291,18 @@ public class TypeAnnotationUtils {
         }
     }
 
-    public static Class<?> findEntityClass(Parameter parameter) {
+    /**
+     * Searches for the target class of a filter annotation
+     *
+     * @param parameter the parameter to search for the target class
+     * @return the target class of the filter annotation or null if not found
+     * @throws DynamicFilterConfigurationException if the target class is not found when required (e.g. when using ConjunctionFrom or DisjunctionFrom annotations or ConditionalStatement type)
+     */
+    public static Class<?> findFilterTargetClass(Parameter parameter) {
         Class<?> filterClass;
         Class<?> entityClass = null;
+
+        // Find from ConjunctionFrom or DisjunctionFrom annotations
 
         ConjunctionFrom conjunctionFrom = parameter.getAnnotation(ConjunctionFrom.class);
         if (conjunctionFrom != null) {
@@ -302,10 +319,18 @@ public class TypeAnnotationUtils {
             entityClass = filterTargetAnnotation.value();
         }
 
-        if (entityClass == null
-                && (parameter.isAnnotationPresent(Conjunction.class) || parameter.isAnnotationPresent(Disjunction.class))
-                && parameter.getType().isAssignableFrom(Specification.class)) {
-            entityClass = (Class<?>) ((ParameterizedType) parameter.getParameterizedType()).getActualTypeArguments()[0];
+        // if not found, search on Conjunction or Disjunction configuration
+
+        if (entityClass == null && (parameter.isAnnotationPresent(Conjunction.class) || parameter.isAnnotationPresent(Disjunction.class))) {
+            if (parameter.getType().isAssignableFrom(Specification.class)) {
+                entityClass = (Class<?>) ((ParameterizedType) parameter.getParameterizedType()).getActualTypeArguments()[0];
+            } else if (parameter.getType().equals(ConditionalStatement.class)) {
+                FilterTarget filterTargetAnnotation = parameter.getAnnotation(FilterTarget.class);
+                if (filterTargetAnnotation == null) {
+                    throw new DynamicFilterConfigurationException("FilterTarget annotation is required for ConditionalStatement type parameters");
+                }
+                entityClass = filterTargetAnnotation.value();
+            }
         }
 
         return entityClass;

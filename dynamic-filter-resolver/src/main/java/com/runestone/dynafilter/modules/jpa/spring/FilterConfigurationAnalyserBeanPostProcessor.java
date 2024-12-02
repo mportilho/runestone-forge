@@ -11,7 +11,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 
 import static com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils.findFilterField;
-import static com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils.retrieveFilterAnnotations;
+import static com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils.listAllFilterRequestData;
 
 public class FilterConfigurationAnalyserBeanPostProcessor implements BeanPostProcessor {
 
@@ -28,10 +28,10 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanPostPro
     }
 
     private static void checkFilterEntityPath(Parameter parameter) {
-        Class<?> entityClass = TypeAnnotationUtils.findEntityClass(parameter);
+        Class<?> entityClass = TypeAnnotationUtils.findFilterTargetClass(parameter);
         if (entityClass != null) {
             AnnotationStatementInput input = new AnnotationStatementInput(parameter.getType(), parameter.getAnnotations());
-            retrieveFilterAnnotations(input).forEach(filter -> findFilterField(entityClass, filter.path()));
+            listAllFilterRequestData(input).forEach(filter -> findFilterField(entityClass, filter.path()));
         }
     }
 }

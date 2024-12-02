@@ -183,6 +183,14 @@ public interface DynamicFilterJpaRepository<T, I> extends JpaRepository<T, I>, J
     <S extends T, R> R findBy(ConditionalStatement conditionalStatement, Function<FluentQuery.FetchableFluentQuery<S>, R> queryFunction);
 
     /**
+     * Convert a conditional statement to a JPA specification of the current repository entity type.
+     *
+     * @param conditionalStatement Conditional statement
+     * @return JPA specification
+     */
+    Specification<T> convertoToSpecification(ConditionalStatement conditionalStatement);
+
+    /**
      * Set the dynamic filter resolver to be used by the repository.
      *
      * <p>For internal use only.

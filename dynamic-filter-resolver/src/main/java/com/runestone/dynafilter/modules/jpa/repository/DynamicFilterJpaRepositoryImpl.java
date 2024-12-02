@@ -25,7 +25,7 @@
 package com.runestone.dynafilter.modules.jpa.repository;
 
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
-import com.runestone.dynafilter.core.generator.annotation.Filter;
+import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
@@ -141,6 +141,11 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
     }
 
     @Override
+    public Specification<T> convertoToSpecification(ConditionalStatement conditionalStatement) {
+        return dynamicFilterResolver.createFilter(conditionalStatement);
+    }
+
+    @Override
     public void setDynamicFilterResolver(DynamicFilterResolver<Specification<T>> dynamicFilterResolver) {
         this.dynamicFilterResolver = dynamicFilterResolver;
     }
@@ -157,7 +162,7 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
             return sort;
         }
         List<Sort.Order> orderList = sort.stream().map(order -> {
-            for (Filter filter : conditionalStatement.statementWrapper().allFilters()) {
+            for (FilterRequestData filter : conditionalStatement.statementWrapper().allFilters()) {
                 if (order.getProperty().equals(filter.parameters()[0]) && !order.getProperty().equals(filter.path())) {
                     return order.withProperty(filter.path());
                 }

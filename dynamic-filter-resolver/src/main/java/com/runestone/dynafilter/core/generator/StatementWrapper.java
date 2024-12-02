@@ -24,8 +24,8 @@
 
 package com.runestone.dynafilter.core.generator;
 
-import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.model.FilterData;
+import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.model.statement.AbstractStatement;
 
 import java.util.List;
@@ -40,9 +40,9 @@ import java.util.Optional;
  * @author Marcelo Portilho
  */
 public record StatementWrapper(AbstractStatement statement, Map<String, FilterData> decoratedFilters,
-                               List<Filter> allFilters) {
+                               List<FilterRequestData> allFilters) {
 
-    public StatementWrapper(AbstractStatement statement, Map<String, FilterData> decoratedFilters, List<Filter> allFilters) {
+    public StatementWrapper(AbstractStatement statement, Map<String, FilterData> decoratedFilters, List<FilterRequestData> allFilters) {
         if (statement == null) {
             throw new IllegalArgumentException("Statement cannot be null");
         }

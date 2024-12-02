@@ -28,6 +28,7 @@ import com.fasterxml.jackson.annotation.JsonView;
 import com.runestone.assertions.Asserts;
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.annotation.*;
+import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.operation.types.IsIn;
@@ -72,20 +73,14 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
                 continue;
             }
 
-            Class<?> clazz = findExternalFilterDefinitionClass(methodParameter);
-            FilterTarget filterTarget = clazz != null ? clazz.getAnnotation(FilterTarget.class) : null;
-            if (clazz != null && filterTarget == null) {
-                LOGGER.warn("Consider adding the @{} annotation to class '{}' to validate the filter's path", FilterTarget.class.getSimpleName(), clazz.getSimpleName());
-            }
-
             String parameterName = getParameterName(methodParameter);
-            List<Filter> parameterAnnotations = TypeAnnotationUtils
-                    .retrieveFilterAnnotations(new AnnotationStatementInput(methodParameter.getParameterType(), methodParameter.getParameterAnnotations()));
+            List<FilterRequestData> parameterAnnotations = TypeAnnotationUtils
+                    .listAllFilterRequestData(new AnnotationStatementInput(methodParameter.getParameterType(), methodParameter.getParameterAnnotations()));
             parameterAnnotations.removeIf(filter -> Decorated.class.equals(filter.operation()));
 
             if (!parameterAnnotations.isEmpty()) {
                 operation.getParameters().removeIf(p -> p.getName().equals(parameterName));
-                for (Filter spec : parameterAnnotations) {
+                for (FilterRequestData spec : parameterAnnotations) {
                     try {
                         customizeParameter(operation, methodParameter, spec);
                     } catch (Exception e) {
@@ -103,7 +98,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
      * representation
      */
     @SuppressWarnings({"rawtypes"})
-    private void customizeParameter(Operation operation, MethodParameter methodParameter, Filter filter) throws Exception {
+    private void customizeParameter(Operation operation, MethodParameter methodParameter, FilterRequestData filter) throws Exception {
         Field field = getParameterField(operation, methodParameter, filter);
 
         if (Decorated.class.equals(filter.operation())) {
@@ -159,7 +154,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private void createCommonSchema(Filter filter, Field field, MethodParameter methodParameter, io.swagger.v3.oas.models.parameters.Parameter parameter) {
+    private void createCommonSchema(FilterRequestData filter, Field field, MethodParameter methodParameter, io.swagger.v3.oas.models.parameters.Parameter parameter) {
         Schema schemaFromType;
         if (field != null) {
             Class<?> fieldClass = field.getType();
@@ -189,7 +184,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
         SchemaValidationUtils.applyValidations(newSchema, field);
     }
 
-    private static Field getParameterField(Operation operation, MethodParameter methodParameter, Filter filter) throws ClassNotFoundException {
+    private static Field getParameterField(Operation operation, MethodParameter methodParameter, FilterRequestData filter) throws ClassNotFoundException {
         Field field = null;
         Class<?> type = methodParameter.getParameter().getType();
         if (Specification.class.isAssignableFrom(type)) {
