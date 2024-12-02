@@ -198,7 +198,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             try {
                 field = TypeAnnotationUtils.findFilterField(parameterizedClassType, filter.path());
             } catch (IllegalStateException e) {
-                String location = Asserts.isNotEmpty(operation.getTags()) ? operation.getTags().get(0) + "." : "";
+                String location = Asserts.isNotEmpty(operation.getTags()) ? operation.getTags().getFirst() + "." : "";
                 location += operation.getOperationId();
                 throw new IllegalStateException(String.format("Fail to get Schema data from Operation '%s'", location), e);
             }
