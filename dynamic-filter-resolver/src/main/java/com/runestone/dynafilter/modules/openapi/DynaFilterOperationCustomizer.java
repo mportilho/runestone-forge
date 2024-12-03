@@ -25,8 +25,6 @@
 package com.runestone.dynafilter.modules.openapi;
 
 import com.fasterxml.jackson.annotation.JsonView;
-import com.runestone.assertions.Asserts;
-import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.annotation.*;
 import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.operation.types.Decorated;
@@ -40,24 +38,18 @@ import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.BooleanSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.ParameterNameDiscoverer;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.method.HandlerMethod;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
 import java.util.List;
 import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
 
 public class DynaFilterOperationCustomizer implements OperationCustomizer {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(DynaFilterOperationCustomizer.class);
 
     private final ParameterNameDiscoverer parameterNameDiscoverer;
 
@@ -99,8 +91,6 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
      */
     @SuppressWarnings({"rawtypes"})
     private void customizeParameter(Operation operation, MethodParameter methodParameter, FilterRequestData filter) throws Exception {
-        Field field = getParameterField(operation, methodParameter, filter);
-
         if (Decorated.class.equals(filter.operation())) {
             var parameter = new io.swagger.v3.oas.models.parameters.Parameter();
             parameter.setName(filter.parameters()[0]);
@@ -136,6 +126,8 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
                 arraySchema.items(parameter.getSchema() != null ? parameter.getSchema() : new StringSchema());
                 parameter.setSchema(arraySchema);
             } else {
+                Class<?> filterTargetClass = TypeAnnotationUtils.findFilterTargetClass(methodParameter.getParameter());
+                Field field = TypeAnnotationUtils.findFilterField(filterTargetClass, filter.path());
                 createCommonSchema(filter, field, methodParameter, parameter);
             }
 
@@ -184,42 +176,6 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
         SchemaValidationUtils.applyValidations(newSchema, field);
     }
 
-    private static Field getParameterField(Operation operation, MethodParameter methodParameter, FilterRequestData filter) throws ClassNotFoundException {
-        Field field = null;
-        Class<?> type = methodParameter.getParameter().getType();
-        if (Specification.class.isAssignableFrom(type)) {
-            ParameterizedType parameterizedType = (ParameterizedType) methodParameter.getParameter().getParameterizedType();
-            Class<?> parameterizedClassType = Class.forName(parameterizedType.getActualTypeArguments()[0].getTypeName());
-            try {
-                field = TypeAnnotationUtils.findFilterField(parameterizedClassType, filter.path());
-            } catch (IllegalStateException e) {
-                String location = Asserts.isNotEmpty(operation.getTags()) ? operation.getTags().getFirst() + "." : "";
-                location += operation.getOperationId();
-                throw new IllegalStateException(String.format("Fail to get Schema data from Operation '%s'", location), e);
-            }
-        } else if (ConditionalStatement.class.isAssignableFrom(type)) {
-            Class<?> clazz = findExternalFilterDefinitionClass(methodParameter);
-            if (clazz != null) {
-                FilterTarget filterTarget = clazz.getAnnotation(FilterTarget.class);
-                for (Field declaredField : clazz.getDeclaredFields()) {
-                    Filter fieldFilter = declaredField.getAnnotation(Filter.class);
-                    if (fieldFilter != null && fieldFilter.path().equals(filter.path())) {
-                        Field targetField = null;
-                        if (filterTarget != null) {
-                            targetField = TypeAnnotationUtils.findFilterField(filterTarget.value(), filter.path()); // just validate the path, don't need the field
-                        }
-                        field = filterTarget != null && filterTarget.useTargetFieldsMetadata() ? targetField : declaredField;
-                        break;
-                    }
-                }
-            }
-        } else {
-            throw new IllegalStateException("Dynamic filter cannot be used with types other than Specification or ConditionalStatement");
-        }
-        return field;
-    }
-
-
     /**
      * Extracts a {@link JsonView} configuration from a {@link MethodParameter} for additional customization
      */
@@ -244,14 +200,6 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             return methodParameter.getParameterName();
         }
         return methodParameter.getParameter().getName();
-    }
-
-    private static Class<?> findExternalFilterDefinitionClass(MethodParameter methodParameter) {
-        ConjunctionFrom conjunctionFrom = methodParameter.getParameterAnnotation(ConjunctionFrom.class);
-        DisjunctionFrom disjunctionFrom = methodParameter.getParameterAnnotation(DisjunctionFrom.class);
-        Class<?> clazz = conjunctionFrom != null ? conjunctionFrom.value() : null;
-        clazz = clazz == null && disjunctionFrom != null ? disjunctionFrom.value() : clazz;
-        return clazz;
     }
 
 }

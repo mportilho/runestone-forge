@@ -24,11 +24,4 @@ public @interface FilterTarget {
      */
     Class<?> value();
 
-    /**
-     * If true, the filter will use the target fields metadata to generate the filter
-     *
-     * @return If true, the filter will use the target fields metadata to generate the filter
-     */
-    boolean useTargetFieldsMetadata() default true;
-
 }
