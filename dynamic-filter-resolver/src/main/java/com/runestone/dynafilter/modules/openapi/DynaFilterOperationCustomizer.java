@@ -90,7 +90,11 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
      * representation
      */
     @SuppressWarnings({"rawtypes"})
-    private void customizeParameter(Operation operation, MethodParameter methodParameter, FilterRequestData filter) throws Exception {
+    private void customizeParameter(Operation operation, MethodParameter methodParameter, FilterRequestData filter) {
+        if (filter.constantValues() != null && filter.constantValues().length > 0) {
+            return;
+        }
+
         if (Decorated.class.equals(filter.operation())) {
             var parameter = new io.swagger.v3.oas.models.parameters.Parameter();
             parameter.setName(filter.parameters()[0]);
