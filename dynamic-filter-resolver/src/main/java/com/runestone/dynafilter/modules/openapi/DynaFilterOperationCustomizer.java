@@ -61,14 +61,13 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
     public Operation customize(Operation operation, HandlerMethod handlerMethod) {
         for (MethodParameter methodParameter : handlerMethod.getMethodParameters()) {
             if (!methodParameter.hasParameterAnnotation(Conjunction.class) && !methodParameter.hasParameterAnnotation(ConjunctionFrom.class)
-                    && !methodParameter.hasParameterAnnotation(Disjunction.class) && !methodParameter.hasParameterAnnotation(Disjunction.class)) {
+                && !methodParameter.hasParameterAnnotation(Disjunction.class) && !methodParameter.hasParameterAnnotation(Disjunction.class)) {
                 continue;
             }
 
             String parameterName = getParameterName(methodParameter);
             List<FilterRequestData> parameterAnnotations = TypeAnnotationUtils
                     .listAllFilterRequestData(new AnnotationStatementInput(methodParameter.getParameterType(), methodParameter.getParameterAnnotations()));
-            parameterAnnotations.removeIf(filter -> Decorated.class.equals(filter.operation()));
 
             if (!parameterAnnotations.isEmpty()) {
                 operation.getParameters().removeIf(p -> p.getName().equals(parameterName));
@@ -89,20 +88,8 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
      * Applies necessary customization on the OpenAPI 3 {@link Operation}
      * representation
      */
-    @SuppressWarnings({"rawtypes"})
     private void customizeParameter(Operation operation, MethodParameter methodParameter, FilterRequestData filter) {
         if (filter.constantValues() != null && filter.constantValues().length > 0) {
-            return;
-        }
-
-        if (Decorated.class.equals(filter.operation())) {
-            var parameter = new io.swagger.v3.oas.models.parameters.Parameter();
-            parameter.setName(filter.parameters()[0]);
-            Schema schema = AnnotationsUtils.resolveSchemaFromType(filter.targetType(), null, null);
-            parameter.setSchema(schema);
-            parameter.setIn(ParameterIn.QUERY.toString());
-            parameter.setDescription(filter.description());
-            operation.getParameters().add(parameter);
             return;
         }
 
