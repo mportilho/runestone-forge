@@ -66,7 +66,7 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
         List<FilterRequestData> allFilters = TypeAnnotationUtils.listAllFilterRequestData(filterInputs);
 
         if (statementList.isEmpty()) {
-            return new StatementWrapper(NO_OP_STATEMENT, Collections.emptyMap(), allFilters);
+            return new StatementWrapper(NO_OP_STATEMENT, decoratedFilters, allFilters);
         } else if (statementList.size() == 1) {
             return new StatementWrapper(statementList.getFirst(), decoratedFilters, allFilters);
         } else {
