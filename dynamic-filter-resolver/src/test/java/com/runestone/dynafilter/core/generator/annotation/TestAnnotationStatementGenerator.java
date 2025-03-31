@@ -37,6 +37,7 @@ import com.runestone.dynafilter.core.generator.annotation.tool.ValueFinderVisito
 import com.runestone.dynafilter.core.model.statement.AbstractStatement;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
 import com.runestone.dynafilter.core.model.statement.NoOpStatement;
+import com.runestone.dynafilter.modules.jpa.resolver.tools.GetJob;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -66,6 +67,7 @@ public class TestAnnotationStatementGenerator {
 
         StatementWrapper statementWrapper = generator.generateStatements(annotationStatementInput, null);
         Assertions.assertThat(statementWrapper.statement()).isInstanceOf(NoOpStatement.class);
+        Assertions.assertThat(statementWrapper.decoratedFilters()).hasSize(0);
     }
 
     @Test
@@ -75,6 +77,7 @@ public class TestAnnotationStatementGenerator {
 
         StatementWrapper statementWrapper = generator.generateStatements(annotationStatementInput, null);
         Assertions.assertThat(statementWrapper.statement()).isInstanceOf(NoOpStatement.class);
+        Assertions.assertThat(statementWrapper.decoratedFilters()).hasSize(0);
     }
 
     @Test
@@ -89,6 +92,7 @@ public class TestAnnotationStatementGenerator {
         Assertions.assertThat(StatementTypeCounterVisitor.count(statement, LogicOperator.CONJUNCTION)).isEqualTo(0);
         Assertions.assertThat(StatementTypeCounterVisitor.count(statement, LogicOperator.DISJUNCTION)).isEqualTo(0);
         Assertions.assertThat(NegatedStmtCounterVisitor.countFilters(statement)).isEqualTo(0);
+        Assertions.assertThat(statementWrapper.decoratedFilters()).hasSize(0);
     }
 
     @Test
@@ -107,6 +111,7 @@ public class TestAnnotationStatementGenerator {
         Assertions.assertThat(ValueFinderVisitor.find("genre", statement)).isEqualTo(new Object[]{"adventure"});
         Assertions.assertThat(ValueFinderVisitor.find("specialClient", statement)).isEqualTo(new Object[]{"false"});
         Assertions.assertThat(ValueFinderVisitor.find("priceInterval", statement)).isEqualTo(new Object[]{"0", "1000"});
+        Assertions.assertThat(statementWrapper.decoratedFilters()).hasSize(0);
     }
 
     @Test
@@ -136,6 +141,7 @@ public class TestAnnotationStatementGenerator {
         Assertions.assertThat(ValueFinderVisitor.find("dateSearchInterval", statement)).isEqualTo(new Object[]{LocalDate.of(2021, 1, 1), LocalDate.of(2021, 12, 31)});
         Assertions.assertThat(ValueFinderVisitor.find("priceInterval", statement)).isEqualTo(new Object[]{10.0, 100.0});
         Assertions.assertThat(ValueFinderVisitor.find("tags", statement)).isEqualTo(new Object[][]{{"multiplayer", "forgotten-realms", "rpg"}});
+        Assertions.assertThat(statementWrapper.decoratedFilters()).hasSize(0);
     }
 
     @Test
@@ -163,6 +169,7 @@ public class TestAnnotationStatementGenerator {
         Assertions.assertThat(ValueFinderVisitor.find("genre", statement)).isEqualTo(new Object[]{"adventure"});
         Assertions.assertThat(ValueFinderVisitor.find("specialClient", statement)).isEqualTo(new Object[]{true});
         Assertions.assertThat(ValueFinderVisitor.find("priceInterval", statement)).isEqualTo(new Object[]{"0", "1000"});
+        Assertions.assertThat(statementWrapper.decoratedFilters()).hasSize(0);
     }
 
     @Test
@@ -181,6 +188,25 @@ public class TestAnnotationStatementGenerator {
         Assertions.assertThat(ValueFinderVisitor.find("title", statement)).isEqualTo(new Object[]{"Down by the River"});
         Assertions.assertThat(ValueFinderVisitor.find("onSalePeriod", statement)).isEqualTo(new Object[]{"false"});
         Assertions.assertThat(ValueFinderVisitor.find("priceInterval", statement)).isEqualTo(new Object[]{"minPrice-Resolved", "maxPrice-Resolved"});
+        Assertions.assertThat(statementWrapper.decoratedFilters()).hasSize(0);
+    }
+
+    @Test
+    public void testCreateStmtWithOnlyOneDecoratedValue() {
+        var annotationStatementInput = new AnnotationStatementInput(GetJob.class, null);
+        AnnotationStatementGenerator generator = new AnnotationStatementGenerator();
+        Map<String, Object> parameters = Map.of("jobDecorated", "Decoration");
+
+        StatementWrapper statementWrapper = generator.generateStatements(annotationStatementInput, parameters);
+        Assertions.assertThat(statementWrapper).isNotNull();
+        AbstractStatement statement = statementWrapper.statement();
+        Assertions.assertThat(FilterDataCounterVisitor.count(statement)).isEqualTo(0);
+        Assertions.assertThat(StatementTypeCounterVisitor.count(statement, LogicOperator.CONJUNCTION)).isEqualTo(0);
+        Assertions.assertThat(StatementTypeCounterVisitor.count(statement, LogicOperator.DISJUNCTION)).isEqualTo(0);
+        Assertions.assertThat(NegatedStmtCounterVisitor.countFilters(statement)).isEqualTo(0);
+
+        Assertions.assertThat(statementWrapper.decoratedFilters()).hasSize(1);
+        Assertions.assertThat(statementWrapper.decoratedFilters()).extracting("job").extracting("values").isEqualTo(new String[]{"Decoration"});
     }
 
 }
