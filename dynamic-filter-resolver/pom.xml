@@ -4,15 +4,15 @@
     <parent>
         <groupId>io.github.runestone-forge</groupId>
         <artifactId>runestone-forge</artifactId>
-        <version>1.0.3</version>
+        <version>1.1.0.0-SNAPSHOT</version>
     </parent>
     <artifactId>dynamic-filter-resolver</artifactId>
     <packaging>jar</packaging>
     <name>Dynamic Filter Resolver</name>
 
     <properties>
-        <spring.boot.version>3.2.1</spring.boot.version>
-        <springdocs.version>2.2.0</springdocs.version>
+        <spring.boot.version>4.0.0</spring.boot.version>
+        <springdocs.version>3.0.0</springdocs.version>
         <jmh.version>1.37</jmh.version>
     </properties>
 
@@ -65,6 +65,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-data-jpa-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

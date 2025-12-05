@@ -164,14 +164,6 @@ public interface DynamicFilterJpaRepository<T, I> extends JpaRepository<T, I>, J
     boolean exists(ConditionalStatement conditionalStatement);
 
     /**
-     * Delete entities by the given conditional statement.
-     *
-     * @param conditionalStatement Conditional statement
-     * @return Number of entities deleted
-     */
-    long delete(ConditionalStatement conditionalStatement);
-
-    /**
      * Find by the given conditional statement and query function.
      *
      * @param conditionalStatement Conditional statement
