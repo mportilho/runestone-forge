@@ -29,8 +29,8 @@ import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Root;
+import org.springframework.data.core.PropertyPath;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.data.mapping.PropertyPath;
 
 import java.util.Collection;
 

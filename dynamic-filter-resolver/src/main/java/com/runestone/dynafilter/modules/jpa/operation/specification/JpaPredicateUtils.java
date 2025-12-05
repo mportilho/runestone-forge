@@ -29,7 +29,7 @@ import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeLeft;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeRight;
 import jakarta.persistence.criteria.*;
 import jakarta.persistence.metamodel.Attribute;
-import org.springframework.data.mapping.PropertyPath;
+import org.springframework.data.core.PropertyPath;
 
 import java.util.function.BiFunction;
 

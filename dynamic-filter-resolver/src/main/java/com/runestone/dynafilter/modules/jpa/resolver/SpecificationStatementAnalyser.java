@@ -57,6 +57,6 @@ public class SpecificationStatementAnalyser implements StatementAnalyser<Specifi
 
     @Override
     public Specification<?> analyseNoOpStatement(NoOpStatement noOpStatement) {
-        return Specification.where(null);
+        return Specification.unrestricted();
     }
 }
