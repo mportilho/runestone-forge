@@ -54,12 +54,13 @@ public class FetchingFilterDecorator implements FilterDecorator<Specification<?>
     public Specification<?> decorate(Specification<?> filter, StatementWrapper statementWrapper) {
         Specification<?> decorated = (root, query, criteriaBuilder) -> {
             Class<?> resultType = query.getResultType();
-            if (resultType == null || (!Long.class.equals(resultType) && !long.class.equals(resultType))) {
+            boolean countQuery = Long.class.equals(resultType) || long.class.equals(resultType);
+            if (!countQuery) {
                 query.distinct(true);
-            }
-            Set<FetchPath> createdFetches = new HashSet<>(fetches.size() * 2);
-            for (Fetching fetching : fetches) {
-                createJoinClause(root, fetching, createdFetches);
+                Set<FetchPath> createdFetches = new HashSet<>(fetches.size() * 2);
+                for (Fetching fetching : fetches) {
+                    createJoinClause(root, fetching, createdFetches);
+                }
             }
             return null;
         };
