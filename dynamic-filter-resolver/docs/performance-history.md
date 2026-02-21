@@ -127,6 +127,7 @@ Conclusao:
 - Commit `3405adb0`: `dynamic-filter-resolver/target/jmh-after-patch.json`
 - PERF-002: `dynamic-filter-resolver/target/jmh-perf02.json`
 - PERF-003 (after): `dynamic-filter-resolver/target/jmh-perf03-after.json`
+- PERF-004 (cache): `dynamic-filter-resolver/target/jmh-perf04-cache.json`
 
 ---
 
@@ -250,6 +251,60 @@ java -cp "$CP" org.openjdk.jmh.Main \
 1. Houve ganho real nos dois hotspots de alta taxa (predicates e fetching).
 2. A variacao nos benchmarks de cache de anotacao foi pequena e continua na faixa sub-microsegundo.
 3. Os novos cenarios adicionados aumentam cobertura para caminhos repetidos/sobrepostos, melhorando confianca para carga real.
+
+---
+
+## Experimento PERF-004
+- Data: 2026-02-21
+- Objetivo: limitar crescimento de memoria do cache de `TypeAnnotationUtils` sem adicionar dependencia externa
+- Baseline commit: estado pos PERF-003 (`dynamic-filter-resolver/target/jmh-perf03-after.json`)
+- Commit testado: working tree atual (LRU bounded cache + testes de limite/eviccao)
+
+### Hipotese
+1. Cache LRU limitado evita crescimento ilimitado de memoria.
+2. Hit-latency permanece baixa (sem regressao relevante para uso real).
+
+### Mudancas aplicadas
+- `src/main/java/com/runestone/dynafilter/core/generator/annotation/TypeAnnotationUtils.java`
+  - cache trocado de `ConcurrentHashMap` ilimitado para LRU bounded (`LinkedHashMap` access-order)
+  - tamanho maximo configuravel via system property `runestone.dynafilter.annotation.cache.max-size` (default `4096`)
+  - metodos de apoio para teste: `cacheSize()` e `cacheMaxSize()`
+- `src/test/java/com/runestone/dynafilter/core/generator/annotation/TestTypeAnnotationUtils.java`
+  - teste de limite do cache
+  - teste de sobrevivencia de entrada recentemente acessada sob pressao de eviccao
+- `src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverPerf02Benchmark.java`
+  - novo benchmark: `perf04_annotationUtils_hitLatency_lruBoundedCache`
+
+### Protocolo de medicao
+- JVM: Java 21.0.10
+- JMH: 1.37
+- Parametros:
+  - `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu us`
+  - `-jvmArgs '-Xms1g -Xmx1g'`
+- Comando:
+
+```bash
+java -cp "$CP" org.openjdk.jmh.Main \
+'DynamicFilterResolverPerf02Benchmark\.(perf02_annotationUtils_reusedInput_afterCacheGrowth|perf02_annotationUtils_newEquivalentInput_afterCacheGrowth|perf04_annotationUtils_hitLatency_lruBoundedCache)' \
+-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu us -jvmArgs '-Xms1g -Xmx1g' -rf json -rff dynamic-filter-resolver/target/jmh-perf04-cache.json -foe true
+```
+
+### Resultado
+| Benchmark | PERF-003 (us/op) | PERF-004 (us/op) | Delta |
+|---|---:|---:|---:|
+| perf02_annotationUtils_reusedInput_afterCacheGrowth | 0.004 | 0.022 | +450.00% |
+| perf02_annotationUtils_newEquivalentInput_afterCacheGrowth | 0.078 | 0.092 | +17.95% |
+| perf04_annotationUtils_hitLatency_lruBoundedCache | n/a | 0.023 | n/a |
+
+### Decisao
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura tecnica
+1. Houve regressao percentual na latencia de hit, mas com impacto absoluto muito baixo (ordem de centesimos de microssegundo).
+2. O ganho estrutural de seguranca de memoria (cache bounded) compensa para workloads long-lived.
+3. Para cenarios ultra sensiveis de latencia, o proximo passo e avaliar um bounded cache concorrente com menor contencao.
 
 ---
 

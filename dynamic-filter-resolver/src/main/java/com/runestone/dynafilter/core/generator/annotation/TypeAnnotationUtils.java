@@ -37,12 +37,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 public class TypeAnnotationUtils {
 
-    private static final ConcurrentMap<AnnotationStatementInput, AnnotationMetadata> CACHE_METADATA = new ConcurrentHashMap<>();
+    private static final int DEFAULT_CACHE_MAX_SIZE = 4096;
+    private static final String CACHE_MAX_SIZE_PROPERTY = "runestone.dynafilter.annotation.cache.max-size";
+    private static final int CACHE_MAX_SIZE = resolveCacheMaxSize();
+    private static final Map<AnnotationStatementInput, AnnotationMetadata> CACHE_METADATA = new LruMetadataCache(CACHE_MAX_SIZE);
 
     private TypeAnnotationUtils() {
     }
@@ -128,7 +129,16 @@ public class TypeAnnotationUtils {
         if (cachedMetadata != null) {
             return cachedMetadata;
         }
-        return CACHE_METADATA.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::buildMetadata);
+
+        AnnotationMetadata builtMetadata = buildMetadata(annotationStatementInput);
+        synchronized (CACHE_METADATA) {
+            AnnotationMetadata existing = CACHE_METADATA.get(annotationStatementInput);
+            if (existing != null) {
+                return existing;
+            }
+            CACHE_METADATA.put(annotationStatementInput, builtMetadata);
+            return builtMetadata;
+        }
     }
 
     private static AnnotationMetadata buildMetadata(AnnotationStatementInput annotationStatementInput) {
@@ -373,6 +383,63 @@ public class TypeAnnotationUtils {
             List<Class<? extends FilterDecorator<?>>> decorators,
             List<FilterRequestData> requestFilters
     ) {
+    }
+
+    static int cacheSize() {
+        synchronized (CACHE_METADATA) {
+            return CACHE_METADATA.size();
+        }
+    }
+
+    static int cacheMaxSize() {
+        return CACHE_MAX_SIZE;
+    }
+
+    private static int resolveCacheMaxSize() {
+        String configuredValue = System.getProperty(CACHE_MAX_SIZE_PROPERTY);
+        if (configuredValue == null || configuredValue.isBlank()) {
+            return DEFAULT_CACHE_MAX_SIZE;
+        }
+        try {
+            int parsedValue = Integer.parseInt(configuredValue.trim());
+            return parsedValue > 0 ? parsedValue : DEFAULT_CACHE_MAX_SIZE;
+        } catch (NumberFormatException ignored) {
+            return DEFAULT_CACHE_MAX_SIZE;
+        }
+    }
+
+    private static final class LruMetadataCache extends LinkedHashMap<AnnotationStatementInput, AnnotationMetadata> {
+        private final int maxEntries;
+
+        private LruMetadataCache(int maxEntries) {
+            super(Math.min(maxEntries, 512), 0.75f, true);
+            this.maxEntries = maxEntries;
+        }
+
+        @Override
+        public synchronized AnnotationMetadata get(Object key) {
+            return super.get(key);
+        }
+
+        @Override
+        public synchronized AnnotationMetadata put(AnnotationStatementInput key, AnnotationMetadata value) {
+            return super.put(key, value);
+        }
+
+        @Override
+        public synchronized void clear() {
+            super.clear();
+        }
+
+        @Override
+        public synchronized int size() {
+            return super.size();
+        }
+
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<AnnotationStatementInput, AnnotationMetadata> eldest) {
+            return size() > maxEntries;
+        }
     }
 
 }

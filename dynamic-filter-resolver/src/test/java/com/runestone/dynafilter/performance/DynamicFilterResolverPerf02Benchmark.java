@@ -105,6 +105,11 @@ public class DynamicFilterResolverPerf02Benchmark {
         blackhole.consume(TypeAnnotationUtils.findAnnotationData(newEquivalentInput));
     }
 
+    @Benchmark
+    public void perf04_annotationUtils_hitLatency_lruBoundedCache(BoundedCacheHitState state, Blackhole blackhole) {
+        blackhole.consume(TypeAnnotationUtils.findAnnotationData(state.hotInput));
+    }
+
     @State(Scope.Benchmark)
     public static class JpaPredicateState {
 
@@ -239,6 +244,31 @@ public class DynamicFilterResolverPerf02Benchmark {
             }
 
             TypeAnnotationUtils.findAnnotationData(reusedInput);
+        }
+
+        @TearDown(Level.Trial)
+        public void tearDown() {
+            TypeAnnotationUtils.clearCaches();
+        }
+    }
+
+    @State(Scope.Benchmark)
+    public static class BoundedCacheHitState {
+        private AnnotationStatementInput hotInput;
+
+        @Setup(Level.Trial)
+        public void setup() {
+            TypeAnnotationUtils.clearCaches();
+            this.hotInput = new AnnotationStatementInput(InMemoryDatabaseApplication.class, InMemoryDatabaseApplication.class.getAnnotations());
+
+            // Fill cache above its bounded limit so eviction is active.
+            for (int i = 0; i < 50_000; i++) {
+                Annotation[] syntheticAnnotations = new Annotation[]{new SyntheticAnnotation(i)};
+                AnnotationStatementInput input = new AnnotationStatementInput(null, syntheticAnnotations);
+                TypeAnnotationUtils.findAnnotationData(input);
+            }
+
+            TypeAnnotationUtils.findAnnotationData(hotInput);
         }
 
         @TearDown(Level.Trial)

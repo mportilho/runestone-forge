@@ -31,6 +31,9 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.lang.annotation.Annotation;
+import java.lang.annotation.Retention;
+
+import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 public class TestTypeAnnotationUtils {
 
@@ -161,6 +164,80 @@ public class TestTypeAnnotationUtils {
 
         AnnotationStatementInput equivalentInput = new AnnotationStatementInput(StatusOkInterface.class, StatusOkInterface.class.getAnnotations());
         Assertions.assertThat(annotationStatementInput).isEqualTo(equivalentInput);
+    }
+
+    @Test
+    public void testCacheIsBoundedByConfiguredLruLimit() {
+        TypeAnnotationUtils.clearCaches();
+        int maxCacheSize = TypeAnnotationUtils.cacheMaxSize();
+
+        for (int i = 0; i < maxCacheSize + 500; i++) {
+            Annotation[] syntheticAnnotations = new Annotation[]{new SyntheticAnnotation(i)};
+            AnnotationStatementInput input = new AnnotationStatementInput(null, syntheticAnnotations);
+            TypeAnnotationUtils.findAnnotationData(input);
+        }
+
+        Assertions.assertThat(TypeAnnotationUtils.cacheSize()).isLessThanOrEqualTo(maxCacheSize);
+    }
+
+    @Test
+    public void testMostRecentlyAccessedEntrySurvivesEvictionPressure() {
+        TypeAnnotationUtils.clearCaches();
+        int maxCacheSize = TypeAnnotationUtils.cacheMaxSize();
+
+        AnnotationStatementInput hotInput = new AnnotationStatementInput(CombinedAnnotations.class, StatusOkInterface.class.getAnnotations());
+        TypeAnnotationUtils.findAnnotationData(hotInput);
+
+        for (int i = 0; i < maxCacheSize; i++) {
+            Annotation[] syntheticAnnotations = new Annotation[]{new SyntheticAnnotation(i)};
+            TypeAnnotationUtils.findAnnotationData(new AnnotationStatementInput(null, syntheticAnnotations));
+        }
+
+        // Refresh hot entry recency before adding one more entry that triggers eviction.
+        var refreshedHotMetadata = TypeAnnotationUtils.findAnnotationData(hotInput);
+
+        TypeAnnotationUtils.findAnnotationData(new AnnotationStatementInput(null, new Annotation[]{new SyntheticAnnotation(maxCacheSize + 1)}));
+        var metadataAfterEviction = TypeAnnotationUtils.findAnnotationData(hotInput);
+        Assertions.assertThat(metadataAfterEviction).isSameAs(refreshedHotMetadata);
+    }
+
+    @Retention(RUNTIME)
+    private @interface SyntheticMarker {
+        int value();
+    }
+
+    private static final class SyntheticAnnotation implements Annotation {
+        private final int value;
+
+        private SyntheticAnnotation(int value) {
+            this.value = value;
+        }
+
+        @Override
+        public Class<? extends Annotation> annotationType() {
+            return SyntheticMarker.class;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof SyntheticAnnotation other)) {
+                return false;
+            }
+            return value == other.value;
+        }
+
+        @Override
+        public int hashCode() {
+            return 127 * "value".hashCode() ^ Integer.hashCode(value);
+        }
+
+        @Override
+        public String toString() {
+            return "@SyntheticMarker(value=" + value + ')';
+        }
     }
 
 }
