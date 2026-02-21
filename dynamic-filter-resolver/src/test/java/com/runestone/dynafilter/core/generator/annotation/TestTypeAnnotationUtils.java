@@ -131,4 +131,23 @@ public class TestTypeAnnotationUtils {
                 .mapToLong(stmt -> stmt.filters().size()).sum()).isEqualTo(2);
     }
 
+    @Test
+    public void testCacheHitWithEquivalentInputs() {
+        TypeAnnotationUtils.clearCaches();
+        AnnotationStatementInput firstInput = new AnnotationStatementInput(CombinedAnnotations.class, StatusOkInterface.class.getAnnotations());
+        AnnotationStatementInput equivalentInput = new AnnotationStatementInput(CombinedAnnotations.class, StatusOkInterface.class.getAnnotations());
+
+        var firstFilters = TypeAnnotationUtils.findAnnotationData(firstInput);
+        var secondFilters = TypeAnnotationUtils.findAnnotationData(equivalentInput);
+        Assertions.assertThat(secondFilters).isSameAs(firstFilters);
+
+        var firstRequestFilters = TypeAnnotationUtils.listAllFilterRequestData(firstInput);
+        var secondRequestFilters = TypeAnnotationUtils.listAllFilterRequestData(equivalentInput);
+        Assertions.assertThat(secondRequestFilters).isSameAs(firstRequestFilters);
+
+        var firstDecorators = TypeAnnotationUtils.findFilterDecorators(firstInput);
+        var secondDecorators = TypeAnnotationUtils.findFilterDecorators(equivalentInput);
+        Assertions.assertThat(secondDecorators).isSameAs(firstDecorators);
+    }
+
 }

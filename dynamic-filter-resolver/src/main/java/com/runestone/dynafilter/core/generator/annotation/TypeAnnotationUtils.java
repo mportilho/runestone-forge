@@ -37,21 +37,27 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class TypeAnnotationUtils {
 
-    private static final Map<AnnotationStatementInput, List<FilterAnnotationData>> CACHE_FILTERS = new WeakHashMap<>();
-    private static final Map<AnnotationStatementInput, List<Class<? extends FilterDecorator<?>>>> CACHE_DECORATORS = new WeakHashMap<>();
-    private static final Map<AnnotationStatementInput, List<FilterRequestData>> CACHE_FILTER_REQUEST_DATA = new WeakHashMap<>();
+    private static final ConcurrentMap<AnnotationStatementInput, AnnotationMetadata> CACHE_METADATA = new ConcurrentHashMap<>();
 
     private TypeAnnotationUtils() {
     }
 
     public static List<Class<? extends FilterDecorator<?>>> findFilterDecorators(AnnotationStatementInput annotationStatementInput) {
-        return CACHE_DECORATORS.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::findFilterDecoratorsInternal);
+        return findCachedMetadata(annotationStatementInput).decorators();
     }
 
     public static List<Class<? extends FilterDecorator<?>>> findFilterDecoratorsInternal(AnnotationStatementInput annotationStatementInput) {
+        List<Annotation> statementAnnotations = TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput);
+        return findFilterDecoratorsInternal(annotationStatementInput, statementAnnotations);
+    }
+
+    private static List<Class<? extends FilterDecorator<?>>> findFilterDecoratorsInternal(AnnotationStatementInput annotationStatementInput,
+                                                                                           List<Annotation> statementAnnotations) {
         List<Class<? extends FilterDecorator<?>>> decorators = new ArrayList<>();
 
         if (annotationStatementInput.type() != null) {
@@ -70,7 +76,7 @@ public class TypeAnnotationUtils {
             }
         }
 
-        for (Annotation annotation : TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput)) {
+        for (Annotation annotation : statementAnnotations) {
             if (annotation.annotationType() == ConjunctionFrom.class) {
                 ConjunctionFrom ann = (ConjunctionFrom) annotation;
                 FilterDecorators filterDecorators = ann.value().getAnnotation(FilterDecorators.class);
@@ -96,12 +102,12 @@ public class TypeAnnotationUtils {
      * @return a list of filter request data
      */
     public static List<FilterRequestData> listAllFilterRequestData(AnnotationStatementInput annotationStatementInput) {
-        return CACHE_FILTER_REQUEST_DATA.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::listAllFilterRequestDataInternal);
+        return findCachedMetadata(annotationStatementInput).requestFilters();
     }
 
-    private static List<FilterRequestData> listAllFilterRequestDataInternal(AnnotationStatementInput annotationStatementInput) {
+    private static List<FilterRequestData> listAllFilterRequestDataInternal(List<FilterAnnotationData> annotationData) {
         List<FilterRequestData> filters = new ArrayList<>(20);
-        for (FilterAnnotationData data : TypeAnnotationUtils.findAnnotationData(annotationStatementInput)) {
+        for (FilterAnnotationData data : annotationData) {
             filters.addAll(data.filters().stream().map(FilterRequestData::of).toList());
             data.filterStatements().forEach(v -> filters.addAll(v.filters().stream().map(FilterRequestData::of).toList()));
         }
@@ -109,12 +115,34 @@ public class TypeAnnotationUtils {
     }
 
     public static List<FilterAnnotationData> findAnnotationData(AnnotationStatementInput annotationStatementInput) {
-        return CACHE_FILTERS.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::findAnnotationDataInternal);
+        return findCachedMetadata(annotationStatementInput).statementData();
     }
 
-    private static List<FilterAnnotationData> findAnnotationDataInternal(AnnotationStatementInput annotationStatementInput) {
+    public static void clearCaches() {
+        CACHE_METADATA.clear();
+    }
+
+    private static AnnotationMetadata findCachedMetadata(AnnotationStatementInput annotationStatementInput) {
+        Objects.requireNonNull(annotationStatementInput, "annotationStatementInput is required");
+        return CACHE_METADATA.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::buildMetadata);
+    }
+
+    private static AnnotationMetadata buildMetadata(AnnotationStatementInput annotationStatementInput) {
+        List<Annotation> statementAnnotations = TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput);
+        List<FilterAnnotationData> annotationData = findAnnotationDataInternal(statementAnnotations);
+        List<Class<? extends FilterDecorator<?>>> decorators = findFilterDecoratorsInternal(annotationStatementInput, statementAnnotations);
+        List<FilterRequestData> filterRequestData = listAllFilterRequestDataInternal(annotationData);
+
+        return new AnnotationMetadata(
+                annotationData.isEmpty() ? List.of() : List.copyOf(annotationData),
+                decorators.isEmpty() ? List.of() : List.copyOf(decorators),
+                filterRequestData.isEmpty() ? List.of() : List.copyOf(filterRequestData)
+        );
+    }
+
+    private static List<FilterAnnotationData> findAnnotationDataInternal(List<Annotation> statementAnnotations) {
         List<FilterAnnotationData> filterAnnotationData = new ArrayList<>();
-        for (Annotation annotation : TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput)) {
+        for (Annotation annotation : statementAnnotations) {
             if (annotation.annotationType() == Conjunction.class) {
                 Conjunction ann = (Conjunction) annotation;
                 List<FilterAnnotationStatement> statements = getFilterAnnotationFromStatements(ann.disjunctions());
@@ -334,6 +362,13 @@ public class TypeAnnotationUtils {
         }
 
         return entityClass;
+    }
+
+    private record AnnotationMetadata(
+            List<FilterAnnotationData> statementData,
+            List<Class<? extends FilterDecorator<?>>> decorators,
+            List<FilterRequestData> requestFilters
+    ) {
     }
 
 }

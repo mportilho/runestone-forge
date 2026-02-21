@@ -37,13 +37,19 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.lang.annotation.Annotation;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class SpringFilterDecoratorFactory implements FilterDecoratorFactory<Specification<?>> {
 
     private final GenericApplicationContext applicationContext;
+    private final ConcurrentMap<AnnotationStatementInput, Optional<FilterDecorator<Specification<?>>>> decoratorCache;
+    private final ConcurrentMap<Class<? extends FilterDecorator<?>>, List<FilterDecorator<Specification<?>>>> decoratorsByClass;
 
     public SpringFilterDecoratorFactory(GenericApplicationContext applicationContext) {
         this.applicationContext = Objects.requireNonNull(applicationContext, "applicationContext is required");
+        this.decoratorCache = new ConcurrentHashMap<>();
+        this.decoratorsByClass = new ConcurrentHashMap<>();
     }
 
     @SuppressWarnings({"unchecked"})
@@ -52,27 +58,53 @@ public class SpringFilterDecoratorFactory implements FilterDecoratorFactory<Spec
         if (input == null) {
             return null;
         }
+        Optional<FilterDecorator<Specification<?>>> cachedDecorator = decoratorCache.get(input);
+        if (cachedDecorator != null) {
+            return cachedDecorator.orElse(null);
+        }
+        FilterDecorator<Specification<?>> createdDecorator = createFilterDecoratorsInternal(input);
+        Optional<FilterDecorator<Specification<?>>> cacheValue = Optional.ofNullable(createdDecorator);
+        Optional<FilterDecorator<Specification<?>>> existing = decoratorCache.putIfAbsent(input, cacheValue);
+        return existing != null ? existing.orElse(null) : createdDecorator;
+    }
+
+    private FilterDecorator<Specification<?>> createFilterDecoratorsInternal(AnnotationStatementInput input) {
         Annotation[] fetchingAnnotations = input.annotations();
         List<Class<? extends FilterDecorator<?>>> decoratorClasses = TypeAnnotationUtils.findFilterDecorators(input);
-        List<FilterDecorator<Specification<?>>> decoratorList = null;
         FetchingFilterDecorator fetchingDecorator = createFetchingDecorator(fetchingAnnotations);
-        if (!decoratorClasses.isEmpty()) {
-            decoratorList = new ArrayList<>(decoratorClasses.size() + 1);
-            for (Class<? extends FilterDecorator<?>> aClass : decoratorClasses) {
-                Map<String, ? extends FilterDecorator<?>> beansOfType = applicationContext.getBeansOfType(aClass);
-                if (beansOfType.isEmpty()) {
-                    applicationContext.registerBean(aClass.getSimpleName(), aClass);
-                    beansOfType = applicationContext.getBeansOfType(aClass);
-                }
-                for (FilterDecorator<?> filterDecorator : beansOfType.values()) {
-                    decoratorList.add((FilterDecorator<Specification<?>>) filterDecorator);
-                }
-            }
-            if (fetchingDecorator != null) {
-                decoratorList.add(fetchingDecorator);
-            }
+        if (decoratorClasses.isEmpty()) {
+            return fetchingDecorator;
         }
-        return decoratorList != null && !decoratorList.isEmpty() ? new CompositeFilterDecorator<>(decoratorList) : fetchingDecorator;
+
+        List<FilterDecorator<Specification<?>>> decoratorList = new ArrayList<>(decoratorClasses.size() + 1);
+        for (Class<? extends FilterDecorator<?>> decoratorClass : decoratorClasses) {
+            decoratorList.addAll(resolveDecorators(decoratorClass));
+        }
+        if (fetchingDecorator != null) {
+            decoratorList.add(fetchingDecorator);
+        }
+        return decoratorList.isEmpty() ? null : new CompositeFilterDecorator<>(decoratorList);
+    }
+
+    private List<FilterDecorator<Specification<?>>> resolveDecorators(Class<? extends FilterDecorator<?>> decoratorClass) {
+        return decoratorsByClass.computeIfAbsent(decoratorClass, this::resolveDecoratorsFromContext);
+    }
+
+    @SuppressWarnings({"unchecked"})
+    private List<FilterDecorator<Specification<?>>> resolveDecoratorsFromContext(Class<? extends FilterDecorator<?>> decoratorClass) {
+        Map<String, ? extends FilterDecorator<?>> beansOfType = applicationContext.getBeansOfType(decoratorClass);
+        if (beansOfType.isEmpty()) {
+            applicationContext.registerBean(decoratorClass.getSimpleName(), decoratorClass);
+            beansOfType = applicationContext.getBeansOfType(decoratorClass);
+        }
+        if (beansOfType.isEmpty()) {
+            return List.of();
+        }
+        List<FilterDecorator<Specification<?>>> decorators = new ArrayList<>(beansOfType.size());
+        for (FilterDecorator<?> filterDecorator : beansOfType.values()) {
+            decorators.add((FilterDecorator<Specification<?>>) filterDecorator);
+        }
+        return List.copyOf(decorators);
     }
 
     private FetchingFilterDecorator createFetchingDecorator(Annotation[] fetchingAnnotations) {

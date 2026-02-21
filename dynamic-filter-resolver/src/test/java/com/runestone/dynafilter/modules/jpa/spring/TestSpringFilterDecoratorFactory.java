@@ -36,6 +36,7 @@ import com.runestone.dynafilter.modules.jpa.spring.tools.NoArgsConstructorFilter
 import com.runestone.dynafilter.modules.jpa.tools.app.simple.SimpleApplication;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.data.jpa.domain.Specification;
@@ -115,6 +116,20 @@ public class TestSpringFilterDecoratorFactory {
         CompositeFilterDecorator<?> filterDecorators = (CompositeFilterDecorator<?>) factory.createFilterDecorators(input);
         Assertions.assertThat(filterDecorators).isNotNull();
         Assertions.assertThat(filterDecorators.getDecorators()).hasSize(3);
+    }
+
+    @Test
+    public void testCachesDecoratorsPerInput() {
+        GenericApplicationContext spyContext = Mockito.spy(applicationContext);
+        SpringFilterDecoratorFactory factory = new SpringFilterDecoratorFactory(spyContext);
+        AnnotationStatementInput firstInput = new AnnotationStatementInput(NoArgsFilterDecorClassContainer.class, null);
+        AnnotationStatementInput equivalentInput = new AnnotationStatementInput(NoArgsFilterDecorClassContainer.class, null);
+
+        FilterDecorator<Specification<?>> firstDecorator = factory.createFilterDecorators(firstInput);
+        FilterDecorator<Specification<?>> secondDecorator = factory.createFilterDecorators(equivalentInput);
+
+        Assertions.assertThat(secondDecorator).isSameAs(firstDecorator);
+        Mockito.verify(spyContext, Mockito.times(1)).getBeansOfType(NoArgsConstructorFilterDecorator.class);
     }
 
 }
