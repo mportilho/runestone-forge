@@ -30,6 +30,8 @@ import com.runestone.dynafilter.core.generator.annotation.testdata.interfaces.*;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.lang.annotation.Annotation;
+
 public class TestTypeAnnotationUtils {
 
     @Test
@@ -148,6 +150,17 @@ public class TestTypeAnnotationUtils {
         var firstDecorators = TypeAnnotationUtils.findFilterDecorators(firstInput);
         var secondDecorators = TypeAnnotationUtils.findFilterDecorators(equivalentInput);
         Assertions.assertThat(secondDecorators).isSameAs(firstDecorators);
+    }
+
+    @Test
+    public void testAnnotationStatementInputDefensiveCopy() {
+        Annotation[] originalAnnotations = StatusOkInterface.class.getAnnotations();
+        AnnotationStatementInput annotationStatementInput = new AnnotationStatementInput(StatusOkInterface.class, originalAnnotations);
+
+        originalAnnotations[0] = null;
+
+        AnnotationStatementInput equivalentInput = new AnnotationStatementInput(StatusOkInterface.class, StatusOkInterface.class.getAnnotations());
+        Assertions.assertThat(annotationStatementInput).isEqualTo(equivalentInput);
     }
 
 }

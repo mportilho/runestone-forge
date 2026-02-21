@@ -124,6 +124,10 @@ public class TypeAnnotationUtils {
 
     private static AnnotationMetadata findCachedMetadata(AnnotationStatementInput annotationStatementInput) {
         Objects.requireNonNull(annotationStatementInput, "annotationStatementInput is required");
+        AnnotationMetadata cachedMetadata = CACHE_METADATA.get(annotationStatementInput);
+        if (cachedMetadata != null) {
+            return cachedMetadata;
+        }
         return CACHE_METADATA.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::buildMetadata);
     }
 
