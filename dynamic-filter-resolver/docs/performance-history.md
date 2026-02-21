@@ -128,6 +128,7 @@ Conclusao:
 - PERF-002: `dynamic-filter-resolver/target/jmh-perf02.json`
 - PERF-003 (after): `dynamic-filter-resolver/target/jmh-perf03-after.json`
 - PERF-004 (cache): `dynamic-filter-resolver/target/jmh-perf04-cache.json`
+- PERF-005 (sort translation): `dynamic-filter-resolver/target/jmh-perf05-sort-translation.json`
 
 ---
 
@@ -305,6 +306,64 @@ java -cp "$CP" org.openjdk.jmh.Main \
 1. Houve regressao percentual na latencia de hit, mas com impacto absoluto muito baixo (ordem de centesimos de microssegundo).
 2. O ganho estrutural de seguranca de memoria (cache bounded) compensa para workloads long-lived.
 3. Para cenarios ultra sensiveis de latencia, o proximo passo e avaliar um bounded cache concorrente com menor contencao.
+
+---
+
+## Experimento PERF-005
+- Data: 2026-02-21
+- Objetivo: remover custo O(ordens x filtros) na traducao de sort em `DynamicFilterJpaRepositoryImpl`
+- Baseline commit: estado pos PERF-004
+- Commit testado: working tree atual (lookup de parametro para path + benchmark comparativo legado/otimizado)
+
+### Hipotese
+1. Traduzir sort em duas fases (`mapa parametro->path` + aplicacao nas ordens) reduz custo para O(ordens + filtros).
+2. Em cenarios sem traducao efetiva, retorno do mesmo `Sort` reduz alocacao e latencia.
+
+### Mudancas aplicadas
+- `src/main/java/com/runestone/dynafilter/modules/jpa/repository/DynamicFilterJpaRepositoryImpl.java`
+  - nova estrategia de traducao com mapa de lookup (uma passada nos filtros + uma passada nas ordens)
+  - preservacao da semantica original de prioridade (primeiro match valido)
+  - fast-path para retornar o mesmo `Sort` quando nada muda
+- `src/test/java/com/runestone/dynafilter/modules/jpa/repository/TestDynamicFilterJpaRepositorySortTranslation.java`
+  - testes de traducao, preservacao de direcao, prioridade de duplicidade e caso sem alteracao
+- `src/test/java/com/runestone/dynafilter/modules/jpa/repository/DynamicFilterRepositorySortPerfBenchmark.java`
+  - benchmark comparativo entre algoritmo legado e otimizado:
+    - `perf05_sortTranslation_legacy_manyOrdersManyFilters`
+    - `perf05_sortTranslation_legacy_noTranslationNeeded`
+    - `perf05_sortTranslation_optimized_manyOrdersManyFilters`
+    - `perf05_sortTranslation_optimized_noTranslationNeeded`
+
+### Protocolo de medicao
+- JVM: Java 21.0.10
+- JMH: 1.37
+- Parametros:
+  - `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu us`
+  - `-jvmArgs '-Xms1g -Xmx1g'`
+- Comando:
+
+```bash
+java -cp "$CP" org.openjdk.jmh.Main \
+'DynamicFilterRepositorySortPerfBenchmark\.(perf05_sortTranslation_optimized_manyOrdersManyFilters|perf05_sortTranslation_legacy_manyOrdersManyFilters|perf05_sortTranslation_optimized_noTranslationNeeded|perf05_sortTranslation_legacy_noTranslationNeeded)' \
+-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu us -jvmArgs '-Xms1g -Xmx1g' -rf json -rff dynamic-filter-resolver/target/jmh-perf05-sort-translation.json -foe true
+```
+
+### Resultado
+| Benchmark | Score (us/op) |
+|---|---:|
+| perf05_sortTranslation_legacy_manyOrdersManyFilters | 79.466 |
+| perf05_sortTranslation_optimized_manyOrdersManyFilters | 6.921 |
+| perf05_sortTranslation_legacy_noTranslationNeeded | 139.353 |
+| perf05_sortTranslation_optimized_noTranslationNeeded | 1.528 |
+
+### Decisao
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura tecnica
+1. Cenario pesado teve reducao de ~91.3% (79.466 -> 6.921 us/op).
+2. Cenario sem traducao teve reducao de ~98.9% (139.353 -> 1.528 us/op).
+3. O risco de crescimento de latencia com mais filtros/ordens foi significativamente reduzido.
 
 ---
 
