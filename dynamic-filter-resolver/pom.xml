@@ -13,6 +13,7 @@
     <properties>
         <spring.boot.version>3.2.1</spring.boot.version>
         <springdocs.version>2.2.0</springdocs.version>
+        <jmh.version>1.37</jmh.version>
     </properties>
 
     <dependencyManagement>
@@ -64,6 +65,18 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-core</artifactId>
+            <version>${jmh.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-generator-annprocess</artifactId>
+            <version>${jmh.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
