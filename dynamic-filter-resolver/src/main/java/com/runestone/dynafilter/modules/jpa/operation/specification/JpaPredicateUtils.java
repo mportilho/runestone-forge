@@ -29,8 +29,11 @@ import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeLeft;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeRight;
 import jakarta.persistence.criteria.*;
 import jakarta.persistence.metamodel.Attribute;
-import org.springframework.data.mapping.PropertyPath;
 
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiFunction;
 
 /**
@@ -39,6 +42,9 @@ import java.util.function.BiFunction;
  * @author Marcelo Portilho
  */
 class JpaPredicateUtils {
+
+    private static final String[] EMPTY_SEGMENTS = {};
+    private static final ConcurrentMap<String, ParsedPath> PARSED_PATH_CACHE = new ConcurrentHashMap<>();
 
     /**
      * Calls comparison methods of {@link CriteriaBuilder} on generic type objects
@@ -59,17 +65,15 @@ class JpaPredicateUtils {
      * defined on {@link FilterData} object. Joins automatically when navigating through entities.
      */
     public static <T> Path<T> computeAttributePath(FilterData filterData, Root<?> root) {
-        PropertyPath propertyPath = PropertyPath.from(filterData.path(), root.getJavaType());
+        String path = Objects.requireNonNull(filterData.path(), "Path cannot be null").trim();
+        ParsedPath parsedPath = PARSED_PATH_CACHE.computeIfAbsent(path, JpaPredicateUtils::parsePath);
+        JoinType joinType = getJoinType(filterData);
         From<?, ?> from = root;
 
-        while (propertyPath != null && propertyPath.hasNext()) {
-            from = getOrCreateJoin(from, propertyPath.getSegment(), getJoinType(filterData));
-            propertyPath = propertyPath.next();
+        for (String associationSegment : parsedPath.associationSegments()) {
+            from = getOrCreateJoin(from, associationSegment, joinType);
         }
-        if (propertyPath == null) {
-            throw new IllegalStateException(String.format("No path '%s' found no type '%s'", filterData.path(), root.getJavaType().getCanonicalName()));
-        }
-        return from.get(propertyPath.getSegment());
+        return from.get(parsedPath.attributeSegment());
     }
 
     /**
@@ -103,6 +107,55 @@ class JpaPredicateUtils {
             }
         }
         return from.join(attribute, joinType);
+    }
+
+    static void clearCaches() {
+        PARSED_PATH_CACHE.clear();
+    }
+
+    private static ParsedPath parsePath(String path) {
+        String[] segments = splitPath(path);
+        if (segments.length == 0) {
+            throw new IllegalStateException("Path cannot be empty");
+        } else if (segments.length == 1) {
+            return new ParsedPath(EMPTY_SEGMENTS, segments[0]);
+        }
+        return new ParsedPath(Arrays.copyOf(segments, segments.length - 1), segments[segments.length - 1]);
+    }
+
+    private static String[] splitPath(String path) {
+        String nonNullPath = Objects.requireNonNull(path, "Path cannot be null").trim();
+        if (nonNullPath.isEmpty()) {
+            return EMPTY_SEGMENTS;
+        }
+
+        int segmentCount = 1;
+        for (int i = 0; i < nonNullPath.length(); i++) {
+            if (nonNullPath.charAt(i) == '.') {
+                segmentCount++;
+            }
+        }
+
+        String[] segments = new String[segmentCount];
+        int start = 0;
+        int segmentIndex = 0;
+        for (int i = 0; i < nonNullPath.length(); i++) {
+            if (nonNullPath.charAt(i) == '.') {
+                if (i == start) {
+                    throw new IllegalStateException("Invalid path segment on path '%s'".formatted(path));
+                }
+                segments[segmentIndex++] = nonNullPath.substring(start, i);
+                start = i + 1;
+            }
+        }
+        if (start == nonNullPath.length()) {
+            throw new IllegalStateException("Invalid path segment on path '%s'".formatted(path));
+        }
+        segments[segmentIndex] = nonNullPath.substring(start);
+        return segments;
+    }
+
+    private record ParsedPath(String[] associationSegments, String attributeSegment) {
     }
 
 }

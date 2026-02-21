@@ -32,21 +32,27 @@ import jakarta.persistence.criteria.FetchParent;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Root;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.data.mapping.PropertyPath;
 
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 public class FetchingFilterDecorator implements FilterDecorator<Specification<?>> {
 
     private final Collection<Fetching> fetches;
+    private final List<ResolvedFetchPath> resolvedFetchPaths;
 
     public FetchingFilterDecorator(Collection<Fetching> fetches) {
         if (Asserts.isEmpty(fetches)) {
             throw new IllegalArgumentException("fetches is required to be not empty");
         }
-        this.fetches = fetches;
+        this.fetches = List.copyOf(fetches);
+        this.resolvedFetchPaths = parseFetches(this.fetches);
     }
 
     @Override
@@ -57,9 +63,9 @@ public class FetchingFilterDecorator implements FilterDecorator<Specification<?>
             boolean countQuery = Long.class.equals(resultType) || long.class.equals(resultType);
             if (!countQuery) {
                 query.distinct(true);
-                Set<FetchPath> createdFetches = new HashSet<>(fetches.size() * 2);
-                for (Fetching fetching : fetches) {
-                    createJoinClause(root, fetching, createdFetches);
+                Map<FetchParent<?, ?>, Map<FetchSegment, Fetch<?, ?>>> fetchLookup = new IdentityHashMap<>();
+                for (ResolvedFetchPath resolvedFetchPath : resolvedFetchPaths) {
+                    createJoinClause(root, resolvedFetchPath, fetchLookup);
                 }
             }
             return null;
@@ -67,35 +73,81 @@ public class FetchingFilterDecorator implements FilterDecorator<Specification<?>
         return filter != null ? ((Specification) decorated).and(filter) : decorated;
     }
 
-    private static void createJoinClause(Root<Object> root, Fetching fetching, Set<FetchPath> createdFetches) {
-        for (String attributePath : fetching.value()) {
-            FetchPath fetchPath = new FetchPath(attributePath, fetching.joinType());
-            if (!createdFetches.add(fetchPath)) {
-                continue;
-            }
-            FetchParent<?, ?> from = root;
-            PropertyPath propertyPath = PropertyPath.from(attributePath, root.getJavaType());
-            while (propertyPath != null && propertyPath.hasNext()) {
-                from = getOrCreateFetch(from, propertyPath.getSegment(), fetching.joinType());
-                propertyPath = propertyPath.next();
-            }
-            if (propertyPath != null) {
-                getOrCreateFetch(from, propertyPath.getSegment(), fetching.joinType());
-            } else {
-                throw new IllegalStateException(
-                        String.format("Expected parsing to yield a PropertyPath from %s but got null!", attributePath));
-            }
+    private static void createJoinClause(Root<Object> root, ResolvedFetchPath fetchPath,
+                                         Map<FetchParent<?, ?>, Map<FetchSegment, Fetch<?, ?>>> fetchLookup) {
+        FetchParent<?, ?> from = root;
+        for (String segment : fetchPath.segments()) {
+            from = getOrCreateFetch(from, segment, fetchPath.joinType(), fetchLookup);
         }
     }
 
-    private static Fetch<?, ?> getOrCreateFetch(FetchParent<?, ?> from, String attributePath, JoinType joinType) {
+    private static Fetch<?, ?> getOrCreateFetch(FetchParent<?, ?> from, String attributePath, JoinType joinType,
+                                                Map<FetchParent<?, ?>, Map<FetchSegment, Fetch<?, ?>>> fetchLookup) {
+        FetchSegment fetchSegment = new FetchSegment(attributePath, joinType);
+        Map<FetchSegment, Fetch<?, ?>> perParentLookup = fetchLookup.computeIfAbsent(from, ignored -> new HashMap<>());
+        Fetch<?, ?> cachedFetch = perParentLookup.get(fetchSegment);
+        if (cachedFetch != null) {
+            return cachedFetch;
+        }
+
         for (Fetch<?, ?> fetch : from.getFetches()) {
             boolean sameName = fetch.getAttribute().getName().equals(attributePath);
             if (sameName && fetch.getJoinType().equals(joinType)) {
+                perParentLookup.put(fetchSegment, fetch);
                 return fetch;
             }
         }
-        return from.fetch(attributePath, joinType);
+        Fetch<?, ?> createdFetch = from.fetch(attributePath, joinType);
+        perParentLookup.put(fetchSegment, createdFetch);
+        return createdFetch;
+    }
+
+    private static List<ResolvedFetchPath> parseFetches(Collection<Fetching> fetches) {
+        List<ResolvedFetchPath> resolvedPaths = new ArrayList<>();
+        Map<FetchPath, ResolvedFetchPath> deduplicatedPaths = new LinkedHashMap<>();
+
+        for (Fetching fetching : fetches) {
+            for (String path : fetching.value()) {
+                FetchPath fetchPath = new FetchPath(path, fetching.joinType());
+                deduplicatedPaths.computeIfAbsent(fetchPath, key ->
+                        new ResolvedFetchPath(splitPathSegments(path), fetching.joinType()));
+            }
+        }
+
+        resolvedPaths.addAll(deduplicatedPaths.values());
+        return List.copyOf(resolvedPaths);
+    }
+
+    private static String[] splitPathSegments(String path) {
+        String nonNullPath = Objects.requireNonNull(path, "Fetching path cannot be null").trim();
+        if (nonNullPath.isEmpty()) {
+            throw new IllegalArgumentException("Fetching path cannot be blank");
+        }
+
+        int segmentCount = 1;
+        for (int i = 0; i < nonNullPath.length(); i++) {
+            if (nonNullPath.charAt(i) == '.') {
+                segmentCount++;
+            }
+        }
+
+        String[] segments = new String[segmentCount];
+        int start = 0;
+        int segmentIndex = 0;
+        for (int i = 0; i < nonNullPath.length(); i++) {
+            if (nonNullPath.charAt(i) == '.') {
+                if (i == start) {
+                    throw new IllegalArgumentException("Invalid fetching path segment on path '%s'".formatted(path));
+                }
+                segments[segmentIndex++] = nonNullPath.substring(start, i);
+                start = i + 1;
+            }
+        }
+        if (start == nonNullPath.length()) {
+            throw new IllegalArgumentException("Invalid fetching path segment on path '%s'".formatted(path));
+        }
+        segments[segmentIndex] = nonNullPath.substring(start);
+        return segments;
     }
 
     public Collection<Fetching> getFetches() {
@@ -103,5 +155,11 @@ public class FetchingFilterDecorator implements FilterDecorator<Specification<?>
     }
 
     private record FetchPath(String value, JoinType joinType) {
+    }
+
+    private record FetchSegment(String segment, JoinType joinType) {
+    }
+
+    private record ResolvedFetchPath(String[] segments, JoinType joinType) {
     }
 }

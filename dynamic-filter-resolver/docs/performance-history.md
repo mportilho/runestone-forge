@@ -125,6 +125,131 @@ Conclusao:
 - Baseline: `/tmp/runestone-bench-before/dynamic-filter-resolver/target/jmh-before.json`
 - Tentativa 1: `/tmp/runestone-bench-after/dynamic-filter-resolver/target/jmh-after.json`
 - Commit `3405adb0`: `dynamic-filter-resolver/target/jmh-after-patch.json`
+- PERF-002: `dynamic-filter-resolver/target/jmh-perf02.json`
+- PERF-003 (after): `dynamic-filter-resolver/target/jmh-perf03-after.json`
+
+---
+
+## Experimento PERF-002
+- Data: 2026-02-21
+- Objetivo: cobrir cenarios de custo nao medidos no PERF-001 (path parsing/join tree, fetching profundo e crescimento de cache)
+- Baseline commit: `3405adb0` (referencia funcional/performance dos cenarios anteriores)
+- Commit testado: working tree atual (benchmark dedicado PERF-002)
+
+### Hipoteses
+1. `toPredicate` com muitos filtros escala com custo relevante por `PropertyPath.from(...)` e busca de joins por segmento.
+2. `FetchingFilterDecorator` em paths profundos/sobrepostos adiciona custo perceptivel por requisicao.
+3. Cache de anotacoes continua estavel em hot-hit mesmo apos crescimento significativo.
+
+### Mudancas aplicadas
+- `src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverPerf02Benchmark.java`
+  - Novo benchmark JMH com cenarios:
+    - `perf02_specification_toPredicate_manyFilters`
+    - `perf02_fetchingDecorator_deepPaths`
+    - `perf02_annotationUtils_reusedInput_afterCacheGrowth`
+    - `perf02_annotationUtils_newEquivalentInput_afterCacheGrowth`
+
+### Protocolo de medicao
+- JVM: Java 21.0.10
+- JMH: 1.37
+- Parametros:
+  - `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu us`
+  - `-jvmArgs '-Xms1g -Xmx1g'`
+- Comando:
+
+```bash
+java -cp "$CP" org.openjdk.jmh.Main \
+'DynamicFilterResolverPerf02Benchmark\.(perf02_specification_toPredicate_manyFilters|perf02_fetchingDecorator_deepPaths|perf02_annotationUtils_reusedInput_afterCacheGrowth|perf02_annotationUtils_newEquivalentInput_afterCacheGrowth)' \
+-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu us -jvmArgs '-Xms1g -Xmx1g' -rf json -rff dynamic-filter-resolver/target/jmh-perf02.json -foe true
+```
+
+### Resultado
+| Benchmark | Score (us/op) | Erro |
+|---|---:|---:|
+| perf02_annotationUtils_reusedInput_afterCacheGrowth | 0.004 | +- 0.001 |
+| perf02_annotationUtils_newEquivalentInput_afterCacheGrowth | 0.074 | +- 0.002 |
+| perf02_fetchingDecorator_deepPaths | 7.374 | +- 0.259 |
+| perf02_specification_toPredicate_manyFilters | 43.746 | +- 1.352 |
+
+### Decisao
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura tecnica
+1. O maior custo medido nesta rodada ficou em `toPredicate_manyFilters` (~43.7 us/op), validando que parsing de path + composicao de joins e o hotspot dominante fora do PERF-001.
+2. O custo de `fetchingDecorator_deepPaths` (~7.4 us/op) e menor, mas nao desprezivel em endpoints de alta taxa.
+3. Cenarios de cache apos crescimento permaneceram muito baratos (<0.1 us/op), sem sinal de degradacao relevante nos hits.
+
+### Proximos passos sugeridos para PERF-004
+1. Avaliar cache de `PropertyPath`/segmentos pre-parseados por `filter.path`.
+2. Avaliar cache de mapeamento de sort (`parameter -> path`) para evitar custo O(ordens x filtros) por chamada.
+3. Repetir os cenarios de PERF-002 apos cada tentativa para validar ganho sem regressao.
+
+---
+
+## Experimento PERF-003
+- Data: 2026-02-21
+- Objetivo: reduzir custo no caminho quente de alta taxa em `JpaPredicateUtils` e `FetchingFilterDecorator`
+- Baseline commit: estado pos PERF-002 (arquivo `dynamic-filter-resolver/target/jmh-perf02.json`)
+- Commit testado: working tree atual (otimizacoes + cenarios adicionais de JMH)
+
+### Hipotese
+1. Evitar `PropertyPath.from(...)` por chamada e reutilizar parse de caminho reduz custo de `toPredicate`.
+2. Pre-processar fetch paths no construtor e usar lookup por identidade reduz custo de `FetchingFilterDecorator`.
+3. Mesmo com as otimizacoes, os cenarios de cache de anotacao devem permanecer estaveis.
+
+### Mudancas aplicadas
+- `src/main/java/com/runestone/dynafilter/modules/jpa/operation/specification/JpaPredicateUtils.java`
+  - cache de parse de path (`PARSED_PATH_CACHE`)
+  - parser de path sem `PropertyPath.from(...)`
+  - calculo de `JoinType` uma unica vez por chamada
+- `src/main/java/com/runestone/dynafilter/modules/jpa/resolver/FetchingFilterDecorator.java`
+  - pre-processamento de paths no construtor
+  - deduplicacao de paths no setup do decorator
+  - lookup por `FetchParent` + segmento para evitar varreduras repetidas de `getFetches()`
+- `src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverPerf02Benchmark.java`
+  - cenarios adicionais:
+    - `perf02_specification_toPredicate_repeatedNestedPath`
+    - `perf02_fetchingDecorator_overlappingPaths`
+
+### Protocolo de medicao
+- JVM: Java 21.0.10
+- JMH: 1.37
+- Parametros:
+  - `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu us`
+  - `-jvmArgs '-Xms1g -Xmx1g'`
+- Comando:
+
+```bash
+java -cp "$CP" org.openjdk.jmh.Main \
+'DynamicFilterResolverPerf02Benchmark\.(perf02_specification_toPredicate_manyFilters|perf02_specification_toPredicate_repeatedNestedPath|perf02_fetchingDecorator_deepPaths|perf02_fetchingDecorator_overlappingPaths|perf02_annotationUtils_reusedInput_afterCacheGrowth|perf02_annotationUtils_newEquivalentInput_afterCacheGrowth)' \
+-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu us -jvmArgs '-Xms1g -Xmx1g' -rf json -rff dynamic-filter-resolver/target/jmh-perf03-after.json -foe true
+```
+
+### Resultado (comparavel com PERF-002)
+| Benchmark | PERF-002 (us/op) | PERF-003 (us/op) | Delta |
+|---|---:|---:|---:|
+| perf02_specification_toPredicate_manyFilters | 43.746 | 38.729 | -11.47% |
+| perf02_fetchingDecorator_deepPaths | 7.374 | 5.623 | -23.74% |
+| perf02_annotationUtils_reusedInput_afterCacheGrowth | 0.004 | 0.004 | +0.00% |
+| perf02_annotationUtils_newEquivalentInput_afterCacheGrowth | 0.074 | 0.078 | +5.41% |
+
+### Resultado (novos cenarios de estresse)
+| Benchmark | PERF-003 (us/op) | Erro |
+|---|---:|---:|
+| perf02_fetchingDecorator_overlappingPaths | 4.340 | +- 0.169 |
+| perf02_specification_toPredicate_repeatedNestedPath | 51.516 | +- 2.081 |
+
+### Decisao
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura tecnica
+1. Houve ganho real nos dois hotspots de alta taxa (predicates e fetching).
+2. A variacao nos benchmarks de cache de anotacao foi pequena e continua na faixa sub-microsegundo.
+3. Os novos cenarios adicionados aumentam cobertura para caminhos repetidos/sobrepostos, melhorando confianca para carga real.
 
 ---
 
