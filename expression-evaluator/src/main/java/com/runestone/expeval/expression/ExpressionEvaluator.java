@@ -36,6 +36,7 @@ import com.runestone.expeval.operation.AbstractOperation;
 import com.runestone.expeval.operation.CloningContext;
 import com.runestone.expeval.operation.OperationContext;
 import com.runestone.expeval.operation.values.AbstractVariableValueOperation;
+import com.runestone.expeval.operation.values.VariableProvider;
 import com.runestone.expeval.operation.values.variable.AssignedVariableOperation;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
@@ -120,6 +121,29 @@ class ExpressionEvaluator {
         }
     }
 
+    public void setVariables(Map<String, Object> variables) {
+        Objects.requireNonNull(variables, "Variables cannot be null");
+        if (variables.isEmpty()) {
+            return;
+        }
+        parseExpression();
+        for (Map.Entry<String, AbstractVariableValueOperation> variableEntry : languageData.variables().entrySet()) {
+            String variableName = variableEntry.getKey();
+            if (!variables.containsKey(variableName)) {
+                continue;
+            }
+            AbstractVariableValueOperation variableOperation = variableEntry.getValue();
+            Object value = variables.get(variableName);
+            if (value instanceof VariableProvider variableProvider) {
+                variableOperation.setValue(variableProvider);
+            } else if (value instanceof Supplier<?> supplier) {
+                variableOperation.setValue((VariableProvider) context -> supplier.get());
+            } else {
+                variableOperation.setValue(value);
+            }
+        }
+    }
+
     /**
      * @return a new expression evaluator with the same expression, options and expression context as the original evaluator
      */
@@ -138,7 +162,7 @@ class ExpressionEvaluator {
      * @return a map of all assigned variables and their current values
      */
     public Map<String, Object> listAssignedVariables() {
-        Map<String, Object> map = new HashMap<>();
+        Map<String, Object> map = new HashMap<>(languageData.assignedVariables().size());
         for (Map.Entry<String, AssignedVariableOperation> entry : languageData.assignedVariables().entrySet()) {
             map.put(entry.getKey(), entry.getValue().getCurrentResult());
         }
@@ -149,7 +173,7 @@ class ExpressionEvaluator {
      * @return a map of all common variables and their current values
      */
     public Map<String, Object> listVariables() {
-        Map<String, Object> map = new HashMap<>();
+        Map<String, Object> map = new HashMap<>(languageData.variables().size());
         for (Map.Entry<String, AbstractVariableValueOperation> entry : languageData.variables().entrySet()) {
             map.put(entry.getKey(), entry.getValue().getCurrentResult());
         }

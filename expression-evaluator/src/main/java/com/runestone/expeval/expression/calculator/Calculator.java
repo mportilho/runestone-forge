@@ -117,7 +117,7 @@ public class Calculator {
      * @return a list of calculation memories for each expression
      */
     public List<CalculationMemory> calculate(List<CalculatorInput> calculatorInputs, Map<String, Object> contextVariables, ExpressionContext expressionContext) {
-        List<CalculationMemory> memoryList = new ArrayList<>();
+        List<CalculationMemory> memoryList = new ArrayList<>(calculatorInputs.size());
         Map<String, Object> computationVariables = contextVariables != null ? new HashMap<>(contextVariables) : new HashMap<>();
 
         for (CalculatorInput input : calculatorInputs) {

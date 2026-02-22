@@ -196,15 +196,7 @@ public class Expression {
      * @return this expression
      */
     public Expression setVariables(Map<String, Object> variables) {
-        variables.forEach((name, value) -> {
-            if (value instanceof VariableProvider variableProvider) {
-                setVariableProvider(name, variableProvider);
-            } else if (value instanceof Supplier<?> supplier) {
-                setVariableProvider(name, supplier);
-            } else {
-                setVariable(name, value);
-            }
-        });
+        evaluator.setVariables(variables);
         return this;
     }
 
