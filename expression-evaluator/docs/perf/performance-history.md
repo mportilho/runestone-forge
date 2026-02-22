@@ -1098,3 +1098,159 @@ Artefatos:
 ### Riscos residuais
 1. O ganho máximo foi medido em microbenchmark e pode ser menor em workloads com fan-in baixo de pais.
 2. Medições foram realizadas em uma única máquina/JVM; recomenda-se repetição em pipeline dedicado de performance para maior robustez estatística.
+
+## Experimento PERF-2026-02-22-EXPEVAL-EXPRESSION-SUPPLIER-DEEP-CLONE
+- Data: 2026-02-22
+- Objetivo: reduzir overhead de clone profundo por chamada no `DefaultExpressionSupplier#createExpression`, preservando isolamento funcional entre expressões retornadas.
+- Baseline commit/estado: `HEAD` em workspace temporário (`/tmp/expeval-baseline-item1-5GgZNK`) com benchmark idêntico.
+- Commit/estado testado: working tree atual com otimização no supplier e testes dedicados.
+
+### Hipótese
+1. Evitar clone profundo na primeira chamada por chave (caminho frio) reduz `ns/op` no cenário `coldCreateAndEvaluate`.
+2. A redução de alocação no caminho frio deve aparecer em `gc.alloc.rate.norm`.
+3. O caminho quente (`hotCreateAndEvaluate`) deve permanecer estável, sem regressão relevante.
+
+### Mudanças aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/expression/supplier/DefaultExpressionSupplier.java`: cache passou a armazenar `CachedExpression` com estratégia em duas fases (primeira expressão sem clone profundo; template aquecido lazy para chamadas subsequentes).
+- `expression-evaluator/src/test/java/com/runestone/expeval/expression/supplier/TestDefaultExpressionSupplier.java`: cobertura de isolamento entre chamadas e ausência de vazamento de estado de variáveis.
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/ExpressionSupplierCloneOverheadBenchmark.java`: benchmark JMH dedicado para cenários cold/hot do supplier.
+
+### Protocolo de medição
+- JVM: OpenJDK 21.0.10
+- JMH: 1.35
+- Benchmark class: `com.runestone.expeval.perf.jmh.ExpressionSupplierCloneOverheadBenchmark`
+- Package de benchmark: `com.runestone.expeval.perf.jmh`
+- Parâmetros de latência (`ns/op`):
+  - `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns`
+- Parâmetros de alocação (`B/op`):
+  - `-wi 3 -i 5 -w 300ms -r 300ms -f 2 -tu ns -prof gc`
+- Comando before (latência):
+```bash
+mvn -f /tmp/expeval-baseline-item1-5GgZNK/pom.xml -pl expression-evaluator -DskipTests test-compile -q
+mvn -f /tmp/expeval-baseline-item1-5GgZNK/pom.xml -pl expression-evaluator -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+cd /tmp/expeval-baseline-item1-5GgZNK/expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*ExpressionSupplierCloneOverheadBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -rf json -rff target/jmh-expression-supplier-clone-before.json -foe true
+```
+- Comando after (latência):
+```bash
+mvn -pl expression-evaluator clean -q
+mvn -pl expression-evaluator -Dtest=TestDefaultExpressionSupplier,TestCalculationMemory,TestCalculatorContracts test -q
+mvn -pl expression-evaluator -DskipTests test-compile -q
+mvn -pl expression-evaluator -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+cd expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*ExpressionSupplierCloneOverheadBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -rf json -rff target/jmh-expression-supplier-clone-after.json -foe true
+```
+- Comandos adicionais (alocação):
+```bash
+cd /tmp/expeval-baseline-item1-5GgZNK/expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*ExpressionSupplierCloneOverheadBenchmark.*' \
+  -wi 3 -i 5 -w 300ms -r 300ms -f 2 -tu ns -prof gc \
+  -rf json -rff target/jmh-expression-supplier-clone-before-gc.json -foe true
+
+cd expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*ExpressionSupplierCloneOverheadBenchmark.*' \
+  -wi 3 -i 5 -w 300ms -r 300ms -f 2 -tu ns -prof gc \
+  -rf json -rff target/jmh-expression-supplier-clone-after-gc.json -foe true
+```
+
+### Resultado
+Latência (`ns/op`):
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| coldCreateAndEvaluate | 6949.006 | 6234.749 | -714.257 | +10.28% |
+| hotCreateAndEvaluate | 1137.814 | 1129.878 | -7.936 | +0.70% |
+
+Alocação (`gc.alloc.rate.norm`, `B/op`):
+
+| Benchmark | Before (B/op) | After (B/op) | Redução (%) |
+|---|---:|---:|---:|
+| coldCreateAndEvaluate | 9363.245 | 7768.731 | +17.03% |
+| hotCreateAndEvaluate | 1824.086 | 1840.090 | -0.88% |
+
+Artefatos:
+- before latência: `/tmp/expeval-baseline-item1-5GgZNK/expression-evaluator/target/jmh-expression-supplier-clone-before.json`
+- after latência: `expression-evaluator/target/jmh-expression-supplier-clone-after.json`
+- before alocação: `/tmp/expeval-baseline-item1-5GgZNK/expression-evaluator/target/jmh-expression-supplier-clone-before-gc.json`
+- after alocação: `expression-evaluator/target/jmh-expression-supplier-clone-after-gc.json`
+
+### Decisão
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura técnica
+1. O cenário-alvo (`coldCreateAndEvaluate`) melhorou `+10.28%` em `ns/op`, confirmando ganho ao remover clone profundo no primeiro acesso.
+2. Em alocação do cenário cold, houve redução de `+17.03%` em `B/op`, coerente com menor churn no caminho frio.
+3. O cenário hot permaneceu estável (`+0.70%` em `ns/op`), com variação pequena de alocação (`-0.88%`), sem regressão estrutural relevante.
+
+### Atividades executadas
+1. Adição de benchmark JMH dedicado (`ExpressionSupplierCloneOverheadBenchmark`) - sucesso.
+2. Adição de testes funcionais para isolamento do supplier (`TestDefaultExpressionSupplier`) - sucesso.
+3. Execução de testes direcionados (`TestDefaultExpressionSupplier`, `TestCalculationMemory`, `TestCalculatorContracts`) - sucesso.
+4. Medição JMH before em baseline temporário (`/tmp/expeval-baseline-item1-5GgZNK`) - sucesso.
+5. Implementação da otimização em `DefaultExpressionSupplier` - sucesso.
+6. Medição JMH after com protocolo idêntico - sucesso.
+7. Medição before/after com `-prof gc` - sucesso.
+8. Correção de fluxo de build: medições sequenciais após `clean` para evitar corrupção de `jmh_generated` por execução Maven paralela - sucesso.
+
+### Riscos residuais
+1. A primeira chamada por chave agora não faz warm-up antecipado; cargas dominadas por reutilização imediata da mesma expressão podem ter perfil diferente do cenário cold.
+2. Benchmarks executados em uma única máquina/JVM; recomenda-se repetição em pipeline dedicado de performance para robustez estatística.
+
+## Experimento PERF-2026-02-22-EXPEVAL-EXPRESSION-SUPPLIER-DEEP-CLONE-DECISION-REVIEW
+- Data: 2026-02-22
+- Objetivo: revisar a decisão do experimento `PERF-2026-02-22-EXPEVAL-EXPRESSION-SUPPLIER-DEEP-CLONE` sob critério de custo/benefício de manutenção.
+- Baseline commit/estado: resultado registrado no experimento anterior (`PERF-2026-02-22-EXPEVAL-EXPRESSION-SUPPLIER-DEEP-CLONE`).
+- Commit/estado testado: working tree após reversão das mudanças de implementação do item 1.
+
+### Hipótese
+1. Apesar do ganho em cold path, o aumento de complexidade no `DefaultExpressionSupplier` pode não se justificar para o benefício líquido.
+2. O caminho hot, mais representativo de reutilização de cache, não teve ganho relevante.
+
+### Mudanças aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/expression/supplier/DefaultExpressionSupplier.java`: reversão para implementação anterior.
+- `expression-evaluator/src/test/java/com/runestone/expeval/expression/supplier/TestDefaultExpressionSupplier.java`: removido (teste criado apenas para a solução descartada).
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/ExpressionSupplierCloneOverheadBenchmark.java`: removido (benchmark criado apenas para a solução descartada).
+
+### Protocolo de decisão
+- Critério principal: equilíbrio entre ganho de performance medido e custo de complexidade/manutenibilidade do código adicional.
+- Evidência usada: resultados já registrados no experimento `PERF-2026-02-22-EXPEVAL-EXPRESSION-SUPPLIER-DEEP-CLONE`.
+
+### Resultado considerado
+| Benchmark | Before (ns/op) | After (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|
+| coldCreateAndEvaluate | 6949.006 | 6234.749 | +10.28% |
+| hotCreateAndEvaluate | 1137.814 | 1129.878 | +0.70% |
+
+| Benchmark | Before (B/op) | After (B/op) | Redução (%) |
+|---|---:|---:|---:|
+| coldCreateAndEvaluate | 9363.245 | 7768.731 | +17.03% |
+| hotCreateAndEvaluate | 1824.086 | 1840.090 | -0.88% |
+
+### Decisão
+- [ ] Aceitar
+- [ ] Ajustar
+- [x] Descartar
+
+### Leitura técnica
+1. O ganho relevante apareceu somente no cold path; no hot path o ganho foi marginal (`+0.70%` em `ns/op`).
+2. A estratégia adicionou complexidade estrutural no supplier para ganho concentrado em cenário menos frequente de cache frio.
+3. Decisão consolidada: descartar a mudança do item 1 e manter a implementação simples anterior.
+
+### Atividades executadas
+1. Reversão do código de produção do item 1 (`git restore -- expression-evaluator/src/main/java/com/runestone/expeval/expression/supplier/DefaultExpressionSupplier.java`) - sucesso.
+2. Remoção dos artefatos de teste/benchmark exclusivos do item 1 - sucesso.
+3. Registro append-only da revisão de decisão em `performance-history.md` - sucesso.
+
+### Riscos residuais
+1. O hotspot de cold path permanece sem otimização dedicada.
+2. Se o perfil de uso mudar para alta taxa de cold starts por expressão, recomenda-se reabrir o item com proposta de menor complexidade.
