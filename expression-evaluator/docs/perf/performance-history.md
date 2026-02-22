@@ -326,8 +326,8 @@ Media dos cenarios:
 
 ### Decisao
 - [ ] Aceitar
-- [x] Ajustar
-- [ ] Descartar
+- [ ] Ajustar
+- [x] Descartar
 
 ### Leitura tecnica
 1. O hotspot principal (`alternatingTypeConversion`) teve melhora expressiva de `+99.43%`, confirmando a reducao de overhead por fallback com excecao.
@@ -625,3 +625,115 @@ java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
 ### Riscos residuais
 1. O benchmark estressa um padrao especifico (contexto amplo com uso esparso). Cargas reais com distribuicao diferente podem ter ganho menor.
 2. O `Calculator` ainda faz copia/snapshot completo de memoria por etapa; existe oportunidade adicional fora do escopo desta rodada.
+
+## Experimento PERF-2026-02-22-EXPEVAL-DYNAMIC-FUNCTION-CALL-ALLOCATION-TUNING
+- Data: 2026-02-22
+- Objetivo: reduzir alocacao por chamada em funcoes dinamicas, com foco em reuso de buffers e remocao de adaptadores por invocacao.
+- Baseline commit/estado: working tree antes da alteracao do hotspot (mesmo estado funcional do modulo apos item 1), com benchmark dedicado adicionado.
+- Commit/estado testado: working tree atual com ajustes em `FunctionOperation` e `OperationCallSite`.
+
+### Hipotese
+1. Evitar criacao por chamada no caminho de funcao dinamica reduz `ns/op` em funcoes de aridade fixa.
+2. Reuso no caminho de fallback varargs (`_N` -> `_1`) reduz `ns/op` e/ou `gc.alloc.rate.norm`.
+3. O caminho nativo (`nativeVariableMath`) deve permanecer estavel.
+
+### Mudancas aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/operation/other/FunctionOperation.java`: ajuste do hot path para uso de contexto de chamada cacheado e caminho mutavel para parametros normalizados.
+- `expression-evaluator/src/main/java/com/runestone/expeval/support/callsite/OperationCallSite.java`: novos overloads de chamada com `DataConversionService`, suporte a caminho mutavel e exposicao de metadado de assinatura em array unico.
+- `expression-evaluator/src/test/java/com/runestone/expeval/support/callsite/TestOperationCallSite.java`: ajuste da cobertura de callsite para as assinaturas novas.
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/DynamicFunctionAllocationBenchmark.java`: benchmark JMH dedicado para aridade fixa e fallback varargs.
+
+### Protocolo de medicao
+- JVM: `java version "21.0.10" 2026-01-20 LTS`
+- JMH: `1.35`
+- Benchmark class: `com.runestone.expeval.perf.jmh.DynamicFunctionAllocationBenchmark`
+- Package de benchmark: `com.runestone.expeval.perf.jmh`
+- Parametros:
+  - `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns`
+  - `-jvmArgs '-Xms1g -Xmx1g'`
+- Profiling GC: `-prof gc`
+- Comando before:
+```bash
+mvn -pl expression-evaluator -Dtest=TestFunctionOperations,TestKnownFunctionsOnExpression,TestOperationCallSite test -q
+cd expression-evaluator
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*DynamicFunctionAllocationBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -rf json -rff target/jmh-dynamic-function-allocation-before.json -foe true
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*DynamicFunctionAllocationBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -prof gc \
+  -rf json -rff target/jmh-dynamic-function-allocation-before-gc.json -foe true
+```
+- Comando after:
+```bash
+mvn -pl expression-evaluator -Dtest=TestFunctionOperations,TestKnownFunctionsOnExpression,TestOperationCallSite test -q
+mvn -pl expression-evaluator test -q
+cd expression-evaluator
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*DynamicFunctionAllocationBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -rf json -rff target/jmh-dynamic-function-allocation-after.json -foe true
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*DynamicFunctionAllocationBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -prof gc \
+  -rf json -rff target/jmh-dynamic-function-allocation-after-gc.json -foe true
+```
+
+### Resultado
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| dynamicFixedArityFunction | 205.900 | 212.291 | 6.391 | -3.10% |
+| dynamicVarArgFallbackFunction | 1081.886 | 1091.281 | 9.395 | -0.87% |
+| nativeVariableMath | 167.546 | 167.348 | -0.198 | +0.12% |
+
+### Resultado GC
+| Benchmark | Before gc.alloc.rate.norm (B/op) | After gc.alloc.rate.norm (B/op) | Before gc.alloc.rate (MB/s) | After gc.alloc.rate (MB/s) | Before gc.count | After gc.count | Before gc.time (ms) | After gc.time (ms) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| dynamicFixedArityFunction | 248.011 | 248.011 | 560.751 | 550.685 | 28.000 | 28.000 | 93.000 | 92.000 |
+| dynamicVarArgFallbackFunction | 600.027 | 624.027 | 268.075 | 267.585 | 12.000 | 12.000 | 41.000 | 42.000 |
+| nativeVariableMath | 192.009 | 192.008 | 545.148 | 555.365 | 27.000 | 27.000 | 89.000 | 92.000 |
+
+### Decisao
+- [ ] Aceitar
+- [ ] Ajustar
+- [x] Descartar
+
+### Leitura tecnica
+1. O tuning nao entregou ganho em latencia nos cenarios dinamicos medidos; houve regressao de `-3.10%` em aridade fixa e `-0.87%` em fallback varargs.
+2. Em GC, o caminho de fallback varargs aumentou `gc.alloc.rate.norm` (`600.027` -> `624.027 B/op`), sem reducao de churn no hot path.
+3. Inferencia: a estrategia atual de buffer/normalizacao nao removeu alocacoes dominantes do caminho e adicionou sobrecusto de controle de chamada.
+
+### Atividades executadas
+1. Criacao de benchmark JMH dedicado (`DynamicFunctionAllocationBenchmark`) - sucesso.
+2. Execucao de testes funcionais direcionados pre-otimizacao - sucesso.
+3. Medicao JMH before (`ns/op`) - sucesso.
+4. Medicao JMH before com `-prof gc` - sucesso.
+5. Implementacao iterativa do tuning em `FunctionOperation` e `OperationCallSite` - sucesso.
+6. Reexecucao de testes funcionais direcionados e suite do modulo - sucesso.
+7. Medicao JMH after (`ns/op`) - sucesso.
+8. Medicao JMH after com `-prof gc` - sucesso.
+9. Consolidacao de artefatos e comparativo em markdown - sucesso.
+
+### Artefatos
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-before.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-before.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-before-gc.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-before-gc.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-after.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-after.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-after-gc.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-after-gc.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-comparison.md`
+
+### Riscos residuais
+1. O item de performance permanece aberto para novo ciclo de tuning no caminho de funcoes dinamicas.
+2. Os cenarios deste experimento medem chamadas unitarias por avaliacao; recomendada rodada adicional com alta densidade de chamadas por avaliacao (ex.: funcoes dinamicas dentro de sequencias longas).
