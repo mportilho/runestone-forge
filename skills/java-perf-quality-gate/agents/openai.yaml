@@ -1,4 +1,4 @@
 interface:
   display_name: "Java Perf Quality Gate"
   short_description: "Guide Java optimization with mandatory JMH before/after quality gates"
-  default_prompt: "Apply a full performance quality workflow with mandatory JMH, benchmarks in src/test/java, and append-only history in <module>/docs/perf/performance-history.md."
+  default_prompt: "Apply a full performance quality workflow with mandatory JMH, optional -prof gc when allocation/GC risk exists, benchmarks in src/test/java, and append-only history in <module>/docs/perf/performance-history.md."

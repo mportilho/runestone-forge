@@ -26,15 +26,26 @@
 - Parametros:
   - `-wi ... -i ... -w ... -r ... -f ... -tu ns`
   - `-jvmArgs '...'`
+- Profiling GC (quando cabivel):
+  - `-prof gc`
 - Comando executado:
 ```bash
 <comando real>
+```
+- Comando executado com `-prof gc` (quando cabivel):
+```bash
+<comando real com -prof gc>
 ```
 
 ### Resultado
 | Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
 |---|---:|---:|---:|---:|
 | ... | ... | ... | ... | ... |
+
+### Resultado GC (quando cabivel)
+| Benchmark | Before gc.alloc.rate.norm (B/op) | After gc.alloc.rate.norm (B/op) | Before gc.alloc.rate (MB/s) | After gc.alloc.rate (MB/s) | Before gc.count | After gc.count | Before gc.time (ms) | After gc.time (ms) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| ... | ... | ... | ... | ... | ... | ... | ... | ... |
 
 ### Decisao
 - [ ] Aceitar
@@ -60,3 +71,4 @@
 - Nao sobrescrever resultados anteriores.
 - Sempre referenciar artefatos JSON de benchmark.
 - Sempre registrar `Melhoria (%)` baseada em comparacao de `ns/op`.
+- Quando `-prof gc` for usado, sempre registrar os resultados GC e o artefato JSON correspondente.

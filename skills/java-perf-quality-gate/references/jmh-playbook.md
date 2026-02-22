@@ -24,6 +24,9 @@ Padronizar medições antes/depois para comparação confiável.
   - `-jvmArgs '-Xms1g -Xmx1g'`
 - Exportar JSON:
   - `-rf json -rff <arquivo>.json`
+- Profiling de GC (condicional):
+  - usar `-prof gc` quando houver suspeita de regressao de alocacao/GC, foco em throughput sob pressao de memoria, ou hot path alocador.
+  - gerar artefato dedicado para GC (ex.: `target/<resultado>-gc.json`).
 
 ## Comando (Maven + classpath de teste)
 ```bash
@@ -36,12 +39,25 @@ java -cp "$CP" org.openjdk.jmh.Main '<RegexDoBenchmark>' \
   -rf json -rff target/<resultado>.json -foe true
 ```
 
+## Comando com GC Profiler (quando aplicavel)
+```bash
+cd <modulo>
+DEP_CP="$(mvn -DincludeScope=test -DskipTests dependency:build-classpath -Dmdep.outputAbsoluteArtifactFilename=true -Dmdep.path | sed -n '/Dependencies classpath:/{n;p;}')"
+CP="target/test-classes:target/classes:${DEP_CP}"
+java -cp "$CP" org.openjdk.jmh.Main '<RegexDoBenchmark>' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -prof gc \
+  -rf json -rff target/<resultado>-gc.json -foe true
+```
+
 ## Regras de Comparabilidade
 - Usar os mesmos cenários, parâmetros e máquina para before/after.
 - Evitar processos de build/test em paralelo durante geração de classes JMH.
 - Se limpar `target`, recomputar before/after no mesmo protocolo.
 - Não comparar resultados com blackhole/mode diferentes.
 - Nao comparar resultados com unidades diferentes de `ns/op`.
+- Se usar `-prof gc`, manter a mesma configuração before/after e comparar o mesmo conjunto de métricas GC.
 
 ## Leitura de Resultado
 - Reportar no mínimo:
@@ -52,3 +68,8 @@ java -cp "$CP" org.openjdk.jmh.Main '<RegexDoBenchmark>' \
 - Em regressões:
   - declarar magnitude absoluta e percentual em `ns/op`
   - decidir com base no trade-off (latência vs benefício estrutural)
+- Quando `-prof gc` estiver ativo, reportar também:
+  - `gc.alloc.rate.norm` (B/op)
+  - `gc.alloc.rate` (MB/s)
+  - `gc.count`
+  - `gc.time` (ms)

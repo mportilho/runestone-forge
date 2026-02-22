@@ -13,7 +13,7 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 
 1. Confirmar escopo e hipótese
 - Delimitar o caminho quente, tipo de carga e risco de regressão.
-- Definir métrica principal por cenário em latência (`ns/op`) e, quando aplicável, throughput/alocacao como apoio.
+- Definir métrica principal por cenário em latência (`ns/op`) e, quando aplicável, throughput, alocacao e sinais de GC via `-prof gc`.
 - Definir baseline técnico: commit, branch ou estado da árvore.
 
 2. Reproduzir e medir baseline
@@ -22,6 +22,7 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 - Compilar e validar os testes funcionais relevantes.
 - Criar/ajustar benchmark em `src/test/java` em package dedicado de performance (ex.: `...perf.jmh...`).
 - Rodar JMH com parâmetros fixos e salvar JSON de baseline.
+- Quando cabível (suspeita de regressão de alocação/GC ou hot path sensível a memoria), rodar baseline adicional com `-prof gc` e salvar JSON dedicado.
 - Confirmar que o benchmark representa o risco real e não só micro-op isolada.
 
 3. Implementar melhoria mínima segura
@@ -41,6 +42,7 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 5. Medir after no mesmo protocolo
 - Rodar os mesmos cenários JMH com parâmetros idênticos.
 - Salvar artefato JSON after e capturar score + erro.
+- Quando `-prof gc` foi usado no baseline, repetir no after e comparar `gc.alloc.rate.norm`, `gc.alloc.rate`, `gc.count` e `gc.time`.
 - Calcular deltas absolutos e percentuais em `ns/op`.
 - Reportar sempre `Melhoria (%) em ns/op` usando: `((before_ns_op - after_ns_op) / before_ns_op) * 100`.
 
@@ -58,6 +60,7 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 - mudanças;
 - protocolo;
 - resultados;
+- resultados de GC com `-prof gc` (quando aplicável);
 - decisão;
 - lições aprendidas.
 - Registrar atividades executadas nesta rodada (comandos e status).
@@ -68,9 +71,11 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 - teste funcional relevante passando;
 - cobertura funcional suficiente por cenário de correção validada antes de implementar a otimização;
 - benchmark before/after comparavel com JMH;
+- verificação before/after com `-prof gc` quando cabivel;
 - benchmark localizado em `src/test/java` com package dedicado de performance;
 - registro em `docs/perf/performance-history.md` do modulo alvo;
 - tabela de resultados contendo `before ns/op`, `after ns/op` e `Melhoria (%)`;
+- tabela/registro de métricas de GC no histórico quando `-prof gc` for usado;
 - decisão final documentada;
 - lista de atividades executadas e limitações.
 - Se benchmark falhar por ambiente ou JMH nao estiver configurado, declarar bloqueio e impacto na confianca da decisao.
@@ -100,3 +105,4 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 - Misturar múltiplas otimizações sem isolamento de impacto.
 - Aceitar regressão de latência sem justificativa explícita.
 - Omitir comando executado e artefato de resultado.
+- Ignorar `-prof gc` em cenário com risco relevante de regressão de alocação/GC.
