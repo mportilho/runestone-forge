@@ -144,6 +144,48 @@ public class TestCalculatorContracts {
     }
 
     @Test
+    public void testFullModeContextSnapshotRemainsStableAcrossStepsWithoutAssignments() {
+        Calculator calculator = new Calculator();
+        List<CalculatorInput> inputs = List.of(
+                new CalculatorInput("a + 1"),
+                new CalculatorInput("a + 2"),
+                new CalculatorInput("a + 3")
+        );
+        Map<String, Object> context = Map.of("a", 10, "unused", 99);
+
+        List<CalculationMemory> memoryList = calculator.calculate(inputs, context, new CalculatorOptions(CalculatorMemoryMode.FULL, 8));
+
+        Assertions.assertThat(memoryList).hasSize(3);
+        for (CalculationMemory memory : memoryList) {
+            Assertions.assertThat(memory.contextVariables()).containsExactlyInAnyOrderEntriesOf(context);
+            Assertions.assertThat(memory.assignedVariables()).isEmpty();
+        }
+    }
+
+    @Test
+    public void testFullModeContextSnapshotAdvancesOnlyAfterAssignmentSteps() {
+        Calculator calculator = new Calculator();
+        List<CalculatorInput> inputs = List.of(
+                new CalculatorInput("x := a + 1;"),
+                new CalculatorInput("a + x"),
+                new CalculatorInput("y := x + 1;"),
+                new CalculatorInput("a + y")
+        );
+        Map<String, Object> context = Map.of("a", 1);
+
+        List<CalculationMemory> memoryList = calculator.calculate(inputs, context, new CalculatorOptions(CalculatorMemoryMode.FULL, 8));
+
+        Assertions.assertThat(memoryList).hasSize(4);
+        Assertions.assertThat(memoryList.get(0).contextVariables()).containsExactlyInAnyOrderEntriesOf(Map.of("a", 1));
+        Assertions.assertThat(memoryList.get(1).contextVariables()).containsExactlyInAnyOrderEntriesOf(
+                Map.of("a", 1, "x", BigDecimal.valueOf(2)));
+        Assertions.assertThat(memoryList.get(2).contextVariables()).containsExactlyInAnyOrderEntriesOf(
+                Map.of("a", 1, "x", BigDecimal.valueOf(2)));
+        Assertions.assertThat(memoryList.get(3).contextVariables()).containsExactlyInAnyOrderEntriesOf(
+                Map.of("a", 1, "x", BigDecimal.valueOf(2), "y", BigDecimal.valueOf(3)));
+    }
+
+    @Test
     public void testCompactModeKeepsOnlyAssignedVariables() {
         Calculator calculator = new Calculator();
         List<CalculatorInput> inputs = List.of(

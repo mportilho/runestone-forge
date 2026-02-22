@@ -31,8 +31,10 @@ import com.runestone.expeval.expression.supplier.DefaultExpressionSupplier;
 import com.runestone.expeval.expression.supplier.ExpressionSupplier;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Map;
 import java.util.Objects;
 
@@ -158,6 +160,9 @@ public class Calculator {
 
         List<CalculationMemory> memoryList = new ArrayList<>(calculatorInputs.size());
         Map<String, Object> computationVariables = contextVariables != null ? new HashMap<>(contextVariables) : new HashMap<>();
+        FullContextSnapshot fullContextSnapshot = memoryMode == CalculatorMemoryMode.FULL
+                ? new FullContextSnapshot(computationVariables)
+                : null;
         LazyContextHistory lazyContextHistory = memoryMode == CalculatorMemoryMode.LAZY
                 ? new LazyContextHistory(computationVariables, calculationOptions.checkpointInterval())
                 : null;
@@ -165,12 +170,17 @@ public class Calculator {
         int step = 0;
         for (CalculatorInput input : calculatorInputs) {
             step++;
+            Map<String, Object> contextSnapshotBeforeStep = fullContextSnapshot != null ? fullContextSnapshot.current() : null;
             Expression expression = expressionSupplier.createExpression(input.expression());
             expression.setVariables(computationVariables);
             Object result = expression.evaluate(expressionContext);
             Map<String, Object> assignedVariables = expression.getAssignedVariables();
-            CalculationMemory memory = createMemory(memoryMode, input, expression, result, assignedVariables, computationVariables, lazyContextHistory, step);
+            CalculationMemory memory = createMemory(memoryMode, input, expression, result, assignedVariables,
+                    contextSnapshotBeforeStep, lazyContextHistory, step);
             computationVariables.putAll(assignedVariables);
+            if (fullContextSnapshot != null) {
+                fullContextSnapshot.advance(assignedVariables);
+            }
             if (lazyContextHistory != null) {
                 lazyContextHistory.registerStep(step, assignedVariables, computationVariables);
             }
@@ -185,12 +195,13 @@ public class Calculator {
             Expression expression,
             Object result,
             Map<String, Object> assignedVariables,
-            Map<String, Object> computationVariables,
+            Map<String, Object> fullContextSnapshotBeforeStep,
             LazyContextHistory lazyContextHistory,
             int step) {
 
         return switch (memoryMode) {
-            case FULL -> new CalculationMemory(input, expression, result, expression.getVariables(), assignedVariables, new HashMap<>(computationVariables));
+            case FULL -> new CalculationMemory(input, expression, result, expression.getVariables(),
+                    assignedVariables, fullContextSnapshotBeforeStep == null ? Map.of() : fullContextSnapshotBeforeStep);
             case COMPACT -> CalculationMemory.compact(input, expression, result, assignedVariables);
             case LAZY -> {
                 Objects.requireNonNull(lazyContextHistory, "Lazy context history cannot be null");
@@ -203,6 +214,47 @@ public class Calculator {
                         () -> lazyContextHistory.snapshotBefore(step));
             }
         };
+    }
+
+    private static final class FullContextSnapshot {
+
+        private Map<String, Object> current;
+
+        private FullContextSnapshot(Map<String, Object> initialState) {
+            this.current = toUnmodifiableCopy(initialState);
+        }
+
+        private Map<String, Object> current() {
+            return current;
+        }
+
+        private void advance(Map<String, Object> assignedVariables) {
+            if (assignedVariables.isEmpty() || !hasEffectiveChanges(assignedVariables)) {
+                return;
+            }
+            Map<String, Object> next = new HashMap<>(current);
+            next.putAll(assignedVariables);
+            current = Collections.unmodifiableMap(next);
+        }
+
+        private boolean hasEffectiveChanges(Map<String, Object> assignedVariables) {
+            for (Entry<String, Object> entry : assignedVariables.entrySet()) {
+                String key = entry.getKey();
+                Object updatedValue = entry.getValue();
+                Object currentValue = current.get(key);
+                if (!Objects.equals(currentValue, updatedValue) || (currentValue == null && !current.containsKey(key))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static Map<String, Object> toUnmodifiableCopy(Map<String, Object> source) {
+            if (source.isEmpty()) {
+                return Map.of();
+            }
+            return Collections.unmodifiableMap(new HashMap<>(source));
+        }
     }
 
     private static final class LazyContextHistory {

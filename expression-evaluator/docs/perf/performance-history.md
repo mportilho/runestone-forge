@@ -1254,3 +1254,110 @@ Artefatos:
 ### Riscos residuais
 1. O hotspot de cold path permanece sem otimização dedicada.
 2. Se o perfil de uso mudar para alta taxa de cold starts por expressão, recomenda-se reabrir o item com proposta de menor complexidade.
+
+## Experimento PERF-2026-02-22-EXPEVAL-CALCULATOR-EAGER-CONTEXT-COPY
+- Data: 2026-02-22
+- Objetivo: corrigir o item 2 (cópia eager de contexto no `Calculator`) mantendo `CalculatorOptions` com default `FULL`.
+- Baseline commit/estado: `HEAD` em workspace temporário (`/tmp/expeval-baseline-item2-G7ItSw`) com benchmark idêntico.
+- Commit/estado testado: working tree atual com otimização no caminho `FULL` de snapshot de contexto.
+
+### Hipótese
+1. No modo `FULL`, evitar copiar `contextVariables` em toda etapa quando não houve mudança de contexto reduz fortemente `ns/op`.
+2. Mesmo com atribuições esparsas, copiar snapshot apenas quando há delta efetivo reduz custo de CPU/alocação.
+3. O comportamento default deve permanecer compatível (`CalculatorOptions.defaultOptions()` continua `FULL`).
+
+### Mudanças aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/expression/calculator/Calculator.java`: novo `FullContextSnapshot` para reuso de snapshot no modo `FULL`; cópia incremental apenas quando `assignedVariables` produz mudança efetiva; remoção de `new HashMap<>(computationVariables)` por etapa no hot path.
+- `expression-evaluator/src/test/java/com/runestone/expeval/expression/TestCalculatorContracts.java`: novos testes para estabilidade do snapshot em etapas sem atribuição e avanço de snapshot apenas após etapas que atribuem variáveis.
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/CalculatorContextCopyBenchmark.java`: benchmark JMH dedicado para `FULL` com contexto grande em dois cenários (`no assignments` e `sparse assignments`).
+- `expression-evaluator/src/main/java/com/runestone/expeval/expression/calculator/CalculatorOptions.java`: sem alteração funcional; default mantido em `CalculatorMemoryMode.FULL`.
+
+### Protocolo de medição
+- JVM: OpenJDK 21.0.10
+- JMH: 1.35
+- Benchmark class: `com.runestone.expeval.perf.jmh.CalculatorContextCopyBenchmark`
+- Package de benchmark: `com.runestone.expeval.perf.jmh`
+- Parâmetros de latência (`ns/op`):
+  - `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns`
+- Parâmetros de alocação (`B/op`):
+  - `-wi 3 -i 5 -w 300ms -r 300ms -f 2 -tu ns -prof gc`
+- Comando before (latência):
+```bash
+mvn -f /tmp/expeval-baseline-item2-G7ItSw/pom.xml -pl expression-evaluator -DskipTests test-compile -q
+mvn -f /tmp/expeval-baseline-item2-G7ItSw/pom.xml -pl expression-evaluator -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+cd /tmp/expeval-baseline-item2-G7ItSw/expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*CalculatorContextCopyBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -rf json -rff target/jmh-calculator-context-copy-before.json -foe true
+```
+- Comando after (latência):
+```bash
+mvn -pl expression-evaluator clean -q
+mvn -pl expression-evaluator -DskipTests test-compile -q
+mvn -pl expression-evaluator -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+cd expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*CalculatorContextCopyBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -rf json -rff target/jmh-calculator-context-copy-after.json -foe true
+```
+- Comandos adicionais (alocação):
+```bash
+cd /tmp/expeval-baseline-item2-G7ItSw/expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*CalculatorContextCopyBenchmark.*' \
+  -wi 3 -i 5 -w 300ms -r 300ms -f 2 -tu ns -prof gc \
+  -rf json -rff target/jmh-calculator-context-copy-before-gc.json -foe true
+
+cd expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*CalculatorContextCopyBenchmark.*' \
+  -wi 3 -i 5 -w 300ms -r 300ms -f 2 -tu ns -prof gc \
+  -rf json -rff target/jmh-calculator-context-copy-after-gc.json -foe true
+```
+
+### Resultado
+Latência (`ns/op`):
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| fullModeLargeContextNoAssignments | 1318555.084 | 105006.036 | -1213549.048 | +92.04% |
+| fullModeLargeContextSparseAssignments | 1315760.408 | 435850.509 | -879909.899 | +66.87% |
+
+Alocação (`gc.alloc.rate.norm`, `B/op`):
+
+| Benchmark | Before (B/op) | After (B/op) | Redução (%) |
+|---|---:|---:|---:|
+| fullModeLargeContextNoAssignments | 2705334.832 | 210338.273 | +92.23% |
+| fullModeLargeContextSparseAssignments | 2711976.454 | 665593.343 | +75.46% |
+
+Artefatos:
+- before latência: `/tmp/expeval-baseline-item2-G7ItSw/expression-evaluator/target/jmh-calculator-context-copy-before.json`
+- after latência: `expression-evaluator/target/jmh-calculator-context-copy-after.json`
+- before alocação: `/tmp/expeval-baseline-item2-G7ItSw/expression-evaluator/target/jmh-calculator-context-copy-before-gc.json`
+- after alocação: `expression-evaluator/target/jmh-calculator-context-copy-after-gc.json`
+
+### Decisão
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura técnica
+1. A cópia eager de `contextVariables` no modo `FULL` era dominante: remover cópia por etapa sem delta trouxe ganho de `+92.04%` no cenário sem atribuições.
+2. Mesmo com atribuições esparsas, o ganho permaneceu alto (`+66.87%`) ao transformar cópia total em atualização incremental.
+3. O default de `CalculatorOptions` permaneceu em `FULL`, preservando compatibilidade comportamental.
+
+### Atividades executadas
+1. Adição de cobertura funcional direcionada em `TestCalculatorContracts` - sucesso.
+2. Adição de benchmark JMH dedicado (`CalculatorContextCopyBenchmark`) - sucesso.
+3. Execução de testes direcionados (`TestCalculatorContracts`, `TestCalculationMemory`) antes da otimização - sucesso.
+4. Medição JMH before (`ns/op` e `-prof gc`) em baseline temporário - sucesso.
+5. Implementação da otimização no hot path de snapshot `FULL` em `Calculator` - sucesso.
+6. Reexecução de testes direcionados e suíte completa do módulo (`mvn -pl expression-evaluator test -q`) - sucesso.
+7. Medição JMH after (`ns/op` e `-prof gc`) com protocolo idêntico - sucesso.
+8. Consolidação dos resultados before/after e registro append-only - sucesso.
+
+### Riscos residuais
+1. O benchmark foca contexto grande e múltiplas etapas; workloads curtos/pequenos podem observar ganho menor.
+2. As medições foram feitas em uma única máquina/JVM; recomendado repetir em pipeline de performance para robustez estatística.
