@@ -33,6 +33,8 @@ import com.runestone.expeval.operation.values.VariableValueProviderContext;
 
 public class VariableValueOperation extends AbstractVariableValueOperation {
 
+    private static final ThreadLocal<ProviderContextHolder> CONTEXT_HOLDER = ThreadLocal.withInitial(ProviderContextHolder::new);
+
     public VariableValueOperation(String variableName) {
         super(variableName);
     }
@@ -53,11 +55,19 @@ public class VariableValueOperation extends AbstractVariableValueOperation {
 
     private Object unwrapFunction(Object object, OperationContext context) {
         if (object instanceof VariableProvider variableProvider) {
-            var providerContext = new VariableValueProviderContext(context.mathContext(), context.scale(), context.zoneId(), context.currentDateTime());
-            return variableProvider.retrieveValue(providerContext);
+            return variableProvider.retrieveValue(resolveProviderContext(context));
         } else {
             return object;
         }
+    }
+
+    private static VariableValueProviderContext resolveProviderContext(OperationContext context) {
+        ProviderContextHolder holder = CONTEXT_HOLDER.get();
+        if (holder.operationContext != context) {
+            holder.operationContext = context;
+            holder.providerContext = new VariableValueProviderContext(context.mathContext(), context.scale(), context.zoneId(), context.currentDateTime());
+        }
+        return holder.providerContext;
     }
 
     @Override
@@ -66,6 +76,11 @@ public class VariableValueOperation extends AbstractVariableValueOperation {
         copiedOperation.overrideValue(this.getValue());
         context.getVariables().put(this.getVariableName(), copiedOperation);
         return copiedOperation;
+    }
+
+    private static final class ProviderContextHolder {
+        private OperationContext operationContext;
+        private VariableValueProviderContext providerContext;
     }
 
 }

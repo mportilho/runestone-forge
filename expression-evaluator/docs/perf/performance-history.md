@@ -427,3 +427,90 @@ Media dos cenarios:
 ### Riscos residuais
 1. Ganho incremental; parte da diferenca historica absoluta em `long/double` pode depender de variacao de ambiente/JIT.
 2. Recomendado repetir em pipeline dedicado de performance para validar estabilidade estatistica.
+
+## Experimento PERF-2026-02-22-EXPEVAL-VARIABLE-PROVIDER-CONTEXT-ALLOCATION
+- Data: 2026-02-22
+- Objetivo: reduzir alocacoes por avaliacao no caminho de `VariableProvider`, mitigando pressao de GC sem alterar semantica de avaliacao.
+- Baseline commit/estado: `HEAD 05fbf28` no estado pre-otimizacao (com benchmark e testes novos adicionados para medicao).
+- Commit/estado testado: working tree atual com cache de `VariableValueProviderContext` por avaliacao e supplier de data/hora mais leve.
+
+### Hipotese
+1. Reutilizar `VariableValueProviderContext` por thread enquanto o mesmo `OperationContext` estiver ativo reduz `B/op` no hot path com providers.
+2. Substituir `MemoizedSupplier` por supplier lazy dedicado por avaliacao reduz overhead de alocacao/sincronizacao no acesso a `currentDateTime`.
+
+### Mudancas aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/operation/values/variable/VariableValueOperation.java`: cache `ThreadLocal` de `VariableValueProviderContext` por `OperationContext` para evitar novas instancias repetidas no mesmo fluxo de avaliacao.
+- `expression-evaluator/src/main/java/com/runestone/expeval/expression/ExpressionEvaluator.java`: troca de `MemoizedSupplier` por `CurrentDateTimeSupplier` lazy por avaliacao.
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/VariableProviderContextOverheadBenchmark.java`: benchmark JMH dedicado ao cenario de providers com `currentDateTime`.
+- `expression-evaluator/src/test/java/com/runestone/expeval/operation/values/TestVariableValues.java`: cobertura de consistencia de `currentDateTime` e reutilizacao do contexto de provider na mesma avaliacao.
+
+### Protocolo de medicao
+- JVM: OpenJDK 21.0.10
+- JMH: 1.35
+- Benchmark class: `com.runestone.expeval.perf.jmh.VariableProviderContextOverheadBenchmark`
+- Package de benchmark: `com.runestone.expeval.perf.jmh`
+- Parametros: `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns -jvmArgs '-Xms1g -Xmx1g' -prof gc`
+- Comando before:
+```bash
+cd expression-evaluator
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*VariableProviderContextOverheadBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -prof gc \
+  -rf json -rff target/jmh-variable-provider-context-before.json -foe true
+```
+- Comando after:
+```bash
+mvn -pl expression-evaluator -Dtest=TestVariableValues,TestVariablesWithExpressionContext test -q
+mvn -pl expression-evaluator test -q
+cd expression-evaluator
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*VariableProviderContextOverheadBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -prof gc \
+  -rf json -rff target/jmh-variable-provider-context-after.json -foe true
+```
+
+### Resultado
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| variableProvidersUsingCurrentDateTime | 497.950 | 428.934 | -69.016 | +13.86% |
+
+Indicadores de alocacao (apoio):
+- `gc.alloc.rate`: `437.201 MB/sec` -> `303.111 MB/sec` (`-134.090 MB/sec`, reducao de `30.67%`).
+- `gc.alloc.rate.norm`: `456.020 B/op` -> `272.013 B/op` (`-184.007 B/op`, reducao de `40.35%`).
+
+### Decisao
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura tecnica
+1. A reducao de `B/op` confirma que a maior parte do ganho vem de menor churn de objetos no caminho de providers.
+2. O ganho em latencia (`+13.86%` em `ns/op`) e consistente com a hipotese de eliminar criacoes repetidas de contexto por avaliacao.
+3. A troca do supplier em `ExpressionEvaluator` reduz overhead estrutural mantendo semantica de data/hora consistente por avaliacao.
+
+### Atividades executadas
+1. Criacao de benchmark JMH dedicado (`VariableProviderContextOverheadBenchmark`) - sucesso.
+2. Execucao de testes direcionados pre-otimizacao: `mvn -pl expression-evaluator -Dtest=TestVariableValues,TestVariablesWithExpressionContext test -q` - sucesso.
+3. Medicao JMH before com `-prof gc` - sucesso.
+4. Implementacao da otimizacao no hotspot (`VariableValueOperation`, `ExpressionEvaluator`) - sucesso.
+5. Execucao de testes direcionados pos-otimizacao: `mvn -pl expression-evaluator -Dtest=TestVariableValues,TestVariablesWithExpressionContext test -q` - sucesso.
+6. Execucao da suite completa do modulo: `mvn -pl expression-evaluator test -q` - sucesso.
+7. Medicao JMH after com protocolo identico - sucesso.
+8. Consolidacao de artefatos em `docs/perf/artifacts` e tabela comparativa - sucesso.
+
+### Artefatos
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-variable-provider-context-before.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-variable-provider-context-after.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-variable-provider-context-before.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-variable-provider-context-after.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-variable-provider-context-comparison.md`
+
+### Riscos residuais
+1. O benchmark desabilita cache de variaveis para estressar o caminho de providers; ganhos absolutos podem variar em workloads com cache mais efetivo.
+2. Medicoes realizadas em uma unica maquina/JVM; recomendado repetir em pipeline dedicado de performance para validar estabilidade estatistica.
