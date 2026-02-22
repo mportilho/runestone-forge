@@ -144,6 +144,7 @@ public class TypeAnnotationUtils {
     private static AnnotationMetadata buildMetadata(AnnotationStatementInput annotationStatementInput) {
         List<Annotation> statementAnnotations = TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput);
         List<FilterAnnotationData> annotationData = findAnnotationDataInternal(statementAnnotations);
+        validateAnnotationData(annotationData);
         List<Class<? extends FilterDecorator<?>>> decorators = findFilterDecoratorsInternal(annotationStatementInput, statementAnnotations);
         List<FilterRequestData> filterRequestData = listAllFilterRequestDataInternal(annotationData);
 
@@ -152,6 +153,41 @@ public class TypeAnnotationUtils {
                 decorators.isEmpty() ? List.of() : List.copyOf(decorators),
                 filterRequestData.isEmpty() ? List.of() : List.copyOf(filterRequestData)
         );
+    }
+
+    private static void validateAnnotationData(List<FilterAnnotationData> annotationData) {
+        if (annotationData == null || annotationData.isEmpty()) {
+            return;
+        }
+        for (FilterAnnotationData data : annotationData) {
+            validateFilters(data.filters());
+            for (FilterAnnotationStatement filterStatement : data.filterStatements()) {
+                validateFilters(filterStatement.filters());
+            }
+        }
+    }
+
+    private static void validateFilters(List<Filter> filters) {
+        if (filters == null || filters.isEmpty()) {
+            return;
+        }
+        for (Filter filter : filters) {
+            validateFilter(filter);
+        }
+    }
+
+    private static void validateFilter(Filter filter) {
+        if (filter.parameters().length == 0) {
+            throw new IllegalArgumentException("No parameter configured for filter of path " + filter.path());
+        }
+        if (filter.constantValues().length != 0 && filter.constantValues().length != filter.parameters().length) {
+            throw new IllegalArgumentException(String.format("Parameters and constant values have different sizes. Parameters required: '%s'",
+                    String.join(", ", Arrays.asList(filter.parameters()))));
+        }
+        if (filter.defaultValues().length != 0 && filter.defaultValues().length != filter.parameters().length) {
+            throw new IllegalArgumentException(String.format("Parameters and default values have different sizes. Parameters required: '%s'",
+                    String.join(", ", Arrays.asList(filter.parameters()))));
+        }
     }
 
     private static List<FilterAnnotationData> findAnnotationDataInternal(List<Annotation> statementAnnotations) {

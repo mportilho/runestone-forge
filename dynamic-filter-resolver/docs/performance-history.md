@@ -131,6 +131,7 @@ Conclusao:
 - PERF-005 (sort translation): `dynamic-filter-resolver/target/jmh-perf05-sort-translation.json`
 - PERF-006 (proxy path): `dynamic-filter-resolver/target/jmh-perf06-proxy.json`
 - PERF-006 (proxy invocation): `dynamic-filter-resolver/target/jmh-perf06-proxy-invocation.json`
+- PERF-007 (metadata validation warmup): `dynamic-filter-resolver/target/jmh-perf07-validation-warmup.json`
 
 ---
 
@@ -176,9 +177,9 @@ java -cp "$CP" org.openjdk.jmh.Main \
 | perf02_specification_toPredicate_manyFilters | 43.746 | +- 1.352 |
 
 ### Decisao
-- [ ] Aceitar
+- [x] Aceitar
 - [ ] Ajustar
-- [x] Descartar
+- [ ] Descartar
 
 ### Leitura tecnica
 1. O maior custo medido nesta rodada ficou em `toPredicate_manyFilters` (~43.7 us/op), validando que parsing de path + composicao de joins e o hotspot dominante fora do PERF-001.
@@ -246,9 +247,9 @@ java -cp "$CP" org.openjdk.jmh.Main \
 | perf02_specification_toPredicate_repeatedNestedPath | 51.516 | +- 2.081 |
 
 ### Decisao
-- [ ] Aceitar
+- [x] Aceitar
 - [ ] Ajustar
-- [x] Descartar
+- [ ] Descartar
 
 ### Leitura tecnica
 1. Houve ganho real nos dois hotspots de alta taxa (predicates e fetching).
@@ -440,6 +441,61 @@ java -cp "$CP" org.openjdk.jmh.Main \
 1. Em 2026-02-21, a alteracao em `SpecificationDynamicFilterArgumentResolver` foi revertida por relacao custo/beneficio desfavoravel.
 2. O ganho medido nao justificou o aumento de complexidade no codigo de producao para o contexto atual.
 3. Os testes e benchmarks de PERF-006 foram mantidos como referencia tecnica; os testes que dependiam do comportamento revertido foram marcados com `@Disabled`.
+
+---
+
+## Experimento PERF-007
+- Data: 2026-02-21
+- Objetivo: remover validacao repetida de metadado por request em `AnnotationStatementGenerator` e realizar warmup de metadado na inicializacao
+- Baseline commit: estado pos PERF-006
+- Commit testado: working tree atual (pre-validacao de metadado em cache + warmup no BeanPostProcessor)
+
+### Hipotese
+1. Validar filtros durante build de metadado cacheado elimina trabalho redundante no caminho quente.
+2. Warmup na inicializacao reduz custo de primeira chamada e antecipa falha de configuracao invalida.
+
+### Mudancas aplicadas
+- `src/main/java/com/runestone/dynafilter/core/generator/annotation/TypeAnnotationUtils.java`
+  - validacao de configuracao de filtros movida para `buildMetadata(...)`
+  - validacao aplicada a filtros diretos e filtros de statements aninhados
+- `src/main/java/com/runestone/dynafilter/core/generator/annotation/AnnotationStatementGenerator.java`
+  - remocao da validacao por request em `processFilterAnnotations(...)`
+- `src/main/java/com/runestone/dynafilter/modules/jpa/spring/FilterConfigurationAnalyserBeanPostProcessor.java`
+  - warmup de metadado para parametros suportados (`ConditionalStatement` e interfaces `Specification`)
+  - manutencao da validacao de paths quando `entityClass` estiver disponivel
+- `src/test/java/com/runestone/dynafilter/core/generator/annotation/TestValidationAnnotationStatementGenerator.java`
+  - novo teste de fail-fast durante warmup de metadado
+- `src/test/java/com/runestone/dynafilter/modules/jpa/spring/TestFilterConfigurationAnalyserBeanPostProcessor.java`
+  - testes de warmup para configuracao valida e invalida
+
+### Protocolo de medicao
+- JVM: Java 21.0.10
+- JMH: 1.37
+- Parametros:
+  - `-wi 5 -i 8 -w 500ms -r 500ms -f 3 -tu us`
+  - `-jvmArgs '-Xms1g -Xmx1g'`
+- Comando:
+
+```bash
+java -cp "$CP" org.openjdk.jmh.Main \
+'DynamicFilterResolverBenchmark\.statementGenerator_searchPeopleAndGames' \
+-wi 5 -i 8 -w 500ms -r 500ms -f 3 -tu us -jvmArgs '-Xms1g -Xmx1g' -rf json -rff dynamic-filter-resolver/target/jmh-perf07-validation-warmup.json -foe true
+```
+
+### Resultado
+| Benchmark | Referencia anterior (us/op) | PERF-007 (us/op) | Delta |
+|---|---:|---:|---:|
+| statementGenerator_searchPeopleAndGames | 4.682 | 4.172 | -10.89% |
+
+### Decisao
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura tecnica
+1. A remocao da validacao por request reduziu o custo medio do statement generator no cenario medido.
+2. Warmup agora detecta configuracao invalida na inicializacao de controllers REST suportados.
+3. O custo de validacao passou para fase de build de metadado cacheado, reduzindo trabalho redundante por requisicao.
 
 ---
 
