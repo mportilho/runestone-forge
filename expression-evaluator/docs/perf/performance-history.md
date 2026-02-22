@@ -902,3 +902,92 @@ Foco do hot path sem dicionário (`findMissingValueOnEmptyContext` + `findMissin
 ### Riscos residuais
 1. A regressão leve no cenário com dicionário presente merece monitoramento em medições futuras de maior duração/forks.
 2. Medições em uma única máquina/JVM; recomenda-se repetir em ambiente de CI de performance.
+
+## Experimento PERF-2026-02-22-EXPEVAL-SEMANTIC-EQUIVALENCE-CACHE-INVALIDATION
+- Data: 2026-02-22
+- Objetivo: quantificar o ganho da correção no `setValue` que evita `clearCache()` para valores comparáveis semanticamente equivalentes (ex.: `BigDecimal("1.0")` vs `BigDecimal("1.00")`).
+- Baseline commit/estado: `HEAD` em archive temporário (`/tmp/expeval-baseline-semantic-NydSFX`) com benchmark idêntico.
+- Commit/estado testado: working tree atual com ajuste em `AbstractVariableValueOperation#setValue`.
+
+### Hipótese
+1. No cenário de atualização com valor comparável equivalente, a mudança deve reduzir fortemente `ns/op`.
+2. No cenário de atualização com valor realmente diferente, a latência deve permanecer estável.
+3. Em alocação (`B/op`), o cenário equivalente deve reduzir drasticamente o churn por evitar invalidação e recomputação.
+
+### Mudanças aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/operation/values/AbstractVariableValueOperation.java`: `setValue` passou a usar equivalência semântica (`equals` ou `compareTo == 0`) antes de invalidar cache.
+- `expression-evaluator/src/test/java/com/runestone/expeval/operation/values/TestCacheInvalidationBehaviour.java`: novo teste para `BigDecimal("1.0")` -> `BigDecimal("1.00")` sem invalidação desnecessária.
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/VariableSetSemanticEqualityBenchmark.java`: benchmark JMH dedicado aos cenários equivalente vs diferente.
+
+### Protocolo de medição
+- JVM: OpenJDK 21.0.10
+- JMH: 1.35
+- Benchmark class: `com.runestone.expeval.perf.jmh.VariableSetSemanticEqualityBenchmark`
+- Latência (`ns/op`) before:
+```bash
+cd /tmp/expeval-baseline-semantic-NydSFX/expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*VariableSetSemanticEqualityBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -rf json -rff target/jmh-semantic-equality-before.json -foe true
+```
+- Latência (`ns/op`) after:
+```bash
+cd expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*VariableSetSemanticEqualityBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -rf json -rff target/jmh-semantic-equality-after.json -foe true
+```
+- Alocação (`B/op`) before:
+```bash
+cd /tmp/expeval-baseline-semantic-NydSFX/expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*VariableSetSemanticEqualityBenchmark.*' \
+  -wi 3 -i 5 -w 300ms -r 300ms -f 2 -tu ns -prof gc \
+  -rf json -rff target/jmh-semantic-equality-before-gc.json -foe true
+```
+- Alocação (`B/op`) after:
+```bash
+cd expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*VariableSetSemanticEqualityBenchmark.*' \
+  -wi 3 -i 5 -w 300ms -r 300ms -f 2 -tu ns -prof gc \
+  -rf json -rff target/jmh-semantic-equality-after-gc.json -foe true
+```
+
+### Resultado
+Latência (`ns/op`):
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| setVariableWithEquivalentComparableValue | 138.805 | 18.779 | -120.027 | +86.47% |
+| setVariableWithDifferentComparableValue | 133.692 | 132.049 | -1.642 | +1.23% |
+
+Alocação (`gc.alloc.rate.norm`, B/op):
+
+| Benchmark | Before (B/op) | After (B/op) | Redução (%) |
+|---|---:|---:|---:|
+| setVariableWithEquivalentComparableValue | 200.010136 | 0.000024 | +100.00% |
+| setVariableWithDifferentComparableValue | 168.008209 | 168.008681 | -0.00% |
+
+### Decisão
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura técnica
+1. O cenário-alvo (valor comparável equivalente) apresentou ganho expressivo de `+86.47%` em `ns/op`.
+2. O cenário de controle (valor realmente diferente) permaneceu estável (`+1.23%`), sem regressão relevante.
+3. Em `B/op`, o cenário-alvo praticamente eliminou alocação por operação após a otimização.
+
+### Atividades executadas
+1. Adição de benchmark JMH dedicado (`VariableSetSemanticEqualityBenchmark`) - sucesso.
+2. Build de benchmark before e after (`test-compile` + classpath) - sucesso.
+3. Medição JMH before/after de latência (`ns/op`) - sucesso.
+4. Medição JMH before/after com `-prof gc` (`B/op`) - sucesso.
+5. Testes funcionais direcionados (`TestCacheInvalidationBehaviour`, `TestVariableValues`) - sucesso.
+
+### Riscos residuais
+1. O ganho medido é focado em comparáveis que usam semântica de `compareTo`; para tipos que não implementam essa semântica, o comportamento continua dependente de `equals`.
+2. Medições foram feitas em única máquina/JVM; ideal repetir em pipeline de performance para validação estatística contínua.

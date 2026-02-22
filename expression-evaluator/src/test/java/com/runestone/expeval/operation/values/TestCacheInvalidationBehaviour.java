@@ -83,4 +83,17 @@ class TestCacheInvalidationBehaviour {
         expression.setVariables(secondBatch);
         Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("100");
     }
+
+    @Test
+    void testSemanticallyEquivalentComparableValueShouldKeepCache() {
+        Expression expression = new Expression("a + 1");
+        expression.setVariable("a", new BigDecimal("1.0"));
+
+        BigDecimal firstEvaluation = expression.evaluate();
+        expression.setVariable("a", new BigDecimal("1.00"));
+        BigDecimal secondEvaluation = expression.evaluate();
+
+        Assertions.assertThat(secondEvaluation).isSameAs(firstEvaluation);
+        Assertions.assertThat(secondEvaluation).isEqualByComparingTo("2.0");
+    }
 }
