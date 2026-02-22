@@ -1,0 +1,4 @@
+interface:
+  display_name: "Java Perf Quality Gate"
+  short_description: "Guide Java optimization with tests and JMH quality gates"
+  default_prompt: "Apply a full before/after performance quality workflow."

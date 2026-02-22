@@ -129,6 +129,8 @@ Conclusao:
 - PERF-003 (after): `dynamic-filter-resolver/target/jmh-perf03-after.json`
 - PERF-004 (cache): `dynamic-filter-resolver/target/jmh-perf04-cache.json`
 - PERF-005 (sort translation): `dynamic-filter-resolver/target/jmh-perf05-sort-translation.json`
+- PERF-006 (proxy path): `dynamic-filter-resolver/target/jmh-perf06-proxy.json`
+- PERF-006 (proxy invocation): `dynamic-filter-resolver/target/jmh-perf06-proxy-invocation.json`
 
 ---
 
@@ -174,9 +176,9 @@ java -cp "$CP" org.openjdk.jmh.Main \
 | perf02_specification_toPredicate_manyFilters | 43.746 | +- 1.352 |
 
 ### Decisao
-- [x] Aceitar
+- [ ] Aceitar
 - [ ] Ajustar
-- [ ] Descartar
+- [x] Descartar
 
 ### Leitura tecnica
 1. O maior custo medido nesta rodada ficou em `toPredicate_manyFilters` (~43.7 us/op), validando que parsing de path + composicao de joins e o hotspot dominante fora do PERF-001.
@@ -244,9 +246,9 @@ java -cp "$CP" org.openjdk.jmh.Main \
 | perf02_specification_toPredicate_repeatedNestedPath | 51.516 | +- 2.081 |
 
 ### Decisao
-- [x] Aceitar
+- [ ] Aceitar
 - [ ] Ajustar
-- [ ] Descartar
+- [x] Descartar
 
 ### Leitura tecnica
 1. Houve ganho real nos dois hotspots de alta taxa (predicates e fetching).
@@ -364,6 +366,80 @@ java -cp "$CP" org.openjdk.jmh.Main \
 1. Cenario pesado teve reducao de ~91.3% (79.466 -> 6.921 us/op).
 2. Cenario sem traducao teve reducao de ~98.9% (139.353 -> 1.528 us/op).
 3. O risco de crescimento de latencia com mais filtros/ordens foi significativamente reduzido.
+
+---
+
+## Experimento PERF-006
+- Data: 2026-02-21
+- Objetivo: reduzir overhead de proxy em `SpecificationDynamicFilterArgumentResolver` e remover dependencia de `method.invoke(...)` no caminho quente de `toPredicate`
+- Baseline commit: estado pos PERF-005
+- Commit testado: working tree atual (invocation handler otimizado + cobertura funcional adicional)
+
+### Hipotese
+1. Delegar `toPredicate` diretamente para `Specification` reduz overhead de invocacao reflexiva.
+2. Tratar `default methods` via `InvocationHandler.invokeDefault` evita falhas em interfaces customizadas com metodos default.
+3. Cache simples do array de interfaces reduz pequena alocacao por request no `newProxyInstance`.
+
+### Mudancas aplicadas
+- `src/main/java/com/runestone/dynafilter/modules/jpa/spring/SpecificationDynamicFilterArgumentResolver.java`
+  - substituicao do lambda reflexivo por `SpecificationProxyInvocationHandler`
+  - dispatch direto para `toPredicate` sem `method.invoke(...)`
+  - suporte explicito a metodos default de interface
+  - tratamento consistente de `equals/hashCode/toString`
+  - cache de array de interfaces para `Proxy.newProxyInstance`
+- `src/test/java/com/runestone/dynafilter/modules/jpa/spring/TestSpecDynaFilterArgumentResolver.java`
+  - teste para interface `Specification` com metodo default
+  - teste para consistencia de metodos `Object` no proxy
+  - teste direto de delegacao de `toPredicate` via `createProxy`
+- `src/test/java/com/runestone/dynafilter/modules/jpa/spring/tools/SearchStateWithDefaultMethod.java`
+  - fixture de teste para interface custom com default method
+- `src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverPerf06ProxyBenchmark.java`
+  - benchmark focado comparando:
+    - `perf06_proxyInvocation_legacyReflective_toPredicate`
+    - `perf06_proxyInvocation_optimized_toPredicate`
+
+### Protocolo de medicao
+- JVM: Java 21.0.10
+- JMH: 1.37
+- Parametros:
+  - `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu us`
+  - `-jvmArgs '-Xms1g -Xmx1g'`
+- Comandos:
+
+```bash
+java -cp "$CP" org.openjdk.jmh.Main \
+'DynamicFilterResolverBenchmark\.(argumentResolver_interfaceProxy|argumentResolver_fetchingDecorator)' \
+-wi 5 -i 8 -w 500ms -r 500ms -f 3 -tu us -jvmArgs '-Xms1g -Xmx1g' -rf json -rff dynamic-filter-resolver/target/jmh-perf06-proxy.json -foe true
+```
+
+```bash
+java -cp "$CP" org.openjdk.jmh.Main \
+'DynamicFilterResolverPerf06ProxyBenchmark\.(perf06_proxyInvocation_optimized_toPredicate|perf06_proxyInvocation_legacyReflective_toPredicate)' \
+-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu us -jvmArgs '-Xms1g -Xmx1g' -rf json -rff dynamic-filter-resolver/target/jmh-perf06-proxy-invocation.json -foe true
+```
+
+### Resultado
+| Benchmark | Score (us/op) |
+|---|---:|
+| argumentResolver_interfaceProxy | 55.298 |
+| argumentResolver_fetchingDecorator | 53.780 |
+| perf06_proxyInvocation_legacyReflective_toPredicate | 6.231 |
+| perf06_proxyInvocation_optimized_toPredicate | 5.671 |
+
+### Decisao
+- [ ] Aceitar
+- [ ] Ajustar
+- [x] Descartar
+
+### Leitura tecnica
+1. O benchmark amplo de `argumentResolver_interfaceProxy` variou pouco e com ruido alto, sem ganho claro.
+2. O benchmark focado no hotspot de invocacao mostrou reducao de ~8.99% em `toPredicate` (6.231 -> 5.671 us/op).
+3. Alem do ganho de latencia no hotspot, a mudanca corrige compatibilidade para interfaces `Specification` com default methods.
+
+### Revisao de decisao
+1. Em 2026-02-21, a alteracao em `SpecificationDynamicFilterArgumentResolver` foi revertida por relacao custo/beneficio desfavoravel.
+2. O ganho medido nao justificou o aumento de complexidade no codigo de producao para o contexto atual.
+3. Os testes e benchmarks de PERF-006 foram mantidos como referencia tecnica; os testes que dependiam do comportamento revertido foram marcados com `@Disabled`.
 
 ---
 
