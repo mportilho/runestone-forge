@@ -267,3 +267,163 @@ Media dos cenarios:
 ### Riscos residuais
 1. O cache de templates por classe aumenta uso de memoria proporcional a classes de providers diferentes utilizadas.
 2. Benchmarks refletem uma unica maquina/JVM; recomenda-se repeticao em CI de performance.
+
+## Experimento PERF-2026-02-22-EXPEVAL-TYPE-CONVERSION-HOTPATH
+- Data: 2026-02-22
+- Objetivo: reduzir custo de conversao de tipos no hot path quando tipos nao casam de primeira, evitando fallback guiado por excecao e normalizando conversao numerica em `BaseOperation`.
+- Baseline commit/estado: `HEAD 4ad4a08` (codigo baseline em workspace temporario com benchmark JMH identico).
+- Commit/estado testado: working tree atual com ajustes em `AbstractOperation` e `BaseOperation`.
+
+### Hipotese
+1. Evitar dupla tentativa de conversao com fallback por excecao no caminho quente reduz `ns/op` no cenario de tipos alternados.
+2. Normalizar conversao numerica por tipo em `BaseOperation` pode reduzir custo recorrente de `new BigDecimal(result.toString())`.
+
+### Mudancas aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/operation/AbstractOperation.java`: novo fluxo de conversao com `tryConvertValue`/`shouldAttemptConversion`, eliminando padrao de tentativa+excecao+retentativa no caminho nao-`BaseOperation`.
+- `expression-evaluator/src/main/java/com/runestone/expeval/operation/BaseOperation.java`: normalizacao numerica por tipo via `normalizeNumberResult(Number, MathContext)`, com fallback para `toString()` apenas em tipos incomuns.
+- `expression-evaluator/src/test/java/com/runestone/expeval/operation/TestTypeConversionHotPathBehaviour.java`: testes funcionais para cenarios de alternancia de tipo e invariantes de `MathContext`/escala.
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/TypeConversionHotPathBenchmark.java`: benchmark JMH dedicado em `src/test/java` no package `com.runestone.expeval.perf.jmh`.
+
+### Protocolo de medicao
+- JVM: OpenJDK 21.0.10
+- JMH: 1.35
+- Benchmark class: `com.runestone.expeval.perf.jmh.TypeConversionHotPathBenchmark`
+- Parametros: `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns -jvmArgs '-Xms1g -Xmx1g'`
+- Comando before:
+```bash
+mvn -f "$BEFORE_DIR/pom.xml" -pl expression-evaluator test -q
+cd "$BEFORE_DIR/expression-evaluator"
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*TypeConversionHotPathBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -rf json -rff target/jmh-type-conversion-before.json -foe true
+```
+- Comando after:
+```bash
+mvn -pl expression-evaluator test -q
+cd expression-evaluator
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*TypeConversionHotPathBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -rf json -rff target/jmh-type-conversion-after.json -foe true
+```
+
+### Resultado
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| alternatingTypeConversion | 1794.985 | 10.222 | -1784.763 | +99.43% |
+| baseOperationDoubleNormalization | 300.542 | 310.918 | +10.376 | -3.45% |
+| baseOperationLongNormalization | 108.373 | 119.817 | +11.443 | -10.56% |
+
+Media dos cenarios:
+- Before medio: 734.633 ns/op
+- After medio: 146.985 ns/op
+- Melhoria media: +79.99%
+
+### Decisao
+- [ ] Aceitar
+- [x] Ajustar
+- [ ] Descartar
+
+### Leitura tecnica
+1. O hotspot principal (`alternatingTypeConversion`) teve melhora expressiva de `+99.43%`, confirmando a reducao de overhead por fallback com excecao.
+2. Os microcenarios de normalizacao em `BaseOperation` regrediram (`-3.45%` e `-10.56%`), o que indica necessidade de ajuste fino nessa parte para evitar custo adicional no caminho numerico comum.
+3. A decisao foi marcada como `Ajustar` para preservar o ganho do hot path sem aceitar regressao nos cenarios numericos de apoio.
+
+### Atividades executadas
+1. Implementacao de reducao de fallback por excecao e normalizacao numerica tipada.
+2. Criacao de testes funcionais de comportamento para cenarios alvo.
+3. Execucao de testes funcionais direcionados e suite do modulo.
+4. Medicao JMH before em baseline temporario.
+5. Medicao JMH after no estado atual.
+6. Consolidacao de artefatos e comparacao em markdown.
+
+### Artefatos
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-hotpath-before.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-hotpath-after.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-hotpath-before.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-hotpath-after.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-hotpath-comparison.md`
+
+### Riscos residuais
+1. Regressao nos caminhos de `BaseOperation` pode afetar cargas predominantemente numericas simples.
+2. Benchmarks refletem uma unica maquina/JVM; recomendada validacao adicional em CI de performance.
+
+## Experimento PERF-2026-02-22-EXPEVAL-TYPE-CONVERSION-BASEOP-FINE-TUNING
+- Data: 2026-02-22
+- Objetivo: ajuste fino no `BaseOperation` para recuperar throughput em `long/double` sem perder ganho no hot path de conversao.
+- Baseline commit/estado: estado `after` do experimento `PERF-2026-02-22-EXPEVAL-TYPE-CONVERSION-HOTPATH`.
+- Commit/estado testado: working tree atual com micro-otimizacao estrutural em `BaseOperation.resolve()`.
+
+### Hipotese
+1. Reduzir overhead fixo por chamada no `BaseOperation` (caminho comum sem variaveis atribuidas) melhora `baseOperationLongNormalization` e `baseOperationDoubleNormalization`.
+2. Ajuste nao deve degradar `alternatingTypeConversion`.
+
+### Mudancas aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/operation/BaseOperation.java`:
+  - cache de flag `hasAssignedVariables` no construtor;
+  - skip do loop de variaveis atribuidas quando vazio;
+  - cache local de `mathContext` e `scale` no hot path de `resolve()`;
+  - manutencao da conversao numerica com `new BigDecimal(result.toString(), mathContext)` para preservar comportamento.
+
+### Protocolo de medicao
+- JVM: OpenJDK 21.0.10
+- JMH: 1.35
+- Benchmark class: `com.runestone.expeval.perf.jmh.TypeConversionHotPathBenchmark`
+- Parametros: `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns -jvmArgs '-Xms1g -Xmx1g'`
+- Comando before: artefato reaproveitado do `after` do experimento anterior (`expression-evaluator-type-conversion-hotpath-after.json`).
+- Comando after:
+```bash
+mvn -pl expression-evaluator test -q
+cd expression-evaluator
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*TypeConversionHotPathBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -rf json -rff target/jmh-type-conversion-baseop-final2-after.json -foe true
+```
+
+### Resultado
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| alternatingTypeConversion | 10.222 | 10.083 | -0.138 | +1.35% |
+| baseOperationDoubleNormalization | 310.918 | 305.914 | -5.004 | +1.61% |
+| baseOperationLongNormalization | 119.817 | 118.849 | -0.968 | +0.81% |
+
+Media dos cenarios:
+- Before medio: 146.985 ns/op
+- After medio: 144.949 ns/op
+- Melhoria media: +1.39%
+
+### Decisao
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura tecnica
+1. Houve recuperacao de `long/double` em relacao ao estado imediatamente anterior.
+2. O cenario principal (`alternatingTypeConversion`) foi preservado com leve melhoria adicional.
+3. O ajuste e de baixo risco funcional por manter semantica numerica original no `BaseOperation`.
+
+### Atividades executadas
+1. Implementacao de ajuste estrutural em `BaseOperation`.
+2. Execucao de testes funcionais do modulo (`mvn -pl expression-evaluator test -q`).
+3. Medicao JMH after com o mesmo protocolo.
+4. Consolidacao dos artefatos e comparacao percentual em ns/op.
+5. Correcao de fluxo: execucao de medicoes em sequencia para evitar corrupcao de `jmh_generated` por concorrencia.
+
+### Artefatos
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-baseoperation-tuning-before.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-baseoperation-tuning-after.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-baseoperation-tuning-before.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-baseoperation-tuning-after.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-baseoperation-tuning-comparison.md`
+
+### Riscos residuais
+1. Ganho incremental; parte da diferenca historica absoluta em `long/double` pode depender de variacao de ambiente/JIT.
+2. Recomendado repetir em pipeline dedicado de performance para validar estabilidade estatistica.

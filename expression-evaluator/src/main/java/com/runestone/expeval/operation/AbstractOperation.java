@@ -116,24 +116,54 @@ public abstract class AbstractOperation {
             }
         }
         if (this instanceof BaseOperation) {
-            this.expectedTypeByValue(result, expectedType);
-        } else if (result != null && !result.getClass().isArray() && !getExpectedType().isArray() && !getExpectedType().equals(result.getClass())) {
-            Object convertedValue;
-            try {
-                convertedValue = context.conversionService().convert(result, getExpectedType());
-            } catch (Exception e) {
-                convertedValue = null;
+            if (result != null && !getExpectedType().isInstance(result)) {
+                this.expectedTypeByValue(result, expectedType);
             }
-            if (convertedValue == null) {
-                expectedTypeByValue(result, expectedType);
-                convertedValue = context.conversionService().convert(result, getExpectedType());
-                if (convertedValue == null) {
-                    throw new ExpressionEvaluatorException(String.format("Cannot convert [%s] to [%s]", result.getClass(), getExpectedType()));
+        } else if (result != null && !result.getClass().isArray() && !getExpectedType().isArray() && !getExpectedType().isInstance(result)) {
+            Class<?> initialExpectedType = getExpectedType();
+            Object convertedValue = tryConvertValue(result, initialExpectedType, context);
+            if (convertedValue != null) {
+                return convertedValue;
+            }
+
+            expectedTypeByValue(result, initialExpectedType);
+            Class<?> inferredExpectedType = getExpectedType();
+            if (inferredExpectedType.isInstance(result)) {
+                return result;
+            }
+            if (!inferredExpectedType.equals(initialExpectedType)) {
+                convertedValue = tryConvertValue(result, inferredExpectedType, context);
+                if (convertedValue != null) {
+                    return convertedValue;
                 }
             }
-            return convertedValue;
+            throw new ExpressionEvaluatorException(String.format("Cannot convert [%s] to [%s]", result.getClass(), inferredExpectedType));
         }
         return result;
+    }
+
+    private Object tryConvertValue(Object sourceValue, Class<?> targetType, OperationContext context) {
+        if (!shouldAttemptConversion(sourceValue, targetType, context)) {
+            return null;
+        }
+        try {
+            return context.conversionService().convert(sourceValue, targetType);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private boolean shouldAttemptConversion(Object sourceValue, Class<?> targetType, OperationContext context) {
+        if (targetType.isInstance(sourceValue)) {
+            return true;
+        }
+        if (targetType.isPrimitive()) {
+            return true;
+        }
+        if (targetType.isEnum() && (sourceValue instanceof String || sourceValue instanceof Number)) {
+            return true;
+        }
+        return context.conversionService().canConvert(sourceValue.getClass(), targetType);
     }
 
     /**

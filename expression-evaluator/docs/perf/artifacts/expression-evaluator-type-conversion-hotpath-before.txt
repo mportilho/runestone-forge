@@ -1,0 +1,239 @@
+# JMH version: 1.35
+# VM version: JDK 21.0.10, Java HotSpot(TM) 64-Bit Server VM, 21.0.10+8-LTS-217
+# VM invoker: /home/marcelo/.sdkman/candidates/java/21.0.10-oracle/bin/java
+# VM options: -Xms1g -Xmx1g -Xms1g -Xmx1g
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 500 ms each
+# Measurement: 10 iterations, 500 ms each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.runestone.expeval.perf.jmh.TypeConversionHotPathBenchmark.alternatingTypeConversion
+
+# Run progress: 0.00% complete, ETA 00:01:07
+# Fork: 1 of 3
+# Warmup Iteration   1: 2238.706 ns/op
+# Warmup Iteration   2: 2294.642 ns/op
+# Warmup Iteration   3: 2236.421 ns/op
+# Warmup Iteration   4: 2028.881 ns/op
+# Warmup Iteration   5: 1698.566 ns/op
+Iteration   1: 1676.690 ns/op
+Iteration   2: 1739.591 ns/op
+Iteration   3: 1723.653 ns/op
+Iteration   4: 1694.873 ns/op
+Iteration   5: 1780.448 ns/op
+Iteration   6: 1754.580 ns/op
+Iteration   7: 1841.907 ns/op
+Iteration   8: 1776.213 ns/op
+Iteration   9: 1741.844 ns/op
+Iteration  10: 1774.843 ns/op
+
+# Run progress: 11.11% complete, ETA 00:01:03
+# Fork: 2 of 3
+# Warmup Iteration   1: 2154.872 ns/op
+# Warmup Iteration   2: 2407.222 ns/op
+# Warmup Iteration   3: 2336.234 ns/op
+# Warmup Iteration   4: 2064.777 ns/op
+# Warmup Iteration   5: 1816.109 ns/op
+Iteration   1: 1779.816 ns/op
+Iteration   2: 1787.281 ns/op
+Iteration   3: 1736.847 ns/op
+Iteration   4: 2310.641 ns/op
+Iteration   5: 1848.473 ns/op
+Iteration   6: 1736.854 ns/op
+Iteration   7: 1808.756 ns/op
+Iteration   8: 1808.519 ns/op
+Iteration   9: 1774.687 ns/op
+Iteration  10: 1713.197 ns/op
+
+# Run progress: 22.22% complete, ETA 00:00:55
+# Fork: 3 of 3
+# Warmup Iteration   1: 2158.074 ns/op
+# Warmup Iteration   2: 2295.771 ns/op
+# Warmup Iteration   3: 2313.402 ns/op
+# Warmup Iteration   4: 2037.392 ns/op
+# Warmup Iteration   5: 1742.843 ns/op
+Iteration   1: 1792.133 ns/op
+Iteration   2: 1765.331 ns/op
+Iteration   3: 1756.721 ns/op
+Iteration   4: 1798.043 ns/op
+Iteration   5: 1776.492 ns/op
+Iteration   6: 1860.377 ns/op
+Iteration   7: 1769.587 ns/op
+Iteration   8: 1806.980 ns/op
+Iteration   9: 1752.547 ns/op
+Iteration  10: 1961.615 ns/op
+
+
+Result "com.runestone.expeval.perf.jmh.TypeConversionHotPathBenchmark.alternatingTypeConversion":
+  1794.985 ±(99.9%) 74.483 ns/op [Average]
+  (min, avg, max) = (1676.690, 1794.985, 2310.641), stdev = 111.482
+  CI (99.9%): [1720.502, 1869.467] (assumes normal distribution)
+
+
+# JMH version: 1.35
+# VM version: JDK 21.0.10, Java HotSpot(TM) 64-Bit Server VM, 21.0.10+8-LTS-217
+# VM invoker: /home/marcelo/.sdkman/candidates/java/21.0.10-oracle/bin/java
+# VM options: -Xms1g -Xmx1g -Xms1g -Xmx1g
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 500 ms each
+# Measurement: 10 iterations, 500 ms each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.runestone.expeval.perf.jmh.TypeConversionHotPathBenchmark.baseOperationDoubleNormalization
+
+# Run progress: 33.33% complete, ETA 00:00:47
+# Fork: 1 of 3
+# Warmup Iteration   1: 824.777 ns/op
+# Warmup Iteration   2: 431.521 ns/op
+# Warmup Iteration   3: 283.395 ns/op
+# Warmup Iteration   4: 241.429 ns/op
+# Warmup Iteration   5: 242.633 ns/op
+Iteration   1: 237.617 ns/op
+Iteration   2: 343.818 ns/op
+Iteration   3: 302.884 ns/op
+Iteration   4: 308.094 ns/op
+Iteration   5: 312.823 ns/op
+Iteration   6: 301.381 ns/op
+Iteration   7: 297.891 ns/op
+Iteration   8: 293.330 ns/op
+Iteration   9: 299.881 ns/op
+Iteration  10: 315.592 ns/op
+
+# Run progress: 44.44% complete, ETA 00:00:39
+# Fork: 2 of 3
+# Warmup Iteration   1: 739.657 ns/op
+# Warmup Iteration   2: 414.995 ns/op
+# Warmup Iteration   3: 282.195 ns/op
+# Warmup Iteration   4: 242.846 ns/op
+# Warmup Iteration   5: 247.667 ns/op
+Iteration   1: 241.859 ns/op
+Iteration   2: 361.305 ns/op
+Iteration   3: 306.732 ns/op
+Iteration   4: 306.946 ns/op
+Iteration   5: 320.202 ns/op
+Iteration   6: 308.838 ns/op
+Iteration   7: 299.211 ns/op
+Iteration   8: 298.110 ns/op
+Iteration   9: 302.465 ns/op
+Iteration  10: 307.313 ns/op
+
+# Run progress: 55.56% complete, ETA 00:00:31
+# Fork: 3 of 3
+# Warmup Iteration   1: 698.882 ns/op
+# Warmup Iteration   2: 406.841 ns/op
+# Warmup Iteration   3: 266.511 ns/op
+# Warmup Iteration   4: 243.920 ns/op
+# Warmup Iteration   5: 238.355 ns/op
+Iteration   1: 243.149 ns/op
+Iteration   2: 329.885 ns/op
+Iteration   3: 303.544 ns/op
+Iteration   4: 304.353 ns/op
+Iteration   5: 306.386 ns/op
+Iteration   6: 288.601 ns/op
+Iteration   7: 299.060 ns/op
+Iteration   8: 284.553 ns/op
+Iteration   9: 290.749 ns/op
+Iteration  10: 299.677 ns/op
+
+
+Result "com.runestone.expeval.perf.jmh.TypeConversionHotPathBenchmark.baseOperationDoubleNormalization":
+  300.542 ±(99.9%) 16.997 ns/op [Average]
+  (min, avg, max) = (237.617, 300.542, 361.305), stdev = 25.441
+  CI (99.9%): [283.544, 317.539] (assumes normal distribution)
+
+
+# JMH version: 1.35
+# VM version: JDK 21.0.10, Java HotSpot(TM) 64-Bit Server VM, 21.0.10+8-LTS-217
+# VM invoker: /home/marcelo/.sdkman/candidates/java/21.0.10-oracle/bin/java
+# VM options: -Xms1g -Xmx1g -Xms1g -Xmx1g
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 500 ms each
+# Measurement: 10 iterations, 500 ms each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.runestone.expeval.perf.jmh.TypeConversionHotPathBenchmark.baseOperationLongNormalization
+
+# Run progress: 66.67% complete, ETA 00:00:23
+# Fork: 1 of 3
+# Warmup Iteration   1: 325.577 ns/op
+# Warmup Iteration   2: 188.760 ns/op
+# Warmup Iteration   3: 96.875 ns/op
+# Warmup Iteration   4: 97.265 ns/op
+# Warmup Iteration   5: 97.279 ns/op
+Iteration   1: 96.536 ns/op
+Iteration   2: 99.634 ns/op
+Iteration   3: 98.652 ns/op
+Iteration   4: 96.945 ns/op
+Iteration   5: 95.599 ns/op
+Iteration   6: 103.366 ns/op
+Iteration   7: 120.948 ns/op
+Iteration   8: 122.641 ns/op
+Iteration   9: 119.342 ns/op
+Iteration  10: 120.093 ns/op
+
+# Run progress: 77.78% complete, ETA 00:00:15
+# Fork: 2 of 3
+# Warmup Iteration   1: 300.259 ns/op
+# Warmup Iteration   2: 178.830 ns/op
+# Warmup Iteration   3: 96.522 ns/op
+# Warmup Iteration   4: 105.766 ns/op
+# Warmup Iteration   5: 98.588 ns/op
+Iteration   1: 96.191 ns/op
+Iteration   2: 101.822 ns/op
+Iteration   3: 100.783 ns/op
+Iteration   4: 99.724 ns/op
+Iteration   5: 97.746 ns/op
+Iteration   6: 100.345 ns/op
+Iteration   7: 119.622 ns/op
+Iteration   8: 119.949 ns/op
+Iteration   9: 124.319 ns/op
+Iteration  10: 120.052 ns/op
+
+# Run progress: 88.89% complete, ETA 00:00:07
+# Fork: 3 of 3
+# Warmup Iteration   1: 300.318 ns/op
+# Warmup Iteration   2: 174.987 ns/op
+# Warmup Iteration   3: 96.806 ns/op
+# Warmup Iteration   4: 96.859 ns/op
+# Warmup Iteration   5: 97.820 ns/op
+Iteration   1: 98.121 ns/op
+Iteration   2: 98.369 ns/op
+Iteration   3: 102.668 ns/op
+Iteration   4: 95.585 ns/op
+Iteration   5: 100.066 ns/op
+Iteration   6: 102.118 ns/op
+Iteration   7: 122.966 ns/op
+Iteration   8: 125.560 ns/op
+Iteration   9: 125.890 ns/op
+Iteration  10: 125.542 ns/op
+
+
+Result "com.runestone.expeval.perf.jmh.TypeConversionHotPathBenchmark.baseOperationLongNormalization":
+  108.373 ±(99.9%) 7.867 ns/op [Average]
+  (min, avg, max) = (95.585, 108.373, 125.890), stdev = 11.775
+  CI (99.9%): [100.506, 116.240] (assumes normal distribution)
+
+
+# Run complete. Total time: 00:01:11
+
+REMEMBER: The numbers below are just data. To gain reusable insights, you need to follow up on
+why the numbers are the way they are. Use profilers (see -prof, -lprof), design factorial
+experiments, perform baseline and negative tests that provide experimental control, make sure
+the benchmarking environment is safe on JVM/OS/HW level, ask for reviews from the domain experts.
+Do not assume the numbers tell you what you want them to tell.
+
+NOTE: Current JVM experimentally supports Compiler Blackholes, and they are in use. Please exercise
+extra caution when trusting the results, look into the generated code to check the benchmark still
+works, and factor in a small probability of new VM bugs. Additionally, while comparisons between
+different JVMs are already problematic, the performance difference caused by different Blackhole
+modes can be very significant. Please make sure you use the consistent Blackhole mode for comparisons.
+
+Benchmark                                                        Mode  Cnt     Score    Error  Units
+TypeConversionHotPathBenchmark.alternatingTypeConversion         avgt   30  1794.985 ± 74.483  ns/op
+TypeConversionHotPathBenchmark.baseOperationDoubleNormalization  avgt   30   300.542 ± 16.997  ns/op
+TypeConversionHotPathBenchmark.baseOperationLongNormalization    avgt   30   108.373 ±  7.867  ns/op
+
+Benchmark result is saved to target/jmh-type-conversion-before.json
