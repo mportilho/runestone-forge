@@ -830,3 +830,75 @@ Alocação (`gc.alloc.rate.norm`, `B/op`) - `target/jmh-calculator-context-modes
 ### Riscos residuais
 1. As medições são preliminares (iterações/forks reduzidos); números absolutos podem variar em hardware/JVM diferentes.
 2. O modo `COMPACT` reduz drasticamente detalhe histórico em `variables/contextVariables` por design; consumidores que dependam desse detalhe devem permanecer em `FULL` ou `LAZY`.
+
+## Experimento PERF-2026-02-22-EXPEVAL-EMPTY-CONTEXT-VARIABLE-LOOKUP
+- Data: 2026-02-22
+- Objetivo: remover alocação desnecessária no hot path de leitura de variável quando `ExpressionContext` não possui `dictionary`.
+- Baseline commit/estado: `HEAD 49d0b77` (working tree com benchmark/teste novos e comportamento anterior em `findValue`, que inicializava `dictionary` no caminho de leitura).
+- Commit/estado testado: working tree atual com retorno imediato de `null` quando `dictionary == null` em `findValue`.
+
+### Hipótese
+1. Evitar `new HashMap<>()` implícito em leitura sem dicionário reduz `ns/op` nos cenários de contexto vazio e contexto com `variablesSupplier` sem valor.
+2. O cenário com dicionário já presente deve permanecer estável, sem regressão relevante.
+
+### Mudanças aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/expression/ExpressionContext.java`: `findValue` agora retorna `null` diretamente quando `dictionary` é `null`, sem chamar `initializeDictionaryMap()`.
+- `expression-evaluator/src/test/java/com/runestone/expeval/expression/TestExpressionContext.java`: cobertura funcional para garantir que leitura em contexto vazio não materializa `dictionary`.
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/EmptyContextValueLookupBenchmark.java`: benchmark JMH dedicado para lookup de chave ausente em três cenários (`empty`, `supplier-only`, `dictionary`).
+
+### Protocolo de medição
+- JVM: OpenJDK 21.0.10
+- JMH: 1.35
+- Benchmark class: `com.runestone.expeval.perf.jmh.EmptyContextValueLookupBenchmark`
+- Parâmetros: `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns -jvmArgs '-Xms1g -Xmx1g'`
+- Comando before:
+```bash
+cd expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*EmptyContextValueLookupBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -rf json -rff target/jmh-empty-context-lookup-before.json -foe true
+```
+- Comando after:
+```bash
+cd expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*EmptyContextValueLookupBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -rf json -rff target/jmh-empty-context-lookup-after.json -foe true
+```
+
+### Resultado
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| findMissingValueOnDictionaryContext | 2.042 | 2.100 | +0.059 | -2.88% |
+| findMissingValueOnEmptyContext | 1.338 | 0.881 | -0.457 | +34.16% |
+| findMissingValueWithSupplierOnlyContext | 1.478 | 1.043 | -0.435 | +29.44% |
+
+Foco do hot path sem dicionário (`findMissingValueOnEmptyContext` + `findMissingValueWithSupplierOnlyContext`):
+- Before médio: `1.408 ns/op`
+- After médio: `0.962 ns/op`
+- Melhoria média: `+31.68%`
+
+### Decisão
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura técnica
+1. A mudança atingiu o alvo: os cenários sem dicionário melhoraram entre `+29.44%` e `+34.16%`.
+2. O cenário com dicionário existente apresentou pequena piora (`-2.88%`) e não pertence ao caminho de otimização proposta.
+3. Inferência: o ganho principal vem da remoção da alocação e escrita de estado (`dictionary = new HashMap<>()`) em leituras efêmeras que só consultam valores.
+
+### Atividades executadas
+1. `mvn -pl expression-evaluator -Dtest=TestExpressionContext test -q` - falha esperada no baseline (`dictionary` inicializada em leitura).
+2. `mvn -pl expression-evaluator -Dtest=TestExpressionContext,TestVariablesWithExpressionContext test -q` - sucesso após correção.
+3. `mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test` - sucesso.
+4. JMH before (`target/jmh-empty-context-lookup-before.json`) - sucesso.
+5. JMH after (`target/jmh-empty-context-lookup-after.json`) - sucesso.
+
+### Riscos residuais
+1. A regressão leve no cenário com dicionário presente merece monitoramento em medições futuras de maior duração/forks.
+2. Medições em uma única máquina/JVM; recomenda-se repetir em ambiente de CI de performance.

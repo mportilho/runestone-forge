@@ -81,7 +81,9 @@ public class ExpressionContext {
         if (variablesSupplier != null && (value = variablesSupplier.apply(name)) != null) {
             return value;
         }
-        initializeDictionaryMap();
+        if (dictionary == null) {
+            return null;
+        }
         return dictionary.get(name);
     }
 
