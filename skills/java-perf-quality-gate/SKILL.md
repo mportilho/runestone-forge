@@ -7,19 +7,20 @@ description: Conduzir análise de performance e qualidade em mudanças Java com 
 
 ## Overview
 
-Aplicar um fluxo padronizado para melhorar código Java com segurança de comportamento e validacao de performance obrigatoriamente por JMH. Produzir decisao objetiva baseada em dados e registrar o experimento em formato append-only.
+Aplicar um fluxo padronizado para melhorar código Java com segurança de comportamento e validação de performance obrigatoriamente por JMH. Produzir decisão objetiva baseada em dados e registrar o experimento em formato append-only.
 
 ## Workflow Operacional
 
 1. Confirmar escopo e hipótese
 - Delimitar o caminho quente, tipo de carga e risco de regressão.
-- Definir metrica principal por cenario em latencia (`ns/op`) e, quando aplicavel, throughput/alocacao como apoio.
+- Definir métrica principal por cenário em latência (`ns/op`) e, quando aplicável, throughput/alocacao como apoio.
 - Definir baseline técnico: commit, branch ou estado da árvore.
 
 2. Reproduzir e medir baseline
-- Garantir que o modulo possui JMH habilitado (dependencias e annotation processor). Sem JMH, a execucao fica bloqueada ate configurar.
+- Garantir que o modulo possui JMH habilitado (dependências e annotation processor). Sem JMH, a execução fica bloqueada ate configurar.
+- Antes de implementar a melhoria de desempenho, mapear os cenários da correção e garantir testes unitários com cobertura funcional suficiente para cada cenário.
+- Compilar e validar os testes funcionais relevantes.
 - Criar/ajustar benchmark em `src/test/java` em package dedicado de performance (ex.: `...perf.jmh...`).
-- Compilar e validar testes existentes relevantes.
 - Rodar JMH com parâmetros fixos e salvar JSON de baseline.
 - Confirmar que o benchmark representa o risco real e não só micro-op isolada.
 
@@ -33,6 +34,9 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 - comportamento nominal;
 - casos de borda da otimização;
 - invariantes de compatibilidade esperadas.
+- Para cada cenário de correção de desempenho, usar cobertura minima de alta confiança antes da implementação: ao menos um caso nominal do hot path, um caso de borda e um caso de regressao/invariante (quando aplicável, justificar ausências).
+- Apos implementar, reexecutar e complementar os testes conforme necessário para manter a confiança funcional.
+- Evitar linguagem absoluta: o objetivo dos testes e aumentar confiança de preservação de comportamento, nao provar ausência total de regressão.
 
 5. Medir after no mesmo protocolo
 - Rodar os mesmos cenários JMH com parâmetros idênticos.
@@ -62,6 +66,7 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 
 - Não concluir sem:
 - teste funcional relevante passando;
+- cobertura funcional suficiente por cenário de correção validada antes de implementar a otimização;
 - benchmark before/after comparavel com JMH;
 - benchmark localizado em `src/test/java` com package dedicado de performance;
 - registro em `docs/perf/performance-history.md` do modulo alvo;
@@ -83,13 +88,14 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 ## Referências da Skill
 
 - Para comandos e desenho de benchmark: `references/jmh-playbook.md`
-- Para template de historico append-only em `docs/perf/performance-history.md` do modulo alvo: `references/performance-history-template.md`
+- Para template de histórico append-only em `docs/perf/performance-history.md` do modulo alvo: `references/performance-history-template.md`
 - Para checklist de execução e evidência: `references/quality-activities-checklist.md`
 
 ## Anti-Patterns
 
 - Concluir com opinião sem benchmark comparável.
 - Medir performance sem JMH ou com benchmark ad-hoc fora do fluxo da skill.
+- Implementar melhoria de desempenho antes de validar cobertura funcional suficiente dos cenários da correção.
 - Criar benchmark fora de `src/test/java` ou sem package dedicado de performance.
 - Misturar múltiplas otimizações sem isolamento de impacto.
 - Aceitar regressão de latência sem justificativa explícita.
