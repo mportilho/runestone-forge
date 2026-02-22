@@ -34,6 +34,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.SplittableRandom;
 
@@ -46,12 +47,14 @@ public abstract class AbstractOperation {
 
     private static final AbstractOperation[] EMPTY_ARRAY = {};
     private static final SplittableRandom RANDOM = new SplittableRandom(System.nanoTime());
+    private static final int INITIAL_PARENT_CAPACITY = 4;
 
     private Object cache;
     private Object lastResult;
     private AbstractOperation[] cacheBlockingSemaphores;
 
     private AbstractOperation[] parents = EMPTY_ARRAY;
+    private int parentCount;
     private Class<?> expectedType;
     private boolean applyingParenthesis;
     private int fixedHash = 0;
@@ -289,10 +292,13 @@ public abstract class AbstractOperation {
         if (operation == null) {
             return;
         }
-        AbstractOperation[] newArray = new AbstractOperation[parents.length + 1];
-        System.arraycopy(parents, 0, newArray, 0, parents.length);
-        newArray[newArray.length - 1] = operation;
-        parents = newArray;
+        int currentCount = parentCount;
+        if (currentCount == parents.length) {
+            int newLength = currentCount == 0 ? INITIAL_PARENT_CAPACITY : currentCount + (currentCount >> 1);
+            parents = Arrays.copyOf(parents, newLength);
+        }
+        parents[currentCount] = operation;
+        parentCount = currentCount + 1;
     }
 
     /**
@@ -312,8 +318,8 @@ public abstract class AbstractOperation {
         if (operation.cacheBlockingSemaphores != null && operation.cacheBlockingSemaphores.length > 0) {
             if (operation.cacheBlockingSemaphores.length == 1 && operation.cacheBlockingSemaphores[0] == semaphore) {
                 operation.cacheBlockingSemaphores = EMPTY_ARRAY;
-                for (AbstractOperation parent : operation.parents) {
-                    enableCaching(semaphore, parent);
+                for (int i = 0; i < operation.parentCount; i++) {
+                    enableCaching(semaphore, operation.parents[i]);
                 }
             } else if (operation.cacheBlockingSemaphores.length > 1) {
                 int index = findSemaphoreIndex(semaphore, operation);
@@ -323,8 +329,8 @@ public abstract class AbstractOperation {
                     System.arraycopy(operation.cacheBlockingSemaphores, index + 1, temp, index,
                             operation.cacheBlockingSemaphores.length - index - 1);
                     operation.cacheBlockingSemaphores = temp;
-                    for (AbstractOperation parent : operation.parents) {
-                        enableCaching(semaphore, parent);
+                    for (int i = 0; i < operation.parentCount; i++) {
+                        enableCaching(semaphore, operation.parents[i]);
                     }
                 }
             }
@@ -336,8 +342,8 @@ public abstract class AbstractOperation {
         if (operation.cacheBlockingSemaphores == null) {
             operation.cacheBlockingSemaphores = new AbstractOperation[1];
             operation.cacheBlockingSemaphores[0] = semaphore;
-            for (AbstractOperation parent : operation.parents) {
-                disableCaching(semaphore, parent);
+            for (int i = 0; i < operation.parentCount; i++) {
+                disableCaching(semaphore, operation.parents[i]);
             }
         } else {
             if (findSemaphoreIndex(semaphore, operation) == -1) {
@@ -345,8 +351,8 @@ public abstract class AbstractOperation {
                 System.arraycopy(operation.cacheBlockingSemaphores, 0, temp, 0, operation.cacheBlockingSemaphores.length);
                 temp[temp.length - 1] = semaphore;
                 operation.cacheBlockingSemaphores = temp;
-                for (AbstractOperation parent : operation.parents) {
-                    disableCaching(semaphore, parent);
+                for (int i = 0; i < operation.parentCount; i++) {
+                    disableCaching(semaphore, operation.parents[i]);
                 }
             }
         }
@@ -377,7 +383,8 @@ public abstract class AbstractOperation {
 
     private void clearCache(AbstractOperation operation) {
         operation.cache = null;
-        for (AbstractOperation parent : operation.parents) {
+        for (int i = 0; i < operation.parentCount; i++) {
+            AbstractOperation parent = operation.parents[i];
             if (parent.cache != null) {
                 clearCache(parent);
             }

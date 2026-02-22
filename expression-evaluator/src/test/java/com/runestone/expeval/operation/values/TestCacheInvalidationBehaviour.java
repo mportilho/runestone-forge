@@ -96,4 +96,51 @@ class TestCacheInvalidationBehaviour {
         Assertions.assertThat(secondEvaluation).isSameAs(firstEvaluation);
         Assertions.assertThat(secondEvaluation).isEqualByComparingTo("2.0");
     }
+
+    @Test
+    void testVariableWithManyParentsShouldInvalidateAllCachedBranchesOnUpdate() {
+        int occurrences = 64;
+        Expression expression = new Expression(buildRepeatedAdditionExpression("a", occurrences));
+
+        expression.setVariable("a", BigDecimal.ONE);
+        Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("64");
+
+        expression.setVariable("a", BigDecimal.valueOf(2));
+        Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("128");
+    }
+
+    @Test
+    void testVariableWithManyParentsShouldSupportCachingToggleWithoutErrors() {
+        int occurrences = 64;
+        Expression expression = new Expression(buildRepeatedAdditionExpression("a", occurrences));
+        expression.setVariable("a", BigDecimal.ONE);
+        expression.evaluate();
+
+        Set<AbstractOperation> operations = expression.visitOperations(new OperationCollectorVisitor());
+        AbstractVariableValueOperation variableOperation = operations.stream()
+                .filter(AbstractVariableValueOperation.class::isInstance)
+                .map(AbstractVariableValueOperation.class::cast)
+                .filter(operation -> "a".equals(operation.getVariableName()))
+                .findFirst()
+                .orElseThrow();
+
+        variableOperation.configureCaching(false);
+        expression.setVariable("a", BigDecimal.valueOf(3));
+        Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("192");
+
+        variableOperation.configureCaching(true);
+        expression.setVariable("a", BigDecimal.valueOf(4));
+        Assertions.assertThat(expression.<BigDecimal>evaluate()).isEqualByComparingTo("256");
+    }
+
+    private static String buildRepeatedAdditionExpression(String variableName, int occurrences) {
+        if (occurrences <= 0) {
+            throw new IllegalArgumentException("Occurrences must be greater than zero");
+        }
+        StringBuilder builder = new StringBuilder(variableName);
+        for (int i = 1; i < occurrences; i++) {
+            builder.append(" + ").append(variableName);
+        }
+        return builder.toString();
+    }
 }

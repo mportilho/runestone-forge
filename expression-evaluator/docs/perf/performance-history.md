@@ -991,3 +991,110 @@ Alocação (`gc.alloc.rate.norm`, B/op):
 ### Riscos residuais
 1. O ganho medido é focado em comparáveis que usam semântica de `compareTo`; para tipos que não implementam essa semântica, o comportamento continua dependente de `equals`.
 2. Medições foram feitas em única máquina/JVM; ideal repetir em pipeline de performance para validação estatística contínua.
+
+## Experimento PERF-2026-02-22-EXPEVAL-PARENT-LINKING-HOTPATH
+- Data: 2026-02-22
+- Objetivo: reduzir o custo de ligação de pais (`addParent`) no hot path e validar impacto em cenário integrado com alta fan-in de variável.
+- Baseline commit/estado: `HEAD` em archive temporário (`/tmp/expeval-baseline-parent-link-qkBwjD`) com benchmark idêntico.
+- Commit/estado testado: working tree atual com otimização em `AbstractOperation` e testes funcionais adicionais.
+
+### Hipótese
+1. Trocar crescimento por cópia total a cada `addParent` por crescimento amortizado reduz fortemente `ns/op` no cenário de burst.
+2. Iterar até `parentCount` (em vez da capacidade do array) preserva semântica e evita trabalho indevido com slots não usados.
+3. O ganho deve aparecer também no benchmark integrado de parse + warmup + evaluate, principalmente em cardinalidade alta (`parentCount=1024`).
+
+### Mudanças aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/operation/AbstractOperation.java`: introdução de `parentCount`, crescimento amortizado do array de pais (`INITIAL_PARENT_CAPACITY` + `Arrays.copyOf`) e loops de propagação (`clearCache`, `disableCaching`, `enableCaching`) limitados ao total real de pais.
+- `expression-evaluator/src/test/java/com/runestone/expeval/operation/values/TestCacheInvalidationBehaviour.java`: cobertura funcional para fan-in alto de variável (invalidação de cache em múltiplos pais e alternância de `configureCaching` sem erro).
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/ParentLinkingHotPathBenchmark.java`: benchmark JMH dedicado para `addParentBurst` e cenário integrado `parseWarmUpAndEvaluateRepeatedVariableExpression`.
+
+### Protocolo de medição
+- JVM: OpenJDK 21.0.10
+- JMH: 1.35
+- Benchmark class: `com.runestone.expeval.perf.jmh.ParentLinkingHotPathBenchmark`
+- Package de benchmark: `com.runestone.expeval.perf.jmh`
+- Parâmetros de latência (`ns/op`):
+  - `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns`
+- Parâmetros de alocação (`B/op`):
+  - `-wi 3 -i 5 -w 300ms -r 300ms -f 2 -tu ns -prof gc`
+- Comando before (latência):
+```bash
+mvn -f "$BEFORE_DIR/pom.xml" -pl expression-evaluator -DskipTests test-compile -q
+cd "$BEFORE_DIR/expression-evaluator"
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*ParentLinkingHotPathBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -rf json -rff target/jmh-parent-link-before.json -foe true
+```
+- Comando after (latência):
+```bash
+mvn -pl expression-evaluator -DskipTests test-compile -q
+cd expression-evaluator
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*ParentLinkingHotPathBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -rf json -rff target/jmh-parent-link-after.json -foe true
+```
+- Comandos adicionais (alocação):
+```bash
+cd "$BEFORE_DIR/expression-evaluator"
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*ParentLinkingHotPathBenchmark.addParentBurst.*' \
+  -wi 3 -i 5 -w 300ms -r 300ms -f 2 -tu ns -prof gc \
+  -rf json -rff target/jmh-parent-link-before-gc.json -foe true
+
+cd expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*ParentLinkingHotPathBenchmark.addParentBurst.*' \
+  -wi 3 -i 5 -w 300ms -r 300ms -f 2 -tu ns -prof gc \
+  -rf json -rff target/jmh-parent-link-after-gc.json -foe true
+```
+
+### Resultado
+Latência (`ns/op`):
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| addParentBurst (`parentCount=64`) | 1951.177 | 585.264 | -1365.913 | +70.00% |
+| addParentBurst (`parentCount=256`) | 26884.575 | 2070.434 | -24814.141 | +92.30% |
+| addParentBurst (`parentCount=1024`) | 399018.564 | 7964.767 | -391053.797 | +98.00% |
+| parseWarmUpAndEvaluateRepeatedVariableExpression (`parentCount=64`) | 72798.340 | 71676.846 | -1121.494 | +1.54% |
+| parseWarmUpAndEvaluateRepeatedVariableExpression (`parentCount=256`) | 296951.522 | 285302.954 | -11648.568 | +3.92% |
+| parseWarmUpAndEvaluateRepeatedVariableExpression (`parentCount=1024`) | 1590597.517 | 1209522.082 | -381075.435 | +23.96% |
+
+Alocação (`gc.alloc.rate.norm`, `B/op`) em `addParentBurst`:
+
+| Benchmark | Before (B/op) | After (B/op) | Redução (%) |
+|---|---:|---:|---:|
+| addParentBurst (`parentCount=64`) | 9512.411 | 1320.061 | +86.12% |
+| addParentBurst (`parentCount=256`) | 136237.798 | 4048.205 | +97.03% |
+| addParentBurst (`parentCount=1024`) | 2117765.512 | 13104.629 | +99.38% |
+
+Artefatos:
+- before latência: `/tmp/expeval-baseline-parent-link-qkBwjD/expression-evaluator/target/jmh-parent-link-before.json`
+- after latência: `expression-evaluator/target/jmh-parent-link-after.json`
+- before alocação: `/tmp/expeval-baseline-parent-link-qkBwjD/expression-evaluator/target/jmh-parent-link-before-gc.json`
+- after alocação: `expression-evaluator/target/jmh-parent-link-after-gc.json`
+
+### Decisão
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura técnica
+1. O hot path de ligação de pais melhorou de forma consistente e expressiva (`+70.00%` a `+98.00%`), confirmando que o custo anterior era dominado por realocação/cópia a cada inserção.
+2. O cenário integrado também melhorou, com ganho mais forte em cardinalidade alta (`+23.96%` em `parentCount=1024`), sinalizando efeito prático quando o fan-in cresce.
+3. A alocação por operação caiu de forma acentuada no microbenchmark (`+86.12%` a `+99.38%` de redução em `B/op`), coerente com o crescimento amortizado do vetor de pais.
+
+### Atividades executadas
+1. `mvn -f "$BEFORE_DIR/pom.xml" -pl expression-evaluator -DskipTests test-compile -q` - sucesso.
+2. Build de classpath JMH before/after (`dependency:build-classpath`) - sucesso.
+3. JMH before/after de latência com protocolo idêntico (`ParentLinkingHotPathBenchmark`) - sucesso.
+4. JMH before/after com `-prof gc` para alocação (`addParentBurst`) - sucesso.
+5. `mvn -pl expression-evaluator -Dtest=TestCacheInvalidationBehaviour,TestVariableValues test -q` - sucesso.
+
+### Riscos residuais
+1. O ganho máximo foi medido em microbenchmark e pode ser menor em workloads com fan-in baixo de pais.
+2. Medições foram realizadas em uma única máquina/JVM; recomenda-se repetição em pipeline dedicado de performance para maior robustez estatística.
