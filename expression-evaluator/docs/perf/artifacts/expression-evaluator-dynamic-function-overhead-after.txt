@@ -1,0 +1,387 @@
+# JMH version: 1.35
+# VM version: JDK 21.0.10, Java HotSpot(TM) 64-Bit Server VM, 21.0.10+8-LTS-217
+# VM invoker: /home/marcelo/.sdkman/candidates/java/21.0.10-oracle/bin/java
+# VM options: -Xms1g -Xmx1g -Xms1g -Xmx1g
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 500 ms each
+# Measurement: 10 iterations, 500 ms each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.runestone.expeval.perf.jmh.DynamicFunctionOverheadBenchmark.dynamicConstantFunction
+
+# Run progress: 0.00% complete, ETA 00:01:52
+# Fork: 1 of 3
+# Warmup Iteration   1: 468.380 ns/op
+# Warmup Iteration   2: 181.027 ns/op
+# Warmup Iteration   3: 109.385 ns/op
+# Warmup Iteration   4: 96.259 ns/op
+# Warmup Iteration   5: 91.653 ns/op
+Iteration   1: 90.187 ns/op
+Iteration   2: 96.046 ns/op
+Iteration   3: 112.179 ns/op
+Iteration   4: 108.308 ns/op
+Iteration   5: 104.049 ns/op
+Iteration   6: 104.146 ns/op
+Iteration   7: 92.461 ns/op
+Iteration   8: 93.085 ns/op
+Iteration   9: 110.980 ns/op
+Iteration  10: 111.980 ns/op
+
+# Run progress: 6.67% complete, ETA 00:01:54
+# Fork: 2 of 3
+# Warmup Iteration   1: 450.708 ns/op
+# Warmup Iteration   2: 182.823 ns/op
+# Warmup Iteration   3: 113.842 ns/op
+# Warmup Iteration   4: 103.791 ns/op
+# Warmup Iteration   5: 103.613 ns/op
+Iteration   1: 100.601 ns/op
+Iteration   2: 98.846 ns/op
+Iteration   3: 99.893 ns/op
+Iteration   4: 106.835 ns/op
+Iteration   5: 102.993 ns/op
+Iteration   6: 101.404 ns/op
+Iteration   7: 100.285 ns/op
+Iteration   8: 99.389 ns/op
+Iteration   9: 110.374 ns/op
+Iteration  10: 117.769 ns/op
+
+# Run progress: 13.33% complete, ETA 00:01:46
+# Fork: 3 of 3
+# Warmup Iteration   1: 958.777 ns/op
+# Warmup Iteration   2: 181.892 ns/op
+# Warmup Iteration   3: 126.525 ns/op
+# Warmup Iteration   4: 97.139 ns/op
+# Warmup Iteration   5: 105.457 ns/op
+Iteration   1: 107.162 ns/op
+Iteration   2: 109.182 ns/op
+Iteration   3: 111.356 ns/op
+Iteration   4: 106.268 ns/op
+Iteration   5: 95.062 ns/op
+Iteration   6: 93.207 ns/op
+Iteration   7: 101.611 ns/op
+Iteration   8: 95.248 ns/op
+Iteration   9: 102.617 ns/op
+Iteration  10: 112.364 ns/op
+
+
+Result "com.runestone.expeval.perf.jmh.DynamicFunctionOverheadBenchmark.dynamicConstantFunction":
+  103.196 ±(99.9%) 4.753 ns/op [Average]
+  (min, avg, max) = (90.187, 103.196, 117.769), stdev = 7.114
+  CI (99.9%): [98.443, 107.949] (assumes normal distribution)
+
+
+# JMH version: 1.35
+# VM version: JDK 21.0.10, Java HotSpot(TM) 64-Bit Server VM, 21.0.10+8-LTS-217
+# VM invoker: /home/marcelo/.sdkman/candidates/java/21.0.10-oracle/bin/java
+# VM options: -Xms1g -Xmx1g -Xms1g -Xmx1g
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 500 ms each
+# Measurement: 10 iterations, 500 ms each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.runestone.expeval.perf.jmh.DynamicFunctionOverheadBenchmark.dynamicFunctionInsideSequence
+
+# Run progress: 20.00% complete, ETA 00:01:37
+# Fork: 1 of 3
+# Warmup Iteration   1: 1658.947 ns/op
+# Warmup Iteration   2: 1358.165 ns/op
+# Warmup Iteration   3: 965.329 ns/op
+# Warmup Iteration   4: 816.487 ns/op
+# Warmup Iteration   5: 808.079 ns/op
+Iteration   1: 811.673 ns/op
+Iteration   2: 823.317 ns/op
+Iteration   3: 806.786 ns/op
+Iteration   4: 944.489 ns/op
+Iteration   5: 939.798 ns/op
+Iteration   6: 923.462 ns/op
+Iteration   7: 924.851 ns/op
+Iteration   8: 922.245 ns/op
+Iteration   9: 886.970 ns/op
+Iteration  10: 824.990 ns/op
+
+# Run progress: 26.67% complete, ETA 00:01:29
+# Fork: 2 of 3
+# Warmup Iteration   1: 1698.806 ns/op
+# Warmup Iteration   2: 1409.716 ns/op
+# Warmup Iteration   3: 1012.760 ns/op
+# Warmup Iteration   4: 880.574 ns/op
+# Warmup Iteration   5: 875.817 ns/op
+Iteration   1: 882.048 ns/op
+Iteration   2: 845.965 ns/op
+Iteration   3: 837.229 ns/op
+Iteration   4: 870.675 ns/op
+Iteration   5: 894.333 ns/op
+Iteration   6: 875.448 ns/op
+Iteration   7: 974.393 ns/op
+Iteration   8: 952.294 ns/op
+Iteration   9: 992.893 ns/op
+Iteration  10: 1032.970 ns/op
+
+# Run progress: 33.33% complete, ETA 00:01:21
+# Fork: 3 of 3
+# Warmup Iteration   1: 1766.491 ns/op
+# Warmup Iteration   2: 1426.113 ns/op
+# Warmup Iteration   3: 1079.920 ns/op
+# Warmup Iteration   4: 851.974 ns/op
+# Warmup Iteration   5: 887.943 ns/op
+Iteration   1: 955.683 ns/op
+Iteration   2: 898.989 ns/op
+Iteration   3: 903.683 ns/op
+Iteration   4: 923.267 ns/op
+Iteration   5: 871.672 ns/op
+Iteration   6: 950.164 ns/op
+Iteration   7: 954.865 ns/op
+Iteration   8: 919.268 ns/op
+Iteration   9: 891.341 ns/op
+Iteration  10: 933.936 ns/op
+
+
+Result "com.runestone.expeval.perf.jmh.DynamicFunctionOverheadBenchmark.dynamicFunctionInsideSequence":
+  905.657 ±(99.9%) 36.651 ns/op [Average]
+  (min, avg, max) = (806.786, 905.657, 1032.970), stdev = 54.858
+  CI (99.9%): [869.005, 942.308] (assumes normal distribution)
+
+
+# JMH version: 1.35
+# VM version: JDK 21.0.10, Java HotSpot(TM) 64-Bit Server VM, 21.0.10+8-LTS-217
+# VM invoker: /home/marcelo/.sdkman/candidates/java/21.0.10-oracle/bin/java
+# VM options: -Xms1g -Xmx1g -Xms1g -Xmx1g
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 500 ms each
+# Measurement: 10 iterations, 500 ms each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.runestone.expeval.perf.jmh.DynamicFunctionOverheadBenchmark.dynamicVariableFunction
+
+# Run progress: 40.00% complete, ETA 00:01:13
+# Fork: 1 of 3
+# Warmup Iteration   1: 1522.115 ns/op
+# Warmup Iteration   2: 376.497 ns/op
+# Warmup Iteration   3: 289.650 ns/op
+# Warmup Iteration   4: 210.828 ns/op
+# Warmup Iteration   5: 210.195 ns/op
+Iteration   1: 216.830 ns/op
+Iteration   2: 218.545 ns/op
+Iteration   3: 217.193 ns/op
+Iteration   4: 229.234 ns/op
+Iteration   5: 209.793 ns/op
+Iteration   6: 215.173 ns/op
+Iteration   7: 212.581 ns/op
+Iteration   8: 216.306 ns/op
+Iteration   9: 213.918 ns/op
+Iteration  10: 207.888 ns/op
+
+# Run progress: 46.67% complete, ETA 00:01:05
+# Fork: 2 of 3
+# Warmup Iteration   1: 1116.744 ns/op
+# Warmup Iteration   2: 370.436 ns/op
+# Warmup Iteration   3: 282.417 ns/op
+# Warmup Iteration   4: 215.892 ns/op
+# Warmup Iteration   5: 216.381 ns/op
+Iteration   1: 216.240 ns/op
+Iteration   2: 214.992 ns/op
+Iteration   3: 216.208 ns/op
+Iteration   4: 217.216 ns/op
+Iteration   5: 211.479 ns/op
+Iteration   6: 223.061 ns/op
+Iteration   7: 239.498 ns/op
+Iteration   8: 222.869 ns/op
+Iteration   9: 219.707 ns/op
+Iteration  10: 219.016 ns/op
+
+# Run progress: 53.33% complete, ETA 00:00:56
+# Fork: 3 of 3
+# Warmup Iteration   1: 1142.376 ns/op
+# Warmup Iteration   2: 358.421 ns/op
+# Warmup Iteration   3: 256.259 ns/op
+# Warmup Iteration   4: 201.731 ns/op
+# Warmup Iteration   5: 204.176 ns/op
+Iteration   1: 199.927 ns/op
+Iteration   2: 203.394 ns/op
+Iteration   3: 205.255 ns/op
+Iteration   4: 206.693 ns/op
+Iteration   5: 205.658 ns/op
+Iteration   6: 202.854 ns/op
+Iteration   7: 200.715 ns/op
+Iteration   8: 204.220 ns/op
+Iteration   9: 206.122 ns/op
+Iteration  10: 208.804 ns/op
+
+
+Result "com.runestone.expeval.perf.jmh.DynamicFunctionOverheadBenchmark.dynamicVariableFunction":
+  213.380 ±(99.9%) 5.839 ns/op [Average]
+  (min, avg, max) = (199.927, 213.380, 239.498), stdev = 8.739
+  CI (99.9%): [207.541, 219.218] (assumes normal distribution)
+
+
+# JMH version: 1.35
+# VM version: JDK 21.0.10, Java HotSpot(TM) 64-Bit Server VM, 21.0.10+8-LTS-217
+# VM invoker: /home/marcelo/.sdkman/candidates/java/21.0.10-oracle/bin/java
+# VM options: -Xms1g -Xmx1g -Xms1g -Xmx1g
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 500 ms each
+# Measurement: 10 iterations, 500 ms each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.runestone.expeval.perf.jmh.DynamicFunctionOverheadBenchmark.nativeConstantMath
+
+# Run progress: 60.00% complete, ETA 00:00:48
+# Fork: 1 of 3
+# Warmup Iteration   1: 74.028 ns/op
+# Warmup Iteration   2: 31.020 ns/op
+# Warmup Iteration   3: 27.825 ns/op
+# Warmup Iteration   4: 26.961 ns/op
+# Warmup Iteration   5: 27.492 ns/op
+Iteration   1: 27.000 ns/op
+Iteration   2: 31.273 ns/op
+Iteration   3: 30.931 ns/op
+Iteration   4: 30.959 ns/op
+Iteration   5: 30.750 ns/op
+Iteration   6: 32.487 ns/op
+Iteration   7: 32.443 ns/op
+Iteration   8: 31.393 ns/op
+Iteration   9: 31.790 ns/op
+Iteration  10: 32.287 ns/op
+
+# Run progress: 66.67% complete, ETA 00:00:40
+# Fork: 2 of 3
+# Warmup Iteration   1: 76.872 ns/op
+# Warmup Iteration   2: 32.425 ns/op
+# Warmup Iteration   3: 26.637 ns/op
+# Warmup Iteration   4: 27.546 ns/op
+# Warmup Iteration   5: 26.395 ns/op
+Iteration   1: 26.934 ns/op
+Iteration   2: 32.166 ns/op
+Iteration   3: 31.479 ns/op
+Iteration   4: 31.758 ns/op
+Iteration   5: 31.596 ns/op
+Iteration   6: 31.197 ns/op
+Iteration   7: 31.631 ns/op
+Iteration   8: 31.479 ns/op
+Iteration   9: 32.638 ns/op
+Iteration  10: 31.198 ns/op
+
+# Run progress: 73.33% complete, ETA 00:00:32
+# Fork: 3 of 3
+# Warmup Iteration   1: 73.594 ns/op
+# Warmup Iteration   2: 29.934 ns/op
+# Warmup Iteration   3: 27.297 ns/op
+# Warmup Iteration   4: 26.198 ns/op
+# Warmup Iteration   5: 28.416 ns/op
+Iteration   1: 27.658 ns/op
+Iteration   2: 32.102 ns/op
+Iteration   3: 32.014 ns/op
+Iteration   4: 31.055 ns/op
+Iteration   5: 33.150 ns/op
+Iteration   6: 31.747 ns/op
+Iteration   7: 31.447 ns/op
+Iteration   8: 30.965 ns/op
+Iteration   9: 30.943 ns/op
+Iteration  10: 31.010 ns/op
+
+
+Result "com.runestone.expeval.perf.jmh.DynamicFunctionOverheadBenchmark.nativeConstantMath":
+  31.183 ±(99.9%) 0.986 ns/op [Average]
+  (min, avg, max) = (26.934, 31.183, 33.150), stdev = 1.475
+  CI (99.9%): [30.197, 32.168] (assumes normal distribution)
+
+
+# JMH version: 1.35
+# VM version: JDK 21.0.10, Java HotSpot(TM) 64-Bit Server VM, 21.0.10+8-LTS-217
+# VM invoker: /home/marcelo/.sdkman/candidates/java/21.0.10-oracle/bin/java
+# VM options: -Xms1g -Xmx1g -Xms1g -Xmx1g
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 500 ms each
+# Measurement: 10 iterations, 500 ms each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.runestone.expeval.perf.jmh.DynamicFunctionOverheadBenchmark.nativeVariableMath
+
+# Run progress: 80.00% complete, ETA 00:00:24
+# Fork: 1 of 3
+# Warmup Iteration   1: 426.939 ns/op
+# Warmup Iteration   2: 300.786 ns/op
+# Warmup Iteration   3: 204.885 ns/op
+# Warmup Iteration   4: 179.565 ns/op
+# Warmup Iteration   5: 180.725 ns/op
+Iteration   1: 179.410 ns/op
+Iteration   2: 176.750 ns/op
+Iteration   3: 170.272 ns/op
+Iteration   4: 169.475 ns/op
+Iteration   5: 168.660 ns/op
+Iteration   6: 178.651 ns/op
+Iteration   7: 178.674 ns/op
+Iteration   8: 180.472 ns/op
+Iteration   9: 170.813 ns/op
+Iteration  10: 173.220 ns/op
+
+# Run progress: 86.67% complete, ETA 00:00:16
+# Fork: 2 of 3
+# Warmup Iteration   1: 364.687 ns/op
+# Warmup Iteration   2: 294.772 ns/op
+# Warmup Iteration   3: 181.020 ns/op
+# Warmup Iteration   4: 177.184 ns/op
+# Warmup Iteration   5: 169.909 ns/op
+Iteration   1: 172.054 ns/op
+Iteration   2: 178.254 ns/op
+Iteration   3: 169.085 ns/op
+Iteration   4: 171.279 ns/op
+Iteration   5: 172.541 ns/op
+Iteration   6: 198.562 ns/op
+Iteration   7: 177.380 ns/op
+Iteration   8: 169.643 ns/op
+Iteration   9: 178.200 ns/op
+Iteration  10: 174.396 ns/op
+
+# Run progress: 93.33% complete, ETA 00:00:08
+# Fork: 3 of 3
+# Warmup Iteration   1: 347.875 ns/op
+# Warmup Iteration   2: 308.227 ns/op
+# Warmup Iteration   3: 185.982 ns/op
+# Warmup Iteration   4: 175.848 ns/op
+# Warmup Iteration   5: 172.881 ns/op
+Iteration   1: 176.374 ns/op
+Iteration   2: 175.003 ns/op
+Iteration   3: 174.595 ns/op
+Iteration   4: 175.161 ns/op
+Iteration   5: 174.012 ns/op
+Iteration   6: 173.805 ns/op
+Iteration   7: 176.481 ns/op
+Iteration   8: 173.730 ns/op
+Iteration   9: 172.589 ns/op
+Iteration  10: 176.895 ns/op
+
+
+Result "com.runestone.expeval.perf.jmh.DynamicFunctionOverheadBenchmark.nativeVariableMath":
+  175.215 ±(99.9%) 3.688 ns/op [Average]
+  (min, avg, max) = (168.660, 175.215, 198.562), stdev = 5.520
+  CI (99.9%): [171.527, 178.903] (assumes normal distribution)
+
+
+# Run complete. Total time: 00:02:01
+
+REMEMBER: The numbers below are just data. To gain reusable insights, you need to follow up on
+why the numbers are the way they are. Use profilers (see -prof, -lprof), design factorial
+experiments, perform baseline and negative tests that provide experimental control, make sure
+the benchmarking environment is safe on JVM/OS/HW level, ask for reviews from the domain experts.
+Do not assume the numbers tell you what you want them to tell.
+
+NOTE: Current JVM experimentally supports Compiler Blackholes, and they are in use. Please exercise
+extra caution when trusting the results, look into the generated code to check the benchmark still
+works, and factor in a small probability of new VM bugs. Additionally, while comparisons between
+different JVMs are already problematic, the performance difference caused by different Blackhole
+modes can be very significant. Please make sure you use the consistent Blackhole mode for comparisons.
+
+Benchmark                                                       Mode  Cnt    Score    Error  Units
+DynamicFunctionOverheadBenchmark.dynamicConstantFunction        avgt   30  103.196 ±  4.753  ns/op
+DynamicFunctionOverheadBenchmark.dynamicFunctionInsideSequence  avgt   30  905.657 ± 36.651  ns/op
+DynamicFunctionOverheadBenchmark.dynamicVariableFunction        avgt   30  213.380 ±  5.839  ns/op
+DynamicFunctionOverheadBenchmark.nativeConstantMath             avgt   30   31.183 ±  0.986  ns/op
+DynamicFunctionOverheadBenchmark.nativeVariableMath             avgt   30  175.215 ±  3.688  ns/op
+
+Benchmark result is saved to target/jmh-dynamic-overhead-after.json

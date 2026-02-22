@@ -1,5 +1,8 @@
 # Template de Registro (Append-Only)
 
+> Arquivo de destino obrigatorio: `<modulo>/docs/perf/performance-history.md`
+> Em multi-modulo, usar sempre o submodulo alvo (ex.: `expression-evaluator/docs/perf/performance-history.md`).
+
 ```md
 ## Experimento PERF-XXX
 - Data: YYYY-MM-DD
@@ -18,8 +21,10 @@
 ### Protocolo de medicao
 - JVM:
 - JMH:
+- Benchmark class (src/test/java):
+- Package de benchmark:
 - Parametros:
-  - `-wi ... -i ... -w ... -r ... -f ... -tu ...`
+  - `-wi ... -i ... -w ... -r ... -f ... -tu ns`
   - `-jvmArgs '...'`
 - Comando executado:
 ```bash
@@ -27,9 +32,9 @@
 ```
 
 ### Resultado
-| Benchmark | Before (us/op) | After (us/op) | Delta |
-|---|---:|---:|---:|
-| ... | ... | ... | ... |
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| ... | ... | ... | ... | ... |
 
 ### Decisao
 - [ ] Aceitar
@@ -50,7 +55,8 @@
 2.
 ```
 
-## Convenções
-- Manter histórico append-only.
-- Não sobrescrever resultados anteriores.
+## Convencoes
+- Manter historico append-only.
+- Nao sobrescrever resultados anteriores.
 - Sempre referenciar artefatos JSON de benchmark.
+- Sempre registrar `Melhoria (%)` baseada em comparacao de `ns/op`.

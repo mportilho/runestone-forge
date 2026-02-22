@@ -7,16 +7,18 @@ description: Conduzir análise de performance e qualidade em mudanças Java com 
 
 ## Overview
 
-Aplicar um fluxo padronizado para melhorar código Java com segurança de comportamento e validação de performance por JMH. Produzir decisão objetiva baseada em dados e registrar o experimento em formato append-only.
+Aplicar um fluxo padronizado para melhorar código Java com segurança de comportamento e validacao de performance obrigatoriamente por JMH. Produzir decisao objetiva baseada em dados e registrar o experimento em formato append-only.
 
 ## Workflow Operacional
 
 1. Confirmar escopo e hipótese
 - Delimitar o caminho quente, tipo de carga e risco de regressão.
-- Definir métrica principal por cenário: latência (`us/op`), throughput, alocação ou combinação.
+- Definir metrica principal por cenario em latencia (`ns/op`) e, quando aplicavel, throughput/alocacao como apoio.
 - Definir baseline técnico: commit, branch ou estado da árvore.
 
 2. Reproduzir e medir baseline
+- Garantir que o modulo possui JMH habilitado (dependencias e annotation processor). Sem JMH, a execucao fica bloqueada ate configurar.
+- Criar/ajustar benchmark em `src/test/java` em package dedicado de performance (ex.: `...perf.jmh...`).
 - Compilar e validar testes existentes relevantes.
 - Rodar JMH com parâmetros fixos e salvar JSON de baseline.
 - Confirmar que o benchmark representa o risco real e não só micro-op isolada.
@@ -35,7 +37,8 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 5. Medir after no mesmo protocolo
 - Rodar os mesmos cenários JMH com parâmetros idênticos.
 - Salvar artefato JSON after e capturar score + erro.
-- Calcular deltas absolutos e percentuais.
+- Calcular deltas absolutos e percentuais em `ns/op`.
+- Reportar sempre `Melhoria (%) em ns/op` usando: `((before_ns_op - after_ns_op) / before_ns_op) * 100`.
 
 6. Decidir com critérios explícitos
 - Aceitar: ganho relevante ou regressão desprezível com benefício estrutural claro.
@@ -44,6 +47,8 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 - Se inferir causa, declarar explicitamente como inferência.
 
 7. Registrar experimento e evidências
+- Criar `docs/perf/performance-history.md` quando nao existir, sempre relativo ao modulo alvo.
+- Em projeto multi-modulo, criar no submodulo onde o benchmark foi executado (ex.: `expression-evaluator/docs/perf/performance-history.md`), nunca na raiz agregadora.
 - Atualizar histórico append-only com:
 - hipótese;
 - mudanças;
@@ -57,10 +62,13 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 
 - Não concluir sem:
 - teste funcional relevante passando;
-- benchmark before/after comparável;
+- benchmark before/after comparavel com JMH;
+- benchmark localizado em `src/test/java` com package dedicado de performance;
+- registro em `docs/perf/performance-history.md` do modulo alvo;
+- tabela de resultados contendo `before ns/op`, `after ns/op` e `Melhoria (%)`;
 - decisão final documentada;
 - lista de atividades executadas e limitações.
-- Se benchmark falhar por ambiente, declarar bloqueio e impacto na confiança da decisão.
+- Se benchmark falhar por ambiente ou JMH nao estiver configurado, declarar bloqueio e impacto na confianca da decisao.
 - Se houver risco de concorrência em medições (ex.: build/annotation processing em paralelo), rodar medições de forma sequencial e limpar artefatos.
 
 ## Formato de Entrega Esperado
@@ -75,12 +83,14 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 ## Referências da Skill
 
 - Para comandos e desenho de benchmark: `references/jmh-playbook.md`
-- Para template de histórico append-only: `references/performance-history-template.md`
+- Para template de historico append-only em `docs/perf/performance-history.md` do modulo alvo: `references/performance-history-template.md`
 - Para checklist de execução e evidência: `references/quality-activities-checklist.md`
 
 ## Anti-Patterns
 
 - Concluir com opinião sem benchmark comparável.
+- Medir performance sem JMH ou com benchmark ad-hoc fora do fluxo da skill.
+- Criar benchmark fora de `src/test/java` ou sem package dedicado de performance.
 - Misturar múltiplas otimizações sem isolamento de impacto.
 - Aceitar regressão de latência sem justificativa explícita.
 - Omitir comando executado e artefato de resultado.

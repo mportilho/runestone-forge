@@ -94,7 +94,11 @@ public class ExpressionContext {
      */
     public OperationCallSite findFunction(String key) {
         initializeFunctionsMap();
-        return functions.getOrDefault(key, OperationCallSiteExtensions.getDefaultOperationCallSites().get(key));
+        OperationCallSite function = functions.get(key);
+        if (function != null) {
+            return function;
+        }
+        return OperationCallSiteExtensions.getDefaultOperationCallSites().get(key);
     }
 
     /**
