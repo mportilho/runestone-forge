@@ -89,4 +89,38 @@ public class TestOperationCallSite {
         Assertions.assertThat(callSite.<Float>call(context, new Object[]{new float[]{1, 2, 3, 4}}, cs::convert)).isEqualTo(4);
     }
 
+    @Test
+    void testMethodNameFilterShouldIncludeOnlyRequestedMethods() {
+        var callSites = OperationCallSiteFactory.createLambdaCallSites(TestCallSiteProvider.class, "sum");
+
+        Assertions.assertThat(callSites).containsKey("sum_2");
+        Assertions.assertThat(callSites).doesNotContainKey("multiply_2");
+    }
+
+    @Test
+    void testClassProviderShouldExposeOnlyStaticMethods() {
+        var callSites = OperationCallSiteFactory.createLambdaCallSites(TestCallSiteProvider.class);
+
+        Assertions.assertThat(callSites).containsKey("sum_2");
+        Assertions.assertThat(callSites).doesNotContainKey("multiply_2");
+    }
+
+    @Test
+    void testInstanceProviderShouldExposeStaticAndInstanceMethods() {
+        var callSites = OperationCallSiteFactory.createLambdaCallSites(new TestCallSiteProvider());
+
+        Assertions.assertThat(callSites).containsKey("sum_2");
+        Assertions.assertThat(callSites).containsKey("multiply_2");
+    }
+
+    public static class TestCallSiteProvider {
+        public static BigDecimal sum(BigDecimal a, BigDecimal b) {
+            return a.add(b);
+        }
+
+        public BigDecimal multiply(BigDecimal a, BigDecimal b) {
+            return a.multiply(b);
+        }
+    }
+
 }

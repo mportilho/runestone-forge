@@ -180,3 +180,90 @@ Media dos cenarios:
 ### Riscos residuais
 1. A desabilitacao de cache no ramo da variavel de sequencia reduz potencial de cache em expressoes que dependam desse ramo.
 2. Benchmarks refletem uma unica maquina/JVM; ideal repetir em ambiente de CI de performance.
+
+## Experimento PERF-2026-02-22-EXPEVAL-FUNCTION-REGISTRATION-REFLECTION
+- Data: 2026-02-22
+- Objetivo: reduzir custo de registro de funcoes via reflexao (`putFunctionsFromProvider`) e custo de lookup padrao de funcoes.
+- Baseline commit/estado: `HEAD 91448cd` (baseline em workspace temporario com mesmo benchmark JMH).
+- Commit/estado testado: working tree atual com cache de templates/callsites e ajustes de lookup.
+
+### Hipotese
+1. Cachear templates por classe e callsites estaticos reduz drasticamente custo de criacao de callsites por request.
+2. Evitar inicializacao desnecessaria do mapa de funcoes e lock no path de defaults reduz custo de lookup em runtime.
+
+### Mudancas aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/support/callsite/OperationCallSiteFactory.java`: substituicao de introspecao repetida por cache de templates (`ClassValue`) e cache de callsites para providers `Class`.
+- `expression-evaluator/src/main/java/com/runestone/expeval/expression/ExpressionContext.java`: lookup de funcao sem inicializar mapa vazio, uso de defaults via holder e validacao de colisao sem `findFunction` repetido.
+- `expression-evaluator/src/main/java/com/runestone/expeval/support/callsite/extensions/OperationCallSiteExtensions.java`: lazy init lock-free via holder idiom.
+- `expression-evaluator/src/test/java/com/runestone/expeval/expression/TestFunctionProviderRegistration.java`: cobertura funcional de registro por provider (instancia/static/colisoes).
+- `expression-evaluator/src/test/java/com/runestone/expeval/support/callsite/TestOperationCallSite.java`: cobertura de filtro e exposicao de metodos no factory.
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/FunctionRegistrationOverheadBenchmark.java`: benchmark JMH dedicado em `src/test/java` no package `com.runestone.expeval.perf.jmh`.
+
+### Protocolo de medicao
+- JVM: OpenJDK 21.0.10
+- JMH: 1.35
+- Benchmark class: `com.runestone.expeval.perf.jmh.FunctionRegistrationOverheadBenchmark`
+- Parametros: `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns -jvmArgs '-Xms1g -Xmx1g'`
+- Comando before:
+```bash
+mvn -f "$BEFORE_DIR/pom.xml" -pl expression-evaluator -DskipTests test-compile -q
+cd "$BEFORE_DIR/expression-evaluator"
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*FunctionRegistrationOverheadBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -rf json -rff target/jmh-function-registration-before.json -foe true
+```
+- Comando after:
+```bash
+mvn -pl expression-evaluator -Dtest=TestFunctionProviderRegistration,TestOperationCallSite,TestFunctionOperations test -q
+cd expression-evaluator
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*FunctionRegistrationOverheadBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -rf json -rff target/jmh-function-registration-after.json -foe true
+```
+
+### Resultado
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| createCallSitesFromProviderClass | 144551.465 | 66.221 | -144485.244 | +99.95% |
+| createCallSitesFromProviderInstance | 197274.384 | 143.266 | -197131.118 | +99.93% |
+| defaultFunctionLookup | 11.538 | 9.455 | -2.083 | +18.05% |
+| putFunctionsFromProviderPerRequest | 198226.670 | 338.870 | -197887.800 | +99.83% |
+
+Media dos cenarios:
+- Before medio: 135016.014 ns/op
+- After medio: 139.453 ns/op
+- Melhoria media: +99.90%
+
+### Decisao
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura tecnica
+1. O maior ganho ocorreu no setup por request (`createCallSitesFromProviderClass` e `putFunctionsFromProviderPerRequest`) com reducao expressiva do custo em ns/op.
+2. O lookup de funcao padrao ficou mais leve (`defaultFunctionLookup`) com remocao de lock/check repetido.
+
+### Atividades executadas
+1. Adicao de testes unitarios para cenarios de registro/callsite antes da implementacao.
+2. Implementacao das otimizações de cache/lazy-init.
+3. Execucao dos testes direcionados e da suite completa do modulo.
+4. Medicao JMH before em baseline temporario.
+5. Medicao JMH after no estado atual.
+6. Consolidacao de artefatos e comparacao em markdown.
+
+### Artefatos
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-registration-overhead-before.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-registration-overhead-after.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-registration-overhead-before.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-registration-overhead-after.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-registration-overhead-comparison.md`
+
+### Riscos residuais
+1. O cache de templates por classe aumenta uso de memoria proporcional a classes de providers diferentes utilizadas.
+2. Benchmarks refletem uma unica maquina/JVM; recomenda-se repeticao em CI de performance.

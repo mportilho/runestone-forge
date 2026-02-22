@@ -1,0 +1,313 @@
+# JMH version: 1.35
+# VM version: JDK 21.0.10, Java HotSpot(TM) 64-Bit Server VM, 21.0.10+8-LTS-217
+# VM invoker: /home/marcelo/.sdkman/candidates/java/21.0.10-oracle/bin/java
+# VM options: -Xms1g -Xmx1g -Xms1g -Xmx1g
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 500 ms each
+# Measurement: 10 iterations, 500 ms each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.runestone.expeval.perf.jmh.FunctionRegistrationOverheadBenchmark.createCallSitesFromProviderClass
+
+# Run progress: 0.00% complete, ETA 00:01:30
+# Fork: 1 of 3
+# Warmup Iteration   1: 169.573 ns/op
+# Warmup Iteration   2: 97.958 ns/op
+# Warmup Iteration   3: 68.288 ns/op
+# Warmup Iteration   4: 67.284 ns/op
+# Warmup Iteration   5: 67.347 ns/op
+Iteration   1: 66.347 ns/op
+Iteration   2: 66.290 ns/op
+Iteration   3: 67.672 ns/op
+Iteration   4: 67.964 ns/op
+Iteration   5: 68.220 ns/op
+Iteration   6: 67.494 ns/op
+Iteration   7: 65.374 ns/op
+Iteration   8: 70.081 ns/op
+Iteration   9: 66.281 ns/op
+Iteration  10: 65.833 ns/op
+
+# Run progress: 8.33% complete, ETA 00:01:27
+# Fork: 2 of 3
+# Warmup Iteration   1: 157.288 ns/op
+# Warmup Iteration   2: 96.819 ns/op
+# Warmup Iteration   3: 64.449 ns/op
+# Warmup Iteration   4: 63.375 ns/op
+# Warmup Iteration   5: 62.352 ns/op
+Iteration   1: 63.560 ns/op
+Iteration   2: 64.294 ns/op
+Iteration   3: 66.915 ns/op
+Iteration   4: 63.358 ns/op
+Iteration   5: 62.429 ns/op
+Iteration   6: 66.294 ns/op
+Iteration   7: 71.670 ns/op
+Iteration   8: 72.987 ns/op
+Iteration   9: 76.598 ns/op
+Iteration  10: 71.124 ns/op
+
+# Run progress: 16.67% complete, ETA 00:01:18
+# Fork: 3 of 3
+# Warmup Iteration   1: 153.389 ns/op
+# Warmup Iteration   2: 88.298 ns/op
+# Warmup Iteration   3: 63.151 ns/op
+# Warmup Iteration   4: 62.537 ns/op
+# Warmup Iteration   5: 63.559 ns/op
+Iteration   1: 62.938 ns/op
+Iteration   2: 63.790 ns/op
+Iteration   3: 63.579 ns/op
+Iteration   4: 65.071 ns/op
+Iteration   5: 63.332 ns/op
+Iteration   6: 63.071 ns/op
+Iteration   7: 63.012 ns/op
+Iteration   8: 62.592 ns/op
+Iteration   9: 63.251 ns/op
+Iteration  10: 65.213 ns/op
+
+
+Result "com.runestone.expeval.perf.jmh.FunctionRegistrationOverheadBenchmark.createCallSitesFromProviderClass":
+  66.221 ±(99.9%) 2.302 ns/op [Average]
+  (min, avg, max) = (62.429, 66.221, 76.598), stdev = 3.445
+  CI (99.9%): [63.920, 68.523] (assumes normal distribution)
+
+
+# JMH version: 1.35
+# VM version: JDK 21.0.10, Java HotSpot(TM) 64-Bit Server VM, 21.0.10+8-LTS-217
+# VM invoker: /home/marcelo/.sdkman/candidates/java/21.0.10-oracle/bin/java
+# VM options: -Xms1g -Xmx1g -Xms1g -Xmx1g
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 500 ms each
+# Measurement: 10 iterations, 500 ms each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.runestone.expeval.perf.jmh.FunctionRegistrationOverheadBenchmark.createCallSitesFromProviderInstance
+
+# Run progress: 25.00% complete, ETA 00:01:10
+# Fork: 1 of 3
+# Warmup Iteration   1: 384.843 ns/op
+# Warmup Iteration   2: 178.624 ns/op
+# Warmup Iteration   3: 148.310 ns/op
+# Warmup Iteration   4: 137.639 ns/op
+# Warmup Iteration   5: 143.389 ns/op
+Iteration   1: 136.993 ns/op
+Iteration   2: 145.829 ns/op
+Iteration   3: 153.439 ns/op
+Iteration   4: 138.326 ns/op
+Iteration   5: 138.537 ns/op
+Iteration   6: 140.445 ns/op
+Iteration   7: 134.445 ns/op
+Iteration   8: 143.649 ns/op
+Iteration   9: 135.870 ns/op
+Iteration  10: 138.881 ns/op
+
+# Run progress: 33.33% complete, ETA 00:01:03
+# Fork: 2 of 3
+# Warmup Iteration   1: 432.496 ns/op
+# Warmup Iteration   2: 213.832 ns/op
+# Warmup Iteration   3: 146.964 ns/op
+# Warmup Iteration   4: 145.727 ns/op
+# Warmup Iteration   5: 146.289 ns/op
+Iteration   1: 147.638 ns/op
+Iteration   2: 146.613 ns/op
+Iteration   3: 146.113 ns/op
+Iteration   4: 145.135 ns/op
+Iteration   5: 144.547 ns/op
+Iteration   6: 137.261 ns/op
+Iteration   7: 177.127 ns/op
+Iteration   8: 158.007 ns/op
+Iteration   9: 140.345 ns/op
+Iteration  10: 140.106 ns/op
+
+# Run progress: 41.67% complete, ETA 00:00:55
+# Fork: 3 of 3
+# Warmup Iteration   1: 394.575 ns/op
+# Warmup Iteration   2: 177.802 ns/op
+# Warmup Iteration   3: 142.756 ns/op
+# Warmup Iteration   4: 142.753 ns/op
+# Warmup Iteration   5: 142.558 ns/op
+Iteration   1: 140.062 ns/op
+Iteration   2: 142.341 ns/op
+Iteration   3: 139.507 ns/op
+Iteration   4: 137.837 ns/op
+Iteration   5: 145.881 ns/op
+Iteration   6: 143.011 ns/op
+Iteration   7: 138.911 ns/op
+Iteration   8: 135.504 ns/op
+Iteration   9: 137.667 ns/op
+Iteration  10: 147.956 ns/op
+
+
+Result "com.runestone.expeval.perf.jmh.FunctionRegistrationOverheadBenchmark.createCallSitesFromProviderInstance":
+  143.266 ±(99.9%) 5.565 ns/op [Average]
+  (min, avg, max) = (134.445, 143.266, 177.127), stdev = 8.330
+  CI (99.9%): [137.701, 148.831] (assumes normal distribution)
+
+
+# JMH version: 1.35
+# VM version: JDK 21.0.10, Java HotSpot(TM) 64-Bit Server VM, 21.0.10+8-LTS-217
+# VM invoker: /home/marcelo/.sdkman/candidates/java/21.0.10-oracle/bin/java
+# VM options: -Xms1g -Xmx1g -Xms1g -Xmx1g
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 500 ms each
+# Measurement: 10 iterations, 500 ms each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.runestone.expeval.perf.jmh.FunctionRegistrationOverheadBenchmark.defaultFunctionLookup
+
+# Run progress: 50.00% complete, ETA 00:00:47
+# Fork: 1 of 3
+# Warmup Iteration   1: 11.396 ns/op
+# Warmup Iteration   2: 10.454 ns/op
+# Warmup Iteration   3: 9.430 ns/op
+# Warmup Iteration   4: 9.737 ns/op
+# Warmup Iteration   5: 9.524 ns/op
+Iteration   1: 9.360 ns/op
+Iteration   2: 9.352 ns/op
+Iteration   3: 9.506 ns/op
+Iteration   4: 9.312 ns/op
+Iteration   5: 9.426 ns/op
+Iteration   6: 9.677 ns/op
+Iteration   7: 9.662 ns/op
+Iteration   8: 9.507 ns/op
+Iteration   9: 9.258 ns/op
+Iteration  10: 9.505 ns/op
+
+# Run progress: 58.33% complete, ETA 00:00:39
+# Fork: 2 of 3
+# Warmup Iteration   1: 11.589 ns/op
+# Warmup Iteration   2: 10.426 ns/op
+# Warmup Iteration   3: 9.687 ns/op
+# Warmup Iteration   4: 9.754 ns/op
+# Warmup Iteration   5: 10.252 ns/op
+Iteration   1: 9.721 ns/op
+Iteration   2: 9.486 ns/op
+Iteration   3: 9.502 ns/op
+Iteration   4: 9.312 ns/op
+Iteration   5: 9.279 ns/op
+Iteration   6: 9.249 ns/op
+Iteration   7: 9.350 ns/op
+Iteration   8: 9.461 ns/op
+Iteration   9: 9.443 ns/op
+Iteration  10: 9.329 ns/op
+
+# Run progress: 66.67% complete, ETA 00:00:31
+# Fork: 3 of 3
+# Warmup Iteration   1: 11.305 ns/op
+# Warmup Iteration   2: 11.879 ns/op
+# Warmup Iteration   3: 10.710 ns/op
+# Warmup Iteration   4: 10.843 ns/op
+# Warmup Iteration   5: 10.259 ns/op
+Iteration   1: 9.284 ns/op
+Iteration   2: 9.488 ns/op
+Iteration   3: 9.785 ns/op
+Iteration   4: 9.339 ns/op
+Iteration   5: 9.414 ns/op
+Iteration   6: 9.773 ns/op
+Iteration   7: 9.448 ns/op
+Iteration   8: 9.323 ns/op
+Iteration   9: 9.669 ns/op
+Iteration  10: 9.429 ns/op
+
+
+Result "com.runestone.expeval.perf.jmh.FunctionRegistrationOverheadBenchmark.defaultFunctionLookup":
+  9.455 ±(99.9%) 0.103 ns/op [Average]
+  (min, avg, max) = (9.249, 9.455, 9.785), stdev = 0.155
+  CI (99.9%): [9.352, 9.558] (assumes normal distribution)
+
+
+# JMH version: 1.35
+# VM version: JDK 21.0.10, Java HotSpot(TM) 64-Bit Server VM, 21.0.10+8-LTS-217
+# VM invoker: /home/marcelo/.sdkman/candidates/java/21.0.10-oracle/bin/java
+# VM options: -Xms1g -Xmx1g -Xms1g -Xmx1g
+# Blackhole mode: compiler (auto-detected, use -Djmh.blackhole.autoDetect=false to disable)
+# Warmup: 5 iterations, 500 ms each
+# Measurement: 10 iterations, 500 ms each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: com.runestone.expeval.perf.jmh.FunctionRegistrationOverheadBenchmark.putFunctionsFromProviderPerRequest
+
+# Run progress: 75.00% complete, ETA 00:00:23
+# Fork: 1 of 3
+# Warmup Iteration   1: 1256.799 ns/op
+# Warmup Iteration   2: 553.376 ns/op
+# Warmup Iteration   3: 333.733 ns/op
+# Warmup Iteration   4: 347.233 ns/op
+# Warmup Iteration   5: 345.086 ns/op
+Iteration   1: 340.450 ns/op
+Iteration   2: 333.604 ns/op
+Iteration   3: 341.721 ns/op
+Iteration   4: 334.219 ns/op
+Iteration   5: 350.408 ns/op
+Iteration   6: 335.864 ns/op
+Iteration   7: 429.590 ns/op
+Iteration   8: 362.247 ns/op
+Iteration   9: 329.268 ns/op
+Iteration  10: 339.851 ns/op
+
+# Run progress: 83.33% complete, ETA 00:00:15
+# Fork: 2 of 3
+# Warmup Iteration   1: 1207.267 ns/op
+# Warmup Iteration   2: 594.739 ns/op
+# Warmup Iteration   3: 330.799 ns/op
+# Warmup Iteration   4: 332.146 ns/op
+# Warmup Iteration   5: 341.319 ns/op
+Iteration   1: 326.387 ns/op
+Iteration   2: 334.313 ns/op
+Iteration   3: 341.640 ns/op
+Iteration   4: 334.932 ns/op
+Iteration   5: 332.806 ns/op
+Iteration   6: 328.383 ns/op
+Iteration   7: 324.435 ns/op
+Iteration   8: 327.462 ns/op
+Iteration   9: 341.394 ns/op
+Iteration  10: 329.881 ns/op
+
+# Run progress: 91.67% complete, ETA 00:00:07
+# Fork: 3 of 3
+# Warmup Iteration   1: 1230.084 ns/op
+# Warmup Iteration   2: 523.600 ns/op
+# Warmup Iteration   3: 333.170 ns/op
+# Warmup Iteration   4: 330.394 ns/op
+# Warmup Iteration   5: 330.708 ns/op
+Iteration   1: 369.093 ns/op
+Iteration   2: 327.860 ns/op
+Iteration   3: 321.284 ns/op
+Iteration   4: 326.882 ns/op
+Iteration   5: 325.074 ns/op
+Iteration   6: 343.992 ns/op
+Iteration   7: 342.457 ns/op
+Iteration   8: 329.000 ns/op
+Iteration   9: 324.110 ns/op
+Iteration  10: 337.501 ns/op
+
+
+Result "com.runestone.expeval.perf.jmh.FunctionRegistrationOverheadBenchmark.putFunctionsFromProviderPerRequest":
+  338.870 ±(99.9%) 13.522 ns/op [Average]
+  (min, avg, max) = (321.284, 338.870, 429.590), stdev = 20.238
+  CI (99.9%): [325.349, 352.392] (assumes normal distribution)
+
+
+# Run complete. Total time: 00:01:34
+
+REMEMBER: The numbers below are just data. To gain reusable insights, you need to follow up on
+why the numbers are the way they are. Use profilers (see -prof, -lprof), design factorial
+experiments, perform baseline and negative tests that provide experimental control, make sure
+the benchmarking environment is safe on JVM/OS/HW level, ask for reviews from the domain experts.
+Do not assume the numbers tell you what you want them to tell.
+
+NOTE: Current JVM experimentally supports Compiler Blackholes, and they are in use. Please exercise
+extra caution when trusting the results, look into the generated code to check the benchmark still
+works, and factor in a small probability of new VM bugs. Additionally, while comparisons between
+different JVMs are already problematic, the performance difference caused by different Blackhole
+modes can be very significant. Please make sure you use the consistent Blackhole mode for comparisons.
+
+Benchmark                                                                  Mode  Cnt    Score    Error  Units
+FunctionRegistrationOverheadBenchmark.createCallSitesFromProviderClass     avgt   30   66.221 ±  2.302  ns/op
+FunctionRegistrationOverheadBenchmark.createCallSitesFromProviderInstance  avgt   30  143.266 ±  5.565  ns/op
+FunctionRegistrationOverheadBenchmark.defaultFunctionLookup                avgt   30    9.455 ±  0.103  ns/op
+FunctionRegistrationOverheadBenchmark.putFunctionsFromProviderPerRequest   avgt   30  338.870 ± 13.522  ns/op
+
+Benchmark result is saved to target/jmh-function-registration-after.json
