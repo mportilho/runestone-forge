@@ -1,20 +1,20 @@
 # JMH Playbook
 
 ## Objetivo
-Padronizar medições antes/depois para comparação confiável.
+Padronizar medições before/after para comparação confiável.
 
-## Pre-condicoes obrigatorias
-- O modulo deve ter JMH habilitado.
-- Dependencias minimas esperadas no `pom.xml`:
+## Pré-condições obrigatórias
+- O módulo deve ter JMH habilitado.
+- Dependências mínimas esperadas no `pom.xml`:
   - `org.openjdk.jmh:jmh-core`
   - `org.openjdk.jmh:jmh-generator-annprocess`
 - Benchmarks devem ser criados em `src/test/java` e em package dedicado de performance.
-- Convencao recomendada:
+- Convenção recomendada:
   - caminho: `src/test/java/<base_package>/perf/jmh/<Nome>Benchmark.java`
   - package: `<base_package>.perf.jmh`
-- Historico de performance deve ficar no modulo alvo:
-  - `<modulo>/docs/perf/performance-history.md`
-  - Em multi-modulo, nao usar a raiz agregadora para historico de submodulo.
+- Histórico de performance deve ficar no módulo alvo:
+  - `<módulo>/docs/perf/performance-history.md`
+  - Em multi-módulo, não usar a raiz agregadora para histórico de submódulo.
 
 ## Protocolo Base
 - JVM: registrar versão exata (`java -version`)
@@ -24,16 +24,15 @@ Padronizar medições antes/depois para comparação confiável.
   - `-jvmArgs '-Xms1g -Xmx1g'`
 - Exportar JSON (recomendado):
   - `-rf json -rff <arquivo>.json`
-- Profiling de GC (condicional):
-  - usar `-prof gc` quando houver suspeita de regressao de alocacao/GC, foco em throughput sob pressao de memoria, ou hot path alocador.
-  - gerar arquivo dedicado para GC (ex.: `target/<resultado>-gc.json`) quando necessário.
+- Medições adicionais:
+  - executar somente quando forem explicitamente solicitadas.
 - Persistência:
-  - nao e obrigatório copiar resultados para `docs/perf/artifacts`.
-  - manter evidencias suficientes no histórico (comandos + tabelas + métricas).
+  - não é obrigatório copiar resultados para `docs/perf/artifacts`.
+  - manter evidências suficientes no histórico (comandos + tabelas + métricas).
 
 ## Comando (Maven + classpath de teste)
 ```bash
-cd <modulo>
+cd <módulo>
 DEP_CP="$(mvn -DincludeScope=test -DskipTests dependency:build-classpath -Dmdep.outputAbsoluteArtifactFilename=true -Dmdep.path | sed -n '/Dependencies classpath:/{n;p;}')"
 CP="target/test-classes:target/classes:${DEP_CP}"
 java -cp "$CP" org.openjdk.jmh.Main '<RegexDoBenchmark>' \
@@ -42,37 +41,19 @@ java -cp "$CP" org.openjdk.jmh.Main '<RegexDoBenchmark>' \
   -rf json -rff target/<resultado>.json -foe true
 ```
 
-## Comando com GC Profiler (quando aplicavel)
-```bash
-cd <modulo>
-DEP_CP="$(mvn -DincludeScope=test -DskipTests dependency:build-classpath -Dmdep.outputAbsoluteArtifactFilename=true -Dmdep.path | sed -n '/Dependencies classpath:/{n;p;}')"
-CP="target/test-classes:target/classes:${DEP_CP}"
-java -cp "$CP" org.openjdk.jmh.Main '<RegexDoBenchmark>' \
-  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
-  -jvmArgs '-Xms1g -Xmx1g' \
-  -prof gc \
-  -rf json -rff target/<resultado>-gc.json -foe true
-```
-
 ## Regras de Comparabilidade
 - Usar os mesmos cenários, parâmetros e máquina para before/after.
 - Evitar processos de build/test em paralelo durante geração de classes JMH.
 - Se limpar `target`, recomputar before/after no mesmo protocolo.
 - Não comparar resultados com blackhole/mode diferentes.
-- Nao comparar resultados com unidades diferentes de `ns/op`.
-- Se usar `-prof gc`, manter a mesma configuração before/after e comparar o mesmo conjunto de métricas GC.
+- Não comparar resultados com unidades diferentes de `ns/op`.
 
 ## Leitura de Resultado
 - Reportar no mínimo:
   - `Score`, `Error`, `Units`
   - `before ns/op`, `after ns/op`, `delta ns/op`, `Melhoria (%)`
-- Formula obrigatoria para melhoria percentual:
+- Fórmula obrigatória para melhoria percentual:
   - `Melhoria (%) = ((before_ns_op - after_ns_op) / before_ns_op) * 100`
 - Em regressões:
   - declarar magnitude absoluta e percentual em `ns/op`
   - decidir com base no trade-off (latência vs benefício estrutural)
-- Quando `-prof gc` estiver ativo, reportar também:
-  - `gc.alloc.rate.norm` (B/op)
-  - `gc.alloc.rate` (MB/s)
-  - `gc.count`
-  - `gc.time` (ms)

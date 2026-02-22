@@ -13,16 +13,15 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 
 1. Confirmar escopo e hipótese
 - Delimitar o caminho quente, tipo de carga e risco de regressão.
-- Definir métrica principal por cenário em latência (`ns/op`) e, quando aplicável, throughput, alocacao e sinais de GC via `-prof gc`.
+- Definir métrica principal por cenário em latência (`ns/op`) e, quando aplicável, throughput e alocação.
 - Definir baseline técnico: commit, branch ou estado da árvore.
 
 2. Reproduzir e medir baseline
-- Garantir que o modulo possui JMH habilitado (dependências e annotation processor). Sem JMH, a execução fica bloqueada ate configurar.
+- Garantir que o módulo possui JMH habilitado (dependências e annotation processor). Sem JMH, a execução fica bloqueada até configurar.
 - Antes de implementar a melhoria de desempenho, mapear os cenários da correção e garantir testes unitários com cobertura funcional suficiente para cada cenário.
 - Compilar e validar os testes funcionais relevantes.
 - Criar/ajustar benchmark em `src/test/java` em package dedicado de performance (ex.: `...perf.jmh...`).
 - Rodar JMH com parâmetros fixos e registrar o resultado before (JSON é recomendado, mas saída texto também é válida).
-- Quando cabível (suspeita de regressão de alocação/GC ou hot path sensível a memoria), rodar baseline adicional com `-prof gc` e registrar o resultado dedicado.
 - Confirmar que o benchmark representa o risco real e não só micro-op isolada.
 
 3. Implementar melhoria mínima segura
@@ -35,14 +34,13 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 - comportamento nominal;
 - casos de borda da otimização;
 - invariantes de compatibilidade esperadas.
-- Para cada cenário de correção de desempenho, usar cobertura minima de alta confiança antes da implementação: ao menos um caso nominal do hot path, um caso de borda e um caso de regressao/invariante (quando aplicável, justificar ausências).
-- Apos implementar, reexecutar e complementar os testes conforme necessário para manter a confiança funcional.
-- Evitar linguagem absoluta: o objetivo dos testes e aumentar confiança de preservação de comportamento, nao provar ausência total de regressão.
+- Para cada cenário de correção de desempenho, usar cobertura mínima de alta confiança antes da implementação: ao menos um caso nominal do hot path, um caso de borda e um caso de regressão/invariante (quando aplicável, justificar ausências).
+- Após implementar, reexecutar e complementar os testes conforme necessário para manter a confiança funcional.
+- Evitar linguagem absoluta: o objetivo dos testes é aumentar confiança de preservação de comportamento, não provar ausência total de regressão.
 
 5. Medir after no mesmo protocolo
 - Rodar os mesmos cenários JMH com parâmetros idênticos.
 - Registrar resultado after e capturar score + erro.
-- Quando `-prof gc` foi usado no baseline, repetir no after e comparar `gc.alloc.rate.norm`, `gc.alloc.rate`, `gc.count` e `gc.time`.
 - Calcular deltas absolutos e percentuais em `ns/op`.
 - Reportar sempre `Melhoria (%) em ns/op` usando: `((before_ns_op - after_ns_op) / before_ns_op) * 100`.
 
@@ -53,33 +51,30 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 - Se inferir causa, declarar explicitamente como inferência.
 
 7. Registrar experimento e evidências
-- Criar `docs/perf/performance-history.md` quando nao existir, sempre relativo ao modulo alvo.
-- Em projeto multi-modulo, criar no submodulo onde o benchmark foi executado (ex.: `expression-evaluator/docs/perf/performance-history.md`), nunca na raiz agregadora.
+- Criar `docs/perf/performance-history.md` quando não existir, sempre relativo ao módulo alvo.
+- Em projeto multi-módulo, criar no submódulo onde o benchmark foi executado (ex.: `expression-evaluator/docs/perf/performance-history.md`), nunca na raiz agregadora.
 - Atualizar histórico append-only com:
 - hipótese;
 - mudanças;
 - protocolo;
 - resultados;
-- resultados de GC com `-prof gc` (quando aplicável);
 - decisão;
 - lições aprendidas.
 - Registrar atividades executadas nesta rodada (comandos e status).
-- Persistir arquivos em `docs/perf/artifacts` e opcional; o minimo obrigatorio e historico com comandos, tabelas e metricas.
+- Persistir arquivos em `docs/perf/artifacts` é opcional; o mínimo obrigatório é histórico com comandos, tabelas e métricas.
 
 ## Critérios de Qualidade Obrigatórios
 
 - Não concluir sem:
 - teste funcional relevante passando;
 - cobertura funcional suficiente por cenário de correção validada antes de implementar a otimização;
-- benchmark before/after comparavel com JMH;
-- verificação before/after com `-prof gc` quando cabivel;
+- benchmark before/after comparável com JMH;
 - benchmark localizado em `src/test/java` com package dedicado de performance;
-- registro em `docs/perf/performance-history.md` do modulo alvo;
+- registro em `docs/perf/performance-history.md` do módulo alvo;
 - tabela de resultados contendo `before ns/op`, `after ns/op` e `Melhoria (%)`;
-- tabela/registro de métricas de GC no histórico quando `-prof gc` for usado;
 - decisão final documentada;
 - lista de atividades executadas e limitações.
-- Se benchmark falhar por ambiente ou JMH nao estiver configurado, declarar bloqueio e impacto na confianca da decisao.
+- Se benchmark falhar por ambiente ou JMH não estiver configurado, declarar bloqueio e impacto na confiança da decisão.
 - Se houver risco de concorrência em medições (ex.: build/annotation processing em paralelo), rodar medições de forma sequencial e limpar artefatos.
 
 ## Formato de Entrega Esperado
@@ -94,7 +89,7 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 ## Referências da Skill
 
 - Para comandos e desenho de benchmark: `references/jmh-playbook.md`
-- Para template de histórico append-only em `docs/perf/performance-history.md` do modulo alvo: `references/performance-history-template.md`
+- Para template de histórico append-only em `docs/perf/performance-history.md` do módulo alvo: `references/performance-history-template.md`
 - Para checklist de execução e evidência: `references/quality-activities-checklist.md`
 
 ## Anti-Patterns
@@ -106,4 +101,3 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 - Misturar múltiplas otimizações sem isolamento de impacto.
 - Aceitar regressão de latência sem justificativa explícita.
 - Omitir comando executado e evidências mínimas de resultado.
-- Ignorar `-prof gc` em cenário com risco relevante de regressão de alocação/GC.

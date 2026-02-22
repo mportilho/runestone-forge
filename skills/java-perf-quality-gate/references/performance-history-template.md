@@ -1,7 +1,7 @@
 # Template de Registro (Append-Only)
 
-> Arquivo de destino obrigatorio: `<modulo>/docs/perf/performance-history.md`
-> Em multi-modulo, usar sempre o submodulo alvo (ex.: `expression-evaluator/docs/perf/performance-history.md`).
+> Arquivo de destino obrigatório: `<módulo>/docs/perf/performance-history.md`
+> Em multi-módulo, usar sempre o submódulo alvo (ex.: `expression-evaluator/docs/perf/performance-history.md`).
 
 ```md
 ## Experimento PERF-XXX
@@ -10,31 +10,29 @@
 - Baseline commit/estado:
 - Commit/estado testado:
 
-### Hipotese
+### Hipótese
 1.
 2.
 
-### Mudancas aplicadas
+### Mudanças aplicadas
 - `arquivo:linha`:
 - `arquivo:linha`:
 
-### Protocolo de medicao
+### Protocolo de medição
 - JVM:
 - JMH:
 - Benchmark class (src/test/java):
 - Package de benchmark:
-- Parametros:
+- Parâmetros:
   - `-wi ... -i ... -w ... -r ... -f ... -tu ns`
   - `-jvmArgs '...'`
-- Profiling GC (quando cabivel):
-  - `-prof gc`
 - Comando executado:
 ```bash
 <comando real>
 ```
-- Comando executado com `-prof gc` (quando cabivel):
+- Comandos adicionais (quando solicitados):
 ```bash
-<comando real com -prof gc>
+<comando real>
 ```
 
 ### Resultado
@@ -42,17 +40,12 @@
 |---|---:|---:|---:|---:|
 | ... | ... | ... | ... | ... |
 
-### Resultado GC (quando cabivel)
-| Benchmark | Before gc.alloc.rate.norm (B/op) | After gc.alloc.rate.norm (B/op) | Before gc.alloc.rate (MB/s) | After gc.alloc.rate (MB/s) | Before gc.count | After gc.count | Before gc.time (ms) | After gc.time (ms) |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| ... | ... | ... | ... | ... | ... | ... | ... | ... |
-
-### Decisao
+### Decisão
 - [ ] Aceitar
 - [ ] Ajustar
 - [ ] Descartar
 
-### Leitura tecnica
+### Leitura técnica
 1.
 2.
 
@@ -66,8 +59,7 @@
 2.
 ```
 
-## Convencoes
-- Manter historico append-only.
-- Nao sobrescrever resultados anteriores.
-- Sempre registrar `Melhoria (%)` baseada em comparacao de `ns/op`.
-- Quando `-prof gc` for usado, sempre registrar os resultados GC e a evidência correspondente.
+## Convenções
+- Manter histórico append-only.
+- Não sobrescrever resultados anteriores.
+- Sempre registrar `Melhoria (%)` baseada em comparação de `ns/op`.
