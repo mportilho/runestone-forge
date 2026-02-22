@@ -21,8 +21,8 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 - Antes de implementar a melhoria de desempenho, mapear os cenários da correção e garantir testes unitários com cobertura funcional suficiente para cada cenário.
 - Compilar e validar os testes funcionais relevantes.
 - Criar/ajustar benchmark em `src/test/java` em package dedicado de performance (ex.: `...perf.jmh...`).
-- Rodar JMH com parâmetros fixos e salvar JSON de baseline.
-- Quando cabível (suspeita de regressão de alocação/GC ou hot path sensível a memoria), rodar baseline adicional com `-prof gc` e salvar JSON dedicado.
+- Rodar JMH com parâmetros fixos e registrar o resultado before (JSON é recomendado, mas saída texto também é válida).
+- Quando cabível (suspeita de regressão de alocação/GC ou hot path sensível a memoria), rodar baseline adicional com `-prof gc` e registrar o resultado dedicado.
 - Confirmar que o benchmark representa o risco real e não só micro-op isolada.
 
 3. Implementar melhoria mínima segura
@@ -41,7 +41,7 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 
 5. Medir after no mesmo protocolo
 - Rodar os mesmos cenários JMH com parâmetros idênticos.
-- Salvar artefato JSON after e capturar score + erro.
+- Registrar resultado after e capturar score + erro.
 - Quando `-prof gc` foi usado no baseline, repetir no after e comparar `gc.alloc.rate.norm`, `gc.alloc.rate`, `gc.count` e `gc.time`.
 - Calcular deltas absolutos e percentuais em `ns/op`.
 - Reportar sempre `Melhoria (%) em ns/op` usando: `((before_ns_op - after_ns_op) / before_ns_op) * 100`.
@@ -64,6 +64,7 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 - decisão;
 - lições aprendidas.
 - Registrar atividades executadas nesta rodada (comandos e status).
+- Persistir arquivos em `docs/perf/artifacts` e opcional; o minimo obrigatorio e historico com comandos, tabelas e metricas.
 
 ## Critérios de Qualidade Obrigatórios
 
@@ -104,5 +105,5 @@ Aplicar um fluxo padronizado para melhorar código Java com segurança de compor
 - Criar benchmark fora de `src/test/java` ou sem package dedicado de performance.
 - Misturar múltiplas otimizações sem isolamento de impacto.
 - Aceitar regressão de latência sem justificativa explícita.
-- Omitir comando executado e artefato de resultado.
+- Omitir comando executado e evidências mínimas de resultado.
 - Ignorar `-prof gc` em cenário com risco relevante de regressão de alocação/GC.

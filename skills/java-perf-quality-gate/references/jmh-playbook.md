@@ -22,11 +22,14 @@ Padronizar medições antes/depois para comparação confiável.
 - Parâmetros padrão:
   - `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns`
   - `-jvmArgs '-Xms1g -Xmx1g'`
-- Exportar JSON:
+- Exportar JSON (recomendado):
   - `-rf json -rff <arquivo>.json`
 - Profiling de GC (condicional):
   - usar `-prof gc` quando houver suspeita de regressao de alocacao/GC, foco em throughput sob pressao de memoria, ou hot path alocador.
-  - gerar artefato dedicado para GC (ex.: `target/<resultado>-gc.json`).
+  - gerar arquivo dedicado para GC (ex.: `target/<resultado>-gc.json`) quando necessário.
+- Persistência:
+  - nao e obrigatório copiar resultados para `docs/perf/artifacts`.
+  - manter evidencias suficientes no histórico (comandos + tabelas + métricas).
 
 ## Comando (Maven + classpath de teste)
 ```bash

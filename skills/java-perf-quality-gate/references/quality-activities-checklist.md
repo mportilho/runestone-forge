@@ -17,7 +17,7 @@
 - Rodar compilação e testes relevantes.
 - Rodar JMH after com protocolo idêntico.
 - Comparar before/after em `ns/op` e calcular `Melhoria (%)`.
-- Quando cabivel, rodar before/after com `-prof gc` e comparar `gc.alloc.rate.norm`, `gc.alloc.rate`, `gc.count` e `gc.time`.
+- Quando cabível, rodar before/after com `-prof gc` e comparar `gc.alloc.rate.norm`, `gc.alloc.rate`, `gc.count` e `gc.time`. Adicione percentual final de melhoria.
 - Decidir: aceitar, ajustar ou descartar.
 - Criar (se ausente) e atualizar `docs/perf/performance-history.md` no modulo alvo.
 - Em projeto multi-modulo, garantir que o historico esteja no submodulo testado (ex.: `expression-evaluator/docs/perf/performance-history.md`).
@@ -25,7 +25,7 @@
 ## Evidências mínimas para concluir
 - Lista de arquivos alterados.
 - Resultado de testes.
-- Resultado de benchmark com artefato JSON.
+- Resultado de benchmark com evidência reprodutível (JSON, txt ou saída registrada com score/erro/unidade).
 - Tabela com `before ns/op`, `after ns/op` e `Melhoria (%)`.
-- Quando `-prof gc` for aplicado, tabela/registro de métricas GC com artefato JSON correspondente.
+- Quando `-prof gc` for aplicado, tabela/registro de métricas GC com evidência correspondente.
 - Decisão final e riscos residuais.

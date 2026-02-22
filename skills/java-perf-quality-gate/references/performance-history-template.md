@@ -69,6 +69,5 @@
 ## Convencoes
 - Manter historico append-only.
 - Nao sobrescrever resultados anteriores.
-- Sempre referenciar artefatos JSON de benchmark.
 - Sempre registrar `Melhoria (%)` baseada em comparacao de `ns/op`.
-- Quando `-prof gc` for usado, sempre registrar os resultados GC e o artefato JSON correspondente.
+- Quando `-prof gc` for usado, sempre registrar os resultados GC e a evidência correspondente.
