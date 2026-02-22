@@ -87,13 +87,6 @@ Foco dinâmico médio (`dynamicConstantFunction`, `dynamicVariableFunction`, `dy
 4. JMH after com `DynamicFunctionOverheadBenchmark` - sucesso
 5. Cópia de artefatos e comparação em markdown - sucesso
 
-### Artefatos
-- `docs/perf/artifacts/expression-evaluator-dynamic-function-overhead-before.json`
-- `docs/perf/artifacts/expression-evaluator-dynamic-function-overhead-after.json`
-- `docs/perf/artifacts/expression-evaluator-dynamic-function-overhead-before.txt`
-- `docs/perf/artifacts/expression-evaluator-dynamic-function-overhead-after.txt`
-- `docs/perf/artifacts/expression-evaluator-dynamic-function-overhead-comparison.md`
-
 ### Riscos residuais
 1. Resultados são de uma única máquina/ambiente; variação pode ocorrer em hardware/JVM diferentes.
 2. Para proteção contínua, ideal incluir gatilho de regressão JMH em pipeline dedicado de performance.
@@ -169,13 +162,6 @@ Media dos cenários:
 3. Medição JMH before em baseline temporário com benchmark idêntico.
 4. Medição JMH after no estado atual.
 5. Consolidação de artefatos e comparação em markdown.
-
-### Artefatos
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-cache-invalidation-cascade-before.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-cache-invalidation-cascade-after.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-cache-invalidation-cascade-before.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-cache-invalidation-cascade-after.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-cache-invalidation-cascade-comparison.md`
 
 ### Riscos residuais
 1. A desabilitação de cache no ramo da variável de sequência reduz potencial de cache em expressões que dependam desse ramo.
@@ -257,13 +243,6 @@ Media dos cenários:
 5. Medição JMH after no estado atual.
 6. Consolidação de artefatos e comparação em markdown.
 
-### Artefatos
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-registration-overhead-before.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-registration-overhead-after.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-registration-overhead-before.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-registration-overhead-after.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-registration-overhead-comparison.md`
-
 ### Riscos residuais
 1. O cache de templates por classe aumenta uso de memória proporcional a classes de providers diferentes utilizadas.
 2. Benchmarks refletem uma única máquina/JVM; recomenda-se repetição em CI de performance.
@@ -342,13 +321,6 @@ Media dos cenários:
 5. Medição JMH after no estado atual.
 6. Consolidação de artefatos e comparação em markdown.
 
-### Artefatos
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-hotpath-before.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-hotpath-after.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-hotpath-before.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-hotpath-after.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-hotpath-comparison.md`
-
 ### Riscos residuais
 1. Regressao nos caminhos de `BaseOperation` pode afetar cargas predominantemente numericas simples.
 2. Benchmarks refletem uma única máquina/JVM; recomendada validação adicional em CI de performance.
@@ -416,13 +388,6 @@ Media dos cenários:
 3. Medição JMH after com o mesmo protocolo.
 4. Consolidação dos artefatos e comparação percentual em ns/op.
 5. Correcao de fluxo: execução de medições em sequência para evitar corrupção de `jmh_generated` por concorrência.
-
-### Artefatos
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-baseoperation-tuning-before.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-baseoperation-tuning-after.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-baseoperation-tuning-before.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-baseoperation-tuning-after.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-type-conversion-baseoperation-tuning-comparison.md`
 
 ### Riscos residuais
 1. Ganho incremental; parte da diferença historica absoluta em `long/double` pode depender de variação de ambiente/JIT.
@@ -502,14 +467,6 @@ Indicadores de alocação (apoio):
 5. Execução de testes direcionados pos-otimização: `mvn -pl expression-evaluator -Dtest=TestVariableValues,TestVariablesWithExpressionContext test -q` - sucesso.
 6. Execução da suíte completa do módulo: `mvn -pl expression-evaluator test -q` - sucesso.
 7. Medição JMH after com protocolo idêntico - sucesso.
-8. Consolidação de artefatos em `docs/perf/artifacts` e tabela comparativa - sucesso.
-
-### Artefatos
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-variable-provider-context-before.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-variable-provider-context-after.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-variable-provider-context-before.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-variable-provider-context-after.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-variable-provider-context-comparison.md`
 
 ### Riscos residuais
 1. O benchmark desabilita cache de variáveis para estressar o caminho de providers; ganhos absolutos podem variar em workloads com cache mais efetivo.
@@ -610,17 +567,6 @@ java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
 8. Medição JMH after (`ns/op`) no estado after - sucesso.
 9. Medição JMH after com `-prof gc` no estado after - sucesso.
 10. Consolidação dos artefatos e tabela comparativa em markdown - sucesso.
-
-### Artefatos
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-calculator-context-propagation-before.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-calculator-context-propagation-before.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-calculator-context-propagation-before-gc.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-calculator-context-propagation-before-gc.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-calculator-context-propagation-after.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-calculator-context-propagation-after.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-calculator-context-propagation-after-gc.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-calculator-context-propagation-after-gc.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-calculator-context-propagation-comparison.md`
 
 ### Riscos residuais
 1. O benchmark estressa um padrão especifico (contexto amplo com uso esparso). Cargas reais com distribuicao diferente podem ter ganho menor.
@@ -723,17 +669,6 @@ java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
 8. Medição JMH after com `-prof gc` - sucesso.
 9. Consolidação de artefatos e comparativo em markdown - sucesso.
 
-### Artefatos
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-before.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-before.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-before-gc.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-before-gc.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-after.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-after.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-after-gc.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-after-gc.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-dynamic-function-allocation-comparison.md`
-
 ### Riscos residuais
 1. O item de performance permanece aberto para novo ciclo de tuning no caminho de funções dinâmicas.
 2. Os cenários deste experimento medem chamadas unitárias por avaliação; recomendada rodada adicional com alta densidade de chamadas por avaliação (ex.: funções dinâmicas dentro de sequências longas).
@@ -812,13 +747,6 @@ java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
 6. Reexecução de testes direcionados e suíte do módulo - sucesso.
 7. Medição JMH after (`ns/op`) com protocolo idêntico - sucesso.
 8. Consolidação dos artefatos e comparativo em markdown - sucesso.
-
-### Artefatos
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-lookup-fallback-before.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-lookup-fallback-before.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-lookup-fallback-after.json`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-lookup-fallback-after.txt`
-- `expression-evaluator/docs/perf/artifacts/expression-evaluator-function-lookup-fallback-comparison.md`
 
 ### Riscos residuais
 1. O benchmark isola chamadas repetidas no mesmo `OperationContext`; cargas com menos repetição por contexto podem observar ganho menor.

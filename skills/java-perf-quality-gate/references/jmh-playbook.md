@@ -27,7 +27,6 @@ Padronizar medições before/after para comparação confiável.
 - Medições adicionais:
   - executar somente quando forem explicitamente solicitadas.
 - Persistência:
-  - não é obrigatório copiar resultados para `docs/perf/artifacts`.
   - manter evidências suficientes no histórico (comandos + tabelas + métricas).
 
 ## Comando (Maven + classpath de teste)
