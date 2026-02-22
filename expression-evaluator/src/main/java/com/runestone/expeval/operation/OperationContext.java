@@ -70,6 +70,13 @@ public record OperationContext(
             return func;
         }
 
+        if (userContext == expressionContext) {
+            if (fallbackFunctionKey == null) {
+                return null;
+            }
+            return userContext.findFunction(fallbackFunctionKey);
+        }
+
         func = expressionContext.findFunction(functionKey);
         if (func != null || fallbackFunctionKey == null) {
             return func;
