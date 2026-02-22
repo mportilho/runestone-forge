@@ -97,3 +97,86 @@ Foco dinamico medio (`dynamicConstantFunction`, `dynamicVariableFunction`, `dyna
 ### Riscos residuais
 1. Resultados sao de uma unica maquina/ambiente; variacao pode ocorrer em hardware/JVM diferentes.
 2. Para protecao continua, ideal incluir gatilho de regressao JMH em pipeline dedicado de performance.
+
+## Experimento PERF-2026-02-22-EXPEVAL-CACHE-INVALIDATION-CASCADE
+- Data: 2026-02-22
+- Objetivo: reduzir overhead de invalidacao de cache em cascata no caminho de sequencias `S[...]`/`P[...]`.
+- Baseline commit/estado: `HEAD 14be2ed` (baseline em workspace temporario com mesma infraestrutura JMH e benchmark identico).
+- Commit/estado testado: working tree atual (otimizacao em `SequenceVariableValueOperation` + testes de cobertura).
+
+### Hipotese
+1. Evitar `setValue()` a cada iteracao da variavel de sequencia elimina invalidacao recursiva de cache por item do loop.
+2. Desabilitar cache para a variavel de sequencia evita estado stale sem necessidade de `clearCache()` em cascata.
+
+### Mudancas aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/operation/values/variable/SequenceVariableValueOperation.java`: `setSequenceIndex` passou a usar `overrideValue` e `getCacheHint()` passou a retornar `false`.
+- `expression-evaluator/src/test/java/com/runestone/expeval/operation/values/TestCacheInvalidationBehaviour.java`: novos testes de comportamento para sequencia sem cache residual e cobertura de atualizacao via `setVariables`.
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/CacheInvalidationCascadeBenchmark.java`: benchmark JMH dedicado em `src/test/java` no package `com.runestone.expeval.perf.jmh`.
+- `expression-evaluator/src/test/java/com/runestone/expeval/operation/math/TestMathOperations.java`: ajuste das expectativas de contagem de cache apos desabilitar cache em caminho de sequencia.
+
+### Protocolo de medicao
+- JVM: OpenJDK 21.0.10
+- JMH: 1.35
+- Benchmark class: `com.runestone.expeval.perf.jmh.CacheInvalidationCascadeBenchmark`
+- Parametros: `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns -jvmArgs '-Xms1g -Xmx1g'`
+- Comando before:
+```bash
+mvn -f "$BEFORE_DIR/pom.xml" -pl expression-evaluator -Dtest=TestMathOperations,TestVariableValues test -q
+cd "$BEFORE_DIR/expression-evaluator"
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*CacheInvalidationCascadeBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -rf json -rff target/jmh-cache-cascade-before.json -foe true
+```
+- Comando after:
+```bash
+mvn -pl expression-evaluator -Dtest=TestCacheInvalidationBehaviour,TestMathOperations,TestVariableValues test -q
+cd expression-evaluator
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=target/jmh.classpath -Dmdep.includeScope=test
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*CacheInvalidationCascadeBenchmark.*' \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' \
+  -rf json -rff target/jmh-cache-cascade-after.json -foe true
+```
+
+### Resultado
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| manyVariablesWithMapBatchSet | 1691.002 | 1656.442 | -34.560 | +2.04% |
+| manyVariablesWithRepeatedSetVariable | 975.883 | 947.344 | -28.539 | +2.92% |
+| sequenceWithVariableMutation | 1187.626 | 1002.735 | -184.891 | +15.57% |
+
+Media dos cenarios:
+- Before medio: 1284.837 ns/op
+- After medio: 1202.174 ns/op
+- Melhoria media: +6.43%
+
+### Decisao
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura tecnica
+1. O ganho mais relevante ocorreu no cenario de sequencia com mutacao de variavel (`+15.57%`), que era o hotspot da invalidacao em cascata.
+2. Os cenarios de atualizacao de multiplas variaveis tambem melhoraram levemente (`+2.04%` e `+2.92%`), sem regressao.
+
+### Atividades executadas
+1. Criacao de testes funcionais de comportamento para o problema de cache em sequencia.
+2. Execucao de testes relevantes de regressao: `TestCacheInvalidationBehaviour`, `TestMathOperations`, `TestVariableValues`.
+3. Medicao JMH before em baseline temporario com benchmark identico.
+4. Medicao JMH after no estado atual.
+5. Consolidacao de artefatos e comparacao em markdown.
+
+### Artefatos
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-cache-invalidation-cascade-before.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-cache-invalidation-cascade-after.json`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-cache-invalidation-cascade-before.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-cache-invalidation-cascade-after.txt`
+- `expression-evaluator/docs/perf/artifacts/expression-evaluator-cache-invalidation-cascade-comparison.md`
+
+### Riscos residuais
+1. A desabilitacao de cache no ramo da variavel de sequencia reduz potencial de cache em expressoes que dependam desse ramo.
+2. Benchmarks refletem uma unica maquina/JVM; ideal repetir em ambiente de CI de performance.
