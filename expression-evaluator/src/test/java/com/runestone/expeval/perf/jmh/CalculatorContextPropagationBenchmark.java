@@ -3,6 +3,8 @@ package com.runestone.expeval.perf.jmh;
 import com.runestone.expeval.expression.calculator.CalculationMemory;
 import com.runestone.expeval.expression.calculator.Calculator;
 import com.runestone.expeval.expression.calculator.CalculatorInput;
+import com.runestone.expeval.expression.calculator.CalculatorMemoryMode;
+import com.runestone.expeval.expression.calculator.CalculatorOptions;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -10,6 +12,7 @@ import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
@@ -17,6 +20,7 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
 import java.math.BigDecimal;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +39,10 @@ public class CalculatorContextPropagationBenchmark {
     private List<CalculatorInput> denseInputs;
     private Map<String, Object> sparseContext;
     private Map<String, Object> denseContext;
+    private Map<CalculatorMemoryMode, CalculatorOptions> optionsByMode;
+
+    @Param({"FULL", "COMPACT", "LAZY"})
+    private CalculatorMemoryMode memoryMode;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -55,19 +63,26 @@ public class CalculatorContextPropagationBenchmark {
             denseContext.put(String.valueOf(variable), BigDecimal.valueOf(variable - 'a' + 1L));
         }
 
-        calculator.calculate(sparseInputs, sparseContext);
-        calculator.calculate(denseInputs, denseContext);
+        optionsByMode = new EnumMap<>(CalculatorMemoryMode.class);
+        for (CalculatorMemoryMode mode : CalculatorMemoryMode.values()) {
+            optionsByMode.put(mode, new CalculatorOptions(mode, 64));
+        }
+
+        for (CalculatorOptions options : optionsByMode.values()) {
+            calculator.calculate(sparseInputs, sparseContext, options);
+            calculator.calculate(denseInputs, denseContext, options);
+        }
     }
 
     @Benchmark
     public void calculatorWithLargeContextSparseUsage(Blackhole blackhole) {
-        List<CalculationMemory> memory = calculator.calculate(sparseInputs, sparseContext);
+        List<CalculationMemory> memory = calculator.calculate(sparseInputs, sparseContext, optionsByMode.get(memoryMode));
         blackhole.consume(memory);
     }
 
     @Benchmark
     public void calculatorWithSmallContextDenseUsage(Blackhole blackhole) {
-        List<CalculationMemory> memory = calculator.calculate(denseInputs, denseContext);
+        List<CalculationMemory> memory = calculator.calculate(denseInputs, denseContext, optionsByMode.get(memoryMode));
         blackhole.consume(memory);
     }
 }

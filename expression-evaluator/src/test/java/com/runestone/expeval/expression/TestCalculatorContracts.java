@@ -27,6 +27,8 @@ package com.runestone.expeval.expression;
 import com.runestone.expeval.expression.calculator.CalculationMemory;
 import com.runestone.expeval.expression.calculator.Calculator;
 import com.runestone.expeval.expression.calculator.CalculatorInput;
+import com.runestone.expeval.expression.calculator.CalculatorMemoryMode;
+import com.runestone.expeval.expression.calculator.CalculatorOptions;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +37,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class TestCalculatorContracts {
 
@@ -64,6 +67,14 @@ public class TestCalculatorContracts {
     }
 
     @Test
+    public void testCalculatorOptionsValidation() {
+        Assertions.assertThatNullPointerException()
+                .isThrownBy(() -> new CalculatorOptions(null, 64));
+        Assertions.assertThatIllegalArgumentException()
+                .isThrownBy(() -> new CalculatorOptions(CalculatorMemoryMode.LAZY, 0));
+    }
+
+    @Test
     public void testCalculateDoesNotMutateContextVariableMap() {
         Calculator calculator = new Calculator();
         List<CalculatorInput> inputs = List.of(new CalculatorInput("c := a + b;"));
@@ -80,6 +91,21 @@ public class TestCalculatorContracts {
     }
 
     @Test
+    public void testCalculateDoesNotMutateContextVariableMapOnAllMemoryModes() {
+        Calculator calculator = new Calculator();
+        List<CalculatorInput> inputs = List.of(new CalculatorInput("c := a + b;"));
+        Map<String, Object> contextVariables = new HashMap<>();
+        contextVariables.put("a", 1);
+        contextVariables.put("b", 2);
+        Map<String, Object> snapshot = new HashMap<>(contextVariables);
+
+        for (CalculatorMemoryMode mode : CalculatorMemoryMode.values()) {
+            calculator.calculate(inputs, contextVariables, new CalculatorOptions(mode, 2));
+            Assertions.assertThat(contextVariables).containsExactlyInAnyOrderEntriesOf(snapshot);
+        }
+    }
+
+    @Test
     public void testCalculationMemoryMapsAreUnmodifiable() {
         Calculator calculator = new Calculator();
         List<CalculatorInput> inputs = List.of(new CalculatorInput("x := 10;"));
@@ -92,6 +118,105 @@ public class TestCalculatorContracts {
                 .isInstanceOf(UnsupportedOperationException.class);
         Assertions.assertThatThrownBy(() -> memory.contextVariables().put("z", BigDecimal.ZERO))
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    public void testDefaultModeMatchesExplicitFullMode() {
+        Calculator calculator = new Calculator();
+        List<CalculatorInput> inputs = List.of(
+                new CalculatorInput("c := a + b;"),
+                new CalculatorInput("d := c + 1; d")
+        );
+        Map<String, Object> context = Map.of("a", 1, "b", 2);
+
+        List<CalculationMemory> defaultMemory = calculator.calculate(inputs, context);
+        List<CalculationMemory> fullMemory = calculator.calculate(inputs, context, new CalculatorOptions(CalculatorMemoryMode.FULL, 8));
+
+        Assertions.assertThat(defaultMemory).hasSize(fullMemory.size());
+        for (int i = 0; i < defaultMemory.size(); i++) {
+            CalculationMemory defaultEntry = defaultMemory.get(i);
+            CalculationMemory fullEntry = fullMemory.get(i);
+            Assertions.assertThat(defaultEntry.result()).isEqualTo(fullEntry.result());
+            Assertions.assertThat(defaultEntry.assignedVariables()).containsExactlyInAnyOrderEntriesOf(fullEntry.assignedVariables());
+            Assertions.assertThat(defaultEntry.variables()).containsExactlyInAnyOrderEntriesOf(fullEntry.variables());
+            Assertions.assertThat(defaultEntry.contextVariables()).containsExactlyInAnyOrderEntriesOf(fullEntry.contextVariables());
+        }
+    }
+
+    @Test
+    public void testCompactModeKeepsOnlyAssignedVariables() {
+        Calculator calculator = new Calculator();
+        List<CalculatorInput> inputs = List.of(
+                new CalculatorInput("c := a + b;"),
+                new CalculatorInput("d := c + 1; d")
+        );
+        Map<String, Object> context = Map.of("a", 1, "b", 2, "unused", 999);
+
+        List<CalculationMemory> memoryList = calculator.calculate(inputs, context, new CalculatorOptions(CalculatorMemoryMode.COMPACT, 8));
+
+        Assertions.assertThat(memoryList).hasSize(2);
+        Assertions.assertThat(memoryList.get(0).variables()).isEmpty();
+        Assertions.assertThat(memoryList.get(0).contextVariables()).isEmpty();
+        Assertions.assertThat(memoryList.get(0).assignedVariables()).containsEntry("c", BigDecimal.valueOf(3));
+        Assertions.assertThat(memoryList.get(0).findNumericVariable("c")).hasValue(BigDecimal.valueOf(3));
+
+        Assertions.assertThat(memoryList.get(1).variables()).isEmpty();
+        Assertions.assertThat(memoryList.get(1).contextVariables()).isEmpty();
+        Assertions.assertThat(memoryList.get(1).assignedVariables()).containsEntry("d", BigDecimal.valueOf(4));
+    }
+
+    @Test
+    public void testLazyModeReconstructsContextByDeltaAndCheckpoint() {
+        Calculator calculator = new Calculator();
+        List<CalculatorInput> inputs = List.of(
+                new CalculatorInput("a := 1;"),
+                new CalculatorInput("b := a + 1;"),
+                new CalculatorInput("c := b + 1; c")
+        );
+        Map<String, Object> context = Map.of("seed", 99);
+
+        List<CalculationMemory> memoryList = calculator.calculate(inputs, context, new CalculatorOptions(CalculatorMemoryMode.LAZY, 2));
+
+        Assertions.assertThat(memoryList).hasSize(3);
+        Assertions.assertThat(memoryList.get(0).contextVariables()).containsExactlyInAnyOrderEntriesOf(Map.of("seed", 99));
+        Assertions.assertThat(memoryList.get(1).contextVariables()).containsExactlyInAnyOrderEntriesOf(
+                Map.of("seed", 99, "a", BigDecimal.ONE));
+        Assertions.assertThat(memoryList.get(2).contextVariables()).containsExactlyInAnyOrderEntriesOf(
+                Map.of("seed", 99, "a", BigDecimal.ONE, "b", BigDecimal.valueOf(2)));
+        Assertions.assertThat(memoryList.get(2).findNumericVariable("b")).hasValue(BigDecimal.valueOf(2));
+    }
+
+    @Test
+    public void testLazyCalculationMemoryMaterializesAndMemoizesOnFirstAccess() {
+        AtomicInteger variablesSupplierCalls = new AtomicInteger();
+        AtomicInteger contextSupplierCalls = new AtomicInteger();
+
+        CalculationMemory memory = CalculationMemory.lazy(
+                new CalculatorInput("x := 1;"),
+                new Expression("x := 1;"),
+                false,
+                new HashMap<>(Map.of("x", BigDecimal.ONE)),
+                () -> {
+                    variablesSupplierCalls.incrementAndGet();
+                    return new HashMap<>(Map.of("x", BigDecimal.ONE, "y", BigDecimal.TEN));
+                },
+                () -> {
+                    contextSupplierCalls.incrementAndGet();
+                    return new HashMap<>(Map.of("k", "v"));
+                });
+
+        Assertions.assertThat(variablesSupplierCalls).hasValue(0);
+        Assertions.assertThat(contextSupplierCalls).hasValue(0);
+
+        Assertions.assertThat(memory.variables().get("y")).isEqualTo(BigDecimal.TEN);
+        Assertions.assertThat(memory.variables().containsKey("x")).isTrue();
+        Assertions.assertThat(memory.variables().size()).isEqualTo(2);
+        Assertions.assertThat(variablesSupplierCalls).hasValue(1);
+
+        Assertions.assertThat(memory.contextVariables().get("k")).isEqualTo("v");
+        Assertions.assertThat(memory.contextVariables().containsKey("k")).isTrue();
+        Assertions.assertThat(memory.contextVariables().size()).isEqualTo(1);
+        Assertions.assertThat(contextSupplierCalls).hasValue(1);
     }
 
     @Test

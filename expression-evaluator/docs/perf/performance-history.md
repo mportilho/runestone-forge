@@ -751,3 +751,82 @@ java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
 ### Riscos residuais
 1. O benchmark isola chamadas repetidas no mesmo `OperationContext`; cargas com menos repetição por contexto podem observar ganho menor.
 2. Como toda medição foi em única máquina/JVM, recomenda-se repetição em pipeline dedicado de performance para validação estatística adicional.
+
+## Experimento PERF-2026-02-22-EXPEVAL-CALCULATOR-MEMORY-MODES
+- Data: 2026-02-22
+- Objetivo: reduzir pressão de heap no caminho de memória detalhada do `Calculator` com estratégia configurável, mantendo compatibilidade por padrão.
+- Baseline commit/estado: working tree atual com modo `FULL` como referência de comparação.
+- Commit/estado testado: working tree atual com novos modos `FULL`, `COMPACT` e `LAZY`.
+
+### Hipótese
+1. `COMPACT` reduz alocação por operação ao evitar snapshots completos por etapa.
+2. `LAZY` reduz alocação no caminho padrão (quando snapshots não são acessados) ao materializar sob demanda.
+3. `FULL` mantém comportamento legado sem regressão funcional.
+
+### Mudanças aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/expression/calculator/CalculatorMemoryMode.java`: enum de estratégia de memória (`FULL`, `COMPACT`, `LAZY`).
+- `expression-evaluator/src/main/java/com/runestone/expeval/expression/calculator/CalculatorOptions.java`: opções configuráveis (`memoryMode`, `checkpointInterval`).
+- `expression-evaluator/src/main/java/com/runestone/expeval/expression/calculator/CalculationMemory.java`: factories `compact`/`lazy` e mapas lazy memoizados com materialização sob demanda.
+- `expression-evaluator/src/main/java/com/runestone/expeval/expression/calculator/Calculator.java`: overloads `calculate(..., CalculatorOptions)` e pipeline por modo, com reconstrução lazy por delta + checkpoints.
+- `expression-evaluator/src/test/java/com/runestone/expeval/expression/TestCalculatorContracts.java`: cobertura de compatibilidade default, `COMPACT`, `LAZY`, memoização e não mutação de contexto.
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/CalculatorContextPropagationBenchmark.java`: benchmark parametrizado por `memoryMode`.
+
+### Protocolo de medição
+- JVM: OpenJDK 21.0.10
+- JMH: 1.35
+- Benchmark class: `com.runestone.expeval.perf.jmh.CalculatorContextPropagationBenchmark`
+- Comando de preparação:
+```bash
+mvn -pl expression-evaluator -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=expression-evaluator/target/jmh.classpath -Dmdep.includeScope=test -q
+```
+- Comparação de latência (`ns/op`, preliminar):
+```bash
+cd expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*CalculatorContextPropagationBenchmark.*' \
+  -wi 3 -i 5 -w 200ms -r 200ms -f 1 -tu ns \
+  -rf json -rff target/jmh-calculator-context-modes.json -foe true
+```
+- Comparação de alocação (`B/op`, preliminar):
+```bash
+cd expression-evaluator
+java -cp "target/test-classes:target/classes:$(cat target/jmh.classpath)" \
+  org.openjdk.jmh.Main '.*CalculatorContextPropagationBenchmark.calculatorWithLargeContextSparseUsage.*' \
+  -p memoryMode=FULL,COMPACT,LAZY \
+  -wi 2 -i 3 -w 200ms -r 200ms -f 1 -tu ns -prof gc \
+  -rf json -rff target/jmh-calculator-context-modes-gc.json -foe true
+```
+
+### Resultado
+Latência (`ns/op`) - `target/jmh-calculator-context-modes.json`:
+
+| Benchmark | FULL | COMPACT | LAZY | Melhoria COMPACT vs FULL | Melhoria LAZY vs FULL |
+|---|---:|---:|---:|---:|---:|
+| calculatorWithLargeContextSparseUsage | 82491.373 | 24424.650 | 41537.478 | +70.39% | +49.65% |
+| calculatorWithSmallContextDenseUsage | 3641.443 | 3305.941 | 3647.797 | +9.22% | -0.17% |
+
+Alocação (`gc.alloc.rate.norm`, `B/op`) - `target/jmh-calculator-context-modes-gc.json`:
+
+| Benchmark | FULL (B/op) | COMPACT (B/op) | LAZY (B/op) | Redução COMPACT vs FULL | Redução LAZY vs FULL |
+|---|---:|---:|---:|---:|---:|
+| calculatorWithLargeContextSparseUsage | 165292.225 | 44073.485 | 84934.570 | +73.34% | +48.62% |
+
+### Decisão
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura técnica
+1. `COMPACT` confirmou redução expressiva de alocação e latência no cenário com contexto grande e uso esparso, principal hotspot de amplificação de memória.
+2. `LAZY` apresentou redução intermediária, preservando acesso ao detalhe quando necessário via materialização sob demanda.
+3. Em cenário denso e pequeno, ganhos são modestos, como esperado, por menor custo de snapshot no baseline.
+
+### Atividades executadas
+1. `mvn -pl expression-evaluator test` - sucesso (`221` testes).
+2. JMH comparativo de latência por modo - sucesso.
+3. JMH com `-prof gc` para alocação por modo (cenário sparse) - sucesso.
+4. Consolidação de artefatos e registro histórico - sucesso.
+
+### Riscos residuais
+1. As medições são preliminares (iterações/forks reduzidos); números absolutos podem variar em hardware/JVM diferentes.
+2. O modo `COMPACT` reduz drasticamente detalhe histórico em `variables/contextVariables` por design; consumidores que dependam desse detalhe devem permanecer em `FULL` ou `LAZY`.
