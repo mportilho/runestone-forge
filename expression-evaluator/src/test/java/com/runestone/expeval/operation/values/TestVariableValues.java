@@ -32,9 +32,11 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.temporal.Temporal;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 public class TestVariableValues {
@@ -155,6 +157,38 @@ public class TestVariableValues {
     }
 
     @Test
+    public void testVariableProviderCurrentDateTimeConsistencyPerEvaluation() throws Exception {
+        Expression expression = new Expression("a = b");
+        VerifyExpressionsTools.checkWarmUpCache(expression, 0);
+
+        AtomicReference<VariableValueProviderContext> firstEvalCtxA = new AtomicReference<>();
+        AtomicReference<VariableValueProviderContext> firstEvalCtxB = new AtomicReference<>();
+        AtomicReference<Temporal> firstEvalA = new AtomicReference<>();
+        AtomicReference<Temporal> firstEvalB = new AtomicReference<>();
+        expression.setVariableProvider("a", context -> storeProviderAndCurrentDateTime(context, firstEvalCtxA, firstEvalA));
+        expression.setVariableProvider("b", context -> storeProviderAndCurrentDateTime(context, firstEvalCtxB, firstEvalB));
+
+        Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
+        Assertions.assertThat(firstEvalA.get()).isSameAs(firstEvalB.get());
+        Assertions.assertThat(firstEvalCtxA.get()).isSameAs(firstEvalCtxB.get());
+
+        Thread.sleep(2);
+
+        AtomicReference<VariableValueProviderContext> secondEvalCtxA = new AtomicReference<>();
+        AtomicReference<VariableValueProviderContext> secondEvalCtxB = new AtomicReference<>();
+        AtomicReference<Temporal> secondEvalA = new AtomicReference<>();
+        AtomicReference<Temporal> secondEvalB = new AtomicReference<>();
+        expression.setVariableProvider("a", context -> storeProviderAndCurrentDateTime(context, secondEvalCtxA, secondEvalA));
+        expression.setVariableProvider("b", context -> storeProviderAndCurrentDateTime(context, secondEvalCtxB, secondEvalB));
+
+        Assertions.assertThat(expression.<Boolean>evaluate()).isTrue();
+        Assertions.assertThat(secondEvalA.get()).isSameAs(secondEvalB.get());
+        Assertions.assertThat(secondEvalCtxA.get()).isSameAs(secondEvalCtxB.get());
+        Assertions.assertThat(secondEvalCtxA.get()).isNotSameAs(firstEvalCtxA.get());
+        Assertions.assertThat(secondEvalA.get()).isNotSameAs(firstEvalA.get());
+    }
+
+    @Test
     public void testVariableMapWithSuppliers() {
         Expression expression = new Expression("a + b + c + 4");
         VerifyExpressionsTools.checkWarmUpCache(expression, 1);
@@ -204,6 +238,17 @@ public class TestVariableValues {
         VerifyExpressionsTools.commonVerifications(expression);
         VerifyExpressionsTools.checkCache(expression, 4);
         VerifyExpressionsTools.checkWarmUpCache(expression, 4);
+    }
+
+    private static Temporal storeProviderAndCurrentDateTime(
+            VariableValueProviderContext context,
+            AtomicReference<VariableValueProviderContext> contextReference,
+            AtomicReference<Temporal> temporalReference
+    ) {
+        contextReference.set(context);
+        Temporal currentDateTime = context.currentDateTime().get();
+        temporalReference.set(currentDateTime);
+        return currentDateTime;
     }
 
 }

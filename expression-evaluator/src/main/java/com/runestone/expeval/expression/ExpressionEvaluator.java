@@ -36,8 +36,8 @@ import com.runestone.expeval.operation.AbstractOperation;
 import com.runestone.expeval.operation.CloningContext;
 import com.runestone.expeval.operation.OperationContext;
 import com.runestone.expeval.operation.values.AbstractVariableValueOperation;
+import com.runestone.expeval.operation.values.VariableProvider;
 import com.runestone.expeval.operation.values.variable.AssignedVariableOperation;
-import com.runestone.memoization.MemoizedSupplier;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -45,9 +45,11 @@ import org.antlr.v4.runtime.atn.PredictionMode;
 
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoField;
+import java.time.temporal.Temporal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * Responsible for evaluating an expression. It parses the text expression and creates an operation tree that can be evaluated, navigated or cloned.
@@ -119,6 +121,29 @@ class ExpressionEvaluator {
         }
     }
 
+    public void setVariables(Map<String, Object> variables) {
+        Objects.requireNonNull(variables, "Variables cannot be null");
+        if (variables.isEmpty()) {
+            return;
+        }
+        parseExpression();
+        for (Map.Entry<String, AbstractVariableValueOperation> variableEntry : languageData.variables().entrySet()) {
+            String variableName = variableEntry.getKey();
+            if (!variables.containsKey(variableName)) {
+                continue;
+            }
+            AbstractVariableValueOperation variableOperation = variableEntry.getValue();
+            Object value = variables.get(variableName);
+            if (value instanceof VariableProvider variableProvider) {
+                variableOperation.setValue(variableProvider);
+            } else if (value instanceof Supplier<?> supplier) {
+                variableOperation.setValue((VariableProvider) context -> supplier.get());
+            } else {
+                variableOperation.setValue(value);
+            }
+        }
+    }
+
     /**
      * @return a new expression evaluator with the same expression, options and expression context as the original evaluator
      */
@@ -137,7 +162,7 @@ class ExpressionEvaluator {
      * @return a map of all assigned variables and their current values
      */
     public Map<String, Object> listAssignedVariables() {
-        Map<String, Object> map = new HashMap<>();
+        Map<String, Object> map = new HashMap<>(languageData.assignedVariables().size());
         for (Map.Entry<String, AssignedVariableOperation> entry : languageData.assignedVariables().entrySet()) {
             map.put(entry.getKey(), entry.getValue().getCurrentResult());
         }
@@ -148,7 +173,7 @@ class ExpressionEvaluator {
      * @return a map of all common variables and their current values
      */
     public Map<String, Object> listVariables() {
-        Map<String, Object> map = new HashMap<>();
+        Map<String, Object> map = new HashMap<>(languageData.variables().size());
         for (Map.Entry<String, AbstractVariableValueOperation> entry : languageData.variables().entrySet()) {
             map.put(entry.getKey(), entry.getValue().getCurrentResult());
         }
@@ -181,8 +206,28 @@ class ExpressionEvaluator {
     private OperationContext createOperationContext(boolean allowNull, ExpressionContext expressionContext) {
         ExpressionContext context = expressionContext != null ? expressionContext : this.expressionContext;
         return new OperationContext(options.mathContext(), options.scale(), allowNull,
-                new MemoizedSupplier<>(() -> ZonedDateTime.now(options.zoneId()).with(ChronoField.MICRO_OF_SECOND, 0)),
+                new CurrentDateTimeSupplier(options.zoneId()),
                 options.conversionService(), this.expressionContext, context, options.zoneId());
+    }
+
+    private static final class CurrentDateTimeSupplier implements Supplier<Temporal> {
+
+        private final java.time.ZoneId zoneId;
+        private Temporal currentDateTime;
+
+        private CurrentDateTimeSupplier(java.time.ZoneId zoneId) {
+            this.zoneId = zoneId;
+        }
+
+        @Override
+        public Temporal get() {
+            Temporal value = currentDateTime;
+            if (value == null) {
+                value = ZonedDateTime.now(zoneId).with(ChronoField.MICRO_OF_SECOND, 0);
+                currentDateTime = value;
+            }
+            return value;
+        }
     }
 
     private AbstractVariableValueOperation getVariableOperation(String name) {

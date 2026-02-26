@@ -40,18 +40,25 @@ import java.util.*;
 
 public class TypeAnnotationUtils {
 
-    private static final Map<AnnotationStatementInput, List<FilterAnnotationData>> CACHE_FILTERS = new WeakHashMap<>();
-    private static final Map<AnnotationStatementInput, List<Class<? extends FilterDecorator<?>>>> CACHE_DECORATORS = new WeakHashMap<>();
-    private static final Map<AnnotationStatementInput, List<FilterRequestData>> CACHE_FILTER_REQUEST_DATA = new WeakHashMap<>();
+    private static final int DEFAULT_CACHE_MAX_SIZE = 4096;
+    private static final String CACHE_MAX_SIZE_PROPERTY = "runestone.dynafilter.annotation.cache.max-size";
+    private static final int CACHE_MAX_SIZE = resolveCacheMaxSize();
+    private static final Map<AnnotationStatementInput, AnnotationMetadata> CACHE_METADATA = new LruMetadataCache(CACHE_MAX_SIZE);
 
     private TypeAnnotationUtils() {
     }
 
     public static List<Class<? extends FilterDecorator<?>>> findFilterDecorators(AnnotationStatementInput annotationStatementInput) {
-        return CACHE_DECORATORS.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::findFilterDecoratorsInternal);
+        return findCachedMetadata(annotationStatementInput).decorators();
     }
 
     public static List<Class<? extends FilterDecorator<?>>> findFilterDecoratorsInternal(AnnotationStatementInput annotationStatementInput) {
+        List<Annotation> statementAnnotations = TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput);
+        return findFilterDecoratorsInternal(annotationStatementInput, statementAnnotations);
+    }
+
+    private static List<Class<? extends FilterDecorator<?>>> findFilterDecoratorsInternal(AnnotationStatementInput annotationStatementInput,
+                                                                                           List<Annotation> statementAnnotations) {
         List<Class<? extends FilterDecorator<?>>> decorators = new ArrayList<>();
 
         if (annotationStatementInput.type() != null) {
@@ -70,7 +77,7 @@ public class TypeAnnotationUtils {
             }
         }
 
-        for (Annotation annotation : TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput)) {
+        for (Annotation annotation : statementAnnotations) {
             if (annotation.annotationType() == ConjunctionFrom.class) {
                 ConjunctionFrom ann = (ConjunctionFrom) annotation;
                 FilterDecorators filterDecorators = ann.value().getAnnotation(FilterDecorators.class);
@@ -96,12 +103,12 @@ public class TypeAnnotationUtils {
      * @return a list of filter request data
      */
     public static List<FilterRequestData> listAllFilterRequestData(AnnotationStatementInput annotationStatementInput) {
-        return CACHE_FILTER_REQUEST_DATA.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::listAllFilterRequestDataInternal);
+        return findCachedMetadata(annotationStatementInput).requestFilters();
     }
 
-    private static List<FilterRequestData> listAllFilterRequestDataInternal(AnnotationStatementInput annotationStatementInput) {
+    private static List<FilterRequestData> listAllFilterRequestDataInternal(List<FilterAnnotationData> annotationData) {
         List<FilterRequestData> filters = new ArrayList<>(20);
-        for (FilterAnnotationData data : TypeAnnotationUtils.findAnnotationData(annotationStatementInput)) {
+        for (FilterAnnotationData data : annotationData) {
             filters.addAll(data.filters().stream().map(FilterRequestData::of).toList());
             data.filterStatements().forEach(v -> filters.addAll(v.filters().stream().map(FilterRequestData::of).toList()));
         }
@@ -109,12 +116,83 @@ public class TypeAnnotationUtils {
     }
 
     public static List<FilterAnnotationData> findAnnotationData(AnnotationStatementInput annotationStatementInput) {
-        return CACHE_FILTERS.computeIfAbsent(annotationStatementInput, TypeAnnotationUtils::findAnnotationDataInternal);
+        return findCachedMetadata(annotationStatementInput).statementData();
     }
 
-    private static List<FilterAnnotationData> findAnnotationDataInternal(AnnotationStatementInput annotationStatementInput) {
+    public static void clearCaches() {
+        CACHE_METADATA.clear();
+    }
+
+    private static AnnotationMetadata findCachedMetadata(AnnotationStatementInput annotationStatementInput) {
+        Objects.requireNonNull(annotationStatementInput, "annotationStatementInput is required");
+        AnnotationMetadata cachedMetadata = CACHE_METADATA.get(annotationStatementInput);
+        if (cachedMetadata != null) {
+            return cachedMetadata;
+        }
+
+        AnnotationMetadata builtMetadata = buildMetadata(annotationStatementInput);
+        synchronized (CACHE_METADATA) {
+            AnnotationMetadata existing = CACHE_METADATA.get(annotationStatementInput);
+            if (existing != null) {
+                return existing;
+            }
+            CACHE_METADATA.put(annotationStatementInput, builtMetadata);
+            return builtMetadata;
+        }
+    }
+
+    private static AnnotationMetadata buildMetadata(AnnotationStatementInput annotationStatementInput) {
+        List<Annotation> statementAnnotations = TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput);
+        List<FilterAnnotationData> annotationData = findAnnotationDataInternal(statementAnnotations);
+        validateAnnotationData(annotationData);
+        List<Class<? extends FilterDecorator<?>>> decorators = findFilterDecoratorsInternal(annotationStatementInput, statementAnnotations);
+        List<FilterRequestData> filterRequestData = listAllFilterRequestDataInternal(annotationData);
+
+        return new AnnotationMetadata(
+                annotationData.isEmpty() ? List.of() : List.copyOf(annotationData),
+                decorators.isEmpty() ? List.of() : List.copyOf(decorators),
+                filterRequestData.isEmpty() ? List.of() : List.copyOf(filterRequestData)
+        );
+    }
+
+    private static void validateAnnotationData(List<FilterAnnotationData> annotationData) {
+        if (annotationData == null || annotationData.isEmpty()) {
+            return;
+        }
+        for (FilterAnnotationData data : annotationData) {
+            validateFilters(data.filters());
+            for (FilterAnnotationStatement filterStatement : data.filterStatements()) {
+                validateFilters(filterStatement.filters());
+            }
+        }
+    }
+
+    private static void validateFilters(List<Filter> filters) {
+        if (filters == null || filters.isEmpty()) {
+            return;
+        }
+        for (Filter filter : filters) {
+            validateFilter(filter);
+        }
+    }
+
+    private static void validateFilter(Filter filter) {
+        if (filter.parameters().length == 0) {
+            throw new IllegalArgumentException("No parameter configured for filter of path " + filter.path());
+        }
+        if (filter.constantValues().length != 0 && filter.constantValues().length != filter.parameters().length) {
+            throw new IllegalArgumentException(String.format("Parameters and constant values have different sizes. Parameters required: '%s'",
+                    String.join(", ", Arrays.asList(filter.parameters()))));
+        }
+        if (filter.defaultValues().length != 0 && filter.defaultValues().length != filter.parameters().length) {
+            throw new IllegalArgumentException(String.format("Parameters and default values have different sizes. Parameters required: '%s'",
+                    String.join(", ", Arrays.asList(filter.parameters()))));
+        }
+    }
+
+    private static List<FilterAnnotationData> findAnnotationDataInternal(List<Annotation> statementAnnotations) {
         List<FilterAnnotationData> filterAnnotationData = new ArrayList<>();
-        for (Annotation annotation : TypeAnnotationUtils.findStatementAnnotations(annotationStatementInput)) {
+        for (Annotation annotation : statementAnnotations) {
             if (annotation.annotationType() == Conjunction.class) {
                 Conjunction ann = (Conjunction) annotation;
                 List<FilterAnnotationStatement> statements = getFilterAnnotationFromStatements(ann.disjunctions());
@@ -334,6 +412,70 @@ public class TypeAnnotationUtils {
         }
 
         return entityClass;
+    }
+
+    private record AnnotationMetadata(
+            List<FilterAnnotationData> statementData,
+            List<Class<? extends FilterDecorator<?>>> decorators,
+            List<FilterRequestData> requestFilters
+    ) {
+    }
+
+    static int cacheSize() {
+        synchronized (CACHE_METADATA) {
+            return CACHE_METADATA.size();
+        }
+    }
+
+    static int cacheMaxSize() {
+        return CACHE_MAX_SIZE;
+    }
+
+    private static int resolveCacheMaxSize() {
+        String configuredValue = System.getProperty(CACHE_MAX_SIZE_PROPERTY);
+        if (configuredValue == null || configuredValue.isBlank()) {
+            return DEFAULT_CACHE_MAX_SIZE;
+        }
+        try {
+            int parsedValue = Integer.parseInt(configuredValue.trim());
+            return parsedValue > 0 ? parsedValue : DEFAULT_CACHE_MAX_SIZE;
+        } catch (NumberFormatException ignored) {
+            return DEFAULT_CACHE_MAX_SIZE;
+        }
+    }
+
+    private static final class LruMetadataCache extends LinkedHashMap<AnnotationStatementInput, AnnotationMetadata> {
+        private final int maxEntries;
+
+        private LruMetadataCache(int maxEntries) {
+            super(Math.min(maxEntries, 512), 0.75f, true);
+            this.maxEntries = maxEntries;
+        }
+
+        @Override
+        public synchronized AnnotationMetadata get(Object key) {
+            return super.get(key);
+        }
+
+        @Override
+        public synchronized AnnotationMetadata put(AnnotationStatementInput key, AnnotationMetadata value) {
+            return super.put(key, value);
+        }
+
+        @Override
+        public synchronized void clear() {
+            super.clear();
+        }
+
+        @Override
+        public synchronized int size() {
+            return super.size();
+        }
+
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<AnnotationStatementInput, AnnotationMetadata> eldest) {
+            return size() > maxEntries;
+        }
     }
 
 }

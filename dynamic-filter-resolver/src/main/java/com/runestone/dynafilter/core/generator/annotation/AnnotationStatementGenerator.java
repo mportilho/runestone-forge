@@ -137,9 +137,6 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
         if (filters == null || filters.isEmpty()) {
             return EMPTY_FILTER_DATA;
         }
-        for (Filter filter : filters) { // fail fast
-            validateFilter(filter);
-        }
 
         List<FilterData> filterParameters = new ArrayList<>(filters.size());
         for (Filter filter : filters) {
@@ -159,22 +156,5 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
             filterParameters.add(filterData);
         }
         return filterParameters.toArray(FilterData[]::new);
-    }
-
-    /**
-     *
-     */
-    private void validateFilter(Filter filter) {
-        if (filter.parameters().length == 0) {
-            throw new IllegalArgumentException("No parameter configured for filter of path " + filter.path());
-        }
-        if (filter.constantValues().length != 0 && filter.constantValues().length != filter.parameters().length) {
-            throw new IllegalArgumentException(String.format("Parameters and constant values have different sizes. Parameters required: '%s'",
-                    String.join(", ", Arrays.asList(filter.parameters()))));
-        }
-        if (filter.defaultValues().length != 0 && filter.defaultValues().length != filter.parameters().length) {
-            throw new IllegalArgumentException(String.format("Parameters and default values have different sizes. Parameters required: '%s'",
-                    String.join(", ", Arrays.asList(filter.parameters()))));
-        }
     }
 }

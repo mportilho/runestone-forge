@@ -62,4 +62,15 @@ public class TestValidationAnnotationStatementGenerator {
                 .hasMessageContaining("first, second");
     }
 
+    @Test
+    public void testFailFastDuringMetadataWarmup() {
+        TypeAnnotationUtils.clearCaches();
+        var annotationStatementInput = new AnnotationStatementInput(BlankParameter.class, null);
+
+        Assertions.assertThatThrownBy(() -> TypeAnnotationUtils.listAllFilterRequestData(annotationStatementInput))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("No parameter configured")
+                .hasMessageContaining("genre");
+    }
+
 }

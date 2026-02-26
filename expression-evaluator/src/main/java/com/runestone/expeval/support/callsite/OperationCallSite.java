@@ -43,6 +43,9 @@ public class OperationCallSite {
     private final String methodName;
     private final MethodType methodType;
     private final CallSiteInvoker callSiteInvoker;
+    private final Class<?>[] parameterTypes;
+    private final Class<?> returnType;
+    private final boolean singleArrayParameter;
 
     /**
      * Creates a new call site for a virtual method
@@ -55,6 +58,9 @@ public class OperationCallSite {
         this.methodName = methodName;
         this.methodType = methodType;
         this.callSiteInvoker = callSiteInvoker;
+        this.parameterTypes = methodType.parameterArray();
+        this.returnType = methodType.returnType();
+        this.singleArrayParameter = methodType.parameterCount() == 1 && methodType.lastParameterType().isArray();
     }
 
     /**
@@ -79,44 +85,59 @@ public class OperationCallSite {
      */
     @SuppressWarnings({"unchecked"})
     public <R> R call(CallSiteContext context, Object[] parameters, BiFunction<Object, Class<?>, Object> converter) {
-        Object[] params;
+        Object[] params = parameters;
         Objects.requireNonNull(context, "CallSite context cannot be null");
-        if (methodType.parameterCount() == 1 && methodType.lastParameterType().getComponentType() != null
+        if (singleArrayParameter
                 && (parameters.length > 1 || (parameters.length == 1 && !(parameters[0].getClass().isArray())))) {
             params = new Object[]{parameters};
-        } else {
-            params = parameters;
         }
-        Object[] convertedParams = new Object[params.length];
+        Object[] invocationParams = params;
 
-        Class<?>[] methodParameterTypes = methodType.parameterArray();
         for (int i = 0, parametersLength = params.length; i < parametersLength; i++) {
             Object parameter = params[i];
-            Class<?> parameterType = methodParameterTypes[i];
+            Class<?> parameterType = parameterTypes[i];
+            Object convertedParameter;
             if (parameterType.isArray()) {
-                if (!parameter.getClass().isArray()) {
-                    throw new IllegalArgumentException(String.format("Parameter on position [%s] of virtual method [%s] should be an array", i, methodName));
-                }
-                int arrLength = Array.getLength(parameter);
-                Object convertedArray = Array.newInstance(parameterType.getComponentType(), arrLength);
-                for (int j = 0; j < arrLength; j++) {
-                    Array.set(convertedArray, j, converter.apply(Array.get(parameter, j), parameterType.getComponentType()));
-                }
-                convertedParams[i] = convertedArray;
+                convertedParameter = convertArrayParameter(parameterType, parameter, converter, i);
+            } else if (parameterType.equals(parameter.getClass())) {
+                convertedParameter = parameter;
             } else {
-                if (parameterType.equals(parameter.getClass())) {
-                    convertedParams[i] = parameter;
-                } else {
-                    convertedParams[i] = converter.apply(parameter, parameterType);
+                convertedParameter = converter.apply(parameter, parameterType);
+            }
+            if (convertedParameter != parameter) {
+                if (invocationParams == params) {
+                    invocationParams = params.clone();
                 }
+                invocationParams[i] = convertedParameter;
             }
         }
 
-        Object value = callSiteInvoker.invoke(context, convertedParams);
-        if (methodType.returnType().equals(value.getClass())) {
+        Object value = callSiteInvoker.invoke(context, invocationParams);
+        if (returnType.equals(value.getClass())) {
             return (R) value;
         }
-        return (R) converter.apply(value, methodType.returnType());
+        return (R) converter.apply(value, returnType);
+    }
+
+    private Object convertArrayParameter(
+            Class<?> parameterType,
+            Object parameter,
+            BiFunction<Object, Class<?>, Object> converter,
+            int parameterIndex) {
+        if (!parameter.getClass().isArray()) {
+            throw new IllegalArgumentException(String.format(
+                    "Parameter on position [%s] of virtual method [%s] should be an array", parameterIndex, methodName));
+        }
+        if (parameterType.isInstance(parameter)) {
+            return parameter;
+        }
+
+        int arrLength = Array.getLength(parameter);
+        Object convertedArray = Array.newInstance(parameterType.getComponentType(), arrLength);
+        for (int j = 0; j < arrLength; j++) {
+            Array.set(convertedArray, j, converter.apply(Array.get(parameter, j), parameterType.getComponentType()));
+        }
+        return convertedArray;
     }
 
     /**

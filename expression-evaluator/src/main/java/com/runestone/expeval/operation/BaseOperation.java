@@ -29,6 +29,7 @@ import com.runestone.expeval.operation.values.variable.AssignedVariableOperation
 import com.runestone.expeval.operation.values.variable.AssignedVectorOperation;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.util.*;
 import java.util.Map.Entry;
 
@@ -38,9 +39,11 @@ public class BaseOperation extends AbstractOperation {
 
     private final Map<String, AssignedVariableOperation> assignedVariables;
     private final AbstractOperation operation;
+    private final boolean hasAssignedVariables;
 
     public BaseOperation(AbstractOperation operation, Map<String, AssignedVariableOperation> assignedVariables) {
         this.assignedVariables = assignedVariables != null ? assignedVariables : Collections.emptyMap();
+        this.hasAssignedVariables = !this.assignedVariables.isEmpty();
         this.operation = operation;
         if (this.operation != null) {
             this.expectedType(this.operation.getExpectedType());
@@ -52,16 +55,19 @@ public class BaseOperation extends AbstractOperation {
 
     @Override
     protected Object resolve(OperationContext context) {
-        for (Entry<String, AssignedVariableOperation> entry : assignedVariables.entrySet()) {
-            entry.getValue().evaluate(context);
+        if (hasAssignedVariables) {
+            for (Entry<String, AssignedVariableOperation> entry : assignedVariables.entrySet()) {
+                entry.getValue().evaluate(context);
+            }
         }
         if (operation != null) {
             Object result = operation.evaluate(context);
             if (result instanceof Number) {
-                BigDecimal numberResult = result instanceof BigDecimal ? (BigDecimal) result
-                        : new BigDecimal(result.toString(), context.mathContext());
-                if (context.scale() != null) {
-                    numberResult = numberResult.setScale(context.scale(), context.mathContext().getRoundingMode());
+                MathContext mathContext = context.mathContext();
+                Integer scale = context.scale();
+                BigDecimal numberResult = result instanceof BigDecimal ? (BigDecimal) result : new BigDecimal(result.toString(), mathContext);
+                if (scale != null) {
+                    numberResult = numberResult.setScale(scale, mathContext.getRoundingMode());
                 }
                 return numberResult;
             }

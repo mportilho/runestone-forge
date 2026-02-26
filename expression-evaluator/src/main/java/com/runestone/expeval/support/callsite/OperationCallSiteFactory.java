@@ -24,15 +24,12 @@
 
 package com.runestone.expeval.support.callsite;
 
-import java.beans.BeanInfo;
-import java.beans.Introspector;
-import java.beans.MethodDescriptor;
 import java.lang.invoke.*;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import static java.lang.reflect.Modifier.isStatic;
 
@@ -44,6 +41,33 @@ import static java.lang.reflect.Modifier.isStatic;
 public class OperationCallSiteFactory {
 
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
+
+    private static final ClassValue<MethodTemplate[]> METHOD_TEMPLATES = new ClassValue<>() {
+        @Override
+        protected MethodTemplate[] computeValue(Class<?> type) {
+            Method[] methods = type.getMethods();
+            Arrays.sort(methods, Comparator.comparing(Method::getName)
+                    .thenComparingInt(Method::getParameterCount)
+                    .thenComparing(Method::toGenericString));
+
+            List<MethodTemplate> templates = new ArrayList<>(methods.length);
+            for (Method method : methods) {
+                if (Object.class.equals(method.getDeclaringClass())
+                        || !Modifier.isPublic(method.getModifiers())
+                        || void.class.equals(method.getReturnType())) {
+                    continue;
+                }
+                try {
+                    templates.add(createMethodTemplate(method));
+                } catch (Throwable e) {
+                    throw new IllegalStateException("Error creating method template for method [" + method + "]", e);
+                }
+            }
+            return templates.toArray(new MethodTemplate[0]);
+        }
+    };
+
+    private static final ConcurrentMap<StaticProviderCacheKey, Map<String, OperationCallSite>> STATIC_PROVIDER_CACHE = new ConcurrentHashMap<>();
 
     /**
      * Creates a map of lambda call sites for all public methods of the given provider object, including static methods.
@@ -76,47 +100,80 @@ public class OperationCallSiteFactory {
 
     private static Map<String, OperationCallSite> makeLambdaCallSites(Object provider, String... methodNames) throws Throwable {
         Objects.requireNonNull(provider, "Provider object for extracting methods required");
-        boolean isClassObject = provider instanceof Class<?>;
-        Class<?> clazz = isClassObject ? (Class<?>) provider : provider.getClass();
-        BeanInfo beanInfo = Introspector.getBeanInfo(clazz, Object.class);
+        boolean classProvider = provider instanceof Class<?>;
+        Class<?> providerClass = classProvider ? (Class<?>) provider : provider.getClass();
+        Set<String> methodNameFilter = normalizeMethodNames(methodNames);
 
+        if (classProvider) {
+            Map<String, OperationCallSite> cached = STATIC_PROVIDER_CACHE.computeIfAbsent(
+                    new StaticProviderCacheKey(providerClass, canonicalFilterKey(methodNameFilter)),
+                    key -> Collections.unmodifiableMap(createCallSites(providerClass, null, methodNameFilter, true)));
+            return new HashMap<>(cached);
+        }
+
+        return createCallSites(providerClass, provider, methodNameFilter, false);
+    }
+
+    private static Map<String, OperationCallSite> createCallSites(
+            Class<?> providerClass,
+            Object provider,
+            Set<String> methodNameFilter,
+            boolean classProvider) {
         Map<String, OperationCallSite> dynamicCallerPool = new HashMap<>();
-        for (MethodDescriptor methodDescriptor : beanInfo.getMethodDescriptors()) {
-            if (verifyIgnorableMethod(methodDescriptor, methodNames)) continue;
-            OperationCallSite lambdaCallSite = createLambdaCallSite(methodDescriptor.getMethod(), isClassObject, provider);
-            if (lambdaCallSite != null) {
-                dynamicCallerPool.put(lambdaCallSite.getKeyName(), lambdaCallSite);
+        for (MethodTemplate methodTemplate : METHOD_TEMPLATES.get(providerClass)) {
+            if (methodNameFilter != null && !methodNameFilter.contains(methodTemplate.methodName())) {
+                continue;
             }
+            if (!methodTemplate.isStatic() && classProvider) {
+                continue;
+            }
+            OperationCallSite callSite;
+            try {
+                callSite = methodTemplate.create(provider);
+            } catch (Throwable e) {
+                throw new IllegalStateException("Error creating call site for method [" + methodTemplate.methodName() + "]", e);
+            }
+            dynamicCallerPool.put(callSite.getKeyName(), callSite);
         }
         return dynamicCallerPool;
     }
 
-    private static boolean verifyIgnorableMethod(MethodDescriptor methodDescriptor, String[] methodNames) {
-        if (methodNames != null && methodNames.length > 0) {
-            boolean found = false;
-            for (String methodName : methodNames) {
-                if (methodName.equals(methodDescriptor.getName())) {
-                    found = true;
-                    break;
-                }
-            }
-            return !found;
-        }
-        return false;
-    }
-
-    private static OperationCallSite createLambdaCallSite(Method method, boolean isClassObject, Object provider) throws Throwable {
-        if (void.class.equals(method.getReturnType()) || !Modifier.isPublic(method.getModifiers())) {
+    private static Set<String> normalizeMethodNames(String[] methodNames) {
+        if (methodNames == null || methodNames.length == 0) {
             return null;
         }
-        if (findFactoryInterface(method.getParameterCount()) == null || hasPrimitives(method)) {
-            return createMethodHandleCaller(method, isClassObject ? null : provider);
-        } else if (isStatic(method.getModifiers())) {
-            return createStaticCaller(method);
-        } else if (!isClassObject) {
-            return createDynamicCaller(method, provider);
+        Set<String> names = new HashSet<>(methodNames.length);
+        for (String methodName : methodNames) {
+            if (methodName != null && !methodName.isBlank()) {
+                names.add(methodName);
+            }
         }
-        return null;
+        return names.isEmpty() ? null : names;
+    }
+
+    private static String canonicalFilterKey(Set<String> methodNameFilter) {
+        if (methodNameFilter == null) {
+            return "*";
+        }
+        List<String> names = new ArrayList<>(methodNameFilter);
+        names.sort(String::compareTo);
+        return String.join("\u0001", names);
+    }
+
+    private static MethodTemplate createMethodTemplate(Method method) throws Throwable {
+        Class<?> factoryInterface = findFactoryInterface(method.getParameterCount());
+        boolean forceMethodHandle = factoryInterface == null || hasPrimitives(method);
+
+        if (isStatic(method.getModifiers())) {
+            if (forceMethodHandle) {
+                return new StaticOperationCallSiteTemplate(method.getName(), createMethodHandleCaller(method, null));
+            }
+            return new StaticOperationCallSiteTemplate(method.getName(), createStaticCaller(method));
+        }
+        if (forceMethodHandle) {
+            return new InstanceMethodHandleTemplate(method);
+        }
+        return new InstanceLambdaTemplate(method, factoryInterface);
     }
 
     // slower
@@ -135,7 +192,8 @@ public class OperationCallSiteFactory {
                 throw new IllegalStateException("Error calling dynamic function", e);
             }
         };
-        return new OperationCallSite(method.getName(), methodHandle.type(), supplier);
+        MethodType functionMethodType = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
+        return new OperationCallSite(method.getName(), functionMethodType, supplier);
     }
 
     private static OperationCallSite createStaticCaller(Method method) throws Throwable {
@@ -151,21 +209,6 @@ public class OperationCallSiteFactory {
                 functionMethodType);
 
         return new OperationCallSite(method.getName(), functionMethodType, createCallSiteInvoker(callSite.getTarget().invoke()));
-    }
-
-    private static OperationCallSite createDynamicCaller(Method method, Object instance) throws Throwable {
-        Class<?> clazz = method.getDeclaringClass();
-        Class<?> factoryInterface = findFactoryInterface(method.getParameterCount());
-        MethodType functionMethodType = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
-        MethodHandle implementationMethodHandle = OperationCallSiteFactory.LOOKUP.findVirtual(clazz, method.getName(), functionMethodType);
-
-        CallSite callSite = LambdaMetafactory.metafactory(OperationCallSiteFactory.LOOKUP,
-                "call",
-                MethodType.methodType(factoryInterface, instance.getClass()), // factoryMethodType
-                MethodType.genericMethodType(method.getParameterCount()), // method params plus instance object
-                implementationMethodHandle,
-                functionMethodType); // method params plus instance object
-        return new OperationCallSite(method.getName(), functionMethodType, createCallSiteInvoker(callSite.getTarget().invoke(instance)));
     }
 
     private static boolean hasPrimitives(Method method) {
@@ -213,6 +256,122 @@ public class OperationCallSiteFactory {
             case InterfaceWrappers.Function11 f -> (c, p) -> f.call(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10]);
             default -> null;
         };
+    }
+
+    private interface MethodTemplate {
+
+        String methodName();
+
+        boolean isStatic();
+
+        OperationCallSite create(Object provider) throws Throwable;
+    }
+
+    private static final class StaticOperationCallSiteTemplate implements MethodTemplate {
+
+        private final String methodName;
+        private final OperationCallSite operationCallSite;
+
+        private StaticOperationCallSiteTemplate(String methodName, OperationCallSite operationCallSite) {
+            this.methodName = methodName;
+            this.operationCallSite = operationCallSite;
+        }
+
+        @Override
+        public String methodName() {
+            return methodName;
+        }
+
+        @Override
+        public boolean isStatic() {
+            return true;
+        }
+
+        @Override
+        public OperationCallSite create(Object provider) {
+            return operationCallSite;
+        }
+    }
+
+    private static final class InstanceLambdaTemplate implements MethodTemplate {
+
+        private final String methodName;
+        private final MethodType functionMethodType;
+        private final MethodHandle factoryTarget;
+
+        private InstanceLambdaTemplate(Method method, Class<?> factoryInterface) throws Throwable {
+            Class<?> clazz = method.getDeclaringClass();
+            this.methodName = method.getName();
+            this.functionMethodType = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
+            MethodHandle implementationMethodHandle = OperationCallSiteFactory.LOOKUP.findVirtual(clazz, methodName, functionMethodType);
+            CallSite callSite = LambdaMetafactory.metafactory(OperationCallSiteFactory.LOOKUP,
+                    "call",
+                    MethodType.methodType(factoryInterface, clazz),
+                    MethodType.genericMethodType(method.getParameterCount()),
+                    implementationMethodHandle,
+                    functionMethodType);
+            this.factoryTarget = callSite.getTarget();
+        }
+
+        @Override
+        public String methodName() {
+            return methodName;
+        }
+
+        @Override
+        public boolean isStatic() {
+            return false;
+        }
+
+        @Override
+        public OperationCallSite create(Object provider) throws Throwable {
+            Object lambda = factoryTarget.invoke(provider);
+            return new OperationCallSite(methodName, functionMethodType, createCallSiteInvoker(lambda));
+        }
+    }
+
+    private static final class InstanceMethodHandleTemplate implements MethodTemplate {
+
+        private final String methodName;
+        private final MethodType functionMethodType;
+        private final MethodHandle unboundMethodHandle;
+
+        private InstanceMethodHandleTemplate(Method method) throws IllegalAccessException {
+            this.methodName = method.getName();
+            this.functionMethodType = MethodType.methodType(method.getReturnType(), method.getParameterTypes());
+            this.unboundMethodHandle = OperationCallSiteFactory.LOOKUP.unreflect(method);
+        }
+
+        @Override
+        public String methodName() {
+            return methodName;
+        }
+
+        @Override
+        public boolean isStatic() {
+            return false;
+        }
+
+        @Override
+        public OperationCallSite create(Object provider) {
+            Objects.requireNonNull(provider, "Provider cannot be null for instance method call sites");
+            MethodHandle methodHandle = unboundMethodHandle.bindTo(provider);
+            MethodHandle callableMethodHandle = methodHandle
+                    .asType(methodHandle.type().generic())
+                    .asSpreader(Object[].class, functionMethodType.parameterCount());
+
+            CallSiteInvoker supplier = (context, parameters) -> {
+                try {
+                    return callableMethodHandle.invokeExact(parameters);
+                } catch (Throwable e) {
+                    throw new IllegalStateException("Error calling dynamic function", e);
+                }
+            };
+            return new OperationCallSite(methodName, functionMethodType, supplier);
+        }
+    }
+
+    private record StaticProviderCacheKey(Class<?> providerClass, String methodFilter) {
     }
 
 }

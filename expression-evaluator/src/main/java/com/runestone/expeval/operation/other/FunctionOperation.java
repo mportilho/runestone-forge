@@ -41,6 +41,14 @@ public class FunctionOperation extends AbstractOperation {
     private final String functionName;
     private final AbstractOperation[] parameters;
     private final boolean cacheHint;
+    private final String functionKey;
+    private final String fallbackFunctionKey;
+
+    private transient OperationContext lastContext;
+    private transient CallSiteContext callSiteContext;
+    private transient OperationContext functionCallSiteContext;
+    private transient OperationCallSite functionCallSite;
+    private transient boolean functionCallSiteResolved;
 
     public FunctionOperation(String functionName, AbstractOperation[] parameters, boolean caching) {
         this.functionName = functionName;
@@ -49,11 +57,13 @@ public class FunctionOperation extends AbstractOperation {
             parameter.addParent(this);
         }
         this.cacheHint = caching;
+        this.functionKey = OperationCallSite.keyName(functionName, parameters.length);
+        this.fallbackFunctionKey = parameters.length > 1 ? OperationCallSite.keyName(functionName, 1) : null;
     }
 
     @Override
     protected Object resolve(OperationContext context) {
-        OperationCallSite caller = context.getFunction(functionName, parameters.length);
+        OperationCallSite caller = resolveFunctionCallSite(context);
         if (caller == null) {
             throw new ExpressionEvaluatorException(String.format("Function [%s] with [%s] parameter(s) not found", functionName, parameters.length));
         }
@@ -62,10 +72,26 @@ public class FunctionOperation extends AbstractOperation {
         for (int i = 0, paramsLength = params.length; i < paramsLength; i++) {
             params[i] = parameters[i].evaluate(context);
         }
-        CallSiteContext callSiteContext = new CallSiteContext(context.mathContext(), context.scale(), context.zoneId(), context.currentDateTime());
-        Object result = caller.call(callSiteContext, params, context.conversionService()::convert);
+        Object result = caller.call(resolveCallSiteContext(context), params, context.conversionService()::convert);
         expectedTypeByValue(result, caller.getMethodType().returnType());
         return convertToInternalTypes(result, context);
+    }
+
+    private OperationCallSite resolveFunctionCallSite(OperationContext context) {
+        if (context != functionCallSiteContext || !functionCallSiteResolved) {
+            functionCallSiteContext = context;
+            functionCallSite = context.getFunction(functionKey, fallbackFunctionKey);
+            functionCallSiteResolved = true;
+        }
+        return functionCallSite;
+    }
+
+    private CallSiteContext resolveCallSiteContext(OperationContext context) {
+        if (context != lastContext) {
+            lastContext = context;
+            callSiteContext = new CallSiteContext(context.mathContext(), context.scale(), context.zoneId(), context.currentDateTime());
+        }
+        return callSiteContext;
     }
 
     private Object convertToInternalTypes(Object value, OperationContext context) {

@@ -30,8 +30,14 @@ import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperati
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
 import com.runestone.dynafilter.modules.jpa.spring.tools.SearchLanguages;
 import com.runestone.dynafilter.modules.jpa.spring.tools.SearchState;
+import com.runestone.dynafilter.modules.jpa.spring.tools.SearchStateWithDefaultMethod;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import jakarta.servlet.http.HttpServletRequest;
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.context.support.GenericApplicationContext;
@@ -40,6 +46,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.servlet.HandlerMapping;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.Map;
 
 public class TestSpecDynaFilterArgumentResolver {
@@ -216,6 +224,89 @@ public class TestSpecDynaFilterArgumentResolver {
 
         Specification<?> specification = (Specification<?>) argumentResolver.resolveArgument(parameter, null, webRequest, null);
         Assertions.assertThat(specification).isNotNull();
+    }
+
+    @Test
+    @Disabled("PERF-006 discarded: default-method proxy support was reverted in SpecificationDynamicFilterArgumentResolver")
+    public void testResolveArgumentWithSpecificationSubInterfaceDefaultMethod() {
+        var argumentResolver = createSpecificationDynaFilterArgumentResolver();
+        MethodParameter parameter = Mockito.mock(MethodParameter.class);
+        NativeWebRequest webRequest = Mockito.mock(NativeWebRequest.class);
+        HttpServletRequest httpServletRequest = Mockito.mock(HttpServletRequest.class);
+
+        Mockito.when(parameter.getParameterType()).thenReturn((Class) SearchStateWithDefaultMethod.class);
+        Mockito.when(parameter.getParameterAnnotations()).thenReturn(SearchLanguages.class.getAnnotations());
+
+        Mockito.when(webRequest.getNativeRequest(HttpServletRequest.class)).thenReturn(httpServletRequest);
+        Mockito.when(webRequest.getParameterMap()).thenReturn(Map.of(
+                "name", new String[]{"English"},
+                "state", new String[]{"ON_USE"},
+                "minCreationDate", new String[]{"2021-01-01"},
+                "maxCreationDate", new String[]{"2021-12-31"}
+        ));
+        Mockito.when(httpServletRequest.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE)).thenReturn(null);
+
+        SearchStateWithDefaultMethod<?> specification = (SearchStateWithDefaultMethod<?>) argumentResolver.resolveArgument(parameter, null, webRequest, null);
+        Assertions.assertThat(specification).isNotNull();
+        Assertions.assertThat(Proxy.isProxyClass(specification.getClass())).isTrue();
+        Assertions.assertThat(specification.isResolved()).isTrue();
+    }
+
+    @Test
+    @Disabled("PERF-006 discarded: optimized Object-method handling on proxy was reverted")
+    public void testResolvedProxyObjectMethodsAreConsistent() {
+        var argumentResolver = createSpecificationDynaFilterArgumentResolver();
+        MethodParameter parameter = Mockito.mock(MethodParameter.class);
+        NativeWebRequest webRequest = Mockito.mock(NativeWebRequest.class);
+        HttpServletRequest httpServletRequest = Mockito.mock(HttpServletRequest.class);
+
+        Mockito.when(parameter.getParameterType()).thenReturn((Class) SearchState.class);
+        Mockito.when(parameter.getParameterAnnotations()).thenReturn(SearchLanguages.class.getAnnotations());
+
+        Mockito.when(webRequest.getNativeRequest(HttpServletRequest.class)).thenReturn(httpServletRequest);
+        Mockito.when(webRequest.getParameterMap()).thenReturn(Map.of(
+                "name", new String[]{"English"},
+                "state", new String[]{"ON_USE"},
+                "minCreationDate", new String[]{"2021-01-01"},
+                "maxCreationDate", new String[]{"2021-12-31"}
+        ));
+        Mockito.when(httpServletRequest.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE)).thenReturn(null);
+
+        Object specification = argumentResolver.resolveArgument(parameter, null, webRequest, null);
+        Assertions.assertThat(specification).isNotNull();
+        Assertions.assertThat(specification.equals(specification)).isTrue();
+        Assertions.assertThat(specification.hashCode()).isEqualTo(specification.hashCode());
+        Assertions.assertThat(specification.toString()).contains("SpecificationProxy");
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Disabled("PERF-006 discarded: direct toPredicate dispatch path was reverted")
+    public void testProxyDelegatesToPredicateAndDefaultMethods() throws Exception {
+        var argumentResolver = createSpecificationDynaFilterArgumentResolver();
+
+        Specification targetSpecification = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+
+        Method createProxyMethod = SpecificationDynamicFilterArgumentResolver.class
+                .getDeclaredMethod("createProxy", Specification.class, Class.class);
+        createProxyMethod.setAccessible(true);
+
+        SearchStateWithDefaultMethod<?> proxy = (SearchStateWithDefaultMethod<?>) createProxyMethod.invoke(
+                argumentResolver,
+                targetSpecification,
+                SearchStateWithDefaultMethod.class
+        );
+
+        Root<?> root = Mockito.mock(Root.class);
+        CriteriaQuery<?> query = Mockito.mock(CriteriaQuery.class);
+        CriteriaBuilder criteriaBuilder = Mockito.mock(CriteriaBuilder.class);
+        Predicate expectedPredicate = Mockito.mock(Predicate.class);
+        Mockito.when(criteriaBuilder.conjunction()).thenReturn(expectedPredicate);
+
+        Predicate predicate = proxy.toPredicate((Root) root, (CriteriaQuery) query, criteriaBuilder);
+
+        Assertions.assertThat(predicate).isSameAs(expectedPredicate);
+        Assertions.assertThat(proxy.isResolved()).isTrue();
     }
 
     @Test

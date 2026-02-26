@@ -64,10 +64,21 @@ public abstract class AbstractVariableValueOperation extends AbstractOperation {
         if (newValue == null) {
             throw new ExpressionConfigurationException(String.format("Variable [%s] received a null value", variableName));
         }
-        if (value == null || (!value.equals(newValue) || (value.getClass().isInstance(newValue) && value instanceof Comparable v1 && v1.compareTo(newValue) != 0))) {
+        if (value == null || !hasEquivalentValue(newValue)) {
             this.value = newValue;
             clearCache();
         }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private boolean hasEquivalentValue(Object newValue) {
+        if (value.equals(newValue)) {
+            return true;
+        }
+        if (value.getClass().isInstance(newValue) && value instanceof Comparable comparableValue) {
+            return comparableValue.compareTo(newValue) == 0;
+        }
+        return false;
     }
 
     @Override

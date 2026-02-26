@@ -39,7 +39,10 @@ import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
 import org.springframework.data.repository.query.FluentQuery;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -156,14 +159,48 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
         if (!sort.isSorted()) {
             return sort;
         }
-        List<Sort.Order> orderList = sort.stream().map(order -> {
-            for (FilterRequestData filter : conditionalStatement.statementWrapper().allFilters()) {
-                if (order.getProperty().equals(filter.parameters()[0]) && !order.getProperty().equals(filter.path())) {
-                    return order.withProperty(filter.path());
-                }
+        return updateSortFilterPath(sort, conditionalStatement.statementWrapper().allFilters());
+    }
+
+    static Sort updateSortFilterPath(Sort sort, List<FilterRequestData> filters) {
+        if (!sort.isSorted() || filters == null || filters.isEmpty()) {
+            return sort;
+        }
+
+        Map<String, String> parameterPathMap = new HashMap<>(Math.max(16, filters.size()));
+        for (FilterRequestData filter : filters) {
+            String[] parameters = filter.parameters();
+            if (parameters == null || parameters.length == 0) {
+                continue;
             }
-            return order;
-        }).toList();
-        return Sort.by(orderList);
+
+            String parameter = parameters[0];
+            if (parameter == null || parameterPathMap.containsKey(parameter)) {
+                continue;
+            }
+
+            String path = filter.path();
+            if (path != null && !parameter.equals(path)) {
+                parameterPathMap.put(parameter, path);
+            }
+        }
+
+        if (parameterPathMap.isEmpty()) {
+            return sort;
+        }
+
+        boolean changed = false;
+        List<Sort.Order> translatedOrders = new ArrayList<>();
+        for (Sort.Order order : sort) {
+            String translatedPath = parameterPathMap.get(order.getProperty());
+            if (translatedPath != null) {
+                translatedOrders.add(order.withProperty(translatedPath));
+                changed = true;
+            } else {
+                translatedOrders.add(order);
+            }
+        }
+
+        return changed ? Sort.by(translatedOrders) : sort;
     }
 }

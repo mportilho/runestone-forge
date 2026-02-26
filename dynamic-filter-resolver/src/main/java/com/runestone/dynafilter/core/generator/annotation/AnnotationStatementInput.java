@@ -25,6 +25,50 @@
 package com.runestone.dynafilter.core.generator.annotation;
 
 import java.lang.annotation.Annotation;
+import java.util.Arrays;
+import java.util.Objects;
 
-public record AnnotationStatementInput(Class<?> type, Annotation[] annotations) {
+public final class AnnotationStatementInput {
+
+    private final Class<?> type;
+    private final Annotation[] annotations;
+    private final int cachedHashCode;
+
+    public AnnotationStatementInput(Class<?> type, Annotation[] annotations) {
+        this.type = type;
+        this.annotations = annotations != null ? annotations.clone() : null;
+        this.cachedHashCode = 31 * Objects.hashCode(type) + Arrays.hashCode(this.annotations);
+    }
+
+    public Class<?> type() {
+        return type;
+    }
+
+    public Annotation[] annotations() {
+        return annotations;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        } else if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        AnnotationStatementInput that = (AnnotationStatementInput) o;
+        return Objects.equals(type, that.type) && Arrays.equals(annotations, that.annotations);
+    }
+
+    @Override
+    public int hashCode() {
+        return cachedHashCode;
+    }
+
+    @Override
+    public String toString() {
+        return "AnnotationStatementInput{" +
+                "type=" + type +
+                ", annotations=" + Arrays.toString(annotations) +
+                '}';
+    }
 }

@@ -81,7 +81,9 @@ public class ExpressionContext {
         if (variablesSupplier != null && (value = variablesSupplier.apply(name)) != null) {
             return value;
         }
-        initializeDictionaryMap();
+        if (dictionary == null) {
+            return null;
+        }
         return dictionary.get(name);
     }
 
@@ -93,8 +95,13 @@ public class ExpressionContext {
      * @see OperationCallSiteExtensions
      */
     public OperationCallSite findFunction(String key) {
-        initializeFunctionsMap();
-        return functions.getOrDefault(key, OperationCallSiteExtensions.getDefaultOperationCallSites().get(key));
+        if (functions != null) {
+            OperationCallSite function = functions.get(key);
+            if (function != null) {
+                return function;
+            }
+        }
+        return defaultOperationCallSites().get(key);
     }
 
     /**
@@ -169,15 +176,27 @@ public class ExpressionContext {
      */
     public void putFunctionsFromProvider(Object functionProvider) {
         try {
+            initializeFunctionsMap();
             Map<String, OperationCallSite> callSiteMap = OperationCallSiteFactory.createLambdaCallSites(functionProvider);
-            List<String> overridingFunctions = callSiteMap.keySet().stream().filter(key -> findFunction(key) != null).toList();
+            Map<String, OperationCallSite> defaultFunctions = defaultOperationCallSites();
+            List<String> overridingFunctions = callSiteMap.keySet().stream()
+                    .filter(key -> functions.containsKey(key) || defaultFunctions.containsKey(key))
+                    .toList();
             if (!overridingFunctions.isEmpty()) {
                 throw new ExpressionConfigurationException("Cannot add the following functions because they are already defined: " + overridingFunctions);
             }
-            callSiteMap.values().forEach(this::putFunction);
+            functions.putAll(callSiteMap);
         } catch (Throwable e) {
             throw new ExpressionConfigurationException("Error while extracting functions from provider object", e);
         }
+    }
+
+    private static Map<String, OperationCallSite> defaultOperationCallSites() {
+        return OperationCallSiteContextHolder.INSTANCE;
+    }
+
+    private static final class OperationCallSiteContextHolder {
+        private static final Map<String, OperationCallSite> INSTANCE = OperationCallSiteExtensions.getDefaultOperationCallSites();
     }
 
     private void initializeFunctionsMap() {

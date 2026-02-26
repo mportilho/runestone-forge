@@ -201,25 +201,25 @@ public class TestMathOperations {
     @Test
     public void testProductOfSequence() {
         Expression exp1 = new Expression("P[[1,2,3]](P + 1)");
-        VerifyExpressionsTools.checkWarmUpCache(exp1, 9);
+        VerifyExpressionsTools.checkWarmUpCache(exp1, 5);
         Assertions.assertThat(exp1.<BigDecimal>evaluate()).isEqualByComparingTo("24");
         Assertions.assertThat(exp1.toString()).isEqualTo("P[x](P + 1)");
         VerifyExpressionsTools.commonVerifications(exp1);
-        VerifyExpressionsTools.checkCache(exp1, 9);
+        VerifyExpressionsTools.checkCache(exp1, 5);
 
         Expression exp2 = new Expression("P[[1,2,3]](P + P[[1,2,3]](P + 2))");
-        VerifyExpressionsTools.checkWarmUpCache(exp2, 16);
+        VerifyExpressionsTools.checkWarmUpCache(exp2, 9);
         Assertions.assertThat(exp2.<BigDecimal>evaluate()).isEqualByComparingTo("238266");
         Assertions.assertThat(exp2.toString()).isEqualTo("P[x](P + P[x](P + 2))");
         VerifyExpressionsTools.commonVerifications(exp2);
-        VerifyExpressionsTools.checkCache(exp2, 16);
+        VerifyExpressionsTools.checkCache(exp2, 9);
 
         Expression exp3 = new Expression("P[[1,2,3]](P + P + P[[1,2,3]](P + 2))");
-        VerifyExpressionsTools.checkWarmUpCache(exp3, 17);
+        VerifyExpressionsTools.checkWarmUpCache(exp3, 9);
         Assertions.assertThat(exp3.<BigDecimal>evaluate()).isEqualByComparingTo("261888");
         Assertions.assertThat(exp3.toString()).isEqualTo("P[x](P + P + P[x](P + 2))");
         VerifyExpressionsTools.commonVerifications(exp3);
-        VerifyExpressionsTools.checkCache(exp3, 17);
+        VerifyExpressionsTools.checkCache(exp3, 9);
     }
 
     @Test
@@ -255,25 +255,25 @@ public class TestMathOperations {
     @Test
     public void testSummation() {
         Expression exp1 = new Expression("S[[1,2,3]](S + 2)");
-        VerifyExpressionsTools.checkWarmUpCache(exp1, 9);
+        VerifyExpressionsTools.checkWarmUpCache(exp1, 5);
         Assertions.assertThat(exp1.<BigDecimal>evaluate()).isEqualByComparingTo("12");
         Assertions.assertThat(exp1.toString()).isEqualTo("S[x](S + 2)");
         VerifyExpressionsTools.commonVerifications(exp1);
-        VerifyExpressionsTools.checkCache(exp1, 9);
+        VerifyExpressionsTools.checkCache(exp1, 5);
 
         Expression exp2 = new Expression("S[[1,3]](S + S[[1,3]](S + 2))");
-        VerifyExpressionsTools.checkWarmUpCache(exp2, 14);
+        VerifyExpressionsTools.checkWarmUpCache(exp2, 7);
         Assertions.assertThat(exp2.<BigDecimal>evaluate()).isEqualByComparingTo("20");
         Assertions.assertThat(exp2.toString()).isEqualTo("S[x](S + S[x](S + 2))");
         VerifyExpressionsTools.commonVerifications(exp2);
-        VerifyExpressionsTools.checkCache(exp2, 14);
+        VerifyExpressionsTools.checkCache(exp2, 7);
 
         Expression exp3 = new Expression("S[[1,3]](S + S + S[[1,3]](S + 2))");
-        VerifyExpressionsTools.checkWarmUpCache(exp3, 15);
+        VerifyExpressionsTools.checkWarmUpCache(exp3, 7);
         Assertions.assertThat(exp3.<BigDecimal>evaluate()).isEqualByComparingTo("24");
         Assertions.assertThat(exp3.toString()).isEqualTo("S[x](S + S + S[x](S + 2))");
         VerifyExpressionsTools.commonVerifications(exp3);
-        VerifyExpressionsTools.checkCache(exp3, 15);
+        VerifyExpressionsTools.checkCache(exp3, 7);
     }
 
     @Test

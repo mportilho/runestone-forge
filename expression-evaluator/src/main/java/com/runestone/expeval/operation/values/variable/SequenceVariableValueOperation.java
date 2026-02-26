@@ -43,7 +43,7 @@ public class SequenceVariableValueOperation extends AbstractVariableValueOperati
     }
 
     public void setSequenceIndex(Object newValue) {
-        setValue(newValue);
+        overrideValue(newValue);
     }
 
     @Override
@@ -54,6 +54,11 @@ public class SequenceVariableValueOperation extends AbstractVariableValueOperati
     @Override
     protected void formatRepresentation(StringBuilder builder) {
         builder.append(getVariableName());
+    }
+
+    @Override
+    public boolean getCacheHint() {
+        return false;
     }
 
 }

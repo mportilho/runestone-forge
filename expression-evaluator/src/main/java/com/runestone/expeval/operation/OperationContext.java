@@ -60,16 +60,34 @@ public record OperationContext(
 
     public OperationCallSite getFunction(String name, int parameterCount) {
         String functionKey = OperationCallSite.keyName(name, parameterCount);
+        String fallbackFunctionKey = parameterCount > 1 ? OperationCallSite.keyName(name, 1) : null;
+        return getFunction(functionKey, fallbackFunctionKey);
+    }
+
+    public OperationCallSite getFunction(String functionKey, String fallbackFunctionKey) {
         OperationCallSite func = userContext.findFunction(functionKey);
-        if (func == null) {
-            func = expressionContext.findFunction(functionKey);
+        if (func != null) {
+            return func;
         }
-        if (func == null && parameterCount > 1) {
-            func = getFunction(name, 1);
-        } else if (func == null && parameterCount == 1) {
-            return null;
+
+        if (userContext == expressionContext) {
+            if (fallbackFunctionKey == null) {
+                return null;
+            }
+            return userContext.findFunction(fallbackFunctionKey);
         }
-        return func;
+
+        func = expressionContext.findFunction(functionKey);
+        if (func != null || fallbackFunctionKey == null) {
+            return func;
+        }
+
+        func = userContext.findFunction(fallbackFunctionKey);
+        if (func != null) {
+            return func;
+        }
+
+        return expressionContext.findFunction(fallbackFunctionKey);
     }
 
 }
