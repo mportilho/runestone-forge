@@ -31,13 +31,6 @@
                             <version>${jmh.version}</version>
                         </path>
                     </annotationProcessorPaths>
-                    <testAnnotationProcessorPaths>
-                        <path>
-                            <groupId>org.openjdk.jmh</groupId>
-                            <artifactId>jmh-generator-annprocess</artifactId>
-                            <version>${jmh.version}</version>
-                        </path>
-                    </testAnnotationProcessorPaths>
                 </configuration>
             </plugin>
         </plugins>
