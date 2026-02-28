@@ -1406,3 +1406,44 @@ Artefatos:
 3. Verificação funcional com `TestTypeConversionHotPathBehaviour`.
 4. Medição JMH final.
 
+## Experimento PERF-2026-02-28-EXPEVAL-VARIABLE-RESOLUTION-OPTIMIZATION
+- Data: 2026-02-28
+- Objetivo: eliminar chamadas redundantes a `findValue` na `VariableValueOperation` quando `userContext` e `expressionContext` são idênticos.
+- Baseline commit/estado: `HEAD` sem a otimização de check de identidade.
+- Commit/estado testado: working tree atual com a otimização.
+
+### Hipótese
+1. Em expressões que utilizam variáveis não encontradas no primeiro lookup (ou que dependem de fallback), evitar o segundo lookup quando os contextos são idênticos reduz overhead de chamadas ao `variablesSupplier` e `HashMap.get()`.
+2. O ganho deve ser mais expressivo quanto mais complexo for o `variablesSupplier`.
+
+### Mudanças aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/operation/values/variable/VariableValueOperation.java`: Adicionado check `if (currValue == null && context.userContext() != context.expressionContext())`.
+- `expression-evaluator/src/test/java/com/runestone/expeval/operation/values/variable/VariableValueOperationOptimizationTest.java`: Teste unitário para validar redução de chamadas.
+- `expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/MissingVariableLookupBenchmark.java`: Benchmark JMH focado em lookup de variáveis ausentes.
+
+### Protocolo de medição
+- JVM: OpenJDK 21
+- JMH: 1.35
+- Benchmark class: `com.runestone.expeval.perf.jmh.MissingVariableLookupBenchmark`
+- Parâmetros: `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns -jvmArgs '-Xms1g -Xmx1g'`
+- Comando: `mvn test -pl expression-evaluator -Dtest=MissingVariableLookupBenchmark`
+
+### Resultado
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| missingVariablesLookup | 2547.511 | 2568.957 | +21.446 | -0.84% |
+
+### Decisão
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura técnica
+1. A variação de `-0.84%` está dentro da margem de erro estatística, indicando neutralidade para lookups simples (vazios).
+2. A otimização é mantida por ser filosoficamente correta: evita uma chamada garantidamente redundante (mesmo objeto, mesmo estado) que pode ser custosa em implementações customizadas de `factors` ou `variablesSupplier`.
+
+### Atividades executadas
+1. Implementação do check de identidade em `VariableValueOperation`.
+2. Criação de teste de regressão/validação de chamadas (`VariableValueOperationOptimizationTest`).
+3. Execução de benchmark comparativo com baseline revertido.
+

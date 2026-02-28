@@ -33,7 +33,8 @@ import com.runestone.expeval.operation.values.VariableValueProviderContext;
 
 public class VariableValueOperation extends AbstractVariableValueOperation {
 
-    private static final ThreadLocal<ProviderContextHolder> CONTEXT_HOLDER = ThreadLocal.withInitial(ProviderContextHolder::new);
+    private static final ThreadLocal<ProviderContextHolder> CONTEXT_HOLDER = ThreadLocal
+            .withInitial(ProviderContextHolder::new);
 
     public VariableValueOperation(String variableName) {
         super(variableName);
@@ -46,7 +47,7 @@ public class VariableValueOperation extends AbstractVariableValueOperation {
             return unwrapFunction(result, context);
         } else {
             Object currValue = context.userContext().findValue(getVariableName());
-            if (currValue == null) {
+            if (currValue == null && context.userContext() != context.expressionContext()) {
                 currValue = context.expressionContext().findValue(getVariableName());
             }
             return unwrapFunction(currValue, context);
@@ -65,7 +66,8 @@ public class VariableValueOperation extends AbstractVariableValueOperation {
         ProviderContextHolder holder = CONTEXT_HOLDER.get();
         if (holder.operationContext != context) {
             holder.operationContext = context;
-            holder.providerContext = new VariableValueProviderContext(context.mathContext(), context.scale(), context.zoneId(), context.currentDateTime());
+            holder.providerContext = new VariableValueProviderContext(context.mathContext(), context.scale(),
+                    context.zoneId(), context.currentDateTime());
         }
         return holder.providerContext;
     }
