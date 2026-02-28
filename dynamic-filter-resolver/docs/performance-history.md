@@ -499,34 +499,50 @@ java -cp "$CP" org.openjdk.jmh.Main \
 
 ---
 
-## Template para proximos experimentos
-Copiar e preencher:
+## Experimento PERF-008
+- Data: 2026-02-27
+- Objetivo: Avaliar se a conversão de Java Streams para loops simples no método `computeExpressionResolver` de `DefaultStatementGenerator` melhora a performance.
+- Baseline estado: Original com Streams (`Arrays.stream().mapMulti()`).
+- Estado testado: Refatoração para loop `for` manual.
 
-```md
-## Experimento PERF-XXX
-- Data:
-- Objetivo:
-- Baseline commit:
-- Commit testado:
+### Hipótese
+1. Loops manuais teriam menos overhead de criação de objetos e pipeline de stream do que `mapMulti`, resultando em menor latência para arrays pequenos de parâmetros de filtro.
 
-### Hipotese
+### Mudanças aplicadas
+- `src/main/java/com/runestone/dynafilter/core/generator/DefaultStatementGenerator.java:188`
+  - Refatoração do método `computeExpressionResolver` para usar loop `for` e pre-alocação de array.
 
-### Mudancas aplicadas
-- Arquivo:
-- Arquivo:
-
-### Protocolo de medicao
-- Comando:
-- Ambiente:
+### Protocolo de medição
+- JVM: Java 21.0.10
+- JMH: 1.37
+- Benchmark class: `com.runestone.dynafilter.performance.DynamicFilterResolverBenchmark`
+- Parâmetros:
+  - `-wi 5 -i 8 -w 500ms -r 500ms -f 0 -tu us`
+- Comando executado:
+```bash
+mvn exec:java -pl dynamic-filter-resolver -Dexec.mainClass="com.runestone.dynafilter.performance.DynamicFilterResolverBenchmarkRunner" -Dexec.classpathScope="test"
+```
 
 ### Resultado
-| Benchmark | Antes | Depois | Delta |
-|---|---:|---:|---:|
+| Benchmark | Before (us/op) | After (us/op) | Delta (us/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| statementGenerator_searchPeopleAndGames | 13.743 | 15.166 | +1.423 | -10.35% |
 
-### Decisao
+### Decisão
 - [ ] Aceitar
 - [ ] Ajustar
-- [ ] Descartar
+- [x] Descartar
 
-### Licoes aprendidas
-```
+### Leitura técnica
+1. O Java Moderno (JDK 21+) otimiza muito bem pipelines de Stream para coleções pequenas. O overhead do `mapMulti` foi inferior ao custo de gerenciamento manual do loop e alocação de array no cenário testado.
+2. A legibilidade e o estilo idiomático do Stream superam o ganho (inexistente neste caso) do loop manual.
+
+### Atividades executadas
+1. `mvn test-compile` - sucesso
+2. `Execução JMH Baseline` - sucesso
+3. `Refatoração para loop` - sucesso
+4. `Execução JMH Experimental` - sucesso
+5. `Reversão para Streams` - sucesso
+
+### Riscos residuais
+1. Nenhum. O código foi revertido para o estado estável e mais performático.
