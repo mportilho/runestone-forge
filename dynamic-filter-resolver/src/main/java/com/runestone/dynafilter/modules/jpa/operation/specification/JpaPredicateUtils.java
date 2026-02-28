@@ -66,7 +66,8 @@ class JpaPredicateUtils {
      */
     public static <T> Path<T> computeAttributePath(FilterData filterData, Root<?> root) {
         String path = Objects.requireNonNull(filterData.path(), "Path cannot be null").trim();
-        ParsedPath parsedPath = PARSED_PATH_CACHE.computeIfAbsent(path, JpaPredicateUtils::parsePath);
+        String key = root.getJavaType().getCanonicalName() + "." + path;
+        ParsedPath parsedPath = PARSED_PATH_CACHE.computeIfAbsent(key, k -> JpaPredicateUtils.parsePath(path));
         JoinType joinType = getJoinType(filterData);
         From<?, ?> from = root;
 
