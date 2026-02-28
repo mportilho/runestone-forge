@@ -1447,3 +1447,64 @@ Artefatos:
 2. Criação de teste de regressão/validação de chamadas (`VariableValueOperationOptimizationTest`).
 3. Execução de benchmark comparativo com baseline revertido.
 
+
+---
+
+## Experimento PERF-2026-02-28-EXPEVAL-CONTEXT-ALLOCATION-REUSE
+
+- Data: 2026-02-28
+- Objetivo: eliminar alocações desnecessárias por chamada de `evaluate()` (item 3.1 do performance-analysis.md): `OperationContext`, `CurrentDateTimeSupplier`, `CallSiteContext` (via identity-cache) e `Object[]` de parâmetros de funções.
+- Baseline commit/estado: `HEAD 8adf33a` (sem as mudanças)
+- Commit/estado testado: working tree com as três otimizações aplicadas
+
+### Hipótese
+
+Três fontes de alocação por chamada a `evaluate()` identificadas em `performance-analysis.md` §3.1:
+1. `new OperationContext(...)` + `new CurrentDateTimeSupplier(...)` em cada `evaluate()` no `ExpressionEvaluator`.
+2. `new CallSiteContext(...)` em `FunctionOperation.resolveCallSiteContext()` — o cache por identidade de `OperationContext` nunca acertava porque o contexto era sempre novo.
+3. `new Object[n]` para transportar parâmetros em cada chamada de função.
+
+**Hipótese:** Reutilizar o `OperationContext` quando o `userContext` não muda (e resetar o supplier de data/hora) e manter um buffer `Object[]` por instância de `FunctionOperation` eliminará as três fontes e reduzirá `ns/op` principalmente em expressões com funções.
+
+### Mudanças aplicadas
+
+- **`ExpressionEvaluator.java`** — adicionados campos `lastUserContext`, `cachedEvalContext`, `sharedDateTimeSupplier`; novo método `getOrCreateEvalContext()` que reutiliza `OperationContext` quando `userContext` é o mesmo (por identidade); `CurrentDateTimeSupplier.reset()` é chamado antes de cada avaliação para garantir timestamp fresco.
+- **`CurrentDateTimeSupplier`** (inner class de `ExpressionEvaluator`) — adicionado método `reset()` que zera o campo `currentDateTime`.
+- **`FunctionOperation.java`** — adicionado campo `transient Object[] paramsBuffer`; métodos `resolveParamsBuffer()` e `clearParamsBuffer()` para alocar uma única vez e reutilizar entre avaliações; slots zerados após cada chamada para evitar GC roots desnecessários.
+- **`VariableValueOperation.java`** — cache de `VariableValueProviderContext` atualizado para usar chave `(OperationContext, Temporal currentDateTime)` em vez de apenas identidade de `OperationContext`; garante que um novo `VariableValueProviderContext` seja criado quando o supplier é resetado (nova avaliação), preservando o contrato observável via `VariableProvider`.
+- **`ContextAllocationReuseBenchmark.java`** — novo benchmark JMH cobrindo quatro cenários: sem funções (baseline puro), 1 função 2 parâmetros, 1 função 6 parâmetros, 2 funções 2 parâmetros.
+
+### Protocolo de medição
+
+- JVM: Oracle JDK 21.0.10+8-LTS-217
+- JMH: 1.37
+- Parâmetros: `@Warmup(iterations=5, time=500ms)`, `@Measurement(iterations=10, time=500ms)`, `@Fork(value=3, jvmArgs=[-Xms1g,-Xmx1g])`
+- Modo: `AverageTime` em `ns/op`
+- Forks × iterações: 3 × 10 = 30 amostras por benchmark
+
+### Resultados
+
+| Benchmark | Before (ns/op) | After (ns/op) | Melhoria (%) |
+|---|---|---|---|
+| `noFunction` | 161.167 ± 4.144 | 144.232 ± 3.099 | **+10.5%** |
+| `singleFunction_2params` | 186.009 ± 6.910 | 131.311 ± 3.349 | **+29.4%** |
+| `singleFunction_6params` | 230.128 ± 20.651 | 180.540 ± 23.176 | **+21.5%** |
+| `twoFunctions_2params` | 298.735 ± 13.009 | 214.450 ± 5.131 | **+28.2%** |
+
+**Overhead incremental por função (Before vs After):**
+- 1 função 2p (before): 186.0 − 161.2 = **+24.8 ns** de overhead por função
+- 1 função 2p (after): 131.3 − 144.2 = **−12.9 ns** (função mais rápida que baseline "puro")
+- O after do `noFunction` já inclui o ganho de `OperationContext` + `CurrentDateTimeSupplier` reuse
+- O delta adicional de funções representa a eliminação de `CallSiteContext` + `Object[]`
+
+### Decisão
+
+**ACCEPT** — ganhos expressivos e consistentes em todos os cenários. Sem regressão funcional (230/230 testes passando). A melhoria para expressões com funções varia de 21% a 29%, e o baseline sem funções melhora 10.5% apenas pelo reuso de `OperationContext`.
+
+### Lições aprendidas
+
+1. O cache de identidade `context != lastContext` no `FunctionOperation` e `VariableValueOperation` nunca era acionado porque cada `evaluate()` criava um novo `OperationContext`. A otimização de reutilizar o contexto **ativa caches já existentes** no código.
+2. `VariableValueProviderContext` precisou de uma segunda chave de cache (valor do `Temporal` atual) para preservar o contrato observable de "contexto novo por avaliação" enquanto o `OperationContext` é reutilizado.
+3. `Object[]` para parâmetros de funções: o buffer por instância de `FunctionOperation` é seguro pois a árvore de operações não é compartilhada entre threads (design por cópia).
+4. O ganho de `noFunction` (~10.5%) vem exclusivamente do reuso de `OperationContext` + `CurrentDateTimeSupplier` — confirma que a alocação do record de 8 campos + objeto interno tem custo não trivial em hot path.
+

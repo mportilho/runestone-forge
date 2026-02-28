@@ -64,8 +64,13 @@ public class VariableValueOperation extends AbstractVariableValueOperation {
 
     private static VariableValueProviderContext resolveProviderContext(OperationContext context) {
         ProviderContextHolder holder = CONTEXT_HOLDER.get();
-        if (holder.operationContext != context) {
+        // Cache by (OperationContext identity, currentDateTime value): when the datetime supplier is reset
+        // between evaluations (e.g. via ExpressionEvaluator context caching), the new Temporal value acts
+        // as an implicit generation marker that forces a fresh VariableValueProviderContext per evaluation.
+        java.time.temporal.Temporal currentTime = context.currentDateTime().get();
+        if (holder.operationContext != context || holder.lastDateTime != currentTime) {
             holder.operationContext = context;
+            holder.lastDateTime = currentTime;
             holder.providerContext = new VariableValueProviderContext(context.mathContext(), context.scale(),
                     context.zoneId(), context.currentDateTime());
         }
@@ -82,6 +87,7 @@ public class VariableValueOperation extends AbstractVariableValueOperation {
 
     private static final class ProviderContextHolder {
         private OperationContext operationContext;
+        private java.time.temporal.Temporal lastDateTime;
         private VariableValueProviderContext providerContext;
     }
 

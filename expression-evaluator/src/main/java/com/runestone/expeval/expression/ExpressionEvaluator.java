@@ -66,6 +66,11 @@ class ExpressionEvaluator {
 
     private LanguageData languageData;
 
+    // Cached eval context — avoids allocating OperationContext + CurrentDateTimeSupplier on each evaluate()
+    private ExpressionContext lastUserContext;
+    private OperationContext cachedEvalContext;
+    private CurrentDateTimeSupplier sharedDateTimeSupplier;
+
     /**
      * Create a new expression evaluator.
      *
@@ -88,7 +93,7 @@ class ExpressionEvaluator {
      */
     public <T> T evaluate(ExpressionContext expressionContext) {
         parseExpression();
-        OperationContext operationContext = createOperationContext(false, expressionContext);
+        OperationContext operationContext = getOrCreateEvalContext(expressionContext);
         return languageData.operation().evaluate(operationContext);
     }
 
@@ -203,6 +208,27 @@ class ExpressionEvaluator {
         }
     }
 
+    /**
+     * Returns a cached {@link OperationContext} for evaluate() calls, avoiding per-call allocation.
+     * The {@link CurrentDateTimeSupplier} is reset on each call so date/time stays current.
+     * A new context is built only when the userContext identity changes.
+     */
+    private OperationContext getOrCreateEvalContext(ExpressionContext userContext) {
+        ExpressionContext resolvedUser = userContext != null ? userContext : this.expressionContext;
+        if (sharedDateTimeSupplier == null) {
+            sharedDateTimeSupplier = new CurrentDateTimeSupplier(options.zoneId());
+        } else {
+            sharedDateTimeSupplier.reset();
+        }
+        if (cachedEvalContext != null && resolvedUser == lastUserContext) {
+            return cachedEvalContext;
+        }
+        lastUserContext = resolvedUser;
+        cachedEvalContext = new OperationContext(options.mathContext(), options.scale(), false,
+                sharedDateTimeSupplier, options.conversionService(), this.expressionContext, resolvedUser, options.zoneId());
+        return cachedEvalContext;
+    }
+
     private OperationContext createOperationContext(boolean allowNull, ExpressionContext expressionContext) {
         ExpressionContext context = expressionContext != null ? expressionContext : this.expressionContext;
         return new OperationContext(options.mathContext(), options.scale(), allowNull,
@@ -217,6 +243,10 @@ class ExpressionEvaluator {
 
         private CurrentDateTimeSupplier(java.time.ZoneId zoneId) {
             this.zoneId = zoneId;
+        }
+
+        void reset() {
+            currentDateTime = null;
         }
 
         @Override

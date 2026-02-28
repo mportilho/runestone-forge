@@ -49,6 +49,7 @@ public class FunctionOperation extends AbstractOperation {
     private transient OperationContext functionCallSiteContext;
     private transient OperationCallSite functionCallSite;
     private transient boolean functionCallSiteResolved;
+    private transient Object[] paramsBuffer;
 
     public FunctionOperation(String functionName, AbstractOperation[] parameters, boolean caching) {
         this.functionName = functionName;
@@ -68,11 +69,12 @@ public class FunctionOperation extends AbstractOperation {
             throw new ExpressionEvaluatorException(String.format("Function [%s] with [%s] parameter(s) not found", functionName, parameters.length));
         }
 
-        Object[] params = new Object[parameters.length];
+        Object[] params = resolveParamsBuffer();
         for (int i = 0, paramsLength = params.length; i < paramsLength; i++) {
             params[i] = parameters[i].evaluate(context);
         }
         Object result = caller.call(resolveCallSiteContext(context), params, context.conversionService()::convert);
+        clearParamsBuffer(params);
         expectedTypeByValue(result, caller.getMethodType().returnType());
         return convertToInternalTypes(result, context);
     }
@@ -84,6 +86,19 @@ public class FunctionOperation extends AbstractOperation {
             functionCallSiteResolved = true;
         }
         return functionCallSite;
+    }
+
+    private Object[] resolveParamsBuffer() {
+        if (paramsBuffer == null) {
+            paramsBuffer = new Object[parameters.length];
+        }
+        return paramsBuffer;
+    }
+
+    private void clearParamsBuffer(Object[] params) {
+        for (int i = 0; i < params.length; i++) {
+            params[i] = null;
+        }
     }
 
     private CallSiteContext resolveCallSiteContext(OperationContext context) {
