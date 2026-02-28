@@ -107,7 +107,7 @@ public class BaseOperation extends AbstractOperation {
     protected AbstractOperation createClone(CloningContext context) {
         Map<String, AssignedVariableOperation> newAssignedVariables = null;
         if (nonNull(assignedVariables)) {
-            newAssignedVariables = new HashMap<>();
+            newAssignedVariables = new LinkedHashMap<>();
             for (Entry<String, AssignedVariableOperation> entry : assignedVariables.entrySet()) {
                 newAssignedVariables.put(entry.getKey(), (AssignedVariableOperation) entry.getValue().copy(context));
             }

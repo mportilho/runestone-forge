@@ -122,7 +122,7 @@ public class FunctionOperation extends AbstractOperation {
         for (int i = 0, copyParamsLength = copyParams.length; i < copyParamsLength; i++) {
             copyParams[i] = parameters[i].copy(context);
         }
-        return new FunctionOperation(functionName, copyParams, isCaching());
+        return new FunctionOperation(functionName, copyParams, cacheHint);
     }
 
     @Override

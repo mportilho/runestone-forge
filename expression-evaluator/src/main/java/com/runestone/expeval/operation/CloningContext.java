@@ -24,11 +24,10 @@
 
 package com.runestone.expeval.operation;
 
-
 import com.runestone.expeval.operation.values.AbstractVariableValueOperation;
 import com.runestone.expeval.operation.values.variable.AssignedVariableOperation;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -43,9 +42,9 @@ public class CloningContext {
     private final Map<AbstractOperation, AbstractOperation> clonedOperationsMap;
 
     public CloningContext() {
-        this.variables = new HashMap<>();
-        this.assignedVariables = new HashMap<>();
-        this.clonedOperationsMap = new HashMap<>();
+        this.variables = new LinkedHashMap<>();
+        this.assignedVariables = new LinkedHashMap<>();
+        this.clonedOperationsMap = new java.util.IdentityHashMap<>();
     }
 
     public Map<AbstractOperation, AbstractOperation> getClonedOperationsMap() {

@@ -46,6 +46,8 @@ import org.antlr.v4.runtime.atn.PredictionMode;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoField;
 import java.time.temporal.Temporal;
+import com.runestone.utils.cache.LruCache;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -59,6 +61,7 @@ import java.util.function.Supplier;
 class ExpressionEvaluator {
 
     private static final ParsingErrorListener PARSING_ERROR_LISTENER = new ParsingErrorListener();
+    private static final LruCache<String, LanguageData> GLOBAL_LANGUAGE_DATA_CACHE = new LruCache<>(1024);
 
     private final String expression;
     private final ExpressionOptions options;
@@ -187,13 +190,26 @@ class ExpressionEvaluator {
 
     private void parseExpression() {
         if (languageData == null) {
-            LanguageParser languageParser = new DefaultLanguageParser();
-            StartContext startContext = createLanguageGrammarContext(CharStreams.fromString(expression), PredictionMode.SLL).start();
-            languageData = languageParser.parse(startContext);
+            LanguageData template = GLOBAL_LANGUAGE_DATA_CACHE.computeIfAbsent(expression, this::doParse);
+            CloningContext cloningCtx = new CloningContext();
+            AbstractOperation copy = template.operation().copy(cloningCtx);
+            languageData = new LanguageData(copy, cloningCtx.getVariables(), cloningCtx.getAssignedVariables());
         }
     }
 
-    private ExpressionEvaluatorParser createLanguageGrammarContext(CharStream expression, PredictionMode predictionMode) {
+    private LanguageData doParse(String expr) {
+        LanguageParser languageParser = new DefaultLanguageParser();
+        StartContext startContext = createLanguageGrammarContext(CharStreams.fromString(expr), PredictionMode.SLL)
+                .start();
+        return languageParser.parse(startContext);
+    }
+
+    static void clearGlobalCache() {
+        GLOBAL_LANGUAGE_DATA_CACHE.clear();
+    }
+
+    private ExpressionEvaluatorParser createLanguageGrammarContext(CharStream expression,
+            PredictionMode predictionMode) {
         ExpressionEvaluatorLexer lexer = new ExpressionEvaluatorLexer(expression);
         lexer.removeErrorListeners();
         lexer.addErrorListener(PARSING_ERROR_LISTENER);
@@ -225,7 +241,8 @@ class ExpressionEvaluator {
         }
         lastUserContext = resolvedUser;
         cachedEvalContext = new OperationContext(options.mathContext(), options.scale(), false,
-                sharedDateTimeSupplier, options.conversionService(), this.expressionContext, resolvedUser, options.zoneId());
+                sharedDateTimeSupplier, options.conversionService(), this.expressionContext, resolvedUser,
+                options.zoneId());
         return cachedEvalContext;
     }
 

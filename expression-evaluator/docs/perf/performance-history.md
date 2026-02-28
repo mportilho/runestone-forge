@@ -1508,3 +1508,44 @@ Três fontes de alocação por chamada a `evaluate()` identificadas em `performa
 3. `Object[]` para parâmetros de funções: o buffer por instância de `FunctionOperation` é seguro pois a árvore de operações não é compartilhada entre threads (design por cópia).
 4. O ganho de `noFunction` (~10.5%) vem exclusivamente do reuso de `OperationContext` + `CurrentDateTimeSupplier` — confirma que a alocação do record de 8 campos + objeto interno tem custo não trivial em hot path.
 
+
+## Experimento PERF-2026-02-28-EXPEVAL-GLOBAL-CACHE
+
+- Data: 2026-02-28
+- Objetivo: implementar um cache global estático no nível do `ExpressionEvaluator` para recriar instâncias baseadas em ASTs (`LanguageData`) pré-processadas, eliminando overhead do ANTLR.
+- Baseline commit/estado: `HEAD` sem `GLOBAL_LANGUAGE_DATA_CACHE`.
+- Commit/estado testado: working tree com o cache através de `com.runestone.utils.cache.LruCache` (LRU) inserido no `ExpressionEvaluator`.
+
+### Hipótese
+
+O lookup no cache pelo texto da expressão elimina a fase completa de `parseExpression()` do ANTLR (lexer e parser). O único overhead em instâncias repetidas passa a ser a cópia (`copy()`) da AbstractOperation original usando um clone graph (`CloningContext`). O ganho deve ser extremo (potencialmente 3x a 10x mais rápido), traduzindo em uma queda drástica em ns/op para inicializações da classe com parsing da mesma expressão.
+
+### Mudanças aplicadas
+
+- **`ExpressionEvaluator.java`** — Criação de um `LruCache<String, LanguageData> GLOBAL_LANGUAGE_DATA_CACHE` limitado a 1024 entradas. O `parseExpression()` faz um lookup e cópia das trees via `.copy(new CloningContext())` se a string já foi avaliada num ExpressionEvaluator prévio. A escolha pelo `LruCache` em vez de `ConcurrentHashMap` visa garantir a segurança de memória do sistema (eviction policy), prevenindo crescimento ilimitado caso o sistema receba milhares de expressões únicas.
+- **`CloningContext.java`** — Troca de `HashMap` para `LinkedHashMap` para preservação da ordem insercional de variáveis durante clones de AST.
+- **`BaseOperation.java`** — Troca de `HashMap` para `LinkedHashMap` durante iteração das variáveis associadas (preservando order-dependence semântica).
+- **`FunctionOperation.java`** — Fix no `createClone` para persistir estado não transiente de `cacheHint` corretamente, visto que AST clonadas precisam recuperar meta-informação intacta.
+
+### Protocolo de medição
+
+- JVM: Oracle JDK 21.0.10+8-LTS-217
+- JMH: 1.37
+- Parâmetros: `@Warmup(iterations=2)`, `@Measurement(iterations=3)`, `@Fork(1)`
+- Modo: `AverageTime` em `ns/op`
+
+### Resultados
+
+| Benchmark | Before (ns/op) | After (ns/op) | Melhoria (%) |
+|---|---|---|---|
+| `testNewEvaluatorInstantiationAndParsing` | 11061.144 ± 4118.767 | 3598.515 ± 895.142 | **+67.5% (~3x mais rápido)** |
+
+### Decisão
+
+**ACCEPT** — O caching global cortou ~7500 ns/op (3x) da instanciação crua de `ExpressionEvaluator` nas execuções. O custo de clonar `AbstractOperation` é vastamente menor do que o pipeline ANTLR4 inteiro. A performance do tempo de configuração de uma runestone-forge evaluation pipeline com subexpressões repetidas agora atinge taxas imbatíveis.
+
+### Lições aprendidas
+
+1. O tempo cru do parse gasta a imensa maioria dos ciclos no parser ANTLR.
+2. É importante isolar a AST cacheada via Deep Copying. `CloningContext` realiza de forma ideal, mas a pureza de iteração se perdeu provendo bugs misteriosos de formatação no `.toString()`. A transição `HashMap` -> `LinkedHashMap` dentro do CloningContext e BaseOperation resolveu isso perfeitamente.
+3. Semáforos e propriedades transientes não devem ditar flags estruturais como `cacheHint` no rebuild da cópia profunda. Foi necessário manter o `cacheHint` atrelado no construtor do clone em `FunctionOperation` ao invés de buscar estado vivo `isCaching()`.
