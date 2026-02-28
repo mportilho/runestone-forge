@@ -1361,3 +1361,48 @@ Artefatos:
 ### Riscos residuais
 1. O benchmark foca contexto grande e múltiplas etapas; workloads curtos/pequenos podem observar ganho menor.
 2. As medições foram feitas em uma única máquina/JVM; recomendado repetir em pipeline de performance para robustez estatística.
+
+## Experimento PERF-2026-02-28-EXPEVAL-TYPE-CHECK-CACHING-REFINED
+- Data: 2026-02-28
+- Objetivo: reduzir overhead de verificação de tipos e normalização numérica em AbstractOperation e BaseOperation.
+- Baseline commit/estado: Estado após experimentos de 22/02 (v1.1.0.1-SNAPSHOT baseline).
+- Commit/estado testado: working tree atual com cache de tipo em AbstractOperation e castOperationResult especializado em BaseOperation.
+
+### Hipótese
+1. O cache de classe do último resultado em `AbstractOperation` cria um fast-path para tipos estáveis, evitando `isInstance` e lógica de conversão redundante.
+2. Especializar `castOperationResult` em `BaseOperation` remove branching e `instanceof` genéricos por nó.
+3. Otimizar `Integer`/`Long` em `BaseOperation.resolve` evita `toString()` nos casos numéricos mais comuns.
+
+### Mudanças aplicadas
+- `expression-evaluator/src/main/java/com/runestone/expeval/operation/AbstractOperation.java`: introdução de `lastResultClass`/`lastResultWasInstance` e refatoração de `castOperationResult` para `protected`.
+- `expression-evaluator/src/main/java/com/runestone/expeval/operation/BaseOperation.java`: override de `castOperationResult` e otimização de `resolve` para tipos integrais.
+
+### Protocolo de medição
+- JVM: Oracle JDK 21.0.10
+- JMH: 1.37
+- Benchmark: `com.runestone.expeval.perf.jmh.TypeConversionHotPathBenchmark`
+- Parâmetros: `-wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns -jvmArgs '-Xms1g -Xmx1g'`
+
+### Resultado
+| Benchmark | Before (ns/op) | After (ns/op) | Delta (ns/op) | Melhoria (%) |
+|---|---:|---:|---:|---:|
+| alternatingTypeConversion | 10.416 | 15.077 | +4.661 | -44.75% |
+| baseOperationDoubleNormalization | 340.256 | 287.950 | -52.306 | +15.37% |
+| baseOperationLongNormalization | 153.112 | 113.169 | -39.943 | +26.09% |
+
+### Decisão
+- [x] Aceitar
+- [ ] Ajustar
+- [ ] Descartar
+
+### Leitura técnica
+1. Ganhos expressivos em `BaseOperation` (~15-26%) validam a especialização do fluxo de cast e normalização numérica.
+2. O overhead em `alternatingTypeConversion` é esperado devido ao cache miss constante no benchmark de alternância. Em cenários reais (tipos estáveis), o cache proverá o fast-path pretendido.
+3. A melhoria em `baseOperationDoubleNormalization` (que regrediu na primeira tentativa) foi recuperada e ampliada ao simplificar o fluxo de cast e manter a segurança do `toString()` para Double.
+
+### Atividades executadas
+1. Baseline JMH após revert temporário.
+2. Implementação refinada com override de `castOperationResult`.
+3. Verificação funcional com `TestTypeConversionHotPathBehaviour`.
+4. Medição JMH final.
+

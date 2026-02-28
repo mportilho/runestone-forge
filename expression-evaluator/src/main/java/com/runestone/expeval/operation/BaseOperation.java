@@ -62,10 +62,20 @@ public class BaseOperation extends AbstractOperation {
         }
         if (operation != null) {
             Object result = operation.evaluate(context);
-            if (result instanceof Number) {
+            if (result instanceof Number number) {
                 MathContext mathContext = context.mathContext();
                 Integer scale = context.scale();
-                BigDecimal numberResult = result instanceof BigDecimal ? (BigDecimal) result : new BigDecimal(result.toString(), mathContext);
+                BigDecimal numberResult;
+                if (number instanceof BigDecimal bd) {
+                    numberResult = bd;
+                } else if (number instanceof Integer i) {
+                    numberResult = new BigDecimal(i, mathContext);
+                } else if (number instanceof Long l) {
+                    numberResult = new BigDecimal(l, mathContext);
+                } else {
+                    numberResult = new BigDecimal(number.toString(), mathContext);
+                }
+
                 if (scale != null) {
                     numberResult = numberResult.setScale(scale, mathContext.getRoundingMode());
                 }
@@ -78,7 +88,19 @@ public class BaseOperation extends AbstractOperation {
         } else if (Boolean.class.equals(this.getExpectedType())) {
             return Boolean.FALSE;
         }
-        throw new ExpressionEvaluatorException(String.format("Type [%s] not expected for base operation. Must be number or boolean.", this.getExpectedType()));
+        throw new ExpressionEvaluatorException(String.format(
+                "Type [%s] not expected for base operation. Must be number or boolean.", this.getExpectedType()));
+    }
+
+    @Override
+    protected Object castOperationResult(Object result, OperationContext context) {
+        if (result == null && !context.allowingNull()) {
+            throw new NullPointerException(String.format("Invalid null result for expression [%s] ", this));
+        }
+        if (result != null && !getExpectedType().isInstance(result)) {
+            this.expectedTypeByValue(result, getExpectedType());
+        }
+        return result;
     }
 
     @Override
@@ -107,7 +129,8 @@ public class BaseOperation extends AbstractOperation {
                 lastAssignedOperation = vectorOperation.getAssignedOperation();
             } else {
                 formatAssignedVectorOperation(builder, vectorOperations);
-                builder.append(entry.getValue().getVariableName()).append(' ').append(entry.getValue().getOperationToken()).append(' ');
+                builder.append(entry.getValue().getVariableName()).append(' ')
+                        .append(entry.getValue().getOperationToken()).append(' ');
                 entry.getValue().getAssignedOperation().toString(builder);
                 builder.append(";\n");
             }
@@ -121,7 +144,8 @@ public class BaseOperation extends AbstractOperation {
         }
     }
 
-    private static void formatAssignedVectorOperation(StringBuilder builder, List<AssignedVectorOperation> vectorOperations) {
+    private static void formatAssignedVectorOperation(StringBuilder builder,
+            List<AssignedVectorOperation> vectorOperations) {
         if (!vectorOperations.isEmpty()) {
             builder.append('[');
             for (int i = 0, commaLimit = vectorOperations.size() - 1; i < vectorOperations.size(); i++) {
@@ -132,7 +156,8 @@ public class BaseOperation extends AbstractOperation {
                 }
             }
             AssignedVectorOperation vectorOperation = vectorOperations.get(0);
-            builder.append("] ").append(vectorOperation.getOperationToken()).append(' ').append(vectorOperation.getAssignedOperation());
+            builder.append("] ").append(vectorOperation.getOperationToken()).append(' ')
+                    .append(vectorOperation.getAssignedOperation());
             builder.append(";\n");
             vectorOperations.clear();
         }

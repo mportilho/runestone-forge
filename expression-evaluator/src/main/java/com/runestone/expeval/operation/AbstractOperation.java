@@ -59,6 +59,9 @@ public abstract class AbstractOperation {
     private boolean applyingParenthesis;
     private int fixedHash = 0;
 
+    private Class<?> lastResultClass;
+    private boolean lastResultWasInstance;
+
     public AbstractOperation() {
         this.expectedType = Object.class;
     }
@@ -110,38 +113,57 @@ public abstract class AbstractOperation {
         return (T) result;
     }
 
-    private Object castOperationResult(Object result, OperationContext context) {
-        if (result == null && !context.allowingNull()) {
-            if (this instanceof AbstractVariableValueOperation variable) {
-                throw new ExpressionEvaluatorException(String.format("Variable [%s] requires a value", variable.getVariableName()));
-            } else {
-                throw new NullPointerException(String.format("Invalid null result for expression [%s] ", this));
+    protected Object castOperationResult(Object result, OperationContext context) {
+        if (result == null) {
+            if (!context.allowingNull()) {
+                if (this instanceof AbstractVariableValueOperation variable) {
+                    throw new ExpressionEvaluatorException(
+                            String.format("Variable [%s] requires a value", variable.getVariableName()));
+                } else {
+                    throw new NullPointerException(String.format("Invalid null result for expression [%s] ", this));
+                }
             }
+            lastResultClass = null;
+            lastResultWasInstance = false;
+            return null;
         }
-        if (this instanceof BaseOperation) {
-            if (result != null && !getExpectedType().isInstance(result)) {
-                this.expectedTypeByValue(result, expectedType);
-            }
-        } else if (result != null && !result.getClass().isArray() && !getExpectedType().isArray() && !getExpectedType().isInstance(result)) {
+
+        Class<?> resultClass = result.getClass();
+        if (resultClass == lastResultClass && lastResultWasInstance) {
+            return result;
+        }
+
+        if (!resultClass.isArray() && !getExpectedType().isArray() && !getExpectedType().isInstance(result)) {
             Class<?> initialExpectedType = getExpectedType();
             Object convertedValue = tryConvertValue(result, initialExpectedType, context);
             if (convertedValue != null) {
+                lastResultClass = convertedValue.getClass();
+                lastResultWasInstance = true;
                 return convertedValue;
             }
 
             expectedTypeByValue(result, initialExpectedType);
             Class<?> inferredExpectedType = getExpectedType();
             if (inferredExpectedType.isInstance(result)) {
+                lastResultClass = resultClass;
+                lastResultWasInstance = true;
                 return result;
             }
             if (!inferredExpectedType.equals(initialExpectedType)) {
                 convertedValue = tryConvertValue(result, inferredExpectedType, context);
                 if (convertedValue != null) {
+                    lastResultClass = convertedValue.getClass();
+                    lastResultWasInstance = true;
                     return convertedValue;
                 }
             }
-            throw new ExpressionEvaluatorException(String.format("Cannot convert [%s] to [%s]", result.getClass(), inferredExpectedType));
+            lastResultWasInstance = false;
+            throw new ExpressionEvaluatorException(
+                    String.format("Cannot convert [%s] to [%s]", resultClass, inferredExpectedType));
         }
+
+        lastResultClass = resultClass;
+        lastResultWasInstance = true;
         return result;
     }
 
@@ -170,7 +192,8 @@ public abstract class AbstractOperation {
     }
 
     /**
-     * Formats a value to be used on the string representation of the current operation
+     * Formats a value to be used on the string representation of the current
+     * operation
      *
      * @param unformattedValue the value to be formatted
      * @return the formatted value
@@ -191,8 +214,10 @@ public abstract class AbstractOperation {
                 }
                 return builder.append("]").toString();
             } else {
-                return String.format("[%s, %s .. %s, %s]", formatByType(Array.get(unformattedValue, 0)), formatByType(Array.get(unformattedValue, 1)),
-                        formatByType(Array.get(unformattedValue, arrayLength - 2)), formatByType(Array.get(unformattedValue, arrayLength - 1)));
+                return String.format("[%s, %s .. %s, %s]", formatByType(Array.get(unformattedValue, 0)),
+                        formatByType(Array.get(unformattedValue, 1)),
+                        formatByType(Array.get(unformattedValue, arrayLength - 2)),
+                        formatByType(Array.get(unformattedValue, arrayLength - 1)));
             }
         }
         return formatByType(unformattedValue);
@@ -223,8 +248,10 @@ public abstract class AbstractOperation {
         }
         if (this.cacheBlockingSemaphores != null && this.cacheBlockingSemaphores.length != 0) {
             copy.cacheBlockingSemaphores = new AbstractOperation[this.cacheBlockingSemaphores.length];
-            for (int i = 0, blockingSemaphoresLength = this.cacheBlockingSemaphores.length; i < blockingSemaphoresLength; i++) {
-                copy.cacheBlockingSemaphores[i] = cloningContext.getClonedOperationsMap().get(this.cacheBlockingSemaphores[i]);
+            for (int i = 0,
+                    blockingSemaphoresLength = this.cacheBlockingSemaphores.length; i < blockingSemaphoresLength; i++) {
+                copy.cacheBlockingSemaphores[i] = cloningContext.getClonedOperationsMap()
+                        .get(this.cacheBlockingSemaphores[i]);
             }
         }
         return copy;
@@ -237,14 +264,17 @@ public abstract class AbstractOperation {
      * @param <T>          Dynamic return type
      * @return the current operation
      */
-    @SuppressWarnings({"unchecked"})
+    @SuppressWarnings({ "unchecked" })
     public final <T extends AbstractOperation> T expectedType(Class<?> expectedType) {
         this.expectedType = Objects.requireNonNull(expectedType);
+        this.lastResultClass = null;
+        this.lastResultWasInstance = false;
         return (T) this;
     }
 
     /**
-     * Sets the expected type for the operation result based on the current value. If there's no corresponding type, the expected type
+     * Sets the expected type for the operation result based on the current value.
+     * If there's no corresponding type, the expected type
      * will remain the same as before.
      *
      * @param value the current value
@@ -266,6 +296,8 @@ public abstract class AbstractOperation {
             } else {
                 expectedType(defaultType);
             }
+            this.lastResultClass = null;
+            this.lastResultWasInstance = false;
         }
     }
 
@@ -273,6 +305,8 @@ public abstract class AbstractOperation {
         this.cache = sourceOperation.cache;
         this.applyingParenthesis = sourceOperation.applyingParenthesis;
         this.expectedType = sourceOperation.expectedType;
+        this.lastResultClass = null;
+        this.lastResultWasInstance = false;
         return this;
     }
 
@@ -302,9 +336,11 @@ public abstract class AbstractOperation {
     }
 
     /**
-     * Configures the current operation to cache its result. It affects the current operation and all of its parents
+     * Configures the current operation to cache its result. It affects the current
+     * operation and all of its parents
      *
-     * @param enable <code>true</code> to enable caching for this operation or <code>false</code> to disable it
+     * @param enable <code>true</code> to enable caching for this operation or
+     *               <code>false</code> to disable it
      */
     public void configureCaching(boolean enable) {
         if (enable && !isCaching()) {
@@ -348,7 +384,8 @@ public abstract class AbstractOperation {
         } else {
             if (findSemaphoreIndex(semaphore, operation) == -1) {
                 AbstractOperation[] temp = new AbstractOperation[operation.cacheBlockingSemaphores.length + 1];
-                System.arraycopy(operation.cacheBlockingSemaphores, 0, temp, 0, operation.cacheBlockingSemaphores.length);
+                System.arraycopy(operation.cacheBlockingSemaphores, 0, temp, 0,
+                        operation.cacheBlockingSemaphores.length);
                 temp[temp.length - 1] = semaphore;
                 operation.cacheBlockingSemaphores = temp;
                 for (int i = 0; i < operation.parentCount; i++) {
@@ -395,7 +432,7 @@ public abstract class AbstractOperation {
      * Retrieves the current cached value for this operation
      *
      * @return The current cache for this operation. Returns <code>null</code> if
-     * the operation was not evaluated or cache is disabled
+     *         the operation was not evaluated or cache is disabled
      */
     public Object getCache() {
         return cache;
