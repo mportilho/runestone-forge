@@ -24,6 +24,7 @@
 
 package com.runestone.converters.impl.dates;
 
+import com.runestone.assertions.Certify;
 import com.runestone.converters.DataConverter;
 import com.runestone.utils.DateUtils;
 
@@ -36,6 +37,7 @@ public class StringToTemporalConverter implements DataConverter<String, Temporal
 
     @Override
     public Temporal convert(String data) {
+        Certify.requireNonBlank(data, "Data must be provided");
         if (data.length() <= 8) {
             return DateUtils.DATETIME_FORMATTER.parse(data, LocalTime::from);
         } else if (data.length() <= 10) {
