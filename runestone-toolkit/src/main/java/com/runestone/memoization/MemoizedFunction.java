@@ -21,16 +21,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
+ 
 package com.runestone.memoization;
-
+ 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.function.Function;
-
+ 
 /**
  * A {@link Function} implementation that caches the result of a delegate function and returns the cached value on
- * subsequent calls. This implementation is thread-safe and uses a {@link ConcurrentHashMap} to store the cached values. If
+ * subsequent calls. This implementation is thread-safe and uses Caffeine to store the cached values. If
  * an exception is thrown by the delegate function, the exception is rethrown and the cache is not updated.
  *
  * @param <T> the type of arguments to the function
@@ -38,11 +39,11 @@ import java.util.function.Function;
  * @author Marcelo Portilho
  */
 public class MemoizedFunction<T, R> implements Function<T, R> {
-
+ 
     private final Function<T, R> delegate;
-    private final ConcurrentMap<T, Future<R>> cache = new ConcurrentHashMap<>(128);
+    private final ConcurrentMap<T, Future<R>> cache;
     private final boolean retryOnError;
-
+ 
     /**
      * Creates a new {@link MemoizedFunction} instance that caches the result of the delegate function.
      *
@@ -51,7 +52,7 @@ public class MemoizedFunction<T, R> implements Function<T, R> {
     MemoizedFunction(Function<T, R> delegate) {
         this(delegate, true);
     }
-
+ 
     /**
      * Creates a new {@link MemoizedFunction} instance that caches the result of the delegate function.
      *
@@ -59,10 +60,25 @@ public class MemoizedFunction<T, R> implements Function<T, R> {
      * @param retryOnError whether to retry the delegate function call if an exception is thrown
      */
     MemoizedFunction(Function<T, R> delegate, boolean retryOnError) {
-        this.delegate = Objects.requireNonNull(delegate, "Supplier delegate must be provided");
-        this.retryOnError = retryOnError;
+        this(delegate, 2048, retryOnError);
     }
 
+    /**
+     * Creates a new {@link MemoizedFunction} instance that caches the result of the delegate function.
+     *
+     * @param delegate     the delegate function
+     * @param maximumSize  the maximum number of entries the cache can hold
+     * @param retryOnError whether to retry the delegate function call if an exception is thrown
+     */
+    MemoizedFunction(Function<T, R> delegate, long maximumSize, boolean retryOnError) {
+        this.delegate = Objects.requireNonNull(delegate, "Supplier delegate must be provided");
+        this.retryOnError = retryOnError;
+        this.cache = Caffeine.newBuilder()
+                .maximumSize(maximumSize)
+                .executor(Runnable::run)
+                .<T, Future<R>>build().asMap();
+    }
+ 
     @Override
     public R apply(T t) {
         Future<R> future = cache.get(t);
@@ -98,5 +114,5 @@ public class MemoizedFunction<T, R> implements Function<T, R> {
             }
         }
     }
-
+ 
 }

@@ -21,16 +21,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
+ 
 package com.runestone.memoization;
-
+ 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.function.BiFunction;
-
+ 
 /**
  * A {@link BiFunction} implementation that caches the result of a delegate function and returns the cached value on
- * subsequent calls. This implementation is thread-safe and uses a {@link ConcurrentHashMap} to store the cached values. The
+ * subsequent calls. This implementation is thread-safe and uses Caffeine to store the cached values. The
  * cache expires after a given duration.
  *
  * @param <T> the type of the first argument to the function
@@ -39,12 +40,11 @@ import java.util.function.BiFunction;
  * @author Marcelo Portilho
  */
 public class MemoizedExpiringBiFunction<T, U, R> implements BiFunction<T, U, R> {
-
+ 
     private final BiFunction<T, U, R> delegate;
-    private final ConcurrentMap<BiParameter, CacheEntry<R>> cache = new ConcurrentHashMap<>(128);
-    private final long durationMillis;
+    private final ConcurrentMap<BiParameter, Future<R>> cache;
     private final boolean retryOnError;
-
+ 
     /**
      * Creates a new {@link MemoizedExpiringBiFunction} instance.
      *
@@ -54,14 +54,31 @@ public class MemoizedExpiringBiFunction<T, U, R> implements BiFunction<T, U, R> 
      * @param retryOnError whether to retry the delegate function on error
      */
     public MemoizedExpiringBiFunction(BiFunction<T, U, R> delegate, long duration, TimeUnit timeUnit, boolean retryOnError) {
+        this(delegate, 2048, duration, timeUnit, retryOnError);
+    }
+
+    /**
+     * Creates a new {@link MemoizedExpiringBiFunction} instance.
+     *
+     * @param delegate     the delegate function to be memoized
+     * @param maximumSize  the maximum number of entries the cache can hold
+     * @param duration     the duration of the cache
+     * @param timeUnit     the time unit of the duration
+     * @param retryOnError whether to retry the delegate function on error
+     */
+    public MemoizedExpiringBiFunction(BiFunction<T, U, R> delegate, long maximumSize, long duration, TimeUnit timeUnit, boolean retryOnError) {
         this.delegate = Objects.requireNonNull(delegate, "Function delegate must be provided");
         if (duration <= 0) {
             throw new IllegalArgumentException("Provided duration must be greater than zero");
         }
-        this.durationMillis = timeUnit.toMillis(duration);
         this.retryOnError = retryOnError;
+        this.cache = Caffeine.newBuilder()
+                .maximumSize(maximumSize)
+                .expireAfterWrite(duration, timeUnit)
+                .executor(Runnable::run)
+                .<BiParameter, Future<R>>build().asMap();
     }
-
+ 
     /**
      * Creates a new {@link MemoizedExpiringBiFunction} instance.
      *
@@ -72,37 +89,33 @@ public class MemoizedExpiringBiFunction<T, U, R> implements BiFunction<T, U, R> 
     public MemoizedExpiringBiFunction(BiFunction<T, U, R> delegate, long duration, TimeUnit timeUnit) {
         this(delegate, duration, timeUnit, true);
     }
-
+ 
     @Override
     public R apply(T t, U u) {
-        long currentTime = System.currentTimeMillis();
         BiParameter biParameter = new BiParameter(t, u);
-        CacheEntry<R> entry = cache.get(biParameter);
-
-        if (entry == null || entry.isExpired(currentTime)) {
-            entry = cache.compute(biParameter, (key, currentEntry) -> {
-                if (currentEntry == null || currentEntry.isExpired(currentTime)) {
-                    FutureTask<R> futureTask = new FutureTask<>(() -> delegate.apply(t, u));
-                    return new CacheEntry<>(futureTask, currentTime + durationMillis);
-                }
-                return currentEntry;
-            });
-            if (entry.future instanceof FutureTask<R> task) {
-                task.run();
-            }
-        }
-        
+        Future<R> future = cache.get(biParameter);
+ 
         try {
-            return entry.future.get();
+            if (future == null) {
+                FutureTask<R> futureTask = new FutureTask<>(() -> delegate.apply(t, u));
+                future = cache.putIfAbsent(biParameter, futureTask);
+                if (future == null) {
+                    future = futureTask;
+                    futureTask.run();
+                }
+            }
+            return future.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Memoization interrupted while fetching a new value", e);
         } catch (CancellationException e) {
-            cache.remove(biParameter, entry);
+            if (future != null) {
+                cache.remove(biParameter, future);
+            }
             throw new IllegalStateException("Memoization cancelled while fetching a new value", e);
         } catch (ExecutionException e) {
-            if (retryOnError) {
-                cache.remove(biParameter, entry);
+            if (retryOnError && future != null) {
+                cache.remove(biParameter, future);
             }
             Throwable cause = e.getCause();
             if (cause instanceof RuntimeException exception) {
@@ -114,13 +127,7 @@ public class MemoizedExpiringBiFunction<T, U, R> implements BiFunction<T, U, R> 
             }
         }
     }
-
-    private record CacheEntry<R>(Future<R> future, long expirationTime) {
-        boolean isExpired(long currentTime) {
-            return currentTime >= expirationTime;
-        }
-    }
-
+ 
     private record BiParameter(Object p1, Object p2) {
     }
 }

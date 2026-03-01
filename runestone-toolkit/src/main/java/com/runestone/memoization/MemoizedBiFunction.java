@@ -21,16 +21,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
+ 
 package com.runestone.memoization;
-
+ 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.function.BiFunction;
-
+ 
 /**
  * A {@link BiFunction} implementation that caches the result of a delegate function and returns the cached value on
- * subsequent calls. This implementation is thread-safe and uses a {@link ConcurrentHashMap} to store the cached values. If
+ * subsequent calls. This implementation is thread-safe and uses Caffeine to store the cached values. If
  * an exception is thrown by the delegate function, the exception is rethrown and the cache is not updated.
  *
  * @param <T> the type of the first argument to the function
@@ -38,11 +39,11 @@ import java.util.function.BiFunction;
  * @param <R> the type of results supplied by this supplier
  */
 public class MemoizedBiFunction<T, U, R> implements BiFunction<T, U, R> {
-
+ 
     private final BiFunction<T, U, R> delegate;
-    private final ConcurrentMap<BiParameter, Future<R>> cache = new ConcurrentHashMap<>(128);
+    private final ConcurrentMap<BiParameter, Future<R>> cache;
     private final boolean retryOnError;
-
+ 
     /**
      * Creates a new {@link MemoizedBiFunction} instance that caches the result of the delegate function.
      *
@@ -51,7 +52,7 @@ public class MemoizedBiFunction<T, U, R> implements BiFunction<T, U, R> {
     public MemoizedBiFunction(BiFunction<T, U, R> delegate) {
         this(delegate, true);
     }
-
+ 
     /**
      * Creates a new {@link MemoizedBiFunction} instance that caches the result of the delegate function.
      *
@@ -59,10 +60,25 @@ public class MemoizedBiFunction<T, U, R> implements BiFunction<T, U, R> {
      * @param retryOnError whether to retry the delegate function call if an exception is thrown
      */
     public MemoizedBiFunction(BiFunction<T, U, R> delegate, boolean retryOnError) {
-        this.delegate = Objects.requireNonNull(delegate, "Supplier delegate must be provided");
-        this.retryOnError = retryOnError;
+        this(delegate, 2048, retryOnError);
     }
 
+    /**
+     * Creates a new {@link MemoizedBiFunction} instance that caches the result of the delegate function.
+     *
+     * @param delegate     the delegate function
+     * @param maximumSize  the maximum number of entries the cache can hold
+     * @param retryOnError whether to retry the delegate function call if an exception is thrown
+     */
+    public MemoizedBiFunction(BiFunction<T, U, R> delegate, long maximumSize, boolean retryOnError) {
+        this.delegate = Objects.requireNonNull(delegate, "Supplier delegate must be provided");
+        this.retryOnError = retryOnError;
+        this.cache = Caffeine.newBuilder()
+                .maximumSize(maximumSize)
+                .executor(Runnable::run)
+                .<BiParameter, Future<R>>build().asMap();
+    }
+ 
     @Override
     public R apply(T t, U u) {
         BiParameter biParameter = new BiParameter(t, u);
@@ -99,7 +115,7 @@ public class MemoizedBiFunction<T, U, R> implements BiFunction<T, U, R> {
             }
         }
     }
-
+ 
     private record BiParameter(Object p1, Object p2) {
     }
 }
