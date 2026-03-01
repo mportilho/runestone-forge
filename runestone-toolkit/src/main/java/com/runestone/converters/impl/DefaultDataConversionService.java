@@ -29,12 +29,20 @@ import com.runestone.converters.DataConverter;
 import com.runestone.converters.NoDataConverterFoundException;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
 public class DefaultDataConversionService implements DataConversionService {
 
     private static final Map<ConverterPairKey, DataConverter<?, ?>> CONVERTERS = loadConverters();
+    private static final ClassValue<EnumMetadata<?>> ENUM_METADATA_CACHE = new ClassValue<>() {
+        @Override
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        protected EnumMetadata<?> computeValue(Class<?> type) {
+            return new EnumMetadata(type);
+        }
+    };
 
     private final boolean throwIfNull;
 
@@ -52,7 +60,7 @@ public class DefaultDataConversionService implements DataConversionService {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({ "unchecked", "null" })
     public <S, T> T convert(S source, Class<T> targetType) {
         Objects.requireNonNull(targetType, "Target Type must be provided");
         if (source == null) {
@@ -80,7 +88,7 @@ public class DefaultDataConversionService implements DataConversionService {
         return convertEnum(source, targetType);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({ "unchecked", "null" })
     private <S, T> T convertPrimitiveTypes(S source, Class<T> targetType) {
         if (source instanceof Number number) {
             return (T) switch (targetType.getName()) {
@@ -100,23 +108,43 @@ public class DefaultDataConversionService implements DataConversionService {
         return null;
     }
 
+    @SuppressWarnings({ "unchecked", "null" })
     private <S, T> T convertEnum(S source, Class<T> targetType) {
         if (targetType.isEnum()) {
+            EnumMetadata<T> metadata = (EnumMetadata<T>) ENUM_METADATA_CACHE.get(targetType);
             if (source instanceof String value) {
-                for (T enumConstant : targetType.getEnumConstants()) {
-                    if (((Enum<?>) enumConstant).name().equalsIgnoreCase(value)) {
-                        return enumConstant;
-                    }
-                }
+                return metadata.getByName(value);
             } else if (source instanceof Number value) {
-                for (T enumConstant : targetType.getEnumConstants()) {
-                    if (value.intValue() == ((Enum<?>) enumConstant).ordinal()) {
-                        return enumConstant;
-                    }
-                }
+                return metadata.getByOrdinal(value.intValue());
             }
         }
         return null;
+    }
+
+    private static final class EnumMetadata<T> {
+        private final T[] constants;
+        private final Map<String, T> nameMap;
+
+        public EnumMetadata(Class<T> enumType) {
+            this.constants = enumType.getEnumConstants();
+            this.nameMap = new HashMap<>();
+            if (constants != null) {
+                for (T constant : constants) {
+                    nameMap.put(((Enum<?>) constant).name().toUpperCase(Locale.ROOT), constant);
+                }
+            }
+        }
+
+        public T getByName(String name) {
+            return nameMap.get(name.toUpperCase(Locale.ROOT));
+        }
+
+        public T getByOrdinal(int ordinal) {
+            if (ordinal >= 0 && ordinal < constants.length) {
+                return constants[ordinal];
+            }
+            return null;
+        }
     }
 
     private static Map<ConverterPairKey, DataConverter<?, ?>> loadConverters() {
