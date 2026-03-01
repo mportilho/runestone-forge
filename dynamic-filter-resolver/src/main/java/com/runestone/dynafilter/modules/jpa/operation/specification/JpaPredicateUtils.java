@@ -27,9 +27,9 @@ package com.runestone.dynafilter.modules.jpa.operation.specification;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeLeft;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeRight;
-import com.runestone.utils.cache.LruCache;
 import jakarta.persistence.criteria.*;
 import jakarta.persistence.metamodel.Attribute;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 import java.util.Arrays;
 import java.util.Map;
@@ -44,7 +44,10 @@ import java.util.function.BiFunction;
 class JpaPredicateUtils {
 
     private static final String[] EMPTY_SEGMENTS = {};
-    private static final Map<String, ParsedPath> PARSED_PATH_CACHE = new LruCache<>(4096);
+    private static final Map<String, ParsedPath> PARSED_PATH_CACHE = Caffeine.newBuilder()
+            .maximumSize(4096)
+            .executor(Runnable::run)
+            .<String, ParsedPath>build().asMap();
 
     /**
      * Calls comparison methods of {@link CriteriaBuilder} on generic type objects

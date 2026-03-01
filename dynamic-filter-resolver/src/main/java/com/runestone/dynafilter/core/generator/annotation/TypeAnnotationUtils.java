@@ -29,7 +29,7 @@ import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
-import com.runestone.utils.cache.LruCache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -44,7 +44,10 @@ public class TypeAnnotationUtils {
     private static final int DEFAULT_CACHE_MAX_SIZE = 4096;
     private static final String CACHE_MAX_SIZE_PROPERTY = "runestone.dynafilter.annotation.cache.max-size";
     private static final int CACHE_MAX_SIZE = resolveCacheMaxSize();
-    private static final Map<AnnotationStatementInput, AnnotationMetadata> CACHE_METADATA = new LruCache<>(CACHE_MAX_SIZE);
+    private static final Map<AnnotationStatementInput, AnnotationMetadata> CACHE_METADATA = Caffeine.newBuilder()
+            .maximumSize(CACHE_MAX_SIZE)
+            .executor(Runnable::run)
+            .<AnnotationStatementInput, AnnotationMetadata>build().asMap();
 
     private TypeAnnotationUtils() {
     }

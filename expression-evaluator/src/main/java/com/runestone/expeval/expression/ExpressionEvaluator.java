@@ -46,12 +46,11 @@ import org.antlr.v4.runtime.atn.PredictionMode;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoField;
 import java.time.temporal.Temporal;
-import com.runestone.utils.cache.LruCache;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 /**
  * Responsible for evaluating an expression. It parses the text expression and creates an operation tree that can be evaluated, navigated or cloned.
@@ -61,7 +60,10 @@ import java.util.function.Supplier;
 class ExpressionEvaluator {
 
     private static final ParsingErrorListener PARSING_ERROR_LISTENER = new ParsingErrorListener();
-    private static final LruCache<String, LanguageData> GLOBAL_LANGUAGE_DATA_CACHE = new LruCache<>(1024);
+    private static final Map<String, LanguageData> GLOBAL_LANGUAGE_DATA_CACHE = Caffeine.newBuilder()
+            .maximumSize(1024)
+            .executor(Runnable::run)
+            .<String, LanguageData>build().asMap();
 
     private final String expression;
     private final ExpressionOptions options;
