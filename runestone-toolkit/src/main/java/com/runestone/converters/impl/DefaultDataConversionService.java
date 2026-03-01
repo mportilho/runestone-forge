@@ -32,10 +32,11 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class DefaultDataConversionService implements DataConversionService {
 
-    private static final Map<ConverterPairKey, DataConverter<?, ?>> CONVERTERS = loadConverters();
+    private static final Map<ConverterPairKey, DataConverter<?, ?>> CONVERTERS = new ConcurrentHashMap<>(loadConverters());
     private static final ClassValue<EnumMetadata<?>> ENUM_METADATA_CACHE = new ClassValue<>() {
         @Override
         @SuppressWarnings({"unchecked", "rawtypes"})
@@ -69,13 +70,32 @@ public class DefaultDataConversionService implements DataConversionService {
             return (T) source;
         }
 
-        DataConverter<S, T> dataConverter = (DataConverter<S, T>) CONVERTERS.get(new ConverterPairKey(source.getClass(), targetType));
+        DataConverter<S, T> dataConverter = getConverter(source.getClass(), targetType);
         T convertedValue = dataConverter != null ? dataConverter.convert(source) : fallbackConversion(source, targetType);
 
         if (convertedValue == null && throwIfNull) {
             throw new NoDataConverterFoundException(source.getClass(), targetType);
         }
         return convertedValue;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <S, T> DataConverter<S, T> getConverter(Class<?> sourceType, Class<?> targetType) {
+        ConverterPairKey key = new ConverterPairKey(sourceType, targetType);
+        DataConverter<?, ?> converter = CONVERTERS.get(key);
+        if (converter != null) {
+            return (DataConverter<S, T>) converter;
+        }
+
+        for (Map.Entry<ConverterPairKey, DataConverter<?, ?>> entry : CONVERTERS.entrySet()) {
+            ConverterPairKey mapKey = entry.getKey();
+            if (mapKey.targetType().equals(targetType) && mapKey.sourceType().isAssignableFrom(sourceType)) {
+                converter = entry.getValue();
+                CONVERTERS.put(key, converter);
+                return (DataConverter<S, T>) converter;
+            }
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")
@@ -148,11 +168,7 @@ public class DefaultDataConversionService implements DataConversionService {
     }
 
     private static Map<ConverterPairKey, DataConverter<?, ?>> loadConverters() {
-        Map<ConverterPairKey, DataConverter<?, ?>> converterMap = new HashMap<>();
-        DataConverterLoader.loadStringConverters(converterMap);
-        DataConverterLoader.loadNumberConverters(converterMap);
-        DataConverterLoader.loadDateConverters(converterMap);
-        return converterMap;
+        return DataConverterLoader.loadConverters();
     }
 
 }
