@@ -58,4 +58,31 @@ public class TestNumberToShortConverter {
         assertThat(converter.convert(new LongAdder())).isEqualTo((short) 0);
     }
 
+    @Test
+    public void testNullConversion() {
+        var converter = new NumberToShortConverter();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Cannot convert null to Short");
+    }
+
+    @Test
+    public void testEdgeCases() {
+        var converter = new NumberToShortConverter();
+        assertThat(converter.convert(Double.MAX_VALUE)).isEqualTo(Double.valueOf(Double.MAX_VALUE).shortValue());
+        assertThat(converter.convert(Float.NaN)).isEqualTo(Float.valueOf(Float.NaN).shortValue());
+        assertThat(converter.convert(Double.POSITIVE_INFINITY)).isEqualTo(Double.valueOf(Double.POSITIVE_INFINITY).shortValue());
+    }
+
+    @Test
+    public void testFloatingPointConversions() {
+        var converter = new NumberToShortConverter();
+        assertThat(converter.convert(0.1f)).isEqualTo((short) 0);
+        assertThat(converter.convert(0.9d)).isEqualTo((short) 0);
+        assertThat(converter.convert(1.5f)).isEqualTo((short) 1);
+        assertThat(converter.convert(1.9d)).isEqualTo((short) 1);
+        assertThat(converter.convert(new BigDecimal("1.9"))).isEqualTo((short) 1);
+        assertThat(converter.convert(-1.9d)).isEqualTo((short) -1);
+    }
+
 }

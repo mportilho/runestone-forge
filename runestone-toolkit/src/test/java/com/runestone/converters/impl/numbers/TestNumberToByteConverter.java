@@ -57,4 +57,32 @@ public class TestNumberToByteConverter {
         assertThat(converter.convert(new LongAccumulator(Long::sum, 1))).isEqualTo((byte) 1);
         assertThat(converter.convert(new LongAdder())).isEqualTo((byte) 0);
     }
+
+    @Test
+    public void testNullConversion() {
+        var converter = new NumberToByteConverter();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Cannot convert null to Byte");
+    }
+
+    @Test
+    public void testEdgeCases() {
+        var converter = new NumberToByteConverter();
+        assertThat(converter.convert(Double.MAX_VALUE)).isEqualTo(Double.valueOf(Double.MAX_VALUE).byteValue());
+        assertThat(converter.convert(Float.NaN)).isEqualTo(Float.valueOf(Float.NaN).byteValue());
+        assertThat(converter.convert(Double.POSITIVE_INFINITY)).isEqualTo(Double.valueOf(Double.POSITIVE_INFINITY).byteValue());
+    }
+
+    @Test
+    public void testFloatingPointConversions() {
+        var converter = new NumberToByteConverter();
+        assertThat(converter.convert(0.1f)).isEqualTo((byte) 0);
+        assertThat(converter.convert(0.9d)).isEqualTo((byte) 0);
+        assertThat(converter.convert(1.5f)).isEqualTo((byte) 1);
+        assertThat(converter.convert(1.9d)).isEqualTo((byte) 1);
+        assertThat(converter.convert(new BigDecimal("1.9"))).isEqualTo((byte) 1);
+        assertThat(converter.convert(-1.9d)).isEqualTo((byte) -1);
+    }
+
 }

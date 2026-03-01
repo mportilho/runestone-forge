@@ -78,4 +78,21 @@ public class TestNumberToBigDecimalConverter {
         assertThat(converter.convert(adder)).isEqualTo(new BigDecimal("0.1"));
     }
 
+    @Test
+    public void testNullConversion() {
+        var converter = new NumberToBigDecimalConverter();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Cannot convert null to BigDecimal");
+    }
+
+    @Test
+    public void testEdgeCases() {
+        var converter = new NumberToBigDecimalConverter();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert(Float.NaN))
+                .isInstanceOf(NumberFormatException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert(Double.POSITIVE_INFINITY))
+                .isInstanceOf(NumberFormatException.class);
+    }
+
 }

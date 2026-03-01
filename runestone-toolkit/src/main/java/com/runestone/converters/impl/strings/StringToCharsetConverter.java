@@ -22,20 +22,22 @@
  * SOFTWARE.
  */
 
-package com.runestone.converters.impl.numbers;
+package com.runestone.converters.impl.strings;
 
 import com.runestone.converters.DataConverter;
 
-import java.math.BigDecimal;
+import java.nio.charset.Charset;
+import java.nio.charset.IllegalCharsetNameException;
+import java.nio.charset.UnsupportedCharsetException;
 
-public class NumberToStringConverter implements DataConverter<Number, String> {
+public class StringToCharsetConverter implements DataConverter<String, Charset> {
 
     @Override
-    public String convert(Number data) {
-        return switch (data) {
-            case BigDecimal n -> n.toPlainString();
-            case Number n -> n.toString();
-            case null -> throw new IllegalArgumentException("Cannot convert null to String");
-        };
+    public Charset convert(String data) {
+        try {
+            return Charset.forName(data);
+        } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
+            throw new IllegalArgumentException("Invalid charset: " + data, e);
+        }
     }
 }

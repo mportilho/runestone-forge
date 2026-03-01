@@ -22,20 +22,22 @@
  * SOFTWARE.
  */
 
-package com.runestone.converters.impl.numbers;
+package com.runestone.converters.impl.strings;
 
 import com.runestone.converters.DataConverter;
 
-import java.math.BigDecimal;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URL;
 
-public class NumberToStringConverter implements DataConverter<Number, String> {
+public class StringToURLConverter implements DataConverter<String, URL> {
 
     @Override
-    public String convert(Number data) {
-        return switch (data) {
-            case BigDecimal n -> n.toPlainString();
-            case Number n -> n.toString();
-            case null -> throw new IllegalArgumentException("Cannot convert null to String");
-        };
+    public URL convert(String data) {
+        try {
+            return URI.create(data).toURL();
+        } catch (MalformedURLException e) {
+            throw new IllegalArgumentException("Invalid URL: " + data, e);
+        }
     }
 }

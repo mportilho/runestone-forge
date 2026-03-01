@@ -57,4 +57,32 @@ public class TestNumberToLongConverter {
         assertThat(converter.convert(new LongAccumulator(Long::sum, 1))).isEqualTo(1L);
         assertThat(converter.convert(new LongAdder())).isEqualTo(0L);
     }
+
+    @Test
+    public void testNullConversion() {
+        var converter = new NumberToLongConverter();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Cannot convert null to Long");
+    }
+
+    @Test
+    public void testEdgeCases() {
+        var converter = new NumberToLongConverter();
+        assertThat(converter.convert(Double.MAX_VALUE)).isEqualTo(Double.valueOf(Double.MAX_VALUE).longValue());
+        assertThat(converter.convert(Float.NaN)).isEqualTo(Float.valueOf(Float.NaN).longValue());
+        assertThat(converter.convert(Double.POSITIVE_INFINITY)).isEqualTo(Double.valueOf(Double.POSITIVE_INFINITY).longValue());
+    }
+
+    @Test
+    public void testFloatingPointConversions() {
+        var converter = new NumberToLongConverter();
+        assertThat(converter.convert(0.1f)).isEqualTo(0L);
+        assertThat(converter.convert(0.9d)).isEqualTo(0L);
+        assertThat(converter.convert(1.5f)).isEqualTo(1L);
+        assertThat(converter.convert(1.9d)).isEqualTo(1L);
+        assertThat(converter.convert(new BigDecimal("1.9"))).isEqualTo(1L);
+        assertThat(converter.convert(-1.9d)).isEqualTo(-1L);
+    }
+
 }

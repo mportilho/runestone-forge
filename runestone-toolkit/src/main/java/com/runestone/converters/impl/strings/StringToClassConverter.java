@@ -22,20 +22,18 @@
  * SOFTWARE.
  */
 
-package com.runestone.converters.impl.numbers;
+package com.runestone.converters.impl.strings;
 
 import com.runestone.converters.DataConverter;
 
-import java.math.BigDecimal;
-
-public class NumberToStringConverter implements DataConverter<Number, String> {
+public class StringToClassConverter implements DataConverter<String, Class<?>> {
 
     @Override
-    public String convert(Number data) {
-        return switch (data) {
-            case BigDecimal n -> n.toPlainString();
-            case Number n -> n.toString();
-            case null -> throw new IllegalArgumentException("Cannot convert null to String");
-        };
+    public Class<?> convert(String data) {
+        try {
+            return Class.forName(data);
+        } catch (ClassNotFoundException e) {
+            throw new IllegalArgumentException("Class not found: " + data, e);
+        }
     }
 }

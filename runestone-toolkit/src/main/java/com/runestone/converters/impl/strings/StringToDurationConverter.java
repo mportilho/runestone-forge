@@ -22,20 +22,16 @@
  * SOFTWARE.
  */
 
-package com.runestone.converters.impl.numbers;
+package com.runestone.converters.impl.strings;
 
 import com.runestone.converters.DataConverter;
 
-import java.math.BigDecimal;
+import java.time.Duration;
 
-public class NumberToStringConverter implements DataConverter<Number, String> {
+public class StringToDurationConverter implements DataConverter<String, Duration> {
 
     @Override
-    public String convert(Number data) {
-        return switch (data) {
-            case BigDecimal n -> n.toPlainString();
-            case Number n -> n.toString();
-            case null -> throw new IllegalArgumentException("Cannot convert null to String");
-        };
+    public Duration convert(String data) {
+        return Duration.parse(data);
     }
 }

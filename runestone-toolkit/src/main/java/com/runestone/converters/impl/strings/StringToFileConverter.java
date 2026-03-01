@@ -22,20 +22,16 @@
  * SOFTWARE.
  */
 
-package com.runestone.converters.impl.numbers;
+package com.runestone.converters.impl.strings;
 
 import com.runestone.converters.DataConverter;
 
-import java.math.BigDecimal;
+import java.io.File;
 
-public class NumberToStringConverter implements DataConverter<Number, String> {
+public class StringToFileConverter implements DataConverter<String, File> {
 
     @Override
-    public String convert(Number data) {
-        return switch (data) {
-            case BigDecimal n -> n.toPlainString();
-            case Number n -> n.toString();
-            case null -> throw new IllegalArgumentException("Cannot convert null to String");
-        };
+    public File convert(String data) {
+        return new File(data);
     }
 }
