@@ -26,7 +26,6 @@ package com.runestone.memoization;
 
 import java.util.Objects;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
 
 /**
@@ -42,10 +41,9 @@ import java.util.function.BiFunction;
 public class MemoizedExpiringBiFunction<T, U, R> implements BiFunction<T, U, R> {
 
     private final BiFunction<T, U, R> delegate;
-    private ConcurrentMap<BiParameter, CacheEntry<R>> cache;
+    private final ConcurrentMap<BiParameter, CacheEntry<R>> cache = new ConcurrentHashMap<>(128);
     private final long durationMillis;
     private final boolean retryOnError;
-    private final ReentrantLock lock = new ReentrantLock();
 
     /**
      * Creates a new {@link MemoizedExpiringBiFunction} instance.
@@ -77,56 +75,47 @@ public class MemoizedExpiringBiFunction<T, U, R> implements BiFunction<T, U, R> 
 
     @Override
     public R apply(T t, U u) {
-        if (cache == null) {
-            lock.lock();
-            try {
-                if (cache == null) {
-                    cache = new ConcurrentHashMap<>(128);
-                }
-            } finally {
-                lock.unlock();
-            }
-        }
-        try {
-            return applyAsync(t, u);
-        } catch (InterruptedException e) {
-            throw new IllegalStateException("Memoization interrupted while fetching a new value", e);
-        }
-    }
-
-    private R applyAsync(T t, U u) throws InterruptedException {
         long currentTime = System.currentTimeMillis();
         BiParameter biParameter = new BiParameter(t, u);
         CacheEntry<R> entry = cache.get(biParameter);
 
         if (entry == null || entry.isExpired(currentTime)) {
-            Callable<R> eval = () -> delegate.apply(t, u);
-            FutureTask<R> futureTask = new FutureTask<>(eval);
-            entry = new CacheEntry<>(futureTask, currentTime + durationMillis);
-            cache.put(biParameter, entry);
-            futureTask.run();
+            entry = cache.compute(biParameter, (key, currentEntry) -> {
+                if (currentEntry == null || currentEntry.isExpired(currentTime)) {
+                    FutureTask<R> futureTask = new FutureTask<>(() -> delegate.apply(t, u));
+                    return new CacheEntry<>(futureTask, currentTime + durationMillis);
+                }
+                return currentEntry;
+            });
+            if (entry.future instanceof FutureTask<R> task) {
+                task.run();
+            }
         }
+        
         try {
-            return entry.future().get();
+            return entry.future.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Memoization interrupted while fetching a new value", e);
         } catch (CancellationException e) {
             cache.remove(biParameter, entry);
+            throw new IllegalStateException("Memoization cancelled while fetching a new value", e);
         } catch (ExecutionException e) {
-            Throwable throwable = e.getCause();
             if (retryOnError) {
                 cache.remove(biParameter, entry);
             }
-            if (throwable instanceof RuntimeException exception) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException exception) {
                 throw exception;
-            } else if (throwable instanceof Error error) {
+            } else if (cause instanceof Error error) {
                 throw error;
             } else {
-                throw new IllegalStateException("Error while fetching new value for memoized function", throwable);
+                throw new IllegalStateException("Error while fetching new value for memoized function", cause);
             }
         }
-        throw new IllegalStateException("Error while fetching new value for memoized function");
     }
 
-    private record CacheEntry<R>(FutureTask<R> future, long expirationTime) {
+    private record CacheEntry<R>(Future<R> future, long expirationTime) {
         boolean isExpired(long currentTime) {
             return currentTime >= expirationTime;
         }

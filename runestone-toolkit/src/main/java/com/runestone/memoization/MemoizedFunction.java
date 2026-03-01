@@ -26,7 +26,6 @@ package com.runestone.memoization;
 
 import java.util.Objects;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 /**
@@ -41,8 +40,7 @@ import java.util.function.Function;
 public class MemoizedFunction<T, R> implements Function<T, R> {
 
     private final Function<T, R> delegate;
-    private ConcurrentMap<T, Future<R>> cache;
-    private final ReentrantLock lock = new ReentrantLock();
+    private final ConcurrentMap<T, Future<R>> cache = new ConcurrentHashMap<>(128);
     private final boolean retryOnError;
 
     /**
@@ -67,52 +65,38 @@ public class MemoizedFunction<T, R> implements Function<T, R> {
 
     @Override
     public R apply(T t) {
-        if (cache == null) {
-            lock.lock();
-            try {
-                if (cache == null) {
-                    cache = new ConcurrentHashMap<>(128);
-                }
-            } finally {
-                lock.unlock();
-            }
-        }
-        try {
-            return applyAsync(t);
-        } catch (InterruptedException e) {
-            throw new IllegalStateException("Memoization interrupted while fetching a new value", e);
-        }
-    }
-
-    private R applyAsync(T t) throws InterruptedException {
         Future<R> future = cache.get(t);
-        if (future == null) {
-            final Callable<R> eval = () -> delegate.apply(t);
-            final FutureTask<R> futureTask = new FutureTask<>(eval); // uses the current thread to execute the task
-            future = cache.putIfAbsent(t, futureTask);
-            if (future == null) {
-                future = futureTask;
-                futureTask.run();
-            }
-        }
         try {
+            if (future == null) {
+                FutureTask<R> futureTask = new FutureTask<>(() -> delegate.apply(t));
+                future = cache.putIfAbsent(t, futureTask);
+                if (future == null) {
+                    future = futureTask;
+                    futureTask.run();
+                }
+            }
             return future.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Memoization interrupted while fetching a new value", e);
         } catch (CancellationException e) {
-            cache.remove(t, future);
-        } catch (ExecutionException e) {
-            if (retryOnError) {
+            if (future != null) {
                 cache.remove(t, future);
             }
-            Throwable throwable = e.getCause();
-            if (throwable instanceof RuntimeException exception) {
+            throw new IllegalStateException("Memoization cancelled while fetching a new value", e);
+        } catch (ExecutionException e) {
+            if (retryOnError && future != null) {
+                cache.remove(t, future);
+            }
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException exception) {
                 throw exception;
-            } else if (throwable instanceof Error error) {
+            } else if (cause instanceof Error error) {
                 throw error;
             } else {
-                throw new IllegalStateException("Error while fetching new value for memoized function", throwable);
+                throw new IllegalStateException("Error while fetching new value for memoized function", cause);
             }
         }
-        throw new IllegalStateException("Error while fetching new value for memoized function");
     }
 
 }

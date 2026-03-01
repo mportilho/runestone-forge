@@ -26,7 +26,6 @@ package com.runestone.memoization;
 
 import java.util.Objects;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 /**
@@ -40,10 +39,9 @@ import java.util.function.Function;
 public class MemoizedExpiringFunction<T, R> implements Function<T, R> {
 
     private final Function<T, R> delegate;
-    private ConcurrentMap<T, CacheEntry<R>> cache;
+    private final ConcurrentMap<T, CacheEntry<R>> cache = new ConcurrentHashMap<>(128);
     private final long durationMillis;
     private final boolean retryOnError;
-    private final ReentrantLock lock = new ReentrantLock();
 
     /**
      * Creates a new {@link MemoizedExpiringFunction} instance.
@@ -75,55 +73,49 @@ public class MemoizedExpiringFunction<T, R> implements Function<T, R> {
 
     @Override
     public R apply(T t) {
-        if (cache == null) {
-            lock.lock();
-            try {
-                if (cache == null) {
-                    cache = new ConcurrentHashMap<>(128);
-                }
-            } finally {
-                lock.unlock();
-            }
-        }
-        try {
-            return applyWithExpiry(t);
-        } catch (InterruptedException e) {
-            throw new IllegalStateException("Memoization interrupted while fetching a new value", e);
-        }
-    }
-
-    private R applyWithExpiry(T t) throws InterruptedException {
         long currentTime = System.currentTimeMillis();
         CacheEntry<R> entry = cache.get(t);
 
         if (entry == null || entry.isExpired(currentTime)) {
-            Callable<R> eval = () -> delegate.apply(t);
-            FutureTask<R> futureTask = new FutureTask<>(eval);
-            entry = new CacheEntry<>(futureTask, currentTime + durationMillis);
-            cache.put(t, entry);
-            futureTask.run();
+            entry = cache.compute(t, (key, currentEntry) -> {
+                if (currentEntry == null || currentEntry.isExpired(currentTime)) {
+                    FutureTask<R> futureTask = new FutureTask<>(() -> delegate.apply(key));
+                    return new CacheEntry<>(futureTask, currentTime + durationMillis);
+                }
+                return currentEntry;
+            });
+            
+            // If the future hasn't started yet, run it. ConcurrentHashMap.compute is atomic.
+            // We check if the future is a FutureTask to run it once.
+            if (entry.future instanceof FutureTask<R> task) {
+                task.run();
+            }
         }
+        
         try {
-            return entry.future().get();
+            return entry.future.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Memoization interrupted while fetching a new value", e);
         } catch (CancellationException e) {
             cache.remove(t, entry);
+            throw new IllegalStateException("Memoization cancelled while fetching a new value", e);
         } catch (ExecutionException e) {
-            Throwable throwable = e.getCause();
             if (retryOnError) {
                 cache.remove(t, entry);
             }
-            if (throwable instanceof RuntimeException exception) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException exception) {
                 throw exception;
-            } else if (throwable instanceof Error error) {
+            } else if (cause instanceof Error error) {
                 throw error;
             } else {
-                throw new IllegalStateException("Error while fetching new value for memoized function", throwable);
+                throw new IllegalStateException("Error while fetching new value for memoized function", cause);
             }
         }
-        throw new IllegalStateException("Error while fetching new value for memoized function");
     }
 
-    private record CacheEntry<R>(FutureTask<R> future, long expirationTime) {
+    private record CacheEntry<R>(Future<R> future, long expirationTime) {
         boolean isExpired(long currentTime) {
             return currentTime >= expirationTime;
         }
