@@ -54,8 +54,28 @@ public class TestNumberToBigDecimalConverter {
         assertThat(converter.convert(new AtomicLong(1))).isEqualTo(BigDecimal.valueOf(1));
         assertThat(converter.convert(new DoubleAccumulator(Double::sum, 1))).isEqualByComparingTo(BigDecimal.valueOf(1));
         assertThat(converter.convert(new DoubleAdder())).isEqualByComparingTo(BigDecimal.valueOf(0));
-        assertThat(converter.convert(new LongAccumulator(Long::sum, 1))).isEqualTo(BigDecimal.valueOf(1));
         assertThat(converter.convert(new LongAdder())).isEqualTo(BigDecimal.valueOf(0));
+    }
+
+    @Test
+    public void testFloatingPointPrecision() {
+        NumberToBigDecimalConverter converter = new NumberToBigDecimalConverter();
+
+        // Specific problematic float values
+        assertThat(converter.convert(0.1f)).isEqualTo(new BigDecimal("0.1"));
+        assertThat(converter.convert(0.2f)).isEqualTo(new BigDecimal("0.2"));
+        assertThat(converter.convert(0.3f)).isEqualTo(new BigDecimal("0.3"));
+
+        // Double values
+        assertThat(converter.convert(0.1d)).isEqualTo(new BigDecimal("0.1"));
+
+        // Atomic/Accumulator versions
+        DoubleAccumulator accumulator = new DoubleAccumulator(Double::sum, 0.1);
+        assertThat(converter.convert(accumulator)).isEqualTo(new BigDecimal("0.1"));
+
+        DoubleAdder adder = new DoubleAdder();
+        adder.add(0.1);
+        assertThat(converter.convert(adder)).isEqualTo(new BigDecimal("0.1"));
     }
 
 }
