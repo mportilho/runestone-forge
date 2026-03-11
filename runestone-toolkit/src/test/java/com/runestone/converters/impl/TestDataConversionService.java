@@ -45,8 +45,10 @@ public class TestDataConversionService {
     @Test
     public void testDefaultDataConversionService() {
         DataConversionService service = new DefaultDataConversionService();
+        Assertions.assertThat(service.canConvert(Integer.class, BigDecimal.class)).isTrue();
         Assertions.assertThat(service.convert("123", Integer.class)).isEqualTo(Integer.valueOf("123"));
         Assertions.assertThat(service.convert("123", int.class)).isEqualTo(123);
+        Assertions.assertThat(service.convert(123, BigDecimal.class)).isEqualByComparingTo("123");
         Assertions.assertThat(service.convert(123, String.class)).isEqualTo("123");
         Assertions.assertThat(service.convert("20200102", LocalDate.class)).isEqualTo(LocalDate.of(2020, 1, 2));
     }

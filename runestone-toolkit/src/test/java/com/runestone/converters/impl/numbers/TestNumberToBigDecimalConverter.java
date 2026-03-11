@@ -34,9 +34,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestNumberToBigDecimalConverter {
 
+    private final NumberToBigDecimalConverter converter = new NumberToBigDecimalConverter();
+
     @Test
     public void testNumbersConversions() {
-        NumberToBigDecimalConverter converter = new NumberToBigDecimalConverter();
         assertThat(converter.convert((byte) 1)).isEqualTo(BigDecimal.valueOf(1));
         assertThat(converter.convert((short) 1)).isEqualTo(BigDecimal.valueOf(1));
         assertThat(converter.convert(1)).isEqualTo(BigDecimal.valueOf(1));
@@ -49,7 +50,6 @@ public class TestNumberToBigDecimalConverter {
 
     @Test
     public void testConcurrentNumbersConversions() {
-        NumberToBigDecimalConverter converter = new NumberToBigDecimalConverter();
         assertThat(converter.convert(new AtomicInteger(1))).isEqualTo(BigDecimal.valueOf(1));
         assertThat(converter.convert(new AtomicLong(1))).isEqualTo(BigDecimal.valueOf(1));
         assertThat(converter.convert(new DoubleAccumulator(Double::sum, 1))).isEqualByComparingTo(BigDecimal.valueOf(1));
@@ -59,8 +59,6 @@ public class TestNumberToBigDecimalConverter {
 
     @Test
     public void testFloatingPointPrecision() {
-        NumberToBigDecimalConverter converter = new NumberToBigDecimalConverter();
-
         // Specific problematic float values
         assertThat(converter.convert(0.1f)).isEqualTo(new BigDecimal("0.1"));
         assertThat(converter.convert(0.2f)).isEqualTo(new BigDecimal("0.2"));
@@ -79,8 +77,49 @@ public class TestNumberToBigDecimalConverter {
     }
 
     @Test
+    public void testByteConversionWithRepresentativeValues() {
+        assertThat(converter.convert(Byte.MIN_VALUE)).isEqualByComparingTo("-128");
+        assertThat(converter.convert((byte) 0)).isEqualByComparingTo("0");
+        assertThat(converter.convert(Byte.MAX_VALUE)).isEqualByComparingTo("127");
+    }
+
+    @Test
+    public void testShortConversionWithRepresentativeValues() {
+        assertThat(converter.convert(Short.MIN_VALUE)).isEqualByComparingTo("-32768");
+        assertThat(converter.convert((short) 0)).isEqualByComparingTo("0");
+        assertThat(converter.convert(Short.MAX_VALUE)).isEqualByComparingTo("32767");
+    }
+
+    @Test
+    public void testIntegerConversionWithRepresentativeValues() {
+        assertThat(converter.convert(Integer.MIN_VALUE)).isEqualByComparingTo("-2147483648");
+        assertThat(converter.convert(0)).isEqualByComparingTo("0");
+        assertThat(converter.convert(Integer.MAX_VALUE)).isEqualByComparingTo("2147483647");
+    }
+
+    @Test
+    public void testLongConversionWithRepresentativeValues() {
+        assertThat(converter.convert(Long.MIN_VALUE)).isEqualByComparingTo("-9223372036854775808");
+        assertThat(converter.convert(0L)).isEqualByComparingTo("0");
+        assertThat(converter.convert(Long.MAX_VALUE)).isEqualByComparingTo("9223372036854775807");
+    }
+
+    @Test
+    public void testFloatConversionWithRepresentativeValues() {
+        assertThat(converter.convert(-12.5f)).isEqualByComparingTo("-12.5");
+        assertThat(converter.convert(0.0f)).isEqualByComparingTo("0.0");
+        assertThat(converter.convert(12.5f)).isEqualByComparingTo("12.5");
+    }
+
+    @Test
+    public void testDoubleConversionWithRepresentativeValues() {
+        assertThat(converter.convert(-12.5d)).isEqualByComparingTo("-12.5");
+        assertThat(converter.convert(0.0d)).isEqualByComparingTo("0.0");
+        assertThat(converter.convert(12.5d)).isEqualByComparingTo("12.5");
+    }
+
+    @Test
     public void testNullConversion() {
-        var converter = new NumberToBigDecimalConverter();
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Cannot convert null to BigDecimal");
@@ -88,7 +127,6 @@ public class TestNumberToBigDecimalConverter {
 
     @Test
     public void testEdgeCases() {
-        var converter = new NumberToBigDecimalConverter();
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert(Float.NaN))
                 .isInstanceOf(NumberFormatException.class);
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert(Double.POSITIVE_INFINITY))

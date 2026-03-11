@@ -57,7 +57,24 @@ public class DefaultDataConversionService implements DataConversionService {
 
     @Override
     public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
-        return CONVERTERS.containsKey(new ConverterPairKey(sourceType, targetType));
+        if (sourceType == null || targetType == null) {
+            return false;
+        }
+        if (targetType.isAssignableFrom(sourceType) || targetType.isPrimitive()) {
+            return true;
+        }
+        if (targetType.isEnum() && (String.class.isAssignableFrom(sourceType) || Number.class.isAssignableFrom(sourceType))) {
+            return true;
+        }
+        if (CONVERTERS.containsKey(new ConverterPairKey(sourceType, targetType))) {
+            return true;
+        }
+        for (ConverterPairKey key : CONVERTERS.keySet()) {
+            if (key.targetType().equals(targetType) && key.sourceType().isAssignableFrom(sourceType)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
