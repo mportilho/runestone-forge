@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**runestone-forge** is a multi-module Java development toolkit with three modules:
+**runestone-forge** is a multi-module Java development toolkit with four modules:
 
 1. **runestone-toolkit** — Core utilities (memoization, caching, data conversion, assertions). No Spring dependency.
 2. **dynamic-filter-resolver** — Dynamic filtering framework for Spring Data JPA repositories, with OpenAPI integration.
 3. **expression-evaluator** — ANTLR 4-based mathematical/logical expression parser and evaluator.
+4. **exp-eval-mk2** — Work-in-progress second iteration of the expression evaluator (currently scaffolded, no source yet). Uses Caffeine for caching.
 
 ## Build & Test Commands
 
@@ -24,6 +25,12 @@ mvn verify
 
 # Run tests for a single module
 mvn clean test -pl expression-evaluator
+
+# Run a single test class
+mvn clean test -pl expression-evaluator -Dtest=ExpressionCalculatorTest
+
+# Run a single test method
+mvn clean test -pl expression-evaluator -Dtest=ExpressionCalculatorTest#methodName
 
 # Update project version
 mvn versions:set -DnewVersion=1.0.0 versions:commit
