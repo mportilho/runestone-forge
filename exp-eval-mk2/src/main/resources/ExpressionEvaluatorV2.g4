@@ -151,18 +151,42 @@ logicalExpression
     | logicalEntity                                                     # logicalValue
     ;
 
+// Mathematical precedence:
+// postfix % and ! > exponentiation ^ > root > unary - > *, /, mod > +, -
 mathExpression
-    : MINUS LPAREN mathExpression RPAREN                                # negateMathParenthesis
-    | LPAREN mathExpression RPAREN                                      # mathParenthesis
-    | mathExpression PERCENT                                            # percentExpression
-    | mathExpression EXCLAMATION                                        # factorialExpression
-    | mathExpression ROOT mathExpression                                # rootExpression
-    | SQRT LPAREN mathExpression RPAREN                                 # squareRootExpression
-    | <assoc=right> mathExpression EXPONENTIATION mathExpression        # exponentiationExpression
-    | mathExpression (MULT | DIV | MODULO) mathExpression               # multiplicationExpression
-    | mathExpression (PLUS | MINUS) mathExpression                      # sumExpression
-    | MODULUS mathExpression MODULUS                                    # modulusExpression
-    | numericEntity                                                     # numberValue
+    : sumExpression
+    ;
+
+sumExpression
+    : multiplicationExpression ((PLUS | MINUS) multiplicationExpression)*
+    ;
+
+multiplicationExpression
+    : unaryExpression ((MULT | DIV | MODULO) unaryExpression)*
+    ;
+
+unaryExpression
+    : MINUS unaryExpression
+    | rootExpression
+    ;
+
+rootExpression
+    : exponentiationExpression (ROOT exponentiationExpression)*
+    ;
+
+exponentiationExpression
+    : postfixExpression (EXPONENTIATION unaryExpression)?
+    ;
+
+postfixExpression
+    : primaryMathExpression ((PERCENT | EXCLAMATION))*
+    ;
+
+primaryMathExpression
+    : LPAREN mathExpression RPAREN
+    | SQRT LPAREN mathExpression RPAREN
+    | MODULUS mathExpression MODULUS
+    | numericEntity
     ;
 
 function
@@ -192,12 +216,12 @@ logicalEntity
     ;
 
 numericEntity
-    : MINUS? IF logicalExpression THEN mathExpression (ELSEIF logicalExpression THEN mathExpression)* ELSE mathExpression ENDIF # mathDecisionExpression
-    | MINUS? IF LPAREN logicalExpression (COMMA | SEMI) mathExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) mathExpression)* (COMMA | SEMI) mathExpression RPAREN # mathFunctionDecisionExpression
-    | MINUS? NUMBER                                                                                                   # numericConstant
-    | NUMBER_TYPE? MINUS? function                                                                                    # numericFunctionResult
+    : IF logicalExpression THEN mathExpression (ELSEIF logicalExpression THEN mathExpression)* ELSE mathExpression ENDIF # mathDecisionExpression
+    | IF LPAREN logicalExpression (COMMA | SEMI) mathExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) mathExpression)* (COMMA | SEMI) mathExpression RPAREN # mathFunctionDecisionExpression
+    | NUMBER                                                                                                             # numericConstant
+    | NUMBER_TYPE? function                                                                                              # numericFunctionResult
     // Identifiers may resolve to user variables or semantic built-ins such as E/pi.
-    | NUMBER_TYPE? MINUS? IDENTIFIER                                                                                  # numericVariable
+    | NUMBER_TYPE? IDENTIFIER                                                                                            # numericVariable
     ;
 
 stringEntity
