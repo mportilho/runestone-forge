@@ -48,6 +48,7 @@ DIV           : '/' ;
 PLUS          : '+' ;
 MINUS         : '-' ;
 PERCENT       : '%' ;
+MODULO        : 'mod' ;
 MODULUS       : '|' ;
 EXCLAMATION   : '!' ;
 EXPONENTIATION: '^' ;
@@ -62,9 +63,7 @@ PRODUCT_SEQUENCE  : 'P[' ;
 SUMMATION_VARIABLE        : 'S' ;
 PRODUCT_SEQUENCE_VARIABLE : 'P' ;
 
-PI    : 'pi' | 'PI' ;
-EULER : 'E' ;
-DEGREE : '\u00B0' | 'deggre' | 'deggres' ;
+DEGREE : '\u00B0' | 'degree' | 'degrees' ;
 
 GT  : '>' ;
 GE  : '>=' ;
@@ -146,14 +145,11 @@ fragment DateFragment        : '0'..'9' '0'..'9' '0'..'9' '0'..'9' '-' MonthFrag
 fragment TimeOffsetFragment  : ('+' | '-') '0'..'2' [0-9] ':' [0-9] [0-9] ;
 
 // Comments and whitespace
-COMMENT
-    : ( '//' ~[\r\n]* '\r'? '\n'
-      | '/*' .*? '*/'
-      | EOF
-      ) -> skip
-    ;
+LINE_COMMENT  : '//' ~[\r\n]* -> skip ;
+BLOCK_COMMENT : '/*' .*? '*/' -> skip ;
 
 WS : [ \r\t\u000C\n]+ -> channel(HIDDEN) ;
+ERROR_CHAR : . ;
 
 /* ########################################  Grammar rules  ######################################## */
 
@@ -164,7 +160,8 @@ mathStart
     ;
 
 logicalStart
-    : (assignmentExpression)* logicalExpression? EOF
+    : assignmentExpression+ EOF
+    | assignmentExpression* logicalExpression EOF
     ;
 
 assignmentExpression
@@ -176,9 +173,9 @@ assignmentExpression
 // NOT (highest) > NAND/NOR/XOR/XNOR > AND > OR (lowest among binary logical)
 logicalExpression
     : (NOT | EXCLAMATION) logicalExpression                             # notExpression
-    | logicalExpression (NAND | NOR | XOR | XNOR) logicalExpression    # logicExpression
-    | logicalExpression AND logicalExpression                           # logicExpression
-    | logicalExpression OR logicalExpression                            # logicExpression
+    | logicalExpression (NAND | NOR | XOR | XNOR) logicalExpression    # bitwiseLogicExpression
+    | logicalExpression AND logicalExpression                           # andExpression
+    | logicalExpression OR logicalExpression                            # orExpression
     | logicalExpression comparisonOperator logicalExpression            # logicComparisonExpression
     | mathExpression comparisonOperator mathExpression                  # comparisonMathExpression
     | stringEntity comparisonOperator stringEntity                      # stringExpression
@@ -198,7 +195,7 @@ mathExpression
     | mathExpression ROOT mathExpression                                # rootExpression
     | SQRT LPAREN mathExpression RPAREN                                 # squareRootExpression
     | <assoc=right> mathExpression EXPONENTIATION mathExpression        # exponentiationExpression
-    | mathExpression (MULT | DIV | PERCENT) mathExpression              # multiplicationExpression
+    | mathExpression (MULT | DIV | MODULO) mathExpression               # multiplicationExpression
     | mathExpression (PLUS | MINUS) mathExpression                      # sumExpression
     | MODULUS mathExpression MODULUS                                    # modulusExpression
     | mathExpression DEGREE                                             # degreeExpression
@@ -278,12 +275,11 @@ logicalEntity
 numericEntity
     : IF logicalExpression THEN mathExpression (ELSEIF logicalExpression THEN mathExpression)? ELSE mathExpression ENDIF # mathDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) mathExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) mathExpression)* (COMMA | SEMI) mathExpression RPAREN # mathFunctionDecisionExpression
-    | EULER                                                                                                    # eulerConstant
-    | PI                                                                                                       # piConstant
     | SUMMATION_VARIABLE                                                                                       # summationVariable
     | PRODUCT_SEQUENCE_VARIABLE                                                                                # productSequenceVariable
     | NUMBER                                                                                                   # numericConstant
     | NUMBER_TYPE? function                                                                                    # numericFunctionResult
+    // Identifiers may resolve to user variables or semantic built-ins such as E/pi.
     | NUMBER_TYPE? IDENTIFIER                                                                                  # numericVariable
     ;
 

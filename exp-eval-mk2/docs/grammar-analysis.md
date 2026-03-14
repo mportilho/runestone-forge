@@ -6,33 +6,7 @@
 
 ---
 
-## Resumo por Severidade
-
-| # | Severidade | Problema |
-|---|-----------|----------|
-| 1 | CRÍTICO | Combined grammar — deveria ser split |
-| 2 | CRÍTICO | `PERCENT` com duplo significado — ambiguidade real |
-| 3 | CRÍTICO | `EOF` como alternativa em `COMMENT` — bug semântico |
-| 4 | ALTO | `EULER : 'E'` — colisão silenciosa com identificadores |
-| 5 | ALTO | Ausência de fallback lexical (`ANY : . ;`) |
-| 6 | ALTO | Typo em `DEGREE`: `'deggre'` / `'deggres'` |
-| 7 | ALTO | `logicalExpression?` opcional cria problemas de null |
-| 8 | ALTO | `S[` e `P[` incorporados ao token — sintaxe confusa |
-| 9 | MÉDIO | Três alternativas com label `#logicExpression` |
-| 10 | MÉDIO | `logicComparisonExpression` semanticamente vago |
-| 11 | MÉDIO | `allEntityTypes` com alta ambiguidade de lookahead |
-
----
-
 ## Problemas Detalhados
-
-### [CRÍTICO] 1. Combined Grammar — Deveria ser Split
-
-A gramática usa `grammar ExpressionEvaluatorV2;` (combined), misturando Lexer e Parser no mesmo arquivo. Para uma gramática desta complexidade (~330 linhas, múltiplos contextos semânticos), isso impede clareza nos erros e dificulta manutenção.
-
-**Solução**: Separar em `ExpressionEvaluatorV2Lexer.g4` e `ExpressionEvaluatorV2Parser.g4`.
-
----
 
 ### [CRÍTICO] 2. `PERCENT` com Duplo Significado — Ambiguidade Real
 
@@ -46,7 +20,7 @@ A gramática usa `grammar ExpressionEvaluatorV2;` (combined), misturando Lexer e
 
 O token `%` aparece em dois contextos incompatíveis na mesma regra `mathExpression`. Se o usuário escreve `10 % 3`, o parser não consegue distinguir entre "10% de 3" e "10 mod 3". É uma ambiguidade léxico-semântica que o ANTLR resolve pelo ordinal da alternativa, silenciosamente escolhendo errado.
 
-**Solução**: Usar tokens distintos — ex.: `PERCENT` para postfix e `MODULO` para o operador binário.
+**Solução**: Usar tokens distintos — ex.: `PERCENT` para postfix e `MODULO` (mod) para o operador binário.
 
 ---
 
@@ -85,6 +59,12 @@ O token `E` (maiúsculo, sozinho) é reservado para o número de Euler. Qualquer
 
 Isso é uma restrição documentada ou um bug silencioso? Se for restrição, precisa estar documentada e gerar um erro claro.
 
+Solução: built-ins semânticos com fallback em IDENTIFIER. Isso costuma ser o desenho mais flexível porque:
+- não bloqueia nomes do usuário;
+- mantém a sintaxe curta para constantes conhecidas;
+- permite uma regra explícita de precedência, por exemplo “variável do usuário sombreia built-in”.
+
+
 ---
 
 ### [ALTO] 5. Ausência de Regra de Fallback Lexical
@@ -96,6 +76,8 @@ Isso é uma restrição documentada ou um bug silencioso? Se for restrição, pr
 
 Se o usuário digita um caractere inválido, o ANTLR lança um erro genérico de reconhecimento sem contexto. Uma regra `ERROR_CHAR : . ;` no final permite capturar caracteres inesperados com mensagens de erro controladas via `BaseErrorListener`.
 
+Solução: adicione o fallback 'ERROR_CHAR' ao final para capturar caracteres inesperados.
+
 ---
 
 ### [ALTO] 6. Typo nos Literais do Token `DEGREE`
@@ -106,6 +88,8 @@ DEGREE : '\u00B0' | 'deggre' | 'deggres' ;
 ```
 
 `'deggre'` e `'deggres'` parecem typos de `'degree'` e `'degrees'` (duplo `g`). Se for um alias intencional, não há comentário explicando. Se for typo, o token correto nunca é reconhecido quando o usuário escreve `degree`.
+
+solução: corrigir typo
 
 ---
 
@@ -119,24 +103,7 @@ logicalStart
 
 O `?` torna `logicalExpression` opcional. Uma entrada contendo apenas assignments (ou até vazia) é um `logicalStart` válido. Isto provavelmente resultará em `null` retornado pelo visitor/listener para o campo de expressão, exigindo null-checks defensivos em todo o código Java de visita.
 
----
-
-### [ALTO] 8. Design Confuso de `SUMMATION` / `PRODUCT_SEQUENCE`
-
-```antlr
-SUMMATION         : 'S[' ;
-PRODUCT_SEQUENCE  : 'P[' ;
-```
-
-O `[` é incorporado ao token. Então a regra:
-
-```antlr
-sequenceFunction
-    : (SUMMATION | PRODUCT_SEQUENCE) vectorEntity RBRACKET LPAREN mathExpression RPAREN
-    ;
-```
-
-Para usar um vetor literal, o usuário precisa escrever `S[[1,2,3]](expr)` — dois colchetes de abertura — porque `vectorEntity` exige seu próprio `LBRACKET`. É uma sintaxe não-intuitiva e difícil de comunicar em documentação.
+Solução: logicalExpression é opcional, mas se ele não existir, pelo menos um assignmentExpression deve existir
 
 ---
 
@@ -151,31 +118,3 @@ Para usar um vetor literal, o usuário precisa escrever `S[[1,2,3]](expr)` — d
 Todas chamam `#logicExpression`. O ANTLR gera um único método `visitLogicExpression()` / `enterLogicExpression()`. Para distinguir AND de XOR de OR dentro do visitor, é preciso inspecionar o token filho manualmente — perde-se a elegância do visitor pattern.
 
 **Solução**: Labels únicos (ex.: `#andExpression`, `#orExpression`, `#bitwiseLogicExpression`) geram métodos distintos.
-
----
-
-### [MÉDIO] 10. `logicComparisonExpression` é Semanticamente Duvidoso
-
-```antlr
-| logicalExpression comparisonOperator logicalExpression   # logicComparisonExpression
-```
-
-Isso permite `true > false` ou `(a and b) = (c or d)`, comparações entre expressões booleanas com operadores relacionais. Abre espaço para expressões sem sentido que o parser aceita silenciosamente.
-
----
-
-### [MÉDIO] 11. `allEntityTypes` — Alta Ambiguidade de Lookahead
-
-```antlr
-allEntityTypes
-    : mathExpression
-    | logicalExpression
-    | dateOperation
-    | timeOperation
-    | dateTimeOperation
-    | stringEntity
-    | vectorEntity
-    ;
-```
-
-`mathExpression` pode ser atingida via `logicalExpression` (ex.: uma expressão matemática é um caso especial de uma lógica via `comparisonMathExpression`). Isso força o ANTLR a usar `LL(*)` com lookahead profundo ao resolver `allEntityTypes` — é um ponto de potencial explosão de performance em expressões aninhadas complexas.

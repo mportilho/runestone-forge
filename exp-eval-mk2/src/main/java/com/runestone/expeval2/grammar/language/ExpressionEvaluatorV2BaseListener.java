@@ -79,6 +79,18 @@ public class ExpressionEvaluatorV2BaseListener implements ExpressionEvaluatorV2L
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterOrExpression(ExpressionEvaluatorV2Parser.OrExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitOrExpression(ExpressionEvaluatorV2Parser.OrExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterDateTimeExpression(ExpressionEvaluatorV2Parser.DateTimeExpressionContext ctx) { }
 	/**
 	 * {@inheritDoc}
@@ -86,6 +98,18 @@ public class ExpressionEvaluatorV2BaseListener implements ExpressionEvaluatorV2L
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitDateTimeExpression(ExpressionEvaluatorV2Parser.DateTimeExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterAndExpression(ExpressionEvaluatorV2Parser.AndExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitAndExpression(ExpressionEvaluatorV2Parser.AndExpressionContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -110,18 +134,6 @@ public class ExpressionEvaluatorV2BaseListener implements ExpressionEvaluatorV2L
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitLogicalValue(ExpressionEvaluatorV2Parser.LogicalValueContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterLogicExpression(ExpressionEvaluatorV2Parser.LogicExpressionContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitLogicExpression(ExpressionEvaluatorV2Parser.LogicExpressionContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -182,6 +194,18 @@ public class ExpressionEvaluatorV2BaseListener implements ExpressionEvaluatorV2L
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitTimeExpression(ExpressionEvaluatorV2Parser.TimeExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterBitwiseLogicExpression(ExpressionEvaluatorV2Parser.BitwiseLogicExpressionContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitBitwiseLogicExpression(ExpressionEvaluatorV2Parser.BitwiseLogicExpressionContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -674,30 +698,6 @@ public class ExpressionEvaluatorV2BaseListener implements ExpressionEvaluatorV2L
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitMathFunctionDecisionExpression(ExpressionEvaluatorV2Parser.MathFunctionDecisionExpressionContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterEulerConstant(ExpressionEvaluatorV2Parser.EulerConstantContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitEulerConstant(ExpressionEvaluatorV2Parser.EulerConstantContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterPiConstant(ExpressionEvaluatorV2Parser.PiConstantContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitPiConstant(ExpressionEvaluatorV2Parser.PiConstantContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *

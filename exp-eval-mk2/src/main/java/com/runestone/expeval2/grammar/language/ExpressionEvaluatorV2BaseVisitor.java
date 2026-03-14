@@ -55,7 +55,21 @@ public class ExpressionEvaluatorV2BaseVisitor<T> extends AbstractParseTreeVisito
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
+	@Override public T visitOrExpression(ExpressionEvaluatorV2Parser.OrExpressionContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
 	@Override public T visitDateTimeExpression(ExpressionEvaluatorV2Parser.DateTimeExpressionContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
+	@Override public T visitAndExpression(ExpressionEvaluatorV2Parser.AndExpressionContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -70,13 +84,6 @@ public class ExpressionEvaluatorV2BaseVisitor<T> extends AbstractParseTreeVisito
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
 	@Override public T visitLogicalValue(ExpressionEvaluatorV2Parser.LogicalValueContext ctx) { return visitChildren(ctx); }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation returns the result of calling
-	 * {@link #visitChildren} on {@code ctx}.</p>
-	 */
-	@Override public T visitLogicExpression(ExpressionEvaluatorV2Parser.LogicExpressionContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -112,6 +119,13 @@ public class ExpressionEvaluatorV2BaseVisitor<T> extends AbstractParseTreeVisito
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
 	@Override public T visitTimeExpression(ExpressionEvaluatorV2Parser.TimeExpressionContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
+	@Override public T visitBitwiseLogicExpression(ExpressionEvaluatorV2Parser.BitwiseLogicExpressionContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -399,20 +413,6 @@ public class ExpressionEvaluatorV2BaseVisitor<T> extends AbstractParseTreeVisito
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
 	@Override public T visitMathFunctionDecisionExpression(ExpressionEvaluatorV2Parser.MathFunctionDecisionExpressionContext ctx) { return visitChildren(ctx); }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation returns the result of calling
-	 * {@link #visitChildren} on {@code ctx}.</p>
-	 */
-	@Override public T visitEulerConstant(ExpressionEvaluatorV2Parser.EulerConstantContext ctx) { return visitChildren(ctx); }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation returns the result of calling
-	 * {@link #visitChildren} on {@code ctx}.</p>
-	 */
-	@Override public T visitPiConstant(ExpressionEvaluatorV2Parser.PiConstantContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
 	 *

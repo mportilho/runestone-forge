@@ -64,6 +64,18 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 */
 	void exitDestructuringAssignment(ExpressionEvaluatorV2Parser.DestructuringAssignmentContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code orExpression}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterOrExpression(ExpressionEvaluatorV2Parser.OrExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code orExpression}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitOrExpression(ExpressionEvaluatorV2Parser.OrExpressionContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code dateTimeExpression}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
 	 * @param ctx the parse tree
@@ -75,6 +87,18 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitDateTimeExpression(ExpressionEvaluatorV2Parser.DateTimeExpressionContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code andExpression}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterAndExpression(ExpressionEvaluatorV2Parser.AndExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code andExpression}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitAndExpression(ExpressionEvaluatorV2Parser.AndExpressionContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code stringExpression}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
@@ -99,18 +123,6 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitLogicalValue(ExpressionEvaluatorV2Parser.LogicalValueContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code logicExpression}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
-	 * @param ctx the parse tree
-	 */
-	void enterLogicExpression(ExpressionEvaluatorV2Parser.LogicExpressionContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code logicExpression}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
-	 * @param ctx the parse tree
-	 */
-	void exitLogicExpression(ExpressionEvaluatorV2Parser.LogicExpressionContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code dateExpression}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
@@ -171,6 +183,18 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitTimeExpression(ExpressionEvaluatorV2Parser.TimeExpressionContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code bitwiseLogicExpression}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterBitwiseLogicExpression(ExpressionEvaluatorV2Parser.BitwiseLogicExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code bitwiseLogicExpression}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitBitwiseLogicExpression(ExpressionEvaluatorV2Parser.BitwiseLogicExpressionContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code logicalParenthesis}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
@@ -647,30 +671,6 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitMathFunctionDecisionExpression(ExpressionEvaluatorV2Parser.MathFunctionDecisionExpressionContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code eulerConstant}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#numericEntity}.
-	 * @param ctx the parse tree
-	 */
-	void enterEulerConstant(ExpressionEvaluatorV2Parser.EulerConstantContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code eulerConstant}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#numericEntity}.
-	 * @param ctx the parse tree
-	 */
-	void exitEulerConstant(ExpressionEvaluatorV2Parser.EulerConstantContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code piConstant}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#numericEntity}.
-	 * @param ctx the parse tree
-	 */
-	void enterPiConstant(ExpressionEvaluatorV2Parser.PiConstantContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code piConstant}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#numericEntity}.
-	 * @param ctx the parse tree
-	 */
-	void exitPiConstant(ExpressionEvaluatorV2Parser.PiConstantContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code summationVariable}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#numericEntity}.

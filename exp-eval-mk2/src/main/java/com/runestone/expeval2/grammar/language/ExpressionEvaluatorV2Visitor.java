@@ -45,12 +45,26 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitDestructuringAssignment(ExpressionEvaluatorV2Parser.DestructuringAssignmentContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code orExpression}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitOrExpression(ExpressionEvaluatorV2Parser.OrExpressionContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code dateTimeExpression}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	T visitDateTimeExpression(ExpressionEvaluatorV2Parser.DateTimeExpressionContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code andExpression}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitAndExpression(ExpressionEvaluatorV2Parser.AndExpressionContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code stringExpression}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
@@ -65,13 +79,6 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitLogicalValue(ExpressionEvaluatorV2Parser.LogicalValueContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code logicExpression}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitLogicExpression(ExpressionEvaluatorV2Parser.LogicExpressionContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code dateExpression}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
@@ -107,6 +114,13 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitTimeExpression(ExpressionEvaluatorV2Parser.TimeExpressionContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code bitwiseLogicExpression}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitBitwiseLogicExpression(ExpressionEvaluatorV2Parser.BitwiseLogicExpressionContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code logicalParenthesis}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalExpression}.
@@ -386,20 +400,6 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitMathFunctionDecisionExpression(ExpressionEvaluatorV2Parser.MathFunctionDecisionExpressionContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code eulerConstant}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#numericEntity}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitEulerConstant(ExpressionEvaluatorV2Parser.EulerConstantContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code piConstant}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#numericEntity}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitPiConstant(ExpressionEvaluatorV2Parser.PiConstantContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code summationVariable}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#numericEntity}.
