@@ -88,7 +88,7 @@ TIME       : HourFragment Colon MinuteSecondFragment (Colon MinuteSecondFragment
 TIME_OFFSET: TimeOffsetFragment ;
 DATETIME   : DateFragment ('T' | '-') HourFragment Colon MinuteSecondFragment (Colon MinuteSecondFragment)? ;
 
-// Type-casting tokens
+// Type-hint tokens
 BOOLEAN_TYPE  : '<bool>' ;
 NUMBER_TYPE   : '<number>' ;
 STRING_TYPE   : '<text>' ;
@@ -100,7 +100,7 @@ VECTOR_TYPE   : '<vector>' ;
 // Fragments
 fragment IdentifierText      : [a-zA-Z_][a-zA-Z_0-9]* ;
 fragment NegativeSymbol      : '-' ;
-fragment Decimal             : NegativeSymbol? [0-9]+ ('.' [0-9]+)? ;
+fragment Decimal             : [0-9]+ ('.' [0-9]+)? ;
 fragment PositiveNumber      : [0-9]+ ;
 fragment OctalDigits         : '0' '0'..'7'+ ;
 fragment HexDigits           : '0x' ('0'..'9' | 'a'..'f' | 'A'..'F')+ ;
@@ -194,7 +194,7 @@ logicalEntity
 numericEntity
     : MINUS? IF logicalExpression THEN mathExpression (ELSEIF logicalExpression THEN mathExpression)* ELSE mathExpression ENDIF # mathDecisionExpression
     | MINUS? IF LPAREN logicalExpression (COMMA | SEMI) mathExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) mathExpression)* (COMMA | SEMI) mathExpression RPAREN # mathFunctionDecisionExpression
-    | NUMBER                                                                                                   # numericConstant
+    | MINUS? NUMBER                                                                                                   # numericConstant
     | NUMBER_TYPE? MINUS? function                                                                                    # numericFunctionResult
     // Identifiers may resolve to user variables or semantic built-ins such as E/pi.
     | NUMBER_TYPE? MINUS? IDENTIFIER                                                                                  # numericVariable
@@ -236,8 +236,11 @@ dateTimeEntity
     ;
 
 vectorEntity
-    : LBRACKET allEntityTypes (COMMA allEntityTypes)* RBRACKET # vectorOfEntities
+    : IF logicalExpression THEN vectorEntity (ELSEIF logicalExpression THEN vectorEntity)* ELSE vectorEntity ENDIF # vectorDecisionExpression
+    | IF LPAREN logicalExpression (COMMA | SEMI) vectorEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) vectorEntity)* (COMMA | SEMI) vectorEntity RPAREN # vectorFunctionDecisionExpression
+    | LBRACKET allEntityTypes (COMMA allEntityTypes)* RBRACKET # vectorOfEntities
     | VECTOR_TYPE? IDENTIFIER                                  # vectorVariable
+    | VECTOR_TYPE? function                                    # vectorFunctionResult
     ;
 
 vectorOfVariables
