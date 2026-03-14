@@ -65,27 +65,6 @@ EQ  : '=' ;
 NEQ : '!=' | '<>' ;
 NOT : '~' | '\u00AC' ;
 
-// Rounding tokens
-R_UP          : 'up' ;
-R_DOWN        : 'down' ;
-R_CEILING     : 'ceiling' ;
-R_FLOOR       : 'floor' ;
-R_HALF_UP     : 'halfUp' ;
-R_HALF_DOWN   : 'halfDown' ;
-R_HALF_EVEN   : 'halfEven' ;
-R_UNNECESSARY : 'unnecessary' ;
-
-// Date/time unit tokens
-DAY_UNIT    : 'days' | 'day' ;
-MONTH_UNIT  : 'months' | 'month' ;
-YEAR_UNIT   : 'years' | 'year' ;
-HOUR_UNIT   : 'hours' | 'hour' ;
-MINUTE_UNIT : 'minutes' | 'minute' ;
-SECOND_UNIT : 'seconds' | 'second' ;
-
-// Set-field operator
-SET_FIELD_OP : '@' ;
-
 // Date/time current-value tokens
 NOW_DATE     : 'currDate' ;
 NOW_TIME     : 'currTime' ;
@@ -99,7 +78,6 @@ RBRACKET           : ']' ;
 COMMA              : ',' ;
 SEMI               : ';' ;
 PERIOD             : '.' ;
-CONTAINS           : 'contains' ;
 CACHE_FUNCTION_PREFIX : '$.' ;
 
 // Literals
@@ -162,15 +140,15 @@ assignmentExpression
 // NOT (highest) > NAND/NOR/XOR/XNOR > AND > OR (lowest among binary logical)
 logicalExpression
     : (NOT | EXCLAMATION) logicalExpression                             # notExpression
-    | logicalExpression (NAND | NOR | XOR | XNOR) logicalExpression    # bitwiseLogicExpression
+    | logicalExpression (NAND | NOR | XOR | XNOR) logicalExpression     # bitwiseLogicExpression
     | logicalExpression AND logicalExpression                           # andExpression
     | logicalExpression OR logicalExpression                            # orExpression
     | logicalExpression comparisonOperator logicalExpression            # logicComparisonExpression
     | mathExpression comparisonOperator mathExpression                  # mathComparisonExpression
     | stringEntity comparisonOperator stringEntity                      # stringExpression
-    | dateExpression comparisonOperator dateExpression                    # dateComparisonExpression
-    | timeExpression comparisonOperator timeExpression                    # timeComparisonExpression
-    | dateTimeExpression comparisonOperator dateTimeExpression            # dateTimeComparisonExpression
+    | dateEntity comparisonOperator dateEntity                          # dateComparisonExpression
+    | timeEntity comparisonOperator timeEntity                          # timeComparisonExpression
+    | dateTimeEntity comparisonOperator dateTimeEntity                  # dateTimeComparisonExpression
     | LPAREN logicalExpression RPAREN                                   # logicalParenthesis
     | logicalEntity                                                     # logicalValue
     ;
@@ -191,25 +169,6 @@ mathExpression
     | numericEntity                                                     # numberValue
     ;
 
-// Date/time unit rules
-dateUnit : mathExpression (DAY_UNIT | MONTH_UNIT | YEAR_UNIT) ;
-timeUnit : mathExpression (HOUR_UNIT | MINUTE_UNIT | SECOND_UNIT) ;
-
-dateExpression
-    : LPAREN dateExpression RPAREN                                          # dateParenthesis
-    | dateEntity ((PLUS | MINUS | SET_FIELD_OP) dateUnit)*                  # dateFunction
-    ;
-
-timeExpression
-    : LPAREN timeExpression RPAREN                                          # timeParenthesis
-    | timeEntity ((PLUS | MINUS | SET_FIELD_OP) timeUnit)*                  # timeFunction
-    ;
-
-dateTimeExpression
-    : LPAREN dateTimeExpression RPAREN                                      # dateTimeParenthesis
-    | dateTimeEntity ((PLUS | MINUS | SET_FIELD_OP) (dateUnit | timeUnit))* # dateTimeFunction
-    ;
-
 function
     : CACHE_FUNCTION_PREFIX? IDENTIFIER LPAREN (allEntityTypes ((COMMA | SEMI) allEntityTypes)*)* RPAREN
     ;
@@ -221,9 +180,9 @@ comparisonOperator
 allEntityTypes
     : mathExpression
     | logicalExpression
-    | dateExpression
-    | timeExpression
-    | dateTimeExpression
+    | dateEntity
+    | timeEntity
+    | dateTimeEntity
     | stringEntity
     | vectorEntity
     ;
@@ -254,8 +213,8 @@ stringEntity
     ;
 
 dateEntity
-    : IF logicalExpression THEN dateExpression (ELSEIF logicalExpression THEN dateExpression)? ELSE dateExpression ENDIF # dateDecisionExpression
-    | IF LPAREN logicalExpression (COMMA | SEMI) dateExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateExpression)* (COMMA | SEMI) dateExpression RPAREN # dateFunctionDecisionExpression
+    : IF logicalExpression THEN dateEntity (ELSEIF logicalExpression THEN dateEntity)? ELSE dateEntity ENDIF # dateDecisionExpression
+    | IF LPAREN logicalExpression (COMMA | SEMI) dateEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateEntity)* (COMMA | SEMI) dateEntity RPAREN # dateFunctionDecisionExpression
     | DATE                                                                                                     # dateConstant
     | NOW_DATE                                                                                                 # dateCurrentValue
     | DATE_TYPE? IDENTIFIER                                                                                    # dateVariable
@@ -263,8 +222,8 @@ dateEntity
     ;
 
 timeEntity
-    : IF logicalExpression THEN timeExpression (ELSEIF logicalExpression THEN timeExpression)? ELSE timeExpression ENDIF # timeDecisionExpression
-    | IF LPAREN logicalExpression (COMMA | SEMI) timeExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) timeExpression)* (COMMA | SEMI) timeExpression RPAREN # timeFunctionDecisionExpression
+    : IF logicalExpression THEN timeEntity (ELSEIF logicalExpression THEN timeEntity)? ELSE timeEntity ENDIF # timeDecisionExpression
+    | IF LPAREN logicalExpression (COMMA | SEMI) timeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) timeEntity)* (COMMA | SEMI) timeEntity RPAREN # timeFunctionDecisionExpression
     | TIME                                                                                                     # timeConstant
     | NOW_TIME                                                                                                 # timeCurrentValue
     | TIME_TYPE? IDENTIFIER                                                                                    # timeVariable
@@ -272,8 +231,8 @@ timeEntity
     ;
 
 dateTimeEntity
-    : IF logicalExpression THEN dateTimeExpression (ELSEIF logicalExpression THEN dateTimeExpression)? ELSE dateTimeExpression ENDIF # dateTimeDecisionExpression
-    | IF LPAREN logicalExpression (COMMA | SEMI) dateTimeExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateTimeExpression)* (COMMA | SEMI) dateTimeExpression RPAREN # dateTimeFunctionDecisionExpression
+    : IF logicalExpression THEN dateTimeEntity (ELSEIF logicalExpression THEN dateTimeEntity)? ELSE dateTimeEntity ENDIF # dateTimeDecisionExpression
+    | IF LPAREN logicalExpression (COMMA | SEMI) dateTimeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateTimeEntity)* (COMMA | SEMI) dateTimeEntity RPAREN # dateTimeFunctionDecisionExpression
     | DATETIME TIME_OFFSET?                                                                                    # dateTimeConstant
     | NOW_DATETIME                                                                                             # dateTimeCurrentValue
     | DATETIME_TYPE? IDENTIFIER                                                                                # dateTimeVariable
