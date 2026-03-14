@@ -134,21 +134,41 @@ assignmentExpression
     | vectorOfVariables EQ (vectorEntity | function) SEMI      # destructuringAssignment
     ;
 
-// Logical expression — precedence expressed via alternative ordering:
+// Logical precedence:
 // NOT (highest) > NAND/NOR/XOR/XNOR > comparison > AND > OR
 logicalExpression
-    : (NOT | EXCLAMATION) logicalExpression                             # notExpression
-    | logicalExpression (NAND | NOR | XOR | XNOR) logicalExpression     # bitwiseLogicExpression
-    | logicalExpression comparisonOperator logicalExpression            # logicComparisonExpression
-    | logicalExpression AND logicalExpression                           # andExpression
-    | logicalExpression OR logicalExpression                            # orExpression
-    | mathExpression comparisonOperator mathExpression                  # mathComparisonExpression
-    | stringEntity comparisonOperator stringEntity                      # stringExpression
-    | dateEntity comparisonOperator dateEntity                          # dateComparisonExpression
-    | timeEntity comparisonOperator timeEntity                          # timeComparisonExpression
-    | dateTimeEntity comparisonOperator dateTimeEntity                  # dateTimeComparisonExpression
-    | LPAREN logicalExpression RPAREN                                   # logicalParenthesis
-    | logicalEntity                                                     # logicalValue
+    : logicalOrExpression
+    ;
+
+logicalOrExpression
+    : logicalAndExpression (OR logicalAndExpression)*                   # orExpression
+    ;
+
+logicalAndExpression
+    : logicalComparisonExpression (AND logicalComparisonExpression)*    # andExpression
+    ;
+
+logicalComparisonExpression
+    : logicalBitwiseExpression (comparisonOperator logicalBitwiseExpression)? # logicComparisonExpression
+    | mathExpression comparisonOperator mathExpression                        # mathComparisonExpression
+    | stringEntity comparisonOperator stringEntity                            # stringExpression
+    | dateEntity comparisonOperator dateEntity                                # dateComparisonExpression
+    | timeEntity comparisonOperator timeEntity                                # timeComparisonExpression
+    | dateTimeEntity comparisonOperator dateTimeEntity                        # dateTimeComparisonExpression
+    ;
+
+logicalBitwiseExpression
+    : logicalNotExpression ((NAND | NOR | XOR | XNOR) logicalNotExpression)* # bitwiseLogicExpression
+    ;
+
+logicalNotExpression
+    : (NOT | EXCLAMATION) logicalNotExpression                          # notExpression
+    | logicalPrimary                                                    # logicalValue
+    ;
+
+logicalPrimary
+    : LPAREN logicalExpression RPAREN                                   # logicalParenthesis
+    | logicalEntity                                                     # logicalAtom
     ;
 
 // Mathematical precedence:
