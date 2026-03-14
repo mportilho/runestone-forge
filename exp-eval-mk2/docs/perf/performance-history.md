@@ -51,3 +51,21 @@
 **Decision:** DISCARD
 **Reason:** The change regressed every measured scenario on the production parsing path, including large regressions on the simplest assignment and logical-comparison cases.
 **Notes:** The code was reverted after measurement. The profiler confirmed that `allEntityTypes` disappeared from the vector scenario, but the broader `valueExpression` rule increased overall prediction cost more than it helped.
+
+## PERF-004: Extract scalar comparisons from `logicalComparisonExpression`
+
+**Date:** 2026-03-14
+
+**Scenario:** Move math/string/date/time/datetime comparisons into a dedicated `scalarComparisonExpression` sub-rule while preserving the accepted language.
+**Hypothesis:** Reducing the top-level decision fan-out in `logicalComparisonExpression` would lower prediction cost for the logical comparison hotspot.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| sll.mathFlatAssignment | 1796.445 | 2427.502 | -35.13% |
+| sll.mathNestedDecisionAssignment | 16146.478 | 21503.010 | -33.17% |
+| sll.logicalMixedComparison | 6513.318 | 8125.541 | -24.75% |
+| sll.vectorAssignment | 7559.027 | 9953.510 | -31.68% |
+
+**Decision:** DISCARD
+**Reason:** Even the conservative extraction regressed every measured scenario on the production parsing path, so the added rule indirection did not pay off.
+**Notes:** The code was reverted after measurement. Profiling showed the cost split across `logicalComparisonExpression` and `scalarComparisonExpression`, but total parse time still increased.
