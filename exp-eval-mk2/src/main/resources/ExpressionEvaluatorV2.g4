@@ -130,7 +130,7 @@ logicalStart
     ;
 
 assignmentExpression
-    : IDENTIFIER EQ assignmentValue SEMI                       # assignOperation
+    : IDENTIFIER EQ assignmentValue SEMI                     # assignOperation
     | vectorOfVariables EQ (vectorEntity | function) SEMI      # destructuringAssignment
     ;
 

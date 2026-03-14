@@ -33,3 +33,21 @@
 **Decision:** ACCEPT
 **Reason:** The production strategy improved in every measured scenario, including double-digit gains in three of four cases, and the affected module test suite now passes.
 **Notes:** `parseWithDefaultAdaptiveLl` regressed for `mathFlatAssignment` (`-36.38%`) and `mathNestedDecisionAssignment` (`-4.10%`), but that path is no longer the intended integration strategy after introducing `ExpressionEvaluatorV2ParserFacade`.
+
+## PERF-003: Expand generic value syntax into function arguments and vector elements
+
+**Date:** 2026-03-14
+
+**Scenario:** Reuse the generic assignment rule for function arguments and vector elements, replacing `allEntityTypes` at those call sites.
+**Hypothesis:** Removing the remaining `allEntityTypes` uses from hot paths would reduce prediction cost further.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| sll.mathFlatAssignment | 1796.445 | 2651.962 | -47.62% |
+| sll.mathNestedDecisionAssignment | 16146.478 | 23245.128 | -43.96% |
+| sll.logicalMixedComparison | 6513.318 | 9803.732 | -50.52% |
+| sll.vectorAssignment | 7559.027 | 9464.258 | -25.20% |
+
+**Decision:** DISCARD
+**Reason:** The change regressed every measured scenario on the production parsing path, including large regressions on the simplest assignment and logical-comparison cases.
+**Notes:** The code was reverted after measurement. The profiler confirmed that `allEntityTypes` disappeared from the vector scenario, but the broader `valueExpression` rule increased overall prediction cost more than it helped.
