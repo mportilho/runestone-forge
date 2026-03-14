@@ -87,3 +87,21 @@
 **Decision:** DISCARD
 **Reason:** Although the experiment enabled mixed scalar comparisons plus semantic error reporting, it regressed every measured scenario on the production parsing path by a wide margin.
 **Notes:** The code was reverted after measurement. This result suggests that broadening the scalar comparison entry point increases prediction work more than the reduced type-specific alternatives save.
+
+## PERF-006: Corpus-driven warmup for the `SLL -> LL` parsing path
+
+**Date:** 2026-03-14
+
+**Scenario:** Warm the shared ANTLR DFA caches with a small versioned corpus before measuring the first parse of each representative input.
+**Hypothesis:** A startup warmup using representative expressions will reduce cold-start parse latency on the production `SLL -> LL` path without changing grammar semantics.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| sll.cold.loan-payment-projection | 5077857.361 | 61432.383 | +98.79% |
+| sll.cold.portfolio-discount-allocation | 5497759.689 | 56658.882 | +98.97% |
+| sll.cold.customer-eligibility-gate | 9445682.616 | 75057.263 | +99.21% |
+| sll.cold.settlement-window-check | 4748308.063 | 51517.380 | +98.92% |
+
+**Decision:** ACCEPT
+**Reason:** The warmed parser reduced cold-start latency by roughly two orders of magnitude across every corpus scenario with no grammar change and low operational risk.
+**Notes:** Measurements came from `ExpressionEvaluatorV2WarmupBenchmark` using the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). The representative corpus is versioned under `src/test/resources/com/runestone/expeval2/grammar/language/perf/corpus/`.

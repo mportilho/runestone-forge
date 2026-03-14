@@ -35,6 +35,14 @@ public final class ExpressionEvaluatorV2ParserFacade {
         return parse(input, EntryPoint.LOGICAL);
     }
 
+    public void warmUp(List<WarmupInput> inputs) {
+        Objects.requireNonNull(inputs, "inputs must not be null");
+        for (WarmupInput input : inputs) {
+            Objects.requireNonNull(input, "warmup input must not be null");
+            parse(input.input(), input.entryPoint().toEntryPoint());
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private <T extends ParserRuleContext> ParseResult<T> parse(String input, EntryPoint entryPoint) {
         String source = requireInput(input);
@@ -70,6 +78,26 @@ public final class ExpressionEvaluatorV2ParserFacade {
 
         public SyntaxError {
             Objects.requireNonNull(message, "message must not be null");
+        }
+    }
+
+    public record WarmupInput(String input, WarmupTarget entryPoint) {
+
+        public WarmupInput {
+            Objects.requireNonNull(input, "input must not be null");
+            Objects.requireNonNull(entryPoint, "entryPoint must not be null");
+        }
+    }
+
+    public enum WarmupTarget {
+        MATH,
+        LOGICAL;
+
+        private EntryPoint toEntryPoint() {
+            return switch (this) {
+                case MATH -> EntryPoint.MATH;
+                case LOGICAL -> EntryPoint.LOGICAL;
+            };
         }
     }
 

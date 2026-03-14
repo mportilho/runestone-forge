@@ -2,6 +2,8 @@ package com.runestone.expeval2.grammar.language.perf;
 
 import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Lexer;
 import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser;
+import com.runestone.expeval2.grammar.language.perf.ExpressionEvaluatorV2ScenarioCatalog.EntryPoint;
+import com.runestone.expeval2.grammar.language.perf.ExpressionEvaluatorV2ScenarioCatalog.Scenario;
 import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -15,6 +17,9 @@ import org.antlr.v4.runtime.atn.PredictionMode;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public final class ExpressionEvaluatorV2ProfileMain {
 
@@ -32,24 +37,26 @@ public final class ExpressionEvaluatorV2ProfileMain {
         }
     };
 
-    private static final List<Scenario> SCENARIOS = List.of(
-        new Scenario("math-flat-assignment", EntryPoint.MATH, "a = foo; 1"),
-        new Scenario("math-nested-decision-assignment", EntryPoint.MATH, nestedDecisionAssignment(8)),
-        new Scenario("logical-mixed-comparison", EntryPoint.LOGICAL, "if true then 10 else 20 endif > if false then 1 else 2 endif and !false"),
-        new Scenario("vector-assignment", EntryPoint.MATH, "[a,b,c] = makeVec(1, if true then 2 else 3 endif, [4,5]); 1")
-    );
-
     private ExpressionEvaluatorV2ProfileMain() {
     }
 
     public static void main(String[] args) {
-        for (Scenario scenario : SCENARIOS) {
+        printGroup("Synthetic scenarios", ExpressionEvaluatorV2ScenarioCatalog.syntheticScenarios());
+        printGroup("Corpus scenarios", ExpressionEvaluatorV2ScenarioCatalog.corpusScenarios());
+    }
+
+    private static void printGroup(String title, List<Scenario> scenarios) {
+        System.out.println(title);
+        System.out.println("=".repeat(title.length()));
+        for (Scenario scenario : scenarios) {
             System.out.println("Scenario: " + scenario.name());
             System.out.println("Input: " + scenario.input());
             ProfileReport report = profile(scenario);
             printTopDecisions(report, 8);
             System.out.println();
         }
+        printAggregateDecisions(scenarios, 8);
+        System.out.println();
     }
 
     private static ProfileReport profile(Scenario scenario) {
@@ -98,27 +105,74 @@ public final class ExpressionEvaluatorV2ProfileMain {
             ));
     }
 
+    private static void printAggregateDecisions(List<Scenario> scenarios, int limit) {
+        Map<Integer, DecisionTotals> totalsByDecision = scenarios.stream()
+            .map(ExpressionEvaluatorV2ProfileMain::profile)
+            .flatMap(report -> Arrays.stream(report.parseInfo().getDecisionInfo())
+                .filter(info -> info.invocations > 0)
+                .map(info -> new DecisionTotals(
+                    info.decision,
+                    ruleName(report.parser(), info.decision),
+                    info.invocations,
+                    info.timeInPrediction,
+                    info.SLL_TotalLook,
+                    info.LL_TotalLook,
+                    info.LL_Fallback
+                )))
+            .collect(Collectors.toMap(
+                DecisionTotals::decision,
+                Function.identity(),
+                DecisionTotals::merge
+            ));
+
+        System.out.println("Aggregate top decisions:");
+        totalsByDecision.values().stream()
+            .sorted(Comparator
+                .comparingLong(DecisionTotals::timeInPrediction)
+                .thenComparingLong(DecisionTotals::sllTotalLook)
+                .thenComparingLong(DecisionTotals::llTotalLook)
+                .reversed())
+            .limit(limit)
+            .forEach(total -> System.out.printf(
+                "  decision=%d rule=%s invocations=%d timeNs=%d sllLook=%d llLook=%d llFallback=%d%n",
+                total.decision(),
+                total.ruleName(),
+                total.invocations(),
+                total.timeInPrediction(),
+                total.sllTotalLook(),
+                total.llTotalLook(),
+                total.llFallback()
+            ));
+    }
+
     private static String ruleName(ExpressionEvaluatorV2Parser parser, int decision) {
         int ruleIndex = parser.getATN().getDecisionState(decision).ruleIndex;
         return ExpressionEvaluatorV2Parser.ruleNames[ruleIndex];
     }
 
-    private static String nestedDecisionAssignment(int depth) {
-        String expression = "value0";
-        for (int i = 1; i <= depth; i++) {
-            expression = "if flag%d then %s else value%d endif".formatted(i, expression, i);
-        }
-        return "result = %s; 1 + 2 * 3".formatted(expression);
-    }
-
-    private enum EntryPoint {
-        MATH,
-        LOGICAL
-    }
-
-    private record Scenario(String name, EntryPoint entryPoint, String input) {
-    }
-
     private record ProfileReport(ExpressionEvaluatorV2Parser parser, ParseInfo parseInfo) {
+    }
+
+    private record DecisionTotals(
+        int decision,
+        String ruleName,
+        long invocations,
+        long timeInPrediction,
+        long sllTotalLook,
+        long llTotalLook,
+        long llFallback
+    ) {
+
+        private DecisionTotals merge(DecisionTotals other) {
+            return new DecisionTotals(
+                decision,
+                ruleName,
+                invocations + other.invocations,
+                timeInPrediction + other.timeInPrediction,
+                sllTotalLook + other.sllTotalLook,
+                llTotalLook + other.llTotalLook,
+                llFallback + other.llFallback
+            );
+        }
     }
 }

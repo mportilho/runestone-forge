@@ -97,27 +97,41 @@ Registrar todas as propostas de melhoria levantadas para `ExpressionEvaluatorV2.
 
 #### 6. Aquecimento dirigido por corpus real
 
-- Status: `PENDING`
+- Status: `ACCEPT`
 - Escopo: integração/runtime.
 - Ideia: usar um conjunto pequeno de expressões reais para aquecer DFA e caches da estratégia `SLL -> LL`.
 - Hipótese: reduzir latência fria sem mexer na gramática.
 - Risco: baixo.
-- Como validar:
-  - coletar corpus representativo
-  - rodar benchmark cold vs warmed
-  - medir `ns/op` e primeira execução
+- Resultado: aceito.
+- Corpus versionado:
+  - `loan-payment-projection`
+  - `portfolio-discount-allocation`
+  - `customer-eligibility-gate`
+  - `settlement-window-check`
+- Efeito medido com `ExpressionEvaluatorV2WarmupBenchmark`:
+  - `loan-payment-projection`: `+98.79%`
+  - `portfolio-discount-allocation`: `+98.97%`
+  - `customer-eligibility-gate`: `+99.21%`
+  - `settlement-window-check`: `+98.92%`
+- Conclusão: aquecer o parser com um corpus pequeno e representativo reduz fortemente a latência fria do caminho `SLL -> LL` sem alterar a linguagem aceita.
 
 #### 7. Profiling com corpus real e ranking por decisão
 
-- Status: `PENDING`
+- Status: `ACCEPT`
 - Escopo: diagnóstico.
 - Ideia: capturar inputs reais e medir `DecisionInfo` por cenário, não só entradas sintéticas.
 - Hipótese: os hotspots de produção podem ser diferentes dos quatro cenários atuais.
 - Risco: baixo.
-- Como validar:
-  - ampliar `ExpressionEvaluatorV2ProfileMain`
-  - incluir entradas reais versionadas em `src/test/resources`
-  - comparar `timeInPrediction`, `SLL_TotalLook`, `LL_Fallback`
+- Resultado: aceito.
+- Implementação:
+  - `ExpressionEvaluatorV2ProfileMain` agora roda cenários sintéticos e corpus versionado
+  - as entradas do corpus ficam em `src/test/resources`
+  - o profiler imprime ranking por cenário e agregado
+- Hotspots observados no corpus:
+  - `assignmentValue` segue dominante quando há assignments genéricos/de decisão
+  - `allEntityTypes` voltou a aparecer como hotspot material em vetores e argumentos de função
+  - `logicalComparisonExpression` continua relevante em cenários lógicos mistos
+- Conclusão: os cenários reais confirmam que o gargalo não está só no assignment escalar; `allEntityTypes` continua sendo um ponto sensível fora dos cenários sintéticos.
 
 #### 8. Normalizar comparações booleanas por semântica, não por gramática
 
@@ -145,10 +159,9 @@ Registrar todas as propostas de melhoria levantadas para `ExpressionEvaluatorV2.
 
 ### Ordem Recomendada de Teste
 
-1. Aquecimento dirigido por corpus real.
-2. Profiling com corpus real.
-3. Validador semântico para comparações booleanas inválidas sem ampliar a gramática.
-4. AST semântica separada, se os ganhos de manutenção justificarem o custo estrutural.
+1. Validador semântico para comparações booleanas inválidas sem ampliar a gramática.
+2. Repetir o profiler do corpus após qualquer ajuste em `allEntityTypes` ou comparações lógicas.
+3. AST semântica separada, se os ganhos de manutenção justificarem o custo estrutural.
 
 ### Protocolo de Medição
 

@@ -4,6 +4,7 @@ import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,6 +72,46 @@ class ExpressionEvaluatorV2ParserFacadeTest {
         ExpressionEvaluatorV2ParserFacade facade = new ExpressionEvaluatorV2ParserFacade();
 
         assertThatThrownBy(() -> facade.parseMath("   "))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("input must not be blank");
+    }
+
+    @Test
+    void shouldWarmUpInputsUsingSameSllThenLlFallbackFlow() {
+        AtomicInteger sllCalls = new AtomicInteger();
+        AtomicInteger llCalls = new AtomicInteger();
+        ExpressionEvaluatorV2ParserFacade facade = new ExpressionEvaluatorV2ParserFacade((input, entryPoint, predictionStrategy) -> {
+            if (predictionStrategy == ExpressionEvaluatorV2ParserFacade.PredictionStrategy.SLL) {
+                sllCalls.incrementAndGet();
+                if (entryPoint == ExpressionEvaluatorV2ParserFacade.EntryPoint.LOGICAL) {
+                    throw new ParseCancellationException();
+                }
+            } else {
+                llCalls.incrementAndGet();
+            }
+
+            return switch (entryPoint) {
+                case MATH -> new ExpressionEvaluatorV2Parser.MathStartContext(null, 0);
+                case LOGICAL -> new ExpressionEvaluatorV2Parser.LogicalStartContext(null, 0);
+            };
+        });
+
+        facade.warmUp(List.of(
+            new ExpressionEvaluatorV2ParserFacade.WarmupInput("a = foo; 1", ExpressionEvaluatorV2ParserFacade.WarmupTarget.MATH),
+            new ExpressionEvaluatorV2ParserFacade.WarmupInput("true", ExpressionEvaluatorV2ParserFacade.WarmupTarget.LOGICAL)
+        ));
+
+        assertThat(sllCalls.get()).isEqualTo(2);
+        assertThat(llCalls.get()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldRejectBlankWarmupInput() {
+        ExpressionEvaluatorV2ParserFacade facade = new ExpressionEvaluatorV2ParserFacade();
+
+        assertThatThrownBy(() -> facade.warmUp(List.of(
+            new ExpressionEvaluatorV2ParserFacade.WarmupInput("   ", ExpressionEvaluatorV2ParserFacade.WarmupTarget.MATH)
+        )))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("input must not be blank");
     }
