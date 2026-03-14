@@ -166,7 +166,7 @@ logicalExpression
     | logicalExpression AND logicalExpression                           # andExpression
     | logicalExpression OR logicalExpression                            # orExpression
     | logicalExpression comparisonOperator logicalExpression            # logicComparisonExpression
-    | mathExpression comparisonOperator mathExpression                  # comparisonMathExpression
+    | mathExpression comparisonOperator mathExpression                  # mathComparisonExpression
     | stringEntity comparisonOperator stringEntity                      # stringExpression
     | dateExpression comparisonOperator dateExpression                    # dateComparisonExpression
     | timeExpression comparisonOperator timeExpression                    # timeComparisonExpression
@@ -196,17 +196,17 @@ dateUnit : mathExpression (DAY_UNIT | MONTH_UNIT | YEAR_UNIT) ;
 timeUnit : mathExpression (HOUR_UNIT | MINUTE_UNIT | SECOND_UNIT) ;
 
 dateExpression
-    : LPAREN dateExpression RPAREN                                                                  # dateParenthesis
-    | dateEntity ((PLUS | MINUS | SET_FIELD_OP) dateUnit)*                                # dateFunction
+    : LPAREN dateExpression RPAREN                                          # dateParenthesis
+    | dateEntity ((PLUS | MINUS | SET_FIELD_OP) dateUnit)*                  # dateFunction
     ;
 
 timeExpression
-    : LPAREN timeExpression RPAREN                                                                  # timeParenthesis
-    | timeEntity ((PLUS | MINUS | SET_FIELD_OP) timeUnit)*                                # timeFunction
+    : LPAREN timeExpression RPAREN                                          # timeParenthesis
+    | timeEntity ((PLUS | MINUS | SET_FIELD_OP) timeUnit)*                  # timeFunction
     ;
 
 dateTimeExpression
-    : LPAREN dateTimeExpression RPAREN                                                              # dateTimeParenthesis
+    : LPAREN dateTimeExpression RPAREN                                      # dateTimeParenthesis
     | dateTimeEntity ((PLUS | MINUS | SET_FIELD_OP) (dateUnit | timeUnit))* # dateTimeFunction
     ;
 
