@@ -55,8 +55,6 @@ EXPONENTIATION: '^' ;
 ROOT          : 'root' | '\u221A' ;
 SQRT          : 'sqrt' ;
 
-DEGREE : '\u00B0' | 'degree' | 'degrees' ;
-
 GT  : '>' ;
 GE  : '>=' ;
 LT  : '<' ;
@@ -154,8 +152,7 @@ logicalExpression
     ;
 
 mathExpression
-    : MINUS mathExpression                                              # unaryMinusExpression
-    | MINUS LPAREN mathExpression RPAREN                                # negateMathParenthesis
+    : MINUS LPAREN mathExpression RPAREN                                # negateMathParenthesis
     | LPAREN mathExpression RPAREN                                      # mathParenthesis
     | mathExpression PERCENT                                            # percentExpression
     | mathExpression EXCLAMATION                                        # factorialExpression
@@ -165,12 +162,11 @@ mathExpression
     | mathExpression (MULT | DIV | MODULO) mathExpression               # multiplicationExpression
     | mathExpression (PLUS | MINUS) mathExpression                      # sumExpression
     | MODULUS mathExpression MODULUS                                    # modulusExpression
-    | mathExpression DEGREE                                             # degreeExpression
     | numericEntity                                                     # numberValue
     ;
 
 function
-    : CACHE_FUNCTION_PREFIX? IDENTIFIER LPAREN (allEntityTypes ((COMMA | SEMI) allEntityTypes)*)* RPAREN
+    : CACHE_FUNCTION_PREFIX? IDENTIFIER LPAREN (allEntityTypes ((COMMA | SEMI) allEntityTypes)*)? RPAREN
     ;
 
 comparisonOperator
@@ -189,23 +185,23 @@ allEntityTypes
 
 logicalEntity
     : (TRUE | FALSE)                                                                                           # logicalConstant
-    | IF logicalExpression THEN logicalExpression (ELSEIF logicalExpression THEN logicalExpression)? ELSE logicalExpression ENDIF # logicalDecisionExpression
+    | IF logicalExpression THEN logicalExpression (ELSEIF logicalExpression THEN logicalExpression)* ELSE logicalExpression ENDIF # logicalDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) logicalExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) logicalExpression)* (COMMA | SEMI) logicalExpression RPAREN # logicalFunctionDecisionExpression
     | BOOLEAN_TYPE? function                                                                                   # logicalFunctionResult
     | BOOLEAN_TYPE? IDENTIFIER                                                                                 # logicalVariable
     ;
 
 numericEntity
-    : IF logicalExpression THEN mathExpression (ELSEIF logicalExpression THEN mathExpression)? ELSE mathExpression ENDIF # mathDecisionExpression
-    | IF LPAREN logicalExpression (COMMA | SEMI) mathExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) mathExpression)* (COMMA | SEMI) mathExpression RPAREN # mathFunctionDecisionExpression
+    : MINUS? IF logicalExpression THEN mathExpression (ELSEIF logicalExpression THEN mathExpression)* ELSE mathExpression ENDIF # mathDecisionExpression
+    | MINUS? IF LPAREN logicalExpression (COMMA | SEMI) mathExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) mathExpression)* (COMMA | SEMI) mathExpression RPAREN # mathFunctionDecisionExpression
     | NUMBER                                                                                                   # numericConstant
-    | NUMBER_TYPE? function                                                                                    # numericFunctionResult
+    | NUMBER_TYPE? MINUS? function                                                                                    # numericFunctionResult
     // Identifiers may resolve to user variables or semantic built-ins such as E/pi.
-    | NUMBER_TYPE? IDENTIFIER                                                                                  # numericVariable
+    | NUMBER_TYPE? MINUS? IDENTIFIER                                                                                  # numericVariable
     ;
 
 stringEntity
-    : IF logicalExpression THEN stringEntity (ELSEIF logicalExpression THEN stringEntity)? ELSE stringEntity ENDIF # stringDecisionExpression
+    : IF logicalExpression THEN stringEntity (ELSEIF logicalExpression THEN stringEntity)* ELSE stringEntity ENDIF # stringDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) stringEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) stringEntity)* (COMMA | SEMI) stringEntity RPAREN # stringFunctionDecisionExpression
     | STRING                                                                                                    # stringConstant
     | STRING_TYPE? function                                                                                    # stringFunctionResult
@@ -213,7 +209,7 @@ stringEntity
     ;
 
 dateEntity
-    : IF logicalExpression THEN dateEntity (ELSEIF logicalExpression THEN dateEntity)? ELSE dateEntity ENDIF # dateDecisionExpression
+    : IF logicalExpression THEN dateEntity (ELSEIF logicalExpression THEN dateEntity)* ELSE dateEntity ENDIF # dateDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) dateEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateEntity)* (COMMA | SEMI) dateEntity RPAREN # dateFunctionDecisionExpression
     | DATE                                                                                                     # dateConstant
     | NOW_DATE                                                                                                 # dateCurrentValue
@@ -222,7 +218,7 @@ dateEntity
     ;
 
 timeEntity
-    : IF logicalExpression THEN timeEntity (ELSEIF logicalExpression THEN timeEntity)? ELSE timeEntity ENDIF # timeDecisionExpression
+    : IF logicalExpression THEN timeEntity (ELSEIF logicalExpression THEN timeEntity)* ELSE timeEntity ENDIF # timeDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) timeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) timeEntity)* (COMMA | SEMI) timeEntity RPAREN # timeFunctionDecisionExpression
     | TIME                                                                                                     # timeConstant
     | NOW_TIME                                                                                                 # timeCurrentValue
@@ -231,7 +227,7 @@ timeEntity
     ;
 
 dateTimeEntity
-    : IF logicalExpression THEN dateTimeEntity (ELSEIF logicalExpression THEN dateTimeEntity)? ELSE dateTimeEntity ENDIF # dateTimeDecisionExpression
+    : IF logicalExpression THEN dateTimeEntity (ELSEIF logicalExpression THEN dateTimeEntity)* ELSE dateTimeEntity ENDIF # dateTimeDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) dateTimeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateTimeEntity)* (COMMA | SEMI) dateTimeEntity RPAREN # dateTimeFunctionDecisionExpression
     | DATETIME TIME_OFFSET?                                                                                    # dateTimeConstant
     | NOW_DATETIME                                                                                             # dateTimeCurrentValue

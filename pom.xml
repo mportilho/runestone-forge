@@ -14,7 +14,7 @@
         <maven.compiler.target>21</maven.compiler.target>
         <sonar.java.source>21</sonar.java.source>
         <junit-jupiter.version>5.10.2</junit-jupiter.version>
-        <assertj-core.version>3.25.3</assertj-core.version>
+        <assertj-core.version>3.27.7</assertj-core.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
