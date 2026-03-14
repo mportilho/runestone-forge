@@ -13,11 +13,11 @@ import org.antlr.v4.runtime.tree.ParseTreeVisitor;
  */
 public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	/**
-	 * Visit a parse tree produced by {@link ExpressionEvaluatorV2Parser#start}.
+	 * Visit a parse tree produced by {@link ExpressionEvaluatorV2Parser#startAssignments}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
-	T visitStart(ExpressionEvaluatorV2Parser.StartContext ctx);
+	T visitStartAssignments(ExpressionEvaluatorV2Parser.StartAssignmentsContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link ExpressionEvaluatorV2Parser#mathStart}.
 	 * @param ctx the parse tree

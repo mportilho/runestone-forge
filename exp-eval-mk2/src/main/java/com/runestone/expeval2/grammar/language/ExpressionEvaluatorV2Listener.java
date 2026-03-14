@@ -10,15 +10,15 @@ import org.antlr.v4.runtime.tree.ParseTreeListener;
  */
 public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	/**
-	 * Enter a parse tree produced by {@link ExpressionEvaluatorV2Parser#start}.
+	 * Enter a parse tree produced by {@link ExpressionEvaluatorV2Parser#startAssignments}.
 	 * @param ctx the parse tree
 	 */
-	void enterStart(ExpressionEvaluatorV2Parser.StartContext ctx);
+	void enterStartAssignments(ExpressionEvaluatorV2Parser.StartAssignmentsContext ctx);
 	/**
-	 * Exit a parse tree produced by {@link ExpressionEvaluatorV2Parser#start}.
+	 * Exit a parse tree produced by {@link ExpressionEvaluatorV2Parser#startAssignments}.
 	 * @param ctx the parse tree
 	 */
-	void exitStart(ExpressionEvaluatorV2Parser.StartContext ctx);
+	void exitStartAssignments(ExpressionEvaluatorV2Parser.StartAssignmentsContext ctx);
 	/**
 	 * Enter a parse tree produced by {@link ExpressionEvaluatorV2Parser#mathStart}.
 	 * @param ctx the parse tree

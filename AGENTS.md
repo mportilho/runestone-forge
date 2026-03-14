@@ -69,3 +69,28 @@ Key pattern: `AbstractOperation` forms a composite tree; each node computes its 
 - **ANTLR 4.13.1** (expression-evaluator)
 - **JUnit 5**, **AssertJ**, **Mockito 5** — testing
 - **JMH 1.37** — microbenchmarks (in `benchmark/` and `perf/` test packages)
+
+## Local ANTLR Tool Jar
+
+To avoid downloading the ANTLR tool repeatedly, reuse the local jar at:
+
+`~/dev/git/temp/antlr4-4.13.1.jar`
+
+Tool dependencies cached locally:
+
+- `~/dev/git/temp/antlr-lib/antlr-runtime-3.5.3.jar`
+- `~/dev/git/temp/antlr-lib/ST4-4.3.4.jar`
+- `~/dev/git/temp/antlr-lib/antlr4-runtime-4.13.1.jar`
+- `~/dev/git/temp/antlr-lib/icu4j-72.1.jar`
+
+ANTLR regeneration command:
+
+```shell
+java -cp ~/dev/git/temp/antlr4-4.13.1.jar:~/dev/git/temp/antlr-lib/antlr-runtime-3.5.3.jar:~/dev/git/temp/antlr-lib/ST4-4.3.4.jar:~/dev/git/temp/antlr-lib/antlr4-runtime-4.13.1.jar:~/dev/git/temp/antlr-lib/icu4j-72.1.jar \
+  org.antlr.v4.Tool \
+  -Dlanguage=Java \
+  -visitor \
+  -listener \
+  -o /home/marcelo/dev/git/runestone-forge/exp-eval-mk2/src/main/java/com/runestone/expeval2/grammar/language \
+  /home/marcelo/dev/git/runestone-forge/exp-eval-mk2/src/main/resources/ExpressionEvaluatorV2.g4
+```

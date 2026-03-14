@@ -153,15 +153,16 @@ ERROR_CHAR : . ;
 
 /* ########################################  Grammar rules  ######################################## */
 
-start : mathStart | logicalStart ;
+startAssignments
+    : assignmentExpression+ EOF
+    ;
 
 mathStart
     : (assignmentExpression)* mathExpression EOF
     ;
 
 logicalStart
-    : assignmentExpression+ EOF
-    | assignmentExpression* logicalExpression EOF
+    : assignmentExpression* logicalExpression EOF
     ;
 
 assignmentExpression
