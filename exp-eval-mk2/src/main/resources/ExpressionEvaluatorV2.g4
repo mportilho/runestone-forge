@@ -122,201 +122,206 @@ ERROR_CHAR : . ;
 /* ########################################  Grammar rules  ######################################## */
 
 mathStart
-    : (assignmentExpression)* mathExpression EOF
+    : (assignmentExpression)* mathExpression EOF                         # mathInput
     ;
 
 logicalStart
-    : assignmentExpression* logicalExpression EOF
+    : assignmentExpression* logicalExpression EOF                        # logicalInput
     ;
 
 assignmentExpression
-    : IDENTIFIER EQ assignmentValue SEMI                     # assignOperation
-    | vectorOfVariables EQ (vectorEntity | function) SEMI      # destructuringAssignment
+    : IDENTIFIER EQ assignmentValue SEMI                     # assignmentOperation
+    | vectorOfVariables EQ (vectorEntity | function) SEMI      # destructuringAssignmentOperation
     ;
 
 // Logical precedence:
 // NOT (highest) > NAND/NOR/XOR/XNOR > comparison > AND > OR
 logicalExpression
-    : logicalOrExpression
+    : logicalOrExpression                                                # logicalOrOperation
     ;
 
 logicalOrExpression
-    : logicalAndExpression (OR logicalAndExpression)*                   # orExpression
+    : logicalAndExpression (OR logicalAndExpression)*                   # logicalOrChainOperation
     ;
 
 logicalAndExpression
-    : logicalComparisonExpression (AND logicalComparisonExpression)*    # andExpression
+    : logicalComparisonExpression (AND logicalComparisonExpression)*    # logicalAndChainOperation
     ;
 
 logicalComparisonExpression
-    : logicalBitwiseExpression (comparisonOperator logicalBitwiseExpression)? # logicComparisonExpression
-    | mathExpression comparisonOperator mathExpression                        # mathComparisonExpression
-    | stringEntity comparisonOperator stringEntity                            # stringExpression
-    | dateEntity comparisonOperator dateEntity                                # dateComparisonExpression
-    | timeEntity comparisonOperator timeEntity                                # timeComparisonExpression
-    | dateTimeEntity comparisonOperator dateTimeEntity                        # dateTimeComparisonExpression
+    : logicalBitwiseExpression (comparisonOperator logicalBitwiseExpression)? # logicalComparisonOperation
+    | mathExpression comparisonOperator mathExpression                        # mathComparisonOperation
+    | stringEntity comparisonOperator stringEntity                            # stringComparisonOperation
+    | dateEntity comparisonOperator dateEntity                                # dateComparisonOperation
+    | timeEntity comparisonOperator timeEntity                                # timeComparisonOperation
+    | dateTimeEntity comparisonOperator dateTimeEntity                        # dateTimeComparisonOperation
     ;
 
 logicalBitwiseExpression
-    : logicalNotExpression ((NAND | NOR | XOR | XNOR) logicalNotExpression)* # bitwiseLogicExpression
+    : logicalNotExpression ((NAND | NOR | XOR | XNOR) logicalNotExpression)* # logicalBitwiseOperation
     ;
 
 logicalNotExpression
-    : (NOT | EXCLAMATION) logicalNotExpression                          # notExpression
-    | logicalPrimary                                                    # logicalValue
+    : (NOT | EXCLAMATION) logicalNotExpression                          # logicalNotOperation
+    | logicalPrimary                                                    # logicalPrimaryOperation
     ;
 
 logicalPrimary
-    : LPAREN logicalExpression RPAREN                                   # logicalParenthesis
-    | logicalEntity                                                     # logicalAtom
+    : LPAREN logicalExpression RPAREN                                   # logicalExpressionParenthesisOperation
+    | logicalEntity                                                     # logicalEntityOperation
     ;
 
 // Mathematical precedence:
 // postfix % and ! > exponentiation ^ > root > unary - > *, /, mod > +, -
 mathExpression
-    : sumExpression
+    : sumExpression                                                      # sumOperation
     ;
 
 sumExpression
-    : multiplicationExpression ((PLUS | MINUS) multiplicationExpression)*
+    : multiplicationExpression ((PLUS | MINUS) multiplicationExpression)* # additiveOperation
     ;
 
 multiplicationExpression
-    : unaryExpression ((MULT | DIV | MODULO) unaryExpression)*
+    : unaryExpression ((MULT | DIV | MODULO) unaryExpression)*           # multiplicativeOperation
     ;
 
 unaryExpression
-    : MINUS unaryExpression
-    | rootExpression
+    : MINUS unaryExpression                                              # unaryMinusOperation
+    | rootExpression                                                     # rootExpressionOperation
     ;
 
 rootExpression
-    : exponentiationExpression (ROOT exponentiationExpression)*
+    : exponentiationExpression (ROOT exponentiationExpression)*          # rootChainOperation
     ;
 
 exponentiationExpression
-    : postfixExpression (EXPONENTIATION unaryExpression)?
+    : postfixExpression (EXPONENTIATION unaryExpression)?                # exponentiationOperation
     ;
 
 postfixExpression
-    : primaryMathExpression ((PERCENT | EXCLAMATION))*
+    : primaryMathExpression ((PERCENT | EXCLAMATION))*                   # postfixOperation
     ;
 
 primaryMathExpression
-    : LPAREN mathExpression RPAREN
-    | SQRT LPAREN mathExpression RPAREN
-    | MODULUS mathExpression MODULUS
-    | numericEntity
+    : LPAREN mathExpression RPAREN                                       # mathExpressionParenthesisOperation
+    | SQRT LPAREN mathExpression RPAREN                                  # squareRootOperation
+    | MODULUS mathExpression MODULUS                                     # modulusOperation
+    | numericEntity                                                      # numericEntityOperation
     ;
 
 function
-    : CACHE_FUNCTION_PREFIX? IDENTIFIER LPAREN (allEntityTypes ((COMMA | SEMI) allEntityTypes)*)? RPAREN
+    : CACHE_FUNCTION_PREFIX? IDENTIFIER LPAREN (allEntityTypes ((COMMA | SEMI) allEntityTypes)*)? RPAREN # functionCallOperation
     ;
 
 referenceTarget
-    : function
-    | IDENTIFIER
+    : function                                                           # functionReferenceTarget
+    | IDENTIFIER                                                         # identifierReferenceTarget
     ;
 
 comparisonOperator
-    : GT | GE | LT | LE | EQ | NEQ
+    : GT                                                                 # greaterThanOperator
+    | GE                                                                 # greaterThanOrEqualOperator
+    | LT                                                                 # lessThanOperator
+    | LE                                                                 # lessThanOrEqualOperator
+    | EQ                                                                 # equalOperator
+    | NEQ                                                                # notEqualOperator
     ;
 
 allEntityTypes
-    : mathExpression
-    | logicalExpression
-    | dateEntity
-    | timeEntity
-    | dateTimeEntity
-    | stringEntity
-    | vectorEntity
+    : mathExpression                                                     # mathEntityType
+    | logicalExpression                                                  # logicalEntityType
+    | dateEntity                                                         # dateEntityType
+    | timeEntity                                                         # timeEntityType
+    | dateTimeEntity                                                     # dateTimeEntityType
+    | stringEntity                                                       # stringEntityType
+    | vectorEntity                                                       # vectorEntityType
     ;
 
 assignmentValue
-    : genericEntity
-    | mathExpression
-    | logicalExpression
-    | dateEntity
-    | timeEntity
-    | dateTimeEntity
-    | stringEntity
-    | vectorEntity
+    : genericEntity                                                      # genericAssignmentValue
+    | mathExpression                                                     # mathAssignmentValue
+    | logicalExpression                                                  # logicalAssignmentValue
+    | dateEntity                                                         # dateAssignmentValue
+    | timeEntity                                                         # timeAssignmentValue
+    | dateTimeEntity                                                     # dateTimeAssignmentValue
+    | stringEntity                                                       # stringAssignmentValue
+    | vectorEntity                                                       # vectorAssignmentValue
     ;
 
 genericEntity
-    : IF logicalExpression THEN genericEntity (ELSEIF logicalExpression THEN genericEntity)* ELSE genericEntity ENDIF
-    | IF LPAREN logicalExpression (COMMA | SEMI) genericEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) genericEntity)* (COMMA | SEMI) genericEntity RPAREN
-    | castExpression
-    | referenceTarget
+    : IF logicalExpression THEN genericEntity (ELSEIF logicalExpression THEN genericEntity)* ELSE genericEntity ENDIF # genericDecisionExpression
+    | IF LPAREN logicalExpression (COMMA | SEMI) genericEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) genericEntity)* (COMMA | SEMI) genericEntity RPAREN # genericFunctionDecisionExpression
+    | castExpression                                                                                                                       # castExpressionOperation
+    | referenceTarget                                                                                                                      # referenceTargetOperation
     ;
 
 castExpression
-    : typeHint LPAREN genericEntity RPAREN
+    : typeHint LPAREN genericEntity RPAREN                              # typeCastOperation
     ;
 
 typeHint
-    : BOOLEAN_TYPE
-    | NUMBER_TYPE
-    | STRING_TYPE
-    | DATE_TYPE
-    | TIME_TYPE
-    | DATETIME_TYPE
-    | VECTOR_TYPE
+    : BOOLEAN_TYPE                                                       # booleanTypeHint
+    | NUMBER_TYPE                                                        # numberTypeHint
+    | STRING_TYPE                                                        # stringTypeHint
+    | DATE_TYPE                                                          # dateTypeHint
+    | TIME_TYPE                                                          # timeTypeHint
+    | DATETIME_TYPE                                                      # dateTimeTypeHint
+    | VECTOR_TYPE                                                        # vectorTypeHint
     ;
 
 logicalEntity
-    : (TRUE | FALSE)                                                                                           # logicalConstant
-    | IF logicalExpression THEN logicalExpression (ELSEIF logicalExpression THEN logicalExpression)* ELSE logicalExpression ENDIF # logicalDecisionExpression
-    | IF LPAREN logicalExpression (COMMA | SEMI) logicalExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) logicalExpression)* (COMMA | SEMI) logicalExpression RPAREN # logicalFunctionDecisionExpression
-    | BOOLEAN_TYPE? referenceTarget                                                                            # logicalReference
+    : (TRUE | FALSE)                                                                                           # logicalConstantOperation
+    | IF logicalExpression THEN logicalExpression (ELSEIF logicalExpression THEN logicalExpression)* ELSE logicalExpression ENDIF # logicalDecisionOperation
+    | IF LPAREN logicalExpression (COMMA | SEMI) logicalExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) logicalExpression)* (COMMA | SEMI) logicalExpression RPAREN # logicalFunctionDecisionOperation
+    | BOOLEAN_TYPE? referenceTarget                                                                            # logicalReferenceOperation
     ;
 
 numericEntity
-    : IF logicalExpression THEN mathExpression (ELSEIF logicalExpression THEN mathExpression)* ELSE mathExpression ENDIF # mathDecisionExpression
-    | IF LPAREN logicalExpression (COMMA | SEMI) mathExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) mathExpression)* (COMMA | SEMI) mathExpression RPAREN # mathFunctionDecisionExpression
-    | NUMBER                                                                                                             # numericConstant
+    : IF logicalExpression THEN mathExpression (ELSEIF logicalExpression THEN mathExpression)* ELSE mathExpression ENDIF # mathDecisionOperation
+    | IF LPAREN logicalExpression (COMMA | SEMI) mathExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) mathExpression)* (COMMA | SEMI) mathExpression RPAREN # mathFunctionDecisionOperation
+    | NUMBER                                                                                                             # numericConstantOperation
     // Identifiers may resolve to user variables or semantic built-ins such as E/pi.
-    | NUMBER_TYPE? referenceTarget                                                                                       # numericReference
+    | NUMBER_TYPE? referenceTarget                                                                                       # numericReferenceOperation
     ;
 
 stringEntity
-    : IF logicalExpression THEN stringEntity (ELSEIF logicalExpression THEN stringEntity)* ELSE stringEntity ENDIF # stringDecisionExpression
-    | IF LPAREN logicalExpression (COMMA | SEMI) stringEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) stringEntity)* (COMMA | SEMI) stringEntity RPAREN # stringFunctionDecisionExpression
-    | STRING                                                                                                    # stringConstant
-    | STRING_TYPE? referenceTarget                                                                             # stringReference
+    : IF logicalExpression THEN stringEntity (ELSEIF logicalExpression THEN stringEntity)* ELSE stringEntity ENDIF # stringDecisionOperation
+    | IF LPAREN logicalExpression (COMMA | SEMI) stringEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) stringEntity)* (COMMA | SEMI) stringEntity RPAREN # stringFunctionDecisionOperation
+    | STRING                                                                                                    # stringConstantOperation
+    | STRING_TYPE? referenceTarget                                                                             # stringReferenceOperation
     ;
 
 dateEntity
-    : IF logicalExpression THEN dateEntity (ELSEIF logicalExpression THEN dateEntity)* ELSE dateEntity ENDIF # dateDecisionExpression
-    | IF LPAREN logicalExpression (COMMA | SEMI) dateEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateEntity)* (COMMA | SEMI) dateEntity RPAREN # dateFunctionDecisionExpression
-    | DATE                                                                                                     # dateConstant
-    | NOW_DATE                                                                                                 # dateCurrentValue
-    | DATE_TYPE? referenceTarget                                                                               # dateReference
+    : IF logicalExpression THEN dateEntity (ELSEIF logicalExpression THEN dateEntity)* ELSE dateEntity ENDIF # dateDecisionOperation
+    | IF LPAREN logicalExpression (COMMA | SEMI) dateEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateEntity)* (COMMA | SEMI) dateEntity RPAREN # dateFunctionDecisionOperation
+    | DATE                                                                                                     # dateConstantOperation
+    | NOW_DATE                                                                                                 # dateCurrentValueOperation
+    | DATE_TYPE? referenceTarget                                                                               # dateReferenceOperation
     ;
 
 timeEntity
-    : IF logicalExpression THEN timeEntity (ELSEIF logicalExpression THEN timeEntity)* ELSE timeEntity ENDIF # timeDecisionExpression
-    | IF LPAREN logicalExpression (COMMA | SEMI) timeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) timeEntity)* (COMMA | SEMI) timeEntity RPAREN # timeFunctionDecisionExpression
-    | TIME                                                                                                     # timeConstant
-    | NOW_TIME                                                                                                 # timeCurrentValue
-    | TIME_TYPE? referenceTarget                                                                               # timeReference
+    : IF logicalExpression THEN timeEntity (ELSEIF logicalExpression THEN timeEntity)* ELSE timeEntity ENDIF # timeDecisionOperation
+    | IF LPAREN logicalExpression (COMMA | SEMI) timeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) timeEntity)* (COMMA | SEMI) timeEntity RPAREN # timeFunctionDecisionOperation
+    | TIME                                                                                                     # timeConstantOperation
+    | NOW_TIME                                                                                                 # timeCurrentValueOperation
+    | TIME_TYPE? referenceTarget                                                                               # timeReferenceOperation
     ;
 
 dateTimeEntity
-    : IF logicalExpression THEN dateTimeEntity (ELSEIF logicalExpression THEN dateTimeEntity)* ELSE dateTimeEntity ENDIF # dateTimeDecisionExpression
-    | IF LPAREN logicalExpression (COMMA | SEMI) dateTimeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateTimeEntity)* (COMMA | SEMI) dateTimeEntity RPAREN # dateTimeFunctionDecisionExpression
-    | DATETIME TIME_OFFSET?                                                                                    # dateTimeConstant
-    | NOW_DATETIME                                                                                             # dateTimeCurrentValue
-    | DATETIME_TYPE? referenceTarget                                                                           # dateTimeReference
+    : IF logicalExpression THEN dateTimeEntity (ELSEIF logicalExpression THEN dateTimeEntity)* ELSE dateTimeEntity ENDIF # dateTimeDecisionOperation
+    | IF LPAREN logicalExpression (COMMA | SEMI) dateTimeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateTimeEntity)* (COMMA | SEMI) dateTimeEntity RPAREN # dateTimeFunctionDecisionOperation
+    | DATETIME TIME_OFFSET?                                                                                    # dateTimeConstantOperation
+    | NOW_DATETIME                                                                                             # dateTimeCurrentValueOperation
+    | DATETIME_TYPE? referenceTarget                                                                           # dateTimeReferenceOperation
     ;
 
 vectorEntity
-    : IF logicalExpression THEN vectorEntity (ELSEIF logicalExpression THEN vectorEntity)* ELSE vectorEntity ENDIF # vectorDecisionExpression
-    | IF LPAREN logicalExpression (COMMA | SEMI) vectorEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) vectorEntity)* (COMMA | SEMI) vectorEntity RPAREN # vectorFunctionDecisionExpression
-    | LBRACKET allEntityTypes (COMMA allEntityTypes)* RBRACKET # vectorOfEntities
-    | VECTOR_TYPE? referenceTarget                             # vectorReference
+    : IF logicalExpression THEN vectorEntity (ELSEIF logicalExpression THEN vectorEntity)* ELSE vectorEntity ENDIF # vectorDecisionOperation
+    | IF LPAREN logicalExpression (COMMA | SEMI) vectorEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) vectorEntity)* (COMMA | SEMI) vectorEntity RPAREN # vectorFunctionDecisionOperation
+    | LBRACKET allEntityTypes (COMMA allEntityTypes)* RBRACKET # vectorOfEntitiesOperation
+    | VECTOR_TYPE? referenceTarget                             # vectorReferenceOperation
     ;
 
 vectorOfVariables
-    : LBRACKET IDENTIFIER (COMMA IDENTIFIER)* RBRACKET
+    : LBRACKET IDENTIFIER (COMMA IDENTIFIER)* RBRACKET                   # vectorOfVariablesOperation
     ;
