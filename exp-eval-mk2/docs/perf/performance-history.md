@@ -105,3 +105,41 @@
 **Decision:** ACCEPT
 **Reason:** The warmed parser reduced cold-start latency by roughly two orders of magnitude across every corpus scenario with no grammar change and low operational risk.
 **Notes:** Measurements came from `ExpressionEvaluatorV2WarmupBenchmark` using the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). The representative corpus is versioned under `src/test/resources/com/runestone/expeval2/grammar/language/perf/corpus/`.
+
+## PERF-007: Cost of explicit semantic validation for boolean comparisons
+
+**Date:** 2026-03-14
+
+**Scenario:** Measure the incremental cost of running `ExpressionEvaluatorV2ParserFacade.validateSemantics(...)` after `parseLogical(...)` on valid logical inputs, without changing the grammar.
+**Hypothesis:** A conservative semantic validator for boolean comparisons would preserve grammar performance and add only a small end-to-end overhead.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| facade.booleanEquality | 1928.757 | 2977.521 | -54.38% |
+| facade.booleanDifference | 2139.957 | 3003.085 | -40.33% |
+| facade.logicalMixedComparison | 9621.523 | 11894.472 | -23.62% |
+| facade.customerEligibilityGate | 25059.751 | 31639.430 | -26.26% |
+| facade.settlementWindowCheck | 16302.370 | 20759.402 | -27.34% |
+
+**Decision:** DISCARD
+**Reason:** The explicit validator regressed every measured scenario, increased code and maintenance burden, and did not justify rejecting behavior that the language can permissively accept.
+**Notes:** Measurements came from `ExpressionEvaluatorV2SemanticValidationBenchmark` using the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). The implementation was later removed from `ExpressionEvaluatorV2ParserFacade`.
+
+## PERF-008: Pruned parse-tree traversal for semantic validation
+
+**Date:** 2026-03-14
+
+**Scenario:** Replace the generic semantic-validation traversal with a pruned walk that skips terminals and only descends into parser rules considered likely to contain boolean comparisons.
+**Hypothesis:** Reducing parse-tree visits would lower the cost of `parseLogical + validateSemantics` without changing validation behavior.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| facade.booleanEquality.optimizedValidation | 2977.521 | 3334.081 | -11.98% |
+| facade.booleanDifference.optimizedValidation | 3003.085 | 3017.679 | -0.49% |
+| facade.logicalMixedComparison.optimizedValidation | 11894.472 | 13994.307 | -17.65% |
+| facade.customerEligibilityGate.optimizedValidation | 31639.430 | 36993.950 | -16.92% |
+| facade.settlementWindowCheck.optimizedValidation | 20759.402 | 22940.459 | -10.51% |
+
+**Decision:** DISCARD
+**Reason:** The pruned traversal still regressed every measured scenario, so the added dispatch and filtering logic did not pay off.
+**Notes:** The optimization was reverted after measurement. Measurements used the same `ExpressionEvaluatorV2SemanticValidationBenchmark` protocol and compared the retained validator against the experimental pruned walk.

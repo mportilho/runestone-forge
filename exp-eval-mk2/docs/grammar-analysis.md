@@ -135,15 +135,22 @@ Registrar todas as propostas de melhoria levantadas para `ExpressionEvaluatorV2.
 
 #### 8. Normalizar comparações booleanas por semântica, não por gramática
 
-- Status: `PENDING`
+- Status: `DISCARD`
 - Escopo: gramática + semântica futura.
 - Ideia: manter a forma sintática atual, mas criar uma camada semântica explícita para rejeitar operadores booleanos inválidos como `true > false`.
 - Hipótese: melhora clareza do pipeline sem reabrir a regressão de parse da proposta 5.
 - Risco: médio.
-- Como validar:
-  - não ampliar a gramática
-  - adicionar validador pós-parse para boolean comparisons
-  - medir custo adicional fora do parser
+- Resultado: descartado.
+- Efeito medido com `ExpressionEvaluatorV2SemanticValidationBenchmark` no caminho `parseLogical + validateSemantics`:
+  - `booleanEquality`: `-54.38%`
+  - `booleanDifference`: `-40.33%`
+  - `logicalMixedComparison`: `-23.62%`
+  - `customerEligibilityGate`: `-26.26%`
+  - `settlementWindowCheck`: `-27.34%`
+- Tentativa adicional descartada:
+  - podar a travessia da parse tree para visitar só regras "prováveis" piorou ainda mais o custo fim a fim
+  - ver `PERF-008`
+- Conclusão: a abordagem semântica foi removida. O aumento de código, a regressão de desempenho e o custo extra de manutenção não se pagam para restringir uma característica que a linguagem pode simplesmente aceitar, como `(true > false) = true`.
 
 #### 9. Introduzir AST semântica separada da parse tree
 
@@ -159,9 +166,8 @@ Registrar todas as propostas de melhoria levantadas para `ExpressionEvaluatorV2.
 
 ### Ordem Recomendada de Teste
 
-1. Validador semântico para comparações booleanas inválidas sem ampliar a gramática.
-2. Repetir o profiler do corpus após qualquer ajuste em `allEntityTypes` ou comparações lógicas.
-3. AST semântica separada, se os ganhos de manutenção justificarem o custo estrutural.
+1. Repetir o profiler do corpus após qualquer ajuste em `allEntityTypes` ou comparações lógicas.
+2. AST semântica separada, se os ganhos de manutenção justificarem o custo estrutural.
 
 ### Protocolo de Medição
 
