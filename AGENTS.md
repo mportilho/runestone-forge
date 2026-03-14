@@ -91,6 +91,9 @@ java -cp ~/dev/git/temp/antlr4-4.13.1.jar:~/dev/git/temp/antlr-lib/antlr-runtime
   -Dlanguage=Java \
   -visitor \
   -listener \
+  -Xexact-output-dir \
   -o /home/marcelo/dev/git/runestone-forge/exp-eval-mk2/src/main/java/com/runestone/expeval2/grammar/language \
   /home/marcelo/dev/git/runestone-forge/exp-eval-mk2/src/main/resources/ExpressionEvaluatorV2.g4
 ```
+
+For diagnostics such as `-Xlog`, also pass `-o /tmp/antlr-diagnostics` (or another scratch directory) to avoid generating parser artifacts under `src/main/resources`.
