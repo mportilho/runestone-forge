@@ -69,3 +69,21 @@
 **Decision:** DISCARD
 **Reason:** Even the conservative extraction regressed every measured scenario on the production parsing path, so the added rule indirection did not pay off.
 **Notes:** The code was reverted after measurement. Profiling showed the cost split across `logicalComparisonExpression` and `scalarComparisonExpression`, but total parse time still increased.
+
+## PERF-005: Generic scalar comparisons plus semantic validation
+
+**Date:** 2026-03-14
+
+**Scenario:** Accept mixed scalar comparisons in the grammar and move obvious type-compatibility checks into a semantic validator after parsing.
+**Hypothesis:** The simpler grammar shape might reduce parse cost enough to justify deferring type compatibility to a later validation phase.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| sll.mathFlatAssignment | 1796.445 | 2526.889 | -40.66% |
+| sll.mathNestedDecisionAssignment | 16146.478 | 21059.537 | -30.43% |
+| sll.logicalMixedComparison | 6513.318 | 10556.541 | -62.08% |
+| sll.vectorAssignment | 7559.027 | 10716.076 | -41.77% |
+
+**Decision:** DISCARD
+**Reason:** Although the experiment enabled mixed scalar comparisons plus semantic error reporting, it regressed every measured scenario on the production parsing path by a wide margin.
+**Notes:** The code was reverted after measurement. This result suggests that broadening the scalar comparison entry point increases prediction work more than the reduced type-specific alternatives save.
