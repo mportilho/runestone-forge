@@ -130,7 +130,7 @@ logicalStart
     ;
 
 assignmentExpression
-    : IDENTIFIER EQ allEntityTypes SEMI                        # assignOperation
+    : IDENTIFIER EQ assignmentValue SEMI                       # assignOperation
     | vectorOfVariables EQ (vectorEntity | function) SEMI      # destructuringAssignment
     ;
 
@@ -213,6 +213,11 @@ function
     : CACHE_FUNCTION_PREFIX? IDENTIFIER LPAREN (allEntityTypes ((COMMA | SEMI) allEntityTypes)*)? RPAREN
     ;
 
+referenceTarget
+    : function
+    | IDENTIFIER
+    ;
+
 comparisonOperator
     : GT | GE | LT | LE | EQ | NEQ
     ;
@@ -227,29 +232,58 @@ allEntityTypes
     | vectorEntity
     ;
 
+assignmentValue
+    : genericEntity
+    | mathExpression
+    | logicalExpression
+    | dateEntity
+    | timeEntity
+    | dateTimeEntity
+    | stringEntity
+    | vectorEntity
+    ;
+
+genericEntity
+    : IF logicalExpression THEN genericEntity (ELSEIF logicalExpression THEN genericEntity)* ELSE genericEntity ENDIF
+    | IF LPAREN logicalExpression (COMMA | SEMI) genericEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) genericEntity)* (COMMA | SEMI) genericEntity RPAREN
+    | castExpression
+    | referenceTarget
+    ;
+
+castExpression
+    : typeHint LPAREN genericEntity RPAREN
+    ;
+
+typeHint
+    : BOOLEAN_TYPE
+    | NUMBER_TYPE
+    | STRING_TYPE
+    | DATE_TYPE
+    | TIME_TYPE
+    | DATETIME_TYPE
+    | VECTOR_TYPE
+    ;
+
 logicalEntity
     : (TRUE | FALSE)                                                                                           # logicalConstant
     | IF logicalExpression THEN logicalExpression (ELSEIF logicalExpression THEN logicalExpression)* ELSE logicalExpression ENDIF # logicalDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) logicalExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) logicalExpression)* (COMMA | SEMI) logicalExpression RPAREN # logicalFunctionDecisionExpression
-    | BOOLEAN_TYPE? function                                                                                   # logicalFunctionResult
-    | BOOLEAN_TYPE? IDENTIFIER                                                                                 # logicalVariable
+    | BOOLEAN_TYPE? referenceTarget                                                                            # logicalReference
     ;
 
 numericEntity
     : IF logicalExpression THEN mathExpression (ELSEIF logicalExpression THEN mathExpression)* ELSE mathExpression ENDIF # mathDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) mathExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) mathExpression)* (COMMA | SEMI) mathExpression RPAREN # mathFunctionDecisionExpression
     | NUMBER                                                                                                             # numericConstant
-    | NUMBER_TYPE? function                                                                                              # numericFunctionResult
     // Identifiers may resolve to user variables or semantic built-ins such as E/pi.
-    | NUMBER_TYPE? IDENTIFIER                                                                                            # numericVariable
+    | NUMBER_TYPE? referenceTarget                                                                                       # numericReference
     ;
 
 stringEntity
     : IF logicalExpression THEN stringEntity (ELSEIF logicalExpression THEN stringEntity)* ELSE stringEntity ENDIF # stringDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) stringEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) stringEntity)* (COMMA | SEMI) stringEntity RPAREN # stringFunctionDecisionExpression
     | STRING                                                                                                    # stringConstant
-    | STRING_TYPE? function                                                                                    # stringFunctionResult
-    | STRING_TYPE? IDENTIFIER                                                                                  # stringVariable
+    | STRING_TYPE? referenceTarget                                                                             # stringReference
     ;
 
 dateEntity
@@ -257,8 +291,7 @@ dateEntity
     | IF LPAREN logicalExpression (COMMA | SEMI) dateEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateEntity)* (COMMA | SEMI) dateEntity RPAREN # dateFunctionDecisionExpression
     | DATE                                                                                                     # dateConstant
     | NOW_DATE                                                                                                 # dateCurrentValue
-    | DATE_TYPE? IDENTIFIER                                                                                    # dateVariable
-    | DATE_TYPE? function                                                                                      # dateFunctionResult
+    | DATE_TYPE? referenceTarget                                                                               # dateReference
     ;
 
 timeEntity
@@ -266,8 +299,7 @@ timeEntity
     | IF LPAREN logicalExpression (COMMA | SEMI) timeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) timeEntity)* (COMMA | SEMI) timeEntity RPAREN # timeFunctionDecisionExpression
     | TIME                                                                                                     # timeConstant
     | NOW_TIME                                                                                                 # timeCurrentValue
-    | TIME_TYPE? IDENTIFIER                                                                                    # timeVariable
-    | TIME_TYPE? function                                                                                      # timeFunctionResult
+    | TIME_TYPE? referenceTarget                                                                               # timeReference
     ;
 
 dateTimeEntity
@@ -275,16 +307,14 @@ dateTimeEntity
     | IF LPAREN logicalExpression (COMMA | SEMI) dateTimeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateTimeEntity)* (COMMA | SEMI) dateTimeEntity RPAREN # dateTimeFunctionDecisionExpression
     | DATETIME TIME_OFFSET?                                                                                    # dateTimeConstant
     | NOW_DATETIME                                                                                             # dateTimeCurrentValue
-    | DATETIME_TYPE? IDENTIFIER                                                                                # dateTimeVariable
-    | DATETIME_TYPE? function                                                                                  # dateTimeFunctionResult
+    | DATETIME_TYPE? referenceTarget                                                                           # dateTimeReference
     ;
 
 vectorEntity
     : IF logicalExpression THEN vectorEntity (ELSEIF logicalExpression THEN vectorEntity)* ELSE vectorEntity ENDIF # vectorDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) vectorEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) vectorEntity)* (COMMA | SEMI) vectorEntity RPAREN # vectorFunctionDecisionExpression
     | LBRACKET allEntityTypes (COMMA allEntityTypes)* RBRACKET # vectorOfEntities
-    | VECTOR_TYPE? IDENTIFIER                                  # vectorVariable
-    | VECTOR_TYPE? function                                    # vectorFunctionResult
+    | VECTOR_TYPE? referenceTarget                             # vectorReference
     ;
 
 vectorOfVariables

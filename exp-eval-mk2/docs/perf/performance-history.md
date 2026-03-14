@@ -15,3 +15,21 @@
 **Decision:** ADJUST
 **Reason:** The measured gain from `SLL -> LL` fallback is large enough to justify adoption in the parser integration layer, but the module still lacks a stable production parsing facade and its existing grammar tests are already failing for unrelated reasons.
 **Notes:** Measurements came from `ExpressionEvaluatorV2ParsingBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10).
+
+## PERF-002: Assignment-oriented grammar refactor on top of parser facade
+
+**Date:** 2026-03-14
+
+**Scenario:** Introduce `genericEntity`, `assignmentValue`, `referenceTarget`, and explicit cast syntax while the production parser path uses the `SLL -> LL` facade.
+**Hypothesis:** Pulling untyped assignment syntax out of `allEntityTypes` will reduce prediction work on the production parsing path without changing benchmark scenarios.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| sll.mathFlatAssignment | 2089.653 | 1796.445 | +14.03% |
+| sll.mathNestedDecisionAssignment | 19776.910 | 16146.478 | +18.36% |
+| sll.logicalMixedComparison | 7302.711 | 6513.318 | +10.81% |
+| sll.vectorAssignment | 7969.691 | 7559.027 | +5.15% |
+
+**Decision:** ACCEPT
+**Reason:** The production strategy improved in every measured scenario, including double-digit gains in three of four cases, and the affected module test suite now passes.
+**Notes:** `parseWithDefaultAdaptiveLl` regressed for `mathFlatAssignment` (`-36.38%`) and `mathNestedDecisionAssignment` (`-4.10%`), but that path is no longer the intended integration strategy after introducing `ExpressionEvaluatorV2ParserFacade`.
