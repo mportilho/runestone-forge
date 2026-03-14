@@ -80,7 +80,7 @@ CACHE_FUNCTION_PREFIX : '$.' ;
 
 // Literals
 IDENTIFIER : IdentifierText ;
-STRING     : '\'' (~'\'')* '\'' ;
+STRING     : '"' ( '\\' [btnfr"'\\] | ~[\r\n\\"] )* '"';
 NUMBER     : Decimal | OctalDigits | HexDigits ;
 POSITIVE   : PositiveNumber ;
 DATE       : DateFragment ;
@@ -110,7 +110,7 @@ fragment MonthFragment       : '0' '1'..'9' | '1' '0'..'2' ;
 fragment HourFragment        : '0'..'1' '0'..'9' | '2' '0'..'3' ;
 fragment MinuteSecondFragment: '0'..'5' '0'..'9' ;
 fragment DateFragment        : '0'..'9' '0'..'9' '0'..'9' '0'..'9' '-' MonthFragment '-' DayFragment ;
-fragment TimeOffsetFragment  : ('+' | '-') '0'..'2' [0-9] ':' [0-9] [0-9] ;
+fragment TimeOffsetFragment  : ('+' | '-') HourFragment Colon MinuteSecondFragment ;
 
 // Comments and whitespace
 LINE_COMMENT  : '//' ~[\r\n]* -> skip ;
@@ -135,13 +135,13 @@ assignmentExpression
     ;
 
 // Logical expression — precedence expressed via alternative ordering:
-// NOT (highest) > NAND/NOR/XOR/XNOR > AND > OR (lowest among binary logical)
+// NOT (highest) > NAND/NOR/XOR/XNOR > comparison > AND > OR
 logicalExpression
     : (NOT | EXCLAMATION) logicalExpression                             # notExpression
     | logicalExpression (NAND | NOR | XOR | XNOR) logicalExpression     # bitwiseLogicExpression
+    | logicalExpression comparisonOperator logicalExpression            # logicComparisonExpression
     | logicalExpression AND logicalExpression                           # andExpression
     | logicalExpression OR logicalExpression                            # orExpression
-    | logicalExpression comparisonOperator logicalExpression            # logicComparisonExpression
     | mathExpression comparisonOperator mathExpression                  # mathComparisonExpression
     | stringEntity comparisonOperator stringEntity                      # stringExpression
     | dateEntity comparisonOperator dateEntity                          # dateComparisonExpression
