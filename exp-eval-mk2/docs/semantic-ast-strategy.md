@@ -320,7 +320,11 @@ final class ExpressionRuntimeSupport {
     ) {
         return new ExpressionRuntimeSupport(
             compiledExpression,
-            MutableBindings.from(compiledExpression.semanticModel(), environment.externalSymbolCatalog())
+            MutableBindings.from(
+                compiledExpression.semanticModel(),
+                environment.externalSymbolCatalog(),
+                environment.runtimeValueFactory()
+            )
         );
     }
 
@@ -343,6 +347,7 @@ public final class ExpressionEnvironment {
     public ExpressionEnvironmentId environmentId() { /* ... */ }
     public FunctionCatalog functionCatalog() { /* ... */ }
     public ExternalSymbolCatalog externalSymbolCatalog() { /* ... */ }
+    public RuntimeValueFactory runtimeValueFactory() { /* ... */ }
 }
 ```
 
@@ -363,6 +368,138 @@ public record ExternalSymbolDescriptor(
 ```
 
 ```java
+public sealed interface RuntimeValue
+    permits NumberValue, BooleanValue, StringValue, DateValue, TimeValue, DateTimeValue, VectorValue, NullValue {
+
+    ResolvedType type();
+    Object raw();
+}
+```
+
+```java
+public record NumberValue(BigDecimal value) implements RuntimeValue {
+    @Override
+    public ResolvedType type() { return ScalarType.NUMBER; }
+
+    @Override
+    public Object raw() { return value; }
+}
+```
+
+```java
+public record BooleanValue(boolean value) implements RuntimeValue {
+    @Override
+    public ResolvedType type() { return ScalarType.BOOLEAN; }
+
+    @Override
+    public Object raw() { return value; }
+}
+```
+
+```java
+public record StringValue(String value) implements RuntimeValue {
+    @Override
+    public ResolvedType type() { return ScalarType.STRING; }
+
+    @Override
+    public Object raw() { return value; }
+}
+```
+
+```java
+public record DateValue(LocalDate value) implements RuntimeValue {
+    @Override
+    public ResolvedType type() { return ScalarType.DATE; }
+
+    @Override
+    public Object raw() { return value; }
+}
+```
+
+```java
+public record TimeValue(LocalTime value) implements RuntimeValue {
+    @Override
+    public ResolvedType type() { return ScalarType.TIME; }
+
+    @Override
+    public Object raw() { return value; }
+}
+```
+
+```java
+public record DateTimeValue(LocalDateTime value) implements RuntimeValue {
+    @Override
+    public ResolvedType type() { return ScalarType.DATETIME; }
+
+    @Override
+    public Object raw() { return value; }
+}
+```
+
+```java
+public record VectorValue(List<RuntimeValue> elements) implements RuntimeValue {
+    public VectorValue {
+        elements = List.copyOf(elements);
+    }
+
+    @Override
+    public ResolvedType type() { return VectorType.INSTANCE; }
+
+    @Override
+    public Object raw() { return elements; }
+}
+```
+
+```java
+public enum NullValue implements RuntimeValue {
+    INSTANCE;
+
+    @Override
+    public ResolvedType type() { return UnknownType.INSTANCE; }
+
+    @Override
+    public Object raw() { return null; }
+}
+```
+
+```java
+public final class RuntimeValueFactory {
+
+    private final DataConversionService conversionService;
+
+    public RuntimeValueFactory(DataConversionService conversionService) {
+        this.conversionService = Objects.requireNonNull(conversionService);
+    }
+
+    public RuntimeValue from(Object rawValue) {
+        return from(rawValue, null);
+    }
+
+    public RuntimeValue from(Object rawValue, ResolvedType expectedType) {
+        // normaliza Object externo para um RuntimeValue canônico
+    }
+}
+```
+
+```java
+public final class RuntimeCoercionService {
+
+    private final DataConversionService conversionService;
+
+    public RuntimeCoercionService(DataConversionService conversionService) {
+        this.conversionService = Objects.requireNonNull(conversionService);
+    }
+
+    public BigDecimal asNumber(RuntimeValue value) { /* ... */ }
+    public boolean asBoolean(RuntimeValue value) { /* ... */ }
+    public String asString(RuntimeValue value) { /* ... */ }
+    public LocalDate asDate(RuntimeValue value) { /* ... */ }
+    public LocalTime asTime(RuntimeValue value) { /* ... */ }
+    public LocalDateTime asDateTime(RuntimeValue value) { /* ... */ }
+}
+```
+
+```java
 public record CompiledExpression(
     String source,
     ExpressionResultType resultType,
@@ -380,6 +517,7 @@ public final class FunctionCatalog {
 
 ```java
 public final class ExpressionEnvironmentBuilder {
+    public ExpressionEnvironmentBuilder conversionService(DataConversionService conversionService) { /* ... */ }
     public ExpressionEnvironmentBuilder registerStaticProvider(Class<?> providerClass) { /* ... */ }
     public ExpressionEnvironmentBuilder registerInstanceProvider(Object providerInstance) { /* ... */ }
     public ExpressionEnvironmentBuilder registerExternalSymbol(
@@ -404,6 +542,7 @@ Observações de desempenho:
 
 - descoberta de métodos, criação de invokers e normalização dos símbolos externos do ambiente acontecem no `ExpressionEnvironmentBuilder`, fora do caminho quente
 - `ExpressionEnvironment`, `FunctionCatalog` e `ExternalSymbolCatalog` devem ser imutáveis depois de construídos
+- `RuntimeValueFactory` deve reutilizar um `DataConversionService` estável, em vez de construir lógica de conversão ad hoc em cada evaluator
 - cache de expressão compilada deve considerar a identidade estável do ambiente, não apenas o source
 - providers de instância registrados no ambiente precisam ser imutáveis ou thread-safe para compartilhamento seguro
 - `MathExpression` e `LogicalExpression` devem permanecer facades finas; todo comportamento compartilhado deve ficar fora da API pública
@@ -446,26 +585,32 @@ Exemplo conceitual:
 public final class MutableBindings {
 
     private final SemanticModel semanticModel;
+    private final RuntimeValueFactory runtimeValueFactory;
     private final Map<SymbolRef, RuntimeValue> values = new HashMap<>();
 
     public static MutableBindings from(
         SemanticModel semanticModel,
-        ExternalSymbolCatalog externalSymbolCatalog
+        ExternalSymbolCatalog externalSymbolCatalog,
+        RuntimeValueFactory runtimeValueFactory
     ) {
-        MutableBindings bindings = new MutableBindings(semanticModel);
+        MutableBindings bindings = new MutableBindings(semanticModel, runtimeValueFactory);
         bindings.seedDefaults(externalSymbolCatalog);
         return bindings;
     }
 
-    private MutableBindings(SemanticModel semanticModel) {
+    private MutableBindings(
+        SemanticModel semanticModel,
+        RuntimeValueFactory runtimeValueFactory
+    ) {
         this.semanticModel = semanticModel;
+        this.runtimeValueFactory = runtimeValueFactory;
     }
 
     public void setValue(String symbolName, Object rawValue) {
         SymbolRef symbolRef = requireSymbol(symbolName);
         rejectWhenInternal(symbolName);
         rejectWhenNonOverridable(symbolName);
-        values.put(symbolRef, RuntimeValueFactory.from(rawValue));
+        values.put(symbolRef, runtimeValueFactory.from(rawValue));
     }
 
     public Optional<RuntimeValue> find(SymbolRef symbolRef) {
@@ -508,6 +653,9 @@ Observações de modelagem:
 - `SemanticModel` deve expor `externalSymbolsByName` e `internalSymbolsByName`
 - `setValue("principal", ...)` consulta apenas `externalSymbolsByName`
 - `setValue(...)` deve falhar se o nome pertencer a `internalSymbolsByName`
+- `RuntimeValue` é a representação canônica consumida pelo evaluator; `DataConversionService` é infraestrutura de conversão, não substituto de `RuntimeValue`
+- `RuntimeValueFactory` deve receber `Object` externo e produzir `RuntimeValue`, opcionalmente usando o `ResolvedType` esperado
+- `RuntimeCoercionService` deve concentrar coerções de `RuntimeValue` para tipos concretos usados pelos evaluators
 - `MutableBindings` deve nascer pré-populado com os `defaultValue` de símbolos do `ExternalSymbolCatalog` efetivamente usados pela expressão
 - `setValue(...)` deve falhar para símbolos do ambiente com `overridable = false`
 - `MutableBindings` é mutável e vive junto da facade pública tipada (`MathExpression` ou `LogicalExpression`)
@@ -625,6 +773,7 @@ public final class ExpressionEnvironment {
     public ExpressionEnvironmentId environmentId() { /* ... */ }
     public FunctionCatalog functionCatalog() { /* ... */ }
     public ExternalSymbolCatalog externalSymbolCatalog() { /* ... */ }
+    public RuntimeValueFactory runtimeValueFactory() { /* ... */ }
 }
 ```
 
@@ -655,6 +804,8 @@ final class ExpressionRuntimeSupport { /* ... */ }
 public final class ExternalSymbolCatalog { /* ... */ }
 public final class FunctionCatalog { /* ... */ }
 public final class ExpressionEnvironmentBuilder { /* ... */ }
+public final class RuntimeValueFactory { /* ... */ }
+public final class RuntimeCoercionService { /* ... */ }
 ```
 
 Regra de encapsulamento:
@@ -685,6 +836,7 @@ Sem misturar ANTLR com domínio semântico:
 - `com.runestone.expeval2.catalog`
   - `FunctionCatalog`, `ExternalSymbolCatalog`, `ExternalSymbolDescriptor`
 - `com.runestone.expeval2.runtime`
+  - `RuntimeValue`, `RuntimeValueFactory`, `RuntimeCoercionService`
   - `MutableBindings`, `ExecutionScope`, `ExpressionRuntimeSupport`, evaluators
 
 Direção de dependências esperada:
@@ -770,6 +922,9 @@ Adicionar:
 - `FunctionCatalog`
 - `ExternalSymbolCatalog`
 - `ExternalSymbolDescriptor`
+- `RuntimeValue`
+- `RuntimeValueFactory`
+- `RuntimeCoercionService`
 - `ResolvedFunctionBinding`
 - `CompiledExpression`
 - `MutableBindings` com os valores externos informados pelo usuário
@@ -790,6 +945,8 @@ Regras da fase 5 para funções:
 - `SemanticResolver` usa `FunctionCatalog` e `ExternalSymbolCatalog` vindos do ambiente para resolver funções, símbolos externos defaultados, retorno e coerções
 - `FunctionCallNode` permanece estrutural; o binding fica fora da AST
 - execução usa apenas `ResolvedFunctionBinding`, sem reflection e sem lookup por nome
+- `RuntimeValueFactory` usa `DataConversionService` para normalizar `Object` externo em `RuntimeValue`
+- evaluators usam `RuntimeCoercionService`, em vez de chamar `DataConversionService` diretamente em cada operação
 - erros de função desconhecida, aridade inválida ou ambiguidade devem surgir na compilação, não no `compute()`
 - símbolos externos pré-vinculados pelo ambiente devem entrar na execução já com seus `defaultValue`
 - símbolos externos com `overridable = false` devem rejeitar sobrescrita por `setValue(...)`
@@ -835,12 +992,16 @@ Separar testes por responsabilidade:
   - rejeita `setValue(String, Object)` para símbolos internos definidos por assignment
   - pré-carrega `defaultValue` de símbolos do ambiente efetivamente usados pela expressão
   - rejeita sobrescrita de símbolo do ambiente com `overridable = false`
+  - valida normalização de `Object` para `RuntimeValue` via `RuntimeValueFactory`
   - valida lookup por `SymbolRef`
   - valida snapshot para criar `ExecutionScope`
 - `execution scope`:
   - valida reutilização do mesmo símbolo em múltiplos `IdentifierNode`
   - valida assignments internos sem mutar `MutableBindings`
   - valida invocação via `ResolvedFunctionBinding` sem nova resolução
+- `runtime coercion`:
+  - valida coerção de `RuntimeValue` para número, boolean, texto, data, hora e datetime
+  - valida fallback para `DataConversionService` apenas quando o valor ainda não estiver na forma canônica
 - `symbol indexes`:
   - valida `Map<SymbolRef, List<IdentifierNode>>`
   - valida `Map<SymbolRef, List<AssignmentNode>>`
