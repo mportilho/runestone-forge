@@ -113,13 +113,25 @@ Não misturar estrutura com resolução logo de saída. A AST estrutural deve se
 - `ResolvedType`
 - `SemanticIssue`
 
-Cada `ExpressionNode` pode ter um `nodeId`, e o resolvedor produz uma tabela paralela:
+Também é importante separar três coisas que parecem próximas, mas têm papéis diferentes:
+
+- `IdentifierNode`: ocorrência sintática de um nome dentro da AST
+- `SymbolRef`: símbolo semântico ao qual uma ou mais ocorrências de identificador apontam
+- `EvaluationContext`: valores concretos fornecidos em runtime para os símbolos da expressão
+
+Exemplo conceitual:
+
+- na expressão `principal + principal * rate`, a AST pode ter dois `IdentifierNode` distintos para `principal`
+- os dois nós podem apontar para o mesmo `SymbolRef("principal")`
+- o valor informado pelo usuário para `principal` deve existir uma única vez no `EvaluationContext`
+
+Cada `ExpressionNode` terá um `nodeId`, e o resolvedor produz uma tabela paralela:
 
 - `Map<NodeId, ResolvedType>`
 - `Map<NodeId, SymbolRef>`
 - `List<SemanticIssue>`
 
-Isso evita acoplar a AST a um estado mutável e permite testar builder e resolução separadamente.
+Isso evita acoplar a AST a um estado mutável e permite testar builder, resolução e execução separadamente.
 
 #### 4. Resolver semântico incremental
 
@@ -188,7 +200,8 @@ input
 -> SemanticAstBuilder
 -> AST estrutural
 -> SemanticResolver
--> tipos resolvidos + issues
+-> tipos resolvidos + SymbolRef + issues
+-> EvaluationContext
 -> evaluator futuro
 ```
 
@@ -204,6 +217,12 @@ public interface SemanticAstBuilder {
 ```java
 public interface SemanticResolver {
     SemanticModel resolve(ExpressionFileNode file, ResolutionContext context);
+}
+```
+
+```java
+public interface EvaluationContext {
+    Object valueOf(SymbolRef symbolRef);
 }
 ```
 
@@ -283,7 +302,8 @@ Adicionar:
 
 - `ResolvedType`
 - `SemanticIssue`
-- `ResolutionContext` com variáveis, funções e built-ins
+- `ResolutionContext` com variáveis, funções e built-ins conhecidos na fase de resolução
+- `EvaluationContext` com os valores concretos fornecidos em runtime
 
 Critério:
 
@@ -301,6 +321,9 @@ Separar testes por responsabilidade:
   - valida inferência
   - valida incompatibilidades
   - ignora a presença de `typeHint` quando ele não tiver papel semântico
+- `evaluation context`:
+  - valida lookup por `SymbolRef`
+  - valida reutilização do mesmo símbolo em múltiplos `IdentifierNode`
 - `parser`:
   - continua cobrindo apenas aceitação sintática e estratégia `SLL -> LL`
 
