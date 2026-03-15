@@ -198,62 +198,131 @@ Regras adicionais de modelagem:
 Para suportar um fluxo como:
 
 ```java
-Expression exp = new Expression("principal + principal * rate", ExpressionResultType.MATH, functionCatalog);
+MathExpression exp = MathExpression.compile("principal + principal * rate", functionCatalog);
 exp.setValue("principal", 10000);
 exp.setValue("rate", 0.038);
-BigDecimal result = exp.computeMath();
+BigDecimal result = exp.compute();
 ```
 
-o desenho recomendado é separar cinco objetos:
+o desenho recomendado é separar sete objetos:
 
-- `Expression`: facade mutável exposta ao usuário
+- `MathExpression`: facade mutável pública para expressões matemáticas
+- `LogicalExpression`: facade mutável pública para expressões lógicas
 - `CompiledExpression`: resultado imutável de parse + análise
 - `MutableBindings`: valores externos preenchidos pelo usuário após o parse
 - `ExecutionScope`: estado temporário usado por uma execução específica
 - `FunctionCatalog`: catálogo imutável e compartilhável com as funções conhecidas pela resolução semântica e pela execução
+- `ExpressionRuntimeSupport`: suporte interno compartilhado entre as duas facades públicas
 
 Responsabilidades:
 
-- `Expression` encapsula a API amigável (`setValue`, `computeMath`, `computeLogical`)
+- `MathExpression` encapsula a API amigável de matemática (`setValue`, `compute`)
+- `LogicalExpression` encapsula a API amigável de lógica (`setValue`, `compute`)
 - `CompiledExpression` guarda `source` e `SemanticModel`
 - `MutableBindings` resolve nome de variável para `SymbolRef` apenas entre os símbolos externos e armazena valores informados pelo usuário
 - `ExecutionScope` nasce de um snapshot de `MutableBindings` e recebe também assignments internos da própria expressão
 - `FunctionCatalog` concentra descoberta, indexação e armazenamento dos métodos públicos expostos pela API
 - `FunctionCatalogBuilder` monta um `FunctionCatalog` a partir de classes estáticas e instâncias do usuário
 - `ResolvedFunctionBinding` representa o binding estável entre um `FunctionCallNode` e a função concreta escolhida na fase de resolução
+- `ExpressionRuntimeSupport` concentra o estado compartilhado (`CompiledExpression` + `MutableBindings`) para evitar duplicação entre `MathExpression` e `LogicalExpression`
 
 Regra arquitetural explícita:
 
 - a gramática continua reconhecendo `IDENTIFIER(...)` sem consultar catálogo
 - `FunctionCatalog` não participa do parse
 - `FunctionCatalog` entra apenas em `compile -> resolve -> runtime`
-- cada instância de `Expression` é vinculada a um único `ExpressionResultType` desde a compilação
-- `compute...()` não deve fazer busca por nome, reflexão nem resolução de overload
-- um mesmo `FunctionCatalog` pode ser compartilhado por múltiplas instâncias de `Expression`
+- cada instância pública de `MathExpression` ou `LogicalExpression` é vinculada a um único `ExpressionResultType` desde a compilação
+- a API pública não deve expor uma facade genérica `Expression` com múltiplos `compute...()`
+- `compute()` não deve fazer busca por nome, reflexão nem resolução de overload
+- um mesmo `FunctionCatalog` pode ser compartilhado por múltiplas instâncias de `MathExpression` e `LogicalExpression`
 
 Shape sugerido:
 
 ```java
-public final class Expression {
+public final class MathExpression {
 
     private static final ExpressionCompiler COMPILER = new ExpressionCompiler();
+
+    private final ExpressionRuntimeSupport runtime;
+
+    private MathExpression(ExpressionRuntimeSupport runtime) {
+        this.runtime = runtime;
+    }
+
+    public static MathExpression compile(String source, FunctionCatalog functionCatalog) {
+        CompiledExpression compiled = COMPILER.compile(source, ExpressionResultType.MATH, functionCatalog);
+        return new MathExpression(ExpressionRuntimeSupport.from(compiled));
+    }
+
+    public MathExpression setValue(String symbolName, Object rawValue) {
+        runtime.setValue(symbolName, rawValue);
+        return this;
+    }
+
+    public BigDecimal compute() {
+        return new MathEvaluator(runtime.compiledExpression()).evaluate(runtime.createExecutionScope());
+    }
+}
+```
+
+```java
+public final class LogicalExpression {
+
+    private static final ExpressionCompiler COMPILER = new ExpressionCompiler();
+
+    private final ExpressionRuntimeSupport runtime;
+
+    private LogicalExpression(ExpressionRuntimeSupport runtime) {
+        this.runtime = runtime;
+    }
+
+    public static LogicalExpression compile(String source, FunctionCatalog functionCatalog) {
+        CompiledExpression compiled = COMPILER.compile(source, ExpressionResultType.LOGICAL, functionCatalog);
+        return new LogicalExpression(ExpressionRuntimeSupport.from(compiled));
+    }
+
+    public LogicalExpression setValue(String symbolName, Object rawValue) {
+        runtime.setValue(symbolName, rawValue);
+        return this;
+    }
+
+    public boolean compute() {
+        return new LogicalEvaluator(runtime.compiledExpression()).evaluate(runtime.createExecutionScope());
+    }
+}
+```
+
+```java
+final class ExpressionRuntimeSupport {
 
     private final CompiledExpression compiledExpression;
     private final MutableBindings bindings;
 
-    public Expression(String source, ExpressionResultType resultType, FunctionCatalog functionCatalog) {
-        this.compiledExpression = COMPILER.compile(source, resultType, functionCatalog);
-        this.bindings = new MutableBindings(compiledExpression.semanticModel());
+    private ExpressionRuntimeSupport(
+        CompiledExpression compiledExpression,
+        MutableBindings bindings
+    ) {
+        this.compiledExpression = compiledExpression;
+        this.bindings = bindings;
     }
 
-    public Expression setValue(String symbolName, Object rawValue) {
+    static ExpressionRuntimeSupport from(CompiledExpression compiledExpression) {
+        return new ExpressionRuntimeSupport(
+            compiledExpression,
+            new MutableBindings(compiledExpression.semanticModel())
+        );
+    }
+
+    void setValue(String symbolName, Object rawValue) {
         bindings.setValue(symbolName, rawValue);
-        return this;
     }
 
-    public BigDecimal computeMath() {
-        ExecutionScope scope = ExecutionScope.from(bindings.snapshot());
-        return new MathEvaluator(compiledExpression).evaluate(scope);
+    ExecutionScope createExecutionScope() {
+        return ExecutionScope.from(bindings.snapshot());
+    }
+
+    CompiledExpression compiledExpression() {
+        return compiledExpression;
     }
 }
 ```
@@ -296,11 +365,12 @@ Observações de desempenho:
 - `FunctionCatalog` deve ser imutável depois de construído
 - cache de expressão compilada deve considerar a identidade ou versão do catálogo, não apenas o source
 - providers de instância registrados no catálogo precisam ser imutáveis ou thread-safe para compartilhamento seguro
+- `MathExpression` e `LogicalExpression` devem permanecer facades finas; todo comportamento compartilhado deve ficar fora da API pública
 
 Cache de expressão compilada:
 
 - é um cache de `CompiledExpression`, não do resultado final de `compute...()`
-- deve viver no compilador ou em uma facade de compilação compartilhada, não dentro de cada instância de `Expression`
+- deve viver no compilador ou em uma facade de compilação compartilhada, não dentro de cada instância de `MathExpression` ou `LogicalExpression`
 - serve para reaproveitar `parse + buildAst + resolve` quando a mesma expressão for compilada repetidamente com o mesmo contexto estrutural
 - não deve armazenar `MutableBindings`, `ExecutionScope` nem valores calculados
 
@@ -383,7 +453,7 @@ Observações de modelagem:
 - `SemanticModel` deve expor `externalSymbolsByName` e `internalSymbolsByName`
 - `setValue("principal", ...)` consulta apenas `externalSymbolsByName`
 - `setValue(...)` deve falhar se o nome pertencer a `internalSymbolsByName`
-- `MutableBindings` é mutável e vive junto da facade `Expression`
+- `MutableBindings` é mutável e vive junto da facade pública tipada (`MathExpression` ou `LogicalExpression`)
 - `ExecutionScope` é mutável, mas existe só durante uma computação
 - assignments da própria expressão escrevem em `ExecutionScope`, não em `MutableBindings`
 
@@ -465,6 +535,22 @@ input
 API sugerida:
 
 ```java
+public final class MathExpression {
+    public static MathExpression compile(String source, FunctionCatalog functionCatalog) { /* ... */ }
+    public MathExpression setValue(String symbolName, Object rawValue) { /* ... */ }
+    public BigDecimal compute() { /* ... */ }
+}
+```
+
+```java
+public final class LogicalExpression {
+    public static LogicalExpression compile(String source, FunctionCatalog functionCatalog) { /* ... */ }
+    public LogicalExpression setValue(String symbolName, Object rawValue) { /* ... */ }
+    public boolean compute() { /* ... */ }
+}
+```
+
+```java
 final class SemanticAstBuilder {
     ExpressionFileNode buildMath(ExpressionEvaluatorV2Parser.MathStartContext root);
     ExpressionFileNode buildLogical(ExpressionEvaluatorV2Parser.LogicalStartContext root);
@@ -500,12 +586,13 @@ public final class ExpressionCompiler {
 ```java
 public final class MutableBindings { /* ... */ }
 public final class ExecutionScope { /* ... */ }
+final class ExpressionRuntimeSupport { /* ... */ }
 ```
 
 Regra de encapsulamento:
 
 - começar com `final class` package-private para `SemanticAstBuilder`, `SemanticResolver` e colaboradores internos
-- expor interface pública apenas onde houver variabilidade real de consumidor, com `FunctionCatalog` como candidato principal
+- expor como API pública apenas `MathExpression`, `LogicalExpression`, `FunctionCatalog` e tipos realmente necessários para integração externa
 - evitar hierarquia de interfaces para tipos que hoje têm uma única implementação esperada
 - manter um tipo público por arquivo e deixar classes auxiliares como package-private por padrão
 
@@ -524,8 +611,10 @@ Sem misturar ANTLR com domínio semântico:
   - índices de leitura e assignment por `SymbolRef`
 - `com.runestone.expeval2.compiler`
   - `ExpressionCompiler`, `CompiledExpression`, cache e orquestração de compilação
+- `com.runestone.expeval2.api`
+  - `MathExpression`, `LogicalExpression`
 - `com.runestone.expeval2.runtime`
-  - `MutableBindings`, `ExecutionScope`, evaluator
+  - `MutableBindings`, `ExecutionScope`, `ExpressionRuntimeSupport`, evaluators
 
 Direção de dependências esperada:
 
@@ -534,6 +623,7 @@ Direção de dependências esperada:
 - `ast.build` depende de `grammar` + `ast`
 - `semantic` depende de `ast` e de contratos estáveis de função, nunca do parser
 - `compiler` orquestra `grammar -> ast.build -> semantic`
+- `api` depende de `compiler` + `runtime`, sem conhecer ANTLR nem detalhes da resolução
 - `runtime` depende de `compiler` e `semantic`, mas não volta a falar com ANTLR
 - qualquer acesso a reflection de funções deve ficar isolado no catálogo, fora do caminho quente de `runtime`
 
@@ -609,6 +699,8 @@ Adicionar:
 - `CompiledExpression`
 - `MutableBindings` com os valores externos informados pelo usuário
 - `ExecutionScope` para a execução efetiva da expressão
+- `MathExpression` e `LogicalExpression` como facades públicas tipadas
+- `ExpressionRuntimeSupport` como suporte interno compartilhado
 - `ExpressionResultType` explícito no contrato de compilação e no `CompiledExpression`
 - índices dentro de `SemanticModel`:
   - `Map<SymbolRef, List<IdentifierNode>>` para leituras
@@ -619,11 +711,11 @@ Adicionar:
 
 Regras da fase 5 para funções:
 
-- `Expression` passa `FunctionCatalog` e `ExpressionResultType` para o compilador no construtor
+- `MathExpression.compile(...)` e `LogicalExpression.compile(...)` passam `FunctionCatalog` e o `ExpressionResultType` implícito para o compilador
 - `SemanticResolver` usa o catálogo para resolver overload, retorno e coerções
 - `FunctionCallNode` permanece estrutural; o binding fica fora da AST
 - execução usa apenas `ResolvedFunctionBinding`, sem reflection e sem lookup por nome
-- erros de função desconhecida, aridade inválida ou ambiguidade devem surgir na compilação, não no `compute...()`
+- erros de função desconhecida, aridade inválida ou ambiguidade devem surgir na compilação, não no `compute()`
 
 Critério:
 
