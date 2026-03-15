@@ -119,13 +119,14 @@ Também é importante separar três coisas que parecem próximas, mas têm papé
 
 - `IdentifierNode`: ocorrência sintática de um nome dentro da AST
 - `SymbolRef`: símbolo semântico ao qual uma ou mais ocorrências de identificador apontam
-- `EvaluationContext`: valores concretos fornecidos em runtime para os símbolos da expressão
+- `MutableBindings`: valores externos fornecidos pelo usuário após o parse
+- `ExecutionScope`: estado efetivo de uma execução, incluindo variáveis derivadas de assignments internos
 
 Exemplo conceitual:
 
 - na expressão `principal + principal * rate`, a AST pode ter dois `IdentifierNode` distintos para `principal`
 - os dois nós podem apontar para o mesmo `SymbolRef("principal")`
-- o valor informado pelo usuário para `principal` deve existir uma única vez no `EvaluationContext`
+- o valor informado pelo usuário para `principal` deve existir uma única vez em `MutableBindings`
 
 Além disso, o modelo semântico deve expor índices para buscas diretas por símbolo, sem precisar varrer a AST:
 
@@ -165,6 +166,118 @@ public record SemanticModel(
 ```
 
 Isso evita acoplar a AST a um estado mutável e permite testar builder, resolução e execução separadamente.
+
+### Estrutura de runtime recomendada
+
+Para suportar um fluxo como:
+
+```java
+Expression exp = new Expression("principal + principal * rate");
+exp.setValue("principal", 10000);
+exp.setValue("rate", 0.038);
+BigDecimal result = exp.computeMath();
+```
+
+o desenho recomendado é separar quatro objetos:
+
+- `Expression`: facade mutável exposta ao usuário
+- `CompiledExpression`: resultado imutável de parse + análise
+- `MutableBindings`: valores externos preenchidos pelo usuário após o parse
+- `ExecutionScope`: estado temporário usado por uma execução específica
+
+Responsabilidades:
+
+- `Expression` encapsula a API amigável (`setValue`, `computeMath`, `computeLogical`)
+- `CompiledExpression` guarda `source` e `SemanticModel`
+- `MutableBindings` resolve nome de variável para `SymbolRef` e armazena valores informados pelo usuário
+- `ExecutionScope` nasce de um snapshot de `MutableBindings` e recebe também assignments internos da própria expressão
+
+Shape sugerido:
+
+```java
+public final class Expression {
+
+    private final CompiledExpression compiledExpression;
+    private final MutableBindings bindings;
+
+    public Expression(String source) {
+        this.compiledExpression = ExpressionCompiler.compile(source);
+        this.bindings = new MutableBindings(compiledExpression.semanticModel());
+    }
+
+    public Expression setValue(String symbolName, Object rawValue) {
+        bindings.setValue(symbolName, rawValue);
+        return this;
+    }
+
+    public BigDecimal computeMath() {
+        ExecutionScope scope = ExecutionScope.from(bindings.snapshot());
+        return new MathEvaluator(compiledExpression).evaluate(scope);
+    }
+}
+```
+
+```java
+public record CompiledExpression(
+    String source,
+    SemanticModel semanticModel
+) {}
+```
+
+```java
+public final class MutableBindings {
+
+    private final SemanticModel semanticModel;
+    private final Map<SymbolRef, RuntimeValue> values = new HashMap<>();
+
+    public MutableBindings(SemanticModel semanticModel) {
+        this.semanticModel = semanticModel;
+    }
+
+    public void setValue(String symbolName, Object rawValue) {
+        SymbolRef symbolRef = requireSymbol(symbolName);
+        values.put(symbolRef, RuntimeValueFactory.from(rawValue));
+    }
+
+    public Optional<RuntimeValue> find(SymbolRef symbolRef) {
+        return Optional.ofNullable(values.get(symbolRef));
+    }
+
+    public Map<SymbolRef, RuntimeValue> snapshot() {
+        return Map.copyOf(values);
+    }
+}
+```
+
+```java
+public final class ExecutionScope {
+
+    private final Map<SymbolRef, RuntimeValue> values;
+
+    private ExecutionScope(Map<SymbolRef, RuntimeValue> values) {
+        this.values = new HashMap<>(values);
+    }
+
+    public static ExecutionScope from(Map<SymbolRef, RuntimeValue> baseValues) {
+        return new ExecutionScope(baseValues);
+    }
+
+    public Optional<RuntimeValue> find(SymbolRef symbolRef) {
+        return Optional.ofNullable(values.get(symbolRef));
+    }
+
+    public void assign(SymbolRef symbolRef, RuntimeValue value) {
+        values.put(symbolRef, value);
+    }
+}
+```
+
+Observações de modelagem:
+
+- `SemanticModel` deve expor `Map<String, SymbolRef>` para que `setValue("principal", ...)` não precise varrer índices
+- `MutableBindings` é mutável e vive junto da facade `Expression`
+- `ExecutionScope` é mutável, mas existe só durante uma computação
+- assignments da própria expressão escrevem em `ExecutionScope`, não em `MutableBindings`
 
 #### 4. Resolver semântico incremental
 
@@ -228,13 +341,16 @@ Pipeline alvo:
 
 ```text
 input
+-> ExpressionCompiler
 -> ExpressionEvaluatorV2ParserFacade
 -> parse tree
 -> SemanticAstBuilder
 -> AST estrutural
 -> SemanticResolver
 -> SemanticModel
--> EvaluationContext
+-> CompiledExpression
+-> MutableBindings
+-> ExecutionScope
 -> evaluator futuro
 ```
 
@@ -254,8 +370,24 @@ public interface SemanticResolver {
 ```
 
 ```java
-public interface EvaluationContext {
-    Object valueOf(SymbolRef symbolRef);
+public record CompiledExpression(
+    String source,
+    SemanticModel semanticModel
+) {}
+```
+
+```java
+public interface MutableBindings {
+    void setValue(String symbolName, Object rawValue);
+    Optional<RuntimeValue> find(SymbolRef symbolRef);
+    Map<SymbolRef, RuntimeValue> snapshot();
+}
+```
+
+```java
+public interface ExecutionScope {
+    Optional<RuntimeValue> find(SymbolRef symbolRef);
+    void assign(SymbolRef symbolRef, RuntimeValue value);
 }
 ```
 
@@ -272,6 +404,8 @@ Sem misturar ANTLR com domínio semântico:
 - `com.runestone.expeval2.semantic`
   - `SemanticModel`, resolução, tipos e issues
   - índices de leitura e assignment por `SymbolRef`
+- `com.runestone.expeval2.runtime`
+  - `CompiledExpression`, `MutableBindings`, `ExecutionScope`, evaluator
 
 ### Sequência de implementação recomendada
 
@@ -339,10 +473,13 @@ Adicionar:
 - `ResolvedType`
 - `SemanticIssue`
 - `ResolutionContext` com variáveis, funções e built-ins conhecidos na fase de resolução
-- `EvaluationContext` com os valores concretos fornecidos em runtime
+- `CompiledExpression`
+- `MutableBindings` com os valores externos informados pelo usuário
+- `ExecutionScope` para a execução efetiva da expressão
 - índices dentro de `SemanticModel`:
   - `Map<SymbolRef, List<IdentifierNode>>` para leituras
   - `Map<SymbolRef, List<AssignmentNode>>` para definições, incluindo `DestructuringAssignmentNode`
+  - `Map<String, SymbolRef>` para lookup por nome na facade
 
 Critério:
 
@@ -360,9 +497,13 @@ Separar testes por responsabilidade:
   - valida inferência
   - valida incompatibilidades
   - ignora a presença de `typeHint` quando ele não tiver papel semântico
-- `evaluation context`:
+- `runtime bindings`:
+  - valida `setValue(String, Object)` via `Map<String, SymbolRef>`
   - valida lookup por `SymbolRef`
+  - valida snapshot para criar `ExecutionScope`
+- `execution scope`:
   - valida reutilização do mesmo símbolo em múltiplos `IdentifierNode`
+  - valida assignments internos sem mutar `MutableBindings`
 - `symbol indexes`:
   - valida `Map<SymbolRef, List<IdentifierNode>>`
   - valida `Map<SymbolRef, List<AssignmentNode>>`
