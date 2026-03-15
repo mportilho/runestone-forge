@@ -68,7 +68,7 @@ class ExpressionEvaluatorV2GrammarTest {
     }
 
     private String parseMathTree(String input) {
-        ExpressionEvaluatorV2ParserFacade.ParseResult<ExpressionEvaluatorV2Parser.MathStartContext> result =
+        ParseResult<ExpressionEvaluatorV2Parser.MathStartContext> result =
             new ExpressionEvaluatorV2ParserFacade().parseMath(input);
         return Trees.toStringTree(result.root(), Arrays.asList(ExpressionEvaluatorV2Parser.ruleNames));
     }

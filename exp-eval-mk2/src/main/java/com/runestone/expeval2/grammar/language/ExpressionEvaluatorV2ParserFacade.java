@@ -1,17 +1,7 @@
 package com.runestone.expeval2.grammar.language;
 
-import org.antlr.v4.runtime.BailErrorStrategy;
-import org.antlr.v4.runtime.BaseErrorListener;
-import org.antlr.v4.runtime.CharStreams;
-import org.antlr.v4.runtime.CommonTokenStream;
-import org.antlr.v4.runtime.DefaultErrorStrategy;
-import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.RecognitionException;
-import org.antlr.v4.runtime.Recognizer;
-import org.antlr.v4.runtime.atn.PredictionMode;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -27,29 +17,34 @@ public final class ExpressionEvaluatorV2ParserFacade {
         this.parseExecutor = Objects.requireNonNull(parseExecutor, "parseExecutor must not be null");
     }
 
-    public ParseResult<com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.MathStartContext> parseMath(String input) {
-        return parse(input, EntryPoint.MATH);
+    public ParseResult<ExpressionEvaluatorV2Parser.MathStartContext> parseMath(String input) {
+        String source = requireInput(input);
+        try {
+            return new ParseResult<>(parseExecutor.parseMath(source, PredictionStrategy.SLL), PredictionStrategy.SLL);
+        } catch (ParseCancellationException ignored) {
+            return new ParseResult<>(parseExecutor.parseMath(source, PredictionStrategy.LL_FALLBACK), PredictionStrategy.LL_FALLBACK);
+        }
     }
 
-    public ParseResult<com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.LogicalStartContext> parseLogical(String input) {
-        return parse(input, EntryPoint.LOGICAL);
+    public ParseResult<ExpressionEvaluatorV2Parser.LogicalStartContext> parseLogical(String input) {
+        String source = requireInput(input);
+        try {
+            return new ParseResult<>(parseExecutor.parseLogical(source, PredictionStrategy.SLL), PredictionStrategy.SLL);
+        } catch (ParseCancellationException ignored) {
+            return new ParseResult<>(parseExecutor.parseLogical(source, PredictionStrategy.LL_FALLBACK), PredictionStrategy.LL_FALLBACK);
+        }
     }
 
     public void warmUp(List<WarmupInput> inputs) {
         Objects.requireNonNull(inputs, "inputs must not be null");
-        for (WarmupInput input : inputs) {
-            Objects.requireNonNull(input, "warmup input must not be null");
-            parse(input.input(), input.entryPoint().toEntryPoint());
-        }
+        inputs.forEach(this::warmUp);
     }
 
-    @SuppressWarnings("unchecked")
-    private <T extends ParserRuleContext> ParseResult<T> parse(String input, EntryPoint entryPoint) {
-        String source = requireInput(input);
-        try {
-            return new ParseResult<>((T) parseExecutor.parse(source, entryPoint, PredictionStrategy.SLL), PredictionStrategy.SLL);
-        } catch (ParseCancellationException ignored) {
-            return new ParseResult<>((T) parseExecutor.parse(source, entryPoint, PredictionStrategy.LL_FALLBACK), PredictionStrategy.LL_FALLBACK);
+    private void warmUp(WarmupInput input) {
+        Objects.requireNonNull(input, "warmup input must not be null");
+        switch (input.entryPoint()) {
+            case MATH -> this.parseMath(input.input());
+            case LOGICAL -> this.parseLogical(input.input());
         }
     }
 
@@ -61,139 +56,4 @@ public final class ExpressionEvaluatorV2ParserFacade {
         return input;
     }
 
-    public record ParseResult<T extends ParserRuleContext>(T root, PredictionStrategy predictionStrategy) {
-
-        public ParseResult {
-            Objects.requireNonNull(root, "root must not be null");
-            Objects.requireNonNull(predictionStrategy, "predictionStrategy must not be null");
-        }
-    }
-
-    public enum PredictionStrategy {
-        SLL,
-        LL_FALLBACK
-    }
-
-    public record SyntaxError(int line, int charPositionInLine, String message) {
-
-        public SyntaxError {
-            Objects.requireNonNull(message, "message must not be null");
-        }
-    }
-
-    public record WarmupInput(String input, WarmupTarget entryPoint) {
-
-        public WarmupInput {
-            Objects.requireNonNull(input, "input must not be null");
-            Objects.requireNonNull(entryPoint, "entryPoint must not be null");
-        }
-    }
-
-    public enum WarmupTarget {
-        MATH,
-        LOGICAL;
-
-        private EntryPoint toEntryPoint() {
-            return switch (this) {
-                case MATH -> EntryPoint.MATH;
-                case LOGICAL -> EntryPoint.LOGICAL;
-            };
-        }
-    }
-
-    public static final class ParsingException extends RuntimeException {
-
-        private final List<SyntaxError> errors;
-
-        ParsingException(String input, List<SyntaxError> errors) {
-            super(buildMessage(input, errors));
-            this.errors = List.copyOf(errors);
-        }
-
-        public List<SyntaxError> errors() {
-            return errors;
-        }
-
-        private static String buildMessage(String input, List<SyntaxError> errors) {
-            if (errors.isEmpty()) {
-                return "failed to parse input: %s".formatted(input);
-            }
-
-            SyntaxError firstError = errors.getFirst();
-            return "failed to parse input at %d:%d - %s".formatted(
-                firstError.line(),
-                firstError.charPositionInLine(),
-                firstError.message()
-            );
-        }
-    }
-
-    interface ParseExecutor {
-        ParserRuleContext parse(String input, EntryPoint entryPoint, PredictionStrategy predictionStrategy);
-    }
-
-    static final class AntlrParseExecutor implements ParseExecutor {
-
-        @Override
-        public ParserRuleContext parse(String input, EntryPoint entryPoint, PredictionStrategy predictionStrategy) {
-            CollectingErrorListener errorListener = new CollectingErrorListener();
-
-            com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Lexer lexer = new com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Lexer(CharStreams.fromString(input));
-            lexer.removeErrorListeners();
-            lexer.addErrorListener(errorListener);
-
-            com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser parser = new com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser(new CommonTokenStream(lexer));
-            parser.removeErrorListeners();
-            parser.addErrorListener(errorListener);
-
-            if (predictionStrategy == PredictionStrategy.SLL) {
-                parser.getInterpreter().setPredictionMode(PredictionMode.SLL);
-                parser.setErrorHandler(new BailErrorStrategy());
-            } else {
-                parser.getInterpreter().setPredictionMode(PredictionMode.LL);
-                parser.setErrorHandler(new DefaultErrorStrategy());
-            }
-
-            ParserRuleContext root = switch (entryPoint) {
-                case MATH -> parser.mathStart();
-                case LOGICAL -> parser.logicalStart();
-            };
-
-            if (root.exception != null || errorListener.hasErrors()) {
-                throw new ParsingException(input, errorListener.errors());
-            }
-
-            return root;
-        }
-    }
-
-    enum EntryPoint {
-        MATH,
-        LOGICAL
-    }
-
-    static final class CollectingErrorListener extends BaseErrorListener {
-
-        private final List<SyntaxError> errors = new ArrayList<>();
-
-        @Override
-        public void syntaxError(
-            Recognizer<?, ?> recognizer,
-            Object offendingSymbol,
-            int line,
-            int charPositionInLine,
-            String msg,
-            RecognitionException e
-        ) {
-            errors.add(new SyntaxError(line, charPositionInLine, msg));
-        }
-
-        boolean hasErrors() {
-            return !errors.isEmpty();
-        }
-
-        List<SyntaxError> errors() {
-            return List.copyOf(errors);
-        }
-    }
 }

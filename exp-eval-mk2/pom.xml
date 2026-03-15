@@ -46,11 +46,6 @@
                             <goal>antlr4</goal>
                         </goals>
                         <configuration>
-                            <sourceDirectory>${project.basedir}/src/main/resources</sourceDirectory>
-                            <includes>
-                                <include>ExpressionEvaluatorV2.g4</include>
-                            </includes>
-                            <outputDirectory>${project.build.directory}/generated-sources/antlr4</outputDirectory>
                             <listener>true</listener>
                             <visitor>true</visitor>
                         </configuration>

@@ -22,10 +22,6 @@ SOFTWARE.*/
 
 grammar ExpressionEvaluatorV2;
 
-@header {
-package com.runestone.expeval2.grammar.language;
-}
-
 /* ########################################  Lexical rules  ######################################## */
 
 IF        : 'if' ;

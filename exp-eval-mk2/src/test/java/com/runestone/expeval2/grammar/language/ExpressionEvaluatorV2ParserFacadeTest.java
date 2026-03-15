@@ -1,6 +1,6 @@
 package com.runestone.expeval2.grammar.language;
 
-import org.antlr.v4.runtime.ParserRuleContext;
+import com.runestone.expeval2.grammar.exception.ParsingException;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 import org.junit.jupiter.api.Test;
 
@@ -16,9 +16,9 @@ class ExpressionEvaluatorV2ParserFacadeTest {
     void shouldParseMathExpressionWithSllWhenFastPathSucceeds() {
         ExpressionEvaluatorV2ParserFacade facade = new ExpressionEvaluatorV2ParserFacade();
 
-        ExpressionEvaluatorV2ParserFacade.ParseResult<ExpressionEvaluatorV2Parser.MathStartContext> result = facade.parseMath("a = foo; 1");
+        ParseResult<com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.MathStartContext> result = facade.parseMath("a = foo; 1");
 
-        assertThat(result.predictionStrategy()).isEqualTo(ExpressionEvaluatorV2ParserFacade.PredictionStrategy.SLL);
+        assertThat(result.predictionStrategy()).isEqualTo(PredictionStrategy.SLL);
         assertThat(result.root().getText()).isEqualTo("a=foo;1<EOF>");
     }
 
@@ -26,10 +26,10 @@ class ExpressionEvaluatorV2ParserFacadeTest {
     void shouldParseLogicalExpressionWithSllWhenFastPathSucceeds() {
         ExpressionEvaluatorV2ParserFacade facade = new ExpressionEvaluatorV2ParserFacade();
 
-        ExpressionEvaluatorV2ParserFacade.ParseResult<ExpressionEvaluatorV2Parser.LogicalStartContext> result =
+        ParseResult<com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.LogicalStartContext> result =
             facade.parseLogical("if true then 10 else 20 endif > if false then 1 else 2 endif and !false");
 
-        assertThat(result.predictionStrategy()).isEqualTo(ExpressionEvaluatorV2ParserFacade.PredictionStrategy.SLL);
+        assertThat(result.predictionStrategy()).isEqualTo(PredictionStrategy.SLL);
         assertThat(result.root().getText()).contains("iftruethen10else20endif");
     }
 
@@ -37,22 +37,22 @@ class ExpressionEvaluatorV2ParserFacadeTest {
     void shouldFallbackToLlWhenSllCancels() {
         AtomicInteger sllCalls = new AtomicInteger();
         AtomicInteger llCalls = new AtomicInteger();
-        ExpressionEvaluatorV2ParserFacade facade = new ExpressionEvaluatorV2ParserFacade((input, entryPoint, predictionStrategy) -> {
-            if (predictionStrategy == ExpressionEvaluatorV2ParserFacade.PredictionStrategy.SLL) {
-                sllCalls.incrementAndGet();
-                throw new ParseCancellationException();
-            }
+        ExpressionEvaluatorV2ParserFacade facade = new ExpressionEvaluatorV2ParserFacade(new TestParseExecutor() {
+            @Override
+            com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.MathStartContext parseMath(PredictionStrategy predictionStrategy) {
+                if (predictionStrategy == PredictionStrategy.SLL) {
+                    sllCalls.incrementAndGet();
+                    throw new ParseCancellationException();
+                }
 
-            llCalls.incrementAndGet();
-            return switch (entryPoint) {
-                case MATH -> new ExpressionEvaluatorV2Parser.MathStartContext(null, 0);
-                case LOGICAL -> new ExpressionEvaluatorV2Parser.LogicalStartContext(null, 0);
-            };
+                llCalls.incrementAndGet();
+                return new com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.MathStartContext(null, 0);
+            }
         });
 
-        ExpressionEvaluatorV2ParserFacade.ParseResult<ExpressionEvaluatorV2Parser.MathStartContext> result = facade.parseMath("1");
+        ParseResult<com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.MathStartContext> result = facade.parseMath("1");
 
-        assertThat(result.predictionStrategy()).isEqualTo(ExpressionEvaluatorV2ParserFacade.PredictionStrategy.LL_FALLBACK);
+        assertThat(result.predictionStrategy()).isEqualTo(PredictionStrategy.LL_FALLBACK);
         assertThat(result.root()).isNotNull();
         assertThat(sllCalls.get()).isEqualTo(1);
         assertThat(llCalls.get()).isEqualTo(1);
@@ -63,7 +63,7 @@ class ExpressionEvaluatorV2ParserFacadeTest {
         ExpressionEvaluatorV2ParserFacade facade = new ExpressionEvaluatorV2ParserFacade();
 
         assertThatThrownBy(() -> facade.parseMath("a = ; 1"))
-            .isInstanceOf(ExpressionEvaluatorV2ParserFacade.ParsingException.class)
+            .isInstanceOf(ParsingException.class)
             .hasMessageContaining("failed to parse input at 1:4");
     }
 
@@ -80,25 +80,32 @@ class ExpressionEvaluatorV2ParserFacadeTest {
     void shouldWarmUpInputsUsingSameSllThenLlFallbackFlow() {
         AtomicInteger sllCalls = new AtomicInteger();
         AtomicInteger llCalls = new AtomicInteger();
-        ExpressionEvaluatorV2ParserFacade facade = new ExpressionEvaluatorV2ParserFacade((input, entryPoint, predictionStrategy) -> {
-            if (predictionStrategy == ExpressionEvaluatorV2ParserFacade.PredictionStrategy.SLL) {
-                sllCalls.incrementAndGet();
-                if (entryPoint == ExpressionEvaluatorV2ParserFacade.EntryPoint.LOGICAL) {
-                    throw new ParseCancellationException();
+        ExpressionEvaluatorV2ParserFacade facade = new ExpressionEvaluatorV2ParserFacade(new TestParseExecutor() {
+            @Override
+            com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.MathStartContext parseMath(PredictionStrategy predictionStrategy) {
+                if (predictionStrategy == PredictionStrategy.SLL) {
+                    sllCalls.incrementAndGet();
+                } else {
+                    llCalls.incrementAndGet();
                 }
-            } else {
-                llCalls.incrementAndGet();
+                return new com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.MathStartContext(null, 0);
             }
 
-            return switch (entryPoint) {
-                case MATH -> new ExpressionEvaluatorV2Parser.MathStartContext(null, 0);
-                case LOGICAL -> new ExpressionEvaluatorV2Parser.LogicalStartContext(null, 0);
-            };
+            @Override
+            com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.LogicalStartContext parseLogical(PredictionStrategy predictionStrategy) {
+                if (predictionStrategy == PredictionStrategy.SLL) {
+                    sllCalls.incrementAndGet();
+                    throw new ParseCancellationException();
+                }
+
+                llCalls.incrementAndGet();
+                return new com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.LogicalStartContext(null, 0);
+            }
         });
 
         facade.warmUp(List.of(
-            new ExpressionEvaluatorV2ParserFacade.WarmupInput("a = foo; 1", ExpressionEvaluatorV2ParserFacade.WarmupTarget.MATH),
-            new ExpressionEvaluatorV2ParserFacade.WarmupInput("true", ExpressionEvaluatorV2ParserFacade.WarmupTarget.LOGICAL)
+            new WarmupInput("a = foo; 1", WarmupTarget.MATH),
+            new WarmupInput("true", WarmupTarget.LOGICAL)
         ));
 
         assertThat(sllCalls.get()).isEqualTo(2);
@@ -110,9 +117,40 @@ class ExpressionEvaluatorV2ParserFacadeTest {
         ExpressionEvaluatorV2ParserFacade facade = new ExpressionEvaluatorV2ParserFacade();
 
         assertThatThrownBy(() -> facade.warmUp(List.of(
-            new ExpressionEvaluatorV2ParserFacade.WarmupInput("   ", ExpressionEvaluatorV2ParserFacade.WarmupTarget.MATH)
+            new WarmupInput("   ", WarmupTarget.MATH)
         )))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("input must not be blank");
+    }
+
+    private abstract static class TestParseExecutor implements ParseExecutor {
+
+        @Override
+        public com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.MathStartContext parseMath(
+            String input,
+            PredictionStrategy predictionStrategy
+        ) {
+            return parseMath(predictionStrategy);
+        }
+
+        @Override
+        public com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.LogicalStartContext parseLogical(
+            String input,
+            PredictionStrategy predictionStrategy
+        ) {
+            return parseLogical(predictionStrategy);
+        }
+
+        com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.MathStartContext parseMath(
+            PredictionStrategy predictionStrategy
+        ) {
+            throw new UnsupportedOperationException("math parsing not stubbed");
+        }
+
+        com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser.LogicalStartContext parseLogical(
+            PredictionStrategy predictionStrategy
+        ) {
+            throw new UnsupportedOperationException("logical parsing not stubbed");
+        }
     }
 }
