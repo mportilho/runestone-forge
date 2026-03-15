@@ -159,6 +159,7 @@ Registrar todas as propostas de melhoria levantadas para `ExpressionEvaluatorV2.
 - Ideia: parar de codificar tanta tipagem fina na gramática e concentrar resolução de tipo numa AST semântica posterior.
 - Hipótese: reduz acoplamento entre sintaxe e semântica e facilita experimentos sem degradar a gramática principal.
 - Risco: alto.
+- Estratégia proposta: ver `docs/semantic-ast-strategy.md`.
 - Como validar:
   - criar transformação parse tree -> AST
   - preservar gramática atual primeiro
