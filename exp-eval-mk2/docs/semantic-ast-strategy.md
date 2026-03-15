@@ -198,43 +198,51 @@ Regras adicionais de modelagem:
 Para suportar um fluxo como:
 
 ```java
-MathExpression exp = MathExpression.compile("principal + principal * rate", functionCatalog);
+MathExpression exp = MathExpression.compile("principal + principal * annualRate", environment);
 exp.setValue("principal", 10000);
-exp.setValue("rate", 0.038);
 BigDecimal result = exp.compute();
 ```
 
-o desenho recomendado é separar sete objetos:
+o desenho recomendado é separar dez objetos:
 
 - `MathExpression`: facade mutável pública para expressões matemáticas
 - `LogicalExpression`: facade mutável pública para expressões lógicas
+- `ExpressionEnvironment`: contexto imutável compartilhável entre compilação e runtime
+- `ExternalSymbolCatalog`: catálogo imutável de símbolos externos pré-vinculados ao ambiente
 - `CompiledExpression`: resultado imutável de parse + análise
 - `MutableBindings`: valores externos preenchidos pelo usuário após o parse
 - `ExecutionScope`: estado temporário usado por uma execução específica
 - `FunctionCatalog`: catálogo imutável e compartilhável com as funções conhecidas pela resolução semântica e pela execução
+- `ExternalSymbolDescriptor`: descritor de símbolo externo com valor padrão obrigatório
 - `ExpressionRuntimeSupport`: suporte interno compartilhado entre as duas facades públicas
 
 Responsabilidades:
 
 - `MathExpression` encapsula a API amigável de matemática (`setValue`, `compute`)
 - `LogicalExpression` encapsula a API amigável de lógica (`setValue`, `compute`)
+- `ExpressionEnvironment` agrega `FunctionCatalog`, `ExternalSymbolCatalog` e a identidade estável usada no cache de compilação
+- `ExternalSymbolCatalog` concentra símbolos externos conhecidos pela aplicação já com valor padrão no ambiente
 - `CompiledExpression` guarda `source` e `SemanticModel`
 - `MutableBindings` resolve nome de variável para `SymbolRef` apenas entre os símbolos externos e armazena valores informados pelo usuário
 - `ExecutionScope` nasce de um snapshot de `MutableBindings` e recebe também assignments internos da própria expressão
 - `FunctionCatalog` concentra descoberta, indexação e armazenamento dos métodos públicos expostos pela API
-- `FunctionCatalogBuilder` monta um `FunctionCatalog` a partir de classes estáticas e instâncias do usuário
+- `ExpressionEnvironmentBuilder` monta um `ExpressionEnvironment`, incluindo funções e símbolos externos defaultados
 - `ResolvedFunctionBinding` representa o binding estável entre um `FunctionCallNode` e a função concreta escolhida na fase de resolução
+- `ExternalSymbolDescriptor` modela nome, tipo, valor padrão e política de sobrescrita para símbolos do ambiente
 - `ExpressionRuntimeSupport` concentra o estado compartilhado (`CompiledExpression` + `MutableBindings`) para evitar duplicação entre `MathExpression` e `LogicalExpression`
 
 Regra arquitetural explícita:
 
 - a gramática continua reconhecendo `IDENTIFIER(...)` sem consultar catálogo
-- `FunctionCatalog` não participa do parse
-- `FunctionCatalog` entra apenas em `compile -> resolve -> runtime`
+- `ExpressionEnvironment` não participa do parse
+- `ExpressionEnvironment` entra apenas em `compile -> resolve -> runtime`
 - cada instância pública de `MathExpression` ou `LogicalExpression` é vinculada a um único `ExpressionResultType` desde a compilação
 - a API pública não deve expor uma facade genérica `Expression` com múltiplos `compute...()`
 - `compute()` não deve fazer busca por nome, reflexão nem resolução de overload
-- um mesmo `FunctionCatalog` pode ser compartilhado por múltiplas instâncias de `MathExpression` e `LogicalExpression`
+- um mesmo `ExpressionEnvironment` pode ser compartilhado por múltiplas instâncias de `MathExpression` e `LogicalExpression`
+- todo símbolo presente em `ExternalSymbolCatalog` deve possuir `defaultValue`
+- `ExternalSymbolCatalog` não declara símbolos "somente tipados"; identificadores externos sem valor padrão continuam sendo descobertos pela análise semântica da expressão
+- `setValue(...)` pode sobrescrever apenas símbolos externos marcados como `overridable`
 
 Shape sugerido:
 
@@ -249,9 +257,9 @@ public final class MathExpression {
         this.runtime = runtime;
     }
 
-    public static MathExpression compile(String source, FunctionCatalog functionCatalog) {
-        CompiledExpression compiled = COMPILER.compile(source, ExpressionResultType.MATH, functionCatalog);
-        return new MathExpression(ExpressionRuntimeSupport.from(compiled));
+    public static MathExpression compile(String source, ExpressionEnvironment environment) {
+        CompiledExpression compiled = COMPILER.compile(source, ExpressionResultType.MATH, environment);
+        return new MathExpression(ExpressionRuntimeSupport.from(compiled, environment));
     }
 
     public MathExpression setValue(String symbolName, Object rawValue) {
@@ -276,9 +284,9 @@ public final class LogicalExpression {
         this.runtime = runtime;
     }
 
-    public static LogicalExpression compile(String source, FunctionCatalog functionCatalog) {
-        CompiledExpression compiled = COMPILER.compile(source, ExpressionResultType.LOGICAL, functionCatalog);
-        return new LogicalExpression(ExpressionRuntimeSupport.from(compiled));
+    public static LogicalExpression compile(String source, ExpressionEnvironment environment) {
+        CompiledExpression compiled = COMPILER.compile(source, ExpressionResultType.LOGICAL, environment);
+        return new LogicalExpression(ExpressionRuntimeSupport.from(compiled, environment));
     }
 
     public LogicalExpression setValue(String symbolName, Object rawValue) {
@@ -306,10 +314,13 @@ final class ExpressionRuntimeSupport {
         this.bindings = bindings;
     }
 
-    static ExpressionRuntimeSupport from(CompiledExpression compiledExpression) {
+    static ExpressionRuntimeSupport from(
+        CompiledExpression compiledExpression,
+        ExpressionEnvironment environment
+    ) {
         return new ExpressionRuntimeSupport(
             compiledExpression,
-            new MutableBindings(compiledExpression.semanticModel())
+            MutableBindings.from(compiledExpression.semanticModel(), environment.externalSymbolCatalog())
         );
     }
 
@@ -328,6 +339,30 @@ final class ExpressionRuntimeSupport {
 ```
 
 ```java
+public final class ExpressionEnvironment {
+    public ExpressionEnvironmentId environmentId() { /* ... */ }
+    public FunctionCatalog functionCatalog() { /* ... */ }
+    public ExternalSymbolCatalog externalSymbolCatalog() { /* ... */ }
+}
+```
+
+```java
+public final class ExternalSymbolCatalog {
+    public Optional<ExternalSymbolDescriptor> find(String name) { /* ... */ }
+    public Map<String, ExternalSymbolDescriptor> symbolsByName() { /* ... */ }
+}
+```
+
+```java
+public record ExternalSymbolDescriptor(
+    String name,
+    ResolvedType declaredType,
+    RuntimeValue defaultValue,
+    boolean overridable
+) {}
+```
+
+```java
 public record CompiledExpression(
     String source,
     ExpressionResultType resultType,
@@ -336,18 +371,24 @@ public record CompiledExpression(
 ```
 
 ```java
-public interface FunctionCatalog {
-    FunctionCatalogId catalogId();
-    Optional<FunctionDescriptor> findExact(String name, int arity);
-    Collection<FunctionDescriptor> findCandidates(String name);
+public final class FunctionCatalog {
+    public FunctionCatalogId catalogId() { /* ... */ }
+    public Optional<FunctionDescriptor> findExact(String name, int arity) { /* ... */ }
+    public Collection<FunctionDescriptor> findCandidates(String name) { /* ... */ }
 }
 ```
 
 ```java
-public final class FunctionCatalogBuilder {
-    public FunctionCatalogBuilder registerStaticProvider(Class<?> providerClass) { /* ... */ }
-    public FunctionCatalogBuilder registerInstanceProvider(Object providerInstance) { /* ... */ }
-    public FunctionCatalog build() { /* ... */ }
+public final class ExpressionEnvironmentBuilder {
+    public ExpressionEnvironmentBuilder registerStaticProvider(Class<?> providerClass) { /* ... */ }
+    public ExpressionEnvironmentBuilder registerInstanceProvider(Object providerInstance) { /* ... */ }
+    public ExpressionEnvironmentBuilder registerExternalSymbol(
+        String name,
+        ResolvedType declaredType,
+        Object defaultValue,
+        boolean overridable
+    ) { /* ... */ }
+    public ExpressionEnvironment build() { /* ... */ }
 }
 ```
 
@@ -361,10 +402,10 @@ public record ResolvedFunctionBinding(
 
 Observações de desempenho:
 
-- descoberta de métodos e criação de invokers acontece no `FunctionCatalogBuilder`, fora do caminho quente
-- `FunctionCatalog` deve ser imutável depois de construído
-- cache de expressão compilada deve considerar a identidade ou versão do catálogo, não apenas o source
-- providers de instância registrados no catálogo precisam ser imutáveis ou thread-safe para compartilhamento seguro
+- descoberta de métodos, criação de invokers e normalização dos símbolos externos do ambiente acontecem no `ExpressionEnvironmentBuilder`, fora do caminho quente
+- `ExpressionEnvironment`, `FunctionCatalog` e `ExternalSymbolCatalog` devem ser imutáveis depois de construídos
+- cache de expressão compilada deve considerar a identidade estável do ambiente, não apenas o source
+- providers de instância registrados no ambiente precisam ser imutáveis ou thread-safe para compartilhamento seguro
 - `MathExpression` e `LogicalExpression` devem permanecer facades finas; todo comportamento compartilhado deve ficar fora da API pública
 
 Cache de expressão compilada:
@@ -377,28 +418,29 @@ Cache de expressão compilada:
 Shape sugerido:
 
 ```java
-public record FunctionCatalogId(String value) {}
+public record ExpressionEnvironmentId(String value) {}
 ```
 
 ```java
 public record ExpressionCacheKey(
     String source,
-    FunctionCatalogId functionCatalogIdentity,
+    ExpressionEnvironmentId environmentId,
     ExpressionResultType resultType
 ) {}
 ```
 
 Regras:
 
-- `functionCatalogIdentity` deve ser um value object estável, nunca um `Object` genérico sem contrato
-- duas expressões com o mesmo `source`, mas com catálogos diferentes, não podem compartilhar o mesmo `CompiledExpression`
+- `environmentId` deve ser um value object estável, nunca um `Object` genérico sem contrato
+- duas expressões com o mesmo `source`, mas com ambientes diferentes, não podem compartilhar o mesmo `CompiledExpression`
 - se no futuro existirem modos distintos de compilação para matemática e lógica, `resultType` também entra na chave
+- se um símbolo do ambiente mudar apenas de valor padrão, mas isso não afetar resolução, tipagem ou disponibilidade estrutural, o `environmentId` não deve ser invalidado por isso
 
 Exemplo conceitual:
 
-- `sum(a, b)` + catálogo A -> `CompiledExpression#1`
-- `sum(a, b)` + catálogo A -> reutiliza `CompiledExpression#1`
-- `sum(a, b)` + catálogo B -> compila outro `CompiledExpression`
+- `sum(a, b)` + ambiente A -> `CompiledExpression#1`
+- `sum(a, b)` + ambiente A -> reutiliza `CompiledExpression#1`
+- `sum(a, b)` + ambiente B -> compila outro `CompiledExpression`
 
 ```java
 public final class MutableBindings {
@@ -406,12 +448,23 @@ public final class MutableBindings {
     private final SemanticModel semanticModel;
     private final Map<SymbolRef, RuntimeValue> values = new HashMap<>();
 
-    public MutableBindings(SemanticModel semanticModel) {
+    public static MutableBindings from(
+        SemanticModel semanticModel,
+        ExternalSymbolCatalog externalSymbolCatalog
+    ) {
+        MutableBindings bindings = new MutableBindings(semanticModel);
+        bindings.seedDefaults(externalSymbolCatalog);
+        return bindings;
+    }
+
+    private MutableBindings(SemanticModel semanticModel) {
         this.semanticModel = semanticModel;
     }
 
     public void setValue(String symbolName, Object rawValue) {
         SymbolRef symbolRef = requireSymbol(symbolName);
+        rejectWhenInternal(symbolName);
+        rejectWhenNonOverridable(symbolName);
         values.put(symbolRef, RuntimeValueFactory.from(rawValue));
     }
 
@@ -422,6 +475,8 @@ public final class MutableBindings {
     public Map<SymbolRef, RuntimeValue> snapshot() {
         return Map.copyOf(values);
     }
+
+    private void seedDefaults(ExternalSymbolCatalog externalSymbolCatalog) { /* ... */ }
 }
 ```
 
@@ -453,6 +508,8 @@ Observações de modelagem:
 - `SemanticModel` deve expor `externalSymbolsByName` e `internalSymbolsByName`
 - `setValue("principal", ...)` consulta apenas `externalSymbolsByName`
 - `setValue(...)` deve falhar se o nome pertencer a `internalSymbolsByName`
+- `MutableBindings` deve nascer pré-populado com os `defaultValue` de símbolos do `ExternalSymbolCatalog` efetivamente usados pela expressão
+- `setValue(...)` deve falhar para símbolos do ambiente com `overridable = false`
 - `MutableBindings` é mutável e vive junto da facade pública tipada (`MathExpression` ou `LogicalExpression`)
 - `ExecutionScope` é mutável, mas existe só durante uma computação
 - assignments da própria expressão escrevem em `ExecutionScope`, não em `MutableBindings`
@@ -536,7 +593,7 @@ API sugerida:
 
 ```java
 public final class MathExpression {
-    public static MathExpression compile(String source, FunctionCatalog functionCatalog) { /* ... */ }
+    public static MathExpression compile(String source, ExpressionEnvironment environment) { /* ... */ }
     public MathExpression setValue(String symbolName, Object rawValue) { /* ... */ }
     public BigDecimal compute() { /* ... */ }
 }
@@ -544,7 +601,7 @@ public final class MathExpression {
 
 ```java
 public final class LogicalExpression {
-    public static LogicalExpression compile(String source, FunctionCatalog functionCatalog) { /* ... */ }
+    public static LogicalExpression compile(String source, ExpressionEnvironment environment) { /* ... */ }
     public LogicalExpression setValue(String symbolName, Object rawValue) { /* ... */ }
     public boolean compute() { /* ... */ }
 }
@@ -564,6 +621,14 @@ final class SemanticResolver {
 ```
 
 ```java
+public final class ExpressionEnvironment {
+    public ExpressionEnvironmentId environmentId() { /* ... */ }
+    public FunctionCatalog functionCatalog() { /* ... */ }
+    public ExternalSymbolCatalog externalSymbolCatalog() { /* ... */ }
+}
+```
+
+```java
 public record CompiledExpression(
     String source,
     ExpressionResultType resultType,
@@ -576,7 +641,7 @@ public final class ExpressionCompiler {
     public CompiledExpression compile(
         String source,
         ExpressionResultType resultType,
-        FunctionCatalog functionCatalog
+        ExpressionEnvironment environment
     ) {
         // orchestration
     }
@@ -587,12 +652,16 @@ public final class ExpressionCompiler {
 public final class MutableBindings { /* ... */ }
 public final class ExecutionScope { /* ... */ }
 final class ExpressionRuntimeSupport { /* ... */ }
+public final class ExternalSymbolCatalog { /* ... */ }
+public final class FunctionCatalog { /* ... */ }
+public final class ExpressionEnvironmentBuilder { /* ... */ }
 ```
 
 Regra de encapsulamento:
 
 - começar com `final class` package-private para `SemanticAstBuilder`, `SemanticResolver` e colaboradores internos
-- expor como API pública apenas `MathExpression`, `LogicalExpression`, `FunctionCatalog` e tipos realmente necessários para integração externa
+- não criar interfaces prematuramente; começar com `final class` sempre que houver uma única implementação conhecida
+- expor como API pública apenas `MathExpression`, `LogicalExpression`, `ExpressionEnvironment`, `ExpressionEnvironmentBuilder` e tipos realmente necessários para integração externa
 - evitar hierarquia de interfaces para tipos que hoje têm uma única implementação esperada
 - manter um tipo público por arquivo e deixar classes auxiliares como package-private por padrão
 
@@ -612,7 +681,9 @@ Sem misturar ANTLR com domínio semântico:
 - `com.runestone.expeval2.compiler`
   - `ExpressionCompiler`, `CompiledExpression`, cache e orquestração de compilação
 - `com.runestone.expeval2.api`
-  - `MathExpression`, `LogicalExpression`
+  - `MathExpression`, `LogicalExpression`, `ExpressionEnvironment`, `ExpressionEnvironmentBuilder`
+- `com.runestone.expeval2.catalog`
+  - `FunctionCatalog`, `ExternalSymbolCatalog`, `ExternalSymbolDescriptor`
 - `com.runestone.expeval2.runtime`
   - `MutableBindings`, `ExecutionScope`, `ExpressionRuntimeSupport`, evaluators
 
@@ -621,11 +692,12 @@ Direção de dependências esperada:
 - `grammar` não depende de `ast`, `semantic`, `compiler` nem `runtime`
 - `ast` não depende de ANTLR, reflection nem runtime
 - `ast.build` depende de `grammar` + `ast`
-- `semantic` depende de `ast` e de contratos estáveis de função, nunca do parser
+- `semantic` depende de `ast` e dos catálogos/descritores estáveis do ambiente, nunca do parser
 - `compiler` orquestra `grammar -> ast.build -> semantic`
 - `api` depende de `compiler` + `runtime`, sem conhecer ANTLR nem detalhes da resolução
+- `catalog` concentra reflection, indexação e validação estrutural do ambiente
 - `runtime` depende de `compiler` e `semantic`, mas não volta a falar com ANTLR
-- qualquer acesso a reflection de funções deve ficar isolado no catálogo, fora do caminho quente de `runtime`
+- qualquer acesso a reflection de funções deve ficar isolado no builder/catálogo, fora do caminho quente de `runtime`
 
 ### Sequência de implementação recomendada
 
@@ -692,9 +764,12 @@ Adicionar:
 - `SemanticModel`
 - `ResolvedType`
 - `SemanticIssue`
-- `ResolutionContext` com variáveis, funções e built-ins conhecidos na fase de resolução
+- `ResolutionContext` derivado de `ExpressionEnvironment`, com funções, símbolos externos defaultados e built-ins conhecidos na fase de resolução
+- `ExpressionEnvironment`
+- `ExpressionEnvironmentBuilder`
 - `FunctionCatalog`
-- `FunctionCatalogBuilder`
+- `ExternalSymbolCatalog`
+- `ExternalSymbolDescriptor`
 - `ResolvedFunctionBinding`
 - `CompiledExpression`
 - `MutableBindings` com os valores externos informados pelo usuário
@@ -711,16 +786,19 @@ Adicionar:
 
 Regras da fase 5 para funções:
 
-- `MathExpression.compile(...)` e `LogicalExpression.compile(...)` passam `FunctionCatalog` e o `ExpressionResultType` implícito para o compilador
-- `SemanticResolver` usa o catálogo para resolver overload, retorno e coerções
+- `MathExpression.compile(...)` e `LogicalExpression.compile(...)` passam `ExpressionEnvironment` e o `ExpressionResultType` implícito para o compilador
+- `SemanticResolver` usa `FunctionCatalog` e `ExternalSymbolCatalog` vindos do ambiente para resolver funções, símbolos externos defaultados, retorno e coerções
 - `FunctionCallNode` permanece estrutural; o binding fica fora da AST
 - execução usa apenas `ResolvedFunctionBinding`, sem reflection e sem lookup por nome
 - erros de função desconhecida, aridade inválida ou ambiguidade devem surgir na compilação, não no `compute()`
+- símbolos externos pré-vinculados pelo ambiente devem entrar na execução já com seus `defaultValue`
+- símbolos externos com `overridable = false` devem rejeitar sobrescrita por `setValue(...)`
 
 Critério:
 
 - tipos resolvidos para literais, operadores básicos e comparações simples
 - chamadas de função resolvidas para binding estável e reutilizável entre execuções da mesma expressão
+- símbolos defaultados do ambiente disponíveis sem `setValue(...)`
 
 ### Workflow de entrega por fase
 
@@ -750,10 +828,13 @@ Separar testes por responsabilidade:
   - valida incompatibilidades
   - ignora a presença de `typeHint` quando ele não tiver papel semântico
   - valida resolução de função via `FunctionCatalog`
+  - valida resolução de símbolos pré-vinculados via `ExternalSymbolCatalog`
   - valida erro para função ausente, aridade inválida e overload ambíguo
 - `runtime bindings`:
   - valida `setValue(String, Object)` apenas para símbolos externos
   - rejeita `setValue(String, Object)` para símbolos internos definidos por assignment
+  - pré-carrega `defaultValue` de símbolos do ambiente efetivamente usados pela expressão
+  - rejeita sobrescrita de símbolo do ambiente com `overridable = false`
   - valida lookup por `SymbolRef`
   - valida snapshot para criar `ExecutionScope`
 - `execution scope`:
