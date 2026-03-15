@@ -41,6 +41,7 @@ Adicionar um conjunto pequeno de nós estáveis, sem reproduzir cada regra do pa
 
 - `ExpressionFileNode`
 - `AssignmentNode`
+- `SimpleAssignmentNode`
 - `DestructuringAssignmentNode`
 - `ExpressionNode`
 - `LiteralNode`
@@ -75,10 +76,15 @@ public record SourceSpan(
 Exemplo de shape:
 
 ```java
-public sealed interface Node permits ExpressionNode, AssignmentNode, DestructuringAssignmentNode {
+public sealed interface Node permits ExpressionNode, AssignmentNode {
     NodeId nodeId();
     SourceSpan sourceSpan();
 }
+```
+
+```java
+public sealed interface AssignmentNode extends Node
+    permits SimpleAssignmentNode, DestructuringAssignmentNode {}
 ```
 
 ```java
@@ -107,11 +113,7 @@ Consequência direta: a AST não deve expor `CastNode`. Se a parse tree usar `ca
 
 #### 3. Anotação semântica fora da AST estrutural
 
-Não misturar estrutura com resolução logo de saída. A AST estrutural deve ser imutável e simples. A semântica entra por um artefato separado, por exemplo:
-
-- `ResolvedExpression`
-- `ResolvedType`
-- `SemanticIssue`
+Não misturar estrutura com resolução logo de saída. A AST estrutural deve ser imutável e simples. Tudo que for derivado, indexado ou resolvido deve ficar concentrado em um container paralelo chamado `SemanticModel`.
 
 Também é importante separar três coisas que parecem próximas, mas têm papéis diferentes:
 
@@ -125,11 +127,42 @@ Exemplo conceitual:
 - os dois nós podem apontar para o mesmo `SymbolRef("principal")`
 - o valor informado pelo usuário para `principal` deve existir uma única vez no `EvaluationContext`
 
-Cada `ExpressionNode` terá um `nodeId`, e o resolvedor produz uma tabela paralela:
+Além disso, o modelo semântico deve expor índices para buscas diretas por símbolo, sem precisar varrer a AST:
 
+- `Map<SymbolRef, List<IdentifierNode>>`: todas as leituras/ocorrências de variáveis na expressão
+- `Map<SymbolRef, List<AssignmentNode>>`: todos os pontos onde a variável é definida por assignment
+
+Para `DestructuringAssignmentNode`, a recomendação é indexar cada variável alvo nesse mesmo mapa de `AssignmentNode`, para que consumidores consultem assignments simples e destructuring pela mesma estrutura.
+
+Exemplo conceitual:
+
+- `principal + principal * rate`
+  - `Map<SymbolRef, List<IdentifierNode>>["principal"] -> [IdentifierNode#1, IdentifierNode#2]`
+- `[left, right] = coords()`
+  - `Map<SymbolRef, List<AssignmentNode>>["left"] -> [DestructuringAssignmentNode#10]`
+  - `Map<SymbolRef, List<AssignmentNode>>["right"] -> [DestructuringAssignmentNode#10]`
+
+Cada `ExpressionNode` terá um `nodeId`, e o resolvedor deve produzir um `SemanticModel` com:
+
+- `ExpressionFileNode ast`
 - `Map<NodeId, ResolvedType>`
 - `Map<NodeId, SymbolRef>`
+- `Map<SymbolRef, List<IdentifierNode>>`
+- `Map<SymbolRef, List<AssignmentNode>>`
 - `List<SemanticIssue>`
+
+Shape sugerido:
+
+```java
+public record SemanticModel(
+    ExpressionFileNode ast,
+    Map<NodeId, ResolvedType> resolvedTypes,
+    Map<NodeId, SymbolRef> symbolByNodeId,
+    Map<SymbolRef, List<IdentifierNode>> identifierUsages,
+    Map<SymbolRef, List<AssignmentNode>> assignmentUsages,
+    List<SemanticIssue> issues
+) {}
+```
 
 Isso evita acoplar a AST a um estado mutável e permite testar builder, resolução e execução separadamente.
 
@@ -200,7 +233,7 @@ input
 -> SemanticAstBuilder
 -> AST estrutural
 -> SemanticResolver
--> tipos resolvidos + SymbolRef + issues
+-> SemanticModel
 -> EvaluationContext
 -> evaluator futuro
 ```
@@ -237,7 +270,8 @@ Sem misturar ANTLR com domínio semântico:
 - `com.runestone.expeval2.ast.build`
   - visitor ou mapper `parse tree -> AST`
 - `com.runestone.expeval2.semantic`
-  - resolução, tipos e issues
+  - `SemanticModel`, resolução, tipos e issues
+  - índices de leitura e assignment por `SymbolRef`
 
 ### Sequência de implementação recomendada
 
@@ -246,6 +280,7 @@ Sem misturar ANTLR com domínio semântico:
 Entregar:
 
 - hierarquia de nós da AST com `sealed interface Node`
+- `sealed interface AssignmentNode` como família comum de assignments
 - `NodeId` e `SourceSpan`
 - `record` para os nós concretos
 - testes unitários dos nós e invariantes básicos
@@ -300,10 +335,14 @@ Critério:
 
 Adicionar:
 
+- `SemanticModel`
 - `ResolvedType`
 - `SemanticIssue`
 - `ResolutionContext` com variáveis, funções e built-ins conhecidos na fase de resolução
 - `EvaluationContext` com os valores concretos fornecidos em runtime
+- índices dentro de `SemanticModel`:
+  - `Map<SymbolRef, List<IdentifierNode>>` para leituras
+  - `Map<SymbolRef, List<AssignmentNode>>` para definições, incluindo `DestructuringAssignmentNode`
 
 Critério:
 
@@ -324,6 +363,10 @@ Separar testes por responsabilidade:
 - `evaluation context`:
   - valida lookup por `SymbolRef`
   - valida reutilização do mesmo símbolo em múltiplos `IdentifierNode`
+- `symbol indexes`:
+  - valida `Map<SymbolRef, List<IdentifierNode>>`
+  - valida `Map<SymbolRef, List<AssignmentNode>>`
+  - valida presença de variáveis de `DestructuringAssignmentNode` no índice de assignments
 - `parser`:
   - continua cobrindo apenas aceitação sintática e estratégia `SLL -> LL`
 
