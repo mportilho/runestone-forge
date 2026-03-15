@@ -122,6 +122,12 @@ Também é importante separar três coisas que parecem próximas, mas têm papé
 - `MutableBindings`: valores externos fornecidos pelo usuário após o parse
 - `ExecutionScope`: estado efetivo de uma execução, incluindo variáveis derivadas de assignments internos
 
+Regra semântica explícita:
+
+- variáveis definidas por `assignmentExpression` nunca podem receber valor via API do usuário
+- `setValue(...)` aceita apenas símbolos de entrada externa
+- todo símbolo criado por `SimpleAssignmentNode` ou `DestructuringAssignmentNode` é interno à expressão
+
 Exemplo conceitual:
 
 - na expressão `principal + principal * rate`, a AST pode ter dois `IdentifierNode` distintos para `principal`
@@ -150,6 +156,8 @@ Cada `ExpressionNode` terá um `nodeId`, e o resolvedor deve produzir um `Semant
 - `Map<NodeId, SymbolRef>`
 - `Map<SymbolRef, List<IdentifierNode>>`
 - `Map<SymbolRef, List<AssignmentNode>>`
+- `Map<String, SymbolRef>` para símbolos externos
+- `Map<String, SymbolRef>` para símbolos internos
 - `List<SemanticIssue>`
 
 Shape sugerido:
@@ -161,6 +169,8 @@ public record SemanticModel(
     Map<NodeId, SymbolRef> symbolByNodeId,
     Map<SymbolRef, List<IdentifierNode>> identifierUsages,
     Map<SymbolRef, List<AssignmentNode>> assignmentUsages,
+    Map<String, SymbolRef> externalSymbolsByName,
+    Map<String, SymbolRef> internalSymbolsByName,
     List<SemanticIssue> issues
 ) {}
 ```
@@ -172,7 +182,7 @@ Isso evita acoplar a AST a um estado mutável e permite testar builder, resoluç
 Para suportar um fluxo como:
 
 ```java
-Expression exp = new Expression("principal + principal * rate");
+Expression exp = new Expression("principal + principal * rate", functionCatalog);
 exp.setValue("principal", 10000);
 exp.setValue("rate", 0.038);
 BigDecimal result = exp.computeMath();
@@ -184,13 +194,25 @@ o desenho recomendado é separar quatro objetos:
 - `CompiledExpression`: resultado imutável de parse + análise
 - `MutableBindings`: valores externos preenchidos pelo usuário após o parse
 - `ExecutionScope`: estado temporário usado por uma execução específica
+- `FunctionCatalog`: catálogo imutável e compartilhável com as funções conhecidas pela resolução semântica e pela execução
 
 Responsabilidades:
 
 - `Expression` encapsula a API amigável (`setValue`, `computeMath`, `computeLogical`)
 - `CompiledExpression` guarda `source` e `SemanticModel`
-- `MutableBindings` resolve nome de variável para `SymbolRef` e armazena valores informados pelo usuário
+- `MutableBindings` resolve nome de variável para `SymbolRef` apenas entre os símbolos externos e armazena valores informados pelo usuário
 - `ExecutionScope` nasce de um snapshot de `MutableBindings` e recebe também assignments internos da própria expressão
+- `FunctionCatalog` concentra descoberta, indexação e armazenamento dos métodos públicos expostos pela API
+- `FunctionCatalogBuilder` monta um `FunctionCatalog` a partir de classes estáticas e instâncias do usuário
+- `ResolvedFunctionBinding` representa o binding estável entre um `FunctionCallNode` e a função concreta escolhida na fase de resolução
+
+Regra arquitetural explícita:
+
+- a gramática continua reconhecendo `IDENTIFIER(...)` sem consultar catálogo
+- `FunctionCatalog` não participa do parse
+- `FunctionCatalog` entra apenas em `compile -> resolve -> runtime`
+- `compute...()` não deve fazer busca por nome, reflexão nem resolução de overload
+- um mesmo `FunctionCatalog` pode ser compartilhado por múltiplas instâncias de `Expression`
 
 Shape sugerido:
 
@@ -200,8 +222,8 @@ public final class Expression {
     private final CompiledExpression compiledExpression;
     private final MutableBindings bindings;
 
-    public Expression(String source) {
-        this.compiledExpression = ExpressionCompiler.compile(source);
+    public Expression(String source, FunctionCatalog functionCatalog) {
+        this.compiledExpression = ExpressionCompiler.compile(source, functionCatalog);
         this.bindings = new MutableBindings(compiledExpression.semanticModel());
     }
 
@@ -223,6 +245,65 @@ public record CompiledExpression(
     SemanticModel semanticModel
 ) {}
 ```
+
+```java
+public interface FunctionCatalog {
+    Optional<FunctionDescriptor> findExact(String name, int arity);
+    Collection<FunctionDescriptor> findCandidates(String name);
+}
+```
+
+```java
+public interface FunctionCatalogBuilder {
+    FunctionCatalogBuilder registerStaticProvider(Class<?> providerClass);
+    FunctionCatalogBuilder registerInstanceProvider(Object providerInstance);
+    FunctionCatalog build();
+}
+```
+
+```java
+public record ResolvedFunctionBinding(
+    FunctionRef functionRef,
+    FunctionDescriptor descriptor,
+    ResolvedType returnType
+) {}
+```
+
+Observações de desempenho:
+
+- descoberta de métodos e criação de invokers acontece no `FunctionCatalogBuilder`, fora do caminho quente
+- `FunctionCatalog` deve ser imutável depois de construído
+- cache de expressão compilada deve considerar a identidade ou versão do catálogo, não apenas o source
+- providers de instância registrados no catálogo precisam ser imutáveis ou thread-safe para compartilhamento seguro
+
+Cache de expressão compilada:
+
+- é um cache de `CompiledExpression`, não do resultado final de `compute...()`
+- deve viver no compilador ou em uma facade de compilação compartilhada, não dentro de cada instância de `Expression`
+- serve para reaproveitar `parse + buildAst + resolve` quando a mesma expressão for compilada repetidamente com o mesmo contexto estrutural
+- não deve armazenar `MutableBindings`, `ExecutionScope` nem valores calculados
+
+Shape sugerido:
+
+```java
+public record ExpressionCacheKey(
+    String source,
+    Object functionCatalogIdentity,
+    ExpressionResultType resultType
+) {}
+```
+
+Regras:
+
+- `functionCatalogIdentity` deve representar a identidade estável ou a versão lógica do catálogo
+- duas expressões com o mesmo `source`, mas com catálogos diferentes, não podem compartilhar o mesmo `CompiledExpression`
+- se no futuro existirem modos distintos de compilação para matemática e lógica, `resultType` também entra na chave
+
+Exemplo conceitual:
+
+- `sum(a, b)` + catálogo A -> `CompiledExpression#1`
+- `sum(a, b)` + catálogo A -> reutiliza `CompiledExpression#1`
+- `sum(a, b)` + catálogo B -> compila outro `CompiledExpression`
 
 ```java
 public final class MutableBindings {
@@ -274,7 +355,9 @@ public final class ExecutionScope {
 
 Observações de modelagem:
 
-- `SemanticModel` deve expor `Map<String, SymbolRef>` para que `setValue("principal", ...)` não precise varrer índices
+- `SemanticModel` deve expor `externalSymbolsByName` e `internalSymbolsByName`
+- `setValue("principal", ...)` consulta apenas `externalSymbolsByName`
+- `setValue(...)` deve falhar se o nome pertencer a `internalSymbolsByName`
 - `MutableBindings` é mutável e vive junto da facade `Expression`
 - `ExecutionScope` é mutável, mas existe só durante uma computação
 - assignments da própria expressão escrevem em `ExecutionScope`, não em `MutableBindings`
@@ -377,6 +460,12 @@ public record CompiledExpression(
 ```
 
 ```java
+public interface ExpressionCompiler {
+    CompiledExpression compile(String source, FunctionCatalog functionCatalog);
+}
+```
+
+```java
 public interface MutableBindings {
     void setValue(String symbolName, Object rawValue);
     Optional<RuntimeValue> find(SymbolRef symbolRef);
@@ -473,17 +562,31 @@ Adicionar:
 - `ResolvedType`
 - `SemanticIssue`
 - `ResolutionContext` com variáveis, funções e built-ins conhecidos na fase de resolução
+- `FunctionCatalog`
+- `FunctionCatalogBuilder`
+- `ResolvedFunctionBinding`
 - `CompiledExpression`
 - `MutableBindings` com os valores externos informados pelo usuário
 - `ExecutionScope` para a execução efetiva da expressão
 - índices dentro de `SemanticModel`:
   - `Map<SymbolRef, List<IdentifierNode>>` para leituras
   - `Map<SymbolRef, List<AssignmentNode>>` para definições, incluindo `DestructuringAssignmentNode`
-  - `Map<String, SymbolRef>` para lookup por nome na facade
+  - `Map<String, SymbolRef>` para símbolos externos aceitos pela facade
+  - `Map<String, SymbolRef>` para símbolos internos definidos por assignment
+  - `Map<NodeId, ResolvedFunctionBinding>` para chamadas de função já ligadas
+
+Regras da fase 5 para funções:
+
+- `Expression` passa um `FunctionCatalog` para o compilador no construtor
+- `SemanticResolver` usa o catálogo para resolver overload, retorno e coerções
+- `FunctionCallNode` permanece estrutural; o binding fica fora da AST
+- execução usa apenas `ResolvedFunctionBinding`, sem reflection e sem lookup por nome
+- erros de função desconhecida, aridade inválida ou ambiguidade devem surgir na compilação, não no `compute...()`
 
 Critério:
 
 - tipos resolvidos para literais, operadores básicos e comparações simples
+- chamadas de função resolvidas para binding estável e reutilizável entre execuções da mesma expressão
 
 ### Estratégia de testes
 
@@ -497,13 +600,17 @@ Separar testes por responsabilidade:
   - valida inferência
   - valida incompatibilidades
   - ignora a presença de `typeHint` quando ele não tiver papel semântico
+  - valida resolução de função via `FunctionCatalog`
+  - valida erro para função ausente, aridade inválida e overload ambíguo
 - `runtime bindings`:
-  - valida `setValue(String, Object)` via `Map<String, SymbolRef>`
+  - valida `setValue(String, Object)` apenas para símbolos externos
+  - rejeita `setValue(String, Object)` para símbolos internos definidos por assignment
   - valida lookup por `SymbolRef`
   - valida snapshot para criar `ExecutionScope`
 - `execution scope`:
   - valida reutilização do mesmo símbolo em múltiplos `IdentifierNode`
   - valida assignments internos sem mutar `MutableBindings`
+  - valida invocação via `ResolvedFunctionBinding` sem nova resolução
 - `symbol indexes`:
   - valida `Map<SymbolRef, List<IdentifierNode>>`
   - valida `Map<SymbolRef, List<AssignmentNode>>`
