@@ -29,7 +29,7 @@ final class AntlrParseExecutor implements ParseExecutor {
     }
 
     private static ExpressionEvaluatorV2Parser newParser(String input, CollectingSyntaxErrorListener errorListener) {
-        com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Lexer lexer = new com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Lexer(CharStreams.fromString(input));
+        ExpressionEvaluatorV2Lexer lexer = new ExpressionEvaluatorV2Lexer(CharStreams.fromString(input));
         lexer.removeErrorListeners();
         lexer.addErrorListener(errorListener);
 
