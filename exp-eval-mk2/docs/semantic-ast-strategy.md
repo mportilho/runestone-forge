@@ -55,10 +55,11 @@ Adicionar um conjunto pequeno de nós estáveis, sem reproduzir cada regra do pa
 
 Shape base recomendado para os nós:
 
-- usar `sealed interface Node` como raiz comum
+- usar `sealed interface Node` como raiz comum, incluindo `ExpressionFileNode`
 - exigir `nodeId()` e `sourceSpan()` no contrato base
 - modelar nós concretos como `record`
 - evitar classe abstrata geral enquanto a AST puder permanecer declarativa e imutável
+- separar o nó-raiz de arquivo dos nós de expressão para não forçar o root semântico a caber artificialmente em `ExpressionNode`
 
 `SourceSpan` é o metadado mínimo de localização do nó no texto original, para permitir diagnóstico e rastreamento fora da parse tree. Shape inicial recomendado:
 
@@ -76,10 +77,19 @@ public record SourceSpan(
 Exemplo de shape:
 
 ```java
-public sealed interface Node permits ExpressionNode, AssignmentNode {
+public sealed interface Node permits ExpressionFileNode, ExpressionNode, AssignmentNode {
     NodeId nodeId();
     SourceSpan sourceSpan();
 }
+```
+
+```java
+public record ExpressionFileNode(
+    NodeId nodeId,
+    SourceSpan sourceSpan,
+    List<AssignmentNode> assignments,
+    ExpressionNode resultExpression
+) implements Node {}
 ```
 
 ```java
@@ -115,7 +125,7 @@ Consequência direta: a AST não deve expor `CastNode`. Se a parse tree usar `ca
 
 Não misturar estrutura com resolução logo de saída. A AST estrutural deve ser imutável e simples. Tudo que for derivado, indexado ou resolvido deve ficar concentrado em um container paralelo chamado `SemanticModel`.
 
-Também é importante separar três coisas que parecem próximas, mas têm papéis diferentes:
+Também é importante separar quatro coisas que parecem próximas, mas têm papéis diferentes:
 
 - `IdentifierNode`: ocorrência sintática de um nome dentro da AST
 - `SymbolRef`: símbolo semântico ao qual uma ou mais ocorrências de identificador apontam
@@ -177,18 +187,24 @@ public record SemanticModel(
 
 Isso evita acoplar a AST a um estado mutável e permite testar builder, resolução e execução separadamente.
 
+Regras adicionais de modelagem:
+
+- `SemanticModel`, `ResolutionContext` e coleções expostas publicamente devem ser imutáveis e defensivamente copiadas
+- `SemanticIssue` deve carregar ao menos código estável, severidade, mensagem e `SourceSpan`
+- índices semânticos são leitura derivada; nenhuma coleção exposta por `SemanticModel` deve permitir mutação externa
+
 ### Estrutura de runtime recomendada
 
 Para suportar um fluxo como:
 
 ```java
-Expression exp = new Expression("principal + principal * rate", functionCatalog);
+Expression exp = new Expression("principal + principal * rate", ExpressionResultType.MATH, functionCatalog);
 exp.setValue("principal", 10000);
 exp.setValue("rate", 0.038);
 BigDecimal result = exp.computeMath();
 ```
 
-o desenho recomendado é separar quatro objetos:
+o desenho recomendado é separar cinco objetos:
 
 - `Expression`: facade mutável exposta ao usuário
 - `CompiledExpression`: resultado imutável de parse + análise
@@ -211,6 +227,7 @@ Regra arquitetural explícita:
 - a gramática continua reconhecendo `IDENTIFIER(...)` sem consultar catálogo
 - `FunctionCatalog` não participa do parse
 - `FunctionCatalog` entra apenas em `compile -> resolve -> runtime`
+- cada instância de `Expression` é vinculada a um único `ExpressionResultType` desde a compilação
 - `compute...()` não deve fazer busca por nome, reflexão nem resolução de overload
 - um mesmo `FunctionCatalog` pode ser compartilhado por múltiplas instâncias de `Expression`
 
@@ -219,11 +236,13 @@ Shape sugerido:
 ```java
 public final class Expression {
 
+    private static final ExpressionCompiler COMPILER = new ExpressionCompiler();
+
     private final CompiledExpression compiledExpression;
     private final MutableBindings bindings;
 
-    public Expression(String source, FunctionCatalog functionCatalog) {
-        this.compiledExpression = ExpressionCompiler.compile(source, functionCatalog);
+    public Expression(String source, ExpressionResultType resultType, FunctionCatalog functionCatalog) {
+        this.compiledExpression = COMPILER.compile(source, resultType, functionCatalog);
         this.bindings = new MutableBindings(compiledExpression.semanticModel());
     }
 
@@ -242,22 +261,24 @@ public final class Expression {
 ```java
 public record CompiledExpression(
     String source,
+    ExpressionResultType resultType,
     SemanticModel semanticModel
 ) {}
 ```
 
 ```java
 public interface FunctionCatalog {
+    FunctionCatalogId catalogId();
     Optional<FunctionDescriptor> findExact(String name, int arity);
     Collection<FunctionDescriptor> findCandidates(String name);
 }
 ```
 
 ```java
-public interface FunctionCatalogBuilder {
-    FunctionCatalogBuilder registerStaticProvider(Class<?> providerClass);
-    FunctionCatalogBuilder registerInstanceProvider(Object providerInstance);
-    FunctionCatalog build();
+public final class FunctionCatalogBuilder {
+    public FunctionCatalogBuilder registerStaticProvider(Class<?> providerClass) { /* ... */ }
+    public FunctionCatalogBuilder registerInstanceProvider(Object providerInstance) { /* ... */ }
+    public FunctionCatalog build() { /* ... */ }
 }
 ```
 
@@ -286,16 +307,20 @@ Cache de expressão compilada:
 Shape sugerido:
 
 ```java
+public record FunctionCatalogId(String value) {}
+```
+
+```java
 public record ExpressionCacheKey(
     String source,
-    Object functionCatalogIdentity,
+    FunctionCatalogId functionCatalogIdentity,
     ExpressionResultType resultType
 ) {}
 ```
 
 Regras:
 
-- `functionCatalogIdentity` deve representar a identidade estável ou a versão lógica do catálogo
+- `functionCatalogIdentity` deve ser um value object estável, nunca um `Object` genérico sem contrato
 - duas expressões com o mesmo `source`, mas com catálogos diferentes, não podem compartilhar o mesmo `CompiledExpression`
 - se no futuro existirem modos distintos de compilação para matemática e lógica, `resultType` também entra na chave
 
@@ -440,14 +465,14 @@ input
 API sugerida:
 
 ```java
-public interface SemanticAstBuilder {
+final class SemanticAstBuilder {
     ExpressionFileNode buildMath(ExpressionEvaluatorV2Parser.MathStartContext root);
     ExpressionFileNode buildLogical(ExpressionEvaluatorV2Parser.LogicalStartContext root);
 }
 ```
 
 ```java
-public interface SemanticResolver {
+final class SemanticResolver {
     SemanticModel resolve(ExpressionFileNode file, ResolutionContext context);
 }
 ```
@@ -455,30 +480,34 @@ public interface SemanticResolver {
 ```java
 public record CompiledExpression(
     String source,
+    ExpressionResultType resultType,
     SemanticModel semanticModel
 ) {}
 ```
 
 ```java
-public interface ExpressionCompiler {
-    CompiledExpression compile(String source, FunctionCatalog functionCatalog);
+public final class ExpressionCompiler {
+    public CompiledExpression compile(
+        String source,
+        ExpressionResultType resultType,
+        FunctionCatalog functionCatalog
+    ) {
+        // orchestration
+    }
 }
 ```
 
 ```java
-public interface MutableBindings {
-    void setValue(String symbolName, Object rawValue);
-    Optional<RuntimeValue> find(SymbolRef symbolRef);
-    Map<SymbolRef, RuntimeValue> snapshot();
-}
+public final class MutableBindings { /* ... */ }
+public final class ExecutionScope { /* ... */ }
 ```
 
-```java
-public interface ExecutionScope {
-    Optional<RuntimeValue> find(SymbolRef symbolRef);
-    void assign(SymbolRef symbolRef, RuntimeValue value);
-}
-```
+Regra de encapsulamento:
+
+- começar com `final class` package-private para `SemanticAstBuilder`, `SemanticResolver` e colaboradores internos
+- expor interface pública apenas onde houver variabilidade real de consumidor, com `FunctionCatalog` como candidato principal
+- evitar hierarquia de interfaces para tipos que hoje têm uma única implementação esperada
+- manter um tipo público por arquivo e deixar classes auxiliares como package-private por padrão
 
 ### Pacotes sugeridos
 
@@ -493,8 +522,20 @@ Sem misturar ANTLR com domínio semântico:
 - `com.runestone.expeval2.semantic`
   - `SemanticModel`, resolução, tipos e issues
   - índices de leitura e assignment por `SymbolRef`
+- `com.runestone.expeval2.compiler`
+  - `ExpressionCompiler`, `CompiledExpression`, cache e orquestração de compilação
 - `com.runestone.expeval2.runtime`
-  - `CompiledExpression`, `MutableBindings`, `ExecutionScope`, evaluator
+  - `MutableBindings`, `ExecutionScope`, evaluator
+
+Direção de dependências esperada:
+
+- `grammar` não depende de `ast`, `semantic`, `compiler` nem `runtime`
+- `ast` não depende de ANTLR, reflection nem runtime
+- `ast.build` depende de `grammar` + `ast`
+- `semantic` depende de `ast` e de contratos estáveis de função, nunca do parser
+- `compiler` orquestra `grammar -> ast.build -> semantic`
+- `runtime` depende de `compiler` e `semantic`, mas não volta a falar com ANTLR
+- qualquer acesso a reflection de funções deve ficar isolado no catálogo, fora do caminho quente de `runtime`
 
 ### Sequência de implementação recomendada
 
@@ -568,6 +609,7 @@ Adicionar:
 - `CompiledExpression`
 - `MutableBindings` com os valores externos informados pelo usuário
 - `ExecutionScope` para a execução efetiva da expressão
+- `ExpressionResultType` explícito no contrato de compilação e no `CompiledExpression`
 - índices dentro de `SemanticModel`:
   - `Map<SymbolRef, List<IdentifierNode>>` para leituras
   - `Map<SymbolRef, List<AssignmentNode>>` para definições, incluindo `DestructuringAssignmentNode`
@@ -577,7 +619,7 @@ Adicionar:
 
 Regras da fase 5 para funções:
 
-- `Expression` passa um `FunctionCatalog` para o compilador no construtor
+- `Expression` passa `FunctionCatalog` e `ExpressionResultType` para o compilador no construtor
 - `SemanticResolver` usa o catálogo para resolver overload, retorno e coerções
 - `FunctionCallNode` permanece estrutural; o binding fica fora da AST
 - execução usa apenas `ResolvedFunctionBinding`, sem reflection e sem lookup por nome
@@ -587,6 +629,21 @@ Critério:
 
 - tipos resolvidos para literais, operadores básicos e comparações simples
 - chamadas de função resolvidas para binding estável e reutilizável entre execuções da mesma expressão
+
+### Workflow de entrega por fase
+
+Cada fase acima deve seguir um ciclo curto e explícito:
+
+1. `RED`: definir primeiro os cenários e testes da fase
+2. `GREEN`: introduzir a estrutura mínima para deixar esses testes passarem
+3. `IMPLEMENT`: substituir stubs e regras temporárias incrementalmente, sem misturar builder, resolver e runtime no mesmo salto
+4. `VERIFY`: rodar a suíte relevante do módulo e os benchmarks aplicáveis antes de avançar para a próxima fase
+
+Regras operacionais:
+
+- não começar uma fase com código de produção sem antes definir os testes que delimitam o subset daquela entrega
+- não fundir numa única PR mudanças de gramática, builder semântico e runtime
+- qualquer mudança em caminho quente deve ser acompanhada de medição comparável com o baseline já documentado
 
 ### Estratégia de testes
 
