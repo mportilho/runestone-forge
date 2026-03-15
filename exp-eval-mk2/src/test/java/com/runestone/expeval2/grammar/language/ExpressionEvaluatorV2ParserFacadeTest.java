@@ -104,8 +104,8 @@ class ExpressionEvaluatorV2ParserFacadeTest {
         });
 
         facade.warmUp(List.of(
-            new WarmupInput("a = foo; 1", WarmupTarget.MATH),
-            new WarmupInput("true", WarmupTarget.LOGICAL)
+            new WarmupInput("a = foo; 1", ExpressionResultType.MATH),
+            new WarmupInput("true", ExpressionResultType.LOGICAL)
         ));
 
         assertThat(sllCalls.get()).isEqualTo(2);
@@ -117,7 +117,7 @@ class ExpressionEvaluatorV2ParserFacadeTest {
         ExpressionEvaluatorV2ParserFacade facade = new ExpressionEvaluatorV2ParserFacade();
 
         assertThatThrownBy(() -> facade.warmUp(List.of(
-            new WarmupInput("   ", WarmupTarget.MATH)
+            new WarmupInput("   ", ExpressionResultType.MATH)
         )))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("input must not be blank");

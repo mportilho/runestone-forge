@@ -1,9 +1,11 @@
 package com.runestone.expeval2.grammar.language;
 
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.BiFunction;
 
 public final class ExpressionEvaluatorV2ParserFacade {
 
@@ -18,20 +20,19 @@ public final class ExpressionEvaluatorV2ParserFacade {
     }
 
     public ParseResult<ExpressionEvaluatorV2Parser.MathStartContext> parseMath(String input) {
-        String source = requireInput(input);
-        try {
-            return new ParseResult<>(parseExecutor.parseMath(source, PredictionStrategy.SLL), PredictionStrategy.SLL);
-        } catch (ParseCancellationException ignored) {
-            return new ParseResult<>(parseExecutor.parseMath(source, PredictionStrategy.LL_FALLBACK), PredictionStrategy.LL_FALLBACK);
-        }
+        return parse(input, parseExecutor::parseMath);
     }
 
     public ParseResult<ExpressionEvaluatorV2Parser.LogicalStartContext> parseLogical(String input) {
+        return parse(input, parseExecutor::parseLogical);
+    }
+
+    private <T extends ParserRuleContext> ParseResult<T> parse(String input, BiFunction<String, PredictionStrategy, T> parser) {
         String source = requireInput(input);
         try {
-            return new ParseResult<>(parseExecutor.parseLogical(source, PredictionStrategy.SLL), PredictionStrategy.SLL);
+            return new ParseResult<>(parser.apply(source, PredictionStrategy.SLL), PredictionStrategy.SLL);
         } catch (ParseCancellationException ignored) {
-            return new ParseResult<>(parseExecutor.parseLogical(source, PredictionStrategy.LL_FALLBACK), PredictionStrategy.LL_FALLBACK);
+            return new ParseResult<>(parser.apply(source, PredictionStrategy.LL_FALLBACK), PredictionStrategy.LL_FALLBACK);
         }
     }
 
@@ -42,7 +43,7 @@ public final class ExpressionEvaluatorV2ParserFacade {
 
     private void warmUp(WarmupInput input) {
         Objects.requireNonNull(input, "warmup input must not be null");
-        switch (input.entryPoint()) {
+        switch (input.resultType()) {
             case MATH -> this.parseMath(input.input());
             case LOGICAL -> this.parseLogical(input.input());
         }
