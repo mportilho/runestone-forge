@@ -29,9 +29,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
-final class SemanticAstBuilder {
+public final class SemanticAstBuilder {
 
-    ExpressionFileNode buildMath(ExpressionEvaluatorV2Parser.MathStartContext root) {
+    public ExpressionFileNode buildMath(ExpressionEvaluatorV2Parser.MathStartContext root) {
         Objects.requireNonNull(root, "root must not be null");
         ExpressionEvaluatorV2Parser.MathInputContext input = (ExpressionEvaluatorV2Parser.MathInputContext) root;
         NodeFactory nodeFactory = new NodeFactory();
@@ -43,7 +43,7 @@ final class SemanticAstBuilder {
         );
     }
 
-    ExpressionFileNode buildLogical(ExpressionEvaluatorV2Parser.LogicalStartContext root) {
+    public ExpressionFileNode buildLogical(ExpressionEvaluatorV2Parser.LogicalStartContext root) {
         Objects.requireNonNull(root, "root must not be null");
         ExpressionEvaluatorV2Parser.LogicalInputContext input = (ExpressionEvaluatorV2Parser.LogicalInputContext) root;
         NodeFactory nodeFactory = new NodeFactory();
