@@ -25,34 +25,20 @@ public final class ExpressionCompiler {
         this(new ExpressionEvaluatorV2ParserFacade(), new SemanticAstBuilder(), new SemanticResolver());
     }
 
-    ExpressionCompiler(
-        ExpressionEvaluatorV2ParserFacade parserFacade,
-        SemanticAstBuilder astBuilder,
-        SemanticResolver semanticResolver
-    ) {
+    ExpressionCompiler(ExpressionEvaluatorV2ParserFacade parserFacade, SemanticAstBuilder astBuilder, SemanticResolver semanticResolver) {
         this.parserFacade = Objects.requireNonNull(parserFacade, "parserFacade must not be null");
         this.astBuilder = Objects.requireNonNull(astBuilder, "astBuilder must not be null");
         this.semanticResolver = Objects.requireNonNull(semanticResolver, "semanticResolver must not be null");
-        this.cache = Caffeine.newBuilder()
-            .maximumSize(1_024)
-            .build();
+        this.cache = Caffeine.newBuilder().maximumSize(1_024).build();
     }
 
-    public CompiledExpression compile(
-        String source,
-        ExpressionResultType resultType,
-        ExpressionEnvironment environment
-    ) {
+    public CompiledExpression compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
         Objects.requireNonNull(environment, "environment must not be null");
         ExpressionCacheKey cacheKey = new ExpressionCacheKey(source, environment.environmentId(), resultType);
         return cache.get(cacheKey, ignored -> compileUncached(source, resultType, environment));
     }
 
-    private CompiledExpression compileUncached(
-        String source,
-        ExpressionResultType resultType,
-        ExpressionEnvironment environment
-    ) {
+    private CompiledExpression compileUncached(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
         Objects.requireNonNull(source, "source must not be null");
         Objects.requireNonNull(resultType, "resultType must not be null");
         ExpressionFileNode ast = switch (resultType) {
