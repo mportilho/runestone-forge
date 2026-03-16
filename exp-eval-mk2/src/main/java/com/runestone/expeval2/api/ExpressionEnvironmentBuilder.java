@@ -2,7 +2,10 @@ package com.runestone.expeval2.api;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.converters.impl.DefaultDataConversionService;
-import com.runestone.expeval2.catalog.*;
+import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
+import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
+import com.runestone.expeval2.catalog.FunctionCatalog;
+import com.runestone.expeval2.catalog.FunctionDescriptor;
 import com.runestone.expeval2.runtime.RuntimeCoercionService;
 import com.runestone.expeval2.runtime.RuntimeValueFactory;
 import com.runestone.expeval2.semantic.ResolvedType;
@@ -12,7 +15,6 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public final class ExpressionEnvironmentBuilder {
@@ -62,7 +64,6 @@ public final class ExpressionEnvironmentBuilder {
         functionDescriptors.forEach(descriptor ->
                 descriptorsByName.computeIfAbsent(descriptor.name(), ignored -> new ArrayList<>()).add(descriptor)
         );
-        String functionSignature = functionSignature(functionDescriptors);
         FunctionCatalog functionCatalog = new FunctionCatalog(descriptorsByName);
 
         Map<String, ExternalSymbolDescriptor> symbolsByName = new LinkedHashMap<>();
@@ -70,23 +71,15 @@ public final class ExpressionEnvironmentBuilder {
                 .sorted(Comparator.comparing(ExternalSymbolRegistration::name))
                 .forEach(registration -> symbolsByName.put(
                         registration.name(),
-                        new ExternalSymbolDescriptor(
-                                registration.name(),
-                                registration.declaredType(),
+                        new ExternalSymbolDescriptor(registration.name(), registration.declaredType(),
                                 runtimeValueFactory.from(registration.defaultValue(), registration.declaredType()),
                                 registration.overridable()
                         )
                 ));
         ExternalSymbolCatalog externalSymbolCatalog = new ExternalSymbolCatalog(symbolsByName);
 
-        String environmentSignature = stableId(functionSignature) + "|" + externalSignature(symbolsByName.values());
-        return new ExpressionEnvironment(
-                new ExpressionEnvironmentId(stableId(environmentSignature)),
-                functionCatalog,
-                externalSymbolCatalog,
-                runtimeValueFactory,
-                runtimeCoercionService
-        );
+        return new ExpressionEnvironment(new ExpressionEnvironmentId(UUID.randomUUID().toString()),
+                functionCatalog, externalSymbolCatalog, runtimeValueFactory, runtimeCoercionService);
     }
 
     private Collection<FunctionDescriptor> discoverFunctions(Class<?> providerClass, Object providerInstance, boolean staticOnly) {
@@ -115,28 +108,6 @@ public final class ExpressionEnvironmentBuilder {
         } catch (IllegalAccessException exception) {
             throw new IllegalStateException("failed to create method handle for " + method, exception);
         }
-    }
-
-    private String functionSignature(List<FunctionDescriptor> descriptors) {
-        return descriptors.stream()
-                .map(descriptor -> descriptor.name()
-                                   + "/" + descriptor.arity()
-                                   + ":" + descriptor.parameterTypes().stream().map(Class::getName).toList()
-                                   + "->" + descriptor.returnType())
-                .reduce((left, right) -> left + "|" + right)
-                .orElse("no-functions");
-    }
-
-    private String externalSignature(Collection<ExternalSymbolDescriptor> descriptors) {
-        return descriptors.stream()
-                .sorted(Comparator.comparing(ExternalSymbolDescriptor::name))
-                .map(descriptor -> descriptor.name() + ":" + descriptor.declaredType() + ":" + descriptor.overridable())
-                .reduce((left, right) -> left + "|" + right)
-                .orElse("no-symbols");
-    }
-
-    private String stableId(String value) {
-        return UUID.nameUUIDFromBytes(value.getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     private record ExternalSymbolRegistration(

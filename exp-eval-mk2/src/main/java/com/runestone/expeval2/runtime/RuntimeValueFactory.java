@@ -1,11 +1,7 @@
 package com.runestone.expeval2.runtime;
 
 import com.runestone.converters.DataConversionService;
-import com.runestone.expeval2.semantic.ResolvedType;
-import com.runestone.expeval2.semantic.ResolvedTypes;
-import com.runestone.expeval2.semantic.ScalarType;
-import com.runestone.expeval2.semantic.UnknownType;
-import com.runestone.expeval2.semantic.VectorType;
+import com.runestone.expeval2.semantic.*;
 
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
@@ -36,8 +32,9 @@ public final class RuntimeValueFactory {
             return runtimeValue;
         }
         ResolvedType effectiveType = expectedType == null || expectedType == UnknownType.INSTANCE
-            ? ResolvedTypes.fromJavaType(rawValue.getClass())
-            : expectedType;
+                ? ResolvedTypes.fromJavaType(rawValue.getClass())
+                : expectedType;
+
         if (effectiveType == VectorType.INSTANCE) {
             return toVector(rawValue);
         }
@@ -51,32 +48,20 @@ public final class RuntimeValueFactory {
                 case DATETIME -> new DateTimeValue(convert(rawValue, LocalDateTime.class));
             };
         }
-        if (rawValue instanceof Number number) {
-            return new NumberValue(convert(number, BigDecimal.class));
-        }
-        if (rawValue instanceof Boolean bool) {
-            return new BooleanValue(bool);
-        }
-        if (rawValue instanceof CharSequence text) {
-            return new StringValue(text.toString());
-        }
-        if (rawValue instanceof LocalDate localDate) {
-            return new DateValue(localDate);
-        }
-        if (rawValue instanceof LocalTime localTime) {
-            return new TimeValue(localTime);
-        }
-        if (rawValue instanceof LocalDateTime localDateTime) {
-            return new DateTimeValue(localDateTime);
-        }
-        if (rawValue instanceof Iterable<?> || rawValue.getClass().isArray()) {
-            return toVector(rawValue);
-        }
-        return new StringValue(convert(rawValue, String.class));
-    }
-
-    public DataConversionService conversionService() {
-        return conversionService;
+        return switch (rawValue) {
+            case Number number -> new NumberValue(convert(number, BigDecimal.class));
+            case Boolean bool -> new BooleanValue(bool);
+            case CharSequence text -> new StringValue(text.toString());
+            case LocalDate localDate -> new DateValue(localDate);
+            case LocalTime localTime -> new TimeValue(localTime);
+            case LocalDateTime localDateTime -> new DateTimeValue(localDateTime);
+            default -> {
+                if (rawValue instanceof Iterable<?> || rawValue.getClass().isArray()) {
+                    yield toVector(rawValue);
+                }
+                yield new StringValue(convert(rawValue, String.class));
+            }
+        };
     }
 
     private VectorValue toVector(Object rawValue) {
