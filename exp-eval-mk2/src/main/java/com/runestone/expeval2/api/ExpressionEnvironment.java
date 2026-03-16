@@ -15,13 +15,8 @@ public final class ExpressionEnvironment {
     private final RuntimeValueFactory runtimeValueFactory;
     private final RuntimeCoercionService runtimeCoercionService;
 
-    ExpressionEnvironment(
-        ExpressionEnvironmentId environmentId,
-        FunctionCatalog functionCatalog,
-        ExternalSymbolCatalog externalSymbolCatalog,
-        RuntimeValueFactory runtimeValueFactory,
-        RuntimeCoercionService runtimeCoercionService
-    ) {
+    ExpressionEnvironment(ExpressionEnvironmentId environmentId, FunctionCatalog functionCatalog, ExternalSymbolCatalog externalSymbolCatalog,
+                          RuntimeValueFactory runtimeValueFactory, RuntimeCoercionService runtimeCoercionService) {
         this.environmentId = Objects.requireNonNull(environmentId, "environmentId must not be null");
         this.functionCatalog = Objects.requireNonNull(functionCatalog, "functionCatalog must not be null");
         this.externalSymbolCatalog = Objects.requireNonNull(externalSymbolCatalog, "externalSymbolCatalog must not be null");

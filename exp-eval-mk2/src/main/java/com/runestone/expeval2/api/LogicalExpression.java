@@ -17,6 +17,10 @@ public final class LogicalExpression {
         this.runtime = Objects.requireNonNull(runtime, "runtime must not be null");
     }
 
+    public static LogicalExpression compile(String source) {
+        return compile(source, ExpressionEnvironmentBuilder.empty());
+    }
+
     public static LogicalExpression compile(String source, ExpressionEnvironment environment) {
         CompiledExpression compiled = COMPILER.compile(source, ExpressionResultType.LOGICAL, environment);
         return new LogicalExpression(ExpressionRuntimeSupport.from(compiled, environment));

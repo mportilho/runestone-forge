@@ -18,6 +18,10 @@ public final class MathExpression {
         this.runtime = Objects.requireNonNull(runtime, "runtime must not be null");
     }
 
+    public static MathExpression compile(String source) {
+        return compile(source, ExpressionEnvironmentBuilder.empty());
+    }
+
     public static MathExpression compile(String source, ExpressionEnvironment environment) {
         CompiledExpression compiled = COMPILER.compile(source, ExpressionResultType.MATH, environment);
         return new MathExpression(ExpressionRuntimeSupport.from(compiled, environment));

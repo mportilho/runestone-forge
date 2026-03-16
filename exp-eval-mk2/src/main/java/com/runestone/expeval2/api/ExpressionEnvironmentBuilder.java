@@ -20,11 +20,16 @@ import java.util.*;
 public final class ExpressionEnvironmentBuilder {
 
     private static final DataConversionService DEFAULT_DATA_CONVERSION_SERVICE = new DefaultDataConversionService();
+    private static final ExpressionEnvironment EMPTY_ENVIRONMENT = new ExpressionEnvironmentBuilder().build();
 
     private DataConversionService conversionService;
     private final List<Class<?>> staticProviders = new ArrayList<>();
     private final List<Object> instanceProviders = new ArrayList<>();
     private final Map<String, ExternalSymbolRegistration> externalSymbols = new LinkedHashMap<>();
+
+    public static ExpressionEnvironment empty() {
+        return EMPTY_ENVIRONMENT;
+    }
 
     public ExpressionEnvironmentBuilder conversionService(DataConversionService conversionService) {
         this.conversionService = Objects.requireNonNull(conversionService, "conversionService must not be null");
