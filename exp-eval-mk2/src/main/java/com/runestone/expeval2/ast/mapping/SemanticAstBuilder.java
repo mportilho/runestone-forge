@@ -4,6 +4,7 @@ import com.runestone.expeval2.ast.AssignmentNode;
 import com.runestone.expeval2.ast.BinaryOperationNode;
 import com.runestone.expeval2.ast.BinaryOperator;
 import com.runestone.expeval2.ast.ConditionalNode;
+import com.runestone.expeval2.ast.DestructuringAssignmentNode;
 import com.runestone.expeval2.ast.ExpressionFileNode;
 import com.runestone.expeval2.ast.ExpressionNode;
 import com.runestone.expeval2.ast.FunctionCallNode;
@@ -16,6 +17,7 @@ import com.runestone.expeval2.ast.SimpleAssignmentNode;
 import com.runestone.expeval2.ast.SourceSpan;
 import com.runestone.expeval2.ast.UnaryOperationNode;
 import com.runestone.expeval2.ast.UnaryOperator;
+import com.runestone.expeval2.ast.VectorLiteralNode;
 import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2BaseVisitor;
 import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser;
 import org.antlr.v4.runtime.ParserRuleContext;
@@ -78,8 +80,23 @@ final class SemanticAstBuilder {
                 buildAssignmentValue(simpleAssignment.assignmentValue(), expressionVisitor)
             );
         }
-        if (assignment instanceof ExpressionEvaluatorV2Parser.DestructuringAssignmentOperationContext) {
-            throw new UnsupportedOperationException("vector assignments are not supported yet"); // STUB
+        if (assignment instanceof ExpressionEvaluatorV2Parser.DestructuringAssignmentOperationContext destructuringAssignment) {
+            if (!(destructuringAssignment.vectorOfVariables() instanceof ExpressionEvaluatorV2Parser.VectorOfVariablesOperationContext vectorOfVariables)) {
+                throw new IllegalStateException("unsupported vectorOfVariables context: "
+                    + destructuringAssignment.vectorOfVariables().getClass().getSimpleName());
+            }
+            List<String> targetNames = vectorOfVariables.IDENTIFIER().stream()
+                .map(TerminalNode::getText)
+                .toList();
+            ExpressionNode value = destructuringAssignment.vectorEntity() != null
+                ? expressionVisitor.visit(destructuringAssignment.vectorEntity())
+                : expressionVisitor.visit(destructuringAssignment.function());
+            return new DestructuringAssignmentNode(
+                nodeFactory.nextId("assign"),
+                nodeFactory.sourceSpan(destructuringAssignment),
+                targetNames,
+                value
+            );
         }
         throw new IllegalStateException("unsupported assignment context: " + assignment.getClass().getSimpleName());
     }
@@ -109,8 +126,8 @@ final class SemanticAstBuilder {
         if (assignmentValue instanceof ExpressionEvaluatorV2Parser.DateTimeAssignmentValueContext dateTimeAssignmentValue) {
             return expressionVisitor.visit(dateTimeAssignmentValue.dateTimeEntity());
         }
-        if (assignmentValue instanceof ExpressionEvaluatorV2Parser.VectorAssignmentValueContext) {
-            throw new UnsupportedOperationException("vector expressions are not supported yet"); // STUB
+        if (assignmentValue instanceof ExpressionEvaluatorV2Parser.VectorAssignmentValueContext vectorAssignmentValue) {
+            return expressionVisitor.visit(vectorAssignmentValue.vectorEntity());
         }
         throw new IllegalStateException("unsupported assignment value: " + assignmentValue.getClass().getSimpleName());
     }
@@ -558,12 +575,28 @@ final class SemanticAstBuilder {
 
         @Override
         public ExpressionNode visitVectorOfEntitiesOperation(ExpressionEvaluatorV2Parser.VectorOfEntitiesOperationContext ctx) {
-            throw new UnsupportedOperationException("vector expressions are not supported yet"); // STUB
+            return new VectorLiteralNode(
+                nodeFactory.nextId("vector"),
+                nodeFactory.sourceSpan(ctx),
+                ctx.allEntityTypes().stream()
+                    .map(this::visitAllEntityType)
+                    .toList()
+            );
         }
 
         @Override
         public ExpressionNode visitVectorReferenceOperation(ExpressionEvaluatorV2Parser.VectorReferenceOperationContext ctx) {
-            throw new UnsupportedOperationException("vector expressions are not supported yet"); // STUB
+            return visit(ctx.referenceTarget());
+        }
+
+        @Override
+        public ExpressionNode visitVectorDecisionOperation(ExpressionEvaluatorV2Parser.VectorDecisionOperationContext ctx) {
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.vectorEntity());
+        }
+
+        @Override
+        public ExpressionNode visitVectorFunctionDecisionOperation(ExpressionEvaluatorV2Parser.VectorFunctionDecisionOperationContext ctx) {
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.vectorEntity());
         }
 
         private ExpressionNode comparisonNode(
@@ -664,8 +697,8 @@ final class SemanticAstBuilder {
             if (ctx instanceof ExpressionEvaluatorV2Parser.DateTimeEntityTypeContext dateTimeEntityType) {
                 return visit(dateTimeEntityType.dateTimeEntity());
             }
-            if (ctx instanceof ExpressionEvaluatorV2Parser.VectorEntityTypeContext) {
-                throw new UnsupportedOperationException("vector expressions are not supported yet"); // STUB
+            if (ctx instanceof ExpressionEvaluatorV2Parser.VectorEntityTypeContext vectorEntityType) {
+                return visit(vectorEntityType.vectorEntity());
             }
             throw new IllegalStateException("unsupported allEntityTypes context: " + ctx.getClass().getSimpleName());
         }

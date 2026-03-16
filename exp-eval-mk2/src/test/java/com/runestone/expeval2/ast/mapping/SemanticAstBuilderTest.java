@@ -3,6 +3,7 @@ package com.runestone.expeval2.ast.mapping;
 import com.runestone.expeval2.ast.BinaryOperationNode;
 import com.runestone.expeval2.ast.BinaryOperator;
 import com.runestone.expeval2.ast.ConditionalNode;
+import com.runestone.expeval2.ast.DestructuringAssignmentNode;
 import com.runestone.expeval2.ast.ExpressionFileNode;
 import com.runestone.expeval2.ast.ExpressionNode;
 import com.runestone.expeval2.ast.FunctionCallNode;
@@ -16,6 +17,7 @@ import com.runestone.expeval2.ast.SimpleAssignmentNode;
 import com.runestone.expeval2.ast.SourceSpan;
 import com.runestone.expeval2.ast.UnaryOperationNode;
 import com.runestone.expeval2.ast.UnaryOperator;
+import com.runestone.expeval2.ast.VectorLiteralNode;
 import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser;
 import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2ParserFacade;
 import org.junit.jupiter.api.Test;
@@ -197,10 +199,64 @@ class SemanticAstBuilderTest {
     }
 
     @Test
-    void shouldRejectVectorExpressionsUntilPhaseFour() {
-        assertThatThrownBy(() -> builder.buildMath(parseMath("items = [1, 2]; 1")))
-            .isInstanceOf(UnsupportedOperationException.class)
-            .hasMessageContaining("vector");
+    void shouldBuildVectorLiteralNodeWithHeterogeneousElements() {
+        ExpressionNode vectorValue = assignmentValueOf("items = [1, true, 2024-12-31, 12:30, 2024-12-31T12:30, \"x\", [2]]; 1");
+
+        assertThat(vectorValue).isInstanceOfSatisfying(VectorLiteralNode.class, vector -> {
+            assertThat(vector.elements()).hasSize(7);
+            assertThat(vector.elements().get(0)).isInstanceOfSatisfying(LiteralNode.class, literal -> assertThat(literal.value()).isEqualTo("1"));
+            assertThat(vector.elements().get(1)).isInstanceOfSatisfying(LiteralNode.class, literal -> assertThat(literal.value()).isEqualTo("true"));
+            assertThat(vector.elements().get(2)).isInstanceOfSatisfying(LiteralNode.class, literal -> assertThat(literal.value()).isEqualTo("2024-12-31"));
+            assertThat(vector.elements().get(3)).isInstanceOfSatisfying(LiteralNode.class, literal -> assertThat(literal.value()).isEqualTo("12:30"));
+            assertThat(vector.elements().get(4)).isInstanceOfSatisfying(LiteralNode.class, literal -> assertThat(literal.value()).isEqualTo("2024-12-31T12:30"));
+            assertThat(vector.elements().get(5)).isInstanceOfSatisfying(LiteralNode.class, literal -> assertThat(literal.value()).isEqualTo("\"x\""));
+            assertThat(vector.elements().get(6)).isInstanceOfSatisfying(VectorLiteralNode.class, nested ->
+                assertThat(nested.elements())
+                    .singleElement()
+                    .isInstanceOfSatisfying(LiteralNode.class, literal -> assertThat(literal.value()).isEqualTo("2"))
+            );
+        });
+    }
+
+    @Test
+    void shouldNormalizeTypedVectorReferencesAndCasts() {
+        ExpressionNode typedReference = assignmentValueOf("items = <vector>payload; 1");
+        ExpressionNode typedCast = assignmentValueOf("items = <vector>(payload); 1");
+
+        assertIdentifierReference(typedReference, "payload");
+        assertIdentifierReference(typedCast, "payload");
+    }
+
+    @Test
+    void shouldBuildConditionalNodesForVectorDecisions() {
+        ExpressionNode keywordDecision = assignmentValueOf("items = if true then [1] elsif false then [2] else [3] endif; 1");
+        ExpressionNode functionalDecision = assignmentValueOf("items = if(true, [1], false, [2], [3]); 1");
+
+        assertVectorConditional(keywordDecision, List.of("1", "2"), "3");
+        assertVectorConditional(functionalDecision, List.of("1", "2"), "3");
+    }
+
+    @Test
+    void shouldBuildDestructuringAssignmentsForVectorLiteralAndFunction() {
+        ExpressionFileNode literalAssignmentFile = builder.buildMath(parseMath("[left,right] = [1,2]; 1"));
+        ExpressionFileNode functionAssignmentFile = builder.buildMath(parseMath("[left,right] = makeVec(); 1"));
+
+        assertThat(literalAssignmentFile.assignments()).singleElement().isInstanceOfSatisfying(DestructuringAssignmentNode.class, assignment -> {
+            assertThat(assignment.targetNames()).containsExactly("left", "right");
+            assertThat(assignment.value()).isInstanceOfSatisfying(VectorLiteralNode.class, vector ->
+                assertThat(vector.elements())
+                    .extracting(element -> ((LiteralNode) element).value())
+                    .containsExactly("1", "2")
+            );
+        });
+
+        assertThat(functionAssignmentFile.assignments()).singleElement().isInstanceOfSatisfying(DestructuringAssignmentNode.class, assignment -> {
+            assertThat(assignment.targetNames()).containsExactly("left", "right");
+            assertThat(assignment.value()).isInstanceOfSatisfying(FunctionCallNode.class, functionCall -> {
+                assertThat(functionCall.functionName()).isEqualTo("makeVec");
+                assertThat(functionCall.arguments()).isEmpty();
+            });
+        });
     }
 
     @ParameterizedTest(name = "[{index}] {0}")
@@ -219,6 +275,14 @@ class SemanticAstBuilderTest {
             .isNotNull();
     }
 
+    @ParameterizedTest(name = "[{index}] {0}")
+    @MethodSource("phaseFourMathInputs")
+    void shouldBuildMathAstAcrossPhaseFourCoverage(String scenario, String input) {
+        assertThat(builder.buildMath(parseMath(input)))
+            .as("phase four math input for scenario '%s' should build without errors", scenario)
+            .isNotNull();
+    }
+
     private ExpressionEvaluatorV2Parser.MathStartContext parseMath(String input) {
         return parserFacade.parseMath(input).root();
     }
@@ -234,6 +298,9 @@ class SemanticAstBuilderTest {
             nodes.add(assignment);
             if (assignment instanceof SimpleAssignmentNode simpleAssignmentNode) {
                 collectExpressionNodes(simpleAssignmentNode.value(), nodes);
+            }
+            if (assignment instanceof DestructuringAssignmentNode destructuringAssignmentNode) {
+                collectExpressionNodes(destructuringAssignmentNode.value(), nodes);
             }
         });
         collectExpressionNodes(fileNode.resultExpression(), nodes);
@@ -256,6 +323,8 @@ class SemanticAstBuilderTest {
                 .forEach(argument -> collectExpressionNodes(argument, nodes));
             case PostfixOperationNode postfixOperationNode -> collectExpressionNodes(postfixOperationNode.operand(), nodes);
             case UnaryOperationNode unaryOperationNode -> collectExpressionNodes(unaryOperationNode.operand(), nodes);
+            case VectorLiteralNode vectorLiteralNode -> vectorLiteralNode.elements()
+                .forEach(element -> collectExpressionNodes(element, nodes));
             case IdentifierNode ignored -> {
             }
             case LiteralNode ignored -> {
@@ -319,6 +388,22 @@ class SemanticAstBuilderTest {
                 .containsExactlyElementsOf(expectedResults);
             assertThat(conditional.elseExpression()).isInstanceOfSatisfying(IdentifierNode.class, elseIdentifier ->
                 assertThat(elseIdentifier.name()).isEqualTo(expectedElse)
+            );
+        });
+    }
+
+    private static void assertVectorConditional(ExpressionNode node, List<String> expectedResults, String expectedElse) {
+        assertThat(node).isInstanceOfSatisfying(ConditionalNode.class, conditional -> {
+            assertThat(conditional.conditions())
+                .extracting(expression -> ((LiteralNode) expression).value())
+                .containsExactly("true", "false");
+            assertThat(conditional.results())
+                .extracting(result -> ((LiteralNode) ((VectorLiteralNode) result).elements().getFirst()).value())
+                .containsExactlyElementsOf(expectedResults);
+            assertThat(conditional.elseExpression()).isInstanceOfSatisfying(VectorLiteralNode.class, elseVector ->
+                assertThat(elseVector.elements())
+                    .singleElement()
+                    .isInstanceOfSatisfying(LiteralNode.class, literal -> assertThat(literal.value()).isEqualTo(expectedElse))
             );
         });
     }
@@ -393,6 +478,18 @@ class SemanticAstBuilderTest {
         return Stream.of(
             Arguments.of("logical if then elsif else decision", "if true then false elsif false then true else false endif"),
             Arguments.of("logical functional decision", "if(true, false, false, true, false)")
+        );
+    }
+
+    private static Stream<Arguments> phaseFourMathInputs() {
+        return Stream.of(
+            Arguments.of("assignments with every explicit cast type", "boolCast = <bool>(flag); numCast = <number>(amount); textCast = <text>(label); dateCast = <date>(createdOn); timeCast = <time>(createdAt); dateTimeCast = <datetime>(timestamp); vectorCast = <vector>(items); 1"),
+            Arguments.of("typed vector reference assignment", "items = <vector>payload; 1"),
+            Arguments.of("vector literal with all entity families", "items = [1, true, 2024-12-31, 12:30, 2024-12-31T12:30, \"x\", [2]]; 1"),
+            Arguments.of("vector decision assignment", "items = if true then [1] elsif false then [2] else [3] endif; 1"),
+            Arguments.of("vector functional decision assignment", "items = if(true, [1], false, [2], [3]); 1"),
+            Arguments.of("destructuring assignment from vector literal", "[left,right] = [1,2]; 1"),
+            Arguments.of("destructuring assignment from function", "[left,right] = makeVec(); 1")
         );
     }
 }
