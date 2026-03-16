@@ -2,6 +2,7 @@ package com.runestone.expeval2.ast.mapping;
 
 import com.runestone.expeval2.ast.BinaryOperationNode;
 import com.runestone.expeval2.ast.BinaryOperator;
+import com.runestone.expeval2.ast.ConditionalNode;
 import com.runestone.expeval2.ast.ExpressionFileNode;
 import com.runestone.expeval2.ast.ExpressionNode;
 import com.runestone.expeval2.ast.FunctionCallNode;
@@ -169,10 +170,30 @@ class SemanticAstBuilderTest {
     }
 
     @Test
-    void shouldRejectConditionalExpressionsUntilPhaseThree() {
-        assertThatThrownBy(() -> builder.buildMath(parseMath("if true then 1 else 2 endif")))
-            .isInstanceOf(UnsupportedOperationException.class)
-            .hasMessageContaining("conditional");
+    void shouldBuildConditionalNodesForKeywordAndFunctionalMathDecisions() {
+        ExpressionNode keywordDecision = builder.buildMath(parseMath("if true then 1 elsif false then 2 else 3 endif")).resultExpression();
+        ExpressionNode functionalDecision = builder.buildMath(parseMath("if(true, 1, false, 2, 3)")).resultExpression();
+
+        assertConditionalStructure(keywordDecision, List.of("true", "false"), List.of("1", "2"), "3");
+        assertConditionalStructure(functionalDecision, List.of("true", "false"), List.of("1", "2"), "3");
+    }
+
+    @Test
+    void shouldBuildConditionalNodesForLogicalDecisions() {
+        ExpressionNode keywordDecision = builder.buildLogical(parseLogical("if true then false elsif false then true else false endif")).resultExpression();
+        ExpressionNode functionalDecision = builder.buildLogical(parseLogical("if(true, false, false, true, false)")).resultExpression();
+
+        assertConditionalStructure(keywordDecision, List.of("true", "false"), List.of("false", "true"), "false");
+        assertConditionalStructure(functionalDecision, List.of("true", "false"), List.of("false", "true"), "false");
+    }
+
+    @Test
+    void shouldNormalizeGenericDecisionBranchesAndOuterTypeHints() {
+        ExpressionNode genericDecision = assignmentValueOf("target = if true then foo elsif false then <number>(bar) else <text>(baz) endif; 1");
+        ExpressionNode wrappedDecision = assignmentValueOf("target = <number>(if(true, foo, false, <number>(bar), <text>(baz))); 1");
+
+        assertConditionalIdentifiers(genericDecision, List.of("foo", "bar"), "baz");
+        assertConditionalIdentifiers(wrappedDecision, List.of("foo", "bar"), "baz");
     }
 
     @Test
@@ -180,6 +201,22 @@ class SemanticAstBuilderTest {
         assertThatThrownBy(() -> builder.buildMath(parseMath("items = [1, 2]; 1")))
             .isInstanceOf(UnsupportedOperationException.class)
             .hasMessageContaining("vector");
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @MethodSource("phaseThreeMathInputs")
+    void shouldBuildMathAstAcrossPhaseThreeCoverage(String scenario, String input) {
+        assertThat(builder.buildMath(parseMath(input)))
+            .as("phase three math input for scenario '%s' should build without errors", scenario)
+            .isNotNull();
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @MethodSource("phaseThreeLogicalInputs")
+    void shouldBuildLogicalAstAcrossPhaseThreeCoverage(String scenario, String input) {
+        assertThat(builder.buildLogical(parseLogical(input)))
+            .as("phase three logical input for scenario '%s' should build without errors", scenario)
+            .isNotNull();
     }
 
     private ExpressionEvaluatorV2Parser.MathStartContext parseMath(String input) {
@@ -210,6 +247,11 @@ class SemanticAstBuilderTest {
                 collectExpressionNodes(binaryOperationNode.left(), nodes);
                 collectExpressionNodes(binaryOperationNode.right(), nodes);
             }
+            case ConditionalNode conditionalNode -> {
+                conditionalNode.conditions().forEach(condition -> collectExpressionNodes(condition, nodes));
+                conditionalNode.results().forEach(result -> collectExpressionNodes(result, nodes));
+                collectExpressionNodes(conditionalNode.elseExpression(), nodes);
+            }
             case FunctionCallNode functionCallNode -> functionCallNode.arguments()
                 .forEach(argument -> collectExpressionNodes(argument, nodes));
             case PostfixOperationNode postfixOperationNode -> collectExpressionNodes(postfixOperationNode.operand(), nodes);
@@ -236,6 +278,49 @@ class SemanticAstBuilderTest {
         assertThat(node).isInstanceOfSatisfying(BinaryOperationNode.class, comparison ->
             assertThat(comparison.operator()).isEqualTo(expectedOperator)
         );
+    }
+
+    private static void assertConditionalStructure(
+        ExpressionNode node,
+        List<String> expectedConditions,
+        List<String> expectedResults,
+        String expectedElse
+    ) {
+        assertThat(node).isInstanceOfSatisfying(ConditionalNode.class, conditional -> {
+            assertThat(conditional.conditions()).hasSize(expectedConditions.size());
+            assertThat(conditional.results()).hasSize(expectedResults.size());
+            assertThat(conditional.conditions())
+                .allSatisfy(condition -> assertThat(condition).isInstanceOf(LiteralNode.class));
+            assertThat(conditional.results())
+                .allSatisfy(result -> assertThat(result).isInstanceOf(LiteralNode.class));
+            assertThat(conditional.conditions())
+                .extracting(expression -> ((LiteralNode) expression).value())
+                .containsExactlyElementsOf(expectedConditions);
+            assertThat(conditional.results())
+                .extracting(expression -> ((LiteralNode) expression).value())
+                .containsExactlyElementsOf(expectedResults);
+            assertThat(conditional.elseExpression()).isInstanceOfSatisfying(LiteralNode.class, elseLiteral ->
+                assertThat(elseLiteral.value()).isEqualTo(expectedElse)
+            );
+        });
+    }
+
+    private static void assertConditionalIdentifiers(
+        ExpressionNode node,
+        List<String> expectedResults,
+        String expectedElse
+    ) {
+        assertThat(node).isInstanceOfSatisfying(ConditionalNode.class, conditional -> {
+            assertThat(conditional.conditions())
+                .extracting(expression -> ((LiteralNode) expression).value())
+                .containsExactly("true", "false");
+            assertThat(conditional.results())
+                .extracting(expression -> ((IdentifierNode) expression).name())
+                .containsExactlyElementsOf(expectedResults);
+            assertThat(conditional.elseExpression()).isInstanceOfSatisfying(IdentifierNode.class, elseIdentifier ->
+                assertThat(elseIdentifier.name()).isEqualTo(expectedElse)
+            );
+        });
     }
 
     private static Stream<Arguments> stablePhaseTwoMathInputs() {
@@ -284,6 +369,30 @@ class SemanticAstBuilderTest {
             Arguments.of("time comparison", "<time>startTime < currTime"),
             Arguments.of("datetime comparison", "<datetime>startAt >= currDateTime"),
             Arguments.of("logical input with supported leading assignment", "value = foo; 1 < 2 and isReady()")
+        );
+    }
+
+    private static Stream<Arguments> phaseThreeMathInputs() {
+        return Stream.of(
+            Arguments.of("numeric if then elsif else decision", "if true then 1 elsif false then 2 else 3 endif"),
+            Arguments.of("numeric functional decision", "if(true, 1, false, 2, 3)"),
+            Arguments.of("generic assignment with if then elsif else", "target = if true then foo elsif false then bar else baz endif; 1"),
+            Arguments.of("generic assignment with functional decision", "target = if(true, foo, false, bar, baz); 1"),
+            Arguments.of("string decision assignment", "textValue = if true then \"a\" elsif false then \"b\" else \"c\" endif; 1"),
+            Arguments.of("string functional decision assignment", "textValue = if(true, \"a\", false, \"b\", \"c\"); 1"),
+            Arguments.of("date decision assignment", "dateValue = if true then 2024-12-31 elsif false then 2024-12-30 else currDate endif; 1"),
+            Arguments.of("date functional decision assignment", "dateValue = if(true, 2024-12-31, false, 2024-12-30, currDate); 1"),
+            Arguments.of("time decision assignment", "timeValue = if true then 12:30 elsif false then 13:45 else currTime endif; 1"),
+            Arguments.of("time functional decision assignment", "timeValue = if(true, 12:30, false, 13:45, currTime); 1"),
+            Arguments.of("datetime decision assignment", "dateTimeValue = if true then 2024-12-31T12:30 elsif false then 2024-12-30T08:15 else currDateTime endif; 1"),
+            Arguments.of("datetime functional decision assignment", "dateTimeValue = if(true, 2024-12-31T12:30, false, 2024-12-30T08:15, currDateTime); 1")
+        );
+    }
+
+    private static Stream<Arguments> phaseThreeLogicalInputs() {
+        return Stream.of(
+            Arguments.of("logical if then elsif else decision", "if true then false elsif false then true else false endif"),
+            Arguments.of("logical functional decision", "if(true, false, false, true, false)")
         );
     }
 }

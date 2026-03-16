@@ -3,6 +3,7 @@ package com.runestone.expeval2.ast.mapping;
 import com.runestone.expeval2.ast.AssignmentNode;
 import com.runestone.expeval2.ast.BinaryOperationNode;
 import com.runestone.expeval2.ast.BinaryOperator;
+import com.runestone.expeval2.ast.ConditionalNode;
 import com.runestone.expeval2.ast.ExpressionFileNode;
 import com.runestone.expeval2.ast.ExpressionNode;
 import com.runestone.expeval2.ast.FunctionCallNode;
@@ -396,12 +397,12 @@ final class SemanticAstBuilder {
 
         @Override
         public ExpressionNode visitLogicalDecisionOperation(ExpressionEvaluatorV2Parser.LogicalDecisionOperationContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression());
         }
 
         @Override
         public ExpressionNode visitLogicalFunctionDecisionOperation(ExpressionEvaluatorV2Parser.LogicalFunctionDecisionOperationContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression());
         }
 
         @Override
@@ -420,12 +421,12 @@ final class SemanticAstBuilder {
 
         @Override
         public ExpressionNode visitMathDecisionOperation(ExpressionEvaluatorV2Parser.MathDecisionOperationContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.mathExpression());
         }
 
         @Override
         public ExpressionNode visitMathFunctionDecisionOperation(ExpressionEvaluatorV2Parser.MathFunctionDecisionOperationContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.mathExpression());
         }
 
         @Override
@@ -444,12 +445,12 @@ final class SemanticAstBuilder {
 
         @Override
         public ExpressionNode visitStringDecisionOperation(ExpressionEvaluatorV2Parser.StringDecisionOperationContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.stringEntity());
         }
 
         @Override
         public ExpressionNode visitStringFunctionDecisionOperation(ExpressionEvaluatorV2Parser.StringFunctionDecisionOperationContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.stringEntity());
         }
 
         @Override
@@ -469,12 +470,12 @@ final class SemanticAstBuilder {
 
         @Override
         public ExpressionNode visitDateDecisionOperation(ExpressionEvaluatorV2Parser.DateDecisionOperationContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.dateEntity());
         }
 
         @Override
         public ExpressionNode visitDateFunctionDecisionOperation(ExpressionEvaluatorV2Parser.DateFunctionDecisionOperationContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.dateEntity());
         }
 
         @Override
@@ -494,12 +495,12 @@ final class SemanticAstBuilder {
 
         @Override
         public ExpressionNode visitTimeDecisionOperation(ExpressionEvaluatorV2Parser.TimeDecisionOperationContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.timeEntity());
         }
 
         @Override
         public ExpressionNode visitTimeFunctionDecisionOperation(ExpressionEvaluatorV2Parser.TimeFunctionDecisionOperationContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.timeEntity());
         }
 
         @Override
@@ -522,22 +523,22 @@ final class SemanticAstBuilder {
 
         @Override
         public ExpressionNode visitDateTimeDecisionOperation(ExpressionEvaluatorV2Parser.DateTimeDecisionOperationContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.dateTimeEntity());
         }
 
         @Override
         public ExpressionNode visitDateTimeFunctionDecisionOperation(ExpressionEvaluatorV2Parser.DateTimeFunctionDecisionOperationContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.dateTimeEntity());
         }
 
         @Override
         public ExpressionNode visitGenericDecisionExpression(ExpressionEvaluatorV2Parser.GenericDecisionExpressionContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.genericEntity());
         }
 
         @Override
         public ExpressionNode visitGenericFunctionDecisionExpression(ExpressionEvaluatorV2Parser.GenericFunctionDecisionExpressionContext ctx) {
-            throw new UnsupportedOperationException("conditional expressions are not supported yet"); // STUB
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.genericEntity());
         }
 
         @Override
@@ -578,6 +579,54 @@ final class SemanticAstBuilder {
                 comparisonOperator(operatorContext),
                 left,
                 right
+            );
+        }
+
+        private ConditionalNode conditionalNode(
+            ParserRuleContext ctx,
+            List<ExpressionEvaluatorV2Parser.LogicalExpressionContext> logicalExpressions
+        ) {
+            if (logicalExpressions.size() < 3 || logicalExpressions.size() % 2 == 0) {
+                throw new IllegalStateException("logical conditional expression must contain condition/result pairs plus else");
+            }
+            List<ExpressionNode> conditions = new ArrayList<>(logicalExpressions.size() / 2);
+            List<ExpressionNode> results = new ArrayList<>(logicalExpressions.size() / 2);
+            for (int index = 0; index < logicalExpressions.size() - 1; index += 2) {
+                conditions.add(visit(logicalExpressions.get(index)));
+                results.add(visit(logicalExpressions.get(index + 1)));
+            }
+            return new ConditionalNode(
+                nodeFactory.nextId("conditional"),
+                nodeFactory.sourceSpan(ctx),
+                conditions,
+                results,
+                visit(logicalExpressions.getLast())
+            );
+        }
+
+        private ConditionalNode conditionalNode(
+            ParserRuleContext ctx,
+            List<? extends ParserRuleContext> conditionContexts,
+            List<? extends ParserRuleContext> resultContexts
+        ) {
+            if (conditionContexts.isEmpty()) {
+                throw new IllegalStateException("conditional expression must contain at least one condition");
+            }
+            if (resultContexts.size() != conditionContexts.size() + 1) {
+                throw new IllegalStateException("conditional expression must contain one else branch");
+            }
+            List<ExpressionNode> conditions = conditionContexts.stream()
+                .map(this::visit)
+                .toList();
+            List<ExpressionNode> results = resultContexts.subList(0, resultContexts.size() - 1).stream()
+                .map(this::visit)
+                .toList();
+            return new ConditionalNode(
+                nodeFactory.nextId("conditional"),
+                nodeFactory.sourceSpan(ctx),
+                conditions,
+                results,
+                visit(resultContexts.getLast())
             );
         }
 
