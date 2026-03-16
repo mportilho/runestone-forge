@@ -9,16 +9,10 @@ import java.util.Optional;
 
 public final class FunctionCatalog {
 
-    private final FunctionCatalogId catalogId;
     private final Map<String, List<FunctionDescriptor>> descriptorsByName;
 
-    public FunctionCatalog(FunctionCatalogId catalogId, Map<String, List<FunctionDescriptor>> descriptorsByName) {
-        this.catalogId = Objects.requireNonNull(catalogId, "catalogId must not be null");
+    public FunctionCatalog(Map<String, List<FunctionDescriptor>> descriptorsByName) {
         this.descriptorsByName = immutableLists(Objects.requireNonNull(descriptorsByName, "descriptorsByName must not be null"));
-    }
-
-    public FunctionCatalogId catalogId() {
-        return catalogId;
     }
 
     public Optional<FunctionDescriptor> findExact(String name, int arity) {

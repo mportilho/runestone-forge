@@ -1,5 +1,6 @@
 package com.runestone.expeval2.api;
 
+import com.runestone.expeval2.semantic.ScalarType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -13,7 +14,7 @@ class ExpressionFacadeTest {
     void shouldComputeMathExpressionsUsingEnvironmentDefaultsAndFunctionBindings() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
             .registerStaticProvider(FunctionFixture.class)
-            .registerExternalSymbol("rate", com.runestone.expeval2.semantic.ScalarType.NUMBER, new BigDecimal("0.10"), true)
+            .registerExternalSymbol("rate", ScalarType.NUMBER, new BigDecimal("0.10"), true)
             .build();
 
         BigDecimal result = MathExpression.compile("bonus(principal) * rate", environment)
@@ -36,7 +37,7 @@ class ExpressionFacadeTest {
     @Test
     void shouldRejectNonOverridableEnvironmentSymbols() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-            .registerExternalSymbol("rate", com.runestone.expeval2.semantic.ScalarType.NUMBER, new BigDecimal("0.10"), false)
+            .registerExternalSymbol("rate", ScalarType.NUMBER, new BigDecimal("0.10"), false)
             .build();
         MathExpression expression = MathExpression.compile("principal * rate", environment)
             .setValue("principal", 100);
@@ -49,7 +50,7 @@ class ExpressionFacadeTest {
     @Test
     void shouldComputeLogicalExpressionsWithDefaultedExternalSymbols() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-            .registerExternalSymbol("threshold", com.runestone.expeval2.semantic.ScalarType.NUMBER, BigDecimal.TEN, true)
+            .registerExternalSymbol("threshold", ScalarType.NUMBER, BigDecimal.TEN, true)
             .build();
 
         boolean result = LogicalExpression.compile("principal > threshold", environment)
