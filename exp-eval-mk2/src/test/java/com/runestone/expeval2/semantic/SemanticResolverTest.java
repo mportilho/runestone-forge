@@ -11,6 +11,7 @@ import com.runestone.expeval2.ast.IdentifierNode;
 import com.runestone.expeval2.compiler.CompiledExpression;
 import com.runestone.expeval2.compiler.ExpressionCompiler;
 import com.runestone.expeval2.grammar.language.ExpressionResultType;
+import com.runestone.expeval2.types.ScalarType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

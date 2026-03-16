@@ -1,7 +1,7 @@
 package com.runestone.expeval2.runtime;
 
-import com.runestone.expeval2.semantic.ResolvedType;
-import com.runestone.expeval2.semantic.UnknownType;
+import com.runestone.expeval2.types.ResolvedType;
+import com.runestone.expeval2.types.UnknownType;
 
 public enum NullValue implements RuntimeValue {
     INSTANCE;

@@ -1,8 +1,8 @@
 package com.runestone.expeval2.semantic;
 
-import com.runestone.expeval2.api.ExpressionEnvironment;
 import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.FunctionCatalog;
+import com.runestone.expeval2.engine.context.CompilationEnvironment;
 import com.runestone.expeval2.grammar.language.ExpressionResultType;
 
 import java.util.Objects;
@@ -23,7 +23,7 @@ public final class ResolutionContext {
         this.externalSymbolCatalog = Objects.requireNonNull(externalSymbolCatalog, "externalSymbolCatalog must not be null");
     }
 
-    public static ResolutionContext from(ExpressionResultType resultType, ExpressionEnvironment environment) {
+    public static ResolutionContext from(ExpressionResultType resultType, CompilationEnvironment environment) {
         Objects.requireNonNull(environment, "environment must not be null");
         return new ResolutionContext(resultType, environment.functionCatalog(), environment.externalSymbolCatalog());
     }

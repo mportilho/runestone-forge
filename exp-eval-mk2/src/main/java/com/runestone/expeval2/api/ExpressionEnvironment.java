@@ -2,12 +2,15 @@ package com.runestone.expeval2.api;
 
 import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.FunctionCatalog;
+import com.runestone.expeval2.engine.context.CompilationEnvironment;
+import com.runestone.expeval2.engine.context.ExpressionEnvironmentId;
+import com.runestone.expeval2.engine.context.RuntimeEnvironment;
 import com.runestone.expeval2.runtime.RuntimeCoercionService;
 import com.runestone.expeval2.runtime.RuntimeValueFactory;
 
 import java.util.Objects;
 
-public final class ExpressionEnvironment {
+public final class ExpressionEnvironment implements CompilationEnvironment, RuntimeEnvironment {
 
     private final ExpressionEnvironmentId environmentId;
     private final FunctionCatalog functionCatalog;

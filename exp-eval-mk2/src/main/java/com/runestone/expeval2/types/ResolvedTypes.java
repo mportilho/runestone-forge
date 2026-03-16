@@ -1,4 +1,4 @@
-package com.runestone.expeval2.semantic;
+package com.runestone.expeval2.types;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;

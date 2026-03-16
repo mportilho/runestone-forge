@@ -4,6 +4,7 @@ import com.runestone.expeval2.ast.AssignmentNode;
 import com.runestone.expeval2.ast.ExpressionFileNode;
 import com.runestone.expeval2.ast.IdentifierNode;
 import com.runestone.expeval2.ast.NodeId;
+import com.runestone.expeval2.types.ResolvedType;
 
 import java.util.LinkedHashMap;
 import java.util.List;

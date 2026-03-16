@@ -4,6 +4,7 @@ import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.semantic.SemanticModel;
 import com.runestone.expeval2.semantic.SymbolRef;
+import com.runestone.expeval2.types.ResolvedType;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -17,24 +18,16 @@ public final class MutableBindings {
     private final ExternalSymbolCatalog externalSymbolCatalog;
     private final Map<SymbolRef, RuntimeValue> values = new HashMap<>();
 
-    public static MutableBindings from(
-        SemanticModel semanticModel,
-        ExternalSymbolCatalog externalSymbolCatalog,
-        RuntimeValueFactory runtimeValueFactory
-    ) {
-        MutableBindings bindings = new MutableBindings(semanticModel, externalSymbolCatalog, runtimeValueFactory);
-        bindings.seedDefaults();
-        return bindings;
-    }
-
-    private MutableBindings(
-        SemanticModel semanticModel,
-        ExternalSymbolCatalog externalSymbolCatalog,
-        RuntimeValueFactory runtimeValueFactory
-    ) {
+    private MutableBindings(SemanticModel semanticModel, ExternalSymbolCatalog externalSymbolCatalog, RuntimeValueFactory runtimeValueFactory) {
         this.semanticModel = Objects.requireNonNull(semanticModel, "semanticModel must not be null");
         this.externalSymbolCatalog = Objects.requireNonNull(externalSymbolCatalog, "externalSymbolCatalog must not be null");
         this.runtimeValueFactory = Objects.requireNonNull(runtimeValueFactory, "runtimeValueFactory must not be null");
+    }
+
+    public static MutableBindings from(SemanticModel semanticModel, ExternalSymbolCatalog externalSymbolCatalog, RuntimeValueFactory runtimeValueFactory) {
+        MutableBindings bindings = new MutableBindings(semanticModel, externalSymbolCatalog, runtimeValueFactory);
+        bindings.seedDefaults();
+        return bindings;
     }
 
     public void setValue(String symbolName, Object rawValue) {
@@ -55,9 +48,11 @@ public final class MutableBindings {
 
     private void seedDefaults() {
         semanticModel.externalSymbolsByName().forEach((name, symbolRef) ->
-            externalSymbolCatalog.find(name)
-                .map(ExternalSymbolDescriptor::defaultValue)
-                .ifPresent(defaultValue -> values.put(symbolRef, defaultValue))
+                externalSymbolCatalog.find(name)
+                        .ifPresent(descriptor -> values.put(
+                                symbolRef,
+                                runtimeValueFactory.from(descriptor.defaultValue(), descriptor.declaredType())
+                        ))
         );
     }
 
@@ -78,15 +73,15 @@ public final class MutableBindings {
 
     private void rejectWhenNonOverridable(String symbolName) {
         externalSymbolCatalog.find(symbolName)
-            .filter(descriptor -> !descriptor.overridable())
-            .ifPresent(descriptor -> {
-                throw new IllegalStateException("symbol '" + symbolName + "' is not overridable");
-            });
+                .filter(descriptor -> !descriptor.overridable())
+                .ifPresent(descriptor -> {
+                    throw new IllegalStateException("symbol '" + symbolName + "' is not overridable");
+                });
     }
 
-    private com.runestone.expeval2.semantic.ResolvedType expectedType(String symbolName) {
+    private ResolvedType expectedType(String symbolName) {
         return externalSymbolCatalog.find(symbolName)
-            .map(ExternalSymbolDescriptor::declaredType)
-            .orElse(null);
+                .map(ExternalSymbolDescriptor::declaredType)
+                .orElse(null);
     }
 }

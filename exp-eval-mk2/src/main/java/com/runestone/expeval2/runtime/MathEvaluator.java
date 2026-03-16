@@ -6,11 +6,7 @@ import java.math.BigDecimal;
 
 final class MathEvaluator extends AbstractRuntimeEvaluator<BigDecimal> {
 
-    MathEvaluator(
-        CompiledExpression compiledExpression,
-        RuntimeValueFactory runtimeValueFactory,
-        RuntimeCoercionService runtimeCoercionService
-    ) {
+    MathEvaluator(CompiledExpression compiledExpression, RuntimeValueFactory runtimeValueFactory, RuntimeCoercionService runtimeCoercionService) {
         super(compiledExpression, runtimeValueFactory, runtimeCoercionService);
     }
 

@@ -1,7 +1,11 @@
 package com.runestone.expeval2.runtime;
 
 import com.runestone.converters.DataConversionService;
-import com.runestone.expeval2.semantic.*;
+import com.runestone.expeval2.types.ResolvedType;
+import com.runestone.expeval2.types.ResolvedTypes;
+import com.runestone.expeval2.types.ScalarType;
+import com.runestone.expeval2.types.UnknownType;
+import com.runestone.expeval2.types.VectorType;
 
 import java.lang.reflect.Array;
 import java.math.BigDecimal;

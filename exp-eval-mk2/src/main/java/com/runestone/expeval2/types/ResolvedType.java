@@ -1,4 +1,4 @@
-package com.runestone.expeval2.semantic;
+package com.runestone.expeval2.types;
 
 public sealed interface ResolvedType permits ScalarType, UnknownType, VectorType {
 }

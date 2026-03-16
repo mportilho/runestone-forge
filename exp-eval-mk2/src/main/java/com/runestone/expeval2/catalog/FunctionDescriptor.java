@@ -1,6 +1,6 @@
 package com.runestone.expeval2.catalog;
 
-import com.runestone.expeval2.semantic.ResolvedType;
+import com.runestone.expeval2.types.ResolvedType;
 
 import java.lang.invoke.MethodHandle;
 import java.util.List;

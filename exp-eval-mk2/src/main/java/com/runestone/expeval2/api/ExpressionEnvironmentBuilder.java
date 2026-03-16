@@ -6,10 +6,11 @@ import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.catalog.FunctionCatalog;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
+import com.runestone.expeval2.engine.context.ExpressionEnvironmentId;
 import com.runestone.expeval2.runtime.RuntimeCoercionService;
 import com.runestone.expeval2.runtime.RuntimeValueFactory;
-import com.runestone.expeval2.semantic.ResolvedType;
-import com.runestone.expeval2.semantic.ResolvedTypes;
+import com.runestone.expeval2.types.ResolvedType;
+import com.runestone.expeval2.types.ResolvedTypes;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -76,8 +77,10 @@ public final class ExpressionEnvironmentBuilder {
                 .sorted(Comparator.comparing(ExternalSymbolRegistration::name))
                 .forEach(registration -> symbolsByName.put(
                         registration.name(),
-                        new ExternalSymbolDescriptor(registration.name(), registration.declaredType(),
-                                runtimeValueFactory.from(registration.defaultValue(), registration.declaredType()),
+                        new ExternalSymbolDescriptor(
+                                registration.name(),
+                                registration.declaredType(),
+                                registration.defaultValue(),
                                 registration.overridable()
                         )
                 ));

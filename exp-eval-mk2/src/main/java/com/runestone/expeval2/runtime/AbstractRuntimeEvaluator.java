@@ -1,27 +1,11 @@
 package com.runestone.expeval2.runtime;
 
-import com.runestone.expeval2.ast.AssignmentNode;
-import com.runestone.expeval2.ast.BinaryOperationNode;
-import com.runestone.expeval2.ast.BinaryOperator;
-import com.runestone.expeval2.ast.ConditionalNode;
-import com.runestone.expeval2.ast.DestructuringAssignmentNode;
-import com.runestone.expeval2.ast.ExpressionNode;
-import com.runestone.expeval2.ast.FunctionCallNode;
-import com.runestone.expeval2.ast.IdentifierNode;
-import com.runestone.expeval2.ast.LiteralNode;
-import com.runestone.expeval2.ast.NodeId;
-import com.runestone.expeval2.ast.PostfixOperationNode;
-import com.runestone.expeval2.ast.PostfixOperator;
-import com.runestone.expeval2.ast.SimpleAssignmentNode;
-import com.runestone.expeval2.ast.UnaryOperationNode;
-import com.runestone.expeval2.ast.UnaryOperator;
-import com.runestone.expeval2.ast.VectorLiteralNode;
+import com.runestone.expeval2.ast.*;
 import com.runestone.expeval2.compiler.CompiledExpression;
 import com.runestone.expeval2.semantic.ResolvedFunctionBinding;
-import com.runestone.expeval2.semantic.ResolvedType;
-import com.runestone.expeval2.semantic.ScalarType;
-import com.runestone.expeval2.semantic.SemanticModel;
 import com.runestone.expeval2.semantic.SymbolRef;
+import com.runestone.expeval2.types.ResolvedType;
+import com.runestone.expeval2.types.ScalarType;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -36,17 +20,11 @@ import java.util.Objects;
 
 abstract class AbstractRuntimeEvaluator<T> {
 
-    private static final BigDecimal ONE_HUNDRED = BigDecimal.valueOf(100);
-
     private final CompiledExpression compiledExpression;
     private final RuntimeValueFactory runtimeValueFactory;
     private final RuntimeCoercionService runtimeCoercionService;
 
-    protected AbstractRuntimeEvaluator(
-        CompiledExpression compiledExpression,
-        RuntimeValueFactory runtimeValueFactory,
-        RuntimeCoercionService runtimeCoercionService
-    ) {
+    protected AbstractRuntimeEvaluator(CompiledExpression compiledExpression, RuntimeValueFactory runtimeValueFactory, RuntimeCoercionService runtimeCoercionService) {
         this.compiledExpression = Objects.requireNonNull(compiledExpression, "compiledExpression must not be null");
         this.runtimeValueFactory = Objects.requireNonNull(runtimeValueFactory, "runtimeValueFactory must not be null");
         this.runtimeCoercionService = Objects.requireNonNull(runtimeCoercionService, "runtimeCoercionService must not be null");
@@ -122,25 +100,25 @@ abstract class AbstractRuntimeEvaluator<T> {
                 return new DateTimeValue(LocalDateTime.now());
             }
             return raw.contains("+") || raw.endsWith("Z")
-                ? new DateTimeValue(OffsetDateTime.parse(raw).toLocalDateTime())
-                : new DateTimeValue(LocalDateTime.parse(raw));
+                    ? new DateTimeValue(OffsetDateTime.parse(raw).toLocalDateTime())
+                    : new DateTimeValue(LocalDateTime.parse(raw));
         }
         return runtimeValueFactory.from(raw);
     }
 
     private RuntimeValue evaluateIdentifier(IdentifierNode node, ExecutionScope scope) {
         SymbolRef symbolRef = compiledExpression.semanticModel().findSymbol(node.nodeId())
-            .orElseThrow(() -> new IllegalStateException("missing symbol for identifier '" + node.name() + "'"));
+                .orElseThrow(() -> new IllegalStateException("missing symbol for identifier '" + node.name() + "'"));
         return scope.find(symbolRef)
-            .orElseThrow(() -> new IllegalStateException("missing value for symbol '" + symbolRef.name() + "'"));
+                .orElseThrow(() -> new IllegalStateException("missing value for symbol '" + symbolRef.name() + "'"));
     }
 
     private RuntimeValue evaluateFunctionCall(FunctionCallNode node, ExecutionScope scope) {
         ResolvedFunctionBinding binding = compiledExpression.semanticModel().findFunctionBinding(node.nodeId())
-            .orElseThrow(() -> new IllegalStateException("missing function binding for '" + node.functionName() + "'"));
+                .orElseThrow(() -> new IllegalStateException("missing function binding for '" + node.functionName() + "'"));
         List<RuntimeValue> arguments = node.arguments().stream()
-            .map(argument -> evaluateExpression(argument, scope))
-            .toList();
+                .map(argument -> evaluateExpression(argument, scope))
+                .toList();
         List<Object> rawArguments = new ArrayList<>(arguments.size());
         for (int index = 0; index < arguments.size(); index++) {
             rawArguments.add(runtimeCoercionService.coerce(arguments.get(index), binding.descriptor().parameterTypes().get(index)));
@@ -172,19 +150,32 @@ abstract class AbstractRuntimeEvaluator<T> {
         RuntimeValue left = evaluateExpression(node.left(), scope);
         RuntimeValue right = evaluateExpression(node.right(), scope);
         return switch (node.operator()) {
-            case ADD -> new NumberValue(runtimeCoercionService.asNumber(left).add(runtimeCoercionService.asNumber(right)));
-            case SUBTRACT -> new NumberValue(runtimeCoercionService.asNumber(left).subtract(runtimeCoercionService.asNumber(right)));
-            case MULTIPLY -> new NumberValue(runtimeCoercionService.asNumber(left).multiply(runtimeCoercionService.asNumber(right)));
-            case DIVIDE -> new NumberValue(runtimeCoercionService.asNumber(left).divide(runtimeCoercionService.asNumber(right), MathContext.DECIMAL128));
-            case MODULO -> new NumberValue(runtimeCoercionService.asNumber(left).remainder(runtimeCoercionService.asNumber(right)));
-            case POWER -> new NumberValue(pow(runtimeCoercionService.asNumber(left), runtimeCoercionService.asNumber(right)));
-            case ROOT -> new NumberValue(root(runtimeCoercionService.asNumber(left), runtimeCoercionService.asNumber(right)));
-            case AND -> new BooleanValue(runtimeCoercionService.asBoolean(left) && runtimeCoercionService.asBoolean(right));
-            case OR -> new BooleanValue(runtimeCoercionService.asBoolean(left) || runtimeCoercionService.asBoolean(right));
-            case XOR -> new BooleanValue(runtimeCoercionService.asBoolean(left) ^ runtimeCoercionService.asBoolean(right));
-            case XNOR -> new BooleanValue(!(runtimeCoercionService.asBoolean(left) ^ runtimeCoercionService.asBoolean(right)));
-            case NAND -> new BooleanValue(!(runtimeCoercionService.asBoolean(left) && runtimeCoercionService.asBoolean(right)));
-            case NOR -> new BooleanValue(!(runtimeCoercionService.asBoolean(left) || runtimeCoercionService.asBoolean(right)));
+            case ADD ->
+                    new NumberValue(runtimeCoercionService.asNumber(left).add(runtimeCoercionService.asNumber(right)));
+            case SUBTRACT ->
+                    new NumberValue(runtimeCoercionService.asNumber(left).subtract(runtimeCoercionService.asNumber(right)));
+            case MULTIPLY ->
+                    new NumberValue(runtimeCoercionService.asNumber(left).multiply(runtimeCoercionService.asNumber(right)));
+            case DIVIDE ->
+                    new NumberValue(runtimeCoercionService.asNumber(left).divide(runtimeCoercionService.asNumber(right), MathContext.DECIMAL128));
+            case MODULO ->
+                    new NumberValue(runtimeCoercionService.asNumber(left).remainder(runtimeCoercionService.asNumber(right)));
+            case POWER ->
+                    new NumberValue(pow(runtimeCoercionService.asNumber(left), runtimeCoercionService.asNumber(right)));
+            case ROOT ->
+                    new NumberValue(root(runtimeCoercionService.asNumber(left), runtimeCoercionService.asNumber(right)));
+            case AND ->
+                    new BooleanValue(runtimeCoercionService.asBoolean(left) && runtimeCoercionService.asBoolean(right));
+            case OR ->
+                    new BooleanValue(runtimeCoercionService.asBoolean(left) || runtimeCoercionService.asBoolean(right));
+            case XOR ->
+                    new BooleanValue(runtimeCoercionService.asBoolean(left) ^ runtimeCoercionService.asBoolean(right));
+            case XNOR ->
+                    new BooleanValue(!(runtimeCoercionService.asBoolean(left) ^ runtimeCoercionService.asBoolean(right)));
+            case NAND ->
+                    new BooleanValue(!(runtimeCoercionService.asBoolean(left) && runtimeCoercionService.asBoolean(right)));
+            case NOR ->
+                    new BooleanValue(!(runtimeCoercionService.asBoolean(left) || runtimeCoercionService.asBoolean(right)));
             case GREATER_THAN -> new BooleanValue(compare(left, right) > 0);
             case GREATER_THAN_OR_EQUAL -> new BooleanValue(compare(left, right) >= 0);
             case LESS_THAN -> new BooleanValue(compare(left, right) < 0);
@@ -197,15 +188,15 @@ abstract class AbstractRuntimeEvaluator<T> {
     private RuntimeValue evaluatePostfix(PostfixOperationNode node, ExecutionScope scope) {
         BigDecimal value = runtimeCoercionService.asNumber(evaluateExpression(node.operand(), scope));
         return switch (node.operator()) {
-            case PERCENT -> new NumberValue(value.divide(ONE_HUNDRED, MathContext.DECIMAL128));
+            case PERCENT -> new NumberValue(value.movePointRight(2));
             case FACTORIAL -> new NumberValue(factorial(value));
         };
     }
 
     private RuntimeValue evaluateVector(VectorLiteralNode node, ExecutionScope scope) {
         return new VectorValue(node.elements().stream()
-            .map(element -> evaluateExpression(element, scope))
-            .toList());
+                .map(element -> evaluateExpression(element, scope))
+                .toList());
     }
 
     private int compare(RuntimeValue left, RuntimeValue right) {
@@ -255,26 +246,26 @@ abstract class AbstractRuntimeEvaluator<T> {
             return base.pow(exponent.intValueExact(), MathContext.DECIMAL128);
         } catch (ArithmeticException ignored) {
             return BigDecimal.valueOf(Math.pow(base.doubleValue(), exponent.doubleValue()))
-                .setScale(16, RoundingMode.HALF_UP)
-                .stripTrailingZeros();
+                    .setScale(16, RoundingMode.HALF_UP)
+                    .stripTrailingZeros();
         }
     }
 
     private BigDecimal root(BigDecimal value, BigDecimal base) {
         return BigDecimal.valueOf(Math.pow(value.doubleValue(), BigDecimal.ONE.divide(base, MathContext.DECIMAL128).doubleValue()))
-            .setScale(16, RoundingMode.HALF_UP)
-            .stripTrailingZeros();
+                .setScale(16, RoundingMode.HALF_UP)
+                .stripTrailingZeros();
     }
 
     private BigDecimal sqrt(BigDecimal value) {
         return BigDecimal.valueOf(Math.sqrt(value.doubleValue()))
-            .setScale(16, RoundingMode.HALF_UP)
-            .stripTrailingZeros();
+                .setScale(16, RoundingMode.HALF_UP)
+                .stripTrailingZeros();
     }
 
     private ResolvedType resolvedType(NodeId nodeId) {
         return compiledExpression.semanticModel().findResolvedType(nodeId)
-            .orElseThrow(() -> new IllegalStateException("missing resolved type for node '" + nodeId.value() + "'"));
+                .orElseThrow(() -> new IllegalStateException("missing resolved type for node '" + nodeId.value() + "'"));
     }
 
     private String unquote(String value) {
@@ -283,8 +274,8 @@ abstract class AbstractRuntimeEvaluator<T> {
         }
         if (value.startsWith("\"") && value.endsWith("\"")) {
             return value.substring(1, value.length() - 1)
-                .replace("\\\"", "\"")
-                .replace("\\\\", "\\");
+                    .replace("\\\"", "\"")
+                    .replace("\\\\", "\\");
         }
         return value;
     }

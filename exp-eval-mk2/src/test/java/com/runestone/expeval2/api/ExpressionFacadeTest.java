@@ -1,6 +1,6 @@
 package com.runestone.expeval2.api;
 
-import com.runestone.expeval2.semantic.ScalarType;
+import com.runestone.expeval2.types.ScalarType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

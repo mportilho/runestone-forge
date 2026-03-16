@@ -60,7 +60,7 @@ class ExpressionCompilerTest {
     void shouldReuseCompiledExpressionsFromTheCacheForTheSameEnvironment() {
         ExpressionEnvironment environment = new ExpressionEnvironmentBuilder()
             .registerStaticProvider(ProviderFixture.class)
-            .registerExternalSymbol("principal", com.runestone.expeval2.semantic.ScalarType.NUMBER, BigDecimal.ONE, true)
+            .registerExternalSymbol("principal", com.runestone.expeval2.types.ScalarType.NUMBER, BigDecimal.ONE, true)
             .build();
 
         CompiledExpression first = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, environment);

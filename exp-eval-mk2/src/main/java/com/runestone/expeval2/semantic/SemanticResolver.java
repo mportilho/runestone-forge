@@ -2,7 +2,6 @@ package com.runestone.expeval2.semantic;
 
 import com.runestone.expeval2.ast.AssignmentNode;
 import com.runestone.expeval2.ast.BinaryOperationNode;
-import com.runestone.expeval2.ast.BinaryOperator;
 import com.runestone.expeval2.ast.ConditionalNode;
 import com.runestone.expeval2.ast.DestructuringAssignmentNode;
 import com.runestone.expeval2.ast.ExpressionFileNode;
@@ -18,6 +17,11 @@ import com.runestone.expeval2.ast.VectorLiteralNode;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
 import com.runestone.expeval2.grammar.language.ExpressionResultType;
+import com.runestone.expeval2.types.ResolvedType;
+import com.runestone.expeval2.types.ResolvedTypes;
+import com.runestone.expeval2.types.ScalarType;
+import com.runestone.expeval2.types.UnknownType;
+import com.runestone.expeval2.types.VectorType;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
