@@ -1,4 +1,4 @@
-package com.runestone.expeval2.runtime;
+package com.runestone.expeval2.runtime.values;
 
 import com.runestone.expeval2.types.ResolvedType;
 import com.runestone.expeval2.types.VectorType;

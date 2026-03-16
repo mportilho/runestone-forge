@@ -1,20 +1,19 @@
-package com.runestone.expeval2.runtime;
+package com.runestone.expeval2.runtime.values;
 
 import com.runestone.expeval2.types.ResolvedType;
 import com.runestone.expeval2.types.ScalarType;
 
-import java.time.LocalDate;
 import java.util.Objects;
 
-public record DateValue(LocalDate value) implements RuntimeValue {
+public record StringValue(String value) implements RuntimeValue {
 
-    public DateValue {
+    public StringValue {
         Objects.requireNonNull(value, "value must not be null");
     }
 
     @Override
     public ResolvedType type() {
-        return ScalarType.DATE;
+        return ScalarType.STRING;
     }
 
     @Override

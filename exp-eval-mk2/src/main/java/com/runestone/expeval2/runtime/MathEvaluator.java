@@ -1,6 +1,8 @@
 package com.runestone.expeval2.runtime;
 
 import com.runestone.expeval2.compiler.CompiledExpression;
+import com.runestone.expeval2.runtime.values.NumberValue;
+import com.runestone.expeval2.runtime.values.RuntimeValue;
 
 import java.math.BigDecimal;
 
