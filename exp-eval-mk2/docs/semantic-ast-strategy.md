@@ -824,7 +824,7 @@ Sem misturar ANTLR com domínio semântico:
   - parser facade e integração ANTLR
 - `com.runestone.expeval2.ast`
   - nós estruturais da AST
-- `com.runestone.expeval2.ast.build`
+- `com.runestone.expeval2.ast.mapping`
   - visitor ou mapper `parse tree -> AST`
 - `com.runestone.expeval2.semantic`
   - `SemanticModel`, resolução, tipos e issues
@@ -843,9 +843,9 @@ Direção de dependências esperada:
 
 - `grammar` não depende de `ast`, `semantic`, `compiler` nem `runtime`
 - `ast` não depende de ANTLR, reflection nem runtime
-- `ast.build` depende de `grammar` + `ast`
+- `ast.mapping` depende de `grammar` + `ast`
 - `semantic` depende de `ast` e dos catálogos/descritores estáveis do ambiente, nunca do parser
-- `compiler` orquestra `grammar -> ast.build -> semantic`
+- `compiler` orquestra `grammar -> ast.mapping -> semantic`
 - `api` depende de `compiler` + `runtime`, sem conhecer ANTLR nem detalhes da resolução
 - `catalog` concentra reflection, indexação e validação estrutural do ambiente
 - `runtime` depende de `compiler` e `semantic`, mas não volta a falar com ANTLR

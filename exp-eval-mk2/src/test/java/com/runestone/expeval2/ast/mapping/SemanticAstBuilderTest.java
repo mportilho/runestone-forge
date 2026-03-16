@@ -1,0 +1,289 @@
+package com.runestone.expeval2.ast.mapping;
+
+import com.runestone.expeval2.ast.BinaryOperationNode;
+import com.runestone.expeval2.ast.BinaryOperator;
+import com.runestone.expeval2.ast.ExpressionFileNode;
+import com.runestone.expeval2.ast.ExpressionNode;
+import com.runestone.expeval2.ast.FunctionCallNode;
+import com.runestone.expeval2.ast.IdentifierNode;
+import com.runestone.expeval2.ast.LiteralNode;
+import com.runestone.expeval2.ast.Node;
+import com.runestone.expeval2.ast.NodeId;
+import com.runestone.expeval2.ast.PostfixOperationNode;
+import com.runestone.expeval2.ast.PostfixOperator;
+import com.runestone.expeval2.ast.SimpleAssignmentNode;
+import com.runestone.expeval2.ast.SourceSpan;
+import com.runestone.expeval2.ast.UnaryOperationNode;
+import com.runestone.expeval2.ast.UnaryOperator;
+import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser;
+import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2ParserFacade;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class SemanticAstBuilderTest {
+
+    private final ExpressionEvaluatorV2ParserFacade parserFacade = new ExpressionEvaluatorV2ParserFacade();
+    private final SemanticAstBuilder builder = new SemanticAstBuilder();
+
+    @Test
+    void shouldBuildMathAstForStablePhaseTwoSubset() {
+        ExpressionFileNode fileNode = builder.buildMath(parseMath("base = 100; score(base, bonus) + -rate * 5!%"));
+
+        assertThat(fileNode.assignments()).singleElement().isInstanceOfSatisfying(SimpleAssignmentNode.class, assignment -> {
+            assertThat(assignment.targetName()).isEqualTo("base");
+            assertThat(assignment.value()).isInstanceOfSatisfying(LiteralNode.class, literal -> {
+                assertThat(literal.value()).isEqualTo("100");
+            });
+        });
+
+        assertThat(fileNode.resultExpression()).isInstanceOfSatisfying(BinaryOperationNode.class, addition -> {
+            assertThat(addition.operator()).isEqualTo(BinaryOperator.ADD);
+            assertThat(addition.left()).isInstanceOfSatisfying(FunctionCallNode.class, functionCall -> {
+                assertThat(functionCall.functionName()).isEqualTo("score");
+                assertThat(functionCall.arguments()).hasSize(2);
+                assertThat(functionCall.arguments().getFirst()).isInstanceOfSatisfying(IdentifierNode.class, identifier -> {
+                    assertThat(identifier.name()).isEqualTo("base");
+                });
+                assertThat(functionCall.arguments().get(1)).isInstanceOfSatisfying(IdentifierNode.class, identifier -> {
+                    assertThat(identifier.name()).isEqualTo("bonus");
+                });
+            });
+            assertThat(addition.right()).isInstanceOfSatisfying(BinaryOperationNode.class, multiplication -> {
+                assertThat(multiplication.operator()).isEqualTo(BinaryOperator.MULTIPLY);
+                assertThat(multiplication.left()).isInstanceOfSatisfying(UnaryOperationNode.class, unary -> {
+                    assertThat(unary.operator()).isEqualTo(UnaryOperator.NEGATE);
+                    assertThat(unary.operand()).isInstanceOfSatisfying(IdentifierNode.class, identifier -> {
+                        assertThat(identifier.name()).isEqualTo("rate");
+                    });
+                });
+                assertThat(multiplication.right()).isInstanceOfSatisfying(PostfixOperationNode.class, percent -> {
+                    assertThat(percent.operator()).isEqualTo(PostfixOperator.PERCENT);
+                    assertThat(percent.operand()).isInstanceOfSatisfying(PostfixOperationNode.class, factorial -> {
+                        assertThat(factorial.operator()).isEqualTo(PostfixOperator.FACTORIAL);
+                        assertThat(factorial.operand()).isInstanceOfSatisfying(LiteralNode.class, literal -> {
+                            assertThat(literal.value()).isEqualTo("5");
+                        });
+                    });
+                });
+            });
+        });
+    }
+
+    @Test
+    void shouldBuildLogicalAstWithUnifiedComparisonNodes() {
+        ExpressionFileNode fileNode = builder.buildLogical(parseLogical("flag = ready(); principal + bonus >= limit() and !blocked"));
+
+        assertThat(fileNode.assignments()).singleElement().isInstanceOfSatisfying(SimpleAssignmentNode.class, assignment -> {
+            assertThat(assignment.targetName()).isEqualTo("flag");
+            assertThat(assignment.value()).isInstanceOfSatisfying(FunctionCallNode.class, functionCall -> {
+                assertThat(functionCall.functionName()).isEqualTo("ready");
+                assertThat(functionCall.arguments()).isEmpty();
+            });
+        });
+
+        assertThat(fileNode.resultExpression()).isInstanceOfSatisfying(BinaryOperationNode.class, andOperation -> {
+            assertThat(andOperation.operator()).isEqualTo(BinaryOperator.AND);
+            assertThat(andOperation.left()).isInstanceOfSatisfying(BinaryOperationNode.class, comparison -> {
+                assertThat(comparison.operator()).isEqualTo(BinaryOperator.GREATER_THAN_OR_EQUAL);
+                assertThat(comparison.left()).isInstanceOfSatisfying(BinaryOperationNode.class, addition -> {
+                    assertThat(addition.operator()).isEqualTo(BinaryOperator.ADD);
+                });
+                assertThat(comparison.right()).isInstanceOfSatisfying(FunctionCallNode.class, functionCall -> {
+                    assertThat(functionCall.functionName()).isEqualTo("limit");
+                    assertThat(functionCall.arguments()).isEmpty();
+                });
+            });
+            assertThat(andOperation.right()).isInstanceOfSatisfying(UnaryOperationNode.class, unary -> {
+                assertThat(unary.operator()).isEqualTo(UnaryOperator.LOGICAL_NOT);
+                assertThat(unary.operand()).isInstanceOfSatisfying(IdentifierNode.class, identifier -> {
+                    assertThat(identifier.name()).isEqualTo("blocked");
+                });
+            });
+        });
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @MethodSource("stablePhaseTwoMathInputs")
+    void shouldBuildMathAstAcrossStablePhaseTwoCoverage(String scenario, String input) {
+        assertThat(builder.buildMath(parseMath(input)))
+            .as("math input for scenario '%s' should build without errors", scenario)
+            .isNotNull();
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @MethodSource("stablePhaseTwoLogicalInputs")
+    void shouldBuildLogicalAstAcrossStablePhaseTwoCoverage(String scenario, String input) {
+        assertThat(builder.buildLogical(parseLogical(input)))
+            .as("logical input for scenario '%s' should build without errors", scenario)
+            .isNotNull();
+    }
+
+    @Test
+    void shouldNormalizeIdentifierReferencesThatOnlyDifferByParserDisambiguationHints() {
+        ExpressionNode genericIdentifier = assignmentValueOf("target = foo; 1");
+        ExpressionNode typedReference = assignmentValueOf("target = <number>foo; 1");
+        ExpressionNode typedCast = assignmentValueOf("target = <number>(foo); 1");
+
+        assertThat(genericIdentifier).isInstanceOfSatisfying(IdentifierNode.class, identifier ->
+            assertThat(identifier.name()).isEqualTo("foo")
+        );
+        assertIdentifierReference(typedReference, "foo");
+        assertIdentifierReference(typedCast, "foo");
+    }
+
+    @Test
+    void shouldUnifyComparisonNodesAcrossDifferentSyntacticFamilies() {
+        assertComparisonOperator(builder.buildLogical(parseLogical("1 + 2 > 3")).resultExpression(), BinaryOperator.GREATER_THAN);
+        assertComparisonOperator(builder.buildLogical(parseLogical("\"a\" = formatName()")).resultExpression(), BinaryOperator.EQUAL);
+        assertComparisonOperator(builder.buildLogical(parseLogical("<date>startDate <= currDate")).resultExpression(), BinaryOperator.LESS_THAN_OR_EQUAL);
+        assertComparisonOperator(builder.buildLogical(parseLogical("<time>startTime < currTime")).resultExpression(), BinaryOperator.LESS_THAN);
+        assertComparisonOperator(builder.buildLogical(parseLogical("<datetime>startAt >= currDateTime")).resultExpression(), BinaryOperator.GREATER_THAN_OR_EQUAL);
+        assertComparisonOperator(builder.buildLogical(parseLogical("true != false")).resultExpression(), BinaryOperator.NOT_EQUAL);
+    }
+
+    @Test
+    void shouldPopulateNodeIdsAndSourceSpansAcrossBuiltTree() {
+        String input = "base = 100; score(base, bonus) + rate";
+
+        ExpressionFileNode fileNode = builder.buildMath(parseMath(input));
+        List<Node> nodes = collectNodes(fileNode);
+
+        assertThat(nodes).isNotEmpty();
+        assertThat(nodes)
+            .extracting(Node::nodeId)
+            .extracting(NodeId::value)
+            .allSatisfy(value -> assertThat(value).isNotBlank());
+        assertThat(nodes)
+            .extracting(Node::sourceSpan)
+            .allSatisfy(sourceSpan -> assertThat(sourceSpan).isNotNull());
+        assertThat(fileNode.sourceSpan()).isEqualTo(new SourceSpan(0, input.length() - 1, 1, 0, 1, input.length()));
+    }
+
+    @Test
+    void shouldRejectConditionalExpressionsUntilPhaseThree() {
+        assertThatThrownBy(() -> builder.buildMath(parseMath("if true then 1 else 2 endif")))
+            .isInstanceOf(UnsupportedOperationException.class)
+            .hasMessageContaining("conditional");
+    }
+
+    @Test
+    void shouldRejectVectorExpressionsUntilPhaseFour() {
+        assertThatThrownBy(() -> builder.buildMath(parseMath("items = [1, 2]; 1")))
+            .isInstanceOf(UnsupportedOperationException.class)
+            .hasMessageContaining("vector");
+    }
+
+    private ExpressionEvaluatorV2Parser.MathStartContext parseMath(String input) {
+        return parserFacade.parseMath(input).root();
+    }
+
+    private ExpressionEvaluatorV2Parser.LogicalStartContext parseLogical(String input) {
+        return parserFacade.parseLogical(input).root();
+    }
+
+    private static List<Node> collectNodes(ExpressionFileNode fileNode) {
+        List<Node> nodes = new ArrayList<>();
+        nodes.add(fileNode);
+        fileNode.assignments().forEach(assignment -> {
+            nodes.add(assignment);
+            if (assignment instanceof SimpleAssignmentNode simpleAssignmentNode) {
+                collectExpressionNodes(simpleAssignmentNode.value(), nodes);
+            }
+        });
+        collectExpressionNodes(fileNode.resultExpression(), nodes);
+        return nodes;
+    }
+
+    private static void collectExpressionNodes(ExpressionNode expressionNode, List<Node> nodes) {
+        nodes.add(expressionNode);
+        switch (expressionNode) {
+            case BinaryOperationNode binaryOperationNode -> {
+                collectExpressionNodes(binaryOperationNode.left(), nodes);
+                collectExpressionNodes(binaryOperationNode.right(), nodes);
+            }
+            case FunctionCallNode functionCallNode -> functionCallNode.arguments()
+                .forEach(argument -> collectExpressionNodes(argument, nodes));
+            case PostfixOperationNode postfixOperationNode -> collectExpressionNodes(postfixOperationNode.operand(), nodes);
+            case UnaryOperationNode unaryOperationNode -> collectExpressionNodes(unaryOperationNode.operand(), nodes);
+            case IdentifierNode ignored -> {
+            }
+            case LiteralNode ignored -> {
+            }
+            default -> throw new IllegalStateException("unexpected expression node: " + expressionNode.getClass().getSimpleName());
+        }
+    }
+
+    private ExpressionNode assignmentValueOf(String input) {
+        return ((SimpleAssignmentNode) builder.buildMath(parseMath(input)).assignments().getFirst()).value();
+    }
+
+    private static void assertIdentifierReference(ExpressionNode node, String expectedName) {
+        assertThat(node).isInstanceOfSatisfying(IdentifierNode.class, identifier ->
+            assertThat(identifier.name()).isEqualTo(expectedName)
+        );
+    }
+
+    private static void assertComparisonOperator(ExpressionNode node, BinaryOperator expectedOperator) {
+        assertThat(node).isInstanceOfSatisfying(BinaryOperationNode.class, comparison ->
+            assertThat(comparison.operator()).isEqualTo(expectedOperator)
+        );
+    }
+
+    private static Stream<Arguments> stablePhaseTwoMathInputs() {
+        return Stream.of(
+            Arguments.of("typed numeric references", "<number>principal + rate"),
+            Arguments.of("cached function with supported argument families", "$.metric(1, true, 2024-12-31, 12:30, 2024-12-31T12:30, \"txt\")"),
+            Arguments.of("function with semicolon separated arguments", "score(1; false; \"x\")"),
+            Arguments.of("parenthesized arithmetic precedence", "(1 + 2) * 3"),
+            Arguments.of("square root function", "sqrt(16)"),
+            Arguments.of("modulus bars", "|1 - 3|"),
+            Arguments.of("postfix factorial and percent", "5!%"),
+            Arguments.of("exponentiation with unary operand", "2 ^ -3"),
+            Arguments.of("root operator chain", "64 root 4 root 2"),
+            Arguments.of("multiplication division and modulo", "10 * 3 / 2 mod 4"),
+            Arguments.of("assignments with explicit cast types except vector", "boolCast = <bool>(flag); numCast = <number>(amount); textCast = <text>(label); dateCast = <date>(createdOn); timeCast = <time>(createdAt); dateTimeCast = <datetime>(timestamp); 1"),
+            Arguments.of("generic assignment using identifier reference", "target = foo; 1"),
+            Arguments.of("generic assignment using function reference", "target = resolve(); 1"),
+            Arguments.of("scalar assignment with math expression", "answer = 1 + 2 * 3; 1"),
+            Arguments.of("scalar assignment with logical expression", "flag = true and !false; 1"),
+            Arguments.of("scalar assignment with string constant", "textValue = \"alpha\"; 1"),
+            Arguments.of("date constant assignment", "dateValue = 2024-12-31; 1"),
+            Arguments.of("date current value assignment", "dateValue = currDate; 1"),
+            Arguments.of("typed date reference assignment", "dateValue = <date>holiday; 1"),
+            Arguments.of("time constant assignment", "timeValue = 12:30:45; 1"),
+            Arguments.of("time current value assignment", "timeValue = currTime; 1"),
+            Arguments.of("typed time reference assignment", "timeValue = <time>meetingTime; 1"),
+            Arguments.of("datetime constant with offset assignment", "dateTimeValue = 2024-12-31T12:30:45-03:00; 1"),
+            Arguments.of("datetime current value assignment", "dateTimeValue = currDateTime; 1"),
+            Arguments.of("typed datetime reference assignment", "dateTimeValue = <datetime>lastUpdatedAt; 1")
+        );
+    }
+
+    private static Stream<Arguments> stablePhaseTwoLogicalInputs() {
+        return Stream.of(
+            Arguments.of("logical constant", "true"),
+            Arguments.of("typed logical reference", "<bool>enabled"),
+            Arguments.of("logical function reference", "isReady()"),
+            Arguments.of("logical not with tilde", "~true"),
+            Arguments.of("logical not with exclamation", "!false"),
+            Arguments.of("parenthesized or and expression", "(true or false) and true"),
+            Arguments.of("bitwise boolean operator chain", "true nand false xor true xnor false nor true"),
+            Arguments.of("boolean comparison", "true != false"),
+            Arguments.of("math comparison", "1 + 2 > 3 * 4"),
+            Arguments.of("string comparison", "<text>left = formatName()"),
+            Arguments.of("date comparison", "<date>startDate <= currDate"),
+            Arguments.of("time comparison", "<time>startTime < currTime"),
+            Arguments.of("datetime comparison", "<datetime>startAt >= currDateTime"),
+            Arguments.of("logical input with supported leading assignment", "value = foo; 1 < 2 and isReady()")
+        );
+    }
+}
