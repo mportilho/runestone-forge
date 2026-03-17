@@ -48,4 +48,18 @@ public record FunctionDescriptor(
             throw new IllegalStateException("failed to invoke function '" + name + "'", throwable);
         }
     }
+
+    public Object invoke(Object[] arguments) {
+        Objects.requireNonNull(arguments, "arguments must not be null");
+        if (arguments.length != arity()) {
+            throw new IllegalArgumentException("arguments size does not match function arity");
+        }
+        try {
+            return invoker.invokeWithArguments(arguments);
+        } catch (RuntimeException exception) {
+            throw exception;
+        } catch (Throwable throwable) {
+            throw new IllegalStateException("failed to invoke function '" + name + "'", throwable);
+        }
+    }
 }

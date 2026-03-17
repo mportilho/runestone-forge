@@ -15,7 +15,14 @@
       "Bash(git -C /home/marcelo/dev/git/runestone-forge stash list)",
       "Bash(git -C /home/marcelo/dev/git/runestone-forge stash)",
       "Bash(git -C /home/marcelo/dev/git/runestone-forge stash pop)",
-      "Bash(xargs sed:*)"
+      "Bash(xargs sed:*)",
+      "Bash(git stash:*)",
+      "Bash(mkdir -p exp-eval-mk2/target/performance-benchmark)",
+      "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts)",
+      "Bash($SKILL_SCRIPTS/run-jmh.sh exp-eval-mk2:*)",
+      "Bash(python3 /home/marcelo/.claude/skills/performance-benchmark/scripts/jmh-parser.py target/performance-benchmark/before.json)",
+      "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); [print\\(f''''{b[\"\"benchmark\"\"].split\\(\"\".\"\"\\)[-1]}: {b[\"\"primaryMetric\"\"][\"\"score\"\"]:.3f} ns/op''''\\) for b in data]\")",
+      "Bash(python3:*)"
     ]
   }
 }

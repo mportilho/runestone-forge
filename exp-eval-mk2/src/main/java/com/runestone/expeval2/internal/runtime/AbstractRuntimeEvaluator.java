@@ -1,5 +1,6 @@
 package com.runestone.expeval2.internal.runtime;
 
+import com.runestone.expeval2.catalog.FunctionDescriptor;
 import com.runestone.expeval2.internal.ast.BinaryOperator;
 import com.runestone.expeval2.internal.ast.PostfixOperator;
 import com.runestone.expeval2.internal.ast.UnaryOperator;
@@ -12,7 +13,6 @@ import java.math.MathContext;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -73,14 +73,14 @@ abstract class AbstractRuntimeEvaluator<T> {
     }
 
     private RuntimeValue evaluateFunctionCall(ExecutableFunctionCall node, ExecutionScope scope) {
-        List<RuntimeValue> arguments = node.arguments().stream()
-                .map(argument -> evaluateExpression(argument, scope))
-                .toList();
-        List<Object> rawArguments = new ArrayList<>(arguments.size());
-        for (int index = 0; index < arguments.size(); index++) {
-            rawArguments.add(runtimeCoercionService.coerce(arguments.get(index), node.binding().descriptor().parameterTypes().get(index)));
+        FunctionDescriptor descriptor = node.binding().descriptor();
+        int arity = descriptor.arity();
+        Object[] args = new Object[arity];
+        for (int i = 0; i < arity; i++) {
+            RuntimeValue evaluated = evaluateExpression(node.arguments().get(i), scope);
+            args[i] = runtimeCoercionService.coerce(evaluated, descriptor.parameterTypes().get(i));
         }
-        Object rawResult = node.binding().descriptor().invoke(rawArguments);
+        Object rawResult = descriptor.invoke(args);
         return runtimeValueFactory.from(rawResult, node.binding().returnType());
     }
 

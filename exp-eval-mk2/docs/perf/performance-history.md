@@ -178,3 +178,43 @@
 **Decision:** ADJUST
 **Reason:** `exp-eval-mk2` is materially faster only for the literal-heavy path, but it regresses in the two mutable-runtime scenarios, with a severe slowdown when invoking user-defined functions.
 **Notes:** Measurements came from `CrossModuleExpressionEngineBenchmark` using the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10), with JSON saved to `exp-eval-mk2/target/performance-benchmark/cross-module-engine-comparison.json`. Cross-module functional coverage passed via `mvn -q -pl exp-eval-mk2 -am -Dsurefire.failIfNoSpecifiedTests=false -Dtest=ExpressionFacadeTest,CrossModuleExpressionEngineTest test`. Running isolated `expression-evaluator` targeted tests currently hits pre-existing truncated JMH generated sources during `testCompile`, so those tests were not used as an additional gate for this experiment.
+
+Allocation profile for `userFunction` scenario (added as part of this entry to serve as baseline for Phase 1 refactoring):
+
+| Benchmark | Score (ns/op) | Allocation (B/op) |
+|-----------|-------------:|------------------:|
+| legacyUserFunction | 1,662.188 | 440.038 |
+| mk2UserFunction | 4,748.322 | 4,144.109 |
+
+## PERF-011: Phase 1 — Eliminate redundant list allocation in `evaluateFunctionCall`
+
+**Date:** 2026-03-17
+
+**Scenario:** Measure the effect of replacing the two intermediate `List` allocations in `AbstractRuntimeEvaluator.evaluateFunctionCall(...)` with a single `Object[]` pre-sized to function arity, and adding a matching `FunctionDescriptor.invoke(Object[])` overload to remove the defensive `List.copyOf(...)` inside the descriptor.
+**Hypothesis:** Removing two list allocations per function call and one defensive copy would reduce both `ns/op` and `B/op` for the `mk2UserFunction` scenario without regressing `mk2VariableChurn` or `mk2LiteralDense`.
+
+**Changes applied:**
+- `AbstractRuntimeEvaluator.evaluateFunctionCall(...)`: replaced `stream().toList()` + `new ArrayList<>(...)` with a single `Object[]` filled in a plain for-loop; passes the array directly to the descriptor.
+- `FunctionDescriptor`: added `invoke(Object[])` overload that calls `invokeWithArguments(arguments)` without the `List.copyOf(...)` wrapping present in `invoke(List<Object>)`.
+- `ExpressionEvaluatorV2ParserFacade`: removed unused import (cosmetic).
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| mk2LiteralDense | 1,060.01 | 1,044.00 | +1.51% |
+| mk2UserFunction | 1,630.70 | 1,351.80 | +17.10% |
+| mk2VariableChurn | 993.02 | 994.10 | -0.11% |
+
+Note: `before` values reflect the working tree state prior to this change in the current benchmark session (not PERF-010 numbers, which used a different JVM session and different expression inputs).
+
+Allocation profile for `userFunction` scenario after Phase 1:
+
+| Benchmark | Score (ns/op) | Allocation (B/op) |
+|-----------|-------------:|------------------:|
+| legacyUserFunction | 724.1 | 440.009 |
+| mk2UserFunction | 1,351.8 | 2,672.020 |
+
+Allocation delta: `mk2UserFunction` went from **4,144 B/op** (PERF-010 baseline) to **2,672 B/op** — a **35.5% reduction**. The gap to the legacy path (440 B/op) remains large; Phases 2 and 3 target the remaining overhead from `invokeWithArguments`, coercion, and `RuntimeValueFactory.from(...)`.
+
+**Decision:** ACCEPT
+**Reason:** `mk2UserFunction` improved by +17.10% (above the 10% threshold), allocation dropped by 35.5%, and `mk2VariableChurn` was essentially flat (-0.11%). The change is isolated, low-risk, and measurably advances the Phase 1 criterion (reduce `B/op` in the `mk2UserFunction` scenario).
+**Notes:** Measurements used `CrossModuleExpressionEngineBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). Allocation measured separately with `-f 1 -prof gc` on the `userFunction` benchmarks only. Module tests passed via `mvn -q -pl exp-eval-mk2 test` both before and after the change.

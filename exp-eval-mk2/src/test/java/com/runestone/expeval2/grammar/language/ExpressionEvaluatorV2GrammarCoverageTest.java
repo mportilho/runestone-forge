@@ -1,4 +1,4 @@
-package com.runestone.expeval2.internal.grammar;
+package com.runestone.expeval2.grammar.language;
 
 import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2ParserFacade;
 import org.junit.jupiter.params.ParameterizedTest;

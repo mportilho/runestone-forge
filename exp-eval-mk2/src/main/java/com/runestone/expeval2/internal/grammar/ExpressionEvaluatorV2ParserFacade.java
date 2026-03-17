@@ -1,6 +1,5 @@
 package com.runestone.expeval2.internal.grammar;
 
-import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2Parser;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 
