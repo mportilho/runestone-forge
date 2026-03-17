@@ -362,9 +362,11 @@ Plano detalhado de refatoração proposto:
    - Resultado medido: `mk2UserFunction` melhorou +22.08% (1381 → 1076 ns/op); alocação caiu 31.2% (2672 → 1840 B/op). Decisão: ACCEPT.
 
 3. Fase 3: reduzir wrapping e coerção redundantes
+   - Situação: Descartado (PERF-013)
    - Verificar se o binding compilado da função pode armazenar metadados já preparados para coerção sem consultar listas de tipos a cada chamada.
    - Avaliar se o retorno da função pode evitar round-trip desnecessário por `RuntimeValueFactory.from(...)` quando o tipo já estiver alinhado.
    - Critério de saída: reduzir CPU e alocação residual depois da remoção das listas.
+   - Resultado medido: `mk2UserFunction` −0.67% (ruído), B/op inalterado (1,840). Descoberta importante: a coerção já tem fast-path via `targetType.isInstance(value.raw())` e o `DataConversionService.convert` para conversões de identidade não aloca. O gap de 1,400 B/op em relação ao legado vem do overhead base do runtime (ExecutionScope + HashMap, snapshot de bindings, criação de avaliador) — alvo da Fase 4. Decisão: ADJUST.
 
 4. Fase 4: atacar overhead base do `compute()`
    - Reutilizar avaliadores quando forem efetivamente stateless.

@@ -250,3 +250,36 @@ Allocation delta: `mk2UserFunction` went from **2,672 B/op** (Phase 1) to **1,84
 **Decision:** ACCEPT
 **Reason:** `mk2UserFunction` improved by +22.08% (above the 10% threshold), allocation dropped by 31.2%, and the variableChurn scenario was unaffected within measurement noise. The change is isolated, low-risk, and the criterion for Phase 2 (reduce dispatch cost of function invocation) is met.
 **Notes:** Measurements used `CrossModuleExpressionEngineBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). Allocation measured separately with `-f 1 -wi 5 -i 5 -prof gc` on the `userFunction` benchmarks only. Module tests passed via `mvn -q -pl exp-eval-mk2 test` both before and after the change.
+
+## PERF-013: Phase 3 — Coercion metadata shortcut and `RuntimeValueFactory.from` fast path
+
+**Date:** 2026-03-17
+
+**Scenario:** Measure the effect of two targeted changes aimed at reducing per-call overhead in the function dispatch path: (1) replacing `descriptor.parameterTypes().get(i)` with a direct `descriptor.parameterType(i)` backed by a `Class<?>[]` field; (2) adding instanceof short-circuits in `RuntimeValueFactory.from(...)` to skip `DataConversionService.convert` when the raw return value already matches the expected Java type.
+**Hypothesis:** The `List.get()` call per argument would be eliminated in favour of a raw array access, and avoiding `DataConversionService.convert` for already-typed return values would reduce both CPU and allocation in the `mk2UserFunction` scenario.
+
+**Changes applied:**
+- `FunctionDescriptor`: added private `Class<?>[]` field `parameterTypesArray` populated from `parameterTypes` at construction; exposed `parameterType(int index)` for direct array access; `arity()` now reads from the array length.
+- `AbstractRuntimeEvaluator.evaluateFunctionCall(...)`: replaced `descriptor.parameterTypes().get(i)` with `descriptor.parameterType(i)`.
+- `RuntimeValueFactory.from(...)`: added `instanceof` fast path for each `ScalarType` case (`BigDecimal`, `Boolean`, `String`, `LocalDate`, `LocalTime`, `LocalDateTime`) to skip `DataConversionService.convert` when the raw value is already the correct Java type.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| mk2UserFunction | 1,053.0 | 1,060.1 | −0.67% |
+| mk2VariableChurn | 959.1 | 957.5 | +0.17% |
+| legacyUserFunction | 746.0 | 708.8 | — (noise) |
+
+Allocation profile after Phase 3:
+
+| Benchmark | Score (ns/op) | Allocation (B/op) |
+|-----------|-------------:|------------------:|
+| legacyUserFunction | 655.4 | 440.009 |
+| mk2UserFunction | 1,049.6 | 1,840.015 |
+
+Allocation delta: **unchanged** at 1,840 B/op vs Phase 2. The Phase 3 hypothesis did not hold.
+
+**Key diagnostic finding:** The remaining 1,400 B/op gap over the legacy path is not from coercion metadata lookup or `RuntimeValueFactory.from(...)` round-trips. For the common `NumberValue → BigDecimal` coercion path, `RuntimeCoercionService.coerce` already short-circuits via `targetType.isInstance(value.raw())` (returning the raw value without allocation), and `DataConversionService.convert` for identity conversions does not allocate. The bulk of the remaining allocation originates in the base runtime overhead per `compute()`: `ExecutionScope` with its `HashMap`, the `MutableBindings.snapshot()` + copy chain, and evaluator object creation. This is the target of Phase 4.
+
+**Decision:** DISCARD
+**Reason:** `mk2UserFunction` change (−0.67%) is within measurement noise (±17 ns/op), and allocation is flat at 1,840 B/op. The code was reverted. The changes produced no measurable performance improvement.
+**Notes:** Measurements used `CrossModuleExpressionEngineBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). Allocation measured with `-f 1 -wi 5 -i 5 -prof gc`. Module tests passed via `mvn -q -pl exp-eval-mk2 test` both before and after revert.

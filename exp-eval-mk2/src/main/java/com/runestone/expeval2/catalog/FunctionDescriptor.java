@@ -3,8 +3,6 @@ package com.runestone.expeval2.catalog;
 import com.runestone.expeval2.types.ResolvedType;
 
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.util.List;
 import java.util.Objects;
 
