@@ -354,10 +354,12 @@ Plano detalhado de refatoração proposto:
    - Critério de saída: reduzir claramente o `B/op` do cenário `mk2UserFunction`.
 
 2. Fase 2: substituir `FunctionDescriptor.invoke(List<Object>)`
+   - Situação: Resolvido (PERF-012)
    - Introduzir um invoker compilado no bind da função, com assinatura mais direta que `List<Object>`.
    - Priorizar um caminho `Object[] -> retorno` ou wrappers por aridade pequena, que é o caso dominante das expressões avaliadas.
    - Remover `List.copyOf(arguments)` do hot path, já que os argumentos são locais e controlados pelo runtime.
    - Critério de saída: derrubar o custo de dispatch puro da função e reduzir a distância para o legado.
+   - Resultado medido: `mk2UserFunction` melhorou +22.08% (1381 → 1076 ns/op); alocação caiu 31.2% (2672 → 1840 B/op). Decisão: ACCEPT.
 
 3. Fase 3: reduzir wrapping e coerção redundantes
    - Verificar se o binding compilado da função pode armazenar metadados já preparados para coerção sem consultar listas de tipos a cada chamada.

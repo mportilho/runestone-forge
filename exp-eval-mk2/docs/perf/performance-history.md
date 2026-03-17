@@ -218,3 +218,35 @@ Allocation delta: `mk2UserFunction` went from **4,144 B/op** (PERF-010 baseline)
 **Decision:** ACCEPT
 **Reason:** `mk2UserFunction` improved by +17.10% (above the 10% threshold), allocation dropped by 35.5%, and `mk2VariableChurn` was essentially flat (-0.11%). The change is isolated, low-risk, and measurably advances the Phase 1 criterion (reduce `B/op` in the `mk2UserFunction` scenario).
 **Notes:** Measurements used `CrossModuleExpressionEngineBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). Allocation measured separately with `-f 1 -prof gc` on the `userFunction` benchmarks only. Module tests passed via `mvn -q -pl exp-eval-mk2 test` both before and after the change.
+
+## PERF-012: Phase 2 — Replace `invokeWithArguments` with pre-compiled spread handle in `FunctionDescriptor`
+
+**Date:** 2026-03-17
+
+**Scenario:** Measure the effect of replacing `MethodHandle.invokeWithArguments(Object[])` in `FunctionDescriptor.invoke(Object[])` with a pre-compiled spread handle using `asSpreader + invokeExact`, computed once at construction time.
+**Hypothesis:** Pre-adapting the method handle at bind time (compilation phase) eliminates the internal boxing, adapter-chain traversal, and array wrapping that `invokeWithArguments` performs on every call, reducing both `ns/op` and `B/op` for the `mk2UserFunction` scenario without regressing `mk2VariableChurn`.
+
+**Changes applied:**
+- `FunctionDescriptor`: converted from `record` to `final class` to allow a private `compiledInvoker` field; field is computed once in the constructor via `invoker.asType(generic()).asSpreader(Object[].class, arity)`; `invoke(Object[])` now calls `compiledInvoker.invokeExact(arguments)` instead of `invoker.invokeWithArguments(arguments)`.
+- `FunctionDescriptor`: removed `invoke(List<Object>)` method, which was already unused after Phase 1.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| mk2UserFunction | 1,381.1 | 1,076.1 | +22.08% |
+| mk2VariableChurn | 978.2 | 1,041.9 | -6.51% |
+| legacyUserFunction | 687.3 | 724.3 | — (noise) |
+
+Note: `mk2VariableChurn` regression (-6.51%) falls within noise given the high error margin (±130.9 ns/op); the variableChurn path does not invoke `FunctionDescriptor`.
+
+Allocation profile for `userFunction` scenario after Phase 2:
+
+| Benchmark | Score (ns/op) | Allocation (B/op) |
+|-----------|-------------:|------------------:|
+| legacyUserFunction | 796.6 | 440.011 |
+| mk2UserFunction | 1,054.4 | 1,840.015 |
+
+Allocation delta: `mk2UserFunction` went from **2,672 B/op** (Phase 1) to **1,840 B/op** — a **31.2% reduction**. Cumulative reduction from the PERF-010 baseline (4,144 B/op): **55.6%**. The remaining gap to the legacy (440 B/op) is targeted by Phase 3 (coercion and `RuntimeValueFactory.from(...)` overhead) and Phase 4 (base runtime overhead).
+
+**Decision:** ACCEPT
+**Reason:** `mk2UserFunction` improved by +22.08% (above the 10% threshold), allocation dropped by 31.2%, and the variableChurn scenario was unaffected within measurement noise. The change is isolated, low-risk, and the criterion for Phase 2 (reduce dispatch cost of function invocation) is met.
+**Notes:** Measurements used `CrossModuleExpressionEngineBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). Allocation measured separately with `-f 1 -wi 5 -i 5 -prof gc` on the `userFunction` benchmarks only. Module tests passed via `mvn -q -pl exp-eval-mk2 test` both before and after the change.

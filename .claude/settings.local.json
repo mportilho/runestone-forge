@@ -22,7 +22,9 @@
       "Bash($SKILL_SCRIPTS/run-jmh.sh exp-eval-mk2:*)",
       "Bash(python3 /home/marcelo/.claude/skills/performance-benchmark/scripts/jmh-parser.py target/performance-benchmark/before.json)",
       "Bash(python3 -c \"import json,sys; data=json.load\\(sys.stdin\\); [print\\(f''''{b[\"\"benchmark\"\"].split\\(\"\".\"\"\\)[-1]}: {b[\"\"primaryMetric\"\"][\"\"score\"\"]:.3f} ns/op''''\\) for b in data]\")",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"CrossModuleExpressionEngineBenchmark\\\\.\\(mk2UserFunction|legacyUserFunction|mk2VariableChurn\\)\" \"target/performance-benchmark/phase2-before.json\")",
+      "Bash(python:*)"
     ]
   }
 }
