@@ -60,6 +60,50 @@ class ExpressionFacadeTest {
         assertThat(result).isTrue();
     }
 
+    @Test
+    void shouldShortCircuitAndWhenLeftIsFalse() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+            .registerStaticProvider(FailingFixture.class)
+            .build();
+
+        boolean result = LogicalExpression.compile("false and alwaysFails()", environment).compute();
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void shouldShortCircuitOrWhenLeftIsTrue() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+            .registerStaticProvider(FailingFixture.class)
+            .build();
+
+        boolean result = LogicalExpression.compile("true or alwaysFails()", environment).compute();
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    void shouldShortCircuitNandWhenLeftIsFalse() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+            .registerStaticProvider(FailingFixture.class)
+            .build();
+
+        boolean result = LogicalExpression.compile("false nand alwaysFails()", environment).compute();
+
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    void shouldShortCircuitNorWhenLeftIsTrue() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+            .registerStaticProvider(FailingFixture.class)
+            .build();
+
+        boolean result = LogicalExpression.compile("true nor alwaysFails()", environment).compute();
+
+        assertThat(result).isFalse();
+    }
+
     public static final class FunctionFixture {
 
         private FunctionFixture() {
@@ -67,6 +111,16 @@ class ExpressionFacadeTest {
 
         public static BigDecimal bonus(BigDecimal principal) {
             return principal.multiply(new BigDecimal("0.5"));
+        }
+    }
+
+    public static final class FailingFixture {
+
+        private FailingFixture() {
+        }
+
+        public static boolean alwaysFails() {
+            throw new AssertionError("right operand must not be evaluated due to short-circuit");
         }
     }
 }

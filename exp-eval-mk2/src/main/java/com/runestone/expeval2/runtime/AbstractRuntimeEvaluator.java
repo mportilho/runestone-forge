@@ -149,8 +149,20 @@ abstract class AbstractRuntimeEvaluator<T> {
 
     private RuntimeValue evaluateBinary(BinaryOperationNode node, ExecutionScope scope) {
         RuntimeValue left = evaluateExpression(node.left(), scope);
+        BinaryOperator operator = node.operator();
+        if (operator == BinaryOperator.AND || operator == BinaryOperator.NAND) {
+            boolean leftBool = runtimeCoercionService.asBoolean(left);
+            if (!leftBool) {
+                return new BooleanValue(operator == BinaryOperator.NAND);
+            }
+        } else if (operator == BinaryOperator.OR || operator == BinaryOperator.NOR) {
+            boolean leftBool = runtimeCoercionService.asBoolean(left);
+            if (leftBool) {
+                return new BooleanValue(operator == BinaryOperator.OR);
+            }
+        }
         RuntimeValue right = evaluateExpression(node.right(), scope);
-        return switch (node.operator()) {
+        return switch (operator) {
             case ADD ->
                     new NumberValue(runtimeCoercionService.asNumber(left).add(runtimeCoercionService.asNumber(right)));
             case SUBTRACT ->
@@ -165,18 +177,14 @@ abstract class AbstractRuntimeEvaluator<T> {
                     new NumberValue(pow(runtimeCoercionService.asNumber(left), runtimeCoercionService.asNumber(right)));
             case ROOT ->
                     new NumberValue(root(runtimeCoercionService.asNumber(left), runtimeCoercionService.asNumber(right)));
-            case AND ->
-                    new BooleanValue(runtimeCoercionService.asBoolean(left) && runtimeCoercionService.asBoolean(right));
-            case OR ->
-                    new BooleanValue(runtimeCoercionService.asBoolean(left) || runtimeCoercionService.asBoolean(right));
+            case AND -> new BooleanValue(runtimeCoercionService.asBoolean(right));
+            case OR -> new BooleanValue(runtimeCoercionService.asBoolean(right));
             case XOR ->
                     new BooleanValue(runtimeCoercionService.asBoolean(left) ^ runtimeCoercionService.asBoolean(right));
             case XNOR ->
                     new BooleanValue(!(runtimeCoercionService.asBoolean(left) ^ runtimeCoercionService.asBoolean(right)));
-            case NAND ->
-                    new BooleanValue(!(runtimeCoercionService.asBoolean(left) && runtimeCoercionService.asBoolean(right)));
-            case NOR ->
-                    new BooleanValue(!(runtimeCoercionService.asBoolean(left) || runtimeCoercionService.asBoolean(right)));
+            case NAND -> new BooleanValue(!runtimeCoercionService.asBoolean(right));
+            case NOR -> new BooleanValue(!runtimeCoercionService.asBoolean(right));
             case GREATER_THAN -> new BooleanValue(compare(left, right) > 0);
             case GREATER_THAN_OR_EQUAL -> new BooleanValue(compare(left, right) >= 0);
             case LESS_THAN -> new BooleanValue(compare(left, right) < 0);
