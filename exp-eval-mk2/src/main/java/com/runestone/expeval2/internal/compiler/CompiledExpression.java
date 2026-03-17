@@ -1,7 +1,7 @@
-package com.runestone.expeval2.compiler;
+package com.runestone.expeval2.internal.compiler;
 
 import com.runestone.expeval2.grammar.language.ExpressionResultType;
-import com.runestone.expeval2.semantic.SemanticModel;
+import com.runestone.expeval2.internal.semantic.SemanticModel;
 
 import java.util.Objects;
 

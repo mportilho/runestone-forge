@@ -1,4 +1,4 @@
-package com.runestone.expeval2.semantic;
+package com.runestone.expeval2.internal.semantic;
 
 import com.runestone.expeval2.ast.AssignmentNode;
 import com.runestone.expeval2.ast.BinaryOperationNode;

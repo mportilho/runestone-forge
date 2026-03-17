@@ -1,4 +1,4 @@
-package com.runestone.expeval2.semantic;
+package com.runestone.expeval2.internal.semantic;
 
 import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.FunctionCatalog;

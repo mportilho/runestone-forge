@@ -1,4 +1,4 @@
-package com.runestone.expeval2.semantic;
+package com.runestone.expeval2.internal.semantic;
 
 import com.runestone.expeval2.catalog.FunctionDescriptor;
 import com.runestone.expeval2.catalog.FunctionRef;

@@ -1,13 +1,13 @@
-package com.runestone.expeval2.runtime;
+package com.runestone.expeval2.internal.runtime;
 
-import com.runestone.expeval2.semantic.SymbolRef;
+import com.runestone.expeval2.internal.semantic.SymbolRef;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-public final class ExecutionScope {
+final class ExecutionScope {
 
     private final Map<SymbolRef, RuntimeValue> values;
 

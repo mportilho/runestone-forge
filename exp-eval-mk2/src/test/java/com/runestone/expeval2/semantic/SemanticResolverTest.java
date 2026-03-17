@@ -8,9 +8,11 @@ import com.runestone.expeval2.ast.ExpressionFileNode;
 import com.runestone.expeval2.ast.ExpressionNode;
 import com.runestone.expeval2.ast.FunctionCallNode;
 import com.runestone.expeval2.ast.IdentifierNode;
-import com.runestone.expeval2.compiler.CompiledExpression;
-import com.runestone.expeval2.compiler.ExpressionCompiler;
+import com.runestone.expeval2.internal.compiler.CompiledExpression;
+import com.runestone.expeval2.internal.compiler.ExpressionCompiler;
 import com.runestone.expeval2.grammar.language.ExpressionResultType;
+import com.runestone.expeval2.internal.semantic.SemanticModel;
+import com.runestone.expeval2.internal.semantic.SymbolRef;
 import com.runestone.expeval2.types.ScalarType;
 import org.junit.jupiter.api.Test;
 

@@ -3,8 +3,10 @@ package com.runestone.expeval2.compiler;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval2.grammar.language.ExpressionResultType;
-import com.runestone.expeval2.semantic.SemanticIssue;
-import com.runestone.expeval2.semantic.SemanticResolutionException;
+import com.runestone.expeval2.internal.compiler.CompiledExpression;
+import com.runestone.expeval2.internal.compiler.ExpressionCompiler;
+import com.runestone.expeval2.internal.semantic.SemanticIssue;
+import com.runestone.expeval2.internal.semantic.SemanticResolutionException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

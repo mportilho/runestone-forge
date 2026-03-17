@@ -1,9 +1,9 @@
-package com.runestone.expeval2.runtime;
+package com.runestone.expeval2.internal.runtime;
 
 import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
-import com.runestone.expeval2.semantic.SemanticModel;
-import com.runestone.expeval2.semantic.SymbolRef;
+import com.runestone.expeval2.internal.semantic.SemanticModel;
+import com.runestone.expeval2.internal.semantic.SymbolRef;
 import com.runestone.expeval2.types.ResolvedType;
 
 import java.util.HashMap;

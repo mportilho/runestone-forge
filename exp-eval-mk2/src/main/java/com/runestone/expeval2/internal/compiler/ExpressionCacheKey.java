@@ -1,4 +1,4 @@
-package com.runestone.expeval2.compiler;
+package com.runestone.expeval2.internal.compiler;
 
 import com.runestone.expeval2.environment.ExpressionEnvironmentId;
 import com.runestone.expeval2.grammar.language.ExpressionResultType;

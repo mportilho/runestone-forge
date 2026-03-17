@@ -1,4 +1,4 @@
-package com.runestone.expeval2.compiler;
+package com.runestone.expeval2.internal.compiler;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -7,10 +7,10 @@ import com.runestone.expeval2.ast.mapping.SemanticAstBuilder;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2ParserFacade;
 import com.runestone.expeval2.grammar.language.ExpressionResultType;
-import com.runestone.expeval2.semantic.ResolutionContext;
-import com.runestone.expeval2.semantic.SemanticModel;
-import com.runestone.expeval2.semantic.SemanticResolutionException;
-import com.runestone.expeval2.semantic.SemanticResolver;
+import com.runestone.expeval2.internal.semantic.ResolutionContext;
+import com.runestone.expeval2.internal.semantic.SemanticModel;
+import com.runestone.expeval2.internal.semantic.SemanticResolutionException;
+import com.runestone.expeval2.internal.semantic.SemanticResolver;
 
 import java.util.Objects;
 

@@ -1,12 +1,20 @@
-package com.runestone.expeval2.runtime;
+package com.runestone.expeval2.internal.runtime;
 
-import com.runestone.expeval2.compiler.CompiledExpression;
+import com.runestone.expeval2.api.CompilationIssue;
+import com.runestone.expeval2.api.ExpressionCompilationException;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
+import com.runestone.expeval2.grammar.language.ExpressionResultType;
+import com.runestone.expeval2.internal.compiler.CompiledExpression;
+import com.runestone.expeval2.internal.compiler.ExpressionCompiler;
+import com.runestone.expeval2.internal.semantic.SemanticResolutionException;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Objects;
 
 public final class ExpressionRuntimeSupport {
+
+    private static final ExpressionCompiler COMPILER = new ExpressionCompiler();
 
     private final CompiledExpression compiledExpression;
     private final MutableBindings bindings;
@@ -21,7 +29,22 @@ public final class ExpressionRuntimeSupport {
         this.runtimeCoercionService = Objects.requireNonNull(runtimeCoercionService, "runtimeCoercionService must not be null");
     }
 
-    public static ExpressionRuntimeSupport from(CompiledExpression compiledExpression, ExpressionEnvironment environment) {
+    public static ExpressionRuntimeSupport compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
+        Objects.requireNonNull(source, "source must not be null");
+        Objects.requireNonNull(resultType, "resultType must not be null");
+        Objects.requireNonNull(environment, "environment must not be null");
+        try {
+            CompiledExpression compiled = COMPILER.compile(source, resultType, environment);
+            return from(compiled, environment);
+        } catch (SemanticResolutionException e) {
+            List<CompilationIssue> issues = e.issues().stream()
+                .map(issue -> new CompilationIssue(issue.code(), issue.message()))
+                .toList();
+            throw new ExpressionCompilationException(source, issues, e);
+        }
+    }
+
+    static ExpressionRuntimeSupport from(CompiledExpression compiledExpression, ExpressionEnvironment environment) {
         Objects.requireNonNull(environment, "environment must not be null");
         RuntimeValueFactory runtimeValueFactory = new RuntimeValueFactory(environment.getDataConversionService());
         RuntimeCoercionService runtimeCoercionService = new RuntimeCoercionService(environment.getDataConversionService());
@@ -41,7 +64,7 @@ public final class ExpressionRuntimeSupport {
         bindings.setValue(symbolName, rawValue);
     }
 
-    public ExecutionScope createExecutionScope() {
+    ExecutionScope createExecutionScope() {
         return ExecutionScope.from(bindings.snapshot());
     }
 
