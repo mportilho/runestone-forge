@@ -23,15 +23,17 @@ public final class ExpressionRuntimeSupport {
 
     public static ExpressionRuntimeSupport from(CompiledExpression compiledExpression, ExpressionEnvironment environment) {
         Objects.requireNonNull(environment, "environment must not be null");
+        RuntimeValueFactory runtimeValueFactory = new RuntimeValueFactory(environment.getDataConversionService());
+        RuntimeCoercionService runtimeCoercionService = new RuntimeCoercionService(environment.getDataConversionService());
         return new ExpressionRuntimeSupport(
                 compiledExpression,
                 MutableBindings.from(
                         compiledExpression.semanticModel(),
                         environment.externalSymbolCatalog(),
-                        environment.runtimeValueFactory()
+                        runtimeValueFactory
                 ),
-                environment.runtimeValueFactory(),
-                environment.runtimeCoercionService()
+                runtimeValueFactory,
+                runtimeCoercionService
         );
     }
 

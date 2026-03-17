@@ -1,9 +1,8 @@
 package com.runestone.expeval2.environment;
 
+import com.runestone.converters.DataConversionService;
 import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.FunctionCatalog;
-import com.runestone.expeval2.runtime.RuntimeCoercionService;
-import com.runestone.expeval2.runtime.RuntimeValueFactory;
 
 import java.util.Objects;
 
@@ -12,16 +11,14 @@ public final class ExpressionEnvironment {
     private final ExpressionEnvironmentId environmentId;
     private final FunctionCatalog functionCatalog;
     private final ExternalSymbolCatalog externalSymbolCatalog;
-    private final RuntimeValueFactory runtimeValueFactory;
-    private final RuntimeCoercionService runtimeCoercionService;
+    private final DataConversionService dataConversionService;
 
     ExpressionEnvironment(ExpressionEnvironmentId environmentId, FunctionCatalog functionCatalog, ExternalSymbolCatalog externalSymbolCatalog,
-                          RuntimeValueFactory runtimeValueFactory, RuntimeCoercionService runtimeCoercionService) {
+                          DataConversionService dataConversionService) {
         this.environmentId = Objects.requireNonNull(environmentId, "environmentId must not be null");
         this.functionCatalog = Objects.requireNonNull(functionCatalog, "functionCatalog must not be null");
         this.externalSymbolCatalog = Objects.requireNonNull(externalSymbolCatalog, "externalSymbolCatalog must not be null");
-        this.runtimeValueFactory = Objects.requireNonNull(runtimeValueFactory, "runtimeValueFactory must not be null");
-        this.runtimeCoercionService = Objects.requireNonNull(runtimeCoercionService, "runtimeCoercionService must not be null");
+        this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService must not be null");
     }
 
     public static ExpressionEnvironmentBuilder builder() {
@@ -40,11 +37,7 @@ public final class ExpressionEnvironment {
         return externalSymbolCatalog;
     }
 
-    public RuntimeValueFactory runtimeValueFactory() {
-        return runtimeValueFactory;
-    }
-
-    public RuntimeCoercionService runtimeCoercionService() {
-        return runtimeCoercionService;
+    public DataConversionService getDataConversionService() {
+        return dataConversionService;
     }
 }

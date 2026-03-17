@@ -10,7 +10,7 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Objects;
 
-public final class RuntimeCoercionService {
+final class RuntimeCoercionService {
 
     private final DataConversionService conversionService;
 

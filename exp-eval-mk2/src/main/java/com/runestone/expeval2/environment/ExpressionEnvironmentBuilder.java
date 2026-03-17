@@ -6,8 +6,6 @@ import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.catalog.FunctionCatalog;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
-import com.runestone.expeval2.runtime.RuntimeCoercionService;
-import com.runestone.expeval2.runtime.RuntimeValueFactory;
 import com.runestone.expeval2.types.ResolvedType;
 import com.runestone.expeval2.types.ResolvedTypes;
 
@@ -57,8 +55,6 @@ public final class ExpressionEnvironmentBuilder {
 
     public ExpressionEnvironment build() {
         DataConversionService effectiveConversionService = conversionService == null ? DEFAULT_DATA_CONVERSION_SERVICE : conversionService;
-        RuntimeValueFactory runtimeValueFactory = new RuntimeValueFactory(effectiveConversionService);
-        RuntimeCoercionService runtimeCoercionService = new RuntimeCoercionService(effectiveConversionService);
 
         List<FunctionDescriptor> functionDescriptors = new ArrayList<>();
         staticProviders.forEach(providerClass -> functionDescriptors.addAll(discoverFunctions(providerClass, null, true)));
@@ -86,7 +82,7 @@ public final class ExpressionEnvironmentBuilder {
         ExternalSymbolCatalog externalSymbolCatalog = new ExternalSymbolCatalog(symbolsByName);
 
         return new ExpressionEnvironment(new ExpressionEnvironmentId(UUID.randomUUID().toString()),
-                functionCatalog, externalSymbolCatalog, runtimeValueFactory, runtimeCoercionService);
+                functionCatalog, externalSymbolCatalog, effectiveConversionService);
     }
 
     private Collection<FunctionDescriptor> discoverFunctions(Class<?> providerClass, Object providerInstance, boolean staticOnly) {
