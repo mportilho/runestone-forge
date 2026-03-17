@@ -70,6 +70,10 @@ Key pattern: `AbstractOperation` forms a composite tree; each node computes its 
 - **JUnit 5**, **AssertJ**, **Mockito 5** — testing
 - **JMH 1.37** — microbenchmarks (in `benchmark/` and `perf/` test packages)
 
+## Agent Skills
+
+- ALWAYS load the java-guidelines skill if present when working with Java files on this project.
+
 ## Local ANTLR Tool Jar
 
 To avoid downloading the ANTLR tool repeatedly, reuse the local jar at:

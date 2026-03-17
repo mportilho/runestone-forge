@@ -143,7 +143,7 @@ abstract class AbstractRuntimeEvaluator<T> {
         return switch (node.operator()) {
             case NEGATE -> new NumberValue(runtimeCoercionService.asNumber(operand).negate());
             case LOGICAL_NOT -> new BooleanValue(!runtimeCoercionService.asBoolean(operand));
-            case SQRT -> new NumberValue(sqrt(runtimeCoercionService.asNumber(operand)));
+            case SQRT -> new NumberValue(runtimeCoercionService.asNumber(operand).sqrt(MathContext.DECIMAL128));
             case MODULUS -> new NumberValue(runtimeCoercionService.asNumber(operand).abs());
         };
     }
@@ -176,8 +176,10 @@ abstract class AbstractRuntimeEvaluator<T> {
                     new NumberValue(runtimeCoercionService.asNumber(left).remainder(runtimeCoercionService.asNumber(right)));
             case POWER ->
                     new NumberValue(pow(runtimeCoercionService.asNumber(left), runtimeCoercionService.asNumber(right)));
-            case ROOT ->
-                    new NumberValue(root(runtimeCoercionService.asNumber(left), runtimeCoercionService.asNumber(right)));
+            case ROOT -> {
+                BigDecimal value = runtimeCoercionService.asNumber(left);
+                yield new NumberValue(BigDecimalMath.root(value, runtimeCoercionService.asNumber(right), MathContext.DECIMAL128));
+            }
             case AND -> new BooleanValue(runtimeCoercionService.asBoolean(right));
             case OR -> new BooleanValue(runtimeCoercionService.asBoolean(right));
             case XOR ->
@@ -252,19 +254,11 @@ abstract class AbstractRuntimeEvaluator<T> {
     }
 
     private BigDecimal pow(BigDecimal base, BigDecimal exponent) {
-        try {
-            return base.pow(exponent.intValueExact(), MathContext.DECIMAL128);
-        } catch (ArithmeticException ignored) {
-            return BigDecimalMath.pow(base, exponent, MathContext.DECIMAL128);
+        BigDecimal normalized = exponent.stripTrailingZeros();
+        if (normalized.scale() <= 0 && normalized.precision() <= 9) {
+            return base.pow(normalized.intValue(), MathContext.DECIMAL128);
         }
-    }
-
-    private BigDecimal root(BigDecimal value, BigDecimal base) {
-        return BigDecimalMath.root(value, base, MathContext.DECIMAL128);
-    }
-
-    private BigDecimal sqrt(BigDecimal value) {
-        return value.sqrt(MathContext.DECIMAL128);
+        return BigDecimalMath.pow(base, exponent, MathContext.DECIMAL128);
     }
 
     private ResolvedType resolvedType(NodeId nodeId) {
