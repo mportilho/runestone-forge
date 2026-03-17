@@ -1,8 +1,11 @@
 package com.runestone.expeval2.runtime;
 
 import com.runestone.converters.DataConversionService;
-import com.runestone.expeval2.runtime.values.*;
-import com.runestone.expeval2.types.*;
+import com.runestone.expeval2.types.ResolvedType;
+import com.runestone.expeval2.types.ResolvedTypes;
+import com.runestone.expeval2.types.ScalarType;
+import com.runestone.expeval2.types.UnknownType;
+import com.runestone.expeval2.types.VectorType;
 
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
@@ -27,7 +30,7 @@ final class RuntimeValueFactory {
 
     public RuntimeValue from(Object rawValue, ResolvedType expectedType) {
         if (rawValue == null) {
-            return NullValue.INSTANCE;
+            return RuntimeValue.NullValue.INSTANCE;
         }
         if (rawValue instanceof RuntimeValue runtimeValue) {
             return runtimeValue;
@@ -41,44 +44,44 @@ final class RuntimeValueFactory {
         }
         if (effectiveType instanceof ScalarType scalarType) {
             return switch (scalarType) {
-                case NUMBER -> new NumberValue(convert(rawValue, BigDecimal.class));
-                case BOOLEAN -> new BooleanValue(convert(rawValue, Boolean.class));
-                case STRING -> new StringValue(convert(rawValue, String.class));
-                case DATE -> new DateValue(convert(rawValue, LocalDate.class));
-                case TIME -> new TimeValue(convert(rawValue, LocalTime.class));
-                case DATETIME -> new DateTimeValue(convert(rawValue, LocalDateTime.class));
+                case NUMBER -> new RuntimeValue.NumberValue(convert(rawValue, BigDecimal.class));
+                case BOOLEAN -> new RuntimeValue.BooleanValue(convert(rawValue, Boolean.class));
+                case STRING -> new RuntimeValue.StringValue(convert(rawValue, String.class));
+                case DATE -> new RuntimeValue.DateValue(convert(rawValue, LocalDate.class));
+                case TIME -> new RuntimeValue.TimeValue(convert(rawValue, LocalTime.class));
+                case DATETIME -> new RuntimeValue.DateTimeValue(convert(rawValue, LocalDateTime.class));
             };
         }
         return switch (rawValue) {
-            case Number number -> new NumberValue(convert(number, BigDecimal.class));
-            case Boolean bool -> new BooleanValue(bool);
-            case CharSequence text -> new StringValue(text.toString());
-            case LocalDate localDate -> new DateValue(localDate);
-            case LocalTime localTime -> new TimeValue(localTime);
-            case LocalDateTime localDateTime -> new DateTimeValue(localDateTime);
+            case Number number -> new RuntimeValue.NumberValue(convert(number, BigDecimal.class));
+            case Boolean bool -> new RuntimeValue.BooleanValue(bool);
+            case CharSequence text -> new RuntimeValue.StringValue(text.toString());
+            case LocalDate localDate -> new RuntimeValue.DateValue(localDate);
+            case LocalTime localTime -> new RuntimeValue.TimeValue(localTime);
+            case LocalDateTime localDateTime -> new RuntimeValue.DateTimeValue(localDateTime);
             default -> {
                 if (rawValue instanceof Iterable<?> || rawValue.getClass().isArray()) {
                     yield toVector(rawValue);
                 }
-                yield new StringValue(convert(rawValue, String.class));
+                yield new RuntimeValue.StringValue(convert(rawValue, String.class));
             }
         };
     }
 
-    private VectorValue toVector(Object rawValue) {
+    private RuntimeValue.VectorValue toVector(Object rawValue) {
         List<RuntimeValue> elements = new ArrayList<>();
         if (rawValue instanceof Iterable<?> iterable) {
             for (Object element : iterable) {
                 elements.add(from(element));
             }
-            return new VectorValue(elements);
+            return new RuntimeValue.VectorValue(elements);
         }
         if (rawValue.getClass().isArray()) {
             int length = Array.getLength(rawValue);
             for (int index = 0; index < length; index++) {
                 elements.add(from(Array.get(rawValue, index)));
             }
-            return new VectorValue(elements);
+            return new RuntimeValue.VectorValue(elements);
         }
         throw new IllegalArgumentException("rawValue is not a vector-compatible type");
     }

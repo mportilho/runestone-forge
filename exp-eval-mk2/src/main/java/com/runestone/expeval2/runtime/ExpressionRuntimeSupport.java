@@ -45,10 +45,6 @@ public final class ExpressionRuntimeSupport {
         return ExecutionScope.from(bindings.snapshot());
     }
 
-    public CompiledExpression compiledExpression() {
-        return compiledExpression;
-    }
-
     public BigDecimal computeMath() {
         MathEvaluator mathEvaluator = new MathEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService);
         return mathEvaluator.evaluate(createExecutionScope());

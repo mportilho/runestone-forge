@@ -1,7 +1,6 @@
 package com.runestone.expeval2.runtime;
 
 import com.runestone.converters.DataConversionService;
-import com.runestone.expeval2.runtime.values.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -19,65 +18,59 @@ final class RuntimeCoercionService {
     }
 
     public BigDecimal asNumber(RuntimeValue value) {
-        Objects.requireNonNull(value, "value must not be null");
         return switch (value) {
-            case NumberValue numberValue -> numberValue.value();
-            case NullValue ignored -> throw new IllegalStateException("cannot coerce null to number");
-            default -> convert(value.raw(), BigDecimal.class, "number");
+            case RuntimeValue.NumberValue numberValue -> numberValue.value();
+            case RuntimeValue.NullValue ignored -> throw new IllegalStateException("cannot coerce null to number");
+            default -> convert(value.raw(), BigDecimal.class);
         };
     }
 
     public boolean asBoolean(RuntimeValue value) {
-        Objects.requireNonNull(value, "value must not be null");
         return switch (value) {
-            case BooleanValue booleanValue -> booleanValue.value();
-            case NullValue ignored -> throw new IllegalStateException("cannot coerce null to boolean");
-            default -> convert(value.raw(), Boolean.class, "boolean");
+            case RuntimeValue.BooleanValue booleanValue -> booleanValue.value();
+            case RuntimeValue.NullValue ignored -> throw new IllegalStateException("cannot coerce null to boolean");
+            default -> convert(value.raw(), Boolean.class);
         };
     }
 
     public String asString(RuntimeValue value) {
-        Objects.requireNonNull(value, "value must not be null");
         return switch (value) {
-            case StringValue stringValue -> stringValue.value();
-            case NullValue ignored -> throw new IllegalStateException("cannot coerce null to string");
-            default -> convert(value.raw(), String.class, "string");
+            case RuntimeValue.StringValue stringValue -> stringValue.value();
+            case RuntimeValue.NullValue ignored -> throw new IllegalStateException("cannot coerce null to string");
+            default -> convert(value.raw(), String.class);
         };
     }
 
     public LocalDate asDate(RuntimeValue value) {
-        Objects.requireNonNull(value, "value must not be null");
         return switch (value) {
-            case DateValue dateValue -> dateValue.value();
-            case NullValue ignored -> throw new IllegalStateException("cannot coerce null to date");
-            default -> convert(value.raw(), LocalDate.class, "date");
+            case RuntimeValue.DateValue dateValue -> dateValue.value();
+            case RuntimeValue.NullValue ignored -> throw new IllegalStateException("cannot coerce null to date");
+            default -> convert(value.raw(), LocalDate.class);
         };
     }
 
     public LocalTime asTime(RuntimeValue value) {
-        Objects.requireNonNull(value, "value must not be null");
         return switch (value) {
-            case TimeValue timeValue -> timeValue.value();
-            case NullValue ignored -> throw new IllegalStateException("cannot coerce null to time");
-            default -> convert(value.raw(), LocalTime.class, "time");
+            case RuntimeValue.TimeValue timeValue -> timeValue.value();
+            case RuntimeValue.NullValue ignored -> throw new IllegalStateException("cannot coerce null to time");
+            default -> convert(value.raw(), LocalTime.class);
         };
     }
 
     public LocalDateTime asDateTime(RuntimeValue value) {
-        Objects.requireNonNull(value, "value must not be null");
         return switch (value) {
-            case DateTimeValue dateTimeValue -> dateTimeValue.value();
-            case NullValue ignored -> throw new IllegalStateException("cannot coerce null to datetime");
-            default -> convert(value.raw(), LocalDateTime.class, "datetime");
+            case RuntimeValue.DateTimeValue dateTimeValue -> dateTimeValue.value();
+            case RuntimeValue.NullValue ignored -> throw new IllegalStateException("cannot coerce null to datetime");
+            default -> convert(value.raw(), LocalDateTime.class);
         };
     }
 
     public List<RuntimeValue> asVector(RuntimeValue value) {
         Objects.requireNonNull(value, "value must not be null");
-        if (value instanceof VectorValue vectorValue) {
+        if (value instanceof RuntimeValue.VectorValue vectorValue) {
             return vectorValue.elements();
         }
-        throw new IllegalStateException("cannot coerce non-vector value to vector");
+        throw new IllegalStateException("cannot coerce " + value.type() + " to vector");
     }
 
     public Object coerce(RuntimeValue value, Class<?> targetType) {
@@ -86,11 +79,11 @@ final class RuntimeCoercionService {
         if (targetType == RuntimeValue.class) {
             return value;
         }
-        if (value == NullValue.INSTANCE) {
-            if (targetType.isPrimitive()) {
-                throw new IllegalStateException("cannot coerce null to primitive type " + targetType.getSimpleName());
-            }
+        if (value == RuntimeValue.NullValue.INSTANCE) {
             return null;
+        }
+        if (targetType.isInstance(value.raw())) {
+            return value.raw();
         }
         if (targetType == BigDecimal.class) {
             return asNumber(value);
@@ -110,23 +103,17 @@ final class RuntimeCoercionService {
         if (targetType == LocalDateTime.class) {
             return asDateTime(value);
         }
-        if (List.class.isAssignableFrom(targetType) && value instanceof VectorValue vectorValue) {
+        if (List.class.isAssignableFrom(targetType) && value instanceof RuntimeValue.VectorValue vectorValue) {
             return vectorValue.elements().stream().map(RuntimeValue::raw).toList();
         }
-        if (targetType.isInstance(value.raw())) {
-            return value.raw();
-        }
-        Object converted = conversionService.convert(value.raw(), targetType);
-        if (converted == null) {
-            throw new IllegalStateException("cannot coerce value to " + targetType.getSimpleName());
-        }
-        return converted;
+
+        return convert(value.raw(), targetType);
     }
 
-    private <T> T convert(Object rawValue, Class<T> targetType, String kind) {
+    private <T> T convert(Object rawValue, Class<T> targetType) {
         T converted = conversionService.convert(rawValue, targetType);
         if (converted == null) {
-            throw new IllegalStateException("cannot coerce value to " + kind);
+            throw new IllegalArgumentException("cannot convert value '" + rawValue + "' to " + targetType.getSimpleName());
         }
         return converted;
     }

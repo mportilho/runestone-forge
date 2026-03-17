@@ -2,7 +2,6 @@ package com.runestone.expeval2.runtime;
 
 import com.runestone.expeval2.ast.*;
 import com.runestone.expeval2.compiler.CompiledExpression;
-import com.runestone.expeval2.runtime.values.*;
 import com.runestone.expeval2.semantic.ResolvedFunctionBinding;
 import com.runestone.expeval2.semantic.SymbolRef;
 import com.runestone.expeval2.types.ResolvedType;
@@ -53,7 +52,7 @@ abstract class AbstractRuntimeEvaluator<T> {
                 List<RuntimeValue> values = runtimeCoercionService.asVector(evaluateExpression(destructuringAssignment.value(), scope));
                 for (int index = 0; index < destructuringAssignment.targetNames().size(); index++) {
                     String targetName = destructuringAssignment.targetNames().get(index);
-                    RuntimeValue value = index < values.size() ? values.get(index) : NullValue.INSTANCE;
+                    RuntimeValue value = index < values.size() ? values.get(index) : RuntimeValue.NullValue.INSTANCE;
                     scope.assign(compiledExpression.semanticModel().internalSymbolsByName().get(targetName), value);
                 }
             }
@@ -77,33 +76,33 @@ abstract class AbstractRuntimeEvaluator<T> {
         ResolvedType resolvedType = resolvedType(node.nodeId());
         String raw = node.value();
         if (resolvedType == ScalarType.NUMBER) {
-            return new NumberValue(new BigDecimal(raw));
+            return new RuntimeValue.NumberValue(new BigDecimal(raw));
         }
         if (resolvedType == ScalarType.BOOLEAN) {
-            return new BooleanValue(Boolean.parseBoolean(raw));
+            return new RuntimeValue.BooleanValue(Boolean.parseBoolean(raw));
         }
         if (resolvedType == ScalarType.STRING) {
-            return new StringValue(unquote(raw));
+            return new RuntimeValue.StringValue(unquote(raw));
         }
         if (resolvedType == ScalarType.DATE) {
             if ("currDate".equals(raw)) {
-                return new DateValue(LocalDate.now());
+                return new RuntimeValue.DateValue(LocalDate.now());
             }
-            return new DateValue(LocalDate.parse(raw));
+            return new RuntimeValue.DateValue(LocalDate.parse(raw));
         }
         if (resolvedType == ScalarType.TIME) {
             if ("currTime".equals(raw)) {
-                return new TimeValue(LocalTime.now());
+                return new RuntimeValue.TimeValue(LocalTime.now());
             }
-            return new TimeValue(LocalTime.parse(raw));
+            return new RuntimeValue.TimeValue(LocalTime.parse(raw));
         }
         if (resolvedType == ScalarType.DATETIME) {
             if ("currDateTime".equals(raw)) {
-                return new DateTimeValue(LocalDateTime.now());
+                return new RuntimeValue.DateTimeValue(LocalDateTime.now());
             }
             return raw.contains("+") || raw.endsWith("Z")
-                    ? new DateTimeValue(OffsetDateTime.parse(raw).toLocalDateTime())
-                    : new DateTimeValue(LocalDateTime.parse(raw));
+                    ? new RuntimeValue.DateTimeValue(OffsetDateTime.parse(raw).toLocalDateTime())
+                    : new RuntimeValue.DateTimeValue(LocalDateTime.parse(raw));
         }
         return runtimeValueFactory.from(raw);
     }
@@ -141,10 +140,10 @@ abstract class AbstractRuntimeEvaluator<T> {
     private RuntimeValue evaluateUnary(UnaryOperationNode node, ExecutionScope scope) {
         RuntimeValue operand = evaluateExpression(node.operand(), scope);
         return switch (node.operator()) {
-            case NEGATE -> new NumberValue(runtimeCoercionService.asNumber(operand).negate());
-            case LOGICAL_NOT -> new BooleanValue(!runtimeCoercionService.asBoolean(operand));
-            case SQRT -> new NumberValue(runtimeCoercionService.asNumber(operand).sqrt(MathContext.DECIMAL128));
-            case MODULUS -> new NumberValue(runtimeCoercionService.asNumber(operand).abs());
+            case NEGATE -> new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(operand).negate());
+            case LOGICAL_NOT -> new RuntimeValue.BooleanValue(!runtimeCoercionService.asBoolean(operand));
+            case SQRT -> new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(operand).sqrt(MathContext.DECIMAL128));
+            case MODULUS -> new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(operand).abs());
         };
     }
 
@@ -154,59 +153,59 @@ abstract class AbstractRuntimeEvaluator<T> {
         if (operator == BinaryOperator.AND || operator == BinaryOperator.NAND) {
             boolean leftBool = runtimeCoercionService.asBoolean(left);
             if (!leftBool) {
-                return new BooleanValue(operator == BinaryOperator.NAND);
+                return new RuntimeValue.BooleanValue(operator == BinaryOperator.NAND);
             }
         } else if (operator == BinaryOperator.OR || operator == BinaryOperator.NOR) {
             boolean leftBool = runtimeCoercionService.asBoolean(left);
             if (leftBool) {
-                return new BooleanValue(operator == BinaryOperator.OR);
+                return new RuntimeValue.BooleanValue(operator == BinaryOperator.OR);
             }
         }
         RuntimeValue right = evaluateExpression(node.right(), scope);
         return switch (operator) {
             case ADD ->
-                    new NumberValue(runtimeCoercionService.asNumber(left).add(runtimeCoercionService.asNumber(right)));
+                    new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).add(runtimeCoercionService.asNumber(right)));
             case SUBTRACT ->
-                    new NumberValue(runtimeCoercionService.asNumber(left).subtract(runtimeCoercionService.asNumber(right)));
+                    new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).subtract(runtimeCoercionService.asNumber(right)));
             case MULTIPLY ->
-                    new NumberValue(runtimeCoercionService.asNumber(left).multiply(runtimeCoercionService.asNumber(right)));
+                    new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).multiply(runtimeCoercionService.asNumber(right)));
             case DIVIDE ->
-                    new NumberValue(runtimeCoercionService.asNumber(left).divide(runtimeCoercionService.asNumber(right), MathContext.DECIMAL128));
+                    new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).divide(runtimeCoercionService.asNumber(right), MathContext.DECIMAL128));
             case MODULO ->
-                    new NumberValue(runtimeCoercionService.asNumber(left).remainder(runtimeCoercionService.asNumber(right)));
+                    new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).remainder(runtimeCoercionService.asNumber(right)));
             case POWER ->
-                    new NumberValue(pow(runtimeCoercionService.asNumber(left), runtimeCoercionService.asNumber(right)));
+                    new RuntimeValue.NumberValue(pow(runtimeCoercionService.asNumber(left), runtimeCoercionService.asNumber(right)));
             case ROOT -> {
                 BigDecimal value = runtimeCoercionService.asNumber(left);
-                yield new NumberValue(BigDecimalMath.root(value, runtimeCoercionService.asNumber(right), MathContext.DECIMAL128));
+                yield new RuntimeValue.NumberValue(BigDecimalMath.root(value, runtimeCoercionService.asNumber(right), MathContext.DECIMAL128));
             }
-            case AND -> new BooleanValue(runtimeCoercionService.asBoolean(right));
-            case OR -> new BooleanValue(runtimeCoercionService.asBoolean(right));
+            case AND -> new RuntimeValue.BooleanValue(runtimeCoercionService.asBoolean(right));
+            case OR -> new RuntimeValue.BooleanValue(runtimeCoercionService.asBoolean(right));
             case XOR ->
-                    new BooleanValue(runtimeCoercionService.asBoolean(left) ^ runtimeCoercionService.asBoolean(right));
+                    new RuntimeValue.BooleanValue(runtimeCoercionService.asBoolean(left) ^ runtimeCoercionService.asBoolean(right));
             case XNOR ->
-                    new BooleanValue(!(runtimeCoercionService.asBoolean(left) ^ runtimeCoercionService.asBoolean(right)));
-            case NAND -> new BooleanValue(!runtimeCoercionService.asBoolean(right));
-            case NOR -> new BooleanValue(!runtimeCoercionService.asBoolean(right));
-            case GREATER_THAN -> new BooleanValue(compare(left, right) > 0);
-            case GREATER_THAN_OR_EQUAL -> new BooleanValue(compare(left, right) >= 0);
-            case LESS_THAN -> new BooleanValue(compare(left, right) < 0);
-            case LESS_THAN_OR_EQUAL -> new BooleanValue(compare(left, right) <= 0);
-            case EQUAL -> new BooleanValue(compareEquality(left, right));
-            case NOT_EQUAL -> new BooleanValue(!compareEquality(left, right));
+                    new RuntimeValue.BooleanValue(!(runtimeCoercionService.asBoolean(left) ^ runtimeCoercionService.asBoolean(right)));
+            case NAND -> new RuntimeValue.BooleanValue(!runtimeCoercionService.asBoolean(right));
+            case NOR -> new RuntimeValue.BooleanValue(!runtimeCoercionService.asBoolean(right));
+            case GREATER_THAN -> new RuntimeValue.BooleanValue(compare(left, right) > 0);
+            case GREATER_THAN_OR_EQUAL -> new RuntimeValue.BooleanValue(compare(left, right) >= 0);
+            case LESS_THAN -> new RuntimeValue.BooleanValue(compare(left, right) < 0);
+            case LESS_THAN_OR_EQUAL -> new RuntimeValue.BooleanValue(compare(left, right) <= 0);
+            case EQUAL -> new RuntimeValue.BooleanValue(compareEquality(left, right));
+            case NOT_EQUAL -> new RuntimeValue.BooleanValue(!compareEquality(left, right));
         };
     }
 
     private RuntimeValue evaluatePostfix(PostfixOperationNode node, ExecutionScope scope) {
         BigDecimal value = runtimeCoercionService.asNumber(evaluateExpression(node.operand(), scope));
         return switch (node.operator()) {
-            case PERCENT -> new NumberValue(value.movePointRight(2));
-            case FACTORIAL -> new NumberValue(factorial(value));
+            case PERCENT -> new RuntimeValue.NumberValue(value.movePointRight(2));
+            case FACTORIAL -> new RuntimeValue.NumberValue(factorial(value));
         };
     }
 
     private RuntimeValue evaluateVector(VectorLiteralNode node, ExecutionScope scope) {
-        return new VectorValue(node.elements().stream()
+        return new RuntimeValue.VectorValue(node.elements().stream()
                 .map(element -> evaluateExpression(element, scope))
                 .toList());
     }
