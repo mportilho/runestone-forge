@@ -21,10 +21,13 @@ Base da analise:
 
 As skills mais aderentes para este modulo, no estado atual, sao:
 
-- `architecture-review`: para avaliar fronteiras, coesao de pacotes, dependencia entre camadas e exposicao excessiva de tipos internos
+- `architecture-review`: para avaliar fronteiras, coesao de pacotes, dependencia entre camadas e exposicao excessiva de
+  tipos internos
 - `java-code-review`: para revisar corretude, contratos de API, null safety, excecoes, colecoes e idioms de Java
-- `solid-principles`: para atacar concentracao de responsabilidades e tipos centrais que acumulam varias razoes de mudanca
-- `clean-code`: para a etapa posterior de simplificacao local, nomes, extracao de metodos e reducao de complexidade dentro de classes ja estabilizadas
+- `solid-principles`: para atacar concentracao de responsabilidades e tipos centrais que acumulam varias razoes de
+  mudanca
+- `clean-code`: para a etapa posterior de simplificacao local, nomes, extracao de metodos e reducao de complexidade
+  dentro de classes ja estabilizadas
 - `java-guidelines`: para orientar implementacoes e refatoracoes futuras
 - `performance-smell-detection`: skill complementar quando a revisao migrar para hotspots do parser e do runtime
 
@@ -44,7 +47,8 @@ O modulo esta estruturado em pacotes com responsabilidades tecnicas bem reconhec
 - `runtime`
 - `catalog`
 
-Essa separacao funciona bem para um motor de expressoes. A arquitetura nao esta organizada por feature, e sim por estagios do pipeline. Para esse dominio, isso e aceitavel e legivel.
+Essa separacao funciona bem para um motor de expressoes. A arquitetura nao esta organizada por feature, e sim por
+estagios do pipeline. Para esse dominio, isso e aceitavel e legivel.
 
 Pontos fortes observados:
 
@@ -81,14 +85,14 @@ Pontos fortes observados:
 
 ## Achados
 
-| Severidade | Tema | Evidencia | Impacto | Recomendacao |
-|---|---|---|---|---|
-| Alta | Operadores logicos sem short-circuit | `runtime/AbstractRuntimeEvaluator.java` avalia `left` e `right` antes do `switch` em `evaluateBinary(...)` | `false and ...` e `true or ...` podem falhar desnecessariamente, avaliar simbolos ausentes e disparar efeitos colaterais de funcoes | Implementar avaliacao preguicosa para `AND` e `OR`, e revisar `NAND`, `NOR`, `XOR`, `XNOR` caso a caso |
-| Media | Ciclo entre pacotes principais | `api` depende de `compiler` e `runtime`, enquanto `compiler`, `runtime` e `semantic` dependem de `api` | Dificulta isolar camadas estaveis e amplia o acoplamento entre fachada publica e miolo da engine | Introduzir contratos mais estreitos; reduzir dependencias do core para `api`; transformar `ExpressionEnvironment` em dependencia mais neutra ou mover partes compartilhadas |
-| Media | Exposicao excessiva de tipos internos | `CompiledExpression`, `SemanticModel`, `MutableBindings`, `ExecutionScope`, `FunctionCatalog`, `FunctionDescriptor` e outros tipos internos estao publicos | Amplia superficie publica sem necessidade clara e dificulta evolucao interna sem risco de quebra | Tornar `package-private` o que nao precisa ser consumido externamente; manter publica apenas a API realmente necessaria |
-| Media | Concentracao excessiva de responsabilidades | `SemanticAstBuilder`, `SemanticResolver` e `AbstractRuntimeEvaluator` concentram muitos casos, regras e variacoes | Aumenta custo de manutencao, eleva risco de regressao e dificulta testes mais focados | Fatiar por responsabilidade: builder por familia de operacoes, resolver por tipo de regra, runtime por operacao/coercao/comparacao |
-| Media | Precisao inconsistente em operacoes avancadas | `pow`, `root` e `sqrt` em `runtime/AbstractRuntimeEvaluator.java` convertem para `double` e depois voltam para `BigDecimal` | Perde precisao justamente nas operacoes mais sensiveis de calculo | Usar implementacao baseada em `big-math` ou explicitar contrato de precisao limitada |
-| Baixa | Builder de ambiente com varias responsabilidades | `api/ExpressionEnvironmentBuilder.java` descobre funcoes via reflexao, monta catalogos, gera IDs e prepara coercao/runtime | Classe cresce como ponto central de montagem e validacao | Extrair discovery de funcoes, assinatura estavel e montagem de simbolos para colaboradores dedicados |
+| Severidade | Status  | Tema                                             | Evidencia                                                                                                                                                  | Impacto                                                                                                                             | Recomendacao                                                                                                                                                                |
+|------------|---------|--------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Alta       | DONE    | Operadores logicos sem short-circuit             | `runtime/AbstractRuntimeEvaluator.java` avalia `left` e `right` antes do `switch` em `evaluateBinary(...)`                                                 | `false and ...` e `true or ...` podem falhar desnecessariamente, avaliar simbolos ausentes e disparar efeitos colaterais de funcoes | Implementar avaliacao preguicosa para `AND` e `OR`, e revisar `NAND`, `NOR`, `XOR`, `XNOR` caso a caso                                                                      |
+| Media      | DONE    | Ciclo entre pacotes principais                   | `api` depende de `compiler` e `runtime`, enquanto `compiler`, `runtime` e `semantic` dependem de `api`                                                     | Dificulta isolar camadas estaveis e amplia o acoplamento entre fachada publica e miolo da engine                                    | Introduzir contratos mais estreitos; reduzir dependencias do core para `api`; transformar `ExpressionEnvironment` em dependencia mais neutra ou mover partes compartilhadas |
+| Media      | PENDING | Exposicao excessiva de tipos internos            | `CompiledExpression`, `SemanticModel`, `MutableBindings`, `ExecutionScope`, `FunctionCatalog`, `FunctionDescriptor` e outros tipos internos estao publicos | Amplia superficie publica sem necessidade clara e dificulta evolucao interna sem risco de quebra                                    | Tornar `package-private` o que nao precisa ser consumido externamente; manter publica apenas a API realmente necessaria                                                     |
+| Media      | PENDING | Concentracao excessiva de responsabilidades      | `SemanticAstBuilder`, `SemanticResolver` e `AbstractRuntimeEvaluator` concentram muitos casos, regras e variacoes                                          | Aumenta custo de manutencao, eleva risco de regressao e dificulta testes mais focados                                               | Fatiar por responsabilidade: builder por familia de operacoes, resolver por tipo de regra, runtime por operacao/coercao/comparacao                                          |
+| Media      | PENDING | Precisao inconsistente em operacoes avancadas    | `pow`, `root` e `sqrt` em `runtime/AbstractRuntimeEvaluator.java` convertem para `double` e depois voltam para `BigDecimal`                                | Perde precisao justamente nas operacoes mais sensiveis de calculo                                                                   | Usar implementacao baseada em `big-math` ou explicitar contrato de precisao limitada                                                                                        |
+| Baixa      | PENDING | Builder de ambiente com varias responsabilidades | `api/ExpressionEnvironmentBuilder.java` descobre funcoes via reflexao, monta catalogos, gera IDs e prepara coercao/runtime                                 | Classe cresce como ponto central de montagem e validacao                                                                            | Extrair discovery de funcoes, assinatura estavel e montagem de simbolos para colaboradores dedicados                                                                        |
 
 ## Observacoes de Qualidade de Codigo
 
@@ -106,7 +110,8 @@ Pontos fortes observados:
 - a semantica de tipos, resolucao de simbolos e bind de funcoes esta centralizada em um unico resolvedor
 - a execucao mistura interpretacao, coercao, comparacao e algoritmos matematicos na mesma classe base
 
-Esses pontos nao sao defeitos arquiteturais imediatos, mas sao sinais claros de que o modulo ainda esta em fase de consolidacao interna e precisa de fronteiras mais rigidas antes de crescer.
+Esses pontos nao sao defeitos arquiteturais imediatos, mas sao sinais claros de que o modulo ainda esta em fase de
+consolidacao interna e precisa de fronteiras mais rigidas antes de crescer.
 
 ## Resultado da Validacao
 
@@ -132,7 +137,8 @@ Tambem foi validado manualmente que:
 
 ## Direcao Recomendada
 
-Se o modulo continuar evoluindo como engine reutilizavel, a melhor direcao nao e migrar para package-by-feature, e sim endurecer o pipeline atual:
+Se o modulo continuar evoluindo como engine reutilizavel, a melhor direcao nao e migrar para package-by-feature, e sim
+endurecer o pipeline atual:
 
 - `grammar` como fronteira sintatica
 - `ast` como modelo estrutural
@@ -144,7 +150,8 @@ Ou seja: manter o estilo atual, mas com menos tipos publicos, menos ciclos e men
 
 ## Conclusao
 
-`exp-eval-mk2` esta em um bom ponto de organizacao conceitual. O pipeline principal esta claro, os testes cobrem bem a base e a modelagem da AST/runtime esta moderna para Java 21.
+`exp-eval-mk2` esta em um bom ponto de organizacao conceitual. O pipeline principal esta claro, os testes cobrem bem a
+base e a modelagem da AST/runtime esta moderna para Java 21.
 
 Os principais problemas nao estao na ideia geral da arquitetura, e sim em tres pontos concretos:
 

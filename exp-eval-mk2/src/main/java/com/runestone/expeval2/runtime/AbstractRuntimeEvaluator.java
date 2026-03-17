@@ -8,9 +8,10 @@ import com.runestone.expeval2.semantic.SymbolRef;
 import com.runestone.expeval2.types.ResolvedType;
 import com.runestone.expeval2.types.ScalarType;
 
+import ch.obermuhlner.math.big.BigDecimalMath;
+
 import java.math.BigDecimal;
 import java.math.MathContext;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -254,22 +255,16 @@ abstract class AbstractRuntimeEvaluator<T> {
         try {
             return base.pow(exponent.intValueExact(), MathContext.DECIMAL128);
         } catch (ArithmeticException ignored) {
-            return BigDecimal.valueOf(Math.pow(base.doubleValue(), exponent.doubleValue()))
-                    .setScale(16, RoundingMode.HALF_UP)
-                    .stripTrailingZeros();
+            return BigDecimalMath.pow(base, exponent, MathContext.DECIMAL128);
         }
     }
 
     private BigDecimal root(BigDecimal value, BigDecimal base) {
-        return BigDecimal.valueOf(Math.pow(value.doubleValue(), BigDecimal.ONE.divide(base, MathContext.DECIMAL128).doubleValue()))
-                .setScale(16, RoundingMode.HALF_UP)
-                .stripTrailingZeros();
+        return BigDecimalMath.root(value, base, MathContext.DECIMAL128);
     }
 
     private BigDecimal sqrt(BigDecimal value) {
-        return BigDecimal.valueOf(Math.sqrt(value.doubleValue()))
-                .setScale(16, RoundingMode.HALF_UP)
-                .stripTrailingZeros();
+        return value.sqrt(MathContext.DECIMAL128);
     }
 
     private ResolvedType resolvedType(NodeId nodeId) {

@@ -61,6 +61,29 @@ class ExpressionFacadeTest {
     }
 
     @Test
+    void shouldComputePowWithNonIntegerExponentAtDecimal128Precision() {
+        // double gives 1.4142135623730951 (rounds up at the 17th decimal place)
+        // DECIMAL128 correctly gives 1.41421356237309504880... (true value)
+        BigDecimal result = MathExpression.compile("2 ^ 0.5", ExpressionEnvironmentBuilder.empty()).compute();
+
+        assertThat(result.toPlainString()).startsWith("1.41421356237309504");
+    }
+
+    @Test
+    void shouldComputeSqrtAtDecimal128Precision() {
+        BigDecimal result = MathExpression.compile("sqrt(2)", ExpressionEnvironmentBuilder.empty()).compute();
+
+        assertThat(result.toPlainString()).startsWith("1.41421356237309504");
+    }
+
+    @Test
+    void shouldComputeRootAtDecimal128Precision() {
+        BigDecimal result = MathExpression.compile("2 root 2", ExpressionEnvironmentBuilder.empty()).compute();
+
+        assertThat(result.toPlainString()).startsWith("1.41421356237309504");
+    }
+
+    @Test
     void shouldShortCircuitAndWhenLeftIsFalse() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
             .registerStaticProvider(FailingFixture.class)
