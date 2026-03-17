@@ -2,7 +2,6 @@ package com.runestone.expeval2.api;
 
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
-import com.runestone.expeval2.grammar.language.ExpressionResultType;
 import com.runestone.expeval2.internal.runtime.ExpressionRuntimeSupport;
 
 import java.util.Objects;
@@ -20,7 +19,7 @@ public final class LogicalExpression {
     }
 
     public static LogicalExpression compile(String source, ExpressionEnvironment environment) {
-        return new LogicalExpression(ExpressionRuntimeSupport.compile(source, ExpressionResultType.LOGICAL, environment));
+        return new LogicalExpression(ExpressionRuntimeSupport.compileLogical(source, environment));
     }
 
     public LogicalExpression setValue(String symbolName, Object rawValue) {

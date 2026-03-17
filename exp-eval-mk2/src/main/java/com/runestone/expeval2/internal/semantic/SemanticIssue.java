@@ -1,6 +1,6 @@
 package com.runestone.expeval2.internal.semantic;
 
-import com.runestone.expeval2.ast.SourceSpan;
+import com.runestone.expeval2.internal.ast.SourceSpan;
 
 import java.util.Objects;
 

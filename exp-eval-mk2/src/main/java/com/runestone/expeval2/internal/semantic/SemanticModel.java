@@ -1,9 +1,9 @@
 package com.runestone.expeval2.internal.semantic;
 
-import com.runestone.expeval2.ast.AssignmentNode;
-import com.runestone.expeval2.ast.ExpressionFileNode;
-import com.runestone.expeval2.ast.IdentifierNode;
-import com.runestone.expeval2.ast.NodeId;
+import com.runestone.expeval2.internal.ast.AssignmentNode;
+import com.runestone.expeval2.internal.ast.ExpressionFileNode;
+import com.runestone.expeval2.internal.ast.IdentifierNode;
+import com.runestone.expeval2.internal.ast.NodeId;
 import com.runestone.expeval2.types.ResolvedType;
 
 import java.util.LinkedHashMap;

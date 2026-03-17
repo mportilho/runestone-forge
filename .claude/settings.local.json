@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn -q -pl exp-eval-mk2 test)",
+      "Bash(mvn:*)",
+      "Bash(grep -l \"import.*internal\\\\.semantic\\\\|import.*ast\\\\.mapping\\\\|import.*expeval2\\\\.ast\\\\|import.*grammar\\\\.language\" /mnt/c/dev/git/runestone-forge/exp-eval-mk2/src/test/java/**/*.java)",
+      "Bash(ls:*)",
+      "Bash(BASE=/home/marcelo/dev/git/runestone-forge/exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/semantic)",
+      "Bash(__NEW_LINE_ab4f4b90d94cf6e3__ sed:*)",
+      "Bash(sed -i 's/^public record SemanticModel/record SemanticModel/' $BASE/SemanticModel.java)",
+      "Bash(sed -i 's/^public record SemanticIssue/record SemanticIssue/' $BASE/SemanticIssue.java)",
+      "Bash(sed -i 's/^public enum SemanticIssueSeverity/enum SemanticIssueSeverity/' $BASE/SemanticIssueSeverity.java)",
+      "Bash(head -5 cat /mnt/c/dev/git/runestone-forge/exp-eval-mk2/target/surefire-reports/*.dumpstream)"
+    ]
+  }
+}

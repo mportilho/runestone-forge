@@ -8,15 +8,17 @@
 | 2 — Consolidar pipeline em `ExpressionRuntimeSupport` | **CONCLUIDA** | Adicionado `compile()` static factory; `from()` rebaixado para package-private; `MathExpression` e `LogicalExpression` removem imports de `ExpressionCompiler` e `CompiledExpression` |
 | 3 — `ExpressionCompiler` e `CompiledExpression` package-private | **PARCIAL** | `api` nao os referencia mais (objetivo principal atingido). Package-private completo e impossivel sem mesclar `internal.compiler` e `internal.runtime`: `CompiledExpression` e referenciado por `AbstractRuntimeEvaluator`, `MathEvaluator`, `LogicalEvaluator` e `ExpressionRuntimeSupport`, todos em pacote diferente. Dependencia `internal.runtime` → `api` introduzida intencionalmente para conversao de excecao no `compile()` factory. |
 | 4 — `ExecutionScope` package-private | **CONCLUIDA** | Removido `public` de `ExecutionScope`; `createExecutionScope()` rebaixado para package-private |
-| 5 — `internal.semantic.*` package-private | pendente | — |
-| 6 — Mover `ast.*` para `internal.ast.*` | pendente | — |
-| 7 — Mover `SemanticAstBuilder` para `internal.ast.mapping` | pendente | — |
-| 8 — Mover `grammar/language` para `internal.grammar.language` | pendente | — |
-| 9 — Migrar testes afetados | pendente | — |
-| 10 — `ExpressionEnvironmentId` package-private | pendente | — |
-| 11 — Verificacao final | pendente | — |
+| 5 — `internal.semantic.*` package-private | **PARCIAL** | `SemanticIssue`, `SemanticIssueSeverity`, `SymbolKind` tornados package-private. Os demais (`SemanticResolver`, `SemanticModel`, `SemanticResolutionException`, `ResolutionContext`, `ResolvedFunctionBinding`, `SymbolRef`) mantidos `public` pois sao usados por `internal.compiler` e `internal.runtime` — sem JPMS nao e possivel restringir ao conjunto `internal.*`. |
+| 6 — Mover `ast.*` para `internal.ast.*` | **CONCLUIDA** | 20 tipos movidos para `internal.ast`; tipos mantidos `public` pois sao referenciados por `internal.compiler`, `internal.runtime`, `internal.semantic` e `internal.ast.mapping` (pacotes distintos). |
+| 7 — Mover `SemanticAstBuilder` para `internal.ast.mapping` | **CONCLUIDA** | Movido com imports atualizados. |
+| 8 — Mover `grammar/language` para `internal.grammar.language` | **CONCLUIDA** | 8 arquivos hand-written movidos. ANTLR-generated ficam em `grammar.language`. `ExpressionRuntimeSupport` ganhou `compileMath()` e `compileLogical()`; `api` nao mais importa `ExpressionResultType`. |
+| 9 — Migrar testes afetados | **CONCLUIDA** | `ExpressionCompilerTest` → `internal.compiler` (reescrito para usar `ExpressionCompilationException`); `SemanticResolverTest` → `internal.semantic`; `SemanticAstBuilderTest` → `internal.ast.mapping`; `ExpressionEvaluatorV2ParserFacadeTest` → `internal.grammar.language`; 6 testes de `ast.*` → `internal.ast`. |
+| 10 — `ExpressionEnvironmentId` package-private | **CONCLUIDA** | `ExpressionEnvironmentId` e `environmentId()` tornados package-private. `ExpressionCacheKey` atualizado para usar `ExpressionEnvironment` diretamente como chave de cache. |
+| 11 — Verificacao final | **CONCLUIDA** | `mvn -q -pl exp-eval-mk2 clean test` — PASSOU (196 testes, 0 falhas). |
 
 **Verificacao pos-etapas 1-4:** `mvn -q -pl exp-eval-mk2 test` — PASSOU (sem falhas).
+
+**Verificacao pos-etapas 5-11:** `mvn -q -pl exp-eval-mk2 clean test` — PASSOU (196 testes, 0 falhas).
 
 ## Contexto
 

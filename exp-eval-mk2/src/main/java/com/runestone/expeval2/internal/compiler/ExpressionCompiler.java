@@ -2,11 +2,11 @@ package com.runestone.expeval2.internal.compiler;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.runestone.expeval2.ast.ExpressionFileNode;
-import com.runestone.expeval2.ast.mapping.SemanticAstBuilder;
+import com.runestone.expeval2.internal.ast.ExpressionFileNode;
+import com.runestone.expeval2.internal.ast.mapping.SemanticAstBuilder;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
-import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2ParserFacade;
-import com.runestone.expeval2.grammar.language.ExpressionResultType;
+import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2ParserFacade;
+import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import com.runestone.expeval2.internal.semantic.ResolutionContext;
 import com.runestone.expeval2.internal.semantic.SemanticModel;
 import com.runestone.expeval2.internal.semantic.SemanticResolutionException;

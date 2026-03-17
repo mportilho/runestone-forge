@@ -1,22 +1,23 @@
 package com.runestone.expeval2.internal.semantic;
 
-import com.runestone.expeval2.ast.AssignmentNode;
-import com.runestone.expeval2.ast.BinaryOperationNode;
-import com.runestone.expeval2.ast.ConditionalNode;
-import com.runestone.expeval2.ast.DestructuringAssignmentNode;
-import com.runestone.expeval2.ast.ExpressionFileNode;
-import com.runestone.expeval2.ast.ExpressionNode;
-import com.runestone.expeval2.ast.FunctionCallNode;
-import com.runestone.expeval2.ast.IdentifierNode;
-import com.runestone.expeval2.ast.LiteralNode;
-import com.runestone.expeval2.ast.NodeId;
-import com.runestone.expeval2.ast.PostfixOperationNode;
-import com.runestone.expeval2.ast.SimpleAssignmentNode;
-import com.runestone.expeval2.ast.UnaryOperationNode;
-import com.runestone.expeval2.ast.VectorLiteralNode;
+import com.runestone.expeval2.internal.ast.AssignmentNode;
+import com.runestone.expeval2.internal.ast.BinaryOperationNode;
+import com.runestone.expeval2.internal.ast.ConditionalNode;
+import com.runestone.expeval2.internal.ast.DestructuringAssignmentNode;
+import com.runestone.expeval2.internal.ast.ExpressionFileNode;
+import com.runestone.expeval2.internal.ast.ExpressionNode;
+import com.runestone.expeval2.internal.ast.FunctionCallNode;
+import com.runestone.expeval2.internal.ast.IdentifierNode;
+import com.runestone.expeval2.internal.ast.LiteralNode;
+import com.runestone.expeval2.internal.ast.NodeId;
+import com.runestone.expeval2.internal.ast.PostfixOperationNode;
+import com.runestone.expeval2.internal.ast.SimpleAssignmentNode;
+import com.runestone.expeval2.internal.ast.SourceSpan;
+import com.runestone.expeval2.internal.ast.UnaryOperationNode;
+import com.runestone.expeval2.internal.ast.VectorLiteralNode;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
-import com.runestone.expeval2.grammar.language.ExpressionResultType;
+import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import com.runestone.expeval2.types.ResolvedType;
 import com.runestone.expeval2.types.ResolvedTypes;
 import com.runestone.expeval2.types.ScalarType;
@@ -265,7 +266,7 @@ public final class SemanticResolver {
             return VectorType.INSTANCE;
         }
 
-        private ResolvedType arithmeticType(ResolvedType leftType, ResolvedType rightType, com.runestone.expeval2.ast.SourceSpan sourceSpan) {
+        private ResolvedType arithmeticType(ResolvedType leftType, ResolvedType rightType, SourceSpan sourceSpan) {
             expectType(leftType, ScalarType.NUMBER, "arithmetic operator", sourceSpan);
             expectType(rightType, ScalarType.NUMBER, "arithmetic operator", sourceSpan);
             return ScalarType.NUMBER;
@@ -275,7 +276,7 @@ public final class SemanticResolver {
             ResolvedType actualType,
             ScalarType expectedType,
             String operation,
-            com.runestone.expeval2.ast.SourceSpan sourceSpan
+            SourceSpan sourceSpan
         ) {
             if (actualType != UnknownType.INSTANCE && actualType != expectedType) {
                 error("TYPE_MISMATCH", operation + " expects " + expectedType + " but found " + actualType, sourceSpan);
@@ -295,7 +296,7 @@ public final class SemanticResolver {
             internalSymbolsByName.computeIfAbsent(name, ignored -> new SymbolRef(name, SymbolKind.INTERNAL));
         }
 
-        private void error(String code, String message, com.runestone.expeval2.ast.SourceSpan sourceSpan) {
+        private void error(String code, String message, SourceSpan sourceSpan) {
             issues.add(new SemanticIssue(code, SemanticIssueSeverity.ERROR, message, sourceSpan));
         }
 

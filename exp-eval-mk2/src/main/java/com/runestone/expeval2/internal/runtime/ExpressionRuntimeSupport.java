@@ -3,7 +3,7 @@ package com.runestone.expeval2.internal.runtime;
 import com.runestone.expeval2.api.CompilationIssue;
 import com.runestone.expeval2.api.ExpressionCompilationException;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
-import com.runestone.expeval2.grammar.language.ExpressionResultType;
+import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import com.runestone.expeval2.internal.compiler.CompiledExpression;
 import com.runestone.expeval2.internal.compiler.ExpressionCompiler;
 import com.runestone.expeval2.internal.semantic.SemanticResolutionException;
@@ -27,6 +27,14 @@ public final class ExpressionRuntimeSupport {
         this.bindings = Objects.requireNonNull(bindings, "bindings must not be null");
         this.runtimeValueFactory = Objects.requireNonNull(runtimeValueFactory, "runtimeValueFactory must not be null");
         this.runtimeCoercionService = Objects.requireNonNull(runtimeCoercionService, "runtimeCoercionService must not be null");
+    }
+
+    public static ExpressionRuntimeSupport compileMath(String source, ExpressionEnvironment environment) {
+        return compile(source, ExpressionResultType.MATH, environment);
+    }
+
+    public static ExpressionRuntimeSupport compileLogical(String source, ExpressionEnvironment environment) {
+        return compile(source, ExpressionResultType.LOGICAL, environment);
     }
 
     public static ExpressionRuntimeSupport compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {

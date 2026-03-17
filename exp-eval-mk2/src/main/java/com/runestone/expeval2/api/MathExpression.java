@@ -2,7 +2,6 @@ package com.runestone.expeval2.api;
 
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
-import com.runestone.expeval2.grammar.language.ExpressionResultType;
 import com.runestone.expeval2.internal.runtime.ExpressionRuntimeSupport;
 
 import java.math.BigDecimal;
@@ -21,7 +20,7 @@ public final class MathExpression {
     }
 
     public static MathExpression compile(String source, ExpressionEnvironment environment) {
-        return new MathExpression(ExpressionRuntimeSupport.compile(source, ExpressionResultType.MATH, environment));
+        return new MathExpression(ExpressionRuntimeSupport.compileMath(source, environment));
     }
 
     public MathExpression setValue(String symbolName, Object rawValue) {

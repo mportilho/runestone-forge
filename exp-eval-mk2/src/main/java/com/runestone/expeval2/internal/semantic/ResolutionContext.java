@@ -2,7 +2,7 @@ package com.runestone.expeval2.internal.semantic;
 
 import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.FunctionCatalog;
-import com.runestone.expeval2.grammar.language.ExpressionResultType;
+import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 
 import java.util.Objects;
 

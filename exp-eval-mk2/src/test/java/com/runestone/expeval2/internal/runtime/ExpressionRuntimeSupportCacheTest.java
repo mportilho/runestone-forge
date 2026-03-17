@@ -1,7 +1,7 @@
 package com.runestone.expeval2.internal.runtime;
 
 import com.runestone.expeval2.environment.ExpressionEnvironment;
-import com.runestone.expeval2.grammar.language.ExpressionResultType;
+import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
