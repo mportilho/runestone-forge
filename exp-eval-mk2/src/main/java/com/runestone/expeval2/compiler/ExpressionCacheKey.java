@@ -5,7 +5,7 @@ import com.runestone.expeval2.grammar.language.ExpressionResultType;
 
 import java.util.Objects;
 
-public record ExpressionCacheKey(
+record ExpressionCacheKey(
     String source,
     ExpressionEnvironmentId environmentId,
     ExpressionResultType resultType
