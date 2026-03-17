@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-public final class MutableBindings {
+final class MutableBindings {
 
     private final SemanticModel semanticModel;
     private final RuntimeValueFactory runtimeValueFactory;
