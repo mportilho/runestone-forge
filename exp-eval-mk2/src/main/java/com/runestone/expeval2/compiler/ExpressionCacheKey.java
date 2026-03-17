@@ -1,6 +1,6 @@
 package com.runestone.expeval2.compiler;
 
-import com.runestone.expeval2.engine.context.ExpressionEnvironmentId;
+import com.runestone.expeval2.environment.ExpressionEnvironmentId;
 import com.runestone.expeval2.grammar.language.ExpressionResultType;
 
 import java.util.Objects;

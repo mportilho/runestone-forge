@@ -2,6 +2,8 @@ package com.runestone.expeval2.api;
 
 import com.runestone.expeval2.compiler.CompiledExpression;
 import com.runestone.expeval2.compiler.ExpressionCompiler;
+import com.runestone.expeval2.environment.ExpressionEnvironment;
+import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval2.grammar.language.ExpressionResultType;
 import com.runestone.expeval2.runtime.ExpressionRuntimeSupport;
 

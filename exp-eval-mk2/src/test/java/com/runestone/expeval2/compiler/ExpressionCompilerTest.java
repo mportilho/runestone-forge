@@ -1,7 +1,7 @@
 package com.runestone.expeval2.compiler;
 
-import com.runestone.expeval2.api.ExpressionEnvironment;
-import com.runestone.expeval2.api.ExpressionEnvironmentBuilder;
+import com.runestone.expeval2.environment.ExpressionEnvironment;
+import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval2.grammar.language.ExpressionResultType;
 import com.runestone.expeval2.semantic.SemanticIssue;
 import com.runestone.expeval2.semantic.SemanticResolutionException;

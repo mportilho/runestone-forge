@@ -1,7 +1,7 @@
 package com.runestone.expeval2.semantic;
 
-import com.runestone.expeval2.api.ExpressionEnvironment;
-import com.runestone.expeval2.api.ExpressionEnvironmentBuilder;
+import com.runestone.expeval2.environment.ExpressionEnvironment;
+import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval2.ast.AssignmentNode;
 import com.runestone.expeval2.ast.BinaryOperationNode;
 import com.runestone.expeval2.ast.ExpressionFileNode;

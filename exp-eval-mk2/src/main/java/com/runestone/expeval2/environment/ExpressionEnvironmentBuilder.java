@@ -1,4 +1,4 @@
-package com.runestone.expeval2.api;
+package com.runestone.expeval2.environment;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.converters.impl.DefaultDataConversionService;
@@ -6,7 +6,6 @@ import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.catalog.FunctionCatalog;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
-import com.runestone.expeval2.engine.context.ExpressionEnvironmentId;
 import com.runestone.expeval2.runtime.RuntimeCoercionService;
 import com.runestone.expeval2.runtime.RuntimeValueFactory;
 import com.runestone.expeval2.types.ResolvedType;

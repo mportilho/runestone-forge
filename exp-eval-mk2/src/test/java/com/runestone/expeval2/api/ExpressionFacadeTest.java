@@ -1,5 +1,7 @@
 package com.runestone.expeval2.api;
 
+import com.runestone.expeval2.environment.ExpressionEnvironment;
+import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval2.types.ScalarType;
 import org.junit.jupiter.api.Test;
 

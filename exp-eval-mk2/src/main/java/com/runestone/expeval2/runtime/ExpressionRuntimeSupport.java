@@ -1,7 +1,7 @@
 package com.runestone.expeval2.runtime;
 
 import com.runestone.expeval2.compiler.CompiledExpression;
-import com.runestone.expeval2.engine.context.RuntimeEnvironment;
+import com.runestone.expeval2.environment.ExpressionEnvironment;
 
 import java.math.BigDecimal;
 import java.util.Objects;
@@ -21,7 +21,7 @@ public final class ExpressionRuntimeSupport {
         this.runtimeCoercionService = Objects.requireNonNull(runtimeCoercionService, "runtimeCoercionService must not be null");
     }
 
-    public static ExpressionRuntimeSupport from(CompiledExpression compiledExpression, RuntimeEnvironment environment) {
+    public static ExpressionRuntimeSupport from(CompiledExpression compiledExpression, ExpressionEnvironment environment) {
         Objects.requireNonNull(environment, "environment must not be null");
         return new ExpressionRuntimeSupport(
                 compiledExpression,

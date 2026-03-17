@@ -4,7 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.runestone.expeval2.ast.ExpressionFileNode;
 import com.runestone.expeval2.ast.mapping.SemanticAstBuilder;
-import com.runestone.expeval2.engine.context.CompilationEnvironment;
+import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2ParserFacade;
 import com.runestone.expeval2.grammar.language.ExpressionResultType;
 import com.runestone.expeval2.semantic.ResolutionContext;
@@ -32,20 +32,21 @@ public final class ExpressionCompiler {
         this.cache = Caffeine.newBuilder().maximumSize(1_024).build();
     }
 
-    public CompiledExpression compile(String source, ExpressionResultType resultType, CompilationEnvironment environment) {
+    public CompiledExpression compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
         Objects.requireNonNull(environment, "environment must not be null");
         ExpressionCacheKey cacheKey = new ExpressionCacheKey(source, environment.environmentId(), resultType);
         return cache.get(cacheKey, ignored -> compileUncached(source, resultType, environment));
     }
 
-    private CompiledExpression compileUncached(String source, ExpressionResultType resultType, CompilationEnvironment environment) {
+    private CompiledExpression compileUncached(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
         Objects.requireNonNull(source, "source must not be null");
         Objects.requireNonNull(resultType, "resultType must not be null");
         ExpressionFileNode ast = switch (resultType) {
             case MATH -> astBuilder.buildMath(parserFacade.parseMath(source).root());
             case LOGICAL -> astBuilder.buildLogical(parserFacade.parseLogical(source).root());
         };
-        SemanticModel semanticModel = semanticResolver.resolve(ast, ResolutionContext.from(resultType, environment));
+        ResolutionContext resolutionContext = new ResolutionContext(resultType, environment.functionCatalog(), environment.externalSymbolCatalog());
+        SemanticModel semanticModel = semanticResolver.resolve(ast, resolutionContext);
         if (semanticModel.hasErrors()) {
             throw new SemanticResolutionException(source, semanticModel.issues());
         }
