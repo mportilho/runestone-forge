@@ -67,6 +67,21 @@ Validação recomendada:
 
 - Benchmark JMH para `compute()` com expressões contendo muitos literais numéricos, datas e strings.
 
+Estratégias consideradas para decisão posterior:
+
+- Árvore de runtime compilada uma vez: consiste em transformar o AST semântico em uma representação executável durante a compilação e reutilizá-la em todo `compute()`. A principal vantagem é remover parsing, branches e decisões repetidas do hot path. O principal custo é aumentar o uso de memória se a estrutura executável duplicar grande parte da árvore já existente.
+- Cache seletivo de literais pré-materializados: consiste em manter, junto do `CompiledExpression`, um repositório de literais constantes já convertidos. É menos invasivo e consome menos memória do que uma segunda árvore completa, preservando boa parte do ganho no ponto mais caro. Como contrapartida, o evaluator continua navegando o AST genérico e fazendo lookups durante a execução.
+- Cache por `ExpressionNode` dentro do evaluator: foi discutido como atalho, mas a efetividade depende do ciclo de vida do evaluator. No desenho atual, o evaluator é recriado em cada `compute()`, o que tornaria esse cache efêmero e pouco útil se ele ficasse apenas como estado interno do evaluator. Para funcionar de forma persistente, o cache precisaria ser promovido para o `CompiledExpression` ou estrutura equivalente.
+- Enriquecimento do modelo de literais sem introduzir tipos de runtime no AST: foi considerada a possibilidade de trocar o `String value` de `LiteralNode` por um valor já materializado. A direção é válida para reduzir custo de execução, mas usar `RuntimeValue` diretamente no pacote de AST aumentaria o acoplamento entre as fases sintática e de runtime. A alternativa mais limpa é manter a representação original no AST e armazenar o valor resolvido em um artefato neutro da fase semântica ou compilada.
+- Pré-compilação seletiva em vez de duplicação estrutural total: também foi discutido que manter duas árvores completas pode ser um custo de memória desnecessário, especialmente se muitas expressões permanecerem em cache. Por isso, a abordagem incremental mais prudente é começar pré-compilando apenas os nós mais caros, em especial literais constantes, antes de avaliar se uma árvore executável maior se justifica.
+- Tratamento separado para pseudo-literais dinâmicos: qualquer estratégia escolhida precisa preservar o comportamento de valores como `currDate`, `currTime` e `currDateTime`, que não devem ser congelados na compilação como se fossem constantes estáticas.
+
+Direção recomendada neste momento:
+
+- Priorizar uma solução incremental com pré-materialização seletiva de literais constantes, medindo o ganho antes de considerar uma árvore completa de runtime.
+- Evitar, por enquanto, introduzir dependência direta de `internal.ast` para `internal.runtime`.
+- Usar benchmark para decidir se o ganho adicional de uma representação executável dedicada compensa o aumento de memória e complexidade.
+
 ### 2. Cópias redundantes de bindings e recriação de avaliadores por execução
 
 Severidade: Alta

@@ -19,10 +19,10 @@ public final class SemanticAstBuilder {
         ExpressionEvaluatorV2Parser.MathInputContext input = (ExpressionEvaluatorV2Parser.MathInputContext) root;
         NodeFactory nodeFactory = new NodeFactory();
         return new ExpressionFileNode(
-            nodeFactory.nextId("file"),
-            nodeFactory.sourceSpan(input),
-            buildAssignments(input.assignmentExpression(), nodeFactory),
-            new ExpressionVisitor(nodeFactory).visit(input.mathExpression())
+                nodeFactory.nextId("file"),
+                nodeFactory.sourceSpan(input),
+                buildAssignments(input.assignmentExpression(), nodeFactory),
+                new ExpressionVisitor(nodeFactory).visit(input.mathExpression())
         );
     }
 
@@ -31,17 +31,14 @@ public final class SemanticAstBuilder {
         ExpressionEvaluatorV2Parser.LogicalInputContext input = (ExpressionEvaluatorV2Parser.LogicalInputContext) root;
         NodeFactory nodeFactory = new NodeFactory();
         return new ExpressionFileNode(
-            nodeFactory.nextId("file"),
-            nodeFactory.sourceSpan(input),
-            buildAssignments(input.assignmentExpression(), nodeFactory),
-            new ExpressionVisitor(nodeFactory).visit(input.logicalExpression())
+                nodeFactory.nextId("file"),
+                nodeFactory.sourceSpan(input),
+                buildAssignments(input.assignmentExpression(), nodeFactory),
+                new ExpressionVisitor(nodeFactory).visit(input.logicalExpression())
         );
     }
 
-    private static List<AssignmentNode> buildAssignments(
-        List<ExpressionEvaluatorV2Parser.AssignmentExpressionContext> assignments,
-        NodeFactory nodeFactory
-    ) {
+    private static List<AssignmentNode> buildAssignments(List<ExpressionEvaluatorV2Parser.AssignmentExpressionContext> assignments, NodeFactory nodeFactory) {
         List<AssignmentNode> nodes = new ArrayList<>(assignments.size());
         ExpressionVisitor expressionVisitor = new ExpressionVisitor(nodeFactory);
         for (ExpressionEvaluatorV2Parser.AssignmentExpressionContext assignment : assignments) {
@@ -51,42 +48,42 @@ public final class SemanticAstBuilder {
     }
 
     private static AssignmentNode buildAssignment(
-        ExpressionEvaluatorV2Parser.AssignmentExpressionContext assignment,
-        ExpressionVisitor expressionVisitor,
-        NodeFactory nodeFactory
+            ExpressionEvaluatorV2Parser.AssignmentExpressionContext assignment,
+            ExpressionVisitor expressionVisitor,
+            NodeFactory nodeFactory
     ) {
         if (assignment instanceof ExpressionEvaluatorV2Parser.AssignmentOperationContext simpleAssignment) {
             return new SimpleAssignmentNode(
-                nodeFactory.nextId("assign"),
-                nodeFactory.sourceSpan(simpleAssignment),
-                simpleAssignment.IDENTIFIER().getText(),
-                buildAssignmentValue(simpleAssignment.assignmentValue(), expressionVisitor)
+                    nodeFactory.nextId("assign"),
+                    nodeFactory.sourceSpan(simpleAssignment),
+                    simpleAssignment.IDENTIFIER().getText(),
+                    buildAssignmentValue(simpleAssignment.assignmentValue(), expressionVisitor)
             );
         }
         if (assignment instanceof ExpressionEvaluatorV2Parser.DestructuringAssignmentOperationContext destructuringAssignment) {
             if (!(destructuringAssignment.vectorOfVariables() instanceof ExpressionEvaluatorV2Parser.VectorOfVariablesOperationContext vectorOfVariables)) {
                 throw new IllegalStateException("unsupported vectorOfVariables context: "
-                    + destructuringAssignment.vectorOfVariables().getClass().getSimpleName());
+                                                + destructuringAssignment.vectorOfVariables().getClass().getSimpleName());
             }
             List<String> targetNames = vectorOfVariables.IDENTIFIER().stream()
-                .map(TerminalNode::getText)
-                .toList();
+                    .map(TerminalNode::getText)
+                    .toList();
             ExpressionNode value = destructuringAssignment.vectorEntity() != null
-                ? expressionVisitor.visit(destructuringAssignment.vectorEntity())
-                : expressionVisitor.visit(destructuringAssignment.function());
+                    ? expressionVisitor.visit(destructuringAssignment.vectorEntity())
+                    : expressionVisitor.visit(destructuringAssignment.function());
             return new DestructuringAssignmentNode(
-                nodeFactory.nextId("assign"),
-                nodeFactory.sourceSpan(destructuringAssignment),
-                targetNames,
-                value
+                    nodeFactory.nextId("assign"),
+                    nodeFactory.sourceSpan(destructuringAssignment),
+                    targetNames,
+                    value
             );
         }
         throw new IllegalStateException("unsupported assignment context: " + assignment.getClass().getSimpleName());
     }
 
     private static ExpressionNode buildAssignmentValue(
-        ExpressionEvaluatorV2Parser.AssignmentValueContext assignmentValue,
-        ExpressionVisitor expressionVisitor
+            ExpressionEvaluatorV2Parser.AssignmentValueContext assignmentValue,
+            ExpressionVisitor expressionVisitor
     ) {
         if (assignmentValue instanceof ExpressionEvaluatorV2Parser.MathAssignmentValueContext mathAssignmentValue) {
             return expressionVisitor.visit(mathAssignmentValue.mathExpression());
@@ -135,11 +132,11 @@ public final class SemanticAstBuilder {
                 ExpressionNode right = visit(ctx.multiplicationExpression(index));
                 BinaryOperator operator = tokenTypeToAdditiveOperator(ctx.getChild(2 * index - 1).getPayload());
                 current = new BinaryOperationNode(
-                    nodeFactory.nextId("binary"),
-                    nodeFactory.sourceSpan(current.sourceSpan(), right.sourceSpan()),
-                    operator,
-                    current,
-                    right
+                        nodeFactory.nextId("binary"),
+                        nodeFactory.sourceSpan(current.sourceSpan(), right.sourceSpan()),
+                        operator,
+                        current,
+                        right
                 );
             }
             return current;
@@ -152,11 +149,11 @@ public final class SemanticAstBuilder {
                 ExpressionNode right = visit(ctx.unaryExpression(index));
                 BinaryOperator operator = tokenTypeToMultiplicativeOperator(ctx.getChild(2 * index - 1).getPayload());
                 current = new BinaryOperationNode(
-                    nodeFactory.nextId("binary"),
-                    nodeFactory.sourceSpan(current.sourceSpan(), right.sourceSpan()),
-                    operator,
-                    current,
-                    right
+                        nodeFactory.nextId("binary"),
+                        nodeFactory.sourceSpan(current.sourceSpan(), right.sourceSpan()),
+                        operator,
+                        current,
+                        right
                 );
             }
             return current;
@@ -165,10 +162,10 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitUnaryMinusOperation(ExpressionEvaluatorV2Parser.UnaryMinusOperationContext ctx) {
             return new UnaryOperationNode(
-                nodeFactory.nextId("unary"),
-                nodeFactory.sourceSpan(ctx),
-                UnaryOperator.NEGATE,
-                visit(ctx.unaryExpression())
+                    nodeFactory.nextId("unary"),
+                    nodeFactory.sourceSpan(ctx),
+                    UnaryOperator.NEGATE,
+                    visit(ctx.unaryExpression())
             );
         }
 
@@ -183,11 +180,11 @@ public final class SemanticAstBuilder {
             for (int index = 1; index < ctx.exponentiationExpression().size(); index++) {
                 ExpressionNode right = visit(ctx.exponentiationExpression(index));
                 current = new BinaryOperationNode(
-                    nodeFactory.nextId("binary"),
-                    nodeFactory.sourceSpan(current.sourceSpan(), right.sourceSpan()),
-                    BinaryOperator.ROOT,
-                    current,
-                    right
+                        nodeFactory.nextId("binary"),
+                        nodeFactory.sourceSpan(current.sourceSpan(), right.sourceSpan()),
+                        BinaryOperator.ROOT,
+                        current,
+                        right
                 );
             }
             return current;
@@ -201,11 +198,11 @@ public final class SemanticAstBuilder {
             }
             ExpressionNode right = visit(ctx.unaryExpression());
             return new BinaryOperationNode(
-                nodeFactory.nextId("binary"),
-                nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
-                BinaryOperator.POWER,
-                left,
-                right
+                    nodeFactory.nextId("binary"),
+                    nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
+                    BinaryOperator.POWER,
+                    left,
+                    right
             );
         }
 
@@ -215,12 +212,10 @@ public final class SemanticAstBuilder {
             for (int childIndex = 1; childIndex < ctx.getChildCount(); childIndex++) {
                 TerminalNode operator = (TerminalNode) ctx.getChild(childIndex);
                 current = new PostfixOperationNode(
-                    nodeFactory.nextId("postfix"),
-                    nodeFactory.sourceSpan(current.sourceSpan(), nodeFactory.sourceSpan(operator.getSymbol())),
-                    operator.getSymbol().getType() == ExpressionEvaluatorV2Parser.PERCENT
-                        ? PostfixOperator.PERCENT
-                        : PostfixOperator.FACTORIAL,
-                    current
+                        nodeFactory.nextId("postfix"),
+                        nodeFactory.sourceSpan(current.sourceSpan(), nodeFactory.sourceSpan(operator.getSymbol())),
+                        operator.getSymbol().getType() == ExpressionEvaluatorV2Parser.PERCENT ? PostfixOperator.PERCENT : PostfixOperator.FACTORIAL,
+                        current
                 );
             }
             return current;
@@ -234,20 +229,20 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitSquareRootOperation(ExpressionEvaluatorV2Parser.SquareRootOperationContext ctx) {
             return new UnaryOperationNode(
-                nodeFactory.nextId("unary"),
-                nodeFactory.sourceSpan(ctx),
-                UnaryOperator.SQRT,
-                visit(ctx.mathExpression())
+                    nodeFactory.nextId("unary"),
+                    nodeFactory.sourceSpan(ctx),
+                    UnaryOperator.SQRT,
+                    visit(ctx.mathExpression())
             );
         }
 
         @Override
         public ExpressionNode visitModulusOperation(ExpressionEvaluatorV2Parser.ModulusOperationContext ctx) {
             return new UnaryOperationNode(
-                nodeFactory.nextId("unary"),
-                nodeFactory.sourceSpan(ctx),
-                UnaryOperator.MODULUS,
-                visit(ctx.mathExpression())
+                    nodeFactory.nextId("unary"),
+                    nodeFactory.sourceSpan(ctx),
+                    UnaryOperator.MODULUS,
+                    visit(ctx.mathExpression())
             );
         }
 
@@ -279,11 +274,11 @@ public final class SemanticAstBuilder {
             }
             ExpressionNode right = visit(ctx.logicalBitwiseExpression(1));
             return new BinaryOperationNode(
-                nodeFactory.nextId("binary"),
-                nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
-                comparisonOperator(ctx.comparisonOperator()),
-                left,
-                right
+                    nodeFactory.nextId("binary"),
+                    nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
+                    comparisonOperator(ctx.comparisonOperator()),
+                    left,
+                    right
             );
         }
 
@@ -319,11 +314,11 @@ public final class SemanticAstBuilder {
                 ExpressionNode right = visit(ctx.logicalNotExpression(index));
                 BinaryOperator operator = tokenTypeToBitwiseOperator(ctx.getChild(2 * index - 1).getPayload());
                 current = new BinaryOperationNode(
-                    nodeFactory.nextId("binary"),
-                    nodeFactory.sourceSpan(current.sourceSpan(), right.sourceSpan()),
-                    operator,
-                    current,
-                    right
+                        nodeFactory.nextId("binary"),
+                        nodeFactory.sourceSpan(current.sourceSpan(), right.sourceSpan()),
+                        operator,
+                        current,
+                        right
                 );
             }
             return current;
@@ -332,10 +327,10 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitLogicalNotOperation(ExpressionEvaluatorV2Parser.LogicalNotOperationContext ctx) {
             return new UnaryOperationNode(
-                nodeFactory.nextId("unary"),
-                nodeFactory.sourceSpan(ctx),
-                UnaryOperator.LOGICAL_NOT,
-                visit(ctx.logicalNotExpression())
+                    nodeFactory.nextId("unary"),
+                    nodeFactory.sourceSpan(ctx),
+                    UnaryOperator.LOGICAL_NOT,
+                    visit(ctx.logicalNotExpression())
             );
         }
 
@@ -357,13 +352,13 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitFunctionCallOperation(ExpressionEvaluatorV2Parser.FunctionCallOperationContext ctx) {
             List<ExpressionNode> arguments = ctx.allEntityTypes().stream()
-                .map(this::visitAllEntityType)
-                .toList();
+                    .map(this::visitAllEntityType)
+                    .toList();
             return new FunctionCallNode(
-                nodeFactory.nextId("call"),
-                nodeFactory.sourceSpan(ctx),
-                ctx.IDENTIFIER().getText(),
-                arguments
+                    nodeFactory.nextId("call"),
+                    nodeFactory.sourceSpan(ctx),
+                    ctx.IDENTIFIER().getText(),
+                    arguments
             );
         }
 
@@ -375,18 +370,18 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitIdentifierReferenceTarget(ExpressionEvaluatorV2Parser.IdentifierReferenceTargetContext ctx) {
             return new IdentifierNode(
-                nodeFactory.nextId("identifier"),
-                nodeFactory.sourceSpan(ctx),
-                ctx.IDENTIFIER().getText()
+                    nodeFactory.nextId("identifier"),
+                    nodeFactory.sourceSpan(ctx),
+                    ctx.IDENTIFIER().getText()
             );
         }
 
         @Override
         public ExpressionNode visitLogicalConstantOperation(ExpressionEvaluatorV2Parser.LogicalConstantOperationContext ctx) {
             return new LiteralNode(
-                nodeFactory.nextId("literal"),
-                nodeFactory.sourceSpan(ctx),
-                ctx.getText()
+                    nodeFactory.nextId("literal"),
+                    nodeFactory.sourceSpan(ctx),
+                    ctx.getText()
             );
         }
 
@@ -413,9 +408,9 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitNumericConstantOperation(ExpressionEvaluatorV2Parser.NumericConstantOperationContext ctx) {
             return new LiteralNode(
-                nodeFactory.nextId("literal"),
-                nodeFactory.sourceSpan(ctx),
-                ctx.NUMBER().getText()
+                    nodeFactory.nextId("literal"),
+                    nodeFactory.sourceSpan(ctx),
+                    ctx.NUMBER().getText()
             );
         }
 
@@ -432,9 +427,9 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitStringConstantOperation(ExpressionEvaluatorV2Parser.StringConstantOperationContext ctx) {
             return new LiteralNode(
-                nodeFactory.nextId("literal"),
-                nodeFactory.sourceSpan(ctx),
-                ctx.STRING().getText()
+                    nodeFactory.nextId("literal"),
+                    nodeFactory.sourceSpan(ctx),
+                    ctx.STRING().getText()
             );
         }
 
@@ -506,8 +501,8 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitDateTimeConstantOperation(ExpressionEvaluatorV2Parser.DateTimeConstantOperationContext ctx) {
             String value = ctx.TIME_OFFSET() == null
-                ? ctx.DATETIME().getText()
-                : ctx.DATETIME().getText() + ctx.TIME_OFFSET().getText();
+                    ? ctx.DATETIME().getText()
+                    : ctx.DATETIME().getText() + ctx.TIME_OFFSET().getText();
             return literal(ctx, value);
         }
 
@@ -559,11 +554,11 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitVectorOfEntitiesOperation(ExpressionEvaluatorV2Parser.VectorOfEntitiesOperationContext ctx) {
             return new VectorLiteralNode(
-                nodeFactory.nextId("vector"),
-                nodeFactory.sourceSpan(ctx),
-                ctx.allEntityTypes().stream()
-                    .map(this::visitAllEntityType)
-                    .toList()
+                    nodeFactory.nextId("vector"),
+                    nodeFactory.sourceSpan(ctx),
+                    ctx.allEntityTypes().stream()
+                            .map(this::visitAllEntityType)
+                            .toList()
             );
         }
 
@@ -583,24 +578,24 @@ public final class SemanticAstBuilder {
         }
 
         private ExpressionNode comparisonNode(
-            ParserRuleContext leftContext,
-            ExpressionEvaluatorV2Parser.ComparisonOperatorContext operatorContext,
-            ParserRuleContext rightContext
+                ParserRuleContext leftContext,
+                ExpressionEvaluatorV2Parser.ComparisonOperatorContext operatorContext,
+                ParserRuleContext rightContext
         ) {
             ExpressionNode left = visit(leftContext);
             ExpressionNode right = visit(rightContext);
             return new BinaryOperationNode(
-                nodeFactory.nextId("binary"),
-                nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
-                comparisonOperator(operatorContext),
-                left,
-                right
+                    nodeFactory.nextId("binary"),
+                    nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
+                    comparisonOperator(operatorContext),
+                    left,
+                    right
             );
         }
 
         private ConditionalNode conditionalNode(
-            ParserRuleContext ctx,
-            List<ExpressionEvaluatorV2Parser.LogicalExpressionContext> logicalExpressions
+                ParserRuleContext ctx,
+                List<ExpressionEvaluatorV2Parser.LogicalExpressionContext> logicalExpressions
         ) {
             if (logicalExpressions.size() < 3 || logicalExpressions.size() % 2 == 0) {
                 throw new IllegalStateException("logical conditional expression must contain condition/result pairs plus else");
@@ -612,18 +607,18 @@ public final class SemanticAstBuilder {
                 results.add(visit(logicalExpressions.get(index + 1)));
             }
             return new ConditionalNode(
-                nodeFactory.nextId("conditional"),
-                nodeFactory.sourceSpan(ctx),
-                conditions,
-                results,
-                visit(logicalExpressions.getLast())
+                    nodeFactory.nextId("conditional"),
+                    nodeFactory.sourceSpan(ctx),
+                    conditions,
+                    results,
+                    visit(logicalExpressions.getLast())
             );
         }
 
         private ConditionalNode conditionalNode(
-            ParserRuleContext ctx,
-            List<? extends ParserRuleContext> conditionContexts,
-            List<? extends ParserRuleContext> resultContexts
+                ParserRuleContext ctx,
+                List<? extends ParserRuleContext> conditionContexts,
+                List<? extends ParserRuleContext> resultContexts
         ) {
             if (conditionContexts.isEmpty()) {
                 throw new IllegalStateException("conditional expression must contain at least one condition");
@@ -632,17 +627,17 @@ public final class SemanticAstBuilder {
                 throw new IllegalStateException("conditional expression must contain one else branch");
             }
             List<ExpressionNode> conditions = conditionContexts.stream()
-                .map(this::visit)
-                .toList();
+                    .map(this::visit)
+                    .toList();
             List<ExpressionNode> results = resultContexts.subList(0, resultContexts.size() - 1).stream()
-                .map(this::visit)
-                .toList();
+                    .map(this::visit)
+                    .toList();
             return new ConditionalNode(
-                nodeFactory.nextId("conditional"),
-                nodeFactory.sourceSpan(ctx),
-                conditions,
-                results,
-                visit(resultContexts.getLast())
+                    nodeFactory.nextId("conditional"),
+                    nodeFactory.sourceSpan(ctx),
+                    conditions,
+                    results,
+                    visit(resultContexts.getLast())
             );
         }
 
@@ -651,11 +646,11 @@ public final class SemanticAstBuilder {
             for (int index = 1; index < contexts.size(); index++) {
                 ExpressionNode right = visit(contexts.get(index));
                 current = new BinaryOperationNode(
-                    nodeFactory.nextId("binary"),
-                    nodeFactory.sourceSpan(current.sourceSpan(), right.sourceSpan()),
-                    operator,
-                    current,
-                    right
+                        nodeFactory.nextId("binary"),
+                        nodeFactory.sourceSpan(current.sourceSpan(), right.sourceSpan()),
+                        operator,
+                        current,
+                        right
                 );
             }
             return current;
@@ -688,21 +683,24 @@ public final class SemanticAstBuilder {
 
         private LiteralNode literal(ParserRuleContext ctx, String value) {
             return new LiteralNode(
-                nodeFactory.nextId("literal"),
-                nodeFactory.sourceSpan(ctx),
-                value
+                    nodeFactory.nextId("literal"),
+                    nodeFactory.sourceSpan(ctx),
+                    value
             );
         }
 
         private BinaryOperator comparisonOperator(ExpressionEvaluatorV2Parser.ComparisonOperatorContext ctx) {
             return switch (ctx) {
                 case ExpressionEvaluatorV2Parser.GreaterThanOperatorContext ignored -> BinaryOperator.GREATER_THAN;
-                case ExpressionEvaluatorV2Parser.GreaterThanOrEqualOperatorContext ignored -> BinaryOperator.GREATER_THAN_OR_EQUAL;
+                case ExpressionEvaluatorV2Parser.GreaterThanOrEqualOperatorContext ignored ->
+                        BinaryOperator.GREATER_THAN_OR_EQUAL;
                 case ExpressionEvaluatorV2Parser.LessThanOperatorContext ignored -> BinaryOperator.LESS_THAN;
-                case ExpressionEvaluatorV2Parser.LessThanOrEqualOperatorContext ignored -> BinaryOperator.LESS_THAN_OR_EQUAL;
+                case ExpressionEvaluatorV2Parser.LessThanOrEqualOperatorContext ignored ->
+                        BinaryOperator.LESS_THAN_OR_EQUAL;
                 case ExpressionEvaluatorV2Parser.EqualOperatorContext ignored -> BinaryOperator.EQUAL;
                 case ExpressionEvaluatorV2Parser.NotEqualOperatorContext ignored -> BinaryOperator.NOT_EQUAL;
-                default -> throw new IllegalStateException("unsupported comparison operator: " + ctx.getClass().getSimpleName());
+                default ->
+                        throw new IllegalStateException("unsupported comparison operator: " + ctx.getClass().getSimpleName());
             };
         }
 
@@ -751,24 +749,24 @@ public final class SemanticAstBuilder {
 
         private SourceSpan sourceSpan(SourceSpan start, SourceSpan end) {
             return new SourceSpan(
-                start.startOffset(),
-                end.endOffset(),
-                start.startLine(),
-                start.startColumn(),
-                end.endLine(),
-                end.endColumn()
+                    start.startOffset(),
+                    end.endOffset(),
+                    start.startLine(),
+                    start.startColumn(),
+                    end.endLine(),
+                    end.endColumn()
             );
         }
 
         private SourceSpan sourceSpan(Token start, Token stop) {
             Token effectiveStop = stop == null ? start : stop;
             return new SourceSpan(
-                Math.max(0, start.getStartIndex()),
-                Math.max(0, effectiveStop.getStopIndex()),
-                start.getLine(),
-                start.getCharPositionInLine(),
-                effectiveStop.getLine(),
-                endColumn(effectiveStop)
+                    Math.max(0, start.getStartIndex()),
+                    Math.max(0, effectiveStop.getStopIndex()),
+                    start.getLine(),
+                    start.getCharPositionInLine(),
+                    effectiveStop.getLine(),
+                    endColumn(effectiveStop)
             );
         }
 
