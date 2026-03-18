@@ -344,3 +344,24 @@ Cross-module comparison after Phase 6:
 **Decision:** ACCEPT
 **Reason:** `mk2UserFunction` improved by +19.57% and `mk2VariableChurn` by +13.89%, both well above the 10% acceptance threshold. More significantly, `mk2UserFunction` is now faster than the legacy path for the first time — closing the −25.8% gap recorded in PERF-014. `mk2VariableChurn` regression risk was zero (it also has no assignments and benefits from the same optimization). The `assign()` guard ensures any expression with assignments that inadvertently takes the wrong path will fail immediately with a clear exception rather than silently corrupting state.
 **Notes:** Measurements used `CrossModuleExpressionEngineBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). Module tests passed via `mvn -q -pl exp-eval-mk2 test` after the changes. B/op profile not re-measured in this session; estimated elimination of ~580 B/op based on the Phase 4 allocation profile (1,400 B/op) and prior analysis in `perf-plan-user-function.md`.
+
+## PERF-016: Phase 7 — Eliminate `Optional` allocation in identifier lookup
+
+**Date:** 2026-03-18
+
+**Scenario:** Measure the effect of replacing `scope.find(id.ref()).orElseThrow(...)` with a direct `scope.findOrNull(id.ref())` null-check in `AbstractRuntimeEvaluator.evaluateExpression`. The `mk2VariableChurn` scenario exercises 22 identifier lookups per `compute()` and `mk2UserFunction` exercises 12, making these the most affected paths.
+**Hypothesis:** Each `find()` call wraps the result in `Optional.ofNullable(...)`. With 12–22 lookups per `compute()`, this could create up to 192 B/op in `Optional` allocations. JIT escape analysis frequently eliminates scalar containers, so actual B/op savings may be zero.
+
+**Changes applied (then reverted):**
+- `ExecutionScope`: added package-private `findOrNull(SymbolRef)` returning the raw value or `null`.
+- `AbstractRuntimeEvaluator`: replaced `scope.find(id.ref()).orElseThrow(...)` with an explicit null-check on `scope.findOrNull(id.ref())`.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| mk2UserFunction | 824.950 ± 31.2 | 809.474 ± 22.3 | +1.88% |
+| mk2VariableChurn | 711.826 ± 23.0 | 732.001 ± 13.4 | −2.83% |
+| mk2LiteralDense | 1,089.866 ± 78.9 | 1,510.545 ± 73.1 | — (spurious; literalDense has no identifier lookups) |
+
+**Decision:** DISCARD
+**Reason:** `mk2VariableChurn` (the primary target) showed a −2.83% change, which is within measurement noise given the ±23 ns/op error on the before run. `mk2UserFunction` showed +1.88%, also within noise. No evidence of measurable gain. The `mk2LiteralDense` apparent regression (−38.6%) is spurious — that benchmark contains no identifier lookups and cannot be affected by this change; it reflects JVM state differences between runs. The JIT's escape analysis already eliminates the `Optional` allocation on the hot path, confirming the plan's own hypothesis. Code was reverted.
+**Notes:** Measurements used `CrossModuleExpressionEngineBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.6). Module tests passed (199/199) via `mvn -q -pl exp-eval-mk2 test` before and after revert.

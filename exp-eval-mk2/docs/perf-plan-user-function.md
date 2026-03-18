@@ -42,7 +42,7 @@ Fase 6 primeiro (maior impacto isolado), depois Fase 5, depois Fase 7.
 
 ## Fase 5 — Pre-alocação do buffer de argumentos por nó de chamada
 
-**Status:** PENDENTE
+**Status:** REJEITADO
 
 **Hipótese:** `evaluateFunctionCall` faz `new Object[arity]` a cada invocação. Com 4 chamadas de aridade 3, são ~160 B/op que podem ser eliminados pré-alocando o buffer no próprio nó, junto ao plan de execução.
 
@@ -208,7 +208,7 @@ Se houver bug na detecção (expressão com assignments entra no caminho read-on
 
 ## Fase 7 — Eliminar `Optional` no lookup de identificadores
 
-**Status:** PENDENTE
+**Status:** DESCARTADO
 
 **Hipótese:** `ExecutionScope.find()` retorna `Optional<RuntimeValue>`. Em 12 lookups por `compute()` no cenário `userFunction`, isso pode criar 12 `Optional` por execução (~192 B/op). O JIT elimina objetos escalares com escape analysis com frequência, então o ganho real pode ser zero. Medir antes de aceitar.
 
