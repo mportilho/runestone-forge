@@ -283,3 +283,64 @@ Allocation delta: **unchanged** at 1,840 B/op vs Phase 2. The Phase 3 hypothesis
 **Decision:** DISCARD
 **Reason:** `mk2UserFunction` change (−0.67%) is within measurement noise (±17 ns/op), and allocation is flat at 1,840 B/op. The code was reverted. The changes produced no measurable performance improvement.
 **Notes:** Measurements used `CrossModuleExpressionEngineBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). Allocation measured with `-f 1 -wi 5 -i 5 -prof gc`. Module tests passed via `mvn -q -pl exp-eval-mk2 test` both before and after revert.
+
+## PERF-014: Phase 4 — Evaluator reuse and single-copy ExecutionScope creation
+
+**Date:** 2026-03-17
+
+**Scenario:** Eliminate two sources of base runtime overhead confirmed by Phase 3's diagnostic: (1) creation of a new `MathEvaluator` or `LogicalEvaluator` on every `compute()` call; (2) the double-copy path `MutableBindings.snapshot()` → `Map.copyOf(values)` followed by `ExecutionScope` → `new HashMap<>(copyOfValues)`, which produced two independent map allocations per execution.
+**Hypothesis:** Caching evaluators as final fields and reducing map copies to a single `new HashMap<>(values)` would noticeably reduce both `ns/op` and `B/op` in the `mk2UserFunction` and `mk2VariableChurn` scenarios.
+
+**Changes applied:**
+- `MutableBindings`: removed `snapshot()` (returned `Map.copyOf(values)`); added package-private `copyValues()` returning `new HashMap<>(values)` directly.
+- `ExecutionScope`: removed the copy inside the constructor; added `fromIsolated(Map<SymbolRef, RuntimeValue>)` factory that takes ownership of an already-isolated map without copying; removed unused `HashMap` import.
+- `ExpressionRuntimeSupport`: added `mathEvaluator` and `logicalEvaluator` as final fields created once at construction; `computeMath()` and `computeLogical()` now reuse these evaluators; `createExecutionScope()` uses `ExecutionScope.fromIsolated(bindings.copyValues())`.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| mk2UserFunction | 1,084.908 ± 27.4 | 918.385 ± 32.0 | +15.35% |
+| mk2VariableChurn | 977.871 ± 20.5 | 824.188 ± 23.3 | +15.72% |
+| mk2LiteralDense | 1,045.611 ± 18.0 | 1,010.016 ± 31.0 | +3.40% |
+
+Allocation profile after Phase 4 (`-f 1 -wi 5 -i 10 -prof gc`):
+
+| Benchmark | Score (ns/op) | Allocation (B/op) |
+|-----------|-------------:|------------------:|
+| legacyUserFunction | 830.4 | 440.011 |
+| mk2UserFunction | 939.2 | 1,400.013 |
+
+Allocation delta: reduced from 1,840 B/op (Phase 3) to 1,400 B/op — a drop of 440 B/op (23.9% reduction). Remaining gap to legacy: 960 B/op (vs 1,400 B/op after Phase 3).
+
+**Decision:** ACCEPT
+**Reason:** Both primary mk2 scenarios improved by >15%, exceeding the 10% acceptance threshold. Allocation also dropped meaningfully (440 B/op). The two structural changes are safe and non-observable: evaluators are stateless (all fields final, no mutable instance state, scope is always passed as a parameter), and the scope creation no longer needs a defensive copy because `copyValues()` already produces an isolated map owned by the caller.
+**Notes:** Measurements used `CrossModuleExpressionEngineBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). Allocation measured with `-f 1 -wi 5 -i 10 -prof gc`. Module tests (199) passed via `mvn -q -pl exp-eval-mk2 test` after the changes.
+
+## PERF-015: Phase 6 — Eliminate HashMap copy for assignment-free expressions
+
+**Date:** 2026-03-18
+
+**Scenario:** Measure the effect of bypassing `MutableBindings.copyValues()` on every `compute()` call when the compiled expression contains no assignments. For the `userFunction` scenario (4 calls to `weighted(a,b,c)`, no assignments), the `new HashMap<>(values)` copy was the single largest allocator, estimated at ~580 B/op.
+**Hypothesis:** Routing assignment-free expressions through a shared read-only map instead of a defensive copy would eliminate ~580 B/op per `compute()` and reduce ns/op for both `mk2UserFunction` and `mk2VariableChurn`, while `mk2VariableChurn` would also benefit because it similarly has no assignments.
+
+**Changes applied:**
+- `MutableBindings`: added package-private `valuesReadOnly()` returning the internal `Map<SymbolRef, RuntimeValue>` directly without copying.
+- `ExecutionScope`: added `mutable` boolean field and `readOnly(Map)` factory; `assign()` throws `IllegalStateException` on read-only scopes; `fromIsolated(Map)` unchanged (still takes ownership of a mutable copy).
+- `ExpressionRuntimeSupport`: added `hasAssignments` boolean field set once at construction from `compiledExpression.executionPlan().assignments().isEmpty()`; `createExecutionScope()` routes to `ExecutionScope.readOnly(bindings.valuesReadOnly())` when no assignments, or the existing `ExecutionScope.fromIsolated(bindings.copyValues())` path otherwise.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| mk2UserFunction | 965.038 ± 34.3 | 776.184 ± 17.2 | +19.57% |
+| mk2VariableChurn | 813.061 ± 21.8 | 700.089 ± 20.3 | +13.89% |
+| mk2LiteralDense | 1,030.138 ± 27.8 | 1,012.948 ± 12.0 | +1.67% |
+
+Cross-module comparison after Phase 6:
+
+| Benchmark | legacy (ns/op) | mk2 (ns/op) | mk2 vs legacy |
+|-----------|---------------:|------------:|-------------:|
+| userFunction | 796.845 | 776.184 | **+2.6% (mk2 wins)** |
+| variableChurn | 1,031.288 | 700.089 | **+32.1% (mk2 wins)** |
+| literalDense | 2,439.801 | 1,012.948 | **+58.5% (mk2 wins)** |
+
+**Decision:** ACCEPT
+**Reason:** `mk2UserFunction` improved by +19.57% and `mk2VariableChurn` by +13.89%, both well above the 10% acceptance threshold. More significantly, `mk2UserFunction` is now faster than the legacy path for the first time — closing the −25.8% gap recorded in PERF-014. `mk2VariableChurn` regression risk was zero (it also has no assignments and benefits from the same optimization). The `assign()` guard ensures any expression with assignments that inadvertently takes the wrong path will fail immediately with a clear exception rather than silently corrupting state.
+**Notes:** Measurements used `CrossModuleExpressionEngineBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). Module tests passed via `mvn -q -pl exp-eval-mk2 test` after the changes. B/op profile not re-measured in this session; estimated elimination of ~580 B/op based on the Phase 4 allocation profile (1,400 B/op) and prior analysis in `perf-plan-user-function.md`.

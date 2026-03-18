@@ -15,15 +15,19 @@ public final class ExpressionRuntimeSupport {
 
     private final CompiledExpression compiledExpression;
     private final MutableBindings bindings;
-    private final RuntimeValueFactory runtimeValueFactory;
-    private final RuntimeCoercionService runtimeCoercionService;
+    private final MathEvaluator mathEvaluator;
+    private final LogicalEvaluator logicalEvaluator;
+    private final boolean hasAssignments;
 
     private ExpressionRuntimeSupport(CompiledExpression compiledExpression, MutableBindings bindings,
                                      RuntimeValueFactory runtimeValueFactory, RuntimeCoercionService runtimeCoercionService) {
         this.compiledExpression = Objects.requireNonNull(compiledExpression, "compiledExpression must not be null");
         this.bindings = Objects.requireNonNull(bindings, "bindings must not be null");
-        this.runtimeValueFactory = Objects.requireNonNull(runtimeValueFactory, "runtimeValueFactory must not be null");
-        this.runtimeCoercionService = Objects.requireNonNull(runtimeCoercionService, "runtimeCoercionService must not be null");
+        Objects.requireNonNull(runtimeValueFactory, "runtimeValueFactory must not be null");
+        Objects.requireNonNull(runtimeCoercionService, "runtimeCoercionService must not be null");
+        this.mathEvaluator = new MathEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService);
+        this.logicalEvaluator = new LogicalEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService);
+        this.hasAssignments = !compiledExpression.executionPlan().assignments().isEmpty();
     }
 
     public static ExpressionRuntimeSupport compileMath(String source, ExpressionEnvironment environment) {
@@ -70,16 +74,21 @@ public final class ExpressionRuntimeSupport {
     }
 
     ExecutionScope createExecutionScope() {
-        return ExecutionScope.from(bindings.snapshot());
+        if (hasAssignments) {
+            return ExecutionScope.fromIsolated(bindings.copyValues());
+        }
+        return ExecutionScope.readOnly(bindings.valuesReadOnly());
     }
 
     public BigDecimal computeMath() {
-        MathEvaluator mathEvaluator = new MathEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService);
         return mathEvaluator.evaluate(createExecutionScope());
     }
 
     public boolean computeLogical() {
-        LogicalEvaluator logicalEvaluator = new LogicalEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService);
         return logicalEvaluator.evaluate(createExecutionScope());
+    }
+
+    public CompiledExpression getCompiledExpression() {
+        return compiledExpression;
     }
 }

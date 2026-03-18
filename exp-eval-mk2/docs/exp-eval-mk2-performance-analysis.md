@@ -262,7 +262,7 @@ Validação recomendada:
 ### 6. Caminho de função customizada está comprovadamente mais lento que o `expression-evaluator`
 
 Severidade: Alta
-Situação: Medido, confirmado e priorizado para refatoração
+Situação: Refatoração concluída (Fases 1–5 executadas; Fases 2 e 4 aceitas, Fase 3 descartada)
 
 Arquivos:
 
@@ -369,14 +369,16 @@ Plano detalhado de refatoração proposto:
    - Resultado medido: `mk2UserFunction` −0.67% (ruído), B/op inalterado (1,840). Descoberta importante: a coerção já tem fast-path via `targetType.isInstance(value.raw())` e o `DataConversionService.convert` para conversões de identidade não aloca. O gap de 1,400 B/op em relação ao legado vem do overhead base do runtime (ExecutionScope + HashMap, snapshot de bindings, criação de avaliador) — alvo da Fase 4. Decisão: ADJUST.
 
 4. Fase 4: atacar overhead base do `compute()`
+   - Situação: Resolvido (PERF-014)
    - Reutilizar avaliadores quando forem efetivamente stateless.
    - Remover a dupla cópia `snapshot() -> new HashMap<>(...)` entre `MutableBindings` e `ExecutionScope`.
    - Critério de saída: aproximar `mk2VariableChurn` do legado e evitar que o restante do runtime masque o ganho no caminho de função.
+   - Resultado medido: `mk2UserFunction` melhorou +15.35% (1,084 → 918 ns/op); `mk2VariableChurn` melhorou +15.72% (977 → 824 ns/op); alocação em `mk2UserFunction` caiu de 1,840 para 1,400 B/op (−23.9%). Gap de alocação para o legado: 960 B/op (antes 1,400 B/op). Decisão: ACCEPT.
 
 5. Fase 5: validar cada etapa com JMH
-   - Reexecutar `CrossModuleExpressionEngineBenchmark` após cada mudança relevante.
-   - Manter a comparação lado a lado com `expression-evaluator`.
-   - Repetir pelo menos o cenário `userFunction` com `-prof gc` até que a alocação deixe de ser desproporcional.
+   - Situação: Concluído (validação integrada às Fases 2, 3 e 4).
+   - `CrossModuleExpressionEngineBenchmark` executado após cada mudança relevante, com comparação lado a lado com `expression-evaluator`.
+   - Cenário `userFunction` repetido com `-prof gc` confirmando redução consistente de alocação a cada fase aceita.
 
 Risco de não agir:
 

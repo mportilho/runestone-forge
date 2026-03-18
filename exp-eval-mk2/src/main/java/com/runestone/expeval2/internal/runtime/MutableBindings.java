@@ -40,8 +40,19 @@ final class MutableBindings {
         return Optional.ofNullable(values.get(symbolRef));
     }
 
-    public Map<SymbolRef, RuntimeValue> snapshot() {
-        return Map.copyOf(values);
+    public HashMap<SymbolRef, RuntimeValue> copyValues() {
+        return new HashMap<>(values);
+    }
+
+    /**
+     * Returns the internal map directly, without copying.
+     * <p>
+     * Use only when the caller guarantees that no {@code assign()} will be called
+     * on the resulting {@link ExecutionScope} — i.e., for expressions without assignments.
+     * The caller must not mutate the returned map.
+     */
+    Map<SymbolRef, RuntimeValue> valuesReadOnly() {
+        return values;
     }
 
     private void seedDefaults() {
