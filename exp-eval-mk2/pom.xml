@@ -66,6 +66,12 @@
             <artifactId>runestone-toolkit</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.github.runestone-forge</groupId>
+            <artifactId>expression-evaluator</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.antlr</groupId>
             <artifactId>antlr4-runtime</artifactId>
             <version>${antlr4.version}</version>

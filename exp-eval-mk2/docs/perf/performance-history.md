@@ -161,3 +161,20 @@
 **Decision:** ACCEPT
 **Reason:** The measured compile-time regression to create the execution plan stayed in the low single digits, while the runtime path improved sharply in both literal-heavy scenarios, which matches the intended optimization target.
 **Notes:** Measurements came from `ExpressionEvaluatorV2ExecutionPlanBenchmark` using the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). The benchmark used one math expression with `64` numeric literals and one logical expression mixing numeric, date, time, datetime, string, and boolean literals. Relevant `exp-eval-mk2` module tests passed in both snapshots via `mvn -q -f exp-eval-mk2/pom.xml test`. Full reactor tests were not used as a gate because the environment failed in `runestone-toolkit` due ByteBuddy self-attachment, equally in both commits.
+
+## PERF-010: Runtime comparison against `expression-evaluator`
+
+**Date:** 2026-03-17
+
+**Scenario:** Compare steady-state math execution between `expression-evaluator` and `exp-eval-mk2` in three cross-module scenarios: many literals with one moving input, multiple variables updated on every execution, and repeated calls to a user-defined function.
+**Hypothesis:** `exp-eval-mk2` would outperform the legacy engine on literal-dense execution, while staying in the same range for variable churn and user-defined function calls.
+
+| Benchmark | expression-evaluator (ns/op) | exp-eval-mk2 (ns/op) | MK2 Improvement (%) |
+|-----------|-----------------------------:|---------------------:|--------------------:|
+| literalDense | 4615.876 | 1726.136 | +62.60% |
+| variableChurn | 1976.268 | 2245.198 | -13.61% |
+| userFunction | 1212.905 | 3785.894 | -212.13% |
+
+**Decision:** ADJUST
+**Reason:** `exp-eval-mk2` is materially faster only for the literal-heavy path, but it regresses in the two mutable-runtime scenarios, with a severe slowdown when invoking user-defined functions.
+**Notes:** Measurements came from `CrossModuleExpressionEngineBenchmark` using the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10), with JSON saved to `exp-eval-mk2/target/performance-benchmark/cross-module-engine-comparison.json`. Cross-module functional coverage passed via `mvn -q -pl exp-eval-mk2 -am -Dsurefire.failIfNoSpecifiedTests=false -Dtest=ExpressionFacadeTest,CrossModuleExpressionEngineTest test`. Running isolated `expression-evaluator` targeted tests currently hits pre-existing truncated JMH generated sources during `testCompile`, so those tests were not used as an additional gate for this experiment.

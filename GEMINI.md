@@ -21,6 +21,8 @@ The project uses Maven as its build tool.
 Unit tests require specific VM parameters on JDK 21+ to enable Mockito/ByteBuddy agent loading:
 `-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true`
 
+In restricted sandboxed environments, the full Maven test suite may still fail during Mockito initialization with ByteBuddy self-attach errors even with those VM parameters configured in Surefire. If that happens, rerun the same Maven test command outside the sandbox before treating it as a code regression.
+
 ## Development Conventions
 - **Language**: Java 21 (uses modern features like Records and Switch Expressions).
 - **Architecture**: Modular and interface-driven. High emphasis on extensibility (Visitors, Decorators, Providers).
