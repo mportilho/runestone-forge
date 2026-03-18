@@ -6,7 +6,6 @@ import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import com.runestone.expeval2.internal.compiler.CompiledExpression;
 import com.runestone.expeval2.internal.compiler.ExpressionCompiler;
-import com.runestone.expeval2.internal.semantic.SemanticResolutionException;
 
 import java.math.BigDecimal;
 import java.util.List;

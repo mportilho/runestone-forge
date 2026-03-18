@@ -1,4 +1,4 @@
-package com.runestone.expeval2.internal.semantic;
+package com.runestone.expeval2.internal.runtime;
 
 import com.runestone.expeval2.internal.ast.AssignmentNode;
 import com.runestone.expeval2.internal.ast.ExpressionFileNode;
@@ -13,15 +13,15 @@ import java.util.Objects;
 import java.util.Optional;
 
 public record SemanticModel(
-    ExpressionFileNode ast,
-    Map<NodeId, ResolvedType> resolvedTypes,
-    Map<NodeId, SymbolRef> symbolByNodeId,
-    Map<SymbolRef, List<IdentifierNode>> identifierUsages,
-    Map<SymbolRef, List<AssignmentNode>> assignmentUsages,
-    Map<String, SymbolRef> externalSymbolsByName,
-    Map<String, SymbolRef> internalSymbolsByName,
-    Map<NodeId, ResolvedFunctionBinding> functionBindings,
-    List<SemanticIssue> issues
+        ExpressionFileNode ast,
+        Map<NodeId, ResolvedType> resolvedTypes,
+        Map<NodeId, SymbolRef> symbolByNodeId,
+        Map<SymbolRef, List<IdentifierNode>> identifierUsages,
+        Map<SymbolRef, List<AssignmentNode>> assignmentUsages,
+        Map<String, SymbolRef> externalSymbolsByName,
+        Map<String, SymbolRef> internalSymbolsByName,
+        Map<NodeId, ResolvedFunctionBinding> functionBindings,
+        List<SemanticIssue> issues
 ) {
 
     public SemanticModel {

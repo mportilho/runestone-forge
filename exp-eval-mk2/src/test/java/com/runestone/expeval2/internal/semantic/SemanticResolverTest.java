@@ -11,6 +11,8 @@ import com.runestone.expeval2.internal.ast.IdentifierNode;
 import com.runestone.expeval2.internal.compiler.CompiledExpression;
 import com.runestone.expeval2.internal.compiler.ExpressionCompiler;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
+import com.runestone.expeval2.internal.runtime.SemanticModel;
+import com.runestone.expeval2.internal.runtime.SymbolRef;
 import com.runestone.expeval2.types.ScalarType;
 import org.junit.jupiter.api.Test;
 

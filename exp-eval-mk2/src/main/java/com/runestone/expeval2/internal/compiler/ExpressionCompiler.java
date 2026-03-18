@@ -7,10 +7,10 @@ import com.runestone.expeval2.internal.ast.mapping.SemanticAstBuilder;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2ParserFacade;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
-import com.runestone.expeval2.internal.semantic.ResolutionContext;
-import com.runestone.expeval2.internal.semantic.SemanticModel;
-import com.runestone.expeval2.internal.semantic.SemanticResolutionException;
-import com.runestone.expeval2.internal.semantic.SemanticResolver;
+import com.runestone.expeval2.internal.runtime.ResolutionContext;
+import com.runestone.expeval2.internal.runtime.SemanticModel;
+import com.runestone.expeval2.internal.runtime.SemanticResolutionException;
+import com.runestone.expeval2.internal.runtime.SemanticResolver;
 
 import java.util.Objects;
 
