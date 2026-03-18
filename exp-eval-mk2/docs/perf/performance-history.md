@@ -143,3 +143,21 @@
 **Decision:** DISCARD
 **Reason:** The pruned traversal still regressed every measured scenario, so the added dispatch and filtering logic did not pay off.
 **Notes:** The optimization was reverted after measurement. Measurements used the same `ExpressionEvaluatorV2SemanticValidationBenchmark` protocol and compared the retained validator against the experimental pruned walk.
+
+## PERF-009: Execution plan creation versus literal reprocessing
+
+**Date:** 2026-03-17
+
+**Scenario:** Compare commit `a5ef798` against `aee4029` to quantify the cost of creating the execution plan during compilation and the runtime gain from stopping repeated literal materialization during `compute()`.
+**Hypothesis:** Building the execution plan in `aee4029` would make `compile()` slightly slower, but would significantly reduce `compute()` latency for literal-heavy expressions by avoiding repeated parsing of numbers, dates, times, datetimes, and strings.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) |
+|-----------|---------------:|--------------:|----------------:|
+| compileLogicalMixedLiteralDense | 233167.895 | 246734.984 | -5.82% |
+| compileMathLiteralDense | 1478188.276 | 1571991.412 | -6.35% |
+| computeLogicalMixedLiteralDense | 8005.152 | 392.940 | +95.09% |
+| computeMathLiteralDense | 5814.145 | 1229.390 | +78.86% |
+
+**Decision:** ACCEPT
+**Reason:** The measured compile-time regression to create the execution plan stayed in the low single digits, while the runtime path improved sharply in both literal-heavy scenarios, which matches the intended optimization target.
+**Notes:** Measurements came from `ExpressionEvaluatorV2ExecutionPlanBenchmark` using the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). The benchmark used one math expression with `64` numeric literals and one logical expression mixing numeric, date, time, datetime, string, and boolean literals. Relevant `exp-eval-mk2` module tests passed in both snapshots via `mvn -q -f exp-eval-mk2/pom.xml test`. Full reactor tests were not used as a gate because the environment failed in `runestone-toolkit` due ByteBuddy self-attachment, equally in both commits.
