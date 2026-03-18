@@ -6,9 +6,8 @@ Este documento consolida uma análise estática do módulo `exp-eval-mk2` com fo
 
 Importante:
 
-- Os achados abaixo são hipóteses fundamentadas em revisão de código, não prova empírica de regressão.
+- Parte dos achados abaixo continua baseada em revisão de código, mas alguns pontos já possuem validação empírica por JMH e estão identificados como tal.
 - O módulo já possui histórico de benchmark para parsing em `exp-eval-mk2/docs/perf/performance-history.md`.
-- Não há, no momento, benchmark equivalente para o caminho de execução do runtime (`compute()`), que é onde estão os principais smells encontrados.
 
 ## Resumo Executivo
 
@@ -21,12 +20,14 @@ Os maiores suspeitos são:
 3. Baixa efetividade potencial do cache de compilação quando o `ExpressionEnvironment` é reconstruído com frequência.
 4. Uso de exceções como fluxo normal na inferência semântica de tipos literais.
 5. Alocação extra em chamadas de função durante a avaliação.
+6. Overhead severo no caminho de função customizada quando comparado ao `expression-evaluator`.
 
 ## Achados
 
 ### 1. Reprocessamento de literais constantes em toda execução
 
 Severidade: Alta
+Situação: Resolvido
 
 Arquivos:
 
@@ -85,6 +86,7 @@ Direção recomendada neste momento:
 ### 2. Cópias redundantes de bindings e recriação de avaliadores por execução
 
 Severidade: Alta
+Situação: Pendente
 
 Arquivos:
 
@@ -129,6 +131,7 @@ Validação recomendada:
 ### 3. Cache de compilação possivelmente pouco efetivo quando o ambiente é reconstruído
 
 Severidade: Média-Alta
+Situação: Pendente
 
 Arquivos:
 
@@ -175,6 +178,7 @@ Validação recomendada:
 ### 4. Inferência semântica de literais usa exceções como fluxo normal
 
 Severidade: Média
+Situação: Pendente
 
 Arquivos:
 
@@ -214,6 +218,7 @@ Validação recomendada:
 ### 5. Chamadas de função acumulam alocação desnecessária
 
 Severidade: Média
+Situação: Pendente
 
 Arquivos:
 
@@ -254,6 +259,126 @@ Validação recomendada:
 
 - Benchmark com expressões ricas em chamadas de função pequenas.
 
+### 6. Caminho de função customizada está comprovadamente mais lento que o `expression-evaluator`
+
+Severidade: Alta
+Situação: Medido, confirmado e priorizado para refatoração
+
+Arquivos:
+
+- `exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/AbstractRuntimeEvaluator.java`
+- `exp-eval-mk2/src/main/java/com/runestone/expeval2/catalog/FunctionDescriptor.java`
+- `exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExpressionRuntimeSupport.java`
+- `exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExecutionScope.java`
+- `exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/MutableBindings.java`
+- `expression-evaluator/src/main/java/com/runestone/expeval/operation/other/FunctionOperation.java`
+- `expression-evaluator/src/main/java/com/runestone/expeval/support/callsite/OperationCallSite.java`
+- `expression-evaluator/src/main/java/com/runestone/expeval/support/callsite/OperationCallSiteFactory.java`
+
+Trechos relevantes:
+
+- `AbstractRuntimeEvaluator.evaluateFunctionCall(...)`
+- `FunctionDescriptor.invoke(...)`
+- `ExpressionRuntimeSupport.createExecutionScope()`
+- `MutableBindings.snapshot()`
+- `ExecutionScope.from(...)`
+- `FunctionOperation.resolve(...)`
+- `OperationCallSite.call(...)`
+- `OperationCallSiteFactory.createCallSiteInvoker(...)`
+
+Descrição:
+
+O benchmark cross-module criado para comparar `expression-evaluator` e `exp-eval-mk2` em cenários equivalentes mostrou que o `mk2` venceu com folga em expressão literal-densa, mas perdeu de forma muito significativa no cenário com função definida pelo usuário.
+
+Resultados medidos no benchmark principal (`CrossModuleExpressionEngineBenchmark`):
+
+| Cenário | expression-evaluator (ns/op) | exp-eval-mk2 (ns/op) | Diferença do MK2 |
+|---------|-----------------------------:|---------------------:|-----------------:|
+| literalDense | 4615.876 | 1726.136 | +62.60% |
+| variableChurn | 1976.268 | 2245.198 | -13.61% |
+| userFunction | 1212.905 | 3785.894 | -212.13% |
+
+Para separar o custo base do runtime do custo específico da chamada de função, foi executada uma rodada adicional com `-prof gc`.
+
+Resultados de alocação no cenário com função customizada:
+
+| Benchmark | Score (ns/op) | Alocação (B/op) |
+|-----------|--------------:|----------------:|
+| `legacyUserFunction` | 1662.188 | 440.038 |
+| `mk2UserFunction` | 4748.322 | 4144.109 |
+
+Resultados de alocação no cenário sem função, apenas churn de variáveis:
+
+| Benchmark | Score (ns/op) | Alocação (B/op) |
+|-----------|--------------:|----------------:|
+| `legacyVariableChurn` | 2355.107 | 1888.898 |
+| `mk2VariableChurn` | 2705.551 | 2000.062 |
+
+Interpretação dos dados:
+
+- O custo base do `mk2` no runtime geral existe, mas é relativamente pequeno no cenário sem função.
+- A regressão grande aparece quando a expressão entra no caminho de função customizada.
+- O principal sinal objetivo é a alocação: o `mk2` consome aproximadamente `9.4x` mais memória por operação no cenário de função customizada (`4144.109 B/op` contra `440.038 B/op`).
+- Isso indica que o problema não está apenas em aritmética, binding de variáveis ou compilação, mas no dispatch de função e nas estruturas intermediárias criadas por chamada.
+
+Por que está acontecendo:
+
+1. Em `AbstractRuntimeEvaluator.evaluateFunctionCall(...)`, o `mk2` cria uma lista nova com os argumentos avaliados e outra lista nova com os argumentos coercidos em toda invocação.
+2. Em `FunctionDescriptor.invoke(...)`, o `mk2` ainda cria uma cópia defensiva adicional com `List.copyOf(arguments)` antes de invocar a função.
+3. A invocação final usa `MethodHandle.invokeWithArguments(...)`, que é o caminho mais genérico e normalmente mais caro do que um invoker especializado por aridade.
+4. Depois da função, o retorno ainda passa por `RuntimeValueFactory.from(...)`, adicionando mais wrapping no hot path.
+5. Em paralelo, o `mk2` continua recriando objetos por `compute()`, como avaliador e `ExecutionScope`, o que piora o cenário, embora isso por si só não explique a regressão de `-212.13%`.
+
+Comparação com o caminho legado:
+
+- O `expression-evaluator` resolve e cacheia o call site na própria operação.
+- Ele reutiliza um `Object[]` de parâmetros por invocação da operação.
+- O dispatch final passa por wrappers especializados por aridade (`Function1`, `Function2`, `Function3`, etc.), evitando o custo de `invokeWithArguments(...)` e reduzindo a necessidade de estruturas intermediárias.
+
+Conclusão do achado:
+
+Este ponto deixou de ser apenas um smell. Há evidência empírica suficiente para tratá-lo como um hotspot confirmado e de prioridade alta no runtime do `mk2`.
+
+Menor refatoração segura:
+
+- Remover do hot path a criação de coleções transitórias no caminho de função.
+- Substituir o dispatch genérico baseado em `invokeWithArguments(...)` por um invoker pré-resolvido e especializado.
+- Reduzir recriação de objetos auxiliares por `compute()` onde isso não for semanticamente necessário.
+
+Plano detalhado de refatoração proposto:
+
+1. Fase 1: eliminar alocação redundante dentro de `evaluateFunctionCall(...)`
+   - Trocar `stream().toList()` por preenchimento direto em buffer indexado.
+   - Evitar `new ArrayList<>(...)` por invocação.
+   - Passar a operar com `Object[]` reutilizável por nó executável ou por evaluator.
+   - Critério de saída: reduzir claramente o `B/op` do cenário `mk2UserFunction`.
+
+2. Fase 2: substituir `FunctionDescriptor.invoke(List<Object>)`
+   - Introduzir um invoker compilado no bind da função, com assinatura mais direta que `List<Object>`.
+   - Priorizar um caminho `Object[] -> retorno` ou wrappers por aridade pequena, que é o caso dominante das expressões avaliadas.
+   - Remover `List.copyOf(arguments)` do hot path, já que os argumentos são locais e controlados pelo runtime.
+   - Critério de saída: derrubar o custo de dispatch puro da função e reduzir a distância para o legado.
+
+3. Fase 3: reduzir wrapping e coerção redundantes
+   - Verificar se o binding compilado da função pode armazenar metadados já preparados para coerção sem consultar listas de tipos a cada chamada.
+   - Avaliar se o retorno da função pode evitar round-trip desnecessário por `RuntimeValueFactory.from(...)` quando o tipo já estiver alinhado.
+   - Critério de saída: reduzir CPU e alocação residual depois da remoção das listas.
+
+4. Fase 4: atacar overhead base do `compute()`
+   - Reutilizar avaliadores quando forem efetivamente stateless.
+   - Remover a dupla cópia `snapshot() -> new HashMap<>(...)` entre `MutableBindings` e `ExecutionScope`.
+   - Critério de saída: aproximar `mk2VariableChurn` do legado e evitar que o restante do runtime masque o ganho no caminho de função.
+
+5. Fase 5: validar cada etapa com JMH
+   - Reexecutar `CrossModuleExpressionEngineBenchmark` após cada mudança relevante.
+   - Manter a comparação lado a lado com `expression-evaluator`.
+   - Repetir pelo menos o cenário `userFunction` com `-prof gc` até que a alocação deixe de ser desproporcional.
+
+Risco de não agir:
+
+- O `mk2` pode parecer mais moderno e mais rápido em parsing e em literais, mas permanecer inadequado para workloads com funções pequenas e frequentes, que são comuns em motores de expressão.
+- Isso compromete a expectativa central de uso da API "compila uma vez, executa muitas" exatamente no cenário em que extensibilidade por função customizada deveria ser um ponto forte.
+
 ## Pontos Positivos Observados
 
 O módulo já mostra preocupação explícita com performance de parsing:
@@ -266,13 +391,13 @@ Isso é um bom sinal: o parser já está sendo tratado como uma área crítica c
 
 ## Lacunas Atuais de Medição
 
-Hoje, a cobertura de benchmark visível no módulo está concentrada em parsing e warmup. Não foi identificado benchmark equivalente para:
+Hoje, a cobertura de benchmark visível no módulo já cobre parsing, warmup e uma primeira comparação de runtime. Ainda faltam medições mais granulares para:
 
 - `compile()` fim a fim;
-- `compute()` em expressões já compiladas;
+- `compute()` segmentado por tipo de operação;
 - alocação por execução;
 - impacto de volume de símbolos externos;
-- impacto de chamadas de função frequentes.
+- custo de dispatch puro de chamadas de função frequentes após isolar o overhead base do runtime.
 
 Sem essa medição, otimizações no runtime correm o risco de serem guiadas apenas por intuição.
 
@@ -280,15 +405,22 @@ Sem essa medição, otimizações no runtime correm o risco de serem guiadas ape
 
 ### Prioridade 1
 
-Criar benchmarks JMH para o runtime de execução:
+Refatorar e medir o caminho de função customizada do runtime:
+
+- remover listas e cópias redundantes em `evaluateFunctionCall(...)`;
+- substituir `invokeWithArguments(...)` por invocação pré-resolvida e menos genérica;
+- repetir benchmark JMH do cenário `userFunction`;
+- repetir benchmark com `-prof gc` para acompanhar `B/op`;
+- registrar cada iteração no `performance-history.md`.
+
+### Prioridade 2
+
+Continuar a expansão da cobertura JMH de runtime:
 
 - expressão simples com muitos literais;
 - expressão com muitos símbolos externos;
-- expressão com várias chamadas de função;
 - cenário "compila uma vez, executa muitas";
 - cenário "compila toda vez".
-
-### Prioridade 2
 
 Validar empiricamente os dois suspeitos mais fortes:
 
@@ -313,4 +445,4 @@ Os principais suspeitos migraram para o runtime:
 - overhead de chamadas de função;
 - dependência da reutilização do ambiente para que o cache de compilação realmente funcione.
 
-O próximo passo tecnicamente correto não é refatorar de imediato, mas medir o runtime com JMH e usar esses resultados para priorizar as otimizações de maior retorno.
+O próximo passo tecnicamente correto não é mais descobrir se existe problema no runtime de função. Esse problema já foi medido. Agora a prioridade correta é refatorar o caminho de função customizada com disciplina de benchmark, mantendo o mesmo protocolo JMH para confirmar redução de `ns/op` e `B/op` a cada etapa.
