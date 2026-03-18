@@ -1,4 +1,4 @@
-package com.runestone.expeval2.grammar.language.perf;
+package com.runestone.expeval2.perf;
 
 import java.io.BufferedReader;
 import java.io.IOException;

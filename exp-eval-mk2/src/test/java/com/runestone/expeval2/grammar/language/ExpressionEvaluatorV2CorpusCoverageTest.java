@@ -1,9 +1,9 @@
 package com.runestone.expeval2.grammar.language;
 import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2ParserFacade;
 
-import com.runestone.expeval2.grammar.language.perf.ExpressionEvaluatorV2ScenarioCatalog;
-import com.runestone.expeval2.grammar.language.perf.ExpressionEvaluatorV2ScenarioCatalog.EntryPoint;
-import com.runestone.expeval2.grammar.language.perf.ExpressionEvaluatorV2ScenarioCatalog.Scenario;
+import com.runestone.expeval2.perf.ExpressionEvaluatorV2ScenarioCatalog;
+import com.runestone.expeval2.perf.ExpressionEvaluatorV2ScenarioCatalog.EntryPoint;
+import com.runestone.expeval2.perf.ExpressionEvaluatorV2ScenarioCatalog.Scenario;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;

@@ -2,9 +2,9 @@ package com.runestone.expeval2.perf.jmh;
 
 import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Lexer;
 import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser;
-import com.runestone.expeval2.grammar.language.perf.ExpressionEvaluatorV2ScenarioCatalog;
-import com.runestone.expeval2.grammar.language.perf.ExpressionEvaluatorV2ScenarioCatalog.EntryPoint;
-import com.runestone.expeval2.grammar.language.perf.ExpressionEvaluatorV2ScenarioCatalog.Scenario;
+import com.runestone.expeval2.perf.ExpressionEvaluatorV2ScenarioCatalog;
+import com.runestone.expeval2.perf.ExpressionEvaluatorV2ScenarioCatalog.EntryPoint;
+import com.runestone.expeval2.perf.ExpressionEvaluatorV2ScenarioCatalog.Scenario;
 import org.antlr.v4.runtime.BailErrorStrategy;
 import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.CharStreams;
