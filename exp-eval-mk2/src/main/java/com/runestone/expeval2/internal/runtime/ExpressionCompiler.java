@@ -1,16 +1,13 @@
-package com.runestone.expeval2.internal.compiler;
+package com.runestone.expeval2.internal.runtime;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.runestone.expeval2.environment.ExpressionEnvironment;
+import com.runestone.expeval2.environment.ExpressionEnvironmentId;
 import com.runestone.expeval2.internal.ast.ExpressionFileNode;
 import com.runestone.expeval2.internal.ast.mapping.SemanticAstBuilder;
-import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2ParserFacade;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
-import com.runestone.expeval2.internal.runtime.ResolutionContext;
-import com.runestone.expeval2.internal.runtime.SemanticModel;
-import com.runestone.expeval2.internal.runtime.SemanticResolutionException;
-import com.runestone.expeval2.internal.runtime.SemanticResolver;
 
 import java.util.Objects;
 
@@ -51,5 +48,20 @@ public final class ExpressionCompiler {
             throw new SemanticResolutionException(source, semanticModel.issues());
         }
         return new CompiledExpression(source, resultType, semanticModel);
+    }
+
+    private record ExpressionCacheKey(
+            String source,
+            ExpressionEnvironmentId environmentId,
+            ExpressionResultType resultType
+    ) {
+
+        public ExpressionCacheKey {
+            if (source == null || source.isBlank()) {
+                throw new IllegalArgumentException("source must not be blank");
+            }
+            Objects.requireNonNull(environmentId, "environmentId must not be null");
+            Objects.requireNonNull(resultType, "resultType must not be null");
+        }
     }
 }

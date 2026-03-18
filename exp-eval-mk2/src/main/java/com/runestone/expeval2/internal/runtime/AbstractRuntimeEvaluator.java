@@ -1,7 +1,6 @@
 package com.runestone.expeval2.internal.runtime;
 
 import com.runestone.expeval2.internal.ast.*;
-import com.runestone.expeval2.internal.compiler.CompiledExpression;
 import com.runestone.expeval2.types.ResolvedType;
 import com.runestone.expeval2.types.ScalarType;
 

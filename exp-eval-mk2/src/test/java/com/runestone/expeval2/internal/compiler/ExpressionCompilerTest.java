@@ -5,6 +5,8 @@ import com.runestone.expeval2.api.ExpressionCompilationException;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
+import com.runestone.expeval2.internal.runtime.CompiledExpression;
+import com.runestone.expeval2.internal.runtime.ExpressionCompiler;
 import com.runestone.expeval2.internal.runtime.ExpressionRuntimeSupport;
 import org.junit.jupiter.api.Test;
 

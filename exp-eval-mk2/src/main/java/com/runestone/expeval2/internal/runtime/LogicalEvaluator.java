@@ -1,7 +1,5 @@
 package com.runestone.expeval2.internal.runtime;
 
-import com.runestone.expeval2.internal.compiler.CompiledExpression;
-
 final class LogicalEvaluator extends AbstractRuntimeEvaluator<Boolean> {
 
     LogicalEvaluator(CompiledExpression compiledExpression, RuntimeValueFactory runtimeValueFactory, RuntimeCoercionService runtimeCoercionService) {

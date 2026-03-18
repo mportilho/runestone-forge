@@ -1,7 +1,5 @@
 package com.runestone.expeval2.internal.runtime;
 
-import com.runestone.expeval2.internal.compiler.CompiledExpression;
-
 import java.math.BigDecimal;
 
 final class MathEvaluator extends AbstractRuntimeEvaluator<BigDecimal> {
