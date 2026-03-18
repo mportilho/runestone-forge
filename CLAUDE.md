@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 1. **runestone-toolkit** — Core utilities (memoization, caching, data conversion, assertions). No Spring dependency.
 2. **dynamic-filter-resolver** — Dynamic filtering framework for Spring Data JPA repositories, with OpenAPI integration.
 3. **expression-evaluator** — ANTLR 4-based mathematical/logical expression parser and evaluator.
-4. **exp-eval-mk2** — Work-in-progress second iteration of the expression evaluator (currently scaffolded, no source yet). Uses Caffeine for caching.
+4. **exp-eval-mk2** — Second iteration of the expression evaluator, fully implemented. Richer type system (scalar, vector, unknown), compilation pipeline with semantic resolution, and Caffeine-based expression cache.
 
 ## Build & Test Commands
 
@@ -63,6 +63,24 @@ Parses and evaluates expressions using an ANTLR 4 grammar (`ExpressionEvaluator.
 - Supports arbitrary-precision arithmetic via Big-Math 2.3.2.
 
 Key pattern: `AbstractOperation` forms a composite tree; each node computes its result by recursively evaluating children. Variable values are supplied via context maps at evaluation time.
+
+### exp-eval-mk2
+A redesigned expression evaluator with a multi-phase compilation pipeline and richer type system.
+
+Public API (package `com.runestone.expeval2.api` and `environment`):
+- `ExpressionEnvironment` — built via `ExpressionEnvironmentBuilder`; configures the runtime (function catalog, external symbols, data conversion). Scoped by `ExpressionEnvironmentId` for cache keying.
+- `MathExpression`, `LogicalExpression` — compiled, reusable expression objects.
+
+Compilation pipeline (all internal, coordinated by `ExpressionCompiler`):
+1. **Parse** — `ExpressionEvaluatorV2ParserFacade` wraps the ANTLR grammar; supports `SLL` with `LL` fallback via `PredictionStrategy`.
+2. **AST** — `SemanticAstBuilder` maps the ANTLR parse tree to typed `Node` subclasses (`BinaryOperationNode`, `FunctionCallNode`, `ConditionalNode`, `VectorLiteralNode`, etc.) in `internal.ast`.
+3. **Semantic resolution** — `SemanticResolver` walks the AST against `FunctionCatalog` and `ExternalSymbolCatalog`, producing a `SemanticModel` with `SymbolRef` bindings and typed `ResolvedType` annotations.
+4. **Execution plan** — `ExecutionPlanBuilder` converts the resolved AST to an `ExecutionPlan` of `ExecutableNode` objects (e.g., `ExecutableBinaryOp`, `ExecutableFunctionCall`, `ExecutableConditional`).
+5. **Evaluation** — `MathEvaluator` / `LogicalEvaluator` walk the `ExecutionPlan` within an `ExecutionScope`, returning `RuntimeValue`.
+
+Type system: `ResolvedType` hierarchy with `ScalarType`, `VectorType`, and `UnknownType`; runtime values are `RuntimeValue` objects coerced via `RuntimeCoercionService`.
+
+Compiled expressions are cached in `ExpressionCompiler` by `(source, environmentId, resultType)` using Caffeine (max 1 024 entries).
 
 ## Tech Stack
 
