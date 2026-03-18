@@ -1,7 +1,7 @@
 package com.runestone.expeval2.internal.ast.mapping;
 
-import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2BaseVisitor;
-import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser;
+import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2BaseVisitor;
+import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2Parser;
 import com.runestone.expeval2.internal.ast.*;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;

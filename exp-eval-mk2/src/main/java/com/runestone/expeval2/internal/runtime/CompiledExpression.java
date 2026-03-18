@@ -5,9 +5,10 @@ import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import java.util.Objects;
 
 public record CompiledExpression(
-    String source,
-    ExpressionResultType resultType,
-    SemanticModel semanticModel
+        String source,
+        ExpressionResultType resultType,
+        SemanticModel semanticModel,
+        ExecutionPlan executionPlan
 ) {
 
     public CompiledExpression {
@@ -16,5 +17,6 @@ public record CompiledExpression(
         }
         Objects.requireNonNull(resultType, "resultType must not be null");
         Objects.requireNonNull(semanticModel, "semanticModel must not be null");
+        Objects.requireNonNull(executionPlan, "executionPlan must not be null");
     }
 }

@@ -10,7 +10,12 @@
       "Bash(sed -i 's/^public record SemanticModel/record SemanticModel/' $BASE/SemanticModel.java)",
       "Bash(sed -i 's/^public record SemanticIssue/record SemanticIssue/' $BASE/SemanticIssue.java)",
       "Bash(sed -i 's/^public enum SemanticIssueSeverity/enum SemanticIssueSeverity/' $BASE/SemanticIssueSeverity.java)",
-      "Bash(head -5 cat /mnt/c/dev/git/runestone-forge/exp-eval-mk2/target/surefire-reports/*.dumpstream)"
+      "Bash(head -5 cat /mnt/c/dev/git/runestone-forge/exp-eval-mk2/target/surefire-reports/*.dumpstream)",
+      "Bash(java:*)",
+      "Bash(git -C /home/marcelo/dev/git/runestone-forge stash list)",
+      "Bash(git -C /home/marcelo/dev/git/runestone-forge stash)",
+      "Bash(git -C /home/marcelo/dev/git/runestone-forge stash pop)",
+      "Bash(xargs sed:*)"
     ]
   }
 }

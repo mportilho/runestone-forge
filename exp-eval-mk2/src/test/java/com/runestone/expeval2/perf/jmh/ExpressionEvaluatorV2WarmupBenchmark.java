@@ -1,7 +1,7 @@
 package com.runestone.expeval2.perf.jmh;
 
-import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Lexer;
-import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser;
+import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2Lexer;
+import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2Parser;
 import com.runestone.expeval2.perf.ExpressionEvaluatorV2ScenarioCatalog;
 import com.runestone.expeval2.perf.ExpressionEvaluatorV2ScenarioCatalog.EntryPoint;
 import com.runestone.expeval2.perf.ExpressionEvaluatorV2ScenarioCatalog.Scenario;

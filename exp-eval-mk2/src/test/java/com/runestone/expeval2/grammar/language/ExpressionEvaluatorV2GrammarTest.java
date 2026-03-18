@@ -1,4 +1,4 @@
-package com.runestone.expeval2.grammar.language;
+package com.runestone.expeval2.internal.grammar;
 
 import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2ParserFacade;
 import com.runestone.expeval2.internal.grammar.ParseResult;

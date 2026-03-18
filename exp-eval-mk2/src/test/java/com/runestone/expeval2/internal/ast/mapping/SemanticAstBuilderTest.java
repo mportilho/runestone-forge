@@ -18,7 +18,7 @@ import com.runestone.expeval2.internal.ast.SourceSpan;
 import com.runestone.expeval2.internal.ast.UnaryOperationNode;
 import com.runestone.expeval2.internal.ast.UnaryOperator;
 import com.runestone.expeval2.internal.ast.VectorLiteralNode;
-import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser;
+import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2Parser;
 import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2ParserFacade;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

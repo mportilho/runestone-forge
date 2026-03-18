@@ -1,6 +1,6 @@
 package com.runestone.expeval2.internal.grammar;
 
-import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser;
+import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2Parser;
 
 interface ParseExecutor {
 

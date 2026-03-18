@@ -1,7 +1,8 @@
 package com.runestone.expeval2.internal.runtime;
 
-import com.runestone.expeval2.internal.ast.*;
-import com.runestone.expeval2.types.ResolvedType;
+import com.runestone.expeval2.internal.ast.BinaryOperator;
+import com.runestone.expeval2.internal.ast.PostfixOperator;
+import com.runestone.expeval2.internal.ast.UnaryOperator;
 import com.runestone.expeval2.types.ScalarType;
 
 import ch.obermuhlner.math.big.BigDecimalMath;
@@ -11,7 +12,6 @@ import java.math.MathContext;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -30,102 +30,61 @@ abstract class AbstractRuntimeEvaluator<T> {
 
     final T evaluate(ExecutionScope scope) {
         Objects.requireNonNull(scope, "scope must not be null");
-        for (AssignmentNode assignment : compiledExpression.semanticModel().ast().assignments()) {
+        ExecutionPlan plan = compiledExpression.executionPlan();
+        for (ExecutableAssignment assignment : plan.assignments()) {
             executeAssignment(assignment, scope);
         }
-        RuntimeValue result = evaluateExpression(compiledExpression.semanticModel().ast().resultExpression(), scope);
-        return convertResult(result);
+        return convertResult(evaluateExpression(plan.resultExpression(), scope));
     }
 
     protected abstract T convertResult(RuntimeValue value);
 
-    private void executeAssignment(AssignmentNode assignment, ExecutionScope scope) {
+    private void executeAssignment(ExecutableAssignment assignment, ExecutionScope scope) {
         switch (assignment) {
-            case SimpleAssignmentNode simpleAssignment -> {
-                SymbolRef target = compiledExpression.semanticModel().internalSymbolsByName().get(simpleAssignment.targetName());
-                scope.assign(target, evaluateExpression(simpleAssignment.value(), scope));
-            }
-            case DestructuringAssignmentNode destructuringAssignment -> {
-                List<RuntimeValue> values = runtimeCoercionService.asVector(evaluateExpression(destructuringAssignment.value(), scope));
-                for (int index = 0; index < destructuringAssignment.targetNames().size(); index++) {
-                    String targetName = destructuringAssignment.targetNames().get(index);
+            case ExecutableSimpleAssignment s ->
+                    scope.assign(s.target(), evaluateExpression(s.value(), scope));
+            case ExecutableDestructuringAssignment d -> {
+                List<RuntimeValue> values = runtimeCoercionService.asVector(evaluateExpression(d.value(), scope));
+                for (int index = 0; index < d.targets().size(); index++) {
                     RuntimeValue value = index < values.size() ? values.get(index) : RuntimeValue.NullValue.INSTANCE;
-                    scope.assign(compiledExpression.semanticModel().internalSymbolsByName().get(targetName), value);
+                    scope.assign(d.targets().get(index), value);
                 }
             }
         }
     }
 
-    private RuntimeValue evaluateExpression(ExpressionNode node, ExecutionScope scope) {
+    private RuntimeValue evaluateExpression(ExecutableNode node, ExecutionScope scope) {
         return switch (node) {
-            case LiteralNode literalNode -> evaluateLiteral(literalNode);
-            case IdentifierNode identifierNode -> evaluateIdentifier(identifierNode, scope);
-            case FunctionCallNode functionCallNode -> evaluateFunctionCall(functionCallNode, scope);
-            case ConditionalNode conditionalNode -> evaluateConditional(conditionalNode, scope);
-            case UnaryOperationNode unaryOperationNode -> evaluateUnary(unaryOperationNode, scope);
-            case BinaryOperationNode binaryOperationNode -> evaluateBinary(binaryOperationNode, scope);
-            case PostfixOperationNode postfixOperationNode -> evaluatePostfix(postfixOperationNode, scope);
-            case VectorLiteralNode vectorLiteralNode -> evaluateVector(vectorLiteralNode, scope);
+            case ExecutableLiteral lit -> lit.precomputed();
+            case ExecutableDynamicLiteral dyn -> switch (dyn.kind()) {
+                case CURR_DATE -> new RuntimeValue.DateValue(LocalDate.now());
+                case CURR_TIME -> new RuntimeValue.TimeValue(LocalTime.now());
+                case CURR_DATETIME -> new RuntimeValue.DateTimeValue(LocalDateTime.now());
+            };
+            case ExecutableIdentifier id -> scope.find(id.ref())
+                    .orElseThrow(() -> new IllegalStateException("missing value for symbol '" + id.ref().name() + "'"));
+            case ExecutableFunctionCall f -> evaluateFunctionCall(f, scope);
+            case ExecutableConditional c -> evaluateConditional(c, scope);
+            case ExecutableUnaryOp u -> evaluateUnary(u, scope);
+            case ExecutableBinaryOp b -> evaluateBinary(b, scope);
+            case ExecutablePostfixOp p -> evaluatePostfix(p, scope);
+            case ExecutableVectorLiteral v -> evaluateVector(v, scope);
         };
     }
 
-    private RuntimeValue evaluateLiteral(LiteralNode node) {
-        ResolvedType resolvedType = resolvedType(node.nodeId());
-        String raw = node.value();
-        if (resolvedType == ScalarType.NUMBER) {
-            return new RuntimeValue.NumberValue(new BigDecimal(raw));
-        }
-        if (resolvedType == ScalarType.BOOLEAN) {
-            return new RuntimeValue.BooleanValue(Boolean.parseBoolean(raw));
-        }
-        if (resolvedType == ScalarType.STRING) {
-            return new RuntimeValue.StringValue(unquote(raw));
-        }
-        if (resolvedType == ScalarType.DATE) {
-            if ("currDate".equals(raw)) {
-                return new RuntimeValue.DateValue(LocalDate.now());
-            }
-            return new RuntimeValue.DateValue(LocalDate.parse(raw));
-        }
-        if (resolvedType == ScalarType.TIME) {
-            if ("currTime".equals(raw)) {
-                return new RuntimeValue.TimeValue(LocalTime.now());
-            }
-            return new RuntimeValue.TimeValue(LocalTime.parse(raw));
-        }
-        if (resolvedType == ScalarType.DATETIME) {
-            if ("currDateTime".equals(raw)) {
-                return new RuntimeValue.DateTimeValue(LocalDateTime.now());
-            }
-            return raw.contains("+") || raw.endsWith("Z")
-                    ? new RuntimeValue.DateTimeValue(OffsetDateTime.parse(raw).toLocalDateTime())
-                    : new RuntimeValue.DateTimeValue(LocalDateTime.parse(raw));
-        }
-        return runtimeValueFactory.from(raw);
-    }
-
-    private RuntimeValue evaluateIdentifier(IdentifierNode node, ExecutionScope scope) {
-        SymbolRef symbolRef = compiledExpression.semanticModel().findSymbol(node.nodeId())
-                .orElseThrow(() -> new IllegalStateException("missing symbol for identifier '" + node.name() + "'"));
-        return scope.find(symbolRef)
-                .orElseThrow(() -> new IllegalStateException("missing value for symbol '" + symbolRef.name() + "'"));
-    }
-
-    private RuntimeValue evaluateFunctionCall(FunctionCallNode node, ExecutionScope scope) {
-        ResolvedFunctionBinding binding = compiledExpression.semanticModel().findFunctionBinding(node.nodeId())
-                .orElseThrow(() -> new IllegalStateException("missing function binding for '" + node.functionName() + "'"));
+    private RuntimeValue evaluateFunctionCall(ExecutableFunctionCall node, ExecutionScope scope) {
         List<RuntimeValue> arguments = node.arguments().stream()
                 .map(argument -> evaluateExpression(argument, scope))
                 .toList();
         List<Object> rawArguments = new ArrayList<>(arguments.size());
         for (int index = 0; index < arguments.size(); index++) {
-            rawArguments.add(runtimeCoercionService.coerce(arguments.get(index), binding.descriptor().parameterTypes().get(index)));
+            rawArguments.add(runtimeCoercionService.coerce(arguments.get(index), node.binding().descriptor().parameterTypes().get(index)));
         }
-        Object rawResult = binding.descriptor().invoke(rawArguments);
-        return runtimeValueFactory.from(rawResult, binding.returnType());
+        Object rawResult = node.binding().descriptor().invoke(rawArguments);
+        return runtimeValueFactory.from(rawResult, node.binding().returnType());
     }
 
-    private RuntimeValue evaluateConditional(ConditionalNode node, ExecutionScope scope) {
+    private RuntimeValue evaluateConditional(ExecutableConditional node, ExecutionScope scope) {
         for (int index = 0; index < node.conditions().size(); index++) {
             if (runtimeCoercionService.asBoolean(evaluateExpression(node.conditions().get(index), scope))) {
                 return evaluateExpression(node.results().get(index), scope);
@@ -134,7 +93,7 @@ abstract class AbstractRuntimeEvaluator<T> {
         return evaluateExpression(node.elseExpression(), scope);
     }
 
-    private RuntimeValue evaluateUnary(UnaryOperationNode node, ExecutionScope scope) {
+    private RuntimeValue evaluateUnary(ExecutableUnaryOp node, ExecutionScope scope) {
         RuntimeValue operand = evaluateExpression(node.operand(), scope);
         return switch (node.operator()) {
             case NEGATE -> new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(operand).negate());
@@ -144,7 +103,7 @@ abstract class AbstractRuntimeEvaluator<T> {
         };
     }
 
-    private RuntimeValue evaluateBinary(BinaryOperationNode node, ExecutionScope scope) {
+    private RuntimeValue evaluateBinary(ExecutableBinaryOp node, ExecutionScope scope) {
         RuntimeValue left = evaluateExpression(node.left(), scope);
         BinaryOperator operator = node.operator();
         if (operator == BinaryOperator.AND || operator == BinaryOperator.NAND) {
@@ -193,7 +152,7 @@ abstract class AbstractRuntimeEvaluator<T> {
         };
     }
 
-    private RuntimeValue evaluatePostfix(PostfixOperationNode node, ExecutionScope scope) {
+    private RuntimeValue evaluatePostfix(ExecutablePostfixOp node, ExecutionScope scope) {
         BigDecimal value = runtimeCoercionService.asNumber(evaluateExpression(node.operand(), scope));
         return switch (node.operator()) {
             case PERCENT -> new RuntimeValue.NumberValue(value.movePointRight(2));
@@ -201,7 +160,7 @@ abstract class AbstractRuntimeEvaluator<T> {
         };
     }
 
-    private RuntimeValue evaluateVector(VectorLiteralNode node, ExecutionScope scope) {
+    private RuntimeValue evaluateVector(ExecutableVectorLiteral node, ExecutionScope scope) {
         return new RuntimeValue.VectorValue(node.elements().stream()
                 .map(element -> evaluateExpression(element, scope))
                 .toList());
@@ -255,22 +214,5 @@ abstract class AbstractRuntimeEvaluator<T> {
             return base.pow(normalized.intValue(), MathContext.DECIMAL128);
         }
         return BigDecimalMath.pow(base, exponent, MathContext.DECIMAL128);
-    }
-
-    private ResolvedType resolvedType(NodeId nodeId) {
-        return compiledExpression.semanticModel().findResolvedType(nodeId)
-                .orElseThrow(() -> new IllegalStateException("missing resolved type for node '" + nodeId.value() + "'"));
-    }
-
-    private String unquote(String value) {
-        if (value.length() < 2) {
-            return value;
-        }
-        if (value.startsWith("\"") && value.endsWith("\"")) {
-            return value.substring(1, value.length() - 1)
-                    .replace("\\\"", "\"")
-                    .replace("\\\\", "\\");
-        }
-        return value;
     }
 }

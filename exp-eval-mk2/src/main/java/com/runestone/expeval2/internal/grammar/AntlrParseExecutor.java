@@ -1,7 +1,7 @@
 package com.runestone.expeval2.internal.grammar;
 
-import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Lexer;
-import com.runestone.expeval2.grammar.language.ExpressionEvaluatorV2Parser;
+import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2Lexer;
+import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2Parser;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.atn.PredictionMode;
 
