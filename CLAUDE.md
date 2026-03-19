@@ -90,6 +90,10 @@ Compiled expressions are cached in `ExpressionCompiler` by `(source, environment
 - **JUnit 5**, **AssertJ**, **Mockito 5** — testing
 - **JMH 1.37** — microbenchmarks (in `benchmark/` and `perf/` test packages)
 
+## Key Reference Documents
+
+- **`exp-eval-mk2/docs/runtime-internals.md`** — Verified findings about the exp-eval-mk2 runtime: compilation pipeline, type system, `RuntimeValue` variants, `RuntimeCoercionService` coercion order, array-parameter coercion fix, overload disambiguation rules, `RuntimeValueFactory` wrapping logic, grammar syntax for date/datetime literals and type-hinted variables, and `ExpressionEnvironmentBuilder` convenience methods. Read this before exploring the exp-eval-mk2 internals from scratch.
+
 ## Agent Skills
 
 - ALWAYS load the java-guidelines skill if present when working with Java files on this project.
