@@ -6,6 +6,12 @@ import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.catalog.FunctionCatalog;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
+import com.runestone.expeval2.catalog.functions.ComparableFunctions;
+import com.runestone.expeval2.catalog.functions.DateTimeFunctions;
+import com.runestone.expeval2.catalog.functions.DoubleExcelFinancialFunctions;
+import com.runestone.expeval2.catalog.functions.ExcelFinancialFunctions;
+import com.runestone.expeval2.catalog.functions.MathFunctions;
+import com.runestone.expeval2.catalog.functions.TrigonometryFunctions;
 import com.runestone.expeval2.types.ResolvedType;
 import com.runestone.expeval2.types.ResolvedTypes;
 
@@ -42,6 +48,38 @@ public final class ExpressionEnvironmentBuilder {
     public ExpressionEnvironmentBuilder registerInstanceProvider(Object providerInstance) {
         instanceProviders.add(Objects.requireNonNull(providerInstance, "providerInstance must not be null"));
         return this;
+    }
+
+    public ExpressionEnvironmentBuilder addComparableFunctions() {
+        return registerStaticProvider(ComparableFunctions.class);
+    }
+
+    public ExpressionEnvironmentBuilder addDateTimeFunctions() {
+        return registerStaticProvider(DateTimeFunctions.class);
+    }
+
+    public ExpressionEnvironmentBuilder addFastExcelFunctions() {
+        return registerStaticProvider(DoubleExcelFinancialFunctions.class);
+    }
+
+    public ExpressionEnvironmentBuilder addExcelFunctions() {
+        return registerStaticProvider(ExcelFinancialFunctions.class);
+    }
+
+    public ExpressionEnvironmentBuilder addMathFunctions() {
+        return registerStaticProvider(MathFunctions.class);
+    }
+
+    public ExpressionEnvironmentBuilder addTrigonometryFunctions() {
+        return registerStaticProvider(TrigonometryFunctions.class);
+    }
+
+    public ExpressionEnvironmentBuilder addAllFunctions() {
+        return addComparableFunctions()
+                .addDateTimeFunctions()
+                .addExcelFunctions()
+                .addMathFunctions()
+                .addTrigonometryFunctions();
     }
 
     public ExpressionEnvironmentBuilder registerExternalSymbol(String name, ResolvedType declaredType,
