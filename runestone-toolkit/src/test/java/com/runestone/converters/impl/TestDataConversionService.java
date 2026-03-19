@@ -54,6 +54,25 @@ public class TestDataConversionService {
     }
 
     @Test
+    public void testNumericWrapperConversions() {
+        DataConversionService service = new DefaultDataConversionService();
+
+        Assertions.assertThat(service.convert(new BigDecimal("12.9"), Integer.class)).isEqualTo(12);
+        Assertions.assertThat(service.convert(new BigDecimal("12.9"), Long.class)).isEqualTo(12L);
+        Assertions.assertThat(service.convert(new BigDecimal("12.9"), Double.class)).isEqualTo(12.9d);
+    }
+
+    @Test
+    public void testAssignableTypeShortCircuit() {
+        DataConversionService service = new DefaultDataConversionService();
+
+        Integer source = 123;
+        Number converted = service.convert(source, Number.class);
+
+        Assertions.assertThat(converted).isSameAs(source);
+    }
+
+    @Test
     public void testStringToEnumConversion() {
         DataConversionService service = new DefaultDataConversionService();
         Assertions.assertThat(service.convert("ACTIVE", Status.class)).isEqualTo(Status.ACTIVE);

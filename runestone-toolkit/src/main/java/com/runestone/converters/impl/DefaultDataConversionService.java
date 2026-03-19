@@ -83,8 +83,12 @@ public class DefaultDataConversionService implements DataConversionService {
         Objects.requireNonNull(targetType, "Target Type must be provided");
         if (source == null) {
             return null;
-        } else if (source.getClass().equals(targetType)) {
+        } else if (targetType.isInstance(source)) {
             return (T) source;
+        }
+        T directNumberConversion = convertNumberTypes(source, targetType);
+        if (directNumberConversion != null) {
+            return directNumberConversion;
         }
 
         DataConverter<S, T> dataConverter = getConverter(source.getClass(), targetType);
@@ -94,6 +98,23 @@ public class DefaultDataConversionService implements DataConversionService {
             throw new NoDataConverterFoundException(source.getClass(), targetType);
         }
         return convertedValue;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <S, T> T convertNumberTypes(S source, Class<T> targetType) {
+        if (!(source instanceof Number number)) {
+            return null;
+        }
+        if (targetType == Integer.class || targetType == int.class) {
+            return (T) Integer.valueOf(number.intValue());
+        }
+        if (targetType == Long.class || targetType == long.class) {
+            return (T) Long.valueOf(number.longValue());
+        }
+        if (targetType == Double.class || targetType == double.class) {
+            return (T) Double.valueOf(number.doubleValue());
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")
