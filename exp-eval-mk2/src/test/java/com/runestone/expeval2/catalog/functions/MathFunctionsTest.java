@@ -237,6 +237,48 @@ class MathFunctionsTest {
     }
 
     @Nested
+    @DisplayName("ln()")
+    class LnTests {
+
+        @Test
+        @DisplayName("Calculates natural logarithm correctly")
+        void ln() {
+            assertThat(MathFunctions.ln(new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
+            assertThat(MathFunctions.ln(new BigDecimal("2.718281828459"))).isCloseTo(ONE, EPSILON);
+            assertThat(MathFunctions.ln(new BigDecimal("10"))).isCloseTo(new BigDecimal("2.302585092994046"), EPSILON);
+        }
+    }
+
+    @Nested
+    @DisplayName("lb()")
+    class LbTests {
+
+        @Test
+        @DisplayName("Calculates binary logarithm correctly")
+        void lb() {
+            assertThat(MathFunctions.lb(new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
+            assertThat(MathFunctions.lb(new BigDecimal("2"))).isCloseTo(ONE, EPSILON);
+            assertThat(MathFunctions.lb(new BigDecimal("4"))).isCloseTo(new BigDecimal("2"), EPSILON);
+            assertThat(MathFunctions.lb(new BigDecimal("10"))).isCloseTo(new BigDecimal("3.321928094887362"), EPSILON);
+        }
+    }
+
+    @Nested
+    @DisplayName("log()")
+    class LogTests {
+
+        @Test
+        @DisplayName("Calculates logarithm with specific base correctly")
+        void log() {
+            assertThat(MathFunctions.log(new BigDecimal("10"), new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
+            assertThat(MathFunctions.log(new BigDecimal("10"), new BigDecimal("10"))).isCloseTo(ONE, EPSILON);
+            assertThat(MathFunctions.log(new BigDecimal("10"), new BigDecimal("100"))).isCloseTo(new BigDecimal("2"), EPSILON);
+            assertThat(MathFunctions.log(new BigDecimal("2"), new BigDecimal("8"))).isCloseTo(new BigDecimal("3"), EPSILON);
+            assertThat(MathFunctions.log(new BigDecimal("3"), new BigDecimal("81"))).isCloseTo(new BigDecimal("4"), EPSILON);
+        }
+    }
+
+    @Nested
     @DisplayName("rule3d()")
     class Rule3dTests {
 

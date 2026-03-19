@@ -206,6 +206,37 @@ public class MathFunctions {
     }
 
     /**
+     * Finds the natural logarithm value of a value.
+     *
+     * @param value Value
+     * @return natural logarithm value
+     */
+    public static BigDecimal ln(BigDecimal value) {
+        return BigDecimalMath.log(value, MC);
+    }
+
+    /**
+     * Finds the binary logarithm value of a value.
+     *
+     * @param value Value
+     * @return binary logarithm value
+     */
+    public static BigDecimal lb(BigDecimal value) {
+        return BigDecimalMath.log2(value, MC);
+    }
+
+    /**
+     * Finds the logarithm value of a value with a specific base.
+     *
+     * @param base  Base
+     * @param value Value
+     * @return logarithm value
+     */
+    public static BigDecimal log(BigDecimal base, BigDecimal value) {
+        return BigDecimalMath.log(value, MC).divide(BigDecimalMath.log(base, MC), MC);
+    }
+
+    /**
      * Finds the direct rule of three value of a list of values. The direct rule of three value is the result of a proportionality
      * between two values.
      *
