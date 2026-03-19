@@ -11,19 +11,48 @@ import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// npv(BigDecimal r, BigDecimal[] cfs) is excluded: the array parameter cannot be coerced
-// from VectorValue to BigDecimal[] via the expression API. See runtime-internals.md §5.
-//
 // Overload disambiguation for fv and pmt:
 //   boolean 5th arg  → fv(BigDecimal,BigDecimal,BigDecimal,BigDecimal,boolean)   ← BigDecimal overload
 //   numeric 5th arg  → fv(BigDecimal,int,BigDecimal,BigDecimal,int)              ← int overload
 // The SemanticResolver selects by matching BOOLEAN vs NUMBER for the 5th parameter type.
 // See runtime-internals.md §6.
-@DisplayName("ExcelFinancialFunctions scalar overloads via MathExpression/LogicalExpression API")
+@DisplayName("ExcelFinancialFunctions via MathExpression/LogicalExpression API")
 class ExcelFinancialFunctionsExpressionTest {
 
     private static final Offset<BigDecimal> EPSILON = Assertions.within(new BigDecimal("0.0001"));
     private static final ExpressionEnvironment ENV = ExpressionEnvironment.builder().addExcelFunctions().build();
+
+    @Nested
+    @DisplayName("npv — net present value")
+    class NetPresentValue {
+
+        @Test
+        @DisplayName("npv of literal cashflow vector is evaluated through array coercion")
+        void npvOfLiteralVector() {
+            BigDecimal result = MathExpression.compile("npv(0.1, [100, 200, 300])", ENV).compute();
+            assertThat(result).isCloseTo(new BigDecimal("481.5928"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("npv via variable vector bound at evaluation time")
+        void npvViaVariableVector() {
+            BigDecimal result = MathExpression.compile("npv(rate, cfs)", ENV)
+                    .setValue("rate", new BigDecimal("0.1"))
+                    .setValue("cfs", java.util.List.of(
+                            new BigDecimal("100"),
+                            new BigDecimal("200"),
+                            new BigDecimal("300")))
+                    .compute();
+            assertThat(result).isCloseTo(new BigDecimal("481.5928"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("npv result can be used in a logical comparison")
+        void npvInLogicalExpression() {
+            boolean result = LogicalExpression.compile("npv(0.1, [100, 200, 300]) > 400", ENV).compute();
+            assertThat(result).isTrue();
+        }
+    }
 
     @Nested
     @DisplayName("fv — future value")

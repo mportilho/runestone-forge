@@ -101,20 +101,58 @@ When a catalog function takes an array parameter (e.g., `mean(BigDecimal[] p)`),
 3. `BigDecimal[].class.isInstance(List<RuntimeValue>)` = **false** → steps 3–10 did not match.
 4. Fell to `DefaultDataConversionService.convert(List<RuntimeValue>, BigDecimal[].class)` → no converter → threw `NoDataConverterFoundException`.
 
-### Fix applied — `RuntimeCoercionService.coerce()` between steps 9 and 10
+### Fix applied — specialized arrays, reference-array fast path, reflective primitive fallback
 
 ```java
-if (targetType.isArray() && value instanceof RuntimeValue.VectorValue vectorValue) {
+if (targetType.isArray() && value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements)) {
+    int n = elements.size();
     Class<?> componentType = targetType.getComponentType();
-    Object array = java.lang.reflect.Array.newInstance(componentType, vectorValue.elements().size());
-    for (int i = 0; i < vectorValue.elements().size(); i++) {
-        Array.set(array, i, coerce(vectorValue.elements().get(i), componentType));
+
+    if (componentType == BigDecimal.class) {
+        BigDecimal[] array = new BigDecimal[n];
+        for (int i = 0; i < n; i++) {
+            array[i] = asNumber(elements.get(i));
+        }
+        return array;
+    }
+    if (componentType == double.class) {
+        double[] array = new double[n];
+        for (int i = 0; i < n; i++) {
+            array[i] = asDouble(elements.get(i));
+        }
+        return array;
+    }
+    if (componentType == int.class) {
+        int[] array = new int[n];
+        for (int i = 0; i < n; i++) {
+            array[i] = asInt(elements.get(i));
+        }
+        return array;
+    }
+    if (componentType == long.class) {
+        long[] array = new long[n];
+        for (int i = 0; i < n; i++) {
+            array[i] = asLong(elements.get(i));
+        }
+        return array;
+    }
+    if (!componentType.isPrimitive()) {
+        Object[] array = (Object[]) java.lang.reflect.Array.newInstance(componentType, n);
+        for (int i = 0; i < n; i++) {
+            array[i] = coerce(elements.get(i), componentType);
+        }
+        return array;
+    }
+
+    Object array = java.lang.reflect.Array.newInstance(componentType, n);
+    for (int i = 0; i < n; i++) {
+        Array.set(array, i, coerce(elements.get(i), componentType));
     }
     return array;
 }
 ```
 
-Each element is recursively coerced to the array's component type. For `Comparable[]` (from `ComparableFunctions` generic `T[]`), step 3 applies: `Comparable.isInstance(BigDecimal)` = true, returning the raw `BigDecimal` directly.
+`BigDecimal[]` and the primitive fast paths avoid reflective writes entirely. Reference arrays such as `Comparable[]` also avoid `Array.set(...)` via a direct `Object[]` write path; only unsupported primitive arrays still use the reflective fallback.
 
 ### Functions now working via the expression API (after fix)
 
@@ -222,7 +260,7 @@ Arguments use the `allEntityTypes` rule, which accepts `mathExpression`, `logica
 
 ### Vector literal
 
-`[1, 2, 3]` is a valid vector literal that compiles as `ExecutableVectorLiteral` → `VectorValue` at runtime. However, it **cannot** be passed to array-parameter functions due to the coercion gap in section 5.
+`[1, 2, 3]` is a valid vector literal that compiles as `ExecutableVectorLiteral` → `VectorValue` at runtime. Array-parameter functions consume it through the coercion path described in section 5.
 
 ---
 

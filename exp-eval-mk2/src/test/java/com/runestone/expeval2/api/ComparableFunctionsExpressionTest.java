@@ -13,11 +13,10 @@ import java.util.List;
 import static java.math.BigDecimal.ONE;
 import static org.assertj.core.api.Assertions.assertThat;
 
-// ComparableFunctions.max(T[]) and min(T[]) require the VectorValue → T[] coercion fix
-// in RuntimeCoercionService (step between List handling and fallback convert).
-// After the fix, vector literals [a, b, c] are coerced to Comparable[] via the component
-// type, which resolves to BigDecimal for numeric elements (Comparable.isInstance(BigDecimal) = true).
-// See runtime-internals.md §5 for root cause and fix description.
+// ComparableFunctions.max(T[]) and min(T[]) exercise the VectorValue → T[] coercion path
+// in RuntimeCoercionService. Vector literals [a, b, c] are coerced to Comparable[] via the
+// component type, which resolves to BigDecimal for numeric elements
+// (Comparable.isInstance(BigDecimal) = true). See runtime-internals.md §5.
 //
 // Empty vector literal [] is not valid grammar (vectorOfEntitiesOperation requires ≥ 1 element),
 // so the empty-array boundary from ComparableFunctionsTest cannot be reproduced via the API.

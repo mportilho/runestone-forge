@@ -389,3 +389,50 @@ Cross-module comparison after Phase 6:
 **Decision:** ACCEPT
 **Reason:** The optimization delivered double-digit performance gains and over 50% reduction in allocations for large arrays, directly addressing the "BigDecimal object creation in loops" performance smell.
 **Notes:** Measurements used `KahanSummationBenchmark` and `MathFunctionsBenchmark` with the standard JMH protocol (JDK 21.0.10). A threshold of 1000 was chosen as it represents the point where the Kahan/double path consistently outperforms the standard BigDecimal path in both latency and allocation.
+
+## PERF-018: Specialize array coercion in `RuntimeCoercionService`
+
+**Date:** 2026-03-19
+
+**Scenario:** Replace the reflective `Array.set(...)` loop used for `VectorValue -> T[]` coercion with specialized loops for the hot array targets (`BigDecimal[]`, `double[]`, `int[]`, `long[]`), while retaining the reflective fallback for compatibility with arbitrary component types.
+**Hypothesis:** Removing reflective writes and recursive `coerce(...)` calls from the hot path would materially reduce `ns/op` for `BigDecimal[]` coercion and reduce both `ns/op` and `B/op` for primitive arrays, especially `double[]`, where reflection forces boxing/unboxing through `Object`.
+
+**Technical baseline:** Branch `refac-springboot-4`, `HEAD` commit `f60d40425dad72588c78a43dcd2ad21a8c19c8bf`, with the benchmark baseline represented by a `HEAD`-equivalent reflective implementation embedded in `RuntimeCoercionArrayBenchmarkSupport.BaselineRuntimeCoercionService`. The measured "after" path is the current working-tree implementation in `RuntimeCoercionService`.
+
+**Changes applied:**
+- `RuntimeCoercionService`: added explicit scalar helpers for `double`, `int`, and `long`.
+- `RuntimeCoercionService`: specialized the array branch for `BigDecimal[]`, `double[]`, `int[]`, and `long[]`, and hoisted `elements.size()` into a local `n`.
+- `MathFunctionsExpressionTest`: added `mean(...)` API coverage for vector literals and bound vectors.
+- `ExcelFinancialFunctionsExpressionTest`: added `npv(...)` API coverage for vector literals and bound vectors.
+- `RuntimeCoercionArrayBenchmarkSupport` and `RuntimeCoercionArrayBenchmark`: added a dedicated JMH benchmark that compares the `HEAD`-equivalent reflective path against the optimized path with the same benchmark names and parameters.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | Before (B/op) | After (B/op) |
+|-----------|---------------:|--------------:|----------------:|--------------:|-------------:|
+| `coerceBigDecimalArray` | 3,242.407 ± 452.485 | 188.667 ± 2.935 | +94.18% | 528.045 | 528.003 |
+| `coerceDoubleArray` | 3,581.717 ± 66.567 | 173.093 ± 1.488 | +95.17% | 7,184.050 | 1,040.002 |
+
+**Decision:** ACCEPT
+**Reason:** Both measured scenarios improved by more than 94%, far above the 10% acceptance threshold. The `double[]` path also reduced allocation by 85.52%, confirming that the reflective primitive writes were materially expensive. `BigDecimal[]` allocation remained flat, so the win there is latency-only; that is consistent with removing reflective dispatch while still allocating the same result array.
+**Notes:** Measurements used `RuntimeCoercionArrayBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, `-prof gc`) on JDK 21.0.6. Relevant functional coverage passed via `mvn -q -pl exp-eval-mk2 -Dtest=MathFunctionsExpressionTest,ExcelFinancialFunctionsExpressionTest,ComparableFunctionsExpressionTest test`. JSON evidence was saved to `/tmp/performance-benchmark/runtime-coercion-array-before.json` and `/tmp/performance-benchmark/runtime-coercion-array-after.json`, with comparison summary in `/tmp/performance-benchmark/runtime-coercion-array-comparison.md`.
+
+## PERF-019: Remove reflective writes from the generic reference-array path
+
+**Date:** 2026-03-19
+
+**Scenario:** Optimize the remaining generic array path in `RuntimeCoercionService.coerce(...)` for reference component types by replacing `Array.set(...)` with direct writes through `Object[]`, while preserving the existing recursive element coercion and keeping the reflective fallback only for unsupported primitive component types.
+**Hypothesis:** For the real generic path still exercised by the module today (`Comparable[]` through `ComparableFunctions.max/min`), replacing reflective writes with direct array stores would materially reduce `ns/op` even if `B/op` remained flat, because the result array allocation still exists in both versions.
+
+**Technical baseline:** Branch `refac-springboot-4`, working tree after `PERF-018`, with the "before" benchmark representing the production implementation that still used `Array.set(...)` for `Comparable[]`. The "after" benchmark represents the updated production implementation with a dedicated reference-array fast path.
+
+**Changes applied:**
+- `RuntimeCoercionService`: added `if (!componentType.isPrimitive())` branch that allocates `(Object[]) Array.newInstance(componentType, n)` and performs direct indexed writes.
+- `RuntimeCoercionServiceTest`: added direct coverage for `Comparable[]` and `String[]` coercion.
+- `RuntimeCoercionArrayBenchmark`: added `coerceComparableArray`.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | Before (B/op) | After (B/op) |
+|-----------|---------------:|--------------:|----------------:|--------------:|-------------:|
+| `coerceComparableArray` | 3,337.086 ± 558.244 | 511.807 ± 8.235 | +84.66% | 528.046 | 528.007 |
+
+**Decision:** ACCEPT
+**Reason:** The `Comparable[]` path improved by +84.66%, far above the 10% acceptance threshold, with stable allocation. This confirms that the remaining cost was primarily reflective dispatch on each store, not structural allocation. The change is low-risk because Java array store checks are still preserved by direct assignment to the covariant runtime array instance.
+**Notes:** Measurements used `RuntimeCoercionArrayBenchmark.coerceComparableArray` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, `-prof gc`) on JDK 21.0.6. Functional coverage passed via `mvn -q -pl exp-eval-mk2 -Dtest=RuntimeCoercionServiceTest,ComparableFunctionsExpressionTest test`. JSON evidence was saved to `/tmp/performance-benchmark/runtime-coercion-comparable-before.json` and `/tmp/performance-benchmark/runtime-coercion-comparable-after.json`, with comparison summary in `/tmp/performance-benchmark/runtime-coercion-comparable-comparison.md`.

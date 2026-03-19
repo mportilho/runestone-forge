@@ -13,15 +13,42 @@ import static java.math.BigDecimal.ONE;
 import static java.math.BigDecimal.ZERO;
 import static org.assertj.core.api.Assertions.assertThat;
 
-// Array-parameter functions (mean, geometricMean, harmonicMean, variance, stdDev, meanDev,
-// distribute, spread) cannot be invoked via the expression API due to the VectorValue → T[]
-// coercion gap in RuntimeCoercionService. Only scalar-parameter functions are tested here.
-// See runtime-internals.md §5 for the root cause and the proposed fix path.
-@DisplayName("MathFunctions scalar functions via MathExpression/LogicalExpression API")
+@DisplayName("MathFunctions via MathExpression/LogicalExpression API")
 class MathFunctionsExpressionTest {
 
     private static final Offset<BigDecimal> EPSILON = Assertions.within(new BigDecimal("0.00000000000000000001"));
     private static final ExpressionEnvironment ENV = ExpressionEnvironment.builder().addMathFunctions().build();
+
+    @Nested
+    @DisplayName("mean — arithmetic mean of a numeric vector")
+    class Mean {
+
+        @Test
+        @DisplayName("mean of literal vector returns arithmetic average")
+        void meanOfLiteralVector() {
+            assertThat(MathExpression.compile("mean([1, 2, 3, 4])", ENV).compute())
+                    .isCloseTo(new BigDecimal("2.5"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("mean via variable vector bound at evaluation time")
+        void meanViaVariableVector() {
+            BigDecimal result = MathExpression.compile("mean(nums)", ENV)
+                    .setValue("nums", java.util.List.of(
+                            new BigDecimal("10"),
+                            new BigDecimal("20"),
+                            new BigDecimal("30")))
+                    .compute();
+            assertThat(result).isCloseTo(new BigDecimal("20"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("mean used in logical comparison")
+        void meanInLogicalExpression() {
+            boolean result = LogicalExpression.compile("mean([2, 4, 6]) = 4", ENV).compute();
+            assertThat(result).isTrue();
+        }
+    }
 
     @Nested
     @DisplayName("ln — natural logarithm")

@@ -66,6 +66,18 @@ final class RuntimeCoercionService {
         };
     }
 
+    public double asDouble(RuntimeValue value) {
+        return asNumber(value).doubleValue();
+    }
+
+    public int asInt(RuntimeValue value) {
+        return asNumber(value).intValue();
+    }
+
+    public long asLong(RuntimeValue value) {
+        return asNumber(value).longValue();
+    }
+
     public List<RuntimeValue> asVector(RuntimeValue value) {
         Objects.requireNonNull(value, "value must not be null");
         if (value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements)) {
@@ -108,9 +120,47 @@ final class RuntimeCoercionService {
             return elements1.stream().map(RuntimeValue::raw).toList();
         }
         if (targetType.isArray() && value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements)) {
+            int n = elements.size();
             Class<?> componentType = targetType.getComponentType();
-            Object array = Array.newInstance(componentType, elements.size());
-            for (int i = 0; i < elements.size(); i++) {
+
+            if (componentType == BigDecimal.class) {
+                BigDecimal[] array = new BigDecimal[n];
+                for (int i = 0; i < n; i++) {
+                    array[i] = asNumber(elements.get(i));
+                }
+                return array;
+            }
+            if (componentType == double.class) {
+                double[] array = new double[n];
+                for (int i = 0; i < n; i++) {
+                    array[i] = asDouble(elements.get(i));
+                }
+                return array;
+            }
+            if (componentType == int.class) {
+                int[] array = new int[n];
+                for (int i = 0; i < n; i++) {
+                    array[i] = asInt(elements.get(i));
+                }
+                return array;
+            }
+            if (componentType == long.class) {
+                long[] array = new long[n];
+                for (int i = 0; i < n; i++) {
+                    array[i] = asLong(elements.get(i));
+                }
+                return array;
+            }
+            if (!componentType.isPrimitive()) {
+                Object[] array = (Object[]) Array.newInstance(componentType, n);
+                for (int i = 0; i < n; i++) {
+                    array[i] = coerce(elements.get(i), componentType);
+                }
+                return array;
+            }
+
+            Object array = Array.newInstance(componentType, n);
+            for (int i = 0; i < n; i++) {
                 Array.set(array, i, coerce(elements.get(i), componentType));
             }
             return array;
