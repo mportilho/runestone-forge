@@ -50,11 +50,12 @@ public class MathFunctions {
      * @return mean value
      */
     public static BigDecimal mean(BigDecimal[] p) {
-        BigDecimal size = valueOf(p.length);
-        if (p.length == 1) {
+        int n = p.length;
+        BigDecimal size = valueOf(n);
+        if (n == 1) {
             return p[0];
-        } else if (p.length == 2) {
-            return p[0].add(p[1]).divide(valueOf(2), MC);
+        } else if (n == 2) {
+            return p[0].add(p[1]).divide(size, MC);
         }
         BigDecimal sum = ZERO;
         for (BigDecimal param : p) {
@@ -70,7 +71,11 @@ public class MathFunctions {
      * @return geometric mean value
      */
     public static BigDecimal geometricMean(BigDecimal[] p) {
-        BigDecimal size = valueOf(p.length);
+        int n = p.length;
+        if (n == 0) {
+            throw new ArithmeticException("Empty array");
+        }
+        BigDecimal size = valueOf(n);
         BigDecimal x = ONE;
         for (BigDecimal param : p) {
             x = x.multiply(param, MC);
@@ -85,7 +90,8 @@ public class MathFunctions {
      * @return harmonic mean value
      */
     public static BigDecimal harmonicMean(BigDecimal[] p) {
-        BigDecimal size = valueOf(p.length);
+        int n = p.length;
+        BigDecimal size = valueOf(n);
         BigDecimal x = ZERO;
         for (BigDecimal param : p) {
             x = x.add(ONE.divide(param, MC), MC);
@@ -101,14 +107,18 @@ public class MathFunctions {
      * @return variance
      */
     public static BigDecimal variance(BigDecimal[] p, int type) {
-        BigDecimal size = valueOf(p.length - type);
-        BigDecimal mean = mean(p);
-        BigDecimal x = ZERO;
+        int n = p.length;
+        BigDecimal sum = ZERO;
+        BigDecimal sumSquares = ZERO;
         for (BigDecimal param : p) {
-            BigDecimal diff = param.subtract(mean, MC);
-            x = x.add(diff.multiply(diff, MC), MC);
+            sum = sum.add(param);
+            sumSquares = sumSquares.add(param.multiply(param, MC), MC);
         }
-        return ONE.divide(size, MC).multiply(x, MC);
+        BigDecimal size = valueOf(n);
+        BigDecimal mean = sum.divide(size, MC);
+        BigDecimal nMinusType = valueOf(n - type);
+        BigDecimal numerator = sumSquares.subtract(sum.multiply(mean, MC), MC);
+        return numerator.divide(nMinusType, MC);
     }
 
     /**
@@ -130,13 +140,18 @@ public class MathFunctions {
      * @return mean deviation
      */
     public static BigDecimal meanDev(BigDecimal[] p) {
-        BigDecimal size = valueOf(p.length);
-        BigDecimal mean = mean(p);
+        int n = p.length;
+        BigDecimal size = valueOf(n);
+        BigDecimal sum = ZERO;
+        for (BigDecimal param : p) {
+            sum = sum.add(param);
+        }
+        BigDecimal mean = sum.divide(size, MC);
         BigDecimal x = ZERO;
         for (BigDecimal param : p) {
             x = x.add(param.subtract(mean, MC).abs(MC), MC);
         }
-        return ONE.divide(size, MC).multiply(x, MC);
+        return x.divide(size, MC);
     }
 
     /**
@@ -266,9 +281,10 @@ public class MathFunctions {
             throw new IllegalArgumentException("References cannot be null or empty");
         }
 
+        int scale = value.scale();
         if (value.compareTo(ZERO) == 0) {
             BigDecimal[] distributed = new BigDecimal[references.length];
-            Arrays.fill(distributed, ZERO.setScale(value.scale(), HALF_EVEN));
+            Arrays.fill(distributed, ZERO.setScale(scale, HALF_EVEN));
             return distributed;
         }
 
@@ -280,20 +296,20 @@ public class MathFunctions {
         BigDecimal[] distributed = new BigDecimal[references.length];
         BigDecimal distributedSum = ZERO;
         if (totalSum.compareTo(ZERO) != 0) {
+            BigDecimal factor = value.divide(totalSum, MC);
             for (int i = 0; i < references.length; i++) {
-                BigDecimal coefficient = references[i].divide(totalSum, 16, HALF_EVEN);
-                BigDecimal distValue = value.multiply(coefficient).setScale(value.scale(), HALF_EVEN);
+                BigDecimal distValue = references[i].multiply(factor).setScale(scale, HALF_EVEN);
                 distributed[i] = distValue;
                 distributedSum = distributedSum.add(distValue);
             }
         } else {
             BigDecimal size = valueOf(references.length);
-            BigDecimal val = value.divide(size, HALF_EVEN).setScale(value.scale(), HALF_EVEN);
+            BigDecimal val = value.divide(size, HALF_EVEN).setScale(scale, HALF_EVEN);
             distributedSum = val.multiply(size);
             Arrays.fill(distributed, val);
         }
 
-        BigDecimal difference = value.subtract(distributedSum).setScale(value.scale(), HALF_EVEN);
+        BigDecimal difference = value.subtract(distributedSum).setScale(scale, HALF_EVEN);
         if (difference.compareTo(ZERO) != 0) {
             int indexToAdjust = -1;
             if (direction.compareTo(ZERO) >= 0) {

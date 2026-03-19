@@ -43,7 +43,7 @@ Arrays.fill(distributed, ZERO.setScale(value.scale(), HALF_EVEN));
 BigDecimal coefficient = references[i].divide(totalSum, 16, HALF_EVEN);
 ```
 *   **Impacto:** Divisões de `BigDecimal` são operações custosas. Além disso, o uso de escala fixa `16` pode divergir da precisão `DECIMAL128` (34 dígitos) usada no restante da classe.
-*   **Sugestão:** Validar se a escala 16 é intencional e considerar se o cálculo pode ser reorganizado para minimizar divisões.
+*   **Sugestão:** Utilizar DECIMAL128 e considerar se o cálculo pode ser reorganizado para minimizar divisões.
 
 ## Próximos Passos Recomendados
 
