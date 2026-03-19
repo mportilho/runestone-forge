@@ -2,8 +2,6 @@ package com.runestone.expeval2.internal.runtime;
 
 import com.runestone.expeval2.catalog.FunctionDescriptor;
 import com.runestone.expeval2.internal.ast.BinaryOperator;
-import com.runestone.expeval2.internal.ast.PostfixOperator;
-import com.runestone.expeval2.internal.ast.UnaryOperator;
 import com.runestone.expeval2.types.ScalarType;
 
 import ch.obermuhlner.math.big.BigDecimalMath;

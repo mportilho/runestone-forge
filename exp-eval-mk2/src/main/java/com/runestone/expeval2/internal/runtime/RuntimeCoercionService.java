@@ -2,6 +2,7 @@ package com.runestone.expeval2.internal.runtime;
 
 import com.runestone.converters.DataConversionService;
 
+import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -67,8 +68,8 @@ final class RuntimeCoercionService {
 
     public List<RuntimeValue> asVector(RuntimeValue value) {
         Objects.requireNonNull(value, "value must not be null");
-        if (value instanceof RuntimeValue.VectorValue vectorValue) {
-            return vectorValue.elements();
+        if (value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements)) {
+            return elements;
         }
         throw new IllegalStateException("cannot coerce " + value.type() + " to vector");
     }
@@ -103,8 +104,16 @@ final class RuntimeCoercionService {
         if (targetType == LocalDateTime.class) {
             return asDateTime(value);
         }
-        if (List.class.isAssignableFrom(targetType) && value instanceof RuntimeValue.VectorValue vectorValue) {
-            return vectorValue.elements().stream().map(RuntimeValue::raw).toList();
+        if (List.class.isAssignableFrom(targetType) && value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements1)) {
+            return elements1.stream().map(RuntimeValue::raw).toList();
+        }
+        if (targetType.isArray() && value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements)) {
+            Class<?> componentType = targetType.getComponentType();
+            Object array = Array.newInstance(componentType, elements.size());
+            for (int i = 0; i < elements.size(); i++) {
+                Array.set(array, i, coerce(elements.get(i), componentType));
+            }
+            return array;
         }
 
         return convert(value.raw(), targetType);
