@@ -27,3 +27,33 @@
 **Decision:** ACCEPT
 **Reason:** Seven of eight scenarios improved by more than 23%, and the two assignable-target cases improved by roughly two orders of magnitude while eliminating the previous `24 B/op` allocation. The only small gain was `double` primitive (+4.13%), but it is still positive and came with no behavioral risk. The measured average improvement across all scenarios was +57.40%.
 **Notes:** The `Double` wrapper scenario still allocates `24 B/op` after the change. This is measured data, not inference. The likely cause is wrapper allocation semantics for `Double.valueOf(...)`, unlike `Integer` and `Long`, which benefit from JVM caching in the benchmark range. That remaining allocation is a narrower follow-up topic and does not block this optimization.
+
+## PERF-002: High-performance `Collection/List -> array` in `DefaultDataConversionService`
+
+**Date:** 2026-03-19
+
+**Scenario:** Add native `Collection/List -> array` support to `DefaultDataConversionService.convert(...)`, avoiding per-element reflective writes and using specialized primitive-array loops plus direct reference-array writes.
+**Hypothesis:** A production path specialized for `List + RandomAccess`, primitive array targets, and reference-array direct assignment would materially outperform a naive reflective baseline based on `Array.set(...)`, especially for numeric primitive arrays where reflection forces boxing/unboxing.
+
+**Technical baseline:** Fresh JMH baseline in the current session using `CollectionArrayConversionBenchmark` configured with an embedded `ReflectiveCollectionArrayConversionService` that represents a naive implementation: iterate the source collection, call `delegate.convert(element, componentType)`, and write each element via `Array.set(...)`. After the production change, the same benchmark methods were switched to call `DefaultDataConversionService`.
+
+**Changes applied:**
+- `DefaultDataConversionService`: added `canConvert(...)` support for `Collection -> array`.
+- `DefaultDataConversionService`: added a `Collection/List -> array` fast path at the start of `convert(...)`.
+- `DefaultDataConversionService`: optimized `List + RandomAccess` separately from generic `Collection` iteration.
+- `DefaultDataConversionService`: specialized primitive targets (`int[]`, `long[]`, `double[]`, `float[]`, `short[]`, `byte[]`, `boolean[]`, `char[]`) and used direct indexed writes for reference arrays.
+- `TestDataConversionService`: added coverage for primitive arrays, reference arrays, insertion-order preservation, and `null` propagation for reference elements.
+- `CollectionArrayConversionBenchmark`: added a dedicated JMH benchmark for representative collection-to-array scenarios with GC profiling.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | Before (B/op) | After (B/op) |
+|---|---:|---:|---:|---:|---:|
+| `convertBigDecimalListToBigDecimalArray` | 1653.735 | 120.799 | +92.70% | 272.023 | 272.002 |
+| `convertBigDecimalListToDoubleArray` | 1667.899 | 72.057 | +95.68% | 2064.023 | 528.001 |
+| `convertBigDecimalListToIntArray` | 1617.162 | 63.682 | +96.06% | 272.022 | 272.001 |
+| `convertBigDecimalListToLongArray` | 1560.998 | 69.283 | +95.56% | 528.022 | 528.001 |
+| `convertIntegerListToNumberArray` | 1574.433 | 119.618 | +92.40% | 272.022 | 272.002 |
+| `convertStringListToIntegerArray` | 1909.040 | 635.097 | +66.73% | 1808.026 | 1808.009 |
+
+**Decision:** ACCEPT
+**Reason:** All measured scenarios improved far above the 10% acceptance threshold, with average improvement of +89.86%. Primitive numeric arrays showed the strongest effect, and `double[]` also reduced allocation by 74.42%, confirming that the reflective baseline was paying a large boxing/reflection penalty. Reference-array cases kept essentially the same structural allocation while still improving CPU by more than 90%, which is consistent with removing reflective dispatch from each store.
+**Notes:** The `String -> Integer[]` scenario still allocates about `1808 B/op` after the change. This is measured data. The remaining allocation is expected from the actual string-to-integer conversions and boxed `Integer[]` result, not from array-store reflection. Functional safety was validated with `mvn -q -pl runestone-toolkit -Dtest=TestDataConversionService test` rerun outside the sandbox because Mockito inline mocking cannot self-attach reliably inside the sandbox.

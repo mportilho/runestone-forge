@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class DefaultDataConversionService implements DataConversionService {
@@ -60,6 +61,9 @@ public class DefaultDataConversionService implements DataConversionService {
         if (sourceType == null || targetType == null) {
             return false;
         }
+        if (CollectionArrayConversionSupport.canConvert(sourceType, targetType)) {
+            return true;
+        }
         if (targetType.isAssignableFrom(sourceType) || targetType.isPrimitive()) {
             return true;
         }
@@ -85,6 +89,10 @@ public class DefaultDataConversionService implements DataConversionService {
             return null;
         } else if (targetType.isInstance(source)) {
             return (T) source;
+        }
+        T collectionArrayConversion = CollectionArrayConversionSupport.convert(source, targetType, this);
+        if (collectionArrayConversion != null) {
+            return collectionArrayConversion;
         }
         T directNumberConversion = convertNumberTypes(source, targetType);
         if (directNumberConversion != null) {

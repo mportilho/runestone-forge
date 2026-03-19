@@ -34,6 +34,8 @@ import org.mockito.Mockito;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.time.LocalDate;
+import java.util.LinkedHashSet;
+import java.util.List;
 
 public class TestDataConversionService {
 
@@ -70,6 +72,37 @@ public class TestDataConversionService {
         Number converted = service.convert(source, Number.class);
 
         Assertions.assertThat(converted).isSameAs(source);
+    }
+
+    @Test
+    public void testListToPrimitiveArrayConversion() {
+        DataConversionService service = new DefaultDataConversionService();
+
+        Assertions.assertThat(service.canConvert(List.class, int[].class)).isTrue();
+        Assertions.assertThat(service.convert(List.of(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3")), int[].class))
+                .containsExactly(1, 2, 3);
+        Assertions.assertThat(service.convert(List.of(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3")), long[].class))
+                .containsExactly(1L, 2L, 3L);
+        Assertions.assertThat(service.convert(List.of(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3")), double[].class))
+                .containsExactly(1.0d, 2.0d, 3.0d);
+        Assertions.assertThat(service.convert(List.of("true", "false", "1"), boolean[].class))
+                .containsExactly(true, false, true);
+        Assertions.assertThat(service.convert(List.of("a", "b", "c"), char[].class))
+                .containsExactly('a', 'b', 'c');
+    }
+
+    @Test
+    public void testCollectionToReferenceArrayConversion() {
+        DataConversionService service = new DefaultDataConversionService();
+
+        Assertions.assertThat(service.canConvert(LinkedHashSet.class, Integer[].class)).isTrue();
+
+        LinkedHashSet<String> orderedValues = new LinkedHashSet<>(List.of("1", "2", "3"));
+        Assertions.assertThat(service.convert(orderedValues, Integer[].class)).containsExactly(1, 2, 3);
+        Assertions.assertThat(service.convert(List.of(1, 2, 3), Number[].class)).containsExactly(1, 2, 3);
+        Assertions.assertThat(service.convert(java.util.Arrays.asList("1", null, "3"), Integer[].class)).containsExactly(1, null, 3);
+        Assertions.assertThat(service.convert(List.of(new BigDecimal("1"), new BigDecimal("2")), BigDecimal[].class))
+                .containsExactly(new BigDecimal("1"), new BigDecimal("2"));
     }
 
     @Test
