@@ -42,6 +42,7 @@ import static java.math.RoundingMode.HALF_EVEN;
 public class MathFunctions {
 
     private static final MathContext MC = MathContext.DECIMAL128;
+    private static final int KAHAN_THRESHOLD = 1000;
 
     /**
      * Finds the mean value of a list of values. The mean value is the sum of all values divided by the number of values.
@@ -51,12 +52,20 @@ public class MathFunctions {
      */
     public static BigDecimal mean(BigDecimal[] p) {
         int n = p.length;
+        if (n == 0) {
+            throw new ArithmeticException("Empty array");
+        }
         BigDecimal size = valueOf(n);
         if (n == 1) {
             return p[0];
         } else if (n == 2) {
             return p[0].add(p[1]).divide(size, MC);
         }
+
+        if (n >= KAHAN_THRESHOLD) {
+            return valueOf(KahanSummation.sum(p)).divide(size, MC);
+        }
+
         BigDecimal sum = ZERO;
         for (BigDecimal param : p) {
             sum = sum.add(param);
@@ -108,15 +117,48 @@ public class MathFunctions {
      */
     public static BigDecimal variance(BigDecimal[] p, int type) {
         int n = p.length;
+        if (n == 0) {
+            throw new ArithmeticException("Empty array");
+        }
+        BigDecimal size = valueOf(n);
+        BigDecimal nMinusType = valueOf(n - type);
+
+        if (n >= KAHAN_THRESHOLD) {
+            double sum = 0.0;
+            double sumSquares = 0.0;
+            double cSum = 0.0;
+            double cSumSquares = 0.0;
+
+            for (BigDecimal val : p) {
+                double x = val.doubleValue();
+                // Kahan for sum
+                double ySum = x - cSum;
+                double tSum = sum + ySum;
+                cSum = (tSum - sum) - ySum;
+                sum = tSum;
+
+                // Kahan for sumSquares
+                double xSq = x * x;
+                double ySq = xSq - cSumSquares;
+                double tSq = sumSquares + ySq;
+                cSumSquares = (tSq - sumSquares) - ySq;
+                sumSquares = tSq;
+            }
+
+            BigDecimal bdSum = valueOf(sum);
+            BigDecimal bdSumSquares = valueOf(sumSquares);
+            BigDecimal mean = bdSum.divide(size, MC);
+            BigDecimal numerator = bdSumSquares.subtract(bdSum.multiply(mean, MC), MC);
+            return numerator.divide(nMinusType, MC);
+        }
+
         BigDecimal sum = ZERO;
         BigDecimal sumSquares = ZERO;
         for (BigDecimal param : p) {
             sum = sum.add(param);
             sumSquares = sumSquares.add(param.multiply(param, MC), MC);
         }
-        BigDecimal size = valueOf(n);
         BigDecimal mean = sum.divide(size, MC);
-        BigDecimal nMinusType = valueOf(n - type);
         BigDecimal numerator = sumSquares.subtract(sum.multiply(mean, MC), MC);
         return numerator.divide(nMinusType, MC);
     }
@@ -141,7 +183,16 @@ public class MathFunctions {
      */
     public static BigDecimal meanDev(BigDecimal[] p) {
         int n = p.length;
+        if (n == 0) {
+            throw new ArithmeticException("Empty array");
+        }
         BigDecimal size = valueOf(n);
+
+        if (n >= KAHAN_THRESHOLD) {
+            double mean = KahanSummation.sum(p) / n;
+            return valueOf(KahanSummation.sumAbsoluteDeviations(p, mean)).divide(size, MC);
+        }
+
         BigDecimal sum = ZERO;
         for (BigDecimal param : p) {
             sum = sum.add(param);

@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 @Measurement(iterations = 5, time = 1)
 public class MathFunctionsBenchmark {
 
-    @Param({"10", "100", "1000"})
+    @Param({"10", "100", "1000", "5000"})
     private int size;
 
     private BigDecimal[] data;
