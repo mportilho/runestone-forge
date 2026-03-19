@@ -158,8 +158,10 @@ public final class RuntimeCoercionScalarBenchmarkSupport {
             if (targetType == LocalDateTime.class) {
                 return asDateTime(value);
             }
-            if (List.class.isAssignableFrom(targetType) && value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements)) {
-                return elements.stream().map(RuntimeValue::raw).toList();
+            if (value instanceof RuntimeValue.VectorValue vectorValue) {
+                if (List.class.isAssignableFrom(targetType)) {
+                    return vectorValue.elements().stream().map(RuntimeValue::raw).toList();
+                }
             }
             return convert(value.raw(), targetType);
         }

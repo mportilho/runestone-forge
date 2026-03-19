@@ -80,8 +80,8 @@ final class RuntimeCoercionService {
 
     public List<RuntimeValue> asVector(RuntimeValue value) {
         Objects.requireNonNull(value, "value must not be null");
-        if (value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements)) {
-            return elements;
+        if (value instanceof RuntimeValue.VectorValue vectorValue) {
+            return vectorValue.elements();
         }
         throw new IllegalStateException("cannot coerce " + value.type() + " to vector");
     }
@@ -125,10 +125,14 @@ final class RuntimeCoercionService {
         if (targetType == LocalDateTime.class) {
             return asDateTime(value);
         }
-        if (List.class.isAssignableFrom(targetType) && value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements1)) {
-            return elements1.stream().map(RuntimeValue::raw).toList();
-        }
-        if (targetType.isArray() && value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements)) {
+        if (value instanceof RuntimeValue.VectorValue vectorValue) {
+            List<RuntimeValue> elements = vectorValue.elements();
+            if (List.class.isAssignableFrom(targetType)) {
+                return elements.stream().map(RuntimeValue::raw).toList();
+            }
+            if (!targetType.isArray()) {
+                return convert(value.raw(), targetType);
+            }
             int n = elements.size();
             Class<?> componentType = targetType.getComponentType();
 

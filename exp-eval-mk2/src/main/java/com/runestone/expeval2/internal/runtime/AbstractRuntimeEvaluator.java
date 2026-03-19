@@ -11,6 +11,7 @@ import java.math.MathContext;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -159,9 +160,11 @@ abstract class AbstractRuntimeEvaluator<T> {
     }
 
     private RuntimeValue evaluateVector(ExecutableVectorLiteral node, ExecutionScope scope) {
-        return new RuntimeValue.VectorValue(node.elements().stream()
-                .map(element -> evaluateExpression(element, scope))
-                .toList());
+        List<RuntimeValue> elements = new ArrayList<>(node.elements().size());
+        for (ExecutableNode element : node.elements()) {
+            elements.add(evaluateExpression(element, scope));
+        }
+        return new RuntimeValue.VectorValue(elements);
     }
 
     private int compare(RuntimeValue left, RuntimeValue right) {

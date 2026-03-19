@@ -134,7 +134,7 @@ sealed interface RuntimeValue permits
 
     record VectorValue(List<RuntimeValue> elements) implements RuntimeValue {
         public VectorValue {
-            elements = List.copyOf(elements);
+            Objects.requireNonNull(elements, "elements must not be null");
         }
 
         @Override

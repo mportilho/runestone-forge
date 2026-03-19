@@ -219,6 +219,29 @@ Allocation delta: `mk2UserFunction` went from **4,144 B/op** (PERF-010 baseline)
 **Reason:** `mk2UserFunction` improved by +17.10% (above the 10% threshold), allocation dropped by 35.5%, and `mk2VariableChurn` was essentially flat (-0.11%). The change is isolated, low-risk, and measurably advances the Phase 1 criterion (reduce `B/op` in the `mk2UserFunction` scenario).
 **Notes:** Measurements used `CrossModuleExpressionEngineBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, JDK 21.0.10). Allocation measured separately with `-f 1 -prof gc` on the `userFunction` benchmarks only. Module tests passed via `mvn -q -pl exp-eval-mk2 test` both before and after the change.
 
+## PERF-021: Focused `RuntimeValueFactory` wrapping fast paths
+
+**Date:** 2026-03-19
+
+**Scenario:** Measure the cost of wrapping already-typed scalar return values and vector-compatible inputs in `RuntimeValueFactory`, with emphasis on `BigDecimal[]` and `Collection` inputs that feed `VectorValue`.
+**Hypothesis:** Skipping redundant conversion for exact scalar types and avoiding reflective/object-growth overhead in `toVector(...)` would reduce both `ns/op` and `B/op`, especially for object arrays.
+
+**Changes applied:**
+- `RuntimeValueFactory.from(...)`: added exact-type fast paths for `BigDecimal`, `Boolean`, `String`, `LocalDate`, `LocalTime`, and `LocalDateTime`.
+- `RuntimeValueFactory.toVector(...)`: added specialized branches for `Collection<?>` and `Object[]`, with pre-sized `ArrayList` allocation; primitive arrays still use the reflective fallback.
+- Added `RuntimeValueFactoryTest` coverage and `RuntimeValueFactoryBenchmark` / `RuntimeValueFactoryBenchmarkSupport` for isolated measurement.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | Before (B/op) | After (B/op) |
+|-----------|---------------:|--------------:|----------------:|--------------:|-------------:|
+| fromNumberScalarExact | 26.950 | 24.444 | +9.30% | 16.000 | 16.000 |
+| fromStringScalarExact | 25.883 | 23.726 | +8.33% | 16.000 | 16.000 |
+| fromVectorArray | 6184.216 | 3393.415 | +45.13% | 5200.085 | 3696.047 |
+| fromVectorIterable | 3856.532 | 3546.295 | +8.05% | 5192.053 | 3696.049 |
+
+**Decision:** ACCEPT
+**Reason:** The object-array path is a clear hotspot in this factory and improved by +45.13% with a 28.92% allocation reduction, while the other scenarios stayed positive and low-risk. The production patch mirrors the measured optimized branch.
+**Notes:** Measurements used `RuntimeValueFactoryBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, `-prof gc`, JDK 21.0.6). Verification passed via `mvn -q -Dtest=RuntimeCoercionServiceTest,RuntimeValueFactoryTest test` and `mvn -q -DskipTests test-compile` in `exp-eval-mk2`.
+
 ## PERF-012: Phase 2 — Replace `invokeWithArguments` with pre-compiled spread handle in `FunctionDescriptor`
 
 **Date:** 2026-03-17
@@ -463,3 +486,26 @@ Cross-module comparison after Phase 6:
 **Decision:** ACCEPT
 **Reason:** Every measured scalar scenario improved well above the 10% acceptance threshold, with average improvement of +63.14%. Allocation also dropped in every scenario. The strongest effect is on boxed `int`/`long` targets, where the optimization removed the conversion-service path entirely and reduced `B/op` to effectively zero under this benchmark.
 **Notes:** Measurements used `RuntimeCoercionScalarBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, `-prof gc`) on JDK 21.0.6. Relevant functional coverage passed via `mvn -q -pl exp-eval-mk2 -Dtest=RuntimeCoercionServiceTest test` before and after the change. JSON evidence was saved to `/tmp/performance-benchmark/runtime-coercion-scalar-before.json` and `/tmp/performance-benchmark/runtime-coercion-scalar-after.json`, with comparison summary in `/tmp/performance-benchmark/runtime-coercion-scalar-comparison.md`.
+
+## PERF-022: Trusted vector materialization for internal runtime paths
+
+**Date:** 2026-03-19
+
+**Scenario:** Revisit the next runtime hotspot after the `RuntimeValueFactory` changes, focusing on `VectorValue(List.copyOf(...))` and `AbstractRuntimeEvaluator.evaluateVector(...)`. The goal was to separate the cost of defensive copying from the cost of stream-based vector literal evaluation.
+**Hypothesis:** Public construction of `VectorValue` should remain defensive, but internal runtime paths that just created a fresh `ArrayList` can safely transfer ownership without `List.copyOf(...)`. Replacing `stream().map(...).toList()` in `evaluateVector(...)` with a pre-sized loop should further reduce `ns/op` and `B/op`.
+
+**Changes applied:**
+- `RuntimeValue.VectorValue`: replaced the `record` with a final class that preserves value-based equality and defensive-copy semantics in the public constructor, while adding internal `fromTrustedElements(...)` for fresh runtime-owned lists.
+- `AbstractRuntimeEvaluator.evaluateVector(...)`: replaced `stream().map(...).toList()` with a pre-sized `ArrayList` loop and the trusted vector factory.
+- `RuntimeValueFactory.toVector(...)`: switched fresh internal lists to the trusted vector factory.
+- `RuntimeCoercionService` and benchmark-support classes: replaced record-pattern destructuring with ordinary `instanceof` access to `vectorValue.elements()`.
+- Added `RuntimeValueTest`, `VectorMaterializationBenchmarkSupport`, and `VectorMaterializationBenchmark`.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | Before (B/op) | After (B/op) |
+|-----------|---------------:|--------------:|----------------:|--------------:|-------------:|
+| `evaluateVectorLiteral` | 658.051 ± 123.441 | 488.668 ± 8.347 | +25.74% | 1832.009 | 568.007 |
+| `wrapMutableList` | 202.964 ± 26.330 | 48.441 ± 1.426 | +76.13% | 1624.003 | 568.001 |
+
+**Decision:** ACCEPT
+**Reason:** Both measured scenarios improved well above the 10% threshold, and the allocation reduction is large in exactly the paths under review. The strongest signal is the mutable-list wrapping path, confirming that the main hotspot was the defensive copy on lists already owned by the runtime.
+**Notes:** Measurements used `VectorMaterializationBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, `-prof gc`) on JDK 21.0.6. The benchmark compares embedded baseline and optimized implementations in the same session; the production patch mirrors the optimized branch. Functional verification passed via `mvn -q -Dtest=RuntimeValueTest,RuntimeValueFactoryTest,RuntimeCoercionServiceTest,ComparableFunctionsExpressionTest,MathFunctionsExpressionTest,ExcelFinancialFunctionsExpressionTest test` and `mvn -q -DskipTests test-compile` in `exp-eval-mk2`. JSON evidence was saved to `/tmp/performance-benchmark/vector-materialization.json`.
