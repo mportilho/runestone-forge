@@ -101,6 +101,15 @@ final class RuntimeCoercionService {
         if (targetType == BigDecimal.class) {
             return asNumber(value);
         }
+        if (targetType == Double.class || targetType == double.class) {
+            return asDouble(value);
+        }
+        if (targetType == Integer.class || targetType == int.class) {
+            return asInt(value);
+        }
+        if (targetType == Long.class || targetType == long.class) {
+            return asLong(value);
+        }
         if (targetType == Boolean.class || targetType == boolean.class) {
             return asBoolean(value);
         }

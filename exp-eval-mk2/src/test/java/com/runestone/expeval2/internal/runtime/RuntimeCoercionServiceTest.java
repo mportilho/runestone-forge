@@ -45,4 +45,17 @@ class RuntimeCoercionServiceTest {
         assertThat(result).isInstanceOf(String[].class);
         assertThat((String[]) result).containsExactly("alpha", "beta");
     }
+
+    @Test
+    @DisplayName("coerces numeric scalar to primitive and boxed number targets")
+    void coercesNumericScalarToPrimitiveAndBoxedNumberTargets() {
+        RuntimeValue.NumberValue value = new RuntimeValue.NumberValue(new BigDecimal("42"));
+
+        assertThat(coercionService.coerce(value, double.class)).isEqualTo(42.0d);
+        assertThat(coercionService.coerce(value, Double.class)).isEqualTo(42.0d);
+        assertThat(coercionService.coerce(value, int.class)).isEqualTo(42);
+        assertThat(coercionService.coerce(value, Integer.class)).isEqualTo(42);
+        assertThat(coercionService.coerce(value, long.class)).isEqualTo(42L);
+        assertThat(coercionService.coerce(value, Long.class)).isEqualTo(42L);
+    }
 }

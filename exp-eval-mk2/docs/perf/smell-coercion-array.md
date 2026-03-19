@@ -78,3 +78,51 @@ Leitura dos dados:
 - `Comparable[]`: houve ganho forte de CPU ao trocar `Array.set(...)` por escrita direta em arrays de referência; a alocação permaneceu estável.
 
 Conclusão: o refactor deve ser mantido. O benchmark confirmou ganho real tanto nos tipos especializados quanto no principal caso do fallback genérico de referência.
+
+### Oportunidades remanescentes após `PERF-018` e `PERF-019`
+
+#### Oportunidade A — coerção escalar de `int` / `long` / `double` ainda passa pelo `conversionService` (Severidade: Medium)
+
+Embora `RuntimeCoercionService` já tenha `asInt`, `asLong` e `asDouble`, esses atalhos hoje são usados apenas no branch de arrays especializados. Para parâmetros escalares de função, `coerce(...)` ainda percorre o despacho genérico e pode cair em `convert(value.raw(), targetType)`.
+
+Isso é relevante porque `coerce(...)` é chamado para cada argumento de função, e o catálogo contém várias assinaturas com `int` e `double`, especialmente em `ExcelFinancialFunctions` e `DoubleExcelFinancialFunctions`.
+
+**Refactor candidato:**
+
+```java
+if (targetType == Double.class || targetType == double.class) {
+    return asDouble(value);
+}
+if (targetType == Integer.class || targetType == int.class) {
+    return asInt(value);
+}
+if (targetType == Long.class || targetType == long.class) {
+    return asLong(value);
+}
+```
+
+**Benchmark necessário?** Sim. Diferente do caso de arrays, isso afeta o caminho geral de argumentos escalares e precisa de validação com `performance-benchmark`.
+
+#### Oportunidade B — branch de `List` ainda usa `stream().map(...).toList()` (Severidade: Low)
+
+O trecho de coerção para `List` ainda cria pipeline de stream:
+
+```java
+if (List.class.isAssignableFrom(targetType) && value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements1)) {
+    return elements1.stream().map(RuntimeValue::raw).toList();
+}
+```
+
+Um loop imperativo com `ArrayList` pré-dimensionado reduziria overhead de pipeline e tornaria a alocação mais explícita.
+
+**Risco/observação:** a varredura atual do catálogo não mostrou funções públicas do módulo recebendo `List`/`Collection`, então isso parece um caminho frio no estado atual.
+
+**Benchmark necessário?** Não por enquanto. Só faz sentido se surgir um uso real desse branch.
+
+#### Oportunidade C — fallback reflexivo restante para primitivos não especializados (Severidade: Low)
+
+Depois dos fast paths atuais, o fallback reflexivo ficou restrito principalmente a arrays primitivos não especializados, como `boolean[]`, `short[]`, `byte[]`, `float[]` e `char[]`.
+
+No estado atual do módulo, a varredura dos catálogos não encontrou assinaturas públicas com esses tipos. Portanto, o custo residual existe em teoria, mas sem evidência de relevância prática hoje.
+
+**Benchmark necessário?** Não no momento. Reavaliar apenas se algum catálogo passar a expor esses tipos.

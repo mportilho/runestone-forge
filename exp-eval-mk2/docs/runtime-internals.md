@@ -75,18 +75,21 @@ coerce(RuntimeValue value, Class<?> targetType):
   2. value == NullValue                        → return null
   3. targetType.isInstance(value.raw())        → return value.raw() directly   ← Temporal works here
   4. targetType == BigDecimal.class            → asNumber(value)
-  5. targetType == Boolean / boolean           → asBoolean(value)
-  6. targetType == String                      → asString(value)
-  7. targetType == LocalDate                   → asDate(value)
-  8. targetType == LocalTime                   → asTime(value)
-  9. targetType == LocalDateTime               → asDateTime(value)
- 10. List.isAssignableFrom(targetType) && VectorValue → elements().stream().map(raw()).toList()
- 11. fallback: conversionService.convert(value.raw(), targetType)
+  5. targetType == Double / double             → asDouble(value)
+  6. targetType == Integer / int               → asInt(value)
+  7. targetType == Long / long                 → asLong(value)
+  8. targetType == Boolean / boolean           → asBoolean(value)
+  9. targetType == String                      → asString(value)
+ 10. targetType == LocalDate                   → asDate(value)
+ 11. targetType == LocalTime                   → asTime(value)
+ 12. targetType == LocalDateTime               → asDateTime(value)
+ 13. List.isAssignableFrom(targetType) && VectorValue → elements().stream().map(raw()).toList()
+ 14. fallback: conversionService.convert(value.raw(), targetType)
 ```
 
 Step 3 is why `DateTimeFunctions(Temporal, Temporal)` works: `Temporal.isInstance(LocalDate)` = true.
 
-Step 11 falls to `DefaultDataConversionService`, which has **no converter** for `List<RuntimeValue> → T[]`.
+Step 14 falls to `DefaultDataConversionService`, which has **no converter** for `List<RuntimeValue> → T[]`.
 
 ---
 

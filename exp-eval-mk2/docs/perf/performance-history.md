@@ -436,3 +436,30 @@ Cross-module comparison after Phase 6:
 **Decision:** ACCEPT
 **Reason:** The `Comparable[]` path improved by +84.66%, far above the 10% acceptance threshold, with stable allocation. This confirms that the remaining cost was primarily reflective dispatch on each store, not structural allocation. The change is low-risk because Java array store checks are still preserved by direct assignment to the covariant runtime array instance.
 **Notes:** Measurements used `RuntimeCoercionArrayBenchmark.coerceComparableArray` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, `-prof gc`) on JDK 21.0.6. Functional coverage passed via `mvn -q -pl exp-eval-mk2 -Dtest=RuntimeCoercionServiceTest,ComparableFunctionsExpressionTest test`. JSON evidence was saved to `/tmp/performance-benchmark/runtime-coercion-comparable-before.json` and `/tmp/performance-benchmark/runtime-coercion-comparable-after.json`, with comparison summary in `/tmp/performance-benchmark/runtime-coercion-comparable-comparison.md`.
+
+## PERF-020: Scalar numeric fast paths in `RuntimeCoercionService`
+
+**Date:** 2026-03-19
+
+**Scenario:** Measure the effect of adding direct scalar coercion branches for `double`/`Double`, `int`/`Integer`, and `long`/`Long` in `RuntimeCoercionService.coerce(...)`, instead of letting those targets fall through to `DataConversionService.convert(value.raw(), targetType)`.
+**Hypothesis:** Numeric scalar coercion is on the hot path for function arguments. Replacing the generic conversion-service dispatch with `asDouble`, `asInt`, and `asLong` should reduce `ns/op` materially and remove avoidable boxing/allocation, especially for `int` and `long` targets.
+
+**Technical baseline:** Branch `refac-springboot-4`, working tree after `PERF-019`, with a fresh JMH baseline captured before changing `RuntimeCoercionService`. The benchmark uses the production `RuntimeCoercionService` as the measured path in both sessions; the embedded `BaselineRuntimeCoercionService` remains only as an internal control for same-session comparisons.
+
+**Changes applied:**
+- `RuntimeCoercionService`: added scalar fast paths for `Double`/`double`, `Integer`/`int`, and `Long`/`long` immediately after the existing `BigDecimal` branch.
+- `RuntimeCoercionServiceTest`: added direct coverage for numeric scalar coercion to primitive and boxed numeric targets.
+- `RuntimeCoercionScalarBenchmarkSupport` and `RuntimeCoercionScalarBenchmark`: added a dedicated JMH benchmark for scalar coercion scenarios with GC profiling.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | Before (B/op) | After (B/op) |
+|-----------|---------------:|--------------:|----------------:|--------------:|-------------:|
+| `coerceDoublePrimitive` | 9.353 ± 0.287 | 6.349 ± 0.103 | +32.12% | 48.000 | 24.000 |
+| `coerceDoubleWrapper` | 30.568 ± 0.942 | 5.276 ± 0.093 | +82.74% | 48.000 | 24.000 |
+| `coerceIntPrimitive` | 8.375 ± 0.207 | 3.878 ± 0.101 | +53.69% | 24.000 | ≈ 0 |
+| `coerceIntWrapper` | 30.230 ± 0.226 | 4.146 ± 0.146 | +86.28% | 24.000 | ≈ 0 |
+| `coerceLongPrimitive` | 7.509 ± 0.101 | 4.640 ± 0.471 | +38.21% | 24.000 | ≈ 0 |
+| `coerceLongWrapper` | 29.573 ± 0.542 | 4.209 ± 0.091 | +85.77% | 24.000 | ≈ 0 |
+
+**Decision:** ACCEPT
+**Reason:** Every measured scalar scenario improved well above the 10% acceptance threshold, with average improvement of +63.14%. Allocation also dropped in every scenario. The strongest effect is on boxed `int`/`long` targets, where the optimization removed the conversion-service path entirely and reduced `B/op` to effectively zero under this benchmark.
+**Notes:** Measurements used `RuntimeCoercionScalarBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, `-prof gc`) on JDK 21.0.6. Relevant functional coverage passed via `mvn -q -pl exp-eval-mk2 -Dtest=RuntimeCoercionServiceTest test` before and after the change. JSON evidence was saved to `/tmp/performance-benchmark/runtime-coercion-scalar-before.json` and `/tmp/performance-benchmark/runtime-coercion-scalar-after.json`, with comparison summary in `/tmp/performance-benchmark/runtime-coercion-scalar-comparison.md`.
