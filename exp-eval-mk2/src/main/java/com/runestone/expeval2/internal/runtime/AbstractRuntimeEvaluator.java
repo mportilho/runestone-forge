@@ -8,9 +8,6 @@ import ch.obermuhlner.math.big.BigDecimalMath;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -55,11 +52,7 @@ abstract class AbstractRuntimeEvaluator<T> {
     private RuntimeValue evaluateExpression(ExecutableNode node, ExecutionScope scope) {
         return switch (node) {
             case ExecutableLiteral lit -> lit.precomputed();
-            case ExecutableDynamicLiteral dyn -> switch (dyn.kind()) {
-                case CURR_DATE -> new RuntimeValue.DateValue(LocalDate.now());
-                case CURR_TIME -> new RuntimeValue.TimeValue(LocalTime.now());
-                case CURR_DATETIME -> new RuntimeValue.DateTimeValue(LocalDateTime.now());
-            };
+            case ExecutableDynamicLiteral dyn -> scope.resolveDynamic(dyn.kind());
             case ExecutableIdentifier id -> scope.find(id.ref())
                     .orElseThrow(() -> new IllegalStateException("missing value for symbol '" + id.ref().name() + "'"));
             case ExecutableFunctionCall f -> evaluateFunctionCall(f, scope);

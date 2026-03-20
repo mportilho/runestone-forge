@@ -1,5 +1,9 @@
 package com.runestone.expeval2.internal.runtime;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -8,6 +12,7 @@ final class ExecutionScope {
 
     private final Map<SymbolRef, RuntimeValue> values;
     private final boolean mutable;
+    private final EnumMap<DynamicInstant, RuntimeValue> dynamicCache = new EnumMap<>(DynamicInstant.class);
 
     private ExecutionScope(Map<SymbolRef, RuntimeValue> values, boolean mutable) {
         this.values = Objects.requireNonNull(values, "values must not be null");
@@ -41,5 +46,13 @@ final class ExecutionScope {
             Objects.requireNonNull(symbolRef, "symbolRef must not be null"),
             Objects.requireNonNull(value, "value must not be null")
         );
+    }
+
+    RuntimeValue resolveDynamic(DynamicInstant kind) {
+        return dynamicCache.computeIfAbsent(Objects.requireNonNull(kind, "kind must not be null"), k -> switch (k) {
+            case CURR_DATE -> new RuntimeValue.DateValue(LocalDate.now());
+            case CURR_TIME -> new RuntimeValue.TimeValue(LocalTime.now());
+            case CURR_DATETIME -> new RuntimeValue.DateTimeValue(LocalDateTime.now());
+        });
     }
 }
