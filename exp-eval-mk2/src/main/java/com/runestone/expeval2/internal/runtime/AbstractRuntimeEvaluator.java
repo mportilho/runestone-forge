@@ -107,7 +107,7 @@ abstract class AbstractRuntimeEvaluator<T> {
         RuntimeValue result = runtimeValueFactory.from(rawResult, node.binding().returnType());
         if (audit != null) {
             audit.exitCall();
-            audit.record(new AuditEvent.FunctionCall(descriptor.name(), List.of(args), result.raw(), audit.callDepth()));
+            audit.record(new AuditEvent.FunctionCall(descriptor.name(), args, result.raw(), audit.callDepth()));
         }
         return result;
     }

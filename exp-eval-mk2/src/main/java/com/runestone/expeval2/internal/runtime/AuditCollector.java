@@ -5,6 +5,7 @@ import com.runestone.expeval2.api.ExpressionAuditTrace;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -12,12 +13,21 @@ import java.util.List;
  *
  * <p>Not thread-safe — expression evaluation is single-threaded per scope.
  * Create one instance per {@code computeWithAudit()} call and discard after {@link #buildTrace()}.
+ *
+ * <p>The {@code initialCapacity} parameter should be the maximum number of audit events that can
+ * be emitted by the expression (computed statically from the {@code ExecutionPlan} by
+ * {@link ExpressionRuntimeSupport}). Pre-sizing avoids ArrayList growth and the defensive
+ * {@code List.copyOf} in {@link #buildTrace()} is replaced by an unmodifiable wrapper.
  */
 final class AuditCollector {
 
     private final long startNanos = System.nanoTime();
-    private final List<AuditEvent> events = new ArrayList<>(16);
+    private final List<AuditEvent> events;
     private int callDepth = 0;
+
+    AuditCollector(int initialCapacity) {
+        this.events = new ArrayList<>(initialCapacity);
+    }
 
     void record(AuditEvent event) {
         events.add(event);
@@ -36,6 +46,6 @@ final class AuditCollector {
     }
 
     ExpressionAuditTrace buildTrace() {
-        return new ExpressionAuditTrace(List.copyOf(events), Duration.ofNanos(System.nanoTime() - startNanos));
+        return new ExpressionAuditTrace(Collections.unmodifiableList(events), Duration.ofNanos(System.nanoTime() - startNanos));
     }
 }

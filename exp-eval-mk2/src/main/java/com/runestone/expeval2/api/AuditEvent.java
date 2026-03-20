@@ -1,5 +1,6 @@
 package com.runestone.expeval2.api;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -38,16 +39,70 @@ public sealed interface AuditEvent permits
      * top-level call, 1 means called from within another function, and so on. This allows
      * reconstructing call hierarchies without a tree structure.
      *
-     * @param functionName name of the invoked function
-     * @param inputArgs    immutable snapshot of the coerced argument values
-     * @param result       raw return value of the function
-     * @param callDepth    nesting depth at call time (0 = top-level call)
+     * <p>Internally stores args as {@code Object[]} to avoid the {@code List.of(args)} allocation
+     * on the evaluation hot path. The immutable-list contract is fulfilled lazily in
+     * {@link #inputArgs()}, which is called only when the audit trace is read.
      */
-    record FunctionCall(String functionName, List<Object> inputArgs, Object result, int callDepth)
-            implements AuditEvent {
-        public FunctionCall {
-            Objects.requireNonNull(functionName, "functionName must not be null");
-            Objects.requireNonNull(inputArgs, "inputArgs must not be null");
+    final class FunctionCall implements AuditEvent {
+
+        private final String functionName;
+        private final Object[] inputArgs;
+        private final Object result;
+        private final int callDepth;
+
+        /**
+         * @param functionName name of the invoked function
+         * @param inputArgs    owned array of coerced argument values; caller must not mutate after passing
+         * @param result       raw return value of the function
+         * @param callDepth    nesting depth at call time (0 = top-level call)
+         */
+        public FunctionCall(String functionName, Object[] inputArgs, Object result, int callDepth) {
+            this.functionName = Objects.requireNonNull(functionName, "functionName must not be null");
+            this.inputArgs = Objects.requireNonNull(inputArgs, "inputArgs must not be null");
+            this.result = result;
+            this.callDepth = callDepth;
+        }
+
+        public String functionName() {
+            return functionName;
+        }
+
+        /**
+         * Returns an immutable snapshot of the coerced argument values.
+         *
+         * <p>Allocation is deferred to read time (off the evaluation hot path).
+         */
+        public List<Object> inputArgs() {
+            return List.copyOf(Arrays.asList(inputArgs));
+        }
+
+        public Object result() {
+            return result;
+        }
+
+        public int callDepth() {
+            return callDepth;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (!(obj instanceof FunctionCall other)) return false;
+            return callDepth == other.callDepth
+                    && functionName.equals(other.functionName)
+                    && Arrays.equals(inputArgs, other.inputArgs)
+                    && Objects.equals(result, other.result);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(functionName, Arrays.hashCode(inputArgs), result, callDepth);
+        }
+
+        @Override
+        public String toString() {
+            return "FunctionCall[functionName=%s, inputArgs=%s, result=%s, callDepth=%d]"
+                    .formatted(functionName, Arrays.toString(inputArgs), result, callDepth);
         }
     }
 

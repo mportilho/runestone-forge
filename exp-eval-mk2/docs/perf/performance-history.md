@@ -509,3 +509,57 @@ Cross-module comparison after Phase 6:
 **Decision:** ACCEPT
 **Reason:** Both measured scenarios improved well above the 10% threshold, and the allocation reduction is large in exactly the paths under review. The strongest signal is the mutable-list wrapping path, confirming that the main hotspot was the defensive copy on lists already owned by the runtime.
 **Notes:** Measurements used `VectorMaterializationBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, `-prof gc`) on JDK 21.0.6. The benchmark compares embedded baseline and optimized implementations in the same session; the production patch mirrors the optimized branch. Functional verification passed via `mvn -q -Dtest=RuntimeValueTest,RuntimeValueFactoryTest,RuntimeCoercionServiceTest,ComparableFunctionsExpressionTest,MathFunctionsExpressionTest,ExcelFinancialFunctionsExpressionTest test` and `mvn -q -DskipTests test-compile` in `exp-eval-mk2`. JSON evidence was saved to `/tmp/performance-benchmark/vector-materialization.json`.
+
+## PERF-023: Audit overhead — latency and allocation cost of `computeWithAudit()`
+
+**Date:** 2026-03-20
+
+**Scenario:** Measure the latency and allocation overhead of enabling audit collection (`computeWithAudit()`) compared to the plain `compute()` path across three representative expression profiles: variable-only reads (no assignments, no functions), a simple assignment, and repeated function calls.
+**Hypothesis:** Audit overhead is non-trivial because each `compute()` with audit creates an `AuditCollector`, allocates one record per event, calls `List.copyOf(events)` in `buildTrace()`, and allocates a wrapping `AuditResult`. Function calls add a further `List.of(args)` per invocation.
+
+| Benchmark | No Audit (ns/op) | With Audit (ns/op) | Overhead (%) | No Audit (B/op) | With Audit (B/op) | Alloc Δ (B/op) |
+|-----------|----------------:|-------------------:|-------------:|----------------:|------------------:|---------------:|
+| variableChurn | 713.507 ± 29.4 | 893.541 ± 41.5 | +25.24% | 1,064 | 1,840 | +776 |
+| assignedVariable | 802.702 ± 69.4 | 1,013.343 ± 71.2 | +26.25% | 1,528 | 2,240 | +712 |
+| userFunction | 802.260 ± 9.9 | 1,009.243 ± 30.1 | +25.79% | 904 | 1,936 | +1,032 |
+
+**Decision:** ADJUST (characterisation — no code change)
+**Reason:** The audit path imposes a consistent ~25% latency overhead and 712–1,032 B/op of additional allocation depending on event count. No change was applied. The results establish the audit cost baseline and identify two improvement candidates for future sessions:
+
+1. **`List.of(args)` per function-call audit event** (`evaluateFunctionCall` in `AbstractRuntimeEvaluator`): the existing `Object[]` is discarded and re-wrapped in `List.of(args)` for each `FunctionCall` record. The +256 B/op gap between `userFunction` (4 calls × 3 args) and `variableChurn` isolates this as ~64 B/op per function invocation with audit enabled. Storing `Object[]` directly in `FunctionCall` would eliminate these copies.
+2. **`AuditCollector` fixed-overhead per `compute()`**: the collector's `ArrayList<>(16)`, `List.copyOf(events)` in `buildTrace()`, `Duration.ofNanos(...)`, and the `AuditResult` wrapper together account for the ~776 B/op minimum per call even with only variable-read events.
+
+**Notes:** Measurements used `AuditOverheadBenchmark` (new) with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, `-prof gc`) on JDK 21.0.10. Functional tests passed (199 tests) via `mvn -q -pl exp-eval-mk2 test` before measurement. JSON evidence saved to `/tmp/performance-benchmark/audit-overhead.json`.
+
+## PERF-024: Reduce allocation on the `computeWithAudit()` hot path
+
+**Date:** 2026-03-20
+
+**Scenario:** Apply two targeted allocation-reduction changes on the audit collection path identified in PERF-023: (1) eliminate `List.of(args)` per function-call event by converting `AuditEvent.FunctionCall` from a record to a final class that stores `Object[]` and defers the `List.copyOf` to the `inputArgs()` accessor (off the hot path); (2) replace `new ArrayList<>(16)` with a pre-sized `new ArrayList<>(maxAuditEvents)` in `AuditCollector` — where `maxAuditEvents` is computed statically from the `ExecutionPlan` once at compilation — and replace `List.copyOf(events)` in `buildTrace()` with `Collections.unmodifiableList(events)`.
+**Hypothesis:** The combined changes would reduce `B/op` by approximately 256 B/op (four `List.of` calls for `userFunction`) + ~128 B/op (`List.copyOf` of N events) and produce a proportional latency improvement on the `WithAudit` paths, without affecting the `compute()` (non-audit) paths.
+
+**Changes applied:**
+- `AuditEvent.FunctionCall`: converted from `record` to `final class`; stores `Object[]` internally; `inputArgs()` accessor calls `List.copyOf(Arrays.asList(inputArgs))` lazily (off hot path); `equals`/`hashCode`/`toString` use `Arrays` comparisons.
+- `AbstractRuntimeEvaluator.evaluateFunctionCall(...)`: removed `List.of(args)`; passes the existing `Object[] args` directly to the `FunctionCall` constructor.
+- `AuditCollector`: replaced `new ArrayList<>(16)` with `new ArrayList<>(initialCapacity)` received via constructor; replaced `List.copyOf(events)` in `buildTrace()` with `Collections.unmodifiableList(events)`.
+- `ExpressionRuntimeSupport`: added `maxAuditEvents` final field computed once at construction via `countMaxAuditEvents(executionPlan)` + `countNodeEvents(node)` static helpers; passed to `new AuditCollector(maxAuditEvents)` in both `computeMathWithAudit()` and `computeLogicalWithAudit()`.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | Before (B/op) | After (B/op) | Alloc Δ (B/op) |
+|-----------|---------------:|--------------:|----------------:|--------------:|-------------:|---------------:|
+| variableChurnWithAudit | 893.541 ± 41.5 | 857.575 ± 38.8 | +4.02% | 1,840 | 1,680 | −160 |
+| assignedVariableWithAudit | 1,013.343 ± 71.2 | 972.170 ± 70.7 | +4.06% | 2,240 | 2,088 | −152 |
+| userFunctionWithAudit | 1,009.243 ± 30.1 | 954.282 ± 35.9 | +5.45% | 1,936 | 1,552 | −384 |
+| variableChurnNoAudit | 713.507 ± 29.4 | 670.101 ± 27.0 | — (noise) | 1,064 | 1,064 | 0 |
+| assignedVariableNoAudit | 802.702 ± 69.4 | 817.190 ± 22.0 | — (noise) | 1,528 | 1,528 | 0 |
+| userFunctionNoAudit | 802.260 ± 9.9 | 812.930 ± 37.9 | — (noise) | 904 | 904 | 0 |
+
+The `noAudit` variance (−1.8% to +6.1%) is measurement noise — the non-audit code path was not modified.
+
+**Allocation decomposition:**
+- `userFunctionWithAudit` −384 B/op = ~256 B eliminated by removing `List.of(args)` for 4 function calls + ~128 B from `Collections.unmodifiableList` replacing `List.copyOf` for 16 events.
+- `variableChurnWithAudit` −160 B/op = ~128 B from `List.copyOf` elimination (14 events) + ~32 B from tighter ArrayList backing array (14 instead of 16 initial capacity).
+- `assignedVariableWithAudit` −152 B/op = same `List.copyOf` elimination + pre-sizing savings.
+
+**Decision:** ACCEPT
+**Reason:** All `WithAudit` paths improved in both latency (+4–5.5%) and allocation (−6.8% to −19.8% B/op). The `userFunction` path — the heaviest function-call scenario — shows the largest allocation reduction (−19.8%). Latency gains are below the 10% threshold but consistent across all three scenarios and paired with significant allocation reduction; per the 1–10% policy with low risk, the change is worth keeping. The `noAudit` paths are unaffected (zero allocation change; latency deltas are within noise).
+**Notes:** Measurements used `AuditOverheadBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, `-prof gc`) on JDK 21.0.10. Functional tests (199) passed via `mvn -q -pl exp-eval-mk2 test` before and after the change. JSON evidence saved to `/tmp/performance-benchmark/audit-overhead-after.json`; comparison in `/tmp/performance-benchmark/audit-overhead-comparison.md`.

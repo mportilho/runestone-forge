@@ -19,6 +19,7 @@ public final class ExpressionRuntimeSupport {
     private final MathEvaluator mathEvaluator;
     private final LogicalEvaluator logicalEvaluator;
     private final boolean hasAssignments;
+    private final int maxAuditEvents;
 
     private ExpressionRuntimeSupport(CompiledExpression compiledExpression, MutableBindings bindings,
                                      RuntimeValueFactory runtimeValueFactory, RuntimeCoercionService runtimeCoercionService,
@@ -31,6 +32,7 @@ public final class ExpressionRuntimeSupport {
         this.mathEvaluator = new MathEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService, mathContext);
         this.logicalEvaluator = new LogicalEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService, mathContext);
         this.hasAssignments = !compiledExpression.executionPlan().assignments().isEmpty();
+        this.maxAuditEvents = countMaxAuditEvents(compiledExpression.executionPlan());
     }
 
     public static ExpressionRuntimeSupport compileMath(String source, ExpressionEnvironment environment) {
@@ -100,15 +102,62 @@ public final class ExpressionRuntimeSupport {
     }
 
     public AuditResult<BigDecimal> computeMathWithAudit() {
-        AuditCollector collector = new AuditCollector();
+        AuditCollector collector = new AuditCollector(maxAuditEvents);
         BigDecimal result = mathEvaluator.evaluate(createAuditedExecutionScope(collector));
         return new AuditResult<>(result, collector.buildTrace());
     }
 
     public AuditResult<Boolean> computeLogicalWithAudit() {
-        AuditCollector collector = new AuditCollector();
+        AuditCollector collector = new AuditCollector(maxAuditEvents);
         boolean result = logicalEvaluator.evaluate(createAuditedExecutionScope(collector));
         return new AuditResult<>(result, collector.buildTrace());
+    }
+
+    private static int countMaxAuditEvents(ExecutionPlan plan) {
+        int count = 0;
+        for (ExecutableAssignment assignment : plan.assignments()) {
+            count += switch (assignment) {
+                case ExecutableSimpleAssignment s -> 1 + countNodeEvents(s.value());
+                case ExecutableDestructuringAssignment d -> d.targets().size() + countNodeEvents(d.value());
+            };
+        }
+        return count + countNodeEvents(plan.resultExpression());
+    }
+
+    private static int countNodeEvents(ExecutableNode node) {
+        return switch (node) {
+            case ExecutableLiteral ignored -> 0;
+            case ExecutableDynamicLiteral ignored -> 1;
+            case ExecutableIdentifier ignored -> 1;
+            case ExecutableFunctionCall f -> {
+                int sum = 1;
+                for (ExecutableNode arg : f.arguments()) {
+                    sum += countNodeEvents(arg);
+                }
+                yield sum;
+            }
+            case ExecutableBinaryOp b -> countNodeEvents(b.left()) + countNodeEvents(b.right());
+            case ExecutableUnaryOp u -> countNodeEvents(u.operand());
+            case ExecutablePostfixOp p -> countNodeEvents(p.operand());
+            case ExecutableConditional c -> {
+                // Upper bound: count all branches; only one condition+result path runs at runtime.
+                int sum = 0;
+                for (ExecutableNode cond : c.conditions()) {
+                    sum += countNodeEvents(cond);
+                }
+                for (ExecutableNode res : c.results()) {
+                    sum += countNodeEvents(res);
+                }
+                yield sum + countNodeEvents(c.elseExpression());
+            }
+            case ExecutableVectorLiteral v -> {
+                int sum = 0;
+                for (ExecutableNode el : v.elements()) {
+                    sum += countNodeEvents(el);
+                }
+                yield sum;
+            }
+        };
     }
 
     public CompiledExpression getCompiledExpression() {
