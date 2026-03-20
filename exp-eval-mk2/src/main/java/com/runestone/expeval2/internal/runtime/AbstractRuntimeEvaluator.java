@@ -1,10 +1,9 @@
 package com.runestone.expeval2.internal.runtime;
 
+import ch.obermuhlner.math.big.BigDecimalMath;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
 import com.runestone.expeval2.internal.ast.BinaryOperator;
 import com.runestone.expeval2.types.ScalarType;
-
-import ch.obermuhlner.math.big.BigDecimalMath;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -40,8 +39,7 @@ abstract class AbstractRuntimeEvaluator<T> {
 
     private void executeAssignment(ExecutableAssignment assignment, ExecutionScope scope) {
         switch (assignment) {
-            case ExecutableSimpleAssignment s ->
-                    scope.assign(s.target(), evaluateExpression(s.value(), scope));
+            case ExecutableSimpleAssignment s -> scope.assign(s.target(), evaluateExpression(s.value(), scope));
             case ExecutableDestructuringAssignment d -> {
                 List<RuntimeValue> values = runtimeCoercionService.asVector(evaluateExpression(d.value(), scope));
                 for (int index = 0; index < d.targets().size(); index++) {
@@ -186,23 +184,29 @@ abstract class AbstractRuntimeEvaluator<T> {
     }
 
     private boolean compareEquality(RuntimeValue left, RuntimeValue right) {
+        if (left instanceof RuntimeValue.NullValue || right instanceof RuntimeValue.NullValue) {
+            return left instanceof RuntimeValue.NullValue && right instanceof RuntimeValue.NullValue;
+        }
         if (left.type() == ScalarType.NUMBER || right.type() == ScalarType.NUMBER) {
             return runtimeCoercionService.asNumber(left).compareTo(runtimeCoercionService.asNumber(right)) == 0;
+        }
+        if (left instanceof RuntimeValue.VectorValue(List<RuntimeValue> leftElements)
+            && right instanceof RuntimeValue.VectorValue(List<RuntimeValue> rightElements)) {
+            if (leftElements.size() != rightElements.size()) {
+                return false;
+            }
+            for (int i = 0; i < leftElements.size(); i++) {
+                if (!compareEquality(leftElements.get(i), rightElements.get(i))) {
+                    return false;
+                }
+            }
+            return true;
         }
         return Objects.equals(left.raw(), right.raw());
     }
 
     private BigDecimal factorial(BigDecimal value) {
-        BigDecimal normalized = value.stripTrailingZeros();
-        int intValue = normalized.intValueExact();
-        if (intValue < 0) {
-            throw new IllegalStateException("factorial requires a non-negative integer");
-        }
-        BigDecimal result = BigDecimal.ONE;
-        for (int factor = 2; factor <= intValue; factor++) {
-            result = result.multiply(BigDecimal.valueOf(factor));
-        }
-        return result;
+        return BigDecimalMath.factorial(value, mathContext);
     }
 
     private BigDecimal pow(BigDecimal base, BigDecimal exponent) {

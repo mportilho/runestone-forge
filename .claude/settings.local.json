@@ -29,7 +29,10 @@
       "Bash(/home/marcelo/udev/git/runestone-forge/exp-eval-mk2/docs/perf/performance-history.md:*)",
       "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"CrossModuleExpressionEngineBenchmark\" \"target/performance-benchmark/phase7-before.json\")",
       "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"CrossModuleExpressionEngineBenchmark\" \"target/performance-benchmark/phase7-after.json\")",
-      "Bash(find /home/marcelo/udev/git/runestone-forge -name *Benchmark* -o -name *JMH*)"
+      "Bash(find /home/marcelo/udev/git/runestone-forge -name *Benchmark* -o -name *JMH*)",
+      "Bash(git:*)",
+      "Bash(bash $SKILL_SCRIPTS/run-jmh.sh /tmp/perf-before/exp-eval-mk2 \"MathFunctionsBenchmark\" \"/tmp/performance-benchmark/mathfunctions-before.json\")",
+      "Bash(bash $SKILL_SCRIPTS/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"MathFunctionsBenchmark\" \"/tmp/performance-benchmark/mathfunctions-after.json\")"
     ]
   }
 }

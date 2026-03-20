@@ -6,6 +6,7 @@ import com.runestone.expeval2.types.ScalarType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -127,6 +128,45 @@ class ExpressionFacadeTest {
         boolean result = LogicalExpression.compile("true nor alwaysFails()", environment).compute();
 
         assertThat(result).isFalse();
+    }
+
+    @Test
+    void shouldHandleNullEquality() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
+        boolean result = LogicalExpression.compile("x = 1", environment)
+            .setValue("x", null)
+            .compute();
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    void shouldHandleNullSelfEquality() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
+        boolean result = LogicalExpression.compile("x = y", environment)
+            .setValue("x", null)
+            .setValue("y", null)
+            .compute();
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    void shouldHandleVectorEqualityWithDifferentScales() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
+        boolean result = LogicalExpression.compile("x = y", environment)
+            .setValue("x", List.of(new BigDecimal("1")))
+            .setValue("y", List.of(new BigDecimal("1.0")))
+            .compute();
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    void shouldHandleVectorEqualityWithNull() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
+        boolean result = LogicalExpression.compile("x = y", environment)
+            .setValue("x", java.util.Arrays.asList(null, new BigDecimal("1")))
+            .setValue("y", java.util.Arrays.asList(null, new BigDecimal("1.0")))
+            .compute();
+        assertThat(result).isTrue();
     }
 
     public static final class FunctionFixture {
