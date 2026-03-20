@@ -80,8 +80,8 @@ final class RuntimeCoercionService {
 
     public List<RuntimeValue> asVector(RuntimeValue value) {
         Objects.requireNonNull(value, "value must not be null");
-        if (value instanceof RuntimeValue.VectorValue vectorValue) {
-            return vectorValue.elements();
+        if (value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements)) {
+            return elements;
         }
         throw new IllegalStateException("cannot coerce " + value.type() + " to vector");
     }
@@ -125,8 +125,7 @@ final class RuntimeCoercionService {
         if (targetType == LocalDateTime.class) {
             return asDateTime(value);
         }
-        if (value instanceof RuntimeValue.VectorValue vectorValue) {
-            List<RuntimeValue> elements = vectorValue.elements();
+        if (value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements)) {
             if (List.class.isAssignableFrom(targetType)) {
                 return elements.stream().map(RuntimeValue::raw).toList();
             }

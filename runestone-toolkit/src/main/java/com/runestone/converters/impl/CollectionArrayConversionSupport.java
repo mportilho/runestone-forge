@@ -60,8 +60,7 @@ final class CollectionArrayConversionSupport {
         return (T) convertCollectionElementsToArray(collection, componentType, conversionService);
     }
 
-    private static Object convertRandomAccessListToArray(List<?> source, Class<?> componentType,
-                                                         DataConversionService conversionService) {
+    private static Object convertRandomAccessListToArray(List<?> source, Class<?> componentType, DataConversionService conversionService) {
         int size = source.size();
         if (componentType == int.class) {
             int[] array = new int[size];
