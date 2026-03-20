@@ -12,15 +12,17 @@ final class ExecutionScope {
 
     private final Map<SymbolRef, RuntimeValue> values;
     private final boolean mutable;
+    private final AuditCollector audit;
     private EnumMap<DynamicInstant, RuntimeValue> dynamicCache;
 
-    private ExecutionScope(Map<SymbolRef, RuntimeValue> values, boolean mutable) {
+    private ExecutionScope(Map<SymbolRef, RuntimeValue> values, boolean mutable, AuditCollector audit) {
         this.values = Objects.requireNonNull(values, "values must not be null");
         this.mutable = mutable;
+        this.audit = audit;
     }
 
     static ExecutionScope fromIsolated(Map<SymbolRef, RuntimeValue> freshValues) {
-        return new ExecutionScope(Objects.requireNonNull(freshValues, "freshValues must not be null"), true);
+        return new ExecutionScope(Objects.requireNonNull(freshValues, "freshValues must not be null"), true, null);
     }
 
     /**
@@ -30,7 +32,31 @@ final class ExecutionScope {
      * returned scope throws {@link IllegalStateException}.
      */
     static ExecutionScope readOnly(Map<SymbolRef, RuntimeValue> sharedValues) {
-        return new ExecutionScope(Objects.requireNonNull(sharedValues, "sharedValues must not be null"), false);
+        return new ExecutionScope(Objects.requireNonNull(sharedValues, "sharedValues must not be null"), false, null);
+    }
+
+    static ExecutionScope fromIsolatedWithAudit(Map<SymbolRef, RuntimeValue> freshValues, AuditCollector audit) {
+        return new ExecutionScope(
+                Objects.requireNonNull(freshValues, "freshValues must not be null"),
+                true,
+                Objects.requireNonNull(audit, "audit must not be null")
+        );
+    }
+
+    static ExecutionScope readOnlyWithAudit(Map<SymbolRef, RuntimeValue> sharedValues, AuditCollector audit) {
+        return new ExecutionScope(
+                Objects.requireNonNull(sharedValues, "sharedValues must not be null"),
+                false,
+                Objects.requireNonNull(audit, "audit must not be null")
+        );
+    }
+
+    boolean hasAudit() {
+        return audit != null;
+    }
+
+    AuditCollector audit() {
+        return audit;
     }
 
     public Optional<RuntimeValue> find(SymbolRef symbolRef) {

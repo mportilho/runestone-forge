@@ -1,6 +1,7 @@
 package com.runestone.expeval2.internal.runtime;
 
 import ch.obermuhlner.math.big.BigDecimalMath;
+import com.runestone.expeval2.api.AuditEvent;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
 import com.runestone.expeval2.internal.ast.BinaryOperator;
 import com.runestone.expeval2.types.ScalarType;
@@ -39,12 +40,25 @@ abstract class AbstractRuntimeEvaluator<T> {
 
     private void executeAssignment(ExecutableAssignment assignment, ExecutionScope scope) {
         switch (assignment) {
-            case ExecutableSimpleAssignment s -> scope.assign(s.target(), evaluateExpression(s.value(), scope));
+            case ExecutableSimpleAssignment s -> {
+                RuntimeValue value = evaluateExpression(s.value(), scope);
+                scope.assign(s.target(), value);
+                AuditCollector simpleAudit = scope.audit();
+                if (simpleAudit != null) {
+                    simpleAudit.record(new AuditEvent.AssignmentEvent(s.target().name(), value.raw()));
+                }
+            }
             case ExecutableDestructuringAssignment d -> {
                 List<RuntimeValue> values = runtimeCoercionService.asVector(evaluateExpression(d.value(), scope));
-                for (int index = 0; index < d.targets().size(); index++) {
+                AuditCollector destructAudit = scope.audit();
+                List<SymbolRef> targets = d.targets();
+                for (int index = 0; index < targets.size(); index++) {
+                    SymbolRef target = targets.get(index);
                     RuntimeValue value = index < values.size() ? values.get(index) : RuntimeValue.NullValue.INSTANCE;
-                    scope.assign(d.targets().get(index), value);
+                    scope.assign(target, value);
+                    if (destructAudit != null) {
+                        destructAudit.record(new AuditEvent.AssignmentEvent(target.name(), value.raw()));
+                    }
                 }
             }
         }
@@ -53,9 +67,23 @@ abstract class AbstractRuntimeEvaluator<T> {
     private RuntimeValue evaluateExpression(ExecutableNode node, ExecutionScope scope) {
         return switch (node) {
             case ExecutableLiteral lit -> lit.precomputed();
-            case ExecutableDynamicLiteral dyn -> scope.resolveDynamic(dyn.kind());
-            case ExecutableIdentifier id -> scope.find(id.ref())
-                    .orElseThrow(() -> new IllegalStateException("missing value for symbol '" + id.ref().name() + "'"));
+            case ExecutableDynamicLiteral dyn -> {
+                RuntimeValue dynValue = scope.resolveDynamic(dyn.kind());
+                AuditCollector dynAudit = scope.audit();
+                if (dynAudit != null) {
+                    dynAudit.record(new AuditEvent.VariableRead(dyn.kind().canonicalName(), true, dynValue.raw()));
+                }
+                yield dynValue;
+            }
+            case ExecutableIdentifier id -> {
+                RuntimeValue idValue = scope.find(id.ref())
+                        .orElseThrow(() -> new IllegalStateException("missing value for symbol '" + id.ref().name() + "'"));
+                AuditCollector idAudit = scope.audit();
+                if (idAudit != null) {
+                    idAudit.record(new AuditEvent.VariableRead(id.ref().name(), false, idValue.raw()));
+                }
+                yield idValue;
+            }
             case ExecutableFunctionCall f -> evaluateFunctionCall(f, scope);
             case ExecutableConditional c -> evaluateConditional(c, scope);
             case ExecutableUnaryOp u -> evaluateUnary(u, scope);
@@ -73,8 +101,15 @@ abstract class AbstractRuntimeEvaluator<T> {
             RuntimeValue evaluated = evaluateExpression(node.arguments().get(i), scope);
             args[i] = runtimeCoercionService.coerce(evaluated, descriptor.parameterTypes().get(i));
         }
+        AuditCollector audit = scope.audit();
+        if (audit != null) audit.enterCall();
         Object rawResult = descriptor.invoke(args);
-        return runtimeValueFactory.from(rawResult, node.binding().returnType());
+        RuntimeValue result = runtimeValueFactory.from(rawResult, node.binding().returnType());
+        if (audit != null) {
+            audit.exitCall();
+            audit.record(new AuditEvent.FunctionCall(descriptor.name(), List.of(args), result.raw(), audit.callDepth()));
+        }
+        return result;
     }
 
     private RuntimeValue evaluateConditional(ExecutableConditional node, ExecutionScope scope) {

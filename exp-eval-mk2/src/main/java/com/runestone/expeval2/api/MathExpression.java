@@ -31,4 +31,8 @@ public final class MathExpression {
     public BigDecimal compute() {
         return runtime.computeMath();
     }
+
+    public AuditResult<BigDecimal> computeWithAudit() {
+        return runtime.computeMathWithAudit();
+    }
 }

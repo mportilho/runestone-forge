@@ -1,5 +1,6 @@
 package com.runestone.expeval2.internal.runtime;
 
+import com.runestone.expeval2.api.AuditResult;
 import com.runestone.expeval2.api.CompilationIssue;
 import com.runestone.expeval2.api.ExpressionCompilationException;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
@@ -83,12 +84,31 @@ public final class ExpressionRuntimeSupport {
         return ExecutionScope.readOnly(bindings.valuesReadOnly());
     }
 
+    private ExecutionScope createAuditedExecutionScope(AuditCollector collector) {
+        if (hasAssignments) {
+            return ExecutionScope.fromIsolatedWithAudit(bindings.copyValues(), collector);
+        }
+        return ExecutionScope.readOnlyWithAudit(bindings.valuesReadOnly(), collector);
+    }
+
     public BigDecimal computeMath() {
         return mathEvaluator.evaluate(createExecutionScope());
     }
 
     public boolean computeLogical() {
         return logicalEvaluator.evaluate(createExecutionScope());
+    }
+
+    public AuditResult<BigDecimal> computeMathWithAudit() {
+        AuditCollector collector = new AuditCollector();
+        BigDecimal result = mathEvaluator.evaluate(createAuditedExecutionScope(collector));
+        return new AuditResult<>(result, collector.buildTrace());
+    }
+
+    public AuditResult<Boolean> computeLogicalWithAudit() {
+        AuditCollector collector = new AuditCollector();
+        boolean result = logicalEvaluator.evaluate(createAuditedExecutionScope(collector));
+        return new AuditResult<>(result, collector.buildTrace());
     }
 
     public CompiledExpression getCompiledExpression() {

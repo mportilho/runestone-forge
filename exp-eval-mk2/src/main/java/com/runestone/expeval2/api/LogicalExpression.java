@@ -30,4 +30,8 @@ public final class LogicalExpression {
     public boolean compute() {
         return runtime.computeLogical();
     }
+
+    public AuditResult<Boolean> computeWithAudit() {
+        return runtime.computeLogicalWithAudit();
+    }
 }
