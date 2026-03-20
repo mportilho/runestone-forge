@@ -1,4 +1,4 @@
-package com.runestone.expeval.support.functions.others;
+package com.runestone.expeval2.catalog.functions;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("DateTimeFunctions Tests")
-class TestDateTimeFunctions {
+class DateTimeFunctionsTest {
 
     private final LocalDateTime baseDateTime = LocalDateTime.of(2023, 5, 15, 10, 30, 45);
 

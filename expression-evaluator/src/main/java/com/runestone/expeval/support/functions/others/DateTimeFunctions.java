@@ -24,6 +24,8 @@
 
 package com.runestone.expeval.support.functions.others;
 
+import java.time.LocalTime;
+import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.Temporal;
 
@@ -98,6 +100,86 @@ public class DateTimeFunctions {
      */
     public static Long yearsBetween(Temporal t1, Temporal t2) {
         return ChronoUnit.YEARS.between(t1, t2);
+    }
+
+    public static Temporal setDay(Temporal temporal, long day) {
+        return temporal.with(ChronoField.DAY_OF_MONTH, day);
+    }
+
+    public static Temporal setMonth(Temporal temporal, long month) {
+        return temporal.with(ChronoField.MONTH_OF_YEAR, month);
+    }
+
+    public static Temporal setYear(Temporal temporal, long year) {
+        return temporal.with(ChronoField.YEAR, year);
+    }
+
+    public static Temporal setHours(Temporal temporal, long hour) {
+        return temporal.with(ChronoField.HOUR_OF_DAY, hour);
+    }
+
+    public static Temporal setMinutes(Temporal temporal, long minute) {
+        return temporal.with(ChronoField.MINUTE_OF_HOUR, minute);
+    }
+
+    public static Temporal setSeconds(Temporal temporal, long second) {
+        return temporal.with(ChronoField.SECOND_OF_MINUTE, second);
+    }
+
+    public static Temporal setMidnight(Temporal temporal) {
+        return temporal.with(LocalTime.MIDNIGHT);
+    }
+
+    public static Temporal setMidday(Temporal temporal) {
+        return temporal.with(LocalTime.NOON);
+    }
+
+    public static Temporal addDay(Temporal temporal, long amount) {
+        return temporal.plus(amount, ChronoUnit.DAYS);
+    }
+
+    public static Temporal addMonth(Temporal temporal, long amount) {
+        return temporal.plus(amount, ChronoUnit.MONTHS);
+    }
+
+    public static Temporal addYear(Temporal temporal, long amount) {
+        return temporal.plus(amount, ChronoUnit.YEARS);
+    }
+
+    public static Temporal addHours(Temporal temporal, long amount) {
+        return temporal.plus(amount, ChronoUnit.HOURS);
+    }
+
+    public static Temporal addMinutes(Temporal temporal, long amount) {
+        return temporal.plus(amount, ChronoUnit.MINUTES);
+    }
+
+    public static Temporal addSeconds(Temporal temporal, long amount) {
+        return temporal.plus(amount, ChronoUnit.SECONDS);
+    }
+
+    public static Temporal subDay(Temporal temporal, long amount) {
+        return temporal.minus(amount, ChronoUnit.DAYS);
+    }
+
+    public static Temporal subMonth(Temporal temporal, long amount) {
+        return temporal.minus(amount, ChronoUnit.MONTHS);
+    }
+
+    public static Temporal subYear(Temporal temporal, long amount) {
+        return temporal.minus(amount, ChronoUnit.YEARS);
+    }
+
+    public static Temporal subHours(Temporal temporal, long amount) {
+        return temporal.minus(amount, ChronoUnit.HOURS);
+    }
+
+    public static Temporal subMinutes(Temporal temporal, long amount) {
+        return temporal.minus(amount, ChronoUnit.MINUTES);
+    }
+
+    public static Temporal subSeconds(Temporal temporal, long amount) {
+        return temporal.minus(amount, ChronoUnit.SECONDS);
     }
 
 }
