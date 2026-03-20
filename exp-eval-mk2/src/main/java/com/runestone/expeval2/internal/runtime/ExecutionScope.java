@@ -12,7 +12,7 @@ final class ExecutionScope {
 
     private final Map<SymbolRef, RuntimeValue> values;
     private final boolean mutable;
-    private final EnumMap<DynamicInstant, RuntimeValue> dynamicCache = new EnumMap<>(DynamicInstant.class);
+    private EnumMap<DynamicInstant, RuntimeValue> dynamicCache;
 
     private ExecutionScope(Map<SymbolRef, RuntimeValue> values, boolean mutable) {
         this.values = Objects.requireNonNull(values, "values must not be null");
@@ -43,12 +43,15 @@ final class ExecutionScope {
             throw new IllegalStateException("assign() is not allowed on a read-only ExecutionScope");
         }
         values.put(
-            Objects.requireNonNull(symbolRef, "symbolRef must not be null"),
-            Objects.requireNonNull(value, "value must not be null")
+                Objects.requireNonNull(symbolRef, "symbolRef must not be null"),
+                Objects.requireNonNull(value, "value must not be null")
         );
     }
 
     RuntimeValue resolveDynamic(DynamicInstant kind) {
+        if (dynamicCache == null) {
+            dynamicCache = new EnumMap<>(DynamicInstant.class);
+        }
         return dynamicCache.computeIfAbsent(Objects.requireNonNull(kind, "kind must not be null"), k -> switch (k) {
             case CURR_DATE -> new RuntimeValue.DateValue(LocalDate.now());
             case CURR_TIME -> new RuntimeValue.TimeValue(LocalTime.now());
