@@ -41,7 +41,6 @@ import static java.math.RoundingMode.HALF_EVEN;
  */
 public class MathFunctions {
 
-    private static final MathContext MC = MathContext.DECIMAL128;
     private static final int KAHAN_THRESHOLD = 1000;
 
     /**
@@ -50,7 +49,7 @@ public class MathFunctions {
      * @param p Array of values
      * @return mean value
      */
-    public static BigDecimal mean(BigDecimal[] p) {
+    public static BigDecimal mean(MathContext mc, BigDecimal[] p) {
         int n = p.length;
         if (n == 0) {
             throw new ArithmeticException("Empty array");
@@ -59,18 +58,18 @@ public class MathFunctions {
         if (n == 1) {
             return p[0];
         } else if (n == 2) {
-            return p[0].add(p[1]).divide(size, MC);
+            return p[0].add(p[1]).divide(size, mc);
         }
 
         if (n >= KAHAN_THRESHOLD) {
-            return valueOf(KahanSummation.sum(p)).divide(size, MC);
+            return valueOf(KahanSummation.sum(p)).divide(size, mc);
         }
 
         BigDecimal sum = ZERO;
         for (BigDecimal param : p) {
             sum = sum.add(param);
         }
-        return sum.divide(size, MC);
+        return sum.divide(size, mc);
     }
 
     /**
@@ -79,7 +78,7 @@ public class MathFunctions {
      * @param p Array of values
      * @return geometric mean value
      */
-    public static BigDecimal geometricMean(BigDecimal[] p) {
+    public static BigDecimal geometricMean(MathContext mc, BigDecimal[] p) {
         int n = p.length;
         if (n == 0) {
             throw new ArithmeticException("Empty array");
@@ -87,9 +86,9 @@ public class MathFunctions {
         BigDecimal size = valueOf(n);
         BigDecimal x = ONE;
         for (BigDecimal param : p) {
-            x = x.multiply(param, MC);
+            x = x.multiply(param, mc);
         }
-        return BigDecimalMath.root(x, size, MC);
+        return BigDecimalMath.root(x, size, mc);
     }
 
     /**
@@ -98,14 +97,14 @@ public class MathFunctions {
      * @param p Array of values
      * @return harmonic mean value
      */
-    public static BigDecimal harmonicMean(BigDecimal[] p) {
+    public static BigDecimal harmonicMean(MathContext mc, BigDecimal[] p) {
         int n = p.length;
         BigDecimal size = valueOf(n);
         BigDecimal x = ZERO;
         for (BigDecimal param : p) {
-            x = x.add(ONE.divide(param, MC), MC);
+            x = x.add(ONE.divide(param, mc), mc);
         }
-        return size.divide(x, MC);
+        return size.divide(x, mc);
     }
 
     /**
@@ -115,7 +114,7 @@ public class MathFunctions {
      * @param type Value 0: Population Standard Deviation; Value 1: Sample Standard Deviation
      * @return variance
      */
-    public static BigDecimal variance(BigDecimal[] p, int type) {
+    public static BigDecimal variance(MathContext mc, BigDecimal[] p, int type) {
         int n = p.length;
         if (n == 0) {
             throw new ArithmeticException("Empty array");
@@ -147,20 +146,20 @@ public class MathFunctions {
 
             BigDecimal bdSum = valueOf(sum);
             BigDecimal bdSumSquares = valueOf(sumSquares);
-            BigDecimal mean = bdSum.divide(size, MC);
-            BigDecimal numerator = bdSumSquares.subtract(bdSum.multiply(mean, MC), MC);
-            return numerator.divide(nMinusType, MC);
+            BigDecimal mean = bdSum.divide(size, mc);
+            BigDecimal numerator = bdSumSquares.subtract(bdSum.multiply(mean, mc), mc);
+            return numerator.divide(nMinusType, mc);
         }
 
         BigDecimal sum = ZERO;
         BigDecimal sumSquares = ZERO;
         for (BigDecimal param : p) {
             sum = sum.add(param);
-            sumSquares = sumSquares.add(param.multiply(param, MC), MC);
+            sumSquares = sumSquares.add(param.multiply(param, mc), mc);
         }
-        BigDecimal mean = sum.divide(size, MC);
-        BigDecimal numerator = sumSquares.subtract(sum.multiply(mean, MC), MC);
-        return numerator.divide(nMinusType, MC);
+        BigDecimal mean = sum.divide(size, mc);
+        BigDecimal numerator = sumSquares.subtract(sum.multiply(mean, mc), mc);
+        return numerator.divide(nMinusType, mc);
     }
 
     /**
@@ -170,8 +169,8 @@ public class MathFunctions {
      * @param type Value 0: Population Standard Deviation; Value 1: Sample Standard Deviation
      * @return standard deviation
      */
-    public static BigDecimal stdDev(BigDecimal[] p, int type) {
-        return BigDecimalMath.sqrt(variance(p, type), MC);
+    public static BigDecimal stdDev(MathContext mc, BigDecimal[] p, int type) {
+        return BigDecimalMath.sqrt(variance(mc, p, type), mc);
     }
 
     /**
@@ -181,7 +180,7 @@ public class MathFunctions {
      * @param p Array of values
      * @return mean deviation
      */
-    public static BigDecimal meanDev(BigDecimal[] p) {
+    public static BigDecimal meanDev(MathContext mc, BigDecimal[] p) {
         int n = p.length;
         if (n == 0) {
             throw new ArithmeticException("Empty array");
@@ -190,19 +189,19 @@ public class MathFunctions {
 
         if (n >= KAHAN_THRESHOLD) {
             double mean = KahanSummation.sum(p) / n;
-            return valueOf(KahanSummation.sumAbsoluteDeviations(p, mean)).divide(size, MC);
+            return valueOf(KahanSummation.sumAbsoluteDeviations(p, mean)).divide(size, mc);
         }
 
         BigDecimal sum = ZERO;
         for (BigDecimal param : p) {
             sum = sum.add(param);
         }
-        BigDecimal mean = sum.divide(size, MC);
+        BigDecimal mean = sum.divide(size, mc);
         BigDecimal x = ZERO;
         for (BigDecimal param : p) {
-            x = x.add(param.subtract(mean, MC).abs(MC), MC);
+            x = x.add(param.subtract(mean, mc).abs(mc), mc);
         }
-        return x.divide(size, MC);
+        return x.divide(size, mc);
     }
 
     /**
@@ -211,55 +210,59 @@ public class MathFunctions {
      * @param value Value
      * @return natural logarithm value
      */
-    public static BigDecimal ln(BigDecimal value) {
-        return BigDecimalMath.log(value, MC);
+    public static BigDecimal ln(MathContext mc, BigDecimal value) {
+        return BigDecimalMath.log(value, mc);
     }
 
     /**
      * Finds the binary logarithm value of a value.
      *
+     * @param mc    MathContext for precision control
      * @param value Value
      * @return binary logarithm value
      */
-    public static BigDecimal lb(BigDecimal value) {
-        return BigDecimalMath.log2(value, MC);
+    public static BigDecimal lb(MathContext mc, BigDecimal value) {
+        return BigDecimalMath.log2(value, mc);
     }
 
     /**
      * Finds the logarithm value of a value with a specific base.
      *
+     * @param mc    MathContext for precision control
      * @param base  Base
      * @param value Value
      * @return logarithm value
      */
-    public static BigDecimal log(BigDecimal base, BigDecimal value) {
-        return BigDecimalMath.log(value, MC).divide(BigDecimalMath.log(base, MC), MC);
+    public static BigDecimal log(MathContext mc, BigDecimal base, BigDecimal value) {
+        return BigDecimalMath.log(value, mc).divide(BigDecimalMath.log(base, mc), mc);
     }
 
     /**
      * Finds the direct rule of three value of a list of values. The direct rule of three value is the result of a proportionality
      * between two values.
      *
+     * @param mc      MathContext for precision control
      * @param origin1 First origin value
      * @param result1 First result value
      * @param origin2 Second origin value
      * @return direct rule of three value
      */
-    public static BigDecimal rule3d(BigDecimal origin1, BigDecimal result1, BigDecimal origin2) {
-        return origin2.multiply(result1, MC).divide(origin1, MC);
+    public static BigDecimal rule3d(MathContext mc, BigDecimal origin1, BigDecimal result1, BigDecimal origin2) {
+        return origin2.multiply(result1, mc).divide(origin1, mc);
     }
 
     /**
      * Finds the inverse rule of three value of a list of values. The inverse rule of three value is the result of a proportionality
      * between two values.
      *
+     * @param mc      MathContext for precision control
      * @param origin1 First origin value
      * @param result1 First result value
      * @param origin2 Second origin value
      * @return inverse rule of three value
      */
-    public static BigDecimal rule3i(BigDecimal origin1, BigDecimal result1, BigDecimal origin2) {
-        return origin1.multiply(result1, MC).divide(origin2, MC);
+    public static BigDecimal rule3i(MathContext mc, BigDecimal origin1, BigDecimal result1, BigDecimal origin2) {
+        return origin1.multiply(result1, mc).divide(origin2, mc);
     }
 
     /**
@@ -355,7 +358,7 @@ public class MathFunctions {
      * @param references Array of reference values
      * @return An array containing the adjusted values
      */
-    public static BigDecimal[] spread(BigDecimal value, BigDecimal direction, BigDecimal[] references) {
+    public static BigDecimal[] spread(MathContext mc, BigDecimal value, BigDecimal direction, BigDecimal[] references) {
         if (value == null) {
             throw new IllegalArgumentException("Value cannot be null");
         }
@@ -378,7 +381,7 @@ public class MathFunctions {
         BigDecimal[] distributed = new BigDecimal[references.length];
         BigDecimal distributedSum = ZERO;
         if (totalSum.compareTo(ZERO) != 0) {
-            BigDecimal factor = value.divide(totalSum, MC);
+            BigDecimal factor = value.divide(totalSum, mc);
             for (int i = 0; i < references.length; i++) {
                 BigDecimal distValue = references[i].multiply(factor).setScale(scale, HALF_EVEN);
                 distributed[i] = distValue;

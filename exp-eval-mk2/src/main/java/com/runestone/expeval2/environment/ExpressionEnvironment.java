@@ -4,6 +4,7 @@ import com.runestone.converters.DataConversionService;
 import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.FunctionCatalog;
 
+import java.math.MathContext;
 import java.util.Objects;
 
 public final class ExpressionEnvironment {
@@ -12,13 +13,15 @@ public final class ExpressionEnvironment {
     private final FunctionCatalog functionCatalog;
     private final ExternalSymbolCatalog externalSymbolCatalog;
     private final DataConversionService dataConversionService;
+    private final MathContext mathContext;
 
     ExpressionEnvironment(ExpressionEnvironmentId environmentId, FunctionCatalog functionCatalog, ExternalSymbolCatalog externalSymbolCatalog,
-                          DataConversionService dataConversionService) {
+                          DataConversionService dataConversionService, MathContext mathContext) {
         this.environmentId = Objects.requireNonNull(environmentId, "environmentId must not be null");
         this.functionCatalog = Objects.requireNonNull(functionCatalog, "functionCatalog must not be null");
         this.externalSymbolCatalog = Objects.requireNonNull(externalSymbolCatalog, "externalSymbolCatalog must not be null");
         this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService must not be null");
+        this.mathContext = Objects.requireNonNull(mathContext, "mathContext must not be null");
     }
 
     public static ExpressionEnvironmentBuilder builder() {
@@ -39,5 +42,9 @@ public final class ExpressionEnvironment {
 
     public DataConversionService getDataConversionService() {
         return dataConversionService;
+    }
+
+    public MathContext mathContext() {
+        return mathContext;
     }
 }

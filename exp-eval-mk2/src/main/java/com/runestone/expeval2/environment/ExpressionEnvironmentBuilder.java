@@ -19,6 +19,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.math.MathContext;
 import java.util.*;
 
 public final class ExpressionEnvironmentBuilder {
@@ -27,6 +28,7 @@ public final class ExpressionEnvironmentBuilder {
     private static final ExpressionEnvironment EMPTY_ENVIRONMENT = new ExpressionEnvironmentBuilder().build();
 
     private DataConversionService conversionService;
+    private MathContext mathContext = MathContext.DECIMAL128;
     private final List<Class<?>> staticProviders = new ArrayList<>();
     private final List<Object> instanceProviders = new ArrayList<>();
     private final Map<String, ExternalSymbolRegistration> externalSymbols = new LinkedHashMap<>();
@@ -37,6 +39,11 @@ public final class ExpressionEnvironmentBuilder {
 
     public ExpressionEnvironmentBuilder conversionService(DataConversionService conversionService) {
         this.conversionService = Objects.requireNonNull(conversionService, "conversionService must not be null");
+        return this;
+    }
+
+    public ExpressionEnvironmentBuilder withMathContext(MathContext mathContext) {
+        this.mathContext = Objects.requireNonNull(mathContext, "mathContext must not be null");
         return this;
     }
 
@@ -120,7 +127,7 @@ public final class ExpressionEnvironmentBuilder {
         ExternalSymbolCatalog externalSymbolCatalog = new ExternalSymbolCatalog(symbolsByName);
 
         return new ExpressionEnvironment(new ExpressionEnvironmentId(UUID.randomUUID().toString()),
-                functionCatalog, externalSymbolCatalog, effectiveConversionService);
+                functionCatalog, externalSymbolCatalog, effectiveConversionService, mathContext);
     }
 
     private Collection<FunctionDescriptor> discoverFunctions(Class<?> providerClass, Object providerInstance, boolean staticOnly) {
@@ -143,7 +150,13 @@ public final class ExpressionEnvironmentBuilder {
             if (providerInstance != null) {
                 handle = handle.bindTo(providerInstance);
             }
-            List<Class<?>> parameterTypes = List.of(method.getParameterTypes());
+            Class<?>[] rawParams = method.getParameterTypes();
+            int firstDataParam = 0;
+            if (rawParams.length > 0 && rawParams[0] == MathContext.class) {
+                handle = MethodHandles.insertArguments(handle, 0, mathContext);
+                firstDataParam = 1;
+            }
+            List<Class<?>> parameterTypes = List.of(rawParams).subList(firstDataParam, rawParams.length);
             List<ResolvedType> parameterResolvedTypes = parameterTypes.stream().map(ResolvedTypes::fromJavaType).toList();
             return new FunctionDescriptor(method.getName(), parameterTypes, parameterResolvedTypes, ResolvedTypes.fromJavaType(method.getReturnType()), handle);
         } catch (IllegalAccessException exception) {

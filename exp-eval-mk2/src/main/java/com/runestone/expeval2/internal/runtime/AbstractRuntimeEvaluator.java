@@ -17,11 +17,14 @@ abstract class AbstractRuntimeEvaluator<T> {
     private final CompiledExpression compiledExpression;
     private final RuntimeValueFactory runtimeValueFactory;
     private final RuntimeCoercionService runtimeCoercionService;
+    private final MathContext mathContext;
 
-    protected AbstractRuntimeEvaluator(CompiledExpression compiledExpression, RuntimeValueFactory runtimeValueFactory, RuntimeCoercionService runtimeCoercionService) {
+    protected AbstractRuntimeEvaluator(CompiledExpression compiledExpression, RuntimeValueFactory runtimeValueFactory,
+                                       RuntimeCoercionService runtimeCoercionService, MathContext mathContext) {
         this.compiledExpression = Objects.requireNonNull(compiledExpression, "compiledExpression must not be null");
         this.runtimeValueFactory = Objects.requireNonNull(runtimeValueFactory, "runtimeValueFactory must not be null");
         this.runtimeCoercionService = Objects.requireNonNull(runtimeCoercionService, "runtimeCoercionService must not be null");
+        this.mathContext = Objects.requireNonNull(mathContext, "mathContext must not be null");
     }
 
     final T evaluate(ExecutionScope scope) {
@@ -90,7 +93,7 @@ abstract class AbstractRuntimeEvaluator<T> {
         return switch (node.operator()) {
             case NEGATE -> new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(operand).negate());
             case LOGICAL_NOT -> new RuntimeValue.BooleanValue(!runtimeCoercionService.asBoolean(operand));
-            case SQRT -> new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(operand).sqrt(MathContext.DECIMAL128));
+            case SQRT -> new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(operand).sqrt(mathContext));
             case MODULUS -> new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(operand).abs());
         };
     }
@@ -118,14 +121,14 @@ abstract class AbstractRuntimeEvaluator<T> {
             case MULTIPLY ->
                     new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).multiply(runtimeCoercionService.asNumber(right)));
             case DIVIDE ->
-                    new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).divide(runtimeCoercionService.asNumber(right), MathContext.DECIMAL128));
+                    new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).divide(runtimeCoercionService.asNumber(right), mathContext));
             case MODULO ->
                     new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).remainder(runtimeCoercionService.asNumber(right)));
             case POWER ->
                     new RuntimeValue.NumberValue(pow(runtimeCoercionService.asNumber(left), runtimeCoercionService.asNumber(right)));
             case ROOT -> {
                 BigDecimal value = runtimeCoercionService.asNumber(left);
-                yield new RuntimeValue.NumberValue(BigDecimalMath.root(value, runtimeCoercionService.asNumber(right), MathContext.DECIMAL128));
+                yield new RuntimeValue.NumberValue(BigDecimalMath.root(value, runtimeCoercionService.asNumber(right), mathContext));
             }
             case AND -> new RuntimeValue.BooleanValue(runtimeCoercionService.asBoolean(right));
             case OR -> new RuntimeValue.BooleanValue(runtimeCoercionService.asBoolean(right));
@@ -205,8 +208,8 @@ abstract class AbstractRuntimeEvaluator<T> {
     private BigDecimal pow(BigDecimal base, BigDecimal exponent) {
         BigDecimal normalized = exponent.stripTrailingZeros();
         if (normalized.scale() <= 0 && normalized.precision() <= 9) {
-            return base.pow(normalized.intValue(), MathContext.DECIMAL128);
+            return base.pow(normalized.intValue(), mathContext);
         }
-        return BigDecimalMath.pow(base, exponent, MathContext.DECIMAL128);
+        return BigDecimalMath.pow(base, exponent, mathContext);
     }
 }

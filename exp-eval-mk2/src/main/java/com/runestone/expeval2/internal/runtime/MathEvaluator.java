@@ -1,11 +1,13 @@
 package com.runestone.expeval2.internal.runtime;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
 
 final class MathEvaluator extends AbstractRuntimeEvaluator<BigDecimal> {
 
-    MathEvaluator(CompiledExpression compiledExpression, RuntimeValueFactory runtimeValueFactory, RuntimeCoercionService runtimeCoercionService) {
-        super(compiledExpression, runtimeValueFactory, runtimeCoercionService);
+    MathEvaluator(CompiledExpression compiledExpression, RuntimeValueFactory runtimeValueFactory,
+                  RuntimeCoercionService runtimeCoercionService, MathContext mathContext) {
+        super(compiledExpression, runtimeValueFactory, runtimeCoercionService, mathContext);
     }
 
     @Override

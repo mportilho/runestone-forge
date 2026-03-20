@@ -9,12 +9,14 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DisplayName("Excel Financial Functions Tests")
 class ExcelFinancialFunctionsTest {
 
+    private static final MathContext MC = MathContext.DECIMAL128;
     private static final Offset<BigDecimal> EPSILON = Assertions.within(new BigDecimal("0.0001"));
 
     @Nested
@@ -30,6 +32,7 @@ class ExcelFinancialFunctionsTest {
         @DisplayName("Calculates FV correctly for various scenarios")
         void calculatesFvCorrectly(String r, String n, String y, String p, boolean t, String expected) {
             BigDecimal result = ExcelFinancialFunctions.fv(
+                    MC,
                     new BigDecimal(r),
                     new BigDecimal(n),
                     new BigDecimal(y),
@@ -47,8 +50,8 @@ class ExcelFinancialFunctionsTest {
             BigDecimal pv = new BigDecimal("-1000");
             BigDecimal expected = new BigDecimal("2886.6838");
 
-            assertThat(ExcelFinancialFunctions.fv(r, 10, pmt, pv, 0)).isCloseTo(expected, EPSILON);
-            assertThat(ExcelFinancialFunctions.fv(r, 10, pmt, pv)).isCloseTo(expected, EPSILON);
+            assertThat(ExcelFinancialFunctions.fv(MC, r, 10, pmt, pv, 0)).isCloseTo(expected, EPSILON);
+            assertThat(ExcelFinancialFunctions.fv(MC, r, 10, pmt, pv)).isCloseTo(expected, EPSILON);
         }
     }
 
@@ -65,6 +68,7 @@ class ExcelFinancialFunctionsTest {
         @DisplayName("Calculates PV correctly for various scenarios")
         void calculatesPvCorrectly(String r, String n, String y, String f, boolean t, String expected) {
             BigDecimal result = ExcelFinancialFunctions.pv(
+                    MC,
                     new BigDecimal(r),
                     new BigDecimal(n),
                     new BigDecimal(y),
@@ -91,7 +95,7 @@ class ExcelFinancialFunctionsTest {
             };
             BigDecimal expected = new BigDecimal("1188.4434");
 
-            BigDecimal result = ExcelFinancialFunctions.npv(rate, cashflows);
+            BigDecimal result = ExcelFinancialFunctions.npv(MC, rate, cashflows);
 
             assertThat(result).isCloseTo(expected, EPSILON);
         }
@@ -110,6 +114,7 @@ class ExcelFinancialFunctionsTest {
         @DisplayName("Calculates PMT correctly for various scenarios")
         void calculatesPmtCorrectly(String r, String n, String p, String f, boolean t, String expected) {
             BigDecimal result = ExcelFinancialFunctions.pmt(
+                    MC,
                     new BigDecimal(r),
                     new BigDecimal(n),
                     new BigDecimal(p),
@@ -126,9 +131,9 @@ class ExcelFinancialFunctionsTest {
             BigDecimal pv = new BigDecimal("1000");
             BigDecimal expected = new BigDecimal("-129.5045");
 
-            assertThat(ExcelFinancialFunctions.pmt(r, 10, pv, BigDecimal.ZERO, 0)).isCloseTo(expected, EPSILON);
-            assertThat(ExcelFinancialFunctions.pmt(r, 10, pv, BigDecimal.ZERO)).isCloseTo(expected, EPSILON);
-            assertThat(ExcelFinancialFunctions.pmt(r, 10, pv)).isCloseTo(expected, EPSILON);
+            assertThat(ExcelFinancialFunctions.pmt(MC, r, 10, pv, BigDecimal.ZERO, 0)).isCloseTo(expected, EPSILON);
+            assertThat(ExcelFinancialFunctions.pmt(MC, r, 10, pv, BigDecimal.ZERO)).isCloseTo(expected, EPSILON);
+            assertThat(ExcelFinancialFunctions.pmt(MC, r, 10, pv)).isCloseTo(expected, EPSILON);
         }
     }
 
@@ -144,6 +149,7 @@ class ExcelFinancialFunctionsTest {
         @DisplayName("Calculates NPER correctly")
         void calculatesNperCorrectly(String r, String y, String p, String f, boolean t, String expected) {
             BigDecimal result = ExcelFinancialFunctions.nper(
+                    MC,
                     new BigDecimal(r),
                     new BigDecimal(y),
                     new BigDecimal(p),
@@ -165,11 +171,11 @@ class ExcelFinancialFunctionsTest {
             BigDecimal pv = new BigDecimal("1000");
 
             // First period interest
-            assertThat(ExcelFinancialFunctions.ipmt(r, 1, 10, pv, BigDecimal.ZERO, 0))
+            assertThat(ExcelFinancialFunctions.ipmt(MC, r, 1, 10, pv, BigDecimal.ZERO, 0))
                     .isCloseTo(new BigDecimal("-50.00"), EPSILON);
 
             // Second period interest
-            assertThat(ExcelFinancialFunctions.ipmt(r, 2, 10, pv, BigDecimal.ZERO, 0))
+            assertThat(ExcelFinancialFunctions.ipmt(MC, r, 2, 10, pv, BigDecimal.ZERO, 0))
                     .isCloseTo(new BigDecimal("-46.0247"), EPSILON);
         }
 
@@ -180,11 +186,11 @@ class ExcelFinancialFunctionsTest {
             BigDecimal pv = new BigDecimal("1000");
 
             // First period principal
-            assertThat(ExcelFinancialFunctions.ppmt(r, 1, 10, pv, BigDecimal.ZERO, 0))
+            assertThat(ExcelFinancialFunctions.ppmt(MC, r, 1, 10, pv, BigDecimal.ZERO, 0))
                     .isCloseTo(new BigDecimal("-79.5045"), EPSILON);
 
             // Second period principal
-            assertThat(ExcelFinancialFunctions.ppmt(r, 2, 10, pv, BigDecimal.ZERO, 0))
+            assertThat(ExcelFinancialFunctions.ppmt(MC, r, 2, 10, pv, BigDecimal.ZERO, 0))
                     .isCloseTo(new BigDecimal("-83.4798"), EPSILON);
         }
 
@@ -196,9 +202,9 @@ class ExcelFinancialFunctionsTest {
             BigDecimal pv = new BigDecimal("1000");
             int per = 5;
 
-            BigDecimal pmt = ExcelFinancialFunctions.pmt(r, nper, pv);
-            BigDecimal ipmt = ExcelFinancialFunctions.ipmt(r, per, nper, pv);
-            BigDecimal ppmt = ExcelFinancialFunctions.ppmt(r, per, nper, pv);
+            BigDecimal pmt = ExcelFinancialFunctions.pmt(MC, r, nper, pv);
+            BigDecimal ipmt = ExcelFinancialFunctions.ipmt(MC, r, per, nper, pv);
+            BigDecimal ppmt = ExcelFinancialFunctions.ppmt(MC, r, per, nper, pv);
 
             assertThat(ipmt.add(ppmt)).isCloseTo(pmt, EPSILON);
         }

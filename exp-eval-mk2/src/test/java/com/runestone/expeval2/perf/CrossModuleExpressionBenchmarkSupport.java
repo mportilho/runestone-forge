@@ -25,6 +25,12 @@ public final class CrossModuleExpressionBenchmarkSupport {
         "a * b + c * d - e + f * g - h + i * j + k - l + (a * c) + (b * d)";
     public static final String USER_FUNCTION_EXPRESSION =
         "weighted(a, b, c) + weighted(d, e, f) + weighted(g, h, i) + weighted(j, k, l)";
+    public static final String CONDITIONAL_EXPRESSION =
+        "if a > b then a * c - d + e - f else g * h - i + j * k - l endif";
+    public static final String LOGARITHM_CHAIN_EXPRESSION =
+        "ln(a) + ln(b) + ln(c) + ln(d) + ln(e) + ln(f) + lb(g) + lb(h) + lb(i) + lb(j) + lb(k) + lb(l)";
+    public static final String POWER_CHAIN_EXPRESSION =
+        "a^2 + b^2 - c^2 + d^2 - e^2 + f^2 + g^2 - h^2 + i^2 - j^2 + k^2 - l^2";
 
     private static final BigDecimal[] LITERAL_SEEDS = buildLiteralSeeds();
     private static final Frame[] VARIABLE_FRAMES = buildFrames(3L, 11L);
@@ -61,6 +67,36 @@ public final class CrossModuleExpressionBenchmarkSupport {
 
     public static MathExpression newMk2UserFunctionExpression() {
         return MathExpression.compile(USER_FUNCTION_EXPRESSION, userFunctionEnvironment());
+    }
+
+    public static Expression newLegacyConditionalExpression() {
+        return new Expression(CONDITIONAL_EXPRESSION);
+    }
+
+    public static MathExpression newMk2ConditionalExpression() {
+        return MathExpression.compile(CONDITIONAL_EXPRESSION);
+    }
+
+    public static Expression newLegacyLogarithmChainExpression() {
+        return new Expression(LOGARITHM_CHAIN_EXPRESSION);
+    }
+
+    public static MathExpression newMk2LogarithmChainExpression() {
+        return MathExpression.compile(LOGARITHM_CHAIN_EXPRESSION, logarithmEnvironment());
+    }
+
+    public static ExpressionEnvironment logarithmEnvironment() {
+        return ExpressionEnvironment.builder()
+            .addMathFunctions()
+            .build();
+    }
+
+    public static Expression newLegacyPowerChainExpression() {
+        return new Expression(POWER_CHAIN_EXPRESSION);
+    }
+
+    public static MathExpression newMk2PowerChainExpression() {
+        return MathExpression.compile(POWER_CHAIN_EXPRESSION);
     }
 
     public static BigDecimal literalSeed(int index) {

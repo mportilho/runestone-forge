@@ -4,6 +4,7 @@ import com.runestone.expeval2.catalog.functions.MathFunctions;
 import org.openjdk.jmh.annotations.*;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
@@ -14,6 +15,8 @@ import java.util.concurrent.TimeUnit;
 @Warmup(iterations = 3, time = 1)
 @Measurement(iterations = 5, time = 1)
 public class MathFunctionsBenchmark {
+
+    private static final MathContext MC = MathContext.DECIMAL128;
 
     @Param({"10", "100", "1000", "5000"})
     private int size;
@@ -31,16 +34,16 @@ public class MathFunctionsBenchmark {
 
     @Benchmark
     public BigDecimal testMean() {
-        return MathFunctions.mean(data);
+        return MathFunctions.mean(MC, data);
     }
 
     @Benchmark
     public BigDecimal testVariance() {
-        return MathFunctions.variance(data, 0);
+        return MathFunctions.variance(MC, data, 0);
     }
 
     @Benchmark
     public BigDecimal testMeanDev() {
-        return MathFunctions.meanDev(data);
+        return MathFunctions.meanDev(MC, data);
     }
 }

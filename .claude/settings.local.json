@@ -28,7 +28,8 @@
       "Bash(/home/marcelo/.claude/skills/performance-benchmark/scripts/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"CrossModuleExpressionEngineBenchmark\" \"/home/marcelo/udev/git/runestone-forge/exp-eval-mk2/target/performance-benchmark/phase4-before.json\")",
       "Bash(/home/marcelo/udev/git/runestone-forge/exp-eval-mk2/docs/perf/performance-history.md:*)",
       "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"CrossModuleExpressionEngineBenchmark\" \"target/performance-benchmark/phase7-before.json\")",
-      "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"CrossModuleExpressionEngineBenchmark\" \"target/performance-benchmark/phase7-after.json\")"
+      "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"CrossModuleExpressionEngineBenchmark\" \"target/performance-benchmark/phase7-after.json\")",
+      "Bash(find /home/marcelo/udev/git/runestone-forge -name *Benchmark* -o -name *JMH*)"
     ]
   }
 }

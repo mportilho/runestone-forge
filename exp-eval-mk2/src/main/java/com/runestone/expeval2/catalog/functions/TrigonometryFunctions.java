@@ -36,137 +36,55 @@ import java.math.MathContext;
  */
 public class TrigonometryFunctions {
 
-    private static final MathContext MC = MathContext.DECIMAL128;
-
-    /**
-     * Finds the sine of a value.
-     *
-     * @param x The value to find the sine of.
-     * @return The sine of the value.
-     */
-    public static BigDecimal sin(BigDecimal x) {
-        return BigDecimalMath.sin(x, MC);
+    public static BigDecimal sin(MathContext mc, BigDecimal x) {
+        return BigDecimalMath.sin(x, mc);
     }
 
-    /**
-     * Finds the cosine of a value.
-     *
-     * @param x The value to find the cosine of.
-     * @return The cosine of the value.
-     */
-    public static BigDecimal cos(BigDecimal x) {
-        return BigDecimalMath.cos(x, MC);
+    public static BigDecimal cos(MathContext mc, BigDecimal x) {
+        return BigDecimalMath.cos(x, mc);
     }
 
-    /**
-     * Finds the tangent of a value.
-     *
-     * @param x The value to find the tangent of.
-     * @return The tangent of the value.
-     */
-    public static BigDecimal tan(BigDecimal x) {
-        return BigDecimalMath.tan(x, MC);
+    public static BigDecimal tan(MathContext mc, BigDecimal x) {
+        return BigDecimalMath.tan(x, mc);
     }
 
-    /**
-     * Finds the arc sine of a value.
-     *
-     * @param x The value to find the arc sine of.
-     * @return The arc sine of the value.
-     */
-    public static BigDecimal asin(BigDecimal x) {
-        return BigDecimalMath.asin(x, MC);
+    public static BigDecimal asin(MathContext mc, BigDecimal x) {
+        return BigDecimalMath.asin(x, mc);
     }
 
-    /**
-     * Finds the arc cosine of a value.
-     *
-     * @param x The value to find the arc cosine of.
-     * @return The arc cosine of the value.
-     */
-    public static BigDecimal acos(BigDecimal x) {
-        return BigDecimalMath.acos(x, MC);
+    public static BigDecimal acos(MathContext mc, BigDecimal x) {
+        return BigDecimalMath.acos(x, mc);
     }
 
-    /**
-     * Finds the arc tangent of a value.
-     *
-     * @param x The value to find the arc tangent of.
-     * @return The arc tangent of the value.
-     */
-    public static BigDecimal atan(BigDecimal x) {
-        return BigDecimalMath.atan(x, MC);
+    public static BigDecimal atan(MathContext mc, BigDecimal x) {
+        return BigDecimalMath.atan(x, mc);
     }
 
-    /**
-     * Finds the arc tangent of a value, given its x and y coordinates.
-     *
-     * @param y The y coordinate.
-     * @param x The x coordinate.
-     * @return The arc tangent of the value.
-     */
-    public static BigDecimal atan2(BigDecimal y, BigDecimal x) {
-        return BigDecimalMath.atan2(y, x, MC);
+    public static BigDecimal atan2(MathContext mc, BigDecimal y, BigDecimal x) {
+        return BigDecimalMath.atan2(y, x, mc);
     }
 
-    /**
-     * Finds the hyperbolic sine of a value.
-     *
-     * @param x The value to find the hyperbolic sine of.
-     * @return The hyperbolic sine of the value.
-     */
-    public static BigDecimal sinh(BigDecimal x) {
-        return BigDecimalMath.sinh(x, MC);
+    public static BigDecimal sinh(MathContext mc, BigDecimal x) {
+        return BigDecimalMath.sinh(x, mc);
     }
 
-    /**
-     * Finds the hyperbolic cosine of a value.
-     *
-     * @param x The value to find the hyperbolic cosine of.
-     * @return The hyperbolic cosine of the value.
-     */
-    public static BigDecimal cosh(BigDecimal x) {
-        return BigDecimalMath.cosh(x, MC);
+    public static BigDecimal cosh(MathContext mc, BigDecimal x) {
+        return BigDecimalMath.cosh(x, mc);
     }
 
-    /**
-     * Finds the hyperbolic tangent of a value.
-     *
-     * @param x The value to find the hyperbolic tangent of.
-     * @return The hyperbolic tangent of the value.
-     */
-    public static BigDecimal tanh(BigDecimal x) {
-        return BigDecimalMath.tanh(x, MC);
+    public static BigDecimal tanh(MathContext mc, BigDecimal x) {
+        return BigDecimalMath.tanh(x, mc);
     }
 
-    /**
-     * Finds the hyperbolic arc sine of a value.
-     *
-     * @param x The value to find the hyperbolic arc sine of.
-     * @return The hyperbolic arc sine of the value.
-     */
-    public static BigDecimal asinh(BigDecimal x) {
-        return BigDecimalMath.asinh(x, MC);
+    public static BigDecimal asinh(MathContext mc, BigDecimal x) {
+        return BigDecimalMath.asinh(x, mc);
     }
 
-    /**
-     * Finds the hyperbolic arc cosine of a value.
-     *
-     * @param x The value to find the hyperbolic arc cosine of.
-     * @return The hyperbolic arc cosine of the value.
-     */
-    public static BigDecimal acosh(BigDecimal x) {
-        return BigDecimalMath.acosh(x, MC);
+    public static BigDecimal acosh(MathContext mc, BigDecimal x) {
+        return BigDecimalMath.acosh(x, mc);
     }
 
-    /**
-     * Finds the hyperbolic arc tangent of a value.
-     *
-     * @param x The value to find the hyperbolic arc tangent of.
-     * @return The hyperbolic arc tangent of the value.
-     */
-    public static BigDecimal atanh(BigDecimal x) {
-        return BigDecimalMath.atanh(x, MC);
+    public static BigDecimal atanh(MathContext mc, BigDecimal x) {
+        return BigDecimalMath.atanh(x, mc);
     }
-
 }

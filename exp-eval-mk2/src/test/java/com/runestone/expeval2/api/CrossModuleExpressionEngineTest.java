@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.offset;
 
 class CrossModuleExpressionEngineTest {
 
@@ -40,6 +41,38 @@ class CrossModuleExpressionEngineTest {
         assertEquivalentForFrame(legacy, mk2, CrossModuleExpressionBenchmarkSupport.userFunctionFrame(191));
     }
 
+    @Test
+    void shouldProduceEquivalentResultsForConditionalScenario() {
+        Expression legacy = CrossModuleExpressionBenchmarkSupport.newLegacyConditionalExpression();
+        MathExpression mk2 = CrossModuleExpressionBenchmarkSupport.newMk2ConditionalExpression();
+
+        assertEquivalentForFrame(legacy, mk2, CrossModuleExpressionBenchmarkSupport.variableFrame(0));
+        assertEquivalentForFrame(legacy, mk2, CrossModuleExpressionBenchmarkSupport.variableFrame(41));
+        assertEquivalentForFrame(legacy, mk2, CrossModuleExpressionBenchmarkSupport.variableFrame(200));
+    }
+
+    @Test
+    void shouldProduceEquivalentResultsForLogarithmChainScenario() {
+        Expression legacy = CrossModuleExpressionBenchmarkSupport.newLegacyLogarithmChainExpression();
+        MathExpression mk2 = CrossModuleExpressionBenchmarkSupport.newMk2LogarithmChainExpression();
+
+        // The two modules use different MathContext precisions for transcendental functions,
+        // so results are numerically equivalent but may differ beyond ~15 significant digits.
+        assertApproximatelyEquivalentForFrame(legacy, mk2, CrossModuleExpressionBenchmarkSupport.variableFrame(0));
+        assertApproximatelyEquivalentForFrame(legacy, mk2, CrossModuleExpressionBenchmarkSupport.variableFrame(41));
+        assertApproximatelyEquivalentForFrame(legacy, mk2, CrossModuleExpressionBenchmarkSupport.variableFrame(200));
+    }
+
+    @Test
+    void shouldProduceEquivalentResultsForPowerChainScenario() {
+        Expression legacy = CrossModuleExpressionBenchmarkSupport.newLegacyPowerChainExpression();
+        MathExpression mk2 = CrossModuleExpressionBenchmarkSupport.newMk2PowerChainExpression();
+
+        assertEquivalentForFrame(legacy, mk2, CrossModuleExpressionBenchmarkSupport.variableFrame(0));
+        assertEquivalentForFrame(legacy, mk2, CrossModuleExpressionBenchmarkSupport.variableFrame(41));
+        assertEquivalentForFrame(legacy, mk2, CrossModuleExpressionBenchmarkSupport.variableFrame(200));
+    }
+
     private static void assertEquivalentForLiteralSeed(Expression legacy, MathExpression mk2, int seedIndex) {
         BigDecimal seed = CrossModuleExpressionBenchmarkSupport.literalSeed(seedIndex);
         CrossModuleExpressionBenchmarkSupport.applyLiteralSeed(legacy, seed);
@@ -54,5 +87,14 @@ class CrossModuleExpressionEngineTest {
         CrossModuleExpressionBenchmarkSupport.applyFrame(mk2, frame);
 
         assertThat(legacy.<BigDecimal>evaluate()).isEqualByComparingTo(mk2.compute());
+    }
+
+    private static void assertApproximatelyEquivalentForFrame(Expression legacy, MathExpression mk2,
+                                                              CrossModuleExpressionBenchmarkSupport.Frame frame) {
+        CrossModuleExpressionBenchmarkSupport.applyFrame(legacy, frame);
+        CrossModuleExpressionBenchmarkSupport.applyFrame(mk2, frame);
+
+        assertThat(legacy.<BigDecimal>evaluate().doubleValue())
+            .isCloseTo(mk2.compute().doubleValue(), offset(1e-9));
     }
 }

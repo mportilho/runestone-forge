@@ -55,6 +55,36 @@ public class CrossModuleExpressionEngineBenchmark {
         return state.evaluateMk2();
     }
 
+    @Benchmark
+    public BigDecimal legacyConditional(ConditionalState state) {
+        return state.evaluateLegacy();
+    }
+
+    @Benchmark
+    public BigDecimal mk2Conditional(ConditionalState state) {
+        return state.evaluateMk2();
+    }
+
+    @Benchmark
+    public BigDecimal legacyLogarithmChain(LogarithmChainState state) {
+        return state.evaluateLegacy();
+    }
+
+    @Benchmark
+    public BigDecimal mk2LogarithmChain(LogarithmChainState state) {
+        return state.evaluateMk2();
+    }
+
+    @Benchmark
+    public BigDecimal legacyPowerChain(PowerChainState state) {
+        return state.evaluateLegacy();
+    }
+
+    @Benchmark
+    public BigDecimal mk2PowerChain(PowerChainState state) {
+        return state.evaluateMk2();
+    }
+
     @State(Scope.Thread)
     public static class LiteralDenseState {
 
@@ -143,6 +173,99 @@ public class CrossModuleExpressionEngineBenchmark {
             CrossModuleExpressionBenchmarkSupport.applyFrame(
                 mk2,
                 CrossModuleExpressionBenchmarkSupport.userFunctionFrame(mk2Index++)
+            );
+            return mk2.compute();
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class ConditionalState {
+
+        private Expression legacy;
+        private MathExpression mk2;
+        private int legacyIndex;
+        private int mk2Index;
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            legacy = CrossModuleExpressionBenchmarkSupport.newLegacyConditionalExpression();
+            mk2 = CrossModuleExpressionBenchmarkSupport.newMk2ConditionalExpression();
+        }
+
+        private BigDecimal evaluateLegacy() {
+            CrossModuleExpressionBenchmarkSupport.applyFrame(
+                legacy,
+                CrossModuleExpressionBenchmarkSupport.variableFrame(legacyIndex++)
+            );
+            return legacy.evaluate();
+        }
+
+        private BigDecimal evaluateMk2() {
+            CrossModuleExpressionBenchmarkSupport.applyFrame(
+                mk2,
+                CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)
+            );
+            return mk2.compute();
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class LogarithmChainState {
+
+        private Expression legacy;
+        private MathExpression mk2;
+        private int legacyIndex;
+        private int mk2Index;
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            legacy = CrossModuleExpressionBenchmarkSupport.newLegacyLogarithmChainExpression();
+            mk2 = CrossModuleExpressionBenchmarkSupport.newMk2LogarithmChainExpression();
+        }
+
+        private BigDecimal evaluateLegacy() {
+            CrossModuleExpressionBenchmarkSupport.applyFrame(
+                legacy,
+                CrossModuleExpressionBenchmarkSupport.variableFrame(legacyIndex++)
+            );
+            return legacy.evaluate();
+        }
+
+        private BigDecimal evaluateMk2() {
+            CrossModuleExpressionBenchmarkSupport.applyFrame(
+                mk2,
+                CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)
+            );
+            return mk2.compute();
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class PowerChainState {
+
+        private Expression legacy;
+        private MathExpression mk2;
+        private int legacyIndex;
+        private int mk2Index;
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            legacy = CrossModuleExpressionBenchmarkSupport.newLegacyPowerChainExpression();
+            mk2 = CrossModuleExpressionBenchmarkSupport.newMk2PowerChainExpression();
+        }
+
+        private BigDecimal evaluateLegacy() {
+            CrossModuleExpressionBenchmarkSupport.applyFrame(
+                legacy,
+                CrossModuleExpressionBenchmarkSupport.variableFrame(legacyIndex++)
+            );
+            return legacy.evaluate();
+        }
+
+        private BigDecimal evaluateMk2() {
+            CrossModuleExpressionBenchmarkSupport.applyFrame(
+                mk2,
+                CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)
             );
             return mk2.compute();
         }

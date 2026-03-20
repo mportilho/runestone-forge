@@ -20,13 +20,15 @@ public final class ExpressionRuntimeSupport {
     private final boolean hasAssignments;
 
     private ExpressionRuntimeSupport(CompiledExpression compiledExpression, MutableBindings bindings,
-                                     RuntimeValueFactory runtimeValueFactory, RuntimeCoercionService runtimeCoercionService) {
+                                     RuntimeValueFactory runtimeValueFactory, RuntimeCoercionService runtimeCoercionService,
+                                     java.math.MathContext mathContext) {
         this.compiledExpression = Objects.requireNonNull(compiledExpression, "compiledExpression must not be null");
         this.bindings = Objects.requireNonNull(bindings, "bindings must not be null");
         Objects.requireNonNull(runtimeValueFactory, "runtimeValueFactory must not be null");
         Objects.requireNonNull(runtimeCoercionService, "runtimeCoercionService must not be null");
-        this.mathEvaluator = new MathEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService);
-        this.logicalEvaluator = new LogicalEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService);
+        Objects.requireNonNull(mathContext, "mathContext must not be null");
+        this.mathEvaluator = new MathEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService, mathContext);
+        this.logicalEvaluator = new LogicalEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService, mathContext);
         this.hasAssignments = !compiledExpression.executionPlan().assignments().isEmpty();
     }
 
@@ -65,7 +67,8 @@ public final class ExpressionRuntimeSupport {
                         runtimeValueFactory
                 ),
                 runtimeValueFactory,
-                runtimeCoercionService
+                runtimeCoercionService,
+                environment.mathContext()
         );
     }
 

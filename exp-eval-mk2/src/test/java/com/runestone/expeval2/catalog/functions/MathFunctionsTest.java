@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
 
 import static java.math.BigDecimal.ONE;
 import static java.math.BigDecimal.ZERO;
@@ -16,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 @DisplayName("MathFunctions Tests")
 class MathFunctionsTest {
 
+    private static final MathContext MC = MathContext.DECIMAL128;
     private static final Offset<BigDecimal> EPSILON = Assertions.within(new BigDecimal("0.0000000000001"));
 
     private static BigDecimal[] bdArray(String... values) {
@@ -34,7 +36,7 @@ class MathFunctionsTest {
         @DisplayName("Throws exception on null array")
         void throwsOnNullArray() {
             Assertions.assertThatNullPointerException()
-                    .isThrownBy(() -> MathFunctions.mean(null));
+                    .isThrownBy(() -> MathFunctions.mean(MC, null));
         }
 
         @Test
@@ -42,28 +44,28 @@ class MathFunctionsTest {
         void throwsOnEmptyArray() {
             BigDecimal[] input = bdArray();
             Assertions.assertThatExceptionOfType(ArithmeticException.class)
-                    .isThrownBy(() -> MathFunctions.mean(input));
+                    .isThrownBy(() -> MathFunctions.mean(MC, input));
         }
 
         @Test
         @DisplayName("Single value")
         void singleValue() {
             BigDecimal[] input = bdArray("5.5");
-            assertThat(MathFunctions.mean(input)).isEqualByComparingTo("5.5");
+            assertThat(MathFunctions.mean(MC, input)).isEqualByComparingTo("5.5");
         }
 
         @Test
         @DisplayName("Two values")
         void twoValues() {
             BigDecimal[] input = bdArray("10", "20");
-            assertThat(MathFunctions.mean(input)).isEqualByComparingTo("15");
+            assertThat(MathFunctions.mean(MC, input)).isEqualByComparingTo("15");
         }
 
         @Test
         @DisplayName("Multiple values")
         void multipleValues() {
             BigDecimal[] input = bdArray("10", "20", "30", "40");
-            assertThat(MathFunctions.mean(input)).isEqualByComparingTo("25");
+            assertThat(MathFunctions.mean(MC, input)).isEqualByComparingTo("25");
         }
     }
 
@@ -75,7 +77,7 @@ class MathFunctionsTest {
         @DisplayName("Throws exception on null array")
         void throwsOnNullArray() {
             Assertions.assertThatNullPointerException()
-                    .isThrownBy(() -> MathFunctions.geometricMean(null));
+                    .isThrownBy(() -> MathFunctions.geometricMean(MC, null));
         }
 
         @Test
@@ -83,21 +85,21 @@ class MathFunctionsTest {
         void handlesEmptyArray() {
             BigDecimal[] input = bdArray();
             Assertions.assertThatExceptionOfType(ArithmeticException.class)
-                    .isThrownBy(() -> MathFunctions.geometricMean(input));
+                    .isThrownBy(() -> MathFunctions.geometricMean(MC, input));
         }
 
         @Test
         @DisplayName("Positive numbers")
         void positiveNumbers() {
             BigDecimal[] input = bdArray("2", "8"); // root(16, 2) = 4
-            assertThat(MathFunctions.geometricMean(input)).isCloseTo(new BigDecimal("4"), EPSILON);
+            assertThat(MathFunctions.geometricMean(MC, input)).isCloseTo(new BigDecimal("4"), EPSILON);
         }
 
         @Test
         @DisplayName("Multiple values")
         void multipleValues() {
             BigDecimal[] inputDec = bdArray("4", "1", "0.03125"); // 4 * 1 * 0.03125 = 0.125. root(0.125, 3) = 0.5
-            assertThat(MathFunctions.geometricMean(inputDec)).isCloseTo(new BigDecimal("0.5"), EPSILON);
+            assertThat(MathFunctions.geometricMean(MC, inputDec)).isCloseTo(new BigDecimal("0.5"), EPSILON);
         }
     }
 
@@ -109,7 +111,7 @@ class MathFunctionsTest {
         @DisplayName("Throws exception on null array")
         void throwsOnNullArray() {
             Assertions.assertThatNullPointerException()
-                    .isThrownBy(() -> MathFunctions.harmonicMean(null));
+                    .isThrownBy(() -> MathFunctions.harmonicMean(MC, null));
         }
 
         @Test
@@ -117,7 +119,7 @@ class MathFunctionsTest {
         void throwsOnZeroValue() {
             BigDecimal[] input = bdArray("1", "0", "4");
             Assertions.assertThatExceptionOfType(ArithmeticException.class)
-                    .isThrownBy(() -> MathFunctions.harmonicMean(input));
+                    .isThrownBy(() -> MathFunctions.harmonicMean(MC, input));
         }
 
         @Test
@@ -125,14 +127,14 @@ class MathFunctionsTest {
         void throwsOnEmptyArray() {
             BigDecimal[] input = bdArray();
             Assertions.assertThatExceptionOfType(ArithmeticException.class)
-                    .isThrownBy(() -> MathFunctions.harmonicMean(input));
+                    .isThrownBy(() -> MathFunctions.harmonicMean(MC, input));
         }
 
         @Test
         @DisplayName("Positive numbers")
         void positiveNumbers() {
             BigDecimal[] input = bdArray("1", "4", "4"); // 3 / (1/1 + 1/4 + 1/4) = 3 / 1.5 = 2
-            assertThat(MathFunctions.harmonicMean(input)).isCloseTo(new BigDecimal("2"), EPSILON);
+            assertThat(MathFunctions.harmonicMean(MC, input)).isCloseTo(new BigDecimal("2"), EPSILON);
         }
     }
 
@@ -144,7 +146,7 @@ class MathFunctionsTest {
         @DisplayName("Throws exception on null array")
         void throwsOnNullArray() {
             Assertions.assertThatNullPointerException()
-                    .isThrownBy(() -> MathFunctions.variance(null, 0));
+                    .isThrownBy(() -> MathFunctions.variance(MC, null, 0));
         }
 
         @Test
@@ -152,21 +154,21 @@ class MathFunctionsTest {
         void throwsOnLengthEqualsType() {
             BigDecimal[] input = bdArray("4"); // length 1
             Assertions.assertThatExceptionOfType(ArithmeticException.class)
-                    .isThrownBy(() -> MathFunctions.variance(input, 1));
+                    .isThrownBy(() -> MathFunctions.variance(MC, input, 1));
         }
 
         @Test
         @DisplayName("Population variance (type 0)")
         void populationVariance() {
             BigDecimal[] input = bdArray("4", "8", "6", "5", "3", "2", "8", "9", "2", "5");
-            assertThat(MathFunctions.variance(input, 0)).isCloseTo(new BigDecimal("5.76"), EPSILON);
+            assertThat(MathFunctions.variance(MC, input, 0)).isCloseTo(new BigDecimal("5.76"), EPSILON);
         }
 
         @Test
         @DisplayName("Sample variance (type 1)")
         void sampleVariance() {
             BigDecimal[] input = bdArray("4", "8", "6", "5", "3", "2", "8", "9", "2", "5");
-            assertThat(MathFunctions.variance(input, 1)).isCloseTo(new BigDecimal("6.4"), EPSILON);
+            assertThat(MathFunctions.variance(MC, input, 1)).isCloseTo(new BigDecimal("6.4"), EPSILON);
         }
     }
 
@@ -178,7 +180,7 @@ class MathFunctionsTest {
         @DisplayName("Throws exception on null array")
         void throwsOnNullArray() {
             Assertions.assertThatNullPointerException()
-                    .isThrownBy(() -> MathFunctions.stdDev(null, 0));
+                    .isThrownBy(() -> MathFunctions.stdDev(MC, null, 0));
         }
 
         @Test
@@ -186,14 +188,14 @@ class MathFunctionsTest {
         void throwsOnLengthEqualsType() {
             BigDecimal[] input = bdArray("4"); // length 1
             Assertions.assertThatExceptionOfType(ArithmeticException.class)
-                    .isThrownBy(() -> MathFunctions.stdDev(input, 1));
+                    .isThrownBy(() -> MathFunctions.stdDev(MC, input, 1));
         }
 
         @Test
         @DisplayName("Population standard deviation (type 0)")
         void populationStdDev() {
             BigDecimal[] input = bdArray("4", "8", "6", "5", "3", "2", "8", "9", "2", "5");
-            assertThat(MathFunctions.stdDev(input, 0)).isCloseTo(new BigDecimal("2.4"), EPSILON);
+            assertThat(MathFunctions.stdDev(MC, input, 0)).isCloseTo(new BigDecimal("2.4"), EPSILON);
         }
 
         @Test
@@ -201,7 +203,7 @@ class MathFunctionsTest {
         void sampleStdDev() {
             BigDecimal[] input = bdArray("4", "8", "6", "5", "3", "2", "8", "9", "2", "5");
             // sqrt(6.4) approx 2.52982212813
-            assertThat(MathFunctions.stdDev(input, 1)).isCloseTo(new BigDecimal("2.5298221281347035"), EPSILON);
+            assertThat(MathFunctions.stdDev(MC, input, 1)).isCloseTo(new BigDecimal("2.5298221281347035"), EPSILON);
         }
     }
 
@@ -213,7 +215,7 @@ class MathFunctionsTest {
         @DisplayName("Throws exception on null array")
         void throwsOnNullArray() {
             Assertions.assertThatNullPointerException()
-                    .isThrownBy(() -> MathFunctions.meanDev(null));
+                    .isThrownBy(() -> MathFunctions.meanDev(MC, null));
         }
 
         @Test
@@ -221,7 +223,7 @@ class MathFunctionsTest {
         void throwsOnEmptyArray() {
             BigDecimal[] input = bdArray();
             Assertions.assertThatExceptionOfType(ArithmeticException.class)
-                    .isThrownBy(() -> MathFunctions.meanDev(input));
+                    .isThrownBy(() -> MathFunctions.meanDev(MC, input));
         }
 
         @Test
@@ -232,7 +234,7 @@ class MathFunctionsTest {
             // diffs = 6, 3, 3, 2, 1, 2, 6, 7
             // sum diffs = 30
             // mean dev = 30 / 8 = 3.75
-            assertThat(MathFunctions.meanDev(input)).isCloseTo(new BigDecimal("3.75"), EPSILON);
+            assertThat(MathFunctions.meanDev(MC, input)).isCloseTo(new BigDecimal("3.75"), EPSILON);
         }
     }
 
@@ -243,9 +245,9 @@ class MathFunctionsTest {
         @Test
         @DisplayName("Calculates natural logarithm correctly")
         void ln() {
-            assertThat(MathFunctions.ln(new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
-            assertThat(MathFunctions.ln(new BigDecimal("2.718281828459"))).isCloseTo(ONE, EPSILON);
-            assertThat(MathFunctions.ln(new BigDecimal("10"))).isCloseTo(new BigDecimal("2.302585092994046"), EPSILON);
+            assertThat(MathFunctions.ln(MC, new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
+            assertThat(MathFunctions.ln(MC, new BigDecimal("2.718281828459"))).isCloseTo(ONE, EPSILON);
+            assertThat(MathFunctions.ln(MC, new BigDecimal("10"))).isCloseTo(new BigDecimal("2.302585092994046"), EPSILON);
         }
     }
 
@@ -256,10 +258,10 @@ class MathFunctionsTest {
         @Test
         @DisplayName("Calculates binary logarithm correctly")
         void lb() {
-            assertThat(MathFunctions.lb(new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
-            assertThat(MathFunctions.lb(new BigDecimal("2"))).isCloseTo(ONE, EPSILON);
-            assertThat(MathFunctions.lb(new BigDecimal("4"))).isCloseTo(new BigDecimal("2"), EPSILON);
-            assertThat(MathFunctions.lb(new BigDecimal("10"))).isCloseTo(new BigDecimal("3.321928094887362"), EPSILON);
+            assertThat(MathFunctions.lb(MC, new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
+            assertThat(MathFunctions.lb(MC, new BigDecimal("2"))).isCloseTo(ONE, EPSILON);
+            assertThat(MathFunctions.lb(MC, new BigDecimal("4"))).isCloseTo(new BigDecimal("2"), EPSILON);
+            assertThat(MathFunctions.lb(MC, new BigDecimal("10"))).isCloseTo(new BigDecimal("3.321928094887362"), EPSILON);
         }
     }
 
@@ -270,11 +272,11 @@ class MathFunctionsTest {
         @Test
         @DisplayName("Calculates logarithm with specific base correctly")
         void log() {
-            assertThat(MathFunctions.log(new BigDecimal("10"), new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
-            assertThat(MathFunctions.log(new BigDecimal("10"), new BigDecimal("10"))).isCloseTo(ONE, EPSILON);
-            assertThat(MathFunctions.log(new BigDecimal("10"), new BigDecimal("100"))).isCloseTo(new BigDecimal("2"), EPSILON);
-            assertThat(MathFunctions.log(new BigDecimal("2"), new BigDecimal("8"))).isCloseTo(new BigDecimal("3"), EPSILON);
-            assertThat(MathFunctions.log(new BigDecimal("3"), new BigDecimal("81"))).isCloseTo(new BigDecimal("4"), EPSILON);
+            assertThat(MathFunctions.log(MC, new BigDecimal("10"), new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
+            assertThat(MathFunctions.log(MC, new BigDecimal("10"), new BigDecimal("10"))).isCloseTo(ONE, EPSILON);
+            assertThat(MathFunctions.log(MC, new BigDecimal("10"), new BigDecimal("100"))).isCloseTo(new BigDecimal("2"), EPSILON);
+            assertThat(MathFunctions.log(MC, new BigDecimal("2"), new BigDecimal("8"))).isCloseTo(new BigDecimal("3"), EPSILON);
+            assertThat(MathFunctions.log(MC, new BigDecimal("3"), new BigDecimal("81"))).isCloseTo(new BigDecimal("4"), EPSILON);
         }
     }
 
@@ -286,14 +288,14 @@ class MathFunctionsTest {
         @DisplayName("Throws exception on null arguments")
         void throwsOnNullArguments() {
             Assertions.assertThatNullPointerException()
-                    .isThrownBy(() -> MathFunctions.rule3d(null, ONE, ONE));
+                    .isThrownBy(() -> MathFunctions.rule3d(MC, null, ONE, ONE));
         }
 
         @Test
         @DisplayName("Throws exception on zero origin1")
         void throwsOnZeroOrigin1() {
             Assertions.assertThatExceptionOfType(ArithmeticException.class)
-                    .isThrownBy(() -> MathFunctions.rule3d(ZERO, ONE, ONE));
+                    .isThrownBy(() -> MathFunctions.rule3d(MC, ZERO, ONE, ONE));
         }
 
         @Test
@@ -303,7 +305,7 @@ class MathFunctionsTest {
             BigDecimal origin1 = new BigDecimal("2");
             BigDecimal result1 = new BigDecimal("10");
             BigDecimal origin2 = new BigDecimal("5");
-            assertThat(MathFunctions.rule3d(origin1, result1, origin2)).isEqualByComparingTo("25");
+            assertThat(MathFunctions.rule3d(MC, origin1, result1, origin2)).isEqualByComparingTo("25");
         }
     }
 
@@ -315,14 +317,14 @@ class MathFunctionsTest {
         @DisplayName("Throws exception on null arguments")
         void throwsOnNullArguments() {
             Assertions.assertThatNullPointerException()
-                    .isThrownBy(() -> MathFunctions.rule3i(ONE, ONE, null));
+                    .isThrownBy(() -> MathFunctions.rule3i(MC, ONE, ONE, null));
         }
 
         @Test
         @DisplayName("Throws exception on zero origin2")
         void throwsOnZeroOrigin2() {
             Assertions.assertThatExceptionOfType(ArithmeticException.class)
-                    .isThrownBy(() -> MathFunctions.rule3i(ONE, ONE, ZERO));
+                    .isThrownBy(() -> MathFunctions.rule3i(MC, ONE, ONE, ZERO));
         }
 
         @Test
@@ -334,7 +336,7 @@ class MathFunctionsTest {
             BigDecimal origin1 = new BigDecimal("4");
             BigDecimal result1 = new BigDecimal("6");
             BigDecimal origin2 = new BigDecimal("8");
-            assertThat(MathFunctions.rule3i(origin1, result1, origin2)).isEqualByComparingTo("3");
+            assertThat(MathFunctions.rule3i(MC, origin1, result1, origin2)).isEqualByComparingTo("3");
         }
     }
 
@@ -553,7 +555,7 @@ class MathFunctionsTest {
         void throwsOnNullValue() {
             BigDecimal[] refs = bdArray("1");
             assertThatIllegalArgumentException()
-                    .isThrownBy(() -> MathFunctions.spread(null, ONE, refs))
+                    .isThrownBy(() -> MathFunctions.spread(MC, null, ONE, refs))
                     .withMessage("Value cannot be null");
         }
 
@@ -561,7 +563,7 @@ class MathFunctionsTest {
         @DisplayName("Throws exception if references are null")
         void throwsOnNullReferences() {
             assertThatIllegalArgumentException()
-                    .isThrownBy(() -> MathFunctions.spread(ONE, ONE, null))
+                    .isThrownBy(() -> MathFunctions.spread(MC, ONE, ONE, null))
                     .withMessage("References cannot be null or empty");
         }
 
@@ -569,14 +571,14 @@ class MathFunctionsTest {
         @DisplayName("Throws exception if references are empty")
         void throwsOnEmptyReferences() {
             assertThatIllegalArgumentException()
-                    .isThrownBy(() -> MathFunctions.spread(ONE, ONE, new BigDecimal[0]))
+                    .isThrownBy(() -> MathFunctions.spread(MC, ONE, ONE, new BigDecimal[0]))
                     .withMessage("References cannot be null or empty");
         }
 
         @Test
         @DisplayName("Zero value returns array of zeros")
         void zeroValue() {
-            BigDecimal[] result = MathFunctions.spread(new BigDecimal("0.00"), ONE, bdArray("1", "2"));
+            BigDecimal[] result = MathFunctions.spread(MC, new BigDecimal("0.00"), ONE, bdArray("1", "2"));
             assertThat(result).hasSize(2);
             assertThat(result[0]).isEqualByComparingTo("0.00");
             assertThat(result[1]).isEqualByComparingTo("0.00");
@@ -587,10 +589,10 @@ class MathFunctionsTest {
         void negativeValueSpread() {
             BigDecimal value = new BigDecimal("-10.00");
             BigDecimal[] refs = bdArray("1", "1", "1");
-            
+
             // Total = 3. -10 / 3 = -3.33 each. Sum = -9.99. Diff = -0.01
             // Distributed forwards, index 0 gets the -0.01.
-            BigDecimal[] result = MathFunctions.spread(value, ONE, refs);
+            BigDecimal[] result = MathFunctions.spread(MC, value, ONE, refs);
             assertThat(result).hasSize(3);
             assertThat(result[0]).isEqualByComparingTo("-3.34");
             assertThat(result[1]).isEqualByComparingTo("-3.33");
@@ -606,11 +608,11 @@ class MathFunctionsTest {
         void mixedSignReferences() {
             BigDecimal value = new BigDecimal("100");
             BigDecimal[] refs = bdArray("10", "-5");
-            
+
             // TotalSum = 5
             // i=0: 10 / 5 * 100 = 200
             // i=1: -5 / 5 * 100 = -100
-            BigDecimal[] result = MathFunctions.spread(value, ONE, refs);
+            BigDecimal[] result = MathFunctions.spread(MC, value, ONE, refs);
             assertThat(result).hasSize(2);
             assertThat(result[0]).isEqualByComparingTo("200");
             assertThat(result[1]).isEqualByComparingTo("-100");
@@ -625,10 +627,10 @@ class MathFunctionsTest {
         void zeroSumWithNegatives() {
             BigDecimal value = new BigDecimal("10.0");
             BigDecimal[] refs = bdArray("10", "-10");
-            
+
             // TotalSum = 0. Equal distribution.
             // 10 / 2 = 5.0 each
-            BigDecimal[] result = MathFunctions.spread(value, ONE, refs);
+            BigDecimal[] result = MathFunctions.spread(MC, value, ONE, refs);
             assertThat(result).hasSize(2);
             assertThat(result[0]).isEqualByComparingTo("5.0");
             assertThat(result[1]).isEqualByComparingTo("5.0");
@@ -639,11 +641,11 @@ class MathFunctionsTest {
         void proportionalSpread() {
             BigDecimal value = new BigDecimal("100");
             BigDecimal[] refs = bdArray("1", "3");
-            
-            // Total = 4. 
+
+            // Total = 4.
             // i=0: 100 * (1/4) = 25
             // i=1: 100 * (3/4) = 75
-            BigDecimal[] result = MathFunctions.spread(value, ONE, refs);
+            BigDecimal[] result = MathFunctions.spread(MC, value, ONE, refs);
             assertThat(result).hasSize(2);
             assertThat(result[0]).isEqualByComparingTo("25");
             assertThat(result[1]).isEqualByComparingTo("75");
@@ -654,10 +656,10 @@ class MathFunctionsTest {
         void forwardsDifference() {
             BigDecimal value = new BigDecimal("10.00");
             BigDecimal[] refs = bdArray("1", "1", "1");
-            
+
             // Total = 3. 10 / 3 = 3.33 each. Sum = 9.99. Diff = 0.01
             // Distributed forwards, index 0 gets the 0.01.
-            BigDecimal[] result = MathFunctions.spread(value, ONE, refs);
+            BigDecimal[] result = MathFunctions.spread(MC, value, ONE, refs);
             assertThat(result).hasSize(3);
             assertThat(result[0]).isEqualByComparingTo("3.34");
             assertThat(result[1]).isEqualByComparingTo("3.33");
@@ -669,10 +671,10 @@ class MathFunctionsTest {
         void backwardsDifference() {
             BigDecimal value = new BigDecimal("10.00");
             BigDecimal[] refs = bdArray("1", "1", "1");
-            
+
             // Total = 3. 10 / 3 = 3.33 each. Sum = 9.99. Diff = 0.01
             // Distributed backwards, index 2 gets the 0.01.
-            BigDecimal[] result = MathFunctions.spread(value, new BigDecimal("-1"), refs);
+            BigDecimal[] result = MathFunctions.spread(MC, value, new BigDecimal("-1"), refs);
             assertThat(result).hasSize(3);
             assertThat(result[0]).isEqualByComparingTo("3.33");
             assertThat(result[1]).isEqualByComparingTo("3.33");
@@ -684,10 +686,10 @@ class MathFunctionsTest {
         void zeroTotalSum() {
             BigDecimal value = new BigDecimal("10.0");
             BigDecimal[] refs = bdArray("0", "0");
-            
+
             // Total sum is 0. Falls back to equal division.
             // 10 / 2 = 5.0
-            BigDecimal[] result = MathFunctions.spread(value, ONE, refs);
+            BigDecimal[] result = MathFunctions.spread(MC, value, ONE, refs);
             assertThat(result).hasSize(2);
             assertThat(result[0]).isEqualByComparingTo("5.0");
             assertThat(result[1]).isEqualByComparingTo("5.0");
@@ -696,12 +698,12 @@ class MathFunctionsTest {
         @Test
         @DisplayName("Does not lose residual when all proportional parts round to zero")
         void smallValueRoundingResidual() {
-            // value = 0.01, refs = [10, 10, 10]. 
+            // value = 0.01, refs = [10, 10, 10].
             // 0.01 * (1/3) = 0.0033... which rounds to 0.00 in scale 2.
             // Sum = 0.00, Diff = 0.01. Should be applied to index 0.
             BigDecimal value = new BigDecimal("0.01");
             BigDecimal[] refs = bdArray("10", "10", "10");
-            BigDecimal[] result = MathFunctions.spread(value, ONE, refs);
+            BigDecimal[] result = MathFunctions.spread(MC, value, ONE, refs);
 
             assertThat(result).hasSize(3);
             assertThat(result[0]).isEqualByComparingTo("0.01");
