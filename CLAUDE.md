@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI agents (Gemini CLI, Claude Code, etc.) when working with code in this repository.
 
 ## Project Overview
 
@@ -33,7 +33,7 @@ mvn clean test -pl expression-evaluator -Dtest=ExpressionCalculatorTest
 mvn clean test -pl expression-evaluator -Dtest=ExpressionCalculatorTest#methodName
 
 # Update project version
-mvn versions:set -DnewVersion=1.0.0 versions:commit
+mvn versions:set -DnewVersion=1.2.0 versions:commit
 ```
 
 > **JDK 21 test note**: Tests require `-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true` for Mockito/ByteBuddy. These flags are already configured in each module's `pom.xml` under `maven-surefire-plugin`.
@@ -43,11 +43,12 @@ mvn versions:set -DnewVersion=1.0.0 versions:commit
 ## Architecture
 
 ### runestone-toolkit
-Foundation library used by the other two modules. Key packages:
+Foundation library used by the other modules. Key packages:
 - `com.runestone.memoization` — `MemoizedFunction`, `MemoizedSupplier` for caching function results.
-- `com.runestone.utils.cache` — `LruCache`, `BoundedCache` implementations.
 - `com.runestone.converters` — Data type conversion service.
+- `com.runestone.assertions` — `Asserts` and `Certify` for design-by-contract and validations.
 
+Uses Caffeine for caching internal structures.
 ### dynamic-filter-resolver
 Enables annotating REST controller parameters with filter definitions that are automatically resolved to JPA `Specification` objects.
 - `com.runestone.dynafilter.core` — Framework-agnostic filter core: models, operations, statement generation, and the `DynamicFilterResolver` interface.
@@ -67,9 +68,10 @@ Key pattern: `AbstractOperation` forms a composite tree; each node computes its 
 ### exp-eval-mk2
 A redesigned expression evaluator with a multi-phase compilation pipeline and richer type system.
 
-Public API (package `com.runestone.expeval2.api` and `environment`):
+Public API (package `com.runestone.expeval2.api`, `environment` and `catalog`):
 - `ExpressionEnvironment` — built via `ExpressionEnvironmentBuilder`; configures the runtime (function catalog, external symbols, data conversion). Scoped by `ExpressionEnvironmentId` for cache keying.
 - `MathExpression`, `LogicalExpression` — compiled, reusable expression objects.
+- `FunctionCatalog`, `ExternalSymbolCatalog` — central repositories for available functions and external symbols.
 
 Compilation pipeline (all internal, coordinated by `ExpressionCompiler`):
 1. **Parse** — `ExpressionEvaluatorV2ParserFacade` wraps the ANTLR grammar; supports `SLL` with `LL` fallback via `PredictionStrategy`.
@@ -86,7 +88,8 @@ Compiled expressions are cached in `ExpressionCompiler` by `(source, environment
 
 - **Java 21**, **Maven 3.9+**
 - **Spring Boot 4.0.2** (dynamic-filter-resolver only)
-- **ANTLR 4.13.1** (expression-evaluator)
+- **SpringDoc OpenAPI 3.0.1** (dynamic-filter-resolver only)
+- **ANTLR 4.13.1**
 - **JUnit 5**, **AssertJ**, **Mockito 5** — testing
 - **JMH 1.37** — microbenchmarks (in `benchmark/` and `perf/` test packages)
 
@@ -100,7 +103,7 @@ Compiled expressions are cached in `ExpressionCompiler` by `(source, environment
 
 ## Local ANTLR Tool Jar
 
-To avoid downloading the ANTLR tool repeatedly, reuse the local jar at:
+To avoid downloading the ANTLR tool repeatedly, reuse the local jar at (path may vary by environment):
 
 `~/dev/git/temp/antlr4-4.13.1.jar`
 
@@ -111,7 +114,7 @@ Tool dependencies cached locally:
 - `~/dev/git/temp/antlr-lib/antlr4-runtime-4.13.1.jar`
 - `~/dev/git/temp/antlr-lib/icu4j-72.1.jar`
 
-ANTLR regeneration command:
+ANTLR regeneration command for `exp-eval-mk2`:
 
 ```shell
 java -cp ~/dev/git/temp/antlr4-4.13.1.jar:~/dev/git/temp/antlr-lib/antlr-runtime-3.5.3.jar:~/dev/git/temp/antlr-lib/ST4-4.3.4.jar:~/dev/git/temp/antlr-lib/antlr4-runtime-4.13.1.jar:~/dev/git/temp/antlr-lib/icu4j-72.1.jar \
@@ -120,8 +123,8 @@ java -cp ~/dev/git/temp/antlr4-4.13.1.jar:~/dev/git/temp/antlr-lib/antlr-runtime
   -visitor \
   -listener \
   -Xexact-output-dir \
-  -o /home/marcelo/dev/git/runestone-forge/exp-eval-mk2/src/main/java/com/runestone/expeval2/grammar/language \
-  /home/marcelo/dev/git/runestone-forge/exp-eval-mk2/src/main/antlr4/com/runestone/expeval2/grammar/language/ExpressionEvaluatorV2.g4
+  -o exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/grammar \
+  exp-eval-mk2/src/main/antlr4/com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4
 ```
 
 For diagnostics such as `-Xlog`, also pass `-o /tmp/antlr-diagnostics` (or another scratch directory) to avoid generating parser artifacts under the ANTLR source tree.
