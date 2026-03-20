@@ -411,7 +411,7 @@ class SemanticAstBuilderTest {
     private static Stream<Arguments> stablePhaseTwoMathInputs() {
         return Stream.of(
             Arguments.of("typed numeric references", "<number>principal + rate"),
-            Arguments.of("cached function with supported argument families", "$.metric(1, true, 2024-12-31, 12:30, 2024-12-31T12:30, \"txt\")"),
+            Arguments.of("function with supported argument families", "metric(1, true, 2024-12-31, 12:30, 2024-12-31T12:30, \"txt\")"),
             Arguments.of("function with semicolon separated arguments", "score(1; false; \"x\")"),
             Arguments.of("parenthesized arithmetic precedence", "(1 + 2) * 3"),
             Arguments.of("square root function", "sqrt(16)"),

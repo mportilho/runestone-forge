@@ -32,7 +32,18 @@
       "Bash(find /home/marcelo/udev/git/runestone-forge -name *Benchmark* -o -name *JMH*)",
       "Bash(git:*)",
       "Bash(bash $SKILL_SCRIPTS/run-jmh.sh /tmp/perf-before/exp-eval-mk2 \"MathFunctionsBenchmark\" \"/tmp/performance-benchmark/mathfunctions-before.json\")",
-      "Bash(bash $SKILL_SCRIPTS/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"MathFunctionsBenchmark\" \"/tmp/performance-benchmark/mathfunctions-after.json\")"
+      "Bash(bash $SKILL_SCRIPTS/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"MathFunctionsBenchmark\" \"/tmp/performance-benchmark/mathfunctions-after.json\")",
+      "Bash(grep -rn \"$\\\\.\" /home/marcelo/udev/git/runestone-forge/exp-eval-mk2/src --include=\"*.java\")",
+      "Bash(grep:*)",
+      "Read(//home/marcelo/dev/git/temp/**)",
+      "Read(//home/marcelo/**)",
+      "Bash(find ~/.m2 -name antlr4-complete*.jar -o -name antlr-complete*.jar)",
+      "Bash(find ~/.m2 -path */antlr4/* -name *.jar)",
+      "Bash(ANTLR_JAR=\"/home/marcelo/.m2/repository/org/antlr/antlr4/4.13.1/antlr4-4.13.1.jar\")",
+      "Bash(ST4=\"/home/marcelo/.m2/repository/org/antlr/ST4/4.0.8/ST4-4.0.8.jar\")",
+      "Bash(ANTLR_RUNTIME=\"/home/marcelo/.m2/repository/org/antlr/antlr-runtime/3.5.2/antlr-runtime-3.5.2.jar\")",
+      "Bash(ANTLR4_RUNTIME=\"/home/marcelo/.m2/repository/org/antlr/antlr4-runtime/4.13.1/antlr4-runtime-4.13.1.jar\")",
+      "Bash(__NEW_LINE_c6bcafd9af9867e8__ java:*)"
     ]
   }
 }

@@ -72,8 +72,6 @@ RBRACKET           : ']' ;
 COMMA              : ',' ;
 SEMI               : ';' ;
 PERIOD             : '.' ;
-CACHE_FUNCTION_PREFIX : '$.' ;
-
 // Literals
 IDENTIFIER : IdentifierText ;
 STRING     : '"' ( '\\' [btnfr"'\\] | ~[\r\n\\"] )* '"';
@@ -206,7 +204,7 @@ primaryMathExpression
     ;
 
 function
-    : CACHE_FUNCTION_PREFIX? IDENTIFIER LPAREN (allEntityTypes ((COMMA | SEMI) allEntityTypes)*)? RPAREN # functionCallOperation
+    : IDENTIFIER LPAREN (allEntityTypes ((COMMA | SEMI) allEntityTypes)*)? RPAREN # functionCallOperation
     ;
 
 referenceTarget

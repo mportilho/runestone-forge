@@ -34,7 +34,7 @@ class ExpressionEvaluatorV2GrammarCoverageTest {
             Arguments.of("numeric literal and additive expression", "42 + 7"),
             Arguments.of("typed numeric references", "<number>principal + rate"),
             Arguments.of("zero argument function reference", "makeNumber()"),
-            Arguments.of("cached function with comma separated mixed arguments", "$.metric(1, true, 2024-12-31, 12:30, 2024-12-31T12:30, \"txt\", [2])"),
+            Arguments.of("function with comma separated mixed arguments", "metric(1, true, 2024-12-31, 12:30, 2024-12-31T12:30, \"txt\", [2])"),
             Arguments.of("function with semicolon separated arguments", "score(1; false; \"x\")"),
             Arguments.of("parenthesized arithmetic precedence", "(1 + 2) * 3"),
             Arguments.of("square root function", "sqrt(16)"),
