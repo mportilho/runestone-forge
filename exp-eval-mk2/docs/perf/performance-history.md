@@ -587,3 +587,210 @@ The `noAudit` variance (−1.8% to +6.1%) is measurement noise — the non-audit
 **Notes:** Benchmark used `AssignmentExpressionBindingsBenchmark` with `-f 1 -wi 5 -i 10 -prof gc` on JDK 21.0.10. JSON evidence in `/tmp/performance-benchmark/assign-before.json` and `/tmp/performance-benchmark/assign-after.json`. The `AuditOverheadBenchmark.assignedVariableNoAudit` and `assignedVariableWithAudit` scenarios (which use `MathExpression` with one assignment) also benefit from this change through the shared `hasAssignments` code path.
 
 **Regression check (intra-session, 2026-03-21):** A follow-up measurement confirmed that `MathExpression` with assignments also benefits from PERF-025. The `AuditOverheadBenchmark.assignedVariableNoAudit` scenario (`r = a + b * c - d; r * e + f - g * h + i - j * k + l` — 1 internal symbol, 11 external) improved by +19.8% in ns/op and -491 B/op in the same JVM session, matching the PERF-025 profile. No regression was detected in any scenario. The apparent 2× gap against PERF-024 numbers is a cross-session JVM artifact (different CPU governor/JIT state between sessions); the intra-session comparison is the authoritative reference.
+
+---
+
+## PERF-026: BooleanValue — missing TRUE/FALSE static singletons
+
+**Date:** 2026-03-21
+
+**Scenario:** Every logical sub-expression in `AbstractRuntimeEvaluator` that produces a boolean result — comparison operators (`>`, `<`, `>=`, `<=`, `==`, `!=`) and boolean binary operators (`AND`, `OR`) — calls `new RuntimeValue.BooleanValue(b)`, creating a fresh 16-B record object per operation. For a 5-comparison AND chain this means up to 9 allocations × 16 B = 144 B/op that could be completely eliminated with two static singletons.
+
+**Hypothesis:** Adding `BooleanValue.TRUE` and `BooleanValue.FALSE` static constants to `RuntimeValue.BooleanValue` and replacing all `new RuntimeValue.BooleanValue(b)` call sites in `AbstractRuntimeEvaluator` would reduce `B/op` proportionally to the number of boolean operations in the expression.
+
+**Benchmark:** `BooleanValueBenchmark` — two scenarios: `boolChain` (5 comparisons + 4 AND ops = up to 9 boolean results) and `boolWide` (10 comparisons + 9 AND ops = up to 19 boolean results). All values are precomputed static `BigDecimal` constants to eliminate benchmark noise.
+
+| Benchmark | ns/op | Error (±) | B/op | BooleanValue portion |
+|-----------|------:|----------:|-----:|--------------------:|
+| boolChain | 921 | ±103 | 336 | ~144 B (9 × 16 B = 43% of total) |
+| boolWide | 1216 | ±223 | 512 | ~304 B (19 × 16 B = 59% of total) |
+
+**Allocation scaling analysis:** The delta between `boolWide` and `boolChain` = 176 B/op for 10 additional boolean operations = 17.6 B per op, matching the 16-B `BooleanValue` record size and confirming the hypothesis. The BooleanValue portion grows from 43% to 59% of total allocation as the expression widens, making it the dominant allocation driver in boolean-heavy expressions.
+
+**Async profiler:** Flamegraphs at `/tmp/performance-benchmark/async-profiles/` confirm `AbstractRuntimeEvaluator.evaluateBooleanBinaryOp` and `evaluateComparison` as the top allocation sites, each pointing to `RuntimeValue$BooleanValue::<init>`.
+
+**Decision:** CANDIDATE
+**Proposed fix:** Add static constants to `RuntimeValue.BooleanValue`:
+```java
+record BooleanValue(boolean value) implements RuntimeValue {
+    static final BooleanValue TRUE  = new BooleanValue(true);
+    static final BooleanValue FALSE = new BooleanValue(false);
+}
+```
+Replace every `new RuntimeValue.BooleanValue(b)` in `AbstractRuntimeEvaluator` with `b ? RuntimeValue.BooleanValue.TRUE : RuntimeValue.BooleanValue.FALSE`. No semantic change. Expected reduction: ~144–304 B/op depending on expression complexity.
+
+---
+
+## PERF-027: BigDecimalMath.log() — extreme allocation for ln() and lb() functions
+
+**Date:** 2026-03-21
+
+**Scenario:** `MathFunctions.ln()` delegates directly to `BigDecimalMath.log(value, mc)` at `DECIMAL128` precision (34 significant digits). The Ben-Manes Big-Math library implements `log()` via a Taylor-series expansion that allocates a very large number of intermediate `BigDecimal` objects per call. For a chain of 12 logarithm calls, the allocation cost is catastrophic.
+
+**Hypothesis:** The `BigDecimalMath.log()` implementation at DECIMAL128 precision allocates intermediate BigDecimals on every call, producing allocation rates in the megabyte-per-call range. This is observable as a performance cliff for any expression using `ln()`, `lb()`, or `log()`.
+
+**Benchmark:** `CrossModuleLogBenchmark.mk2LogarithmChain` — evaluates `ln(a) + ln(b) + ... + ln(l)` (12 calls) with constant inputs.
+
+| Benchmark | ns/op | Error (±) | B/op |
+|-----------|------:|----------:|-----:|
+| mk2LogarithmChain | 1,866,908 | ±398,544 | 1,721,264 |
+
+**Finding:** 1.87 ms per call and 1.72 MB/op for 12 log calls. This is the highest-impact finding in this analysis. Each `ln()` call contributes ~143,438 B/op (~140 KB) of intermediate `BigDecimal` allocations from the Taylor-series expansion inside `BigDecimalMath.log()`.
+
+**Async profiler:** Flamegraph confirms that virtually the entire allocation stack originates in `BigDecimalMath.log()` internals — `logUsingTwoThirds()`, `logUsingExponent()`, `logUsingRoot()`, and similar Taylor-series helper methods.
+
+**Decision:** CANDIDATE
+**Proposed fixes (in priority order):**
+1. **Double-precision fast path:** Add a `DoubleMathFunctions` class (following the existing pattern of `DoubleExcelFinancialFunctions`) that uses `Math.log()` / `Math.log(2)` for non-arbitrary-precision contexts, and register double variants in `ExpressionEnvironmentBuilder.addMathFunctions()` behind a precision-tier selection mechanism.
+2. **Lower default MathContext precision:** Evaluate whether `DECIMAL128` is the right default for all math operations, or if `DECIMAL64` (16 digits) would suffice for most use cases and reduce BigDecimalMath allocation significantly.
+3. **Memoize `log(2)` for `lb()`:** See PERF-028.
+
+---
+
+## PERF-028: lb() — recomputes log(2) from scratch on every call
+
+**Date:** 2026-03-21
+
+**Scenario:** `MathFunctions.lb()` delegates to `BigDecimalMath.log2(value, mc)`. The Big-Math implementation of `log2` internally computes `log(value) / log(2)`, calling `BigDecimalMath.log()` **twice** — once for `value` and once for the constant `2` — with no caching of the constant term. Every call to `lb()` therefore pays twice the `BigDecimalMath.log()` cost even though `log(2)` is a pure constant at any given precision.
+
+**Hypothesis:** `lb()` should be ~2× more expensive than `ln()` per call due to the double `log()` invocation, and this overhead is measurable in isolation.
+
+**Measurement:** Micro-benchmark (100 calls with timed loop, same input value, same MathContext):
+| Method | ns / 100 calls | Ratio |
+|--------|---------------:|------:|
+| ln()   | 237,408 | 1.00× |
+| lb()   | 264,147 | 1.11× |
+
+**Finding:** The 11% overhead is consistent with a second `BigDecimalMath.log(BigDecimal.TWO, mc)` call — the 1.11× instead of 2.0× ratio is because `log(2)` (a value near 1) is computationally cheaper than `log(x)` for arbitrary `x`. The overhead is still significant: every expression using `lb()` pays an extra ~26 µs per call relative to `ln()`.
+
+**Async profiler:** Flamegraph for `mk2LogarithmChain` shows a secondary `log` stack that originates from the constant-argument path of `log2`, confirming the double-invocation.
+
+**Decision:** CANDIDATE
+**Proposed fix:** Precompute `log(2)` once per `MathContext` precision and cache it as a `static final` in `MathFunctions` or in `BigDecimalMath`'s calling wrapper:
+```java
+private static final ConcurrentHashMap<Integer, BigDecimal> LOG2_CACHE = new ConcurrentHashMap<>();
+
+static BigDecimal log2(BigDecimal value, MathContext mc) {
+    BigDecimal log2const = LOG2_CACHE.computeIfAbsent(mc.getPrecision(),
+        p -> BigDecimalMath.log(BigDecimal.TWO, mc));
+    return BigDecimalMath.log(value, mc).divide(log2const, mc);
+}
+```
+
+---
+
+## PERF-029: RuntimeValueFactory and RuntimeCoercionService created per compile() call
+
+**Date:** 2026-03-21
+
+**Scenario:** `ExpressionRuntimeSupport.from()` always creates two stateless wrapper objects — `new RuntimeValueFactory(conversionService)` and `new RuntimeCoercionService(conversionService)` — regardless of whether the underlying `CompiledExpression` was served from the Caffeine cache or freshly parsed. Both objects are stateless (they hold only a single reference to the shared `DataConversionService`) and contribute ~24 B each (~48 B total) per `compile()` call.
+
+**Hypothesis:** These two objects are pure pass-throughs to `DataConversionService` with no mutable state. Storing them as `final` fields in `ExpressionEnvironment` (which already owns `DataConversionService`) would eliminate the 48 B allocation on every cache-hit `compile()` call.
+
+**Benchmark:** `CompilePathAllocationBenchmark.compileSimpleCacheHit` and `compileFunctionCacheHit` — expressions are pre-warmed into the Caffeine cache in the `@Setup(Level.Trial)` method, so the benchmark measures only the per-call overhead in the cache-hit path.
+
+| Benchmark | ns/op | B/op | Notes |
+|-----------|------:|-----:|-------|
+| compileSimpleCacheHit | 245 | 240 | 48 B from factory objects + ~192 B from MutableBindings + ERS wrapper |
+| compileFunctionCacheHit | 274 | 240 | Same floor — function catalog size does not affect cache-hit allocation |
+
+**Finding:** Both cache-hit scenarios show a 240 B/op floor. The factory pair (~48 B) accounts for 20% of the allocation on every compile call even when the entire compilation is a cache hit. Storing these as `ExpressionEnvironment` fields would reduce the floor to ~192 B/op.
+
+**Async profiler:** Flamegraph shows `RuntimeValueFactory::<init>` and `RuntimeCoercionService::<init>` stacks visible in cache-hit paths, each called from `ExpressionRuntimeSupport.from()`.
+
+**Decision:** CANDIDATE
+**Proposed fix:** Add `final RuntimeValueFactory runtimeValueFactory` and `final RuntimeCoercionService runtimeCoercionService` fields to `ExpressionEnvironment`, initialized once in its constructor using the already-owned `DataConversionService`. Modify `ExpressionRuntimeSupport.from()` to read these fields instead of allocating new instances.
+
+---
+
+## PERF-030: FunctionCatalog.findExact() — stream + list allocation per function lookup
+
+**Date:** 2026-03-21
+
+**Scenario:** `FunctionCatalog.findExact(String name, int arity)` is called once per function call node during semantic resolution (the compile path). Its current implementation creates a new `Stream`, calls `.filter(...)`, and calls `.toList()` on every invocation, allocating a `Stream` object and a new `List` even when the catalog has only a single overload for the given function name.
+
+```java
+// Current implementation:
+public Optional<FunctionDescriptor> findExact(String name, int arity) {
+    List<FunctionDescriptor> candidates = descriptorsByName
+        .getOrDefault(name, List.of())
+        .stream()
+        .filter(descriptor -> descriptor.arity() == arity)
+        .toList();
+    return candidates.size() == 1 ? Optional.of(candidates.getFirst()) : Optional.empty();
+}
+```
+
+**Hypothesis:** Replacing the stream pipeline with a plain indexed loop (or a direct `Map<FunctionRef, FunctionDescriptor>` lookup) would eliminate the per-lookup stream and list allocation. Since `ExpressionEnvironmentBuilder` already sorts descriptors by arity within each name group, a sequential scan finds the match in O(1) for the common single-overload case.
+
+**Benchmark:** `CompilePathAllocationBenchmark.compileFunctionCacheMiss` — exercises the full compilation pipeline including semantic resolution of 8 function calls (4 `ln`, 4 `sqrt`).
+
+| Benchmark | ns/op | B/op | Notes |
+|-----------|------:|-----:|-------|
+| compileFunctionCacheMiss | 81,148 | 54,870 | Full pipeline: ANTLR + AST + semantic resolution + execution plan |
+| compileFunctionCacheHit  | 274    | 240   | No semantic resolution; 54,630 B/op delta = compile-only allocation |
+
+**Finding:** The cache-miss path allocates 54,630 B/op more than the cache-hit path. The `FunctionCatalog.findExact()` stream is called 8 times per compilation in the function-call benchmark, contributing one `Stream` + one `List` allocation per call.
+
+**Decision:** CANDIDATE
+**Proposed fix (Option A — direct map lookup):** Replace `descriptorsByName: Map<String, List<FunctionDescriptor>>` with `descriptorsByRef: Map<FunctionRef, FunctionDescriptor>` indexed by `(name, arity)`. `findExact(name, arity)` becomes a single `Map.get(new FunctionRef(name, arity))` — zero stream, zero list. Note: this synergizes with PERF-031 (precomputed `FunctionRef` in `FunctionDescriptor`).
+**Proposed fix (Option B — indexed scan):** Keep the existing map and replace the stream with a `for` loop returning on first match:
+```java
+for (FunctionDescriptor d : descriptorsByName.getOrDefault(name, List.of())) {
+    if (d.arity() == arity) return Optional.of(d);
+}
+return Optional.empty();
+```
+
+---
+
+## PERF-031: FunctionDescriptor.functionRef() — new FunctionRef record on every call
+
+**Date:** 2026-03-21
+
+**Scenario:** `FunctionDescriptor.functionRef()` returns `new FunctionRef(name, arity())` on every invocation. Both `name` and `arity()` are compile-time constants (stored as `final` fields). The record could be computed once in the constructor and returned from a cached field.
+
+```java
+// Current implementation:
+public FunctionRef functionRef() {
+    return new FunctionRef(name, arity());  // 32 B allocated on every call
+}
+```
+
+**Hypothesis:** Precomputing the `FunctionRef` in the `FunctionDescriptor` constructor and returning the cached instance would eliminate one 32-B allocation per function-call node per cache-miss compilation.
+
+**Evidence:** Static analysis confirms the smell. Combined with `FunctionCatalog.findExact()` (PERF-030), during a cache-miss compilation of an expression with 8 function calls, `functionRef()` is called at least 8 times, contributing 8 × 32 B = 256 B of avoidable allocation.
+
+**Decision:** CANDIDATE
+**Proposed fix:** Add a `private final FunctionRef functionRef` field to `FunctionDescriptor`, initialize it in the constructor (`this.functionRef = new FunctionRef(name, arity())`), and change the method to `return this.functionRef`. This synergizes with PERF-030 Option A (direct map lookup keyed by `FunctionRef`).
+
+---
+
+## PERF-032: RuntimeCoercionService.coerce() for List target — missed stream allocation
+
+**Date:** 2026-03-21
+
+**Scenario:** PERF-022 eliminated a `List.copyOf()` allocation on the `evaluateVector` trusted path. However, the `List` target branch in `RuntimeCoercionService.coerce()` was not updated and still uses a stream pipeline:
+
+```java
+if (List.class.isAssignableFrom(targetType)) {
+    return elements.stream().map(RuntimeValue::raw).toList();  // Stream + List allocated
+}
+```
+
+This path is exercised whenever a function that declares a `List` parameter receives a vector value, converting `RuntimeValue` wrappers to their raw forms via `stream().map().toList()`.
+
+**Hypothesis:** Replacing the stream pipeline with a pre-sized `ArrayList` loop would eliminate one `Stream` allocation and one intermediate array copy from this path, mirroring the fix already applied in PERF-022.
+
+**Evidence:** Static analysis. The fix is structurally identical to PERF-022 and carries no behavioral risk.
+
+**Decision:** CANDIDATE
+**Proposed fix:**
+```java
+if (List.class.isAssignableFrom(targetType)) {
+    List<Object> result = new ArrayList<>(elements.size());
+    for (RuntimeValue rv : elements) result.add(rv.raw());
+    return result;
+}
+```
+Expected savings: one `Stream` object + one internal spliterator per vector-argument function call.
