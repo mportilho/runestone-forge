@@ -62,7 +62,7 @@ class ExpressionEvaluatorV2ParserFacadeTest {
 
         assertThatThrownBy(() -> facade.parseMath("a = ; 1"))
             .isInstanceOf(ParsingException.class)
-            .hasMessageContaining("failed to parse input at 1:4");
+            .hasMessageContaining("syntax error at 1:4");
     }
 
     @Test

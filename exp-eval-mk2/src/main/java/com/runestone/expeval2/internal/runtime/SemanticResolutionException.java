@@ -1,5 +1,7 @@
 package com.runestone.expeval2.internal.runtime;
 
+import com.runestone.expeval2.internal.ast.SourceSpan;
+
 import java.util.List;
 import java.util.Objects;
 
@@ -25,10 +27,19 @@ public final class SemanticResolutionException extends RuntimeException {
     private static String buildMessage(String source, List<SemanticIssue> issues) {
         Objects.requireNonNull(source, "source must not be null");
         List<SemanticIssue> safeIssues = List.copyOf(Objects.requireNonNull(issues, "issues must not be null"));
-        String detail = safeIssues.stream()
-            .map(issue -> issue.code() + ": " + issue.message())
-            .findFirst()
-            .orElse("semantic resolution failed");
-        return "Semantic resolution failed for source '" + source + "': " + detail;
+        if (safeIssues.isEmpty()) {
+            return "semantic resolution failed for expression:\n\n  " + source;
+        }
+        SemanticIssue first = safeIssues.getFirst();
+        String[] lines = source.split("\n", -1);
+        SourceSpan span = first.sourceSpan();
+        int lineIdx = span.startLine() - 1;
+        String sourceLine = (lineIdx >= 0 && lineIdx < lines.length) ? lines[lineIdx] : source;
+        int caretLen = Math.max(1, span.endColumn() - span.startColumn());
+        caretLen = Math.min(caretLen, Math.max(1, sourceLine.length() - span.startColumn()));
+        String pointer = " ".repeat(Math.max(0, span.startColumn())) + "^".repeat(caretLen);
+        return "semantic resolution failed:\n\n  %s\n  %s\n  %s at %d:%d \u2014 %s".formatted(
+            sourceLine, pointer, first.code(), span.startLine(), span.startColumn(), first.message()
+        );
     }
 }

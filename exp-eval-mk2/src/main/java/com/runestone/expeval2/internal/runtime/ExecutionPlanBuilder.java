@@ -109,7 +109,7 @@ final class ExecutionPlanBuilder {
         SymbolRef ref = model.findSymbol(id.nodeId())
                 .orElseThrow(() -> new IllegalStateException(
                         "missing symbol for identifier '" + id.name() + "'"));
-        return new ExecutableIdentifier(ref);
+        return new ExecutableIdentifier(ref, id.sourceSpan());
     }
 
     private ExecutableNode buildFunctionCall(FunctionCallNode f, SemanticModel model) {

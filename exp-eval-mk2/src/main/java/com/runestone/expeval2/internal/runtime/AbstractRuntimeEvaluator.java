@@ -2,8 +2,11 @@ package com.runestone.expeval2.internal.runtime;
 
 import ch.obermuhlner.math.big.BigDecimalMath;
 import com.runestone.expeval2.api.AuditEvent;
+import com.runestone.expeval2.api.CompilationPosition;
+import com.runestone.expeval2.api.ExpressionEvaluationException;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
 import com.runestone.expeval2.internal.ast.BinaryOperator;
+import com.runestone.expeval2.internal.ast.SourceSpan;
 import com.runestone.expeval2.types.ScalarType;
 
 import java.math.BigDecimal;
@@ -103,7 +106,7 @@ abstract class AbstractRuntimeEvaluator<T> {
             }
             case ExecutableIdentifier id -> {
                 RuntimeValue idValue = scope.find(id.ref())
-                        .orElseThrow(() -> new IllegalStateException("missing value for symbol '" + id.ref().name() + "'"));
+                        .orElseThrow(() -> unboundVariableException(id));
                 AuditCollector idAudit = scope.audit();
                 if (idAudit != null) {
                     idAudit.record(new AuditEvent.VariableRead(id.ref().name(), false, idValue.raw()));
@@ -276,5 +279,12 @@ abstract class AbstractRuntimeEvaluator<T> {
             return base.pow(normalized.intValue(), mathContext);
         }
         return BigDecimalMath.pow(base, exponent, mathContext);
+    }
+
+    private ExpressionEvaluationException unboundVariableException(ExecutableIdentifier id) {
+        SourceSpan span = id.sourceSpan();
+        CompilationPosition position = new CompilationPosition(span.startLine(), span.startColumn(), span.endColumn());
+        String message = "variable '" + id.ref().name() + "' has no value; call setValue(\"" + id.ref().name() + "\", ...) before compute()";
+        return new ExpressionEvaluationException(compiledExpression.source(), "UNBOUND_VARIABLE", message, position);
     }
 }

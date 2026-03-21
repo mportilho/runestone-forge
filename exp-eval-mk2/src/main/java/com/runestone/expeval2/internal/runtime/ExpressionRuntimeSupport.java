@@ -2,8 +2,10 @@ package com.runestone.expeval2.internal.runtime;
 
 import com.runestone.expeval2.api.AuditResult;
 import com.runestone.expeval2.api.CompilationIssue;
+import com.runestone.expeval2.api.CompilationPosition;
 import com.runestone.expeval2.api.ExpressionCompilationException;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
+import com.runestone.expeval2.internal.ast.SourceSpan;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 
 import java.math.BigDecimal;
@@ -59,7 +61,11 @@ public final class ExpressionRuntimeSupport {
             return from(compiled, environment);
         } catch (SemanticResolutionException e) {
             List<CompilationIssue> issues = e.issues().stream()
-                .map(issue -> new CompilationIssue(issue.code(), issue.message()))
+                .map(issue -> {
+                    SourceSpan span = issue.sourceSpan();
+                    CompilationPosition position = new CompilationPosition(span.startLine(), span.startColumn(), span.endColumn());
+                    return new CompilationIssue(issue.code(), issue.message(), position);
+                })
                 .toList();
             throw new ExpressionCompilationException(source, issues, e);
         }
