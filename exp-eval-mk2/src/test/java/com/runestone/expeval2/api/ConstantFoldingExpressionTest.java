@@ -1,13 +1,16 @@
 package com.runestone.expeval2.api;
 
 import com.runestone.expeval2.environment.ExpressionEnvironment;
+import com.runestone.expeval2.internal.runtime.ExpressionCompiler;
 import org.assertj.core.data.Offset;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
@@ -229,6 +232,101 @@ class ConstantFoldingExpressionTest {
 
             assertThat(result.trace().functionCalls()).hasSize(1);
             assertThat(result.trace().functionCalls().getFirst().functionName()).isEqualTo("ln");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Runtime invocation count — the core folding contract
+    // -----------------------------------------------------------------------
+
+    /**
+     * These tests verify that a foldable function is called exactly once (at build time)
+     * and never again during {@code compute()}, regardless of how many times it is called.
+     *
+     * <p>Each test uses a fresh {@link ExpressionCompiler} to prevent the Caffeine cache from
+     * returning a previously compiled expression that would skip the build-time invocation.
+     */
+    @Nested
+    @DisplayName("Runtime invocation count — foldable function must not be called during compute()")
+    class RuntimeInvocationCount {
+
+        @BeforeEach
+        void resetCounter() {
+            CountedFunctions.CALL_COUNT.set(0);
+        }
+
+        @Test
+        @DisplayName("foldable function with literal arg is invoked exactly once at build time, zero times during compute()")
+        void foldableFunctionInvokedOnceAtBuildTimeNeverDuringCompute() {
+            ExpressionEnvironment env = ExpressionEnvironment.builder()
+                    .registerStaticProvider(CountedFunctions.class, true)
+                    .build();
+            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+
+            MathExpression expr = MathExpression.compile("counted(5)", env, freshCompiler);
+            assertThat(CountedFunctions.CALL_COUNT.get())
+                    .as("function must be called exactly once at fold time")
+                    .isEqualTo(1);
+
+            expr.compute();
+            expr.compute();
+            expr.compute();
+            assertThat(CountedFunctions.CALL_COUNT.get())
+                    .as("function must not be called again during compute()")
+                    .isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("non-foldable function with literal arg is invoked on every compute() call")
+        void nonFoldableFunctionInvokedOnEachCompute() {
+            ExpressionEnvironment env = ExpressionEnvironment.builder()
+                    .registerStaticProvider(CountedFunctions.class)   // foldable=false
+                    .build();
+            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+
+            MathExpression expr = MathExpression.compile("counted(5)", env, freshCompiler);
+            assertThat(CountedFunctions.CALL_COUNT.get())
+                    .as("non-foldable function must not be called at build time")
+                    .isEqualTo(0);
+
+            expr.compute();
+            expr.compute();
+            expr.compute();
+            assertThat(CountedFunctions.CALL_COUNT.get())
+                    .as("non-foldable function must be called once per compute()")
+                    .isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("nested foldable calls counted(counted(5)) are both invoked exactly once at build time")
+        void nestedFoldableCallsInvokedTwiceAtBuildTimeNeverDuringCompute() {
+            ExpressionEnvironment env = ExpressionEnvironment.builder()
+                    .registerStaticProvider(CountedFunctions.class, true)
+                    .build();
+            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+
+            // inner counted(5) folds first (1 call), outer counted(result) folds next (1 call) = 2 total
+            MathExpression expr = MathExpression.compile("counted(counted(5))", env, freshCompiler);
+            assertThat(CountedFunctions.CALL_COUNT.get())
+                    .as("both inner and outer calls must be invoked at fold time")
+                    .isEqualTo(2);
+
+            expr.compute();
+            expr.compute();
+            assertThat(CountedFunctions.CALL_COUNT.get())
+                    .as("neither call must be invoked during compute()")
+                    .isEqualTo(2);
+        }
+    }
+
+    /** Fixture that counts how many times it has been invoked. */
+    public static final class CountedFunctions {
+
+        static final AtomicInteger CALL_COUNT = new AtomicInteger(0);
+
+        public static BigDecimal counted(BigDecimal value) {
+            CALL_COUNT.incrementAndGet();
+            return value;
         }
     }
 }
