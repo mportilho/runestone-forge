@@ -790,8 +790,9 @@ This path is exercised whenever a function that declares a `List` parameter rece
 
 **Evidence:** Static analysis. The fix is structurally identical to PERF-022 and carries no behavioral risk.
 
-**Decision:** CANDIDATE
-**Proposed fix:**
+**Decision:** DONE (2026-03-21)
+**Implementation:** Replaced `elements.stream().map(RuntimeValue::raw).toList()` with a pre-sized `ArrayList` loop in `RuntimeCoercionService.coerce()` (line 129). Added `java.util.ArrayList` import.
+
 ```java
 if (List.class.isAssignableFrom(targetType)) {
     List<Object> result = new ArrayList<>(elements.size());
@@ -799,4 +800,4 @@ if (List.class.isAssignableFrom(targetType)) {
     return result;
 }
 ```
-Expected savings: one `Stream` object + one internal spliterator per vector-argument function call.
+Eliminates one `Stream` object + one internal spliterator per vector-argument function call. Benchmark not yet measured.

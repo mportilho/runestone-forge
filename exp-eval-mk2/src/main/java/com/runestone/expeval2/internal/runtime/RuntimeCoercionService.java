@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -127,7 +128,9 @@ final class RuntimeCoercionService {
         }
         if (value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements)) {
             if (List.class.isAssignableFrom(targetType)) {
-                return elements.stream().map(RuntimeValue::raw).toList();
+                List<Object> result = new ArrayList<>(elements.size());
+                for (RuntimeValue rv : elements) result.add(rv.raw());
+                return result;
             }
             if (!targetType.isArray()) {
                 return convert(value.raw(), targetType);
