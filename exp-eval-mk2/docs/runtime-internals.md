@@ -16,7 +16,8 @@ source string
   → MathEvaluator / LogicalEvaluator (ExecutionPlan + ExecutionScope → RuntimeValue)
 ```
 
-Compiled expressions are cached in `ExpressionCompiler` by `(source, environmentId, resultType)` via Caffeine (max 1 024 entries).
+Compiled expressions are cached in `ExpressionCompiler` by `(source, environmentId, resultType)` via Caffeine.
+Cache size and TTL are configurable — see section 10.
 
 ---
 
@@ -281,24 +282,209 @@ Arguments use the `allEntityTypes` rule, which accepts `mathExpression`, `logica
 
 `registerStaticProvider(Class<?>)` discovers all public static methods via `getMethods()`.
 
+> **Default environment**: `ExpressionEnvironmentBuilder.empty()` — and the no-environment overloads on `MathExpression`, `LogicalExpression`, and `AssignmentExpression` all use `empty()`. No functions are registered by default. An expression that calls any function without an explicit environment with that function registered will fail with `UNKNOWN_FUNCTION`.
+
 ---
 
-## 10. Public API usage pattern
+## 10. Cache configuration
+
+`ExpressionCompiler` is configurable and can be used both as a JVM-wide singleton and as an injectable component.
+
+### CacheConfig record
 
 ```java
-// Math result
+public record CacheConfig(long maximumSize, Duration expireAfterWrite)
+```
+
+- `maximumSize` — maximum Caffeine cache entries; must be positive.
+- `expireAfterWrite` — TTL per entry; `null` disables expiration.
+- `CacheConfig.defaults()` — reads `expeval.cache.maximumSize` (default 1 024) and `expeval.cache.ttlSeconds` (default 0 = no TTL) from system properties.
+
+### Singleton lifecycle via ExpressionRuntimeSupport
+
+```java
+// Configure before first compilation (silently ignored if already initialized)
+ExpressionRuntimeSupport.configure(new CacheConfig(4_096, Duration.ofHours(1)));
+
+// Replace the singleton at any time (atomically)
+ExpressionRuntimeSupport.reconfigure(new CacheConfig(8_192, null));
+
+// Clear cache entries without replacing the compiler
+ExpressionRuntimeSupport.invalidateCache();
+```
+
+### DI / Spring @Bean pattern
+
+```java
+@Bean
+public ExpressionCompiler expressionCompiler() {
+    return new ExpressionCompiler(new CacheConfig(4_096, Duration.ofHours(1)));
+}
+
+// Then pass the injected compiler to the three-argument compile overload:
+MathExpression expr = MathExpression.compile("a + b", environment, compiler);
+```
+
+The three-argument `compile` overloads exist on `MathExpression`, `LogicalExpression`, and `AssignmentExpression`.
+
+### Cache key
+
+Two compilations share an entry when `(source, environmentId, resultType)` are identical. `ExpressionEnvironmentId` is derived deterministically from the environment's function providers, external symbols, and `MathContext`, so environments built from identical configurations share cache entries automatically.
+
+---
+
+## 11. Audit trail
+
+`computeWithAudit()` is available on all three expression types and returns `AuditResult<T>`.
+
+### AuditResult
+
+```java
+public record AuditResult<T>(T value, ExpressionAuditTrace trace)
+```
+
+- `T` is `BigDecimal` (math), `Boolean` (logical), or `Map<String, Object>` (assignments).
+
+### ExpressionAuditTrace
+
+```java
+public record ExpressionAuditTrace(List<AuditEvent> events, Duration evaluationTime)
+```
+
+Convenience views:
+- `variableSnapshot()` — `LinkedHashMap<String, Object>` of all variable names to their last-seen value during evaluation (assignments first, then reads; iteration order follows first appearance).
+- `functionCalls()` — ordered `List<AuditEvent.FunctionCall>` of all function calls during evaluation.
+
+### AuditEvent — sealed interface with three permits
+
+| Subtype | When emitted | Key fields |
+|---|---|---|
+| `VariableRead(name, systemProvided, value)` | Each time an identifier is resolved | `systemProvided=true` for `currDate`/`currTime`/`currDateTime` |
+| `FunctionCall(functionName, inputArgs, result, callDepth)` | After each function invocation | `callDepth=0` for top-level, ≥1 for nested; `inputArgs()` returns immutable `List<Object>` |
+| `AssignmentEvent(targetName, newValue)` | After each variable assignment (one per target for destructuring) | — |
+
+> **Hot-path note**: `FunctionCall` uses `Object[]` internally and wraps to `List.copyOf(...)` only on `inputArgs()`, deferring allocation to read time. `AuditCollector` is pre-sized from the execution plan's estimated event count to avoid `ArrayList` growth during evaluation.
+
+---
+
+## 12. ValidationResult — compile-time metadata
+
+`validate()` on each expression type returns `ValidationResult` without throwing.
+
+```java
+public record ValidationResult(
+    String source,
+    boolean valid,
+    List<CompilationIssue> issues,
+    Set<String> assignedVariables,
+    Set<String> userVariables,
+    Set<String> functions)
+```
+
+| Field | Content when `valid=true` | Content when `valid=false` |
+|---|---|---|
+| `issues` | empty | one or more `CompilationIssue` with `code`, `message`, optional `position` |
+| `assignedVariables` | names of variables assigned within the expression (internal symbols) | empty |
+| `userVariables` | names of variables that must be supplied at evaluation time (external/free symbols) | empty |
+| `functions` | deduplicated names of all functions called in the expression | empty |
+
+All three sets are unmodifiable (`Set.copyOf`). `failed()` always produces empty sets.
+
+### Issue codes
+
+| Code | Cause |
+|---|---|
+| `SYNTAX_ERROR` | ANTLR parse failure |
+| `UNKNOWN_FUNCTION` | function name not in `FunctionCatalog` |
+| `INVALID_FUNCTION_ARITY` | wrong number of arguments |
+| `INCOMPATIBLE_FUNCTION_ARGUMENTS` | argument types do not match any overload |
+| `AMBIGUOUS_FUNCTION` | multiple overloads match |
+| `INCOMPATIBLE_COMPARISON` | comparison operands have incompatible types |
+
+`CompilationIssue.position()` carries `(line, column, endColumn)` for semantic errors and syntax errors; it is `null` for issues without a source location.
+
+### formatMessage()
+
+Returns a human-readable string. For semantic/syntax errors with a position, formats the source line with a caret pointer:
+
+```
+  principal * rate + unknown()
+                     ^^^^^^^^^
+  UNKNOWN_FUNCTION at 1:19 — unknown function 'unknown'
+```
+
+---
+
+## 13. Public API usage pattern
+
+### Three expression types
+
+```java
+// Math — returns BigDecimal
+BigDecimal result = MathExpression.compile("a + b * c")
+        .setValue("a", 1).setValue("b", 2).setValue("c", 3)
+        .compute(); // 7
+
+// Logical — returns boolean
+boolean ok = LogicalExpression.compile("x > 10")
+        .setValue("x", 15)
+        .compute(); // true
+
+// Assignments — returns Map<String, Object>
+Map<String, Object> vars = AssignmentExpression.compile("x = a + 1; y = x * 2;")
+        .setValue("a", 5)
+        .compute(); // {x=6, y=12}
+```
+
+### Functions and external symbols
+
+```java
 ExpressionEnvironment env = ExpressionEnvironment.builder()
+        .addMathFunctions()
         .addTrigonometryFunctions()
+        .registerExternalSymbol("rate", BigDecimal.valueOf(0.05), false)
         .build();
 
-BigDecimal result = MathExpression.compile("sin(x)", env)
+BigDecimal result = MathExpression.compile("sin(x) + rate", env)
         .setValue("x", new BigDecimal("1.5707963267948966"))
         .compute();
+```
 
-// Logical result
-boolean ok = LogicalExpression.compile("atan2(1, 0) > 1", env).compute();
+### Validation with metadata
 
-// Date function — pass LocalDate via setValue
+```java
+ExpressionEnvironment env = ExpressionEnvironment.builder()
+        .addMathFunctions()
+        .registerExternalSymbol("principal", BigDecimal.ONE, false)
+        .build();
+
+ValidationResult vr = MathExpression.validate("mean([principal, 2]) + rate", env);
+
+vr.valid();             // true
+vr.userVariables();     // {"principal", "rate"}  — rate is a free variable
+vr.assignedVariables(); // {} — no assignments in this expression
+vr.functions();         // {"mean"}
+vr.formatMessage();     // "expression is valid: mean([principal, 2]) + rate"
+```
+
+### Audit trail
+
+```java
+ExpressionEnvironment env = ExpressionEnvironment.builder().addMathFunctions().build();
+
+AuditResult<BigDecimal> audit = MathExpression.compile("mean([a, b])", env)
+        .setValue("a", 2).setValue("b", 4)
+        .computeWithAudit();
+
+audit.value();                              // 3
+audit.trace().evaluationTime();            // Duration
+audit.trace().variableSnapshot();          // {a=2, b=4}
+audit.trace().functionCalls().getFirst().functionName(); // "mean"
+```
+
+### Date functions
+
+```java
 ExpressionEnvironment dateEnv = ExpressionEnvironment.builder()
         .addDateTimeFunctions()
         .build();
@@ -306,5 +492,19 @@ ExpressionEnvironment dateEnv = ExpressionEnvironment.builder()
 BigDecimal days = MathExpression.compile("daysBetween(d1, d2)", dateEnv)
         .setValue("d1", LocalDate.of(2024, 1, 1))
         .setValue("d2", LocalDate.of(2024, 12, 31))
-        .compute(); // returns BigDecimal 365
+        .compute(); // 365
+```
+
+### Spring DI with injected compiler
+
+```java
+@Bean
+public ExpressionCompiler expressionCompiler() {
+    return new ExpressionCompiler(new CacheConfig(4_096, Duration.ofHours(1)));
+}
+
+// In a service:
+@Autowired ExpressionCompiler compiler;
+
+MathExpression expr = MathExpression.compile("a + b", environment, compiler);
 ```
