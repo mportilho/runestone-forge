@@ -32,14 +32,16 @@ public final class ExpressionCompiler {
     }
 
     public CompiledExpression compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
+        if (source == null || source.isBlank()) {
+            throw new IllegalArgumentException("source must not be blank");
+        }
+        Objects.requireNonNull(resultType, "resultType must not be null");
         Objects.requireNonNull(environment, "environment must not be null");
         ExpressionCacheKey cacheKey = new ExpressionCacheKey(source, environment.environmentId(), resultType);
         return cache.get(cacheKey, ignored -> compileUncached(source, resultType, environment));
     }
 
     private CompiledExpression compileUncached(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
-        Objects.requireNonNull(source, "source must not be null");
-        Objects.requireNonNull(resultType, "resultType must not be null");
         ExpressionFileNode ast = switch (resultType) {
             case MATH -> astBuilder.buildMath(parserFacade.parseMath(source).root());
             case LOGICAL -> astBuilder.buildLogical(parserFacade.parseLogical(source).root());
