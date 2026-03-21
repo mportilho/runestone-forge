@@ -20,6 +20,9 @@ import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.MathContext;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 public final class ExpressionEnvironmentBuilder {
@@ -126,8 +129,28 @@ public final class ExpressionEnvironmentBuilder {
                 ));
         ExternalSymbolCatalog externalSymbolCatalog = new ExternalSymbolCatalog(symbolsByName);
 
-        return new ExpressionEnvironment(new ExpressionEnvironmentId(UUID.randomUUID().toString()),
+        return new ExpressionEnvironment(new ExpressionEnvironmentId(deriveEnvironmentId(staticProviders, instanceProviders, externalSymbols, mathContext)),
                 functionCatalog, externalSymbolCatalog, effectiveConversionService, mathContext);
+    }
+
+    private static String deriveEnvironmentId(
+            List<Class<?>> staticProviders,
+            List<Object> instanceProviders,
+            Map<String, ExternalSymbolRegistration> externalSymbols,
+            MathContext mathContext) {
+        List<String> parts = new ArrayList<>();
+        staticProviders.forEach(c -> parts.add("s:" + c.getName()));
+        instanceProviders.forEach(o -> parts.add("i:" + o.getClass().getName() + "@" + System.identityHashCode(o)));
+        externalSymbols.forEach((name, reg) -> parts.add("x:" + name + ":" + reg.declaredType() + ":" + reg.overridable()));
+        parts.add("mc:" + mathContext.getPrecision() + ":" + mathContext.getRoundingMode());
+        Collections.sort(parts);
+        String content = String.join("|", parts);
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(content.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash, 0, 8);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
 
     private Collection<FunctionDescriptor> discoverFunctions(Class<?> providerClass, Object providerInstance, boolean staticOnly) {

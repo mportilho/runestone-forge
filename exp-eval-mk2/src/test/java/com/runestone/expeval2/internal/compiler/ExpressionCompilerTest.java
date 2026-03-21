@@ -72,6 +72,38 @@ class ExpressionCompilerTest {
         assertThat(second).isSameAs(first);
     }
 
+    @Test
+    void shouldShareCacheAcrossEquivalentEnvironmentsBuiltIndependently() {
+        ExpressionEnvironment env1 = new ExpressionEnvironmentBuilder()
+            .registerStaticProvider(ProviderFixture.class)
+            .registerExternalSymbol("principal", com.runestone.expeval2.types.ScalarType.NUMBER, BigDecimal.ONE, true)
+            .build();
+        ExpressionEnvironment env2 = new ExpressionEnvironmentBuilder()
+            .registerStaticProvider(ProviderFixture.class)
+            .registerExternalSymbol("principal", com.runestone.expeval2.types.ScalarType.NUMBER, BigDecimal.ONE, true)
+            .build();
+
+        CompiledExpression first = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, env1);
+        CompiledExpression second = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, env2);
+
+        assertThat(second).isSameAs(first);
+    }
+
+    @Test
+    void shouldNotShareCacheAcrossDifferentInstanceProviderInstances() {
+        ExpressionEnvironment env1 = new ExpressionEnvironmentBuilder()
+            .registerInstanceProvider(new InstanceProviderFixture(BigDecimal.ONE))
+            .build();
+        ExpressionEnvironment env2 = new ExpressionEnvironmentBuilder()
+            .registerInstanceProvider(new InstanceProviderFixture(BigDecimal.TEN))
+            .build();
+
+        CompiledExpression first = compiler.compile("multiply(2)", ExpressionResultType.MATH, env1);
+        CompiledExpression second = compiler.compile("multiply(2)", ExpressionResultType.MATH, env2);
+
+        assertThat(second).isNotSameAs(first);
+    }
+
     public static final class ProviderFixture {
 
         private ProviderFixture() {
@@ -87,6 +119,19 @@ class ExpressionCompilerTest {
 
         public static BigDecimal pick(String value) {
             return BigDecimal.valueOf(value.length());
+        }
+    }
+
+    public static final class InstanceProviderFixture {
+
+        private final BigDecimal factor;
+
+        InstanceProviderFixture(BigDecimal factor) {
+            this.factor = factor;
+        }
+
+        public BigDecimal multiply(BigDecimal x) {
+            return x.multiply(factor);
         }
     }
 }

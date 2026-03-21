@@ -5,6 +5,7 @@ import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.math.MathContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -34,7 +35,7 @@ class ExpressionRuntimeSupportCacheTest {
     @Test
     void shouldNotReuseCompiledExpressionForDifferentEnvironments() throws Exception {
         ExpressionEnvironment env1 = ExpressionEnvironment.builder().build();
-        ExpressionEnvironment env2 = ExpressionEnvironment.builder().build();
+        ExpressionEnvironment env2 = ExpressionEnvironment.builder().withMathContext(MathContext.DECIMAL64).build();
 
         ExpressionRuntimeSupport first = ExpressionRuntimeSupport.compile("1 + 2", ExpressionResultType.MATH, env1);
         ExpressionRuntimeSupport second = ExpressionRuntimeSupport.compile("1 + 2", ExpressionResultType.MATH, env2);
