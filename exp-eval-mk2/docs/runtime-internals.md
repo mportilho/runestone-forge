@@ -276,9 +276,8 @@ Arguments use the `allEntityTypes` rule, which accepts `mathExpression`, `logica
 | `addTrigonometryFunctions()` | `TrigonometryFunctions` |
 | `addComparableFunctions()` | `ComparableFunctions` |
 | `addExcelFunctions()` | `ExcelFinancialFunctions` (BigDecimal overloads) |
-| `addFastExcelFunctions()` | `DoubleExcelFinancialFunctions` (double overloads) |
 | `addDateTimeFunctions()` | `DateTimeFunctions` |
-| `addAllFunctions()` | All of the above except `DoubleExcelFinancialFunctions` |
+| `addAllFunctions()` | All of the above |
 
 `registerStaticProvider(Class<?>)` discovers all public static methods via `getMethods()`.
 

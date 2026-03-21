@@ -14,6 +14,7 @@ public final class FunctionDescriptor {
     private final ResolvedType returnType;
     private final MethodHandle invoker;
     private final MethodHandle compiledInvoker;
+    private final FunctionRef functionRef;
 
     public FunctionDescriptor(
         String name,
@@ -34,6 +35,7 @@ public final class FunctionDescriptor {
             throw new IllegalArgumentException("parameterResolvedTypes must match parameterTypes size");
         }
         this.compiledInvoker = compileInvoker(invoker, this.parameterTypes.size());
+        this.functionRef = new FunctionRef(this.name, this.parameterTypes.size());
     }
 
     public String name() {
@@ -61,7 +63,7 @@ public final class FunctionDescriptor {
     }
 
     public FunctionRef functionRef() {
-        return new FunctionRef(name, arity());
+        return functionRef;
     }
 
     public Object invoke(Object[] arguments) {

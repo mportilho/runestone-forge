@@ -698,8 +698,8 @@ static BigDecimal log2(BigDecimal value, MathContext mc) {
 
 **Async profiler:** Flamegraph shows `RuntimeValueFactory::<init>` and `RuntimeCoercionService::<init>` stacks visible in cache-hit paths, each called from `ExpressionRuntimeSupport.from()`.
 
-**Decision:** CANDIDATE
-**Proposed fix:** Add `final RuntimeValueFactory runtimeValueFactory` and `final RuntimeCoercionService runtimeCoercionService` fields to `ExpressionEnvironment`, initialized once in its constructor using the already-owned `DataConversionService`. Modify `ExpressionRuntimeSupport.from()` to read these fields instead of allocating new instances.
+**Decision:** DISCARDED
+**Reason:** `RuntimeValueFactory` and `RuntimeCoercionService` are package-private in `internal.runtime`, making it impossible to store them as fields in `ExpressionEnvironment` (a different package) without widening visibility. Any alternative caching approach (e.g., `ConcurrentHashMap` in `ExpressionRuntimeSupport`) introduces a per-call map lookup (~10–20 ns) that likely exceeds the cost of two TLAB bump allocations (~2–6 ns total). The optimization is not worth the added complexity.
 
 ---
 
@@ -730,17 +730,23 @@ public Optional<FunctionDescriptor> findExact(String name, int arity) {
 | compileFunctionCacheMiss | 81,148 | 54,870 | Full pipeline: ANTLR + AST + semantic resolution + execution plan |
 | compileFunctionCacheHit  | 274    | 240   | No semantic resolution; 54,630 B/op delta = compile-only allocation |
 
-**Finding:** The cache-miss path allocates 54,630 B/op more than the cache-hit path. The `FunctionCatalog.findExact()` stream is called 8 times per compilation in the function-call benchmark, contributing one `Stream` + one `List` allocation per call.
+**Finding:** The cache-miss path allocates 54,630 B/op more than the cache-hit path. Investigation revealed that `findExact()` is not called by `SemanticResolver` — the actual hot path uses `findCandidates()`. The real allocation sources in `SemanticResolver.resolveFunctionCall()` were: (1) an unnecessary `List.copyOf()` wrapping the already-immutable result of `findCandidates()`; (2) two stream filter pipelines (`arityMatches`, `compatibleMatches`) each allocating a `Stream` object and a result `List`; (3) `descriptor.functionRef()` allocating a new `FunctionRef` on each resolution (PERF-031).
 
-**Decision:** CANDIDATE
-**Proposed fix (Option A — direct map lookup):** Replace `descriptorsByName: Map<String, List<FunctionDescriptor>>` with `descriptorsByRef: Map<FunctionRef, FunctionDescriptor>` indexed by `(name, arity)`. `findExact(name, arity)` becomes a single `Map.get(new FunctionRef(name, arity))` — zero stream, zero list. Note: this synergizes with PERF-031 (precomputed `FunctionRef` in `FunctionDescriptor`).
-**Proposed fix (Option B — indexed scan):** Keep the existing map and replace the stream with a `for` loop returning on first match:
-```java
-for (FunctionDescriptor d : descriptorsByName.getOrDefault(name, List.of())) {
-    if (d.arity() == arity) return Optional.of(d);
-}
-return Optional.empty();
-```
+**Decision:** DONE (2026-03-21)
+**Implementation:**
+- `FunctionCatalog.findExact()` replaced stream pipeline with a `for` loop returning on first match (Option B) — fixes the method even though it is not currently on the hot path.
+- `SemanticResolver.resolveFunctionCall()` refactored: removed `List.copyOf()` on `findCandidates()` result; replaced the two stream filter pipelines with a single `for` loop that detects arity mismatches, ambiguous matches, and incompatible arguments in one pass without allocating intermediate lists.
+- `FunctionDescriptor.functionRef()` now returns a `private final FunctionRef` field pre-computed in the constructor (PERF-031).
+
+**Measured result (CompilePathAllocationBenchmark, forks=0, 5 iterations):**
+
+| Benchmark | ns/op before | B/op before | ns/op after | B/op after | B/op delta |
+|-----------|-------------:|------------:|------------:|-----------:|-----------:|
+| compileFunctionCacheMiss | 105,427 | 56,130 | 107,567 | 52,830 | **−3,300** |
+| compileFunctionCacheHit  | 320     | 432     | 309     | 432    | 0 (expected — no semantic resolution on cache hit) |
+| compileSimpleCacheHit    | 401     | 560     | 333     | 560    | 0 (expected — no function calls) |
+
+Cache-miss allocation reduced by ~3,300 B/op (~5.9%). ns/op delta is within single-fork noise.
 
 ---
 
@@ -761,8 +767,8 @@ public FunctionRef functionRef() {
 
 **Evidence:** Static analysis confirms the smell. Combined with `FunctionCatalog.findExact()` (PERF-030), during a cache-miss compilation of an expression with 8 function calls, `functionRef()` is called at least 8 times, contributing 8 × 32 B = 256 B of avoidable allocation.
 
-**Decision:** CANDIDATE
-**Proposed fix:** Add a `private final FunctionRef functionRef` field to `FunctionDescriptor`, initialize it in the constructor (`this.functionRef = new FunctionRef(name, arity())`), and change the method to `return this.functionRef`. This synergizes with PERF-030 Option A (direct map lookup keyed by `FunctionRef`).
+**Decision:** DONE (2026-03-21) — implemented together with PERF-030. See PERF-030 for benchmark results.
+**Implementation:** Added `private final FunctionRef functionRef` field to `FunctionDescriptor`, initialized in the constructor as `new FunctionRef(this.name, this.parameterTypes.size())`. The `functionRef()` accessor now returns the cached field.
 
 ---
 

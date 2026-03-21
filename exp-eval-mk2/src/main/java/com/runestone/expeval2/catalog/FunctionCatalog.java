@@ -17,10 +17,10 @@ public final class FunctionCatalog {
 
     public Optional<FunctionDescriptor> findExact(String name, int arity) {
         Objects.requireNonNull(name, "name must not be null");
-        List<FunctionDescriptor> candidates = descriptorsByName.getOrDefault(name, List.of()).stream()
-            .filter(descriptor -> descriptor.arity() == arity)
-            .toList();
-        return candidates.size() == 1 ? Optional.of(candidates.getFirst()) : Optional.empty();
+        for (FunctionDescriptor d : descriptorsByName.getOrDefault(name, List.of())) {
+            if (d.arity() == arity) return Optional.of(d);
+        }
+        return Optional.empty();
     }
 
     public Collection<FunctionDescriptor> findCandidates(String name) {

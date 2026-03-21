@@ -63,10 +63,6 @@ public final class ExpressionEnvironmentBuilder {
         return registerStaticProvider(DateTimeFunctions.class);
     }
 
-    public ExpressionEnvironmentBuilder addFastExcelFunctions() {
-        return registerStaticProvider(DoubleExcelFinancialFunctions.class);
-    }
-
     public ExpressionEnvironmentBuilder addExcelFunctions() {
         return registerStaticProvider(ExcelFinancialFunctions.class);
     }

@@ -31,6 +31,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -184,33 +185,35 @@ public final class SemanticResolver {
             List<ResolvedType> argumentTypes = node.arguments().stream()
                 .map(this::resolveExpression)
                 .toList();
-            List<FunctionDescriptor> candidates = List.copyOf(context.functionCatalog().findCandidates(node.functionName()));
+            Collection<FunctionDescriptor> candidates = context.functionCatalog().findCandidates(node.functionName());
             if (candidates.isEmpty()) {
                 error("UNKNOWN_FUNCTION", "unknown function '" + node.functionName() + "'", node.sourceSpan());
                 return UnknownType.INSTANCE;
             }
-            List<FunctionDescriptor> arityMatches = candidates.stream()
-                .filter(descriptor -> descriptor.arity() == node.arguments().size())
-                .toList();
-            if (arityMatches.isEmpty()) {
+            int expectedArity = node.arguments().size();
+            FunctionDescriptor exactMatch = null;
+            boolean arityFound = false;
+            for (FunctionDescriptor d : candidates) {
+                if (d.arity() != expectedArity) continue;
+                arityFound = true;
+                if (!matchesArguments(d, argumentTypes)) continue;
+                if (exactMatch != null) {
+                    error("AMBIGUOUS_FUNCTION", "ambiguous function call '" + node.functionName() + "'", node.sourceSpan());
+                    return UnknownType.INSTANCE;
+                }
+                exactMatch = d;
+            }
+            if (!arityFound) {
                 error("INVALID_FUNCTION_ARITY", "invalid arity for function '" + node.functionName() + "'", node.sourceSpan());
                 return UnknownType.INSTANCE;
             }
-            List<FunctionDescriptor> compatibleMatches = arityMatches.stream()
-                .filter(descriptor -> matchesArguments(descriptor, argumentTypes))
-                .toList();
-            if (compatibleMatches.size() > 1) {
-                error("AMBIGUOUS_FUNCTION", "ambiguous function call '" + node.functionName() + "'", node.sourceSpan());
-                return UnknownType.INSTANCE;
-            }
-            if (compatibleMatches.isEmpty()) {
+            if (exactMatch == null) {
                 error("INCOMPATIBLE_FUNCTION_ARGUMENTS", "incompatible arguments for function '" + node.functionName() + "'", node.sourceSpan());
                 return UnknownType.INSTANCE;
             }
-            FunctionDescriptor descriptor = compatibleMatches.getFirst();
-            ResolvedFunctionBinding binding = new ResolvedFunctionBinding(descriptor.functionRef(), descriptor, descriptor.returnType());
+            ResolvedFunctionBinding binding = new ResolvedFunctionBinding(exactMatch.functionRef(), exactMatch, exactMatch.returnType());
             functionBindings.put(node.nodeId(), binding);
-            return descriptor.returnType();
+            return exactMatch.returnType();
         }
 
         private boolean matchesArguments(FunctionDescriptor descriptor, List<ResolvedType> argumentTypes) {
