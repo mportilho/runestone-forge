@@ -1,5 +1,6 @@
 package com.runestone.expeval2.catalog;
 
+import com.runestone.expeval2.api.FunctionInvocationException;
 import com.runestone.expeval2.types.ResolvedType;
 
 import java.lang.invoke.MethodHandle;
@@ -90,10 +91,10 @@ public final class FunctionDescriptor {
         }
         try {
             return compiledInvoker.invokeExact(arguments);
-        } catch (RuntimeException exception) {
-            throw exception;
+        } catch (Error error) {
+            throw error;
         } catch (Throwable throwable) {
-            throw new IllegalStateException("failed to invoke function '" + name + "'", throwable);
+            throw new FunctionInvocationException(name, throwable);
         }
     }
 
