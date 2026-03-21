@@ -42,6 +42,7 @@ import static java.math.RoundingMode.HALF_EVEN;
 public class MathFunctions {
 
     private static final int KAHAN_THRESHOLD = 1000;
+    private static final double LN_2 = Math.log(2);
 
     /**
      * Finds the mean value of a list of values. The mean value is the sum of all values divided by the number of values.
@@ -235,6 +236,43 @@ public class MathFunctions {
      */
     public static BigDecimal log(MathContext mc, BigDecimal base, BigDecimal value) {
         return BigDecimalMath.log(value, mc).divide(BigDecimalMath.log(base, mc), mc);
+    }
+
+    /**
+     * Finds the natural logarithm value of a value using double precision arithmetic.
+     * Faster than {@link #ln(MathContext, BigDecimal)} but with reduced precision.
+     *
+     * @param value Value
+     * @return natural logarithm value, {@link Double#NEGATIVE_INFINITY} if value is zero,
+     * or {@link Double#NaN} if value is negative
+     */
+    public static double lnFast(double value) {
+        return Math.log(value);
+    }
+
+    /**
+     * Finds the binary logarithm value of a value using double precision arithmetic.
+     * Faster than {@link #lb(MathContext, BigDecimal)} but with reduced precision.
+     *
+     * @param value Value
+     * @return binary logarithm value, {@link Double#NEGATIVE_INFINITY} if value is zero,
+     * or {@link Double#NaN} if value is negative
+     */
+    public static double lbFast(double value) {
+        return Math.log(value) / LN_2;
+    }
+
+    /**
+     * Finds the logarithm value of a value with a specific base using double precision arithmetic.
+     * Faster than {@link #log(MathContext, BigDecimal, BigDecimal)} but with reduced precision.
+     *
+     * @param base  Base of the logarithm
+     * @param value Value
+     * @return logarithm value, {@link Double#NEGATIVE_INFINITY} if value is zero,
+     * or {@link Double#NaN} if value or base is negative, or if base is 1
+     */
+    public static double logFast(double base, double value) {
+        return Math.log(value) / Math.log(base);
     }
 
     /**

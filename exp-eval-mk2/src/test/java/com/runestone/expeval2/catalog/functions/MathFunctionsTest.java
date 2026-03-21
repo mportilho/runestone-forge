@@ -5,6 +5,8 @@ import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -13,6 +15,7 @@ import static java.math.BigDecimal.ONE;
 import static java.math.BigDecimal.ZERO;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.within;
 
 @DisplayName("MathFunctions Tests")
 class MathFunctionsTest {
@@ -277,6 +280,113 @@ class MathFunctionsTest {
             assertThat(MathFunctions.log(MC, new BigDecimal("10"), new BigDecimal("100"))).isCloseTo(new BigDecimal("2"), EPSILON);
             assertThat(MathFunctions.log(MC, new BigDecimal("2"), new BigDecimal("8"))).isCloseTo(new BigDecimal("3"), EPSILON);
             assertThat(MathFunctions.log(MC, new BigDecimal("3"), new BigDecimal("81"))).isCloseTo(new BigDecimal("4"), EPSILON);
+        }
+    }
+
+    @Nested
+    @DisplayName("lnFast()")
+    class LnFastTests {
+
+        private static final Offset<Double> DOUBLE_EPSILON = within(1e-10);
+
+        @ParameterizedTest(name = "lnFast({0}) = {1}")
+        @CsvSource({
+                "1.0,  0.0",
+                "2.718281828459045, 1.0",
+                "10.0, 2.302585092994046",
+                "0.5, -0.6931471805599453"
+        })
+        @DisplayName("Happy path: known values")
+        void happyPath(double input, double expected) {
+            assertThat(MathFunctions.lnFast(input)).isCloseTo(expected, DOUBLE_EPSILON);
+        }
+
+        @Test
+        @DisplayName("Zero returns NEGATIVE_INFINITY")
+        void zeroReturnsNegativeInfinity() {
+            assertThat(MathFunctions.lnFast(0.0)).isEqualTo(Double.NEGATIVE_INFINITY);
+        }
+
+        @Test
+        @DisplayName("Negative value returns NaN")
+        void negativeReturnsNaN() {
+            assertThat(MathFunctions.lnFast(-1.0)).isNaN();
+        }
+    }
+
+    @Nested
+    @DisplayName("lbFast()")
+    class LbFastTests {
+
+        private static final Offset<Double> DOUBLE_EPSILON = within(1e-10);
+
+        @ParameterizedTest(name = "lbFast({0}) = {1}")
+        @CsvSource({
+                "1.0, 0.0",
+                "2.0, 1.0",
+                "4.0, 2.0",
+                "8.0, 3.0",
+                "10.0, 3.321928094887362"
+        })
+        @DisplayName("Happy path: known values")
+        void happyPath(double input, double expected) {
+            assertThat(MathFunctions.lbFast(input)).isCloseTo(expected, DOUBLE_EPSILON);
+        }
+
+        @Test
+        @DisplayName("Zero returns NEGATIVE_INFINITY")
+        void zeroReturnsNegativeInfinity() {
+            assertThat(MathFunctions.lbFast(0.0)).isEqualTo(Double.NEGATIVE_INFINITY);
+        }
+
+        @Test
+        @DisplayName("Negative value returns NaN")
+        void negativeReturnsNaN() {
+            assertThat(MathFunctions.lbFast(-1.0)).isNaN();
+        }
+    }
+
+    @Nested
+    @DisplayName("logFast()")
+    class LogFastTests {
+
+        private static final Offset<Double> DOUBLE_EPSILON = within(1e-10);
+
+        @ParameterizedTest(name = "logFast({0}, {1}) = {2}")
+        @CsvSource({
+                "10.0, 1.0,   0.0",
+                "10.0, 10.0,  1.0",
+                "10.0, 100.0, 2.0",
+                "2.0,  8.0,   3.0",
+                "3.0,  81.0,  4.0"
+        })
+        @DisplayName("Happy path: known values")
+        void happyPath(double base, double value, double expected) {
+            assertThat(MathFunctions.logFast(base, value)).isCloseTo(expected, DOUBLE_EPSILON);
+        }
+
+        @Test
+        @DisplayName("Value zero returns NEGATIVE_INFINITY")
+        void valueZeroReturnsNegativeInfinity() {
+            assertThat(MathFunctions.logFast(10.0, 0.0)).isEqualTo(Double.NEGATIVE_INFINITY);
+        }
+
+        @Test
+        @DisplayName("Negative value returns NaN")
+        void negativeValueReturnsNaN() {
+            assertThat(MathFunctions.logFast(10.0, -1.0)).isNaN();
+        }
+
+        @Test
+        @DisplayName("Negative base returns NaN")
+        void negativeBaseReturnsNaN() {
+            assertThat(MathFunctions.logFast(-2.0, 10.0)).isNaN();
+        }
+
+        @Test
+        @DisplayName("Base 1 returns POSITIVE_INFINITY (log(1) = 0, positive / 0.0 in IEEE 754)")
+        void baseOneReturnsInfinity() {
+            assertThat(MathFunctions.logFast(1.0, 10.0)).isEqualTo(Double.POSITIVE_INFINITY);
         }
     }
 
