@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
@@ -28,7 +29,7 @@ class ExpressionValidationTest {
         @Test
         @DisplayName("ok() is valid with empty issues and preserves source")
         void okIsValidWithEmptyIssues() {
-            var result = ValidationResult.ok("1 + 1");
+            var result = ValidationResult.ok("1 + 1", Set.of(), Set.of(), Set.of());
 
             assertThat(result.valid()).isTrue();
             assertThat(result.issues()).isEmpty();
@@ -49,7 +50,7 @@ class ExpressionValidationTest {
         @Test
         @DisplayName("issues list is unmodifiable after construction")
         void issuesListIsUnmodifiable() {
-            var result = ValidationResult.ok("1 + 1");
+            var result = ValidationResult.ok("1 + 1", Set.of(), Set.of(), Set.of());
 
             assertThat(result.issues()).isUnmodifiable();
         }
@@ -58,20 +59,41 @@ class ExpressionValidationTest {
         @DisplayName("null source throws NullPointerException")
         void nullSourceThrows() {
             assertThatNullPointerException()
-                .isThrownBy(() -> new ValidationResult(null, true, List.of()));
+                .isThrownBy(() -> new ValidationResult(null, true, List.of(), Set.of(), Set.of(), Set.of()));
         }
 
         @Test
         @DisplayName("null issues list throws NullPointerException")
         void nullIssuesThrows() {
             assertThatNullPointerException()
-                .isThrownBy(() -> new ValidationResult("expr", true, null));
+                .isThrownBy(() -> new ValidationResult("expr", true, null, Set.of(), Set.of(), Set.of()));
+        }
+
+        @Test
+        @DisplayName("null assignedVariables throws NullPointerException")
+        void nullAssignedVariablesThrows() {
+            assertThatNullPointerException()
+                .isThrownBy(() -> new ValidationResult("expr", true, List.of(), null, Set.of(), Set.of()));
+        }
+
+        @Test
+        @DisplayName("null userVariables throws NullPointerException")
+        void nullUserVariablesThrows() {
+            assertThatNullPointerException()
+                .isThrownBy(() -> new ValidationResult("expr", true, List.of(), Set.of(), null, Set.of()));
+        }
+
+        @Test
+        @DisplayName("null functions throws NullPointerException")
+        void nullFunctionsThrows() {
+            assertThatNullPointerException()
+                .isThrownBy(() -> new ValidationResult("expr", true, List.of(), Set.of(), Set.of(), null));
         }
 
         @Test
         @DisplayName("formatMessage() on a valid result contains the source expression")
         void formatMessageValidContainsSource() {
-            var result = ValidationResult.ok("1 + 1");
+            var result = ValidationResult.ok("1 + 1", Set.of(), Set.of(), Set.of());
 
             assertThat(result.formatMessage()).contains("1 + 1");
         }
@@ -406,6 +428,114 @@ class ExpressionValidationTest {
         void validateNeverThrowsForInvalidExpressions(String source) {
             var result = MathExpression.validate(source);
             assertThat(result.valid()).isFalse();
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Expression metadata in valid result
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("Expression metadata in valid result")
+    class ValidationResultMetadata {
+
+        private static final ExpressionEnvironment WITH_MATH =
+                ExpressionEnvironment.builder().addMathFunctions().build();
+
+        @Test
+        @DisplayName("userVariables contains all free variables referenced in expression")
+        void userVariablesContainsAllFreeVariables() {
+            var result = MathExpression.validate("principal * rate");
+
+            assertThat(result.userVariables()).containsExactlyInAnyOrder("principal", "rate");
+        }
+
+        @Test
+        @DisplayName("userVariables contains declared external symbols")
+        void userVariablesContainsDeclaredExternalSymbols() {
+            ExpressionEnvironment env = ExpressionEnvironment.builder()
+                .registerExternalSymbol("x", BigDecimal.ONE, true)
+                .build();
+
+            var result = MathExpression.validate("x + 1", env);
+
+            assertThat(result.userVariables()).contains("x");
+        }
+
+        @Test
+        @DisplayName("userVariables is empty for constant-only expressions")
+        void userVariablesEmptyForConstantExpression() {
+            var result = MathExpression.validate("1 + 2 * 3");
+
+            assertThat(result.userVariables()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("assignedVariables contains variables assigned within the expression")
+        void assignedVariablesContainsInternalVariables() {
+            var result = AssignmentExpression.validate("a = 1; b = 2;");
+
+            assertThat(result.assignedVariables()).containsExactlyInAnyOrder("a", "b");
+        }
+
+        @Test
+        @DisplayName("assignedVariables is empty for expressions without assignments")
+        void assignedVariablesEmptyForNonAssignmentExpression() {
+            var result = MathExpression.validate("1 + 2");
+
+            assertThat(result.assignedVariables()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("functions contains all called function names")
+        void functionsContainsAllCalledFunctions() {
+            var result = MathExpression.validate("mean([1, 2]) + mean([3, 4])", WITH_MATH);
+
+            assertThat(result.functions()).containsExactlyInAnyOrder("mean");
+        }
+
+        @Test
+        @DisplayName("functions deduplicates when same function is called multiple times")
+        void functionsDeduplicatedForRepeatedCalls() {
+            var result = MathExpression.validate("mean([1, 2]) + mean([3, 4])", WITH_MATH);
+
+            assertThat(result.functions()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("functions contains distinct names for multiple different functions")
+        void functionsContainsDistinctNamesForMultipleFunctions() {
+            var result = MathExpression.validate("mean([1, 2]) + ln(10)", WITH_MATH);
+
+            assertThat(result.functions()).containsExactlyInAnyOrder("mean", "ln");
+        }
+
+        @Test
+        @DisplayName("functions is empty for expressions without function calls")
+        void functionsEmptyForExpressionWithoutFunctionCalls() {
+            var result = MathExpression.validate("x * 2");
+
+            assertThat(result.functions()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("failed result has empty assignedVariables, userVariables, and functions")
+        void failedResultHasEmptyMetadata() {
+            var result = MathExpression.validate("missing() + 1");
+
+            assertThat(result.assignedVariables()).isEmpty();
+            assertThat(result.userVariables()).isEmpty();
+            assertThat(result.functions()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("all metadata sets are unmodifiable")
+        void metadataSetsAreUnmodifiable() {
+            var result = MathExpression.validate("x + 1");
+
+            assertThat(result.assignedVariables()).isUnmodifiable();
+            assertThat(result.userVariables()).isUnmodifiable();
+            assertThat(result.functions()).isUnmodifiable();
         }
     }
 }

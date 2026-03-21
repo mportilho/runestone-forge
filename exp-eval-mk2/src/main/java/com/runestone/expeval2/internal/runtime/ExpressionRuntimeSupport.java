@@ -18,6 +18,8 @@ import java.math.MathContext;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Bridge between the compilation pipeline and the public expression API.
@@ -264,8 +266,14 @@ public final class ExpressionRuntimeSupport {
         Objects.requireNonNull(resultType, "resultType must not be null");
         Objects.requireNonNull(environment, "environment must not be null");
         try {
-            compile(source, resultType, environment);
-            return ValidationResult.ok(source);
+            ExpressionRuntimeSupport runtime = compile(source, resultType, environment);
+            SemanticModel model = runtime.getCompiledExpression().semanticModel();
+            Set<String> assignedVariables = model.internalSymbolsByName().keySet();
+            Set<String> userVariables = model.externalSymbolsByName().keySet();
+            Set<String> functions = model.functionBindings().values().stream()
+                    .map(b -> b.functionRef().name())
+                    .collect(Collectors.toSet());
+            return ValidationResult.ok(source, assignedVariables, userVariables, functions);
         } catch (ExpressionCompilationException e) {
             return ValidationResult.failed(source, e.issues());
         } catch (ParsingException e) {
