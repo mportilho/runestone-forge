@@ -7,6 +7,7 @@ import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 
 import java.lang.invoke.MethodType;
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.util.StringJoiner;
 
 public final class CrossModuleExpressionBenchmarkSupport {
@@ -88,6 +89,17 @@ public final class CrossModuleExpressionBenchmarkSupport {
     public static ExpressionEnvironment logarithmEnvironment() {
         return ExpressionEnvironment.builder()
             .addMathFunctions()
+            .build();
+    }
+
+    public static MathExpression newMk2LogarithmChainExpressionDecimal64() {
+        return MathExpression.compile(LOGARITHM_CHAIN_EXPRESSION, logarithmEnvironmentDecimal64());
+    }
+
+    public static ExpressionEnvironment logarithmEnvironmentDecimal64() {
+        return ExpressionEnvironment.builder()
+            .addMathFunctions()
+            .withMathContext(MathContext.DECIMAL64)
             .build();
     }
 

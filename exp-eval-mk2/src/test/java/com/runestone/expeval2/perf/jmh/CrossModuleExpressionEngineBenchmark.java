@@ -71,7 +71,12 @@ public class CrossModuleExpressionEngineBenchmark {
     }
 
     @Benchmark
-    public BigDecimal mk2LogarithmChain(LogarithmChainState state) {
+    public BigDecimal mk2LogarithmChainDecimal128(LogarithmChainState state) {
+        return state.evaluateMk2();
+    }
+
+    @Benchmark
+    public BigDecimal mk2LogarithmChainDecimal64(LogarithmChainDecimal64State state) {
         return state.evaluateMk2();
     }
 
@@ -229,6 +234,26 @@ public class CrossModuleExpressionEngineBenchmark {
                 CrossModuleExpressionBenchmarkSupport.variableFrame(legacyIndex++)
             );
             return legacy.evaluate();
+        }
+
+        private BigDecimal evaluateMk2() {
+            CrossModuleExpressionBenchmarkSupport.applyFrame(
+                mk2,
+                CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)
+            );
+            return mk2.compute();
+        }
+    }
+
+    @State(Scope.Thread)
+    public static class LogarithmChainDecimal64State {
+
+        private MathExpression mk2;
+        private int mk2Index;
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            mk2 = CrossModuleExpressionBenchmarkSupport.newMk2LogarithmChainExpressionDecimal64();
         }
 
         private BigDecimal evaluateMk2() {

@@ -51,7 +51,7 @@ public final class CrossModuleBenchmarkRunner {
     }
 
     private static void printComparisonTable(Collection<RunResult> results) {
-        String[] scenarios = {"LiteralDense", "VariableChurn", "UserFunction", "Conditional", "LogarithmChain", "PowerChain"};
+        String[] scenarios = {"LiteralDense", "VariableChurn", "UserFunction", "Conditional", "LogarithmChainDecimal128", "PowerChain"};
 
         System.out.printf("%-20s  %12s  %12s  %8s%n", "Scenario", "legacy ns/op", "mk2 ns/op", "ratio");
         System.out.println("-".repeat(60));
