@@ -28,7 +28,7 @@ public final class ExpressionEnvironmentBuilder {
     private DataConversionService conversionService;
     private MathContext mathContext = MathContext.DECIMAL128;
     private final List<StaticProviderEntry> staticProviders = new ArrayList<>();
-    private final List<Object> instanceProviders = new ArrayList<>();
+    private final List<InstanceProviderEntry> instanceProviders = new ArrayList<>();
     private final Map<String, ExternalSymbolRegistration> externalSymbols = new LinkedHashMap<>();
 
     public static ExpressionEnvironment empty() {
@@ -58,7 +58,14 @@ public final class ExpressionEnvironmentBuilder {
     }
 
     public ExpressionEnvironmentBuilder registerInstanceProvider(Object providerInstance) {
-        instanceProviders.add(Objects.requireNonNull(providerInstance, "providerInstance must not be null"));
+        instanceProviders.add(new InstanceProviderEntry(
+                Objects.requireNonNull(providerInstance, "providerInstance must not be null"), false));
+        return this;
+    }
+
+    public ExpressionEnvironmentBuilder registerInstanceProvider(Object providerInstance, boolean foldable) {
+        instanceProviders.add(new InstanceProviderEntry(
+                Objects.requireNonNull(providerInstance, "providerInstance must not be null"), foldable));
         return this;
     }
 
@@ -104,7 +111,7 @@ public final class ExpressionEnvironmentBuilder {
 
         List<FunctionDescriptor> functionDescriptors = new ArrayList<>();
         staticProviders.forEach(entry -> functionDescriptors.addAll(discoverFunctions(entry.providerClass(), null, true, entry.foldable())));
-        instanceProviders.forEach(providerInstance -> functionDescriptors.addAll(discoverFunctions(providerInstance.getClass(), providerInstance, false, false)));
+        instanceProviders.forEach(entry -> functionDescriptors.addAll(discoverFunctions(entry.instance().getClass(), entry.instance(), false, entry.foldable())));
         functionDescriptors.sort(Comparator.comparing(FunctionDescriptor::name).thenComparing(FunctionDescriptor::arity));
 
         Map<String, List<FunctionDescriptor>> descriptorsByName = new LinkedHashMap<>();
@@ -128,7 +135,8 @@ public final class ExpressionEnvironmentBuilder {
         ExternalSymbolCatalog externalSymbolCatalog = new ExternalSymbolCatalog(symbolsByName);
 
         List<Class<?>> staticProviderClasses = staticProviders.stream().map(StaticProviderEntry::providerClass).toList();
-        return new ExpressionEnvironment(new ExpressionEnvironmentId(deriveEnvironmentId(staticProviderClasses, instanceProviders, externalSymbols, mathContext)),
+        List<Object> instanceObjects = instanceProviders.stream().map(InstanceProviderEntry::instance).toList();
+        return new ExpressionEnvironment(new ExpressionEnvironmentId(deriveEnvironmentId(staticProviderClasses, instanceObjects, externalSymbols, mathContext)),
                 functionCatalog, externalSymbolCatalog, effectiveConversionService, mathContext);
     }
 
@@ -187,6 +195,9 @@ public final class ExpressionEnvironmentBuilder {
     }
 
     private record StaticProviderEntry(Class<?> providerClass, boolean foldable) {
+    }
+
+    private record InstanceProviderEntry(Object instance, boolean foldable) {
     }
 
     private record ExternalSymbolRegistration(
