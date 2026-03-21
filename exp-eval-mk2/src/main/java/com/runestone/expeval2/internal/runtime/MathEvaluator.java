@@ -5,9 +5,8 @@ import java.math.MathContext;
 
 final class MathEvaluator extends AbstractRuntimeEvaluator<BigDecimal> {
 
-    MathEvaluator(CompiledExpression compiledExpression, RuntimeValueFactory runtimeValueFactory,
-                  RuntimeCoercionService runtimeCoercionService, MathContext mathContext) {
-        super(compiledExpression, runtimeValueFactory, runtimeCoercionService, mathContext);
+    MathEvaluator(CompiledExpression compiledExpression, RuntimeServices runtimeServices, MathContext mathContext) {
+        super(compiledExpression, runtimeServices, mathContext);
     }
 
     @Override

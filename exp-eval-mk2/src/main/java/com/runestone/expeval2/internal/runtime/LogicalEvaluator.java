@@ -4,9 +4,8 @@ import java.math.MathContext;
 
 final class LogicalEvaluator extends AbstractRuntimeEvaluator<Boolean> {
 
-    LogicalEvaluator(CompiledExpression compiledExpression, RuntimeValueFactory runtimeValueFactory,
-                     RuntimeCoercionService runtimeCoercionService, MathContext mathContext) {
-        super(compiledExpression, runtimeValueFactory, runtimeCoercionService, mathContext);
+    LogicalEvaluator(CompiledExpression compiledExpression, RuntimeServices runtimeServices, MathContext mathContext) {
+        super(compiledExpression, runtimeServices, mathContext);
     }
 
     @Override

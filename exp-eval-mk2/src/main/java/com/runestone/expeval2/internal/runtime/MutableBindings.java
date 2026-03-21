@@ -12,18 +12,18 @@ import java.util.Optional;
 final class MutableBindings {
 
     private final SemanticModel semanticModel;
-    private final RuntimeValueFactory runtimeValueFactory;
+    private final RuntimeServices runtimeServices;
     private final ExternalSymbolCatalog externalSymbolCatalog;
     private final Map<SymbolRef, RuntimeValue> values = new HashMap<>();
 
-    private MutableBindings(SemanticModel semanticModel, ExternalSymbolCatalog externalSymbolCatalog, RuntimeValueFactory runtimeValueFactory) {
+    private MutableBindings(SemanticModel semanticModel, ExternalSymbolCatalog externalSymbolCatalog, RuntimeServices runtimeServices) {
         this.semanticModel = Objects.requireNonNull(semanticModel, "semanticModel must not be null");
         this.externalSymbolCatalog = Objects.requireNonNull(externalSymbolCatalog, "externalSymbolCatalog must not be null");
-        this.runtimeValueFactory = Objects.requireNonNull(runtimeValueFactory, "runtimeValueFactory must not be null");
+        this.runtimeServices = Objects.requireNonNull(runtimeServices, "runtimeServices must not be null");
     }
 
-    public static MutableBindings from(SemanticModel semanticModel, ExternalSymbolCatalog externalSymbolCatalog, RuntimeValueFactory runtimeValueFactory) {
-        MutableBindings bindings = new MutableBindings(semanticModel, externalSymbolCatalog, runtimeValueFactory);
+    public static MutableBindings from(SemanticModel semanticModel, ExternalSymbolCatalog externalSymbolCatalog, RuntimeServices runtimeServices) {
+        MutableBindings bindings = new MutableBindings(semanticModel, externalSymbolCatalog, runtimeServices);
         bindings.seedDefaults();
         return bindings;
     }
@@ -32,7 +32,7 @@ final class MutableBindings {
         rejectWhenInternal(symbolName);
         SymbolRef symbolRef = requireExternalSymbol(symbolName);
         rejectWhenNonOverridable(symbolName);
-        values.put(symbolRef, runtimeValueFactory.from(rawValue, expectedType(symbolName)));
+        values.put(symbolRef, runtimeServices.from(rawValue, expectedType(symbolName)));
     }
 
     public Optional<RuntimeValue> find(SymbolRef symbolRef) {
@@ -56,7 +56,7 @@ final class MutableBindings {
                 externalSymbolCatalog.find(name)
                         .ifPresent(descriptor -> values.put(
                                 symbolRef,
-                                runtimeValueFactory.from(descriptor.defaultValue(), descriptor.declaredType())
+                                runtimeServices.from(descriptor.defaultValue(), descriptor.declaredType())
                         ))
         );
     }

@@ -152,15 +152,13 @@ public final class ExpressionRuntimeSupport {
     private final int maxAuditEvents;
 
     private ExpressionRuntimeSupport(CompiledExpression compiledExpression, MutableBindings bindings,
-                                     RuntimeValueFactory runtimeValueFactory, RuntimeCoercionService runtimeCoercionService,
-                                     MathContext mathContext) {
+                                     RuntimeServices runtimeServices, MathContext mathContext) {
         this.compiledExpression = Objects.requireNonNull(compiledExpression, "compiledExpression must not be null");
         this.bindings = Objects.requireNonNull(bindings, "bindings must not be null");
-        Objects.requireNonNull(runtimeValueFactory, "runtimeValueFactory must not be null");
-        Objects.requireNonNull(runtimeCoercionService, "runtimeCoercionService must not be null");
+        Objects.requireNonNull(runtimeServices, "runtimeServices must not be null");
         Objects.requireNonNull(mathContext, "mathContext must not be null");
-        this.mathEvaluator = new MathEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService, mathContext);
-        this.logicalEvaluator = new LogicalEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService, mathContext);
+        this.mathEvaluator = new MathEvaluator(compiledExpression, runtimeServices, mathContext);
+        this.logicalEvaluator = new LogicalEvaluator(compiledExpression, runtimeServices, mathContext);
         this.hasAssignments = !compiledExpression.executionPlan().assignments().isEmpty();
         this.internalSymbolCount = compiledExpression.semanticModel().internalSymbolsByName().size();
         this.maxAuditEvents = countMaxAuditEvents(compiledExpression.executionPlan());
@@ -341,17 +339,15 @@ public final class ExpressionRuntimeSupport {
 
     static ExpressionRuntimeSupport from(CompiledExpression compiledExpression, ExpressionEnvironment environment) {
         Objects.requireNonNull(environment, "environment must not be null");
-        RuntimeValueFactory runtimeValueFactory = new RuntimeValueFactory(environment.getDataConversionService());
-        RuntimeCoercionService runtimeCoercionService = new RuntimeCoercionService(environment.getDataConversionService());
+        RuntimeServices runtimeServices = environment.runtimeServices();
         return new ExpressionRuntimeSupport(
                 compiledExpression,
                 MutableBindings.from(
                         compiledExpression.semanticModel(),
                         environment.externalSymbolCatalog(),
-                        runtimeValueFactory
+                        runtimeServices
                 ),
-                runtimeValueFactory,
-                runtimeCoercionService,
+                runtimeServices,
                 environment.mathContext()
         );
     }

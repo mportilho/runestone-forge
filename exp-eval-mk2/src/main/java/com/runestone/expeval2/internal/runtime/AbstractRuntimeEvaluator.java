@@ -20,15 +20,13 @@ import java.util.Objects;
 abstract class AbstractRuntimeEvaluator<T> {
 
     private final CompiledExpression compiledExpression;
-    private final RuntimeValueFactory runtimeValueFactory;
-    private final RuntimeCoercionService runtimeCoercionService;
+    private final RuntimeServices runtimeServices;
     private final MathContext mathContext;
 
-    protected AbstractRuntimeEvaluator(CompiledExpression compiledExpression, RuntimeValueFactory runtimeValueFactory,
-                                       RuntimeCoercionService runtimeCoercionService, MathContext mathContext) {
+    protected AbstractRuntimeEvaluator(CompiledExpression compiledExpression, RuntimeServices runtimeServices,
+                                       MathContext mathContext) {
         this.compiledExpression = Objects.requireNonNull(compiledExpression, "compiledExpression must not be null");
-        this.runtimeValueFactory = Objects.requireNonNull(runtimeValueFactory, "runtimeValueFactory must not be null");
-        this.runtimeCoercionService = Objects.requireNonNull(runtimeCoercionService, "runtimeCoercionService must not be null");
+        this.runtimeServices = Objects.requireNonNull(runtimeServices, "runtimeServices must not be null");
         this.mathContext = Objects.requireNonNull(mathContext, "mathContext must not be null");
     }
 
@@ -78,7 +76,7 @@ abstract class AbstractRuntimeEvaluator<T> {
                 }
             }
             case ExecutableDestructuringAssignment d -> {
-                List<RuntimeValue> values = runtimeCoercionService.asVector(evaluateExpression(d.value(), scope));
+                List<RuntimeValue> values = runtimeServices.asVector(evaluateExpression(d.value(), scope));
                 AuditCollector destructAudit = scope.audit();
                 List<SymbolRef> targets = d.targets();
                 for (int index = 0; index < targets.size(); index++) {
@@ -128,12 +126,12 @@ abstract class AbstractRuntimeEvaluator<T> {
         Object[] args = new Object[arity];
         for (int i = 0; i < arity; i++) {
             RuntimeValue evaluated = evaluateExpression(node.arguments().get(i), scope);
-            args[i] = runtimeCoercionService.coerce(evaluated, descriptor.parameterTypes().get(i));
+            args[i] = runtimeServices.coerce(evaluated, descriptor.parameterTypes().get(i));
         }
         AuditCollector audit = scope.audit();
         if (audit != null) audit.enterCall();
         Object rawResult = descriptor.invoke(args);
-        RuntimeValue result = runtimeValueFactory.from(rawResult, node.binding().returnType());
+        RuntimeValue result = runtimeServices.from(rawResult, node.binding().returnType());
         if (audit != null) {
             audit.exitCall();
             audit.record(new AuditEvent.FunctionCall(descriptor.name(), args, result.raw(), audit.callDepth()));
@@ -143,7 +141,7 @@ abstract class AbstractRuntimeEvaluator<T> {
 
     private RuntimeValue evaluateConditional(ExecutableConditional node, ExecutionScope scope) {
         for (int index = 0; index < node.conditions().size(); index++) {
-            if (runtimeCoercionService.asBoolean(evaluateExpression(node.conditions().get(index), scope))) {
+            if (runtimeServices.asBoolean(evaluateExpression(node.conditions().get(index), scope))) {
                 return evaluateExpression(node.results().get(index), scope);
             }
         }
@@ -153,10 +151,10 @@ abstract class AbstractRuntimeEvaluator<T> {
     private RuntimeValue evaluateUnary(ExecutableUnaryOp node, ExecutionScope scope) {
         RuntimeValue operand = evaluateExpression(node.operand(), scope);
         return switch (node.operator()) {
-            case NEGATE -> new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(operand).negate());
-            case LOGICAL_NOT -> new RuntimeValue.BooleanValue(!runtimeCoercionService.asBoolean(operand));
-            case SQRT -> new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(operand).sqrt(mathContext));
-            case MODULUS -> new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(operand).abs());
+            case NEGATE -> new RuntimeValue.NumberValue(runtimeServices.asNumber(operand).negate());
+            case LOGICAL_NOT -> new RuntimeValue.BooleanValue(!runtimeServices.asBoolean(operand));
+            case SQRT -> new RuntimeValue.NumberValue(runtimeServices.asNumber(operand).sqrt(mathContext));
+            case MODULUS -> new RuntimeValue.NumberValue(runtimeServices.asNumber(operand).abs());
         };
     }
 
@@ -164,12 +162,12 @@ abstract class AbstractRuntimeEvaluator<T> {
         RuntimeValue left = evaluateExpression(node.left(), scope);
         BinaryOperator operator = node.operator();
         if (operator == BinaryOperator.AND || operator == BinaryOperator.NAND) {
-            boolean leftBool = runtimeCoercionService.asBoolean(left);
+            boolean leftBool = runtimeServices.asBoolean(left);
             if (!leftBool) {
                 return new RuntimeValue.BooleanValue(operator == BinaryOperator.NAND);
             }
         } else if (operator == BinaryOperator.OR || operator == BinaryOperator.NOR) {
-            boolean leftBool = runtimeCoercionService.asBoolean(left);
+            boolean leftBool = runtimeServices.asBoolean(left);
             if (leftBool) {
                 return new RuntimeValue.BooleanValue(operator == BinaryOperator.OR);
             }
@@ -177,29 +175,29 @@ abstract class AbstractRuntimeEvaluator<T> {
         RuntimeValue right = evaluateExpression(node.right(), scope);
         return switch (operator) {
             case ADD ->
-                    new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).add(runtimeCoercionService.asNumber(right)));
+                    new RuntimeValue.NumberValue(runtimeServices.asNumber(left).add(runtimeServices.asNumber(right)));
             case SUBTRACT ->
-                    new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).subtract(runtimeCoercionService.asNumber(right)));
+                    new RuntimeValue.NumberValue(runtimeServices.asNumber(left).subtract(runtimeServices.asNumber(right)));
             case MULTIPLY ->
-                    new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).multiply(runtimeCoercionService.asNumber(right)));
+                    new RuntimeValue.NumberValue(runtimeServices.asNumber(left).multiply(runtimeServices.asNumber(right)));
             case DIVIDE ->
-                    new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).divide(runtimeCoercionService.asNumber(right), mathContext));
+                    new RuntimeValue.NumberValue(runtimeServices.asNumber(left).divide(runtimeServices.asNumber(right), mathContext));
             case MODULO ->
-                    new RuntimeValue.NumberValue(runtimeCoercionService.asNumber(left).remainder(runtimeCoercionService.asNumber(right)));
+                    new RuntimeValue.NumberValue(runtimeServices.asNumber(left).remainder(runtimeServices.asNumber(right)));
             case POWER ->
-                    new RuntimeValue.NumberValue(pow(runtimeCoercionService.asNumber(left), runtimeCoercionService.asNumber(right)));
+                    new RuntimeValue.NumberValue(pow(runtimeServices.asNumber(left), runtimeServices.asNumber(right)));
             case ROOT -> {
-                BigDecimal value = runtimeCoercionService.asNumber(left);
-                yield new RuntimeValue.NumberValue(BigDecimalMath.root(value, runtimeCoercionService.asNumber(right), mathContext));
+                BigDecimal value = runtimeServices.asNumber(left);
+                yield new RuntimeValue.NumberValue(BigDecimalMath.root(value, runtimeServices.asNumber(right), mathContext));
             }
-            case AND -> new RuntimeValue.BooleanValue(runtimeCoercionService.asBoolean(right));
-            case OR -> new RuntimeValue.BooleanValue(runtimeCoercionService.asBoolean(right));
+            case AND -> new RuntimeValue.BooleanValue(runtimeServices.asBoolean(right));
+            case OR -> new RuntimeValue.BooleanValue(runtimeServices.asBoolean(right));
             case XOR ->
-                    new RuntimeValue.BooleanValue(runtimeCoercionService.asBoolean(left) ^ runtimeCoercionService.asBoolean(right));
+                    new RuntimeValue.BooleanValue(runtimeServices.asBoolean(left) ^ runtimeServices.asBoolean(right));
             case XNOR ->
-                    new RuntimeValue.BooleanValue(!(runtimeCoercionService.asBoolean(left) ^ runtimeCoercionService.asBoolean(right)));
-            case NAND -> new RuntimeValue.BooleanValue(!runtimeCoercionService.asBoolean(right));
-            case NOR -> new RuntimeValue.BooleanValue(!runtimeCoercionService.asBoolean(right));
+                    new RuntimeValue.BooleanValue(!(runtimeServices.asBoolean(left) ^ runtimeServices.asBoolean(right)));
+            case NAND -> new RuntimeValue.BooleanValue(!runtimeServices.asBoolean(right));
+            case NOR -> new RuntimeValue.BooleanValue(!runtimeServices.asBoolean(right));
             case GREATER_THAN -> new RuntimeValue.BooleanValue(compare(left, right) > 0);
             case GREATER_THAN_OR_EQUAL -> new RuntimeValue.BooleanValue(compare(left, right) >= 0);
             case LESS_THAN -> new RuntimeValue.BooleanValue(compare(left, right) < 0);
@@ -210,7 +208,7 @@ abstract class AbstractRuntimeEvaluator<T> {
     }
 
     private RuntimeValue evaluatePostfix(ExecutablePostfixOp node, ExecutionScope scope) {
-        BigDecimal value = runtimeCoercionService.asNumber(evaluateExpression(node.operand(), scope));
+        BigDecimal value = runtimeServices.asNumber(evaluateExpression(node.operand(), scope));
         return switch (node.operator()) {
             case PERCENT -> new RuntimeValue.NumberValue(value.movePointRight(2));
             case FACTORIAL -> new RuntimeValue.NumberValue(factorial(value));
@@ -227,22 +225,22 @@ abstract class AbstractRuntimeEvaluator<T> {
 
     private int compare(RuntimeValue left, RuntimeValue right) {
         if (left.type() == ScalarType.NUMBER || right.type() == ScalarType.NUMBER) {
-            return runtimeCoercionService.asNumber(left).compareTo(runtimeCoercionService.asNumber(right));
+            return runtimeServices.asNumber(left).compareTo(runtimeServices.asNumber(right));
         }
         if (left.type() == ScalarType.DATE || right.type() == ScalarType.DATE) {
-            return runtimeCoercionService.asDate(left).compareTo(runtimeCoercionService.asDate(right));
+            return runtimeServices.asDate(left).compareTo(runtimeServices.asDate(right));
         }
         if (left.type() == ScalarType.TIME || right.type() == ScalarType.TIME) {
-            return runtimeCoercionService.asTime(left).compareTo(runtimeCoercionService.asTime(right));
+            return runtimeServices.asTime(left).compareTo(runtimeServices.asTime(right));
         }
         if (left.type() == ScalarType.DATETIME || right.type() == ScalarType.DATETIME) {
-            return runtimeCoercionService.asDateTime(left).compareTo(runtimeCoercionService.asDateTime(right));
+            return runtimeServices.asDateTime(left).compareTo(runtimeServices.asDateTime(right));
         }
         if (left.type() == ScalarType.STRING || right.type() == ScalarType.STRING) {
-            return runtimeCoercionService.asString(left).compareTo(runtimeCoercionService.asString(right));
+            return runtimeServices.asString(left).compareTo(runtimeServices.asString(right));
         }
         if (left.type() == ScalarType.BOOLEAN || right.type() == ScalarType.BOOLEAN) {
-            return Boolean.compare(runtimeCoercionService.asBoolean(left), runtimeCoercionService.asBoolean(right));
+            return Boolean.compare(runtimeServices.asBoolean(left), runtimeServices.asBoolean(right));
         }
         throw new IllegalStateException("unsupported comparison between values");
     }
@@ -252,7 +250,7 @@ abstract class AbstractRuntimeEvaluator<T> {
             return left instanceof RuntimeValue.NullValue && right instanceof RuntimeValue.NullValue;
         }
         if (left.type() == ScalarType.NUMBER || right.type() == ScalarType.NUMBER) {
-            return runtimeCoercionService.asNumber(left).compareTo(runtimeCoercionService.asNumber(right)) == 0;
+            return runtimeServices.asNumber(left).compareTo(runtimeServices.asNumber(right)) == 0;
         }
         if (left instanceof RuntimeValue.VectorValue(List<RuntimeValue> leftElements)
             && right instanceof RuntimeValue.VectorValue(List<RuntimeValue> rightElements)) {
