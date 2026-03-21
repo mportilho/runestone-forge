@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -379,6 +380,94 @@ class AuditTrailExpressionTest {
                     .containsExactly("left", "right");
             assertThat((BigDecimal) assignments.get(0).newValue()).isEqualByComparingTo("10");
             assertThat((BigDecimal) assignments.get(1).newValue()).isEqualByComparingTo("20");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Destructuring assignment audit — spread() as RHS
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("Destructuring assignment audit — spread() as RHS")
+    class DestructuringAssignmentAudit {
+
+        @Test
+        @DisplayName("canonical example emits one AssignmentEvent per target with spread-computed values")
+        void canonicalSpreadExampleEmitsAssignmentEventsWithCorrectValues() {
+            // spread(100, -1, [100, 10, 40]): total=150, direction<0
+            // proportional slots (scale 0, HALF_EVEN): [67, 7, 27], sum=101, diff=-1
+            // backward adjustment on last non-zero ref (index 2): 27-1=26 → [67, 7, 26]
+            AuditResult<BigDecimal> result = MathExpression.compile(
+                            "[pagtoPrincipal, pagtoCorrecao, pagtoJuros] = spread(100, -1, [100, 10, 40]); 0",
+                            WITH_MATH)
+                    .computeWithAudit();
+
+            List<AuditEvent.AssignmentEvent> assignments = result.trace().events().stream()
+                    .filter(AuditEvent.AssignmentEvent.class::isInstance)
+                    .map(AuditEvent.AssignmentEvent.class::cast)
+                    .toList();
+
+            assertThat(assignments)
+                    .hasSize(3)
+                    .extracting(AuditEvent.AssignmentEvent::targetName)
+                    .containsExactly("pagtoPrincipal", "pagtoCorrecao", "pagtoJuros");
+            assertThat((BigDecimal) assignments.get(0).newValue()).isEqualByComparingTo("67");
+            assertThat((BigDecimal) assignments.get(1).newValue()).isEqualByComparingTo("7");
+            assertThat((BigDecimal) assignments.get(2).newValue()).isEqualByComparingTo("26");
+        }
+
+        @Test
+        @DisplayName("FunctionCall(spread) appears before AssignmentEvents in the event stream")
+        void spreadFunctionCallPrecedesAssignmentEventsInStream() {
+            AuditResult<BigDecimal> result = MathExpression.compile(
+                            "[a, b, c] = spread(100, -1, [100, 10, 40]); 0", WITH_MATH)
+                    .computeWithAudit();
+
+            List<AuditEvent> events = result.trace().events();
+            int spreadIndex = -1;
+            int firstAssignIndex = -1;
+            for (int i = 0; i < events.size(); i++) {
+                AuditEvent e = events.get(i);
+                if (e instanceof AuditEvent.FunctionCall fc && "spread".equals(fc.functionName())) {
+                    spreadIndex = i;
+                } else if (e instanceof AuditEvent.AssignmentEvent && firstAssignIndex == -1) {
+                    firstAssignIndex = i;
+                }
+            }
+
+            assertThat(spreadIndex).as("FunctionCall(spread) must appear in the event stream").isGreaterThanOrEqualTo(0);
+            assertThat(firstAssignIndex).as("at least one AssignmentEvent must appear").isGreaterThanOrEqualTo(0);
+            assertThat(spreadIndex).isLessThan(firstAssignIndex);
+        }
+
+        @Test
+        @DisplayName("destructured vars used in result expression appear in variableSnapshot()")
+        void destructuredVarsUsedInResultAppearInVariableSnapshot() {
+            // spread(100, 1, [1, 3]) → [25, 75]; then a+b is evaluated, producing VariableRead events
+            AuditResult<BigDecimal> result = MathExpression.compile(
+                            "[a, b] = spread(100, 1, [1, 3]); a + b", WITH_MATH)
+                    .computeWithAudit();
+
+            Map<String, Object> snapshot = result.trace().variableSnapshot();
+            assertThat(snapshot).containsKeys("a", "b");
+            assertThat((BigDecimal) snapshot.get("a")).isEqualByComparingTo("25");
+            assertThat((BigDecimal) snapshot.get("b")).isEqualByComparingTo("75");
+        }
+
+        @Test
+        @DisplayName("destructured vars NOT used in result still appear in variableSnapshot() via AssignmentEvent")
+        void destructuredVarsUnusedInResultStillAppearInVariableSnapshot() {
+            // vars are assigned but never read; variableSnapshot() now also collects AssignmentEvents
+            AuditResult<BigDecimal> result = MathExpression.compile(
+                            "[pagtoPrincipal, pagtoCorrecao, pagtoJuros] = spread(100, -1, [100, 10, 40]); 0",
+                            WITH_MATH)
+                    .computeWithAudit();
+
+            Map<String, Object> snapshot = result.trace().variableSnapshot();
+            assertThat(snapshot).containsKeys("pagtoPrincipal", "pagtoCorrecao", "pagtoJuros");
+            assertThat((BigDecimal) snapshot.get("pagtoPrincipal")).isEqualByComparingTo("67");
+            assertThat((BigDecimal) snapshot.get("pagtoCorrecao")).isEqualByComparingTo("7");
+            assertThat((BigDecimal) snapshot.get("pagtoJuros")).isEqualByComparingTo("26");
         }
     }
 

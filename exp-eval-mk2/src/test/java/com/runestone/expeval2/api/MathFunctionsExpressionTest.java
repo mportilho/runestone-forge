@@ -237,4 +237,262 @@ class MathFunctionsExpressionTest {
             assertThat(result).isTrue();
         }
     }
+
+    @Nested
+    @DisplayName("geometricMean — nth root of the product of all values")
+    class GeometricMean {
+
+        @Test
+        @DisplayName("geometricMean([2, 8]) = 4 — square root of product")
+        void geometricMeanOfLiteralVector() {
+            assertThat(MathExpression.compile("geometricMean([2, 8])", ENV).compute())
+                    .isCloseTo(new BigDecimal("4"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("geometricMean via variable vector: geometricMean([4, 1, 0.03125]) = 0.5")
+        void geometricMeanViaVariableVector() {
+            BigDecimal result = MathExpression.compile("geometricMean(nums)", ENV)
+                    .setValue("nums", java.util.List.of(
+                            new BigDecimal("4"),
+                            new BigDecimal("1"),
+                            new BigDecimal("0.03125")))
+                    .compute();
+            assertThat(result).isCloseTo(new BigDecimal("0.5"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("geometricMean used in logical comparison: geometricMean([2, 8]) = 4 → true")
+        void geometricMeanInLogicalExpression() {
+            boolean result = LogicalExpression.compile("geometricMean([2, 8]) = 4", ENV).compute();
+            assertThat(result).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("harmonicMean — reciprocal of the arithmetic mean of reciprocals")
+    class HarmonicMean {
+
+        @Test
+        @DisplayName("harmonicMean([1, 4, 4]) = 2")
+        void harmonicMeanOfLiteralVector() {
+            assertThat(MathExpression.compile("harmonicMean([1, 4, 4])", ENV).compute())
+                    .isCloseTo(new BigDecimal("2"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("harmonicMean via variable vector")
+        void harmonicMeanViaVariableVector() {
+            BigDecimal result = MathExpression.compile("harmonicMean(nums)", ENV)
+                    .setValue("nums", java.util.List.of(
+                            new BigDecimal("1"),
+                            new BigDecimal("4"),
+                            new BigDecimal("4")))
+                    .compute();
+            assertThat(result).isCloseTo(new BigDecimal("2"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("harmonicMean used in logical comparison: harmonicMean([1, 4, 4]) = 2 → true")
+        void harmonicMeanInLogicalExpression() {
+            boolean result = LogicalExpression.compile("harmonicMean([1, 4, 4]) = 2", ENV).compute();
+            assertThat(result).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("meanDev — mean of absolute deviations from the mean")
+    class MeanDev {
+
+        @Test
+        @DisplayName("meanDev([3, 6, 6, 7, 8, 11, 15, 16]) = 3.75")
+        void meanDevOfLiteralVector() {
+            // mean = 9; absolute deviations: 6,3,3,2,1,2,6,7 → sum 30 → 30/8 = 3.75
+            assertThat(MathExpression.compile("meanDev([3, 6, 6, 7, 8, 11, 15, 16])", ENV).compute())
+                    .isCloseTo(new BigDecimal("3.75"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("meanDev via variable vector")
+        void meanDevViaVariableVector() {
+            BigDecimal result = MathExpression.compile("meanDev(nums)", ENV)
+                    .setValue("nums", java.util.List.of(
+                            new BigDecimal("3"),
+                            new BigDecimal("6"),
+                            new BigDecimal("6"),
+                            new BigDecimal("7"),
+                            new BigDecimal("8"),
+                            new BigDecimal("11"),
+                            new BigDecimal("15"),
+                            new BigDecimal("16")))
+                    .compute();
+            assertThat(result).isCloseTo(new BigDecimal("3.75"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("meanDev used in logical comparison: meanDev([3, 6, 6, 7, 8, 11, 15, 16]) > 3 → true")
+        void meanDevInLogicalExpression() {
+            boolean result = LogicalExpression.compile("meanDev([3, 6, 6, 7, 8, 11, 15, 16]) > 3", ENV).compute();
+            assertThat(result).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("variance — population (type=0) and sample (type=1) variance")
+    class Variance {
+
+        @Test
+        @DisplayName("population variance of [2,4,4,4,5,5,7,9] = 4")
+        void populationVarianceOfLiteralVector() {
+            // mean=5; squared deviations: 9,1,1,1,0,0,4,16 → sum 32 → 32/8 = 4
+            assertThat(MathExpression.compile("variance([2, 4, 4, 4, 5, 5, 7, 9], 0)", ENV).compute())
+                    .isCloseTo(new BigDecimal("4"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("sample variance of [2,4,4,4,5,5,7,9] = 32/7")
+        void sampleVarianceOfLiteralVector() {
+            // 32/7 ≈ 4.571428571428571428571428571428571 (DECIMAL128 precision)
+            assertThat(MathExpression.compile("variance([2, 4, 4, 4, 5, 5, 7, 9], 1)", ENV).compute())
+                    .isCloseTo(new BigDecimal("4.571428571428571428571428571428571"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("variance via variable vector")
+        void varianceViaVariableVector() {
+            BigDecimal result = MathExpression.compile("variance(nums, 0)", ENV)
+                    .setValue("nums", java.util.List.of(
+                            new BigDecimal("2"),
+                            new BigDecimal("4"),
+                            new BigDecimal("4"),
+                            new BigDecimal("4"),
+                            new BigDecimal("5"),
+                            new BigDecimal("5"),
+                            new BigDecimal("7"),
+                            new BigDecimal("9")))
+                    .compute();
+            assertThat(result).isCloseTo(new BigDecimal("4"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("variance used in logical comparison: variance([2,4,4,4,5,5,7,9], 0) = 4 → true")
+        void varianceInLogicalExpression() {
+            boolean result = LogicalExpression.compile("variance([2, 4, 4, 4, 5, 5, 7, 9], 0) = 4", ENV).compute();
+            assertThat(result).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("stdDev — population (type=0) and sample (type=1) standard deviation")
+    class StdDev {
+
+        @Test
+        @DisplayName("population stdDev of [2,4,4,4,5,5,7,9] = 2 — exact square root")
+        void populationStdDevOfLiteralVector() {
+            // sqrt(variance=4) = 2
+            assertThat(MathExpression.compile("stdDev([2, 4, 4, 4, 5, 5, 7, 9], 0)", ENV).compute())
+                    .isCloseTo(new BigDecimal("2"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("sample stdDev of [2,4,4,4,5,5,7,9] = sqrt(32/7)")
+        void sampleStdDevOfLiteralVector() {
+            // sqrt(32/7) ≈ 2.138089935299395077476427847038028 (DECIMAL128 precision)
+            assertThat(MathExpression.compile("stdDev([2, 4, 4, 4, 5, 5, 7, 9], 1)", ENV).compute())
+                    .isCloseTo(new BigDecimal("2.138089935299395077476427847038028"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("stdDev via variable vector")
+        void stdDevViaVariableVector() {
+            BigDecimal result = MathExpression.compile("stdDev(nums, 0)", ENV)
+                    .setValue("nums", java.util.List.of(
+                            new BigDecimal("2"),
+                            new BigDecimal("4"),
+                            new BigDecimal("4"),
+                            new BigDecimal("4"),
+                            new BigDecimal("5"),
+                            new BigDecimal("5"),
+                            new BigDecimal("7"),
+                            new BigDecimal("9")))
+                    .compute();
+            assertThat(result).isCloseTo(new BigDecimal("2"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("stdDev used in logical comparison: stdDev([2,4,4,4,5,5,7,9], 0) = 2 → true")
+        void stdDevInLogicalExpression() {
+            boolean result = LogicalExpression.compile("stdDev([2, 4, 4, 4, 5, 5, 7, 9], 0) = 2", ENV).compute();
+            assertThat(result).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("distribute — sequential distribution with upper/lower limits per bucket")
+    class Distribute {
+
+        // distribute returns BigDecimal[] (VectorValue). To produce a scalar result
+        // these tests compose distribute inside mean(), which validates the full
+        // vector-returning function pipeline end-to-end through the expression API.
+
+        @Test
+        @DisplayName("mean(distribute(5, 1, [1,2,3], [4,4,4])) = 2.75 — forward distribution composed with mean")
+        void distributeForwardComposedWithMean() {
+            // distribute(5, dir≥0, [1,2,3], [4,4,4]) → [4,4,3,0] (remainder=0)
+            // mean([4,4,3,0]) = 11/4 = 2.75
+            assertThat(MathExpression.compile("mean(distribute(5, 1, [1, 2, 3], [4, 4, 4]))", ENV).compute())
+                    .isCloseTo(new BigDecimal("2.75"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("distribute forward result compared in logical expression")
+        void distributeInLogicalExpression() {
+            // mean([4,4,3,0]) = 2.75 < 3
+            boolean result = LogicalExpression.compile("mean(distribute(5, 1, [1, 2, 3], [4, 4, 4])) < 3", ENV).compute();
+            assertThat(result).isTrue();
+        }
+
+        @Test
+        @DisplayName("mean(distribute(5, -1, [1,2,3], [4,4,4])) = 2.75 — backward distribution same sum")
+        void distributeBackwardComposedWithMean() {
+            // distribute(5, dir<0, [1,2,3], [4,4,4]) → [3,4,4,0] (fills from last bucket)
+            // mean([3,4,4,0]) = 11/4 = 2.75
+            assertThat(MathExpression.compile("mean(distribute(5, -1, [1, 2, 3], [4, 4, 4]))", ENV).compute())
+                    .isCloseTo(new BigDecimal("2.75"), EPSILON);
+        }
+    }
+
+    @Nested
+    @DisplayName("spread — proportional distribution of a value across reference weights")
+    class Spread {
+
+        // spread returns BigDecimal[] (VectorValue). Tests compose spread inside mean()
+        // to produce a scalar, validating the vector-returning function pipeline.
+
+        @Test
+        @DisplayName("mean(spread(100, 1, [1, 3])) = 50 — parts 25 and 75 average to 50")
+        void spreadProportionalComposedWithMean() {
+            // spread(100, 1, [1,3]): total=4, parts=[25, 75]
+            // mean([25, 75]) = 50
+            assertThat(MathExpression.compile("mean(spread(100, 1, [1, 3]))", ENV).compute())
+                    .isCloseTo(new BigDecimal("50"), EPSILON);
+        }
+
+        @Test
+        @DisplayName("spread result compared in logical expression")
+        void spreadInLogicalExpression() {
+            // mean([25, 75]) = 50
+            boolean result = LogicalExpression.compile("mean(spread(100, 1, [1, 3])) = 50", ENV).compute();
+            assertThat(result).isTrue();
+        }
+
+        @Test
+        @DisplayName("mean(spread(100, 1, [1, 1])) = 50 — equal references split evenly")
+        void spreadEqualReferencesComposedWithMean() {
+            // spread(100, 1, [1,1]): total=2, parts=[50, 50]
+            // mean([50, 50]) = 50
+            assertThat(MathExpression.compile("mean(spread(100, 1, [1, 1]))", ENV).compute())
+                    .isCloseTo(new BigDecimal("50"), EPSILON);
+        }
+    }
 }

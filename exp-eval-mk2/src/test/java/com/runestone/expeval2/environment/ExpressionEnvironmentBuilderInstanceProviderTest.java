@@ -23,6 +23,10 @@ class ExpressionEnvironmentBuilderInstanceProviderTest {
         public BigDecimal scale(BigDecimal value) {
             return value.multiply(factor);
         }
+
+        public BigDecimal scaleWithMathContext(MathContext mathContext, BigDecimal value) {
+            return value.multiply(factor, mathContext);
+        }
     }
 
     static final class MixedFixture {
@@ -79,6 +83,17 @@ class ExpressionEnvironmentBuilderInstanceProviderTest {
                 .build();
 
         BigDecimal result = MathExpression.compile("scale(5)", environment).compute();
+
+        assertThat(result).isEqualByComparingTo("15");
+    }
+
+    @Test
+    void shouldRegisterInstanceMethodsInFunctionCatalogWithMathContext() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerInstanceProvider(new ScalerFixture(new BigDecimal("3")))
+                .build();
+
+        BigDecimal result = MathExpression.compile("scaleWithMathContext(5)", environment).compute();
 
         assertThat(result).isEqualByComparingTo("15");
     }

@@ -5,7 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * Immutable audit trace of a single expression evaluation.
@@ -24,25 +23,27 @@ public record ExpressionAuditTrace(List<AuditEvent> events, Duration evaluationT
     }
 
     /**
-     * Snapshot of all identifier values read during evaluation, keyed by name.
+     * Snapshot of all variable values seen during evaluation, keyed by name.
      *
-     * <p>Includes both user-supplied variables and built-in temporal identifiers
-     * ({@code currDate}, {@code currTime}, {@code currDateTime}). When the same identifier
-     * is read more than once, the last-read value is kept. Iteration order follows first
-     * appearance.
+     * <p>Includes assigned variables (from simple and destructuring assignments),
+     * user-supplied variables, and built-in temporal identifiers
+     * ({@code currDate}, {@code currTime}, {@code currDateTime}).
+     * Events are processed in evaluation order: assignments are recorded first,
+     * and subsequent reads overwrite the value for the same name. Iteration order
+     * follows first appearance.
      *
      * @return mutable {@link LinkedHashMap} (safe to post-process) of name → raw value
      */
     public Map<String, Object> variableSnapshot() {
-        return events.stream()
-                .filter(AuditEvent.VariableRead.class::isInstance)
-                .map(AuditEvent.VariableRead.class::cast)
-                .collect(Collectors.toMap(
-                        AuditEvent.VariableRead::name,
-                        AuditEvent.VariableRead::value,
-                        (first, last) -> last,
-                        LinkedHashMap::new
-                ));
+        LinkedHashMap<String, Object> snapshot = new LinkedHashMap<>();
+        for (AuditEvent event : events) {
+            switch (event) {
+                case AuditEvent.AssignmentEvent a -> snapshot.put(a.targetName(), a.newValue());
+                case AuditEvent.VariableRead r    -> snapshot.put(r.name(), r.value());
+                case AuditEvent.FunctionCall ignored -> {}
+            }
+        }
+        return snapshot;
     }
 
     /**
