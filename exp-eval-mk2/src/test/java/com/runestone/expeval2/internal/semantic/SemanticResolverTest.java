@@ -30,9 +30,9 @@ class SemanticResolverTest {
     @Test
     void shouldResolveTypesAndBuildSymbolIndexesForAssignmentsAndComparisons() {
         ExpressionEnvironment environment = new ExpressionEnvironmentBuilder()
-            .registerExternalSymbol("principal", ScalarType.NUMBER, BigDecimal.ZERO, true)
-            .registerExternalSymbol("rate", ScalarType.NUMBER, BigDecimal.ZERO, true)
-            .registerExternalSymbol("limit", ScalarType.NUMBER, BigDecimal.ZERO, true)
+            .registerExternalSymbol("principal", BigDecimal.ZERO, true)
+            .registerExternalSymbol("rate", BigDecimal.ZERO, true)
+            .registerExternalSymbol("limit", BigDecimal.ZERO, true)
             .build();
 
         CompiledExpression compiled = compiler.compile(
@@ -70,7 +70,7 @@ class SemanticResolverTest {
     void shouldResolveStableFunctionBindingsInsideSemanticModel() {
         ExpressionEnvironment environment = new ExpressionEnvironmentBuilder()
             .registerStaticProvider(FunctionFixtures.class)
-            .registerExternalSymbol("principal", ScalarType.NUMBER, BigDecimal.TEN, true)
+            .registerExternalSymbol("principal", BigDecimal.TEN, true)
             .build();
 
         CompiledExpression compiled = compiler.compile(

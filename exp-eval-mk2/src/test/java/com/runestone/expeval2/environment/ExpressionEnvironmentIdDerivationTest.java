@@ -1,6 +1,5 @@
 package com.runestone.expeval2.environment;
 
-import com.runestone.expeval2.types.ScalarType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -48,10 +47,10 @@ class ExpressionEnvironmentIdDerivationTest {
         @DisplayName("Same external symbol registration shares ID")
         void sameExternalSymbolSharesId() {
             ExpressionEnvironmentId id1 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("rate", ScalarType.NUMBER, BigDecimal.ZERO, true)
+                    .registerExternalSymbol("rate", BigDecimal.ZERO, true)
                     .build().environmentId();
             ExpressionEnvironmentId id2 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("rate", ScalarType.NUMBER, BigDecimal.ZERO, true)
+                    .registerExternalSymbol("rate", BigDecimal.ZERO, true)
                     .build().environmentId();
 
             assertThat(id1).isEqualTo(id2);
@@ -85,10 +84,10 @@ class ExpressionEnvironmentIdDerivationTest {
         void differentDefaultValueForSameSymbolSharesId() {
             // defaultValue affects runtime evaluation, not compilation — intentionally excluded from the cache key
             ExpressionEnvironmentId id1 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("rate", ScalarType.NUMBER, BigDecimal.ZERO, true)
+                    .registerExternalSymbol("rate", BigDecimal.ZERO, true)
                     .build().environmentId();
             ExpressionEnvironmentId id2 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("rate", ScalarType.NUMBER, BigDecimal.TEN, true)
+                    .registerExternalSymbol("rate", BigDecimal.TEN, true)
                     .build().environmentId();
 
             assertThat(id1).isEqualTo(id2);
@@ -114,12 +113,12 @@ class ExpressionEnvironmentIdDerivationTest {
         @DisplayName("External symbols in different order produce same ID")
         void externalSymbolsInDifferentOrderShareId() {
             ExpressionEnvironmentId id1 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("rate", ScalarType.NUMBER, null, true)
-                    .registerExternalSymbol("cap", ScalarType.NUMBER, null, false)
+                    .registerExternalSymbol("rate", BigDecimal.ZERO, true)
+                    .registerExternalSymbol("cap", BigDecimal.ZERO, false)
                     .build().environmentId();
             ExpressionEnvironmentId id2 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("cap", ScalarType.NUMBER, null, false)
-                    .registerExternalSymbol("rate", ScalarType.NUMBER, null, true)
+                    .registerExternalSymbol("cap", BigDecimal.ZERO, false)
+                    .registerExternalSymbol("rate", BigDecimal.ZERO, true)
                     .build().environmentId();
 
             assertThat(id1).isEqualTo(id2);
@@ -154,9 +153,9 @@ class ExpressionEnvironmentIdDerivationTest {
         @DisplayName("Different external symbol names produce different IDs")
         void differentSymbolNamesDifferentIds() {
             ExpressionEnvironmentId id1 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("rate", ScalarType.NUMBER, null, true).build().environmentId();
+                    .registerExternalSymbol("rate", BigDecimal.ZERO, true).build().environmentId();
             ExpressionEnvironmentId id2 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("cap", ScalarType.NUMBER, null, true).build().environmentId();
+                    .registerExternalSymbol("cap", BigDecimal.ZERO, true).build().environmentId();
 
             assertThat(id1).isNotEqualTo(id2);
         }
@@ -165,9 +164,9 @@ class ExpressionEnvironmentIdDerivationTest {
         @DisplayName("Different external symbol types produce different IDs")
         void differentSymbolTypesDifferentIds() {
             ExpressionEnvironmentId id1 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("flag", ScalarType.NUMBER, null, true).build().environmentId();
+                    .registerExternalSymbol("flag", BigDecimal.ZERO, true).build().environmentId();
             ExpressionEnvironmentId id2 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("flag", ScalarType.BOOLEAN, null, true).build().environmentId();
+                    .registerExternalSymbol("flag", Boolean.TRUE, true).build().environmentId();
 
             assertThat(id1).isNotEqualTo(id2);
         }
@@ -176,9 +175,9 @@ class ExpressionEnvironmentIdDerivationTest {
         @DisplayName("Different overridable flag produces different IDs")
         void differentOverridableFlagDifferentIds() {
             ExpressionEnvironmentId id1 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("rate", ScalarType.NUMBER, null, true).build().environmentId();
+                    .registerExternalSymbol("rate", BigDecimal.ZERO, true).build().environmentId();
             ExpressionEnvironmentId id2 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("rate", ScalarType.NUMBER, null, false).build().environmentId();
+                    .registerExternalSymbol("rate", BigDecimal.ZERO, false).build().environmentId();
 
             assertThat(id1).isNotEqualTo(id2);
         }
@@ -199,7 +198,7 @@ class ExpressionEnvironmentIdDerivationTest {
         void extraSymbolDifferentIds() {
             ExpressionEnvironmentId id1 = ExpressionEnvironment.builder().build().environmentId();
             ExpressionEnvironmentId id2 = ExpressionEnvironment.builder()
-                    .registerExternalSymbol("rate", ScalarType.NUMBER, null, true).build().environmentId();
+                    .registerExternalSymbol("rate", BigDecimal.ZERO, true).build().environmentId();
 
             assertThat(id1).isNotEqualTo(id2);
         }

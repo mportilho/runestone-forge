@@ -1,7 +1,6 @@
 package com.runestone.expeval2.api;
 
 import com.runestone.expeval2.environment.ExpressionEnvironment;
-import com.runestone.expeval2.types.ScalarType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -147,7 +146,7 @@ class ExpressionValidationTest {
         @DisplayName("returns valid when external symbols are declared in the environment")
         void validExpressionWithDeclaredExternalSymbols() {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
-                .registerExternalSymbol("principal", ScalarType.NUMBER, BigDecimal.ONE, true)
+                .registerExternalSymbol("principal", BigDecimal.ONE, true)
                 .build();
 
             var result = MathExpression.validate("principal * 1.1", env);
@@ -195,7 +194,7 @@ class ExpressionValidationTest {
         @DisplayName("does not throw on type mismatch — returns invalid result")
         void typeMismatchDoesNotThrow() {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
-                .registerExternalSymbol("flag", ScalarType.BOOLEAN, true, false)
+                .registerExternalSymbol("flag", true, false)
                 .build();
 
             var result = MathExpression.validate("flag + 1", env);
@@ -207,7 +206,7 @@ class ExpressionValidationTest {
         @DisplayName("type mismatch issue carries source position")
         void typeMismatchIssueHasPosition() {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
-                .registerExternalSymbol("flag", ScalarType.BOOLEAN, true, false)
+                .registerExternalSymbol("flag", true, false)
                 .build();
 
             var result = MathExpression.validate("flag + 1", env);
@@ -234,7 +233,7 @@ class ExpressionValidationTest {
         @DisplayName("formatMessage() includes caret under the invalid type in type-mismatch error")
         void formatMessageIncludesCaretForTypeMismatch() {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
-                .registerExternalSymbol("flag", ScalarType.BOOLEAN, true, false)
+                .registerExternalSymbol("flag", true, false)
                 .build();
 
             var result = MathExpression.validate("flag + 1", env);
@@ -316,8 +315,8 @@ class ExpressionValidationTest {
         @DisplayName("incompatible comparison types returns invalid result with issue code")
         void incompatibleComparisonTypesIsInvalid() {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
-                .registerExternalSymbol("n", ScalarType.NUMBER, BigDecimal.ONE, false)
-                .registerExternalSymbol("d", ScalarType.DATE, LocalDate.now(), false)
+                .registerExternalSymbol("n", BigDecimal.ONE, false)
+                .registerExternalSymbol("d", LocalDate.now(), false)
                 .build();
 
             var result = LogicalExpression.validate("n > d", env);

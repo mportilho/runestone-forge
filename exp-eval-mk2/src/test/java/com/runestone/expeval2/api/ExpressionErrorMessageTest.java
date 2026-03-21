@@ -3,7 +3,6 @@ package com.runestone.expeval2.api;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval2.internal.grammar.ParsingException;
-import com.runestone.expeval2.types.ScalarType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -108,7 +107,7 @@ class ExpressionErrorMessageTest {
         @DisplayName("TYPE_MISMATCH: formats message when boolean symbol used in arithmetic")
         void formatsTypeMismatchError() {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
-                .registerExternalSymbol("flag", ScalarType.BOOLEAN, true, false)
+                .registerExternalSymbol("flag", true, false)
                 .build();
 
             assertThatThrownBy(() -> MathExpression.compile("flag + 1", env))
@@ -123,7 +122,7 @@ class ExpressionErrorMessageTest {
         @DisplayName("RESULT_TYPE_MISMATCH: formats message when boolean symbol is the math result")
         void formatsResultTypeMismatchError() {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
-                .registerExternalSymbol("flag", ScalarType.BOOLEAN, true, false)
+                .registerExternalSymbol("flag", true, false)
                 .build();
 
             assertThatThrownBy(() -> MathExpression.compile("flag", env))
@@ -139,8 +138,8 @@ class ExpressionErrorMessageTest {
         void formatsIncompatibleComparisonError() {
             // n (NUMBER) > d (DATE) — types differ, neither is UNKNOWN
             ExpressionEnvironment env = ExpressionEnvironment.builder()
-                .registerExternalSymbol("n", ScalarType.NUMBER, BigDecimal.ONE, false)
-                .registerExternalSymbol("d", ScalarType.DATE, LocalDate.now(), false)
+                .registerExternalSymbol("n", BigDecimal.ONE, false)
+                .registerExternalSymbol("d", LocalDate.now(), false)
                 .build();
 
             assertThatThrownBy(() -> LogicalExpression.compile("n > d", env))

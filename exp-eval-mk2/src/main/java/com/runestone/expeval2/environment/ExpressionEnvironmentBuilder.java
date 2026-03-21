@@ -6,12 +6,7 @@ import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.catalog.FunctionCatalog;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
-import com.runestone.expeval2.catalog.functions.ComparableFunctions;
-import com.runestone.expeval2.catalog.functions.DateTimeFunctions;
-import com.runestone.expeval2.catalog.functions.DoubleExcelFinancialFunctions;
-import com.runestone.expeval2.catalog.functions.ExcelFinancialFunctions;
-import com.runestone.expeval2.catalog.functions.MathFunctions;
-import com.runestone.expeval2.catalog.functions.TrigonometryFunctions;
+import com.runestone.expeval2.catalog.functions.*;
 import com.runestone.expeval2.types.ResolvedType;
 import com.runestone.expeval2.types.ResolvedTypes;
 
@@ -92,12 +87,12 @@ public final class ExpressionEnvironmentBuilder {
                 .addTrigonometryFunctions();
     }
 
-    public ExpressionEnvironmentBuilder registerExternalSymbol(String name, ResolvedType declaredType,
-                                                               Object defaultValue, boolean overridable) {
+    public ExpressionEnvironmentBuilder registerExternalSymbol(String name, Object defaultValue, boolean overridable) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("name must not be blank");
         }
-        externalSymbols.put(name, new ExternalSymbolRegistration(name, Objects.requireNonNull(declaredType, "declaredType must not be null"), defaultValue, overridable));
+        Objects.requireNonNull(defaultValue, "defaultValue must not be null");
+        externalSymbols.put(name, new ExternalSymbolRegistration(name, ResolvedTypes.fromJavaType(defaultValue.getClass()), defaultValue, overridable));
         return this;
     }
 
