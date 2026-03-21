@@ -69,6 +69,24 @@ class ConstantFoldingExpressionTest {
         }
 
         @Test
+        @DisplayName("ln(lb(256)) — nested foldable calls produce the correct value (lb=8, ln(8)≈2.079)")
+        void nestedFoldedCallsProduceCorrectValue() {
+            BigDecimal result = MathExpression.compile("ln(lb(256))", ENV).compute();
+
+            // lb(256)=8, ln(8)=ln(2^3)=3*ln(2)≈2.0794415417
+            BigDecimal expected = MathExpression.compile("ln(8)", ENV).compute();
+            assertThat(result).isCloseTo(expected, EPSILON);
+        }
+
+        @Test
+        @DisplayName("log(lb(4), lb(256)) — two nested foldable args produce the correct value (log₂(8)=3)")
+        void nestedFoldedTwoArgsProduceCorrectValue() {
+            BigDecimal result = MathExpression.compile("log(lb(4), lb(256))", ENV).compute();
+
+            assertThat(result).isCloseTo(new BigDecimal("3"), EPSILON);
+        }
+
+        @Test
         @DisplayName("folded result matches non-folded result for ln(variable) with the same value")
         void foldedResultMatchesNonFoldedForSameValue() {
             // ln(1.05) as folded literal vs ln(x) where x=1.05 must agree

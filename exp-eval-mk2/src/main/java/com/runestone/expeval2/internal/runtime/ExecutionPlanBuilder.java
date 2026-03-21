@@ -122,11 +122,11 @@ final class ExecutionPlanBuilder {
                 .toList();
 
         FunctionDescriptor descriptor = binding.descriptor();
-        if (descriptor.isFoldable() && arguments.stream().allMatch(ExecutableLiteral.class::isInstance)) {
+        if (descriptor.isFoldable() && arguments.stream().allMatch(this::isConstantNode)) {
             int arity = descriptor.arity();
             Object[] args = new Object[arity];
             for (int i = 0; i < arity; i++) {
-                RuntimeValue rv = ((ExecutableLiteral) arguments.get(i)).precomputed();
+                RuntimeValue rv = constantRuntimeValue(arguments.get(i), runtimeServices);
                 args[i] = runtimeServices.coerce(rv, descriptor.parameterTypes().get(i));
             }
             Object rawResult = descriptor.invoke(args);
@@ -134,6 +134,22 @@ final class ExecutionPlanBuilder {
         }
 
         return ExecutableFunctionCall.of(binding, arguments);
+    }
+
+    private boolean isConstantNode(ExecutableNode node) {
+        return switch (node) {
+            case ExecutableLiteral ignored -> true;
+            case ExecutableFunctionCall f -> f.isFolded();
+            default -> false;
+        };
+    }
+
+    private RuntimeValue constantRuntimeValue(ExecutableNode node, RuntimeServices runtimeServices) {
+        return switch (node) {
+            case ExecutableLiteral lit -> lit.precomputed();
+            case ExecutableFunctionCall f -> runtimeServices.from(f.foldedResult(), f.binding().returnType());
+            default -> throw new IllegalStateException("not a constant node: " + node);
+        };
     }
 
     private String unquote(String value) {

@@ -82,6 +82,28 @@ class ConstantFoldingPlanTest {
         }
 
         @Test
+        @DisplayName("ln(lb(256)) is folded — inner lb(256) is constant so outer ln is also foldable")
+        void nestedFoldableFunctionsAreFolded() {
+            // lb(256)=8 is folded first; ln(8) then receives a folded node as argument → also folded
+            CompiledExpression compiled = compile("ln(lb(256))");
+
+            ExecutableFunctionCall call = resultFunctionCall(compiled);
+
+            assertThat(call.isFolded()).isTrue();
+        }
+
+        @Test
+        @DisplayName("log(lb(4), lb(256)) is folded — both scalar arguments are folded inner calls")
+        void nestedFoldableWithTwoFoldedArgsIsFolded() {
+            // lb(4)=2, lb(256)=8; log(2, 8) = 3
+            CompiledExpression compiled = compile("log(lb(4), lb(256))");
+
+            ExecutableFunctionCall call = resultFunctionCall(compiled);
+
+            assertThat(call.isFolded()).isTrue();
+        }
+
+        @Test
         @DisplayName("ln(1.05) in a larger expression — the function-call subnode is folded")
         void lnSubnodeInBinaryOpIsFolded() {
             // ln(1.05) * n — result is a BinaryOp; left child is the folded call
@@ -103,6 +125,19 @@ class ConstantFoldingPlanTest {
     @Nested
     @DisplayName("Function call that must NOT be folded")
     class NotFolded {
+
+        @Test
+        @DisplayName("ln(lb(x)) is not folded — inner lb receives a variable, so it is not folded and outer ln cannot fold either")
+        void nestedFunctionWithVariableIsNotFolded() {
+            CompiledExpression compiled = compile("ln(lb(x))");
+
+            ExecutableFunctionCall outer = resultFunctionCall(compiled);
+
+            assertThat(outer.isFolded()).isFalse();
+            // The inner lb(x) is also not folded
+            ExecutableFunctionCall inner = (ExecutableFunctionCall) outer.arguments().getFirst();
+            assertThat(inner.isFolded()).isFalse();
+        }
 
         @Test
         @DisplayName("ln(variable) is not folded — argument is not a literal")
