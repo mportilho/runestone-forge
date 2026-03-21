@@ -20,12 +20,13 @@
 build time:
   ExecutionPlanBuilder.buildFunctionCall()
     → descriptor.isFoldable() && todos os args são ExecutableLiteral?
-    → sim: descriptor.invoke(coercedArgs) → armazena (foldedArgs, foldedResult) em ExecutableFunctionCall
+    → sim: runtimeServices.coerce() + descriptor.invoke(coercedArgs)
+         → armazena (foldedArgs, foldedResult) em ExecutableFunctionCall
 
 runtime (compute()):
   AbstractRuntimeEvaluator.evaluateFunctionCall()
     → node.isFolded()?
-    → sim: wrap foldedResult via runtimeValueFactory.from() + emite audit com foldedArgs
+    → sim: runtimeServices.from(foldedResult) + emite audit com foldedArgs
     → não: caminho atual inalterado
 ```
 
@@ -126,11 +127,9 @@ record ExecutableFunctionCall(
 
 ### 4. `ExecutionPlanBuilder` — `internal.runtime` package
 
-**Problema:** o builder não tem `RuntimeCoercionService`, que é necessário para coercir os args literais antes de invocar a função (ex.: literal `Integer` para parâmetro `BigDecimal`).
+**Solução:** `ExecutionPlanBuilder` recebe um `RuntimeServices` via construtor. `RuntimeServices` já está disponível em `ExpressionEnvironment` (criado uma vez no `ExpressionEnvironmentBuilder.build()`) e pode ser repassado de `ExpressionCompiler` → `ExecutionPlanBuilder` sem nenhuma criação adicional de objetos.
 
-**Solução:** `ExecutionPlanBuilder` recebe um `RuntimeCoercionService` via construtor. Quem o instancia (`ExpressionCompiler`) tem acesso a `DataConversionService` via `ExpressionEnvironment` e pode criar e injetar o serviço.
-
-> **Ponto a confirmar durante a implementação:** verificar se `ExpressionCompiler` já recebe ou pode receber `DataConversionService` para criar o `RuntimeCoercionService` de folding.
+> **`RuntimeServices` resolve o ponto de incerteza anterior** (acesso a `DataConversionService` no builder): o serviço agora é injetado diretamente, com coerção e wrapping disponíveis via `runtimeServices.coerce()` e `runtimeServices.from()`.
 
 Mudança em `buildFunctionCall()`:
 
@@ -149,7 +148,7 @@ private ExecutableNode buildFunctionCall(FunctionCallNode f, SemanticModel model
         Object[] args = new Object[arity];
         for (int i = 0; i < arity; i++) {
             RuntimeValue rv = ((ExecutableLiteral) arguments.get(i)).precomputed();
-            args[i] = coercionService.coerce(rv, descriptor.parameterTypes().get(i));
+            args[i] = runtimeServices.coerce(rv, descriptor.parameterTypes().get(i));
         }
         Object rawResult = descriptor.invoke(args);
         return ExecutableFunctionCall.folded(binding, arguments, args, rawResult);
@@ -163,12 +162,12 @@ private ExecutableNode buildFunctionCall(FunctionCallNode f, SemanticModel model
 
 ### 5. `AbstractRuntimeEvaluator` — `internal.runtime` package
 
-Adicionar short-circuit no início de `evaluateFunctionCall()`. O audit continua sendo emitido com os mesmos campos — comportamento idêntico ao caminho normal.
+Adicionar short-circuit no início de `evaluateFunctionCall()`. O audit continua sendo emitido com os mesmos campos — comportamento idêntico ao caminho normal. Ambas as operações (`from` e `coerce`) são acessadas via o campo `runtimeServices` já existente no evaluador (migrado de dois campos separados para um único `RuntimeServices`).
 
 ```java
 private RuntimeValue evaluateFunctionCall(ExecutableFunctionCall node, ExecutionScope scope) {
     if (node.isFolded()) {
-        RuntimeValue result = runtimeValueFactory.from(node.foldedResult(), node.binding().returnType());
+        RuntimeValue result = runtimeServices.from(node.foldedResult(), node.binding().returnType());
         AuditCollector audit = scope.audit();
         if (audit != null) {
             audit.enterCall();
@@ -189,12 +188,12 @@ private RuntimeValue evaluateFunctionCall(ExecutableFunctionCall node, Execution
     Object[] args = new Object[arity];
     for (int i = 0; i < arity; i++) {
         RuntimeValue evaluated = evaluateExpression(node.arguments().get(i), scope);
-        args[i] = runtimeCoercionService.coerce(evaluated, descriptor.parameterTypes().get(i));
+        args[i] = runtimeServices.coerce(evaluated, descriptor.parameterTypes().get(i));
     }
     AuditCollector audit = scope.audit();
     if (audit != null) audit.enterCall();
     Object rawResult = descriptor.invoke(args);
-    RuntimeValue result = runtimeValueFactory.from(rawResult, node.binding().returnType());
+    RuntimeValue result = runtimeServices.from(rawResult, node.binding().returnType());
     if (audit != null) {
         audit.exitCall();
         audit.record(new AuditEvent.FunctionCall(descriptor.name(), args, result.raw(), audit.callDepth()));
@@ -207,16 +206,24 @@ private RuntimeValue evaluateFunctionCall(ExecutableFunctionCall node, Execution
 
 ## Cadeia de Dependência das Mudanças
 
+`RuntimeServices` é o elo central que eliminou a dependência de `DataConversionService` direto no builder e unificou os dois serviços internos.
+
 ```
-FunctionDescriptor            ← adiciona isFoldable()
+RuntimeServices (NEW)          ← criado em ExpressionEnvironment; expõe coerce() + from()
          ↓
-ExpressionEnvironmentBuilder  ← addMathFunctions() passa foldable=true para toDescriptor()
+ExpressionEnvironment          ← armazena RuntimeServices; expõe runtimeServices()
+         ↓                                          ↓
+ExpressionEnvironmentBuilder   ← addMathFunctions()  ExpressionRuntimeSupport.from()
+  passa foldable=true               passa foldable=true    usa environment.runtimeServices()
+         ↓                                          ↓
+FunctionDescriptor             ← adiciona isFoldable()
          ↓
-ExecutionPlanBuilder           ← recebe RuntimeCoercionService; buildFunctionCall() faz folding
-         ↓ (via ExpressionCompiler — verificar acesso a DataConversionService)
+ExecutionPlanBuilder           ← recebe RuntimeServices; buildFunctionCall() faz folding
+         ↓
 ExecutableFunctionCall         ← adiciona foldedArgs + foldedResult + isFolded()
          ↓
-AbstractRuntimeEvaluator       ← short-circuit se isFolded(), audit preservado
+AbstractRuntimeEvaluator       ← campo runtimeServices (unificado); short-circuit se isFolded()
+  MutableBindings              ← usa runtimeServices.from() em vez de RuntimeValueFactory direto
 ```
 
 ---
@@ -238,9 +245,25 @@ O padrão financeiro mais comum — `fator * ln(taxa)` onde `taxa` é um literal
 
 ---
 
-## Observação sobre `runtimeValueFactory.from()` no caminho folded
+## Observação sobre `runtimeServices.from()` no caminho folded
 
-O `runtimeValueFactory.from(node.foldedResult(), returnType)` ainda é chamado a cada `compute()`. Trata-se apenas de um wrapping leve (sem cálculo numérico), portanto o custo é desprezível comparado à eliminação da série de Taylor.
+O `runtimeServices.from(node.foldedResult(), returnType)` ainda é chamado a cada `compute()`. Trata-se apenas de um wrapping leve (sem cálculo numérico), portanto o custo é desprezível comparado à eliminação da série de Taylor.
+
+## Status de Implementação
+
+| Etapa | Status |
+|---|---|
+| `RuntimeServices` criado | ✅ Implementado |
+| `ExpressionEnvironment` expõe `runtimeServices()` | ✅ Implementado |
+| `ExpressionRuntimeSupport.from()` usa `RuntimeServices` | ✅ Implementado |
+| `AbstractRuntimeEvaluator` unificado em `RuntimeServices` | ✅ Implementado |
+| `MutableBindings` usa `RuntimeServices` | ✅ Implementado |
+| `MathEvaluator` / `LogicalEvaluator` simplificados | ✅ Implementado |
+| `FunctionDescriptor.isFoldable()` | ⬜ Pendente |
+| `ExpressionEnvironmentBuilder` — foldable em math functions | ⬜ Pendente |
+| `ExecutableFunctionCall` — foldedArgs + foldedResult | ⬜ Pendente |
+| `ExecutionPlanBuilder` — recebe `RuntimeServices`, faz folding | ⬜ Pendente |
+| `AbstractRuntimeEvaluator` — short-circuit no caminho folded | ⬜ Pendente |
 
 ---
 
