@@ -46,14 +46,18 @@ public final class SemanticResolver {
         for (AssignmentNode assignment : file.assignments()) {
             session.resolveAssignment(assignment);
         }
-        ResolvedType resultType = session.resolveExpression(file.resultExpression());
-        if (context.resultType() == ExpressionResultType.MATH && resultType != UnknownType.INSTANCE && resultType != ScalarType.NUMBER) {
-            session.error("RESULT_TYPE_MISMATCH", "math expressions must resolve to NUMBER", file.resultExpression().sourceSpan());
+        if (file.resultExpression() != null) {
+            ResolvedType resultType = session.resolveExpression(file.resultExpression());
+            if (context.resultType() == ExpressionResultType.MATH && resultType != UnknownType.INSTANCE && resultType != ScalarType.NUMBER) {
+                session.error("RESULT_TYPE_MISMATCH", "math expressions must resolve to NUMBER", file.resultExpression().sourceSpan());
+            }
+            if (context.resultType() == ExpressionResultType.LOGICAL && resultType != UnknownType.INSTANCE && resultType != ScalarType.BOOLEAN) {
+                session.error("RESULT_TYPE_MISMATCH", "logical expressions must resolve to BOOLEAN", file.resultExpression().sourceSpan());
+            }
+            session.resolvedTypes.put(file.nodeId(), resultType);
+        } else {
+            session.resolvedTypes.put(file.nodeId(), UnknownType.INSTANCE);
         }
-        if (context.resultType() == ExpressionResultType.LOGICAL && resultType != UnknownType.INSTANCE && resultType != ScalarType.BOOLEAN) {
-            session.error("RESULT_TYPE_MISMATCH", "logical expressions must resolve to BOOLEAN", file.resultExpression().sourceSpan());
-        }
-        session.resolvedTypes.put(file.nodeId(), resultType);
         return new SemanticModel(
             file,
             session.resolvedTypes,

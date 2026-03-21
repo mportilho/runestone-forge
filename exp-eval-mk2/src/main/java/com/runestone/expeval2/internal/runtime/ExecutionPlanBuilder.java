@@ -18,7 +18,8 @@ final class ExecutionPlanBuilder {
         List<ExecutableAssignment> assignments = ast.assignments().stream()
                 .map(assignment -> buildAssignment(assignment, model))
                 .toList();
-        return new ExecutionPlan(assignments, buildNode(ast.resultExpression(), model));
+        ExecutableNode resultNode = ast.resultExpression() != null ? buildNode(ast.resultExpression(), model) : null;
+        return new ExecutionPlan(assignments, resultNode);
     }
 
     private ExecutableAssignment buildAssignment(AssignmentNode assignment, SemanticModel model) {

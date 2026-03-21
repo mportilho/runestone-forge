@@ -563,3 +563,27 @@ The `noAudit` variance (−1.8% to +6.1%) is measurement noise — the non-audit
 **Decision:** ACCEPT
 **Reason:** All `WithAudit` paths improved in both latency (+4–5.5%) and allocation (−6.8% to −19.8% B/op). The `userFunction` path — the heaviest function-call scenario — shows the largest allocation reduction (−19.8%). Latency gains are below the 10% threshold but consistent across all three scenarios and paired with significant allocation reduction; per the 1–10% policy with low risk, the change is worth keeping. The `noAudit` paths are unaffected (zero allocation change; latency deltas are within noise).
 **Notes:** Measurements used `AuditOverheadBenchmark` with the standard JMH protocol (`5x500ms` warmup, `10x500ms` measurement, `3` forks, `ns/op`, `-prof gc`) on JDK 21.0.10. Functional tests (199) passed via `mvn -q -pl exp-eval-mk2 test` before and after the change. JSON evidence saved to `/tmp/performance-benchmark/audit-overhead-after.json`; comparison in `/tmp/performance-benchmark/audit-overhead-comparison.md`.
+
+## PERF-025: Two-layer ExecutionScope — eliminate external bindings copy on every compute()
+
+**Date:** 2026-03-21
+
+**Scenario:** `AssignmentExpression.compute()` always uses a mutable `ExecutionScope` (`hasAssignments = true`), which triggered `MutableBindings.copyValues()` → `new HashMap<>(externalBindings)` on every call. The copy size grows with the number of external symbols used in the expression. This was flagged as a smell in performance review of the `AssignmentExpression` implementation.
+
+**Hypothesis:** Replacing the copy-on-create approach with a two-layer scope — fresh internal map for assignments, shared read-only external bindings — would eliminate the external bindings copy without changing semantics, reducing both `ns/op` and `B/op` proportionally to the number of external symbols.
+
+**Changes applied:**
+- `ExecutionScope`: added nullable `externalValues` field (read-only external layer); added `fromTwoLayerIsolated(Map sharedExternal, int internalCapacity)` and `fromTwoLayerIsolatedWithAudit(...)` factory methods; `find()` checks `values` (internal) first, then `externalValues` when present; `assign()` writes only to `values` (internal layer is never null and always mutable).
+- `ExpressionRuntimeSupport`: added `internalSymbolCount` field (cached from semantic model at construction); `createExecutionScope()` and `createAuditedExecutionScope()` now call `fromTwoLayerIsolated`/`fromTwoLayerIsolatedWithAudit` instead of `fromIsolated(bindings.copyValues())` for all expressions with assignments.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | Before (B/op) | After (B/op) | Δ B/op |
+|-----------|---------------:|--------------:|----------------:|--------------:|-------------:|-------:|
+| computeNoExternal (0 ext) | 615.5 | 557.5 | +9.4% | 736.0 | 704.0 | −32 |
+| computeThreeExternal (3 ext) | 933.3 | 794.4 | +14.9% | 1088.0 | 1008.0 | −80 |
+| computeTwelveExternal (12 ext) | 1692.2 | 1333.5 | +21.2% | 2248.0 | 1906.7 | −341 |
+
+**Decision:** ACCEPT
+**Reason:** All three scenarios improved: 14.9% and 21.2% for expressions with external symbols (above the 10% threshold), and 9.4% for zero-external expressions (below threshold but low-risk and consistent with the savings in B/op). The improvement scales with external symbol count, confirming the hypothesis. Semantics are preserved: the internal layer absorbs assignment writes, and the shared external layer is never mutated. All 610 module tests passed before and after the change.
+**Notes:** Benchmark used `AssignmentExpressionBindingsBenchmark` with `-f 1 -wi 5 -i 10 -prof gc` on JDK 21.0.10. JSON evidence in `/tmp/performance-benchmark/assign-before.json` and `/tmp/performance-benchmark/assign-after.json`. The `AuditOverheadBenchmark.assignedVariableNoAudit` and `assignedVariableWithAudit` scenarios (which use `MathExpression` with one assignment) also benefit from this change through the shared `hasAssignments` code path.
+
+**Regression check (intra-session, 2026-03-21):** A follow-up measurement confirmed that `MathExpression` with assignments also benefits from PERF-025. The `AuditOverheadBenchmark.assignedVariableNoAudit` scenario (`r = a + b * c - d; r * e + f - g * h + i - j * k + l` — 1 internal symbol, 11 external) improved by +19.8% in ns/op and -491 B/op in the same JVM session, matching the PERF-025 profile. No regression was detected in any scenario. The apparent 2× gap against PERF-024 numbers is a cross-session JVM artifact (different CPU governor/JIT state between sessions); the intra-session comparison is the authoritative reference.

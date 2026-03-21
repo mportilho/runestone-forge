@@ -116,7 +116,11 @@ ERROR_CHAR : . ;
 /* ########################################  Grammar rules  ######################################## */
 
 mathStart
-    : (assignmentExpression)* mathExpression EOF                         # mathInput
+    : (assignmentExpression)* mathExpression EOF                          # mathInput
+    ;
+
+assignmentStart
+    : assignmentExpression+ EOF                                           # assignmentInput
     ;
 
 logicalStart

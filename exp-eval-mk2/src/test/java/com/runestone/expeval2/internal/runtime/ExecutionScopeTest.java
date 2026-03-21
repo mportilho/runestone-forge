@@ -129,7 +129,7 @@ class ExecutionScopeTest {
         @Test
         @DisplayName("fromIsolated scope also caches dynamic values per execution")
         void fromIsolatedScopeCachesDynamicValues() {
-            ExecutionScope scope = ExecutionScope.fromIsolated(new HashMap<>());
+            ExecutionScope scope = ExecutionScope.from(new HashMap<>(), 2);
 
             RuntimeValue first = scope.resolveDynamic(DynamicInstant.CURR_DATE);
             RuntimeValue second = scope.resolveDynamic(DynamicInstant.CURR_DATE);

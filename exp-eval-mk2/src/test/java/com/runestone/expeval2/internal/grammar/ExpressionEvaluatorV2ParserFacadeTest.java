@@ -140,6 +140,14 @@ class ExpressionEvaluatorV2ParserFacadeTest {
             return parseLogical(predictionStrategy);
         }
 
+        @Override
+        public com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2Parser.AssignmentStartContext parseAssignments(
+            String input,
+            PredictionStrategy predictionStrategy
+        ) {
+            throw new UnsupportedOperationException("assignment parsing not stubbed");
+        }
+
         com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2Parser.MathStartContext parseMath(
             PredictionStrategy predictionStrategy
         ) {

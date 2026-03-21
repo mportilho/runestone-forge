@@ -26,6 +26,18 @@ public final class SemanticAstBuilder {
         );
     }
 
+    public ExpressionFileNode buildAssignmentFile(ExpressionEvaluatorV2Parser.AssignmentStartContext root) {
+        Objects.requireNonNull(root, "root must not be null");
+        ExpressionEvaluatorV2Parser.AssignmentInputContext input = (ExpressionEvaluatorV2Parser.AssignmentInputContext) root;
+        NodeFactory nodeFactory = new NodeFactory();
+        return new ExpressionFileNode(
+                nodeFactory.nextId("file"),
+                nodeFactory.sourceSpan(input),
+                buildAssignments(input.assignmentExpression(), nodeFactory),
+                null
+        );
+    }
+
     public ExpressionFileNode buildLogical(ExpressionEvaluatorV2Parser.LogicalStartContext root) {
         Objects.requireNonNull(root, "root must not be null");
         ExpressionEvaluatorV2Parser.LogicalInputContext input = (ExpressionEvaluatorV2Parser.LogicalInputContext) root;

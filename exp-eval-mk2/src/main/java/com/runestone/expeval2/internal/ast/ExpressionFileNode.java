@@ -13,6 +13,6 @@ public record ExpressionFileNode(
         AstValidation.requireNodeId(nodeId);
         AstValidation.requireSourceSpan(sourceSpan);
         assignments = AstValidation.copyList(assignments, "assignments");
-        AstValidation.requireNonNull(resultExpression, "resultExpression");
+        // resultExpression is null for assignment-only mode (AssignmentExpression)
     }
 }

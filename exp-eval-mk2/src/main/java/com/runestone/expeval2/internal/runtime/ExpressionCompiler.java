@@ -43,6 +43,7 @@ public final class ExpressionCompiler {
         ExpressionFileNode ast = switch (resultType) {
             case MATH -> astBuilder.buildMath(parserFacade.parseMath(source).root());
             case LOGICAL -> astBuilder.buildLogical(parserFacade.parseLogical(source).root());
+            case ASSIGNMENTS -> astBuilder.buildAssignmentFile(parserFacade.parseAssignments(source).root());
         };
         ResolutionContext resolutionContext = new ResolutionContext(resultType, environment.functionCatalog(), environment.externalSymbolCatalog());
         SemanticModel semanticModel = semanticResolver.resolve(ast, resolutionContext);

@@ -47,9 +47,8 @@ class ExpressionFileNodeTest {
             .isInstanceOf(NullPointerException.class)
             .hasMessage("assignments must not be null");
 
-        assertThatThrownBy(() -> new ExpressionFileNode(nodeId("file-1"), sourceSpan(), List.of(), null))
-            .isInstanceOf(NullPointerException.class)
-            .hasMessage("resultExpression must not be null");
+        // resultExpression is nullable: null is valid for assignment-only mode (AssignmentExpression)
+        assertThat(new ExpressionFileNode(nodeId("file-1"), sourceSpan(), List.of(), null).resultExpression()).isNull();
     }
 
     private static NodeId nodeId(String value) {

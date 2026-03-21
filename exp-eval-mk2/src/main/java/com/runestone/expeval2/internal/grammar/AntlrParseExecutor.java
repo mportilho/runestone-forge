@@ -17,6 +17,11 @@ final class AntlrParseExecutor implements ParseExecutor {
         return parse(input, predictionStrategy, ExpressionEvaluatorV2Parser::logicalStart);
     }
 
+    @Override
+    public ExpressionEvaluatorV2Parser.AssignmentStartContext parseAssignments(String input, PredictionStrategy predictionStrategy) {
+        return parse(input, predictionStrategy, ExpressionEvaluatorV2Parser::assignmentStart);
+    }
+
     private <T extends ParserRuleContext> T parse(String input, PredictionStrategy predictionStrategy, StartRule<T> startRule) {
         CollectingSyntaxErrorListener errorListener = new CollectingSyntaxErrorListener();
         ExpressionEvaluatorV2Parser parser = newParser(input, errorListener);

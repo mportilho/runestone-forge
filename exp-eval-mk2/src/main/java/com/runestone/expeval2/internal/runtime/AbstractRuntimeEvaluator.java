@@ -9,7 +9,9 @@ import com.runestone.expeval2.types.ScalarType;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 abstract class AbstractRuntimeEvaluator<T> {
@@ -37,6 +39,30 @@ abstract class AbstractRuntimeEvaluator<T> {
     }
 
     protected abstract T convertResult(RuntimeValue value);
+
+    final Map<String, Object> evaluateAssignments(ExecutionScope scope) {
+        Objects.requireNonNull(scope, "scope must not be null");
+        ExecutionPlan plan = compiledExpression.executionPlan();
+        for (ExecutableAssignment assignment : plan.assignments()) {
+            executeAssignment(assignment, scope);
+        }
+        // Collect in source-declaration order; plan.assignments() preserves declaration order
+        // and already holds the resolved SymbolRefs — no AST traversal or extra map lookup needed
+        List<ExecutableAssignment> assignments = plan.assignments();
+        Map<String, Object> result = new LinkedHashMap<>(assignments.size());
+        for (ExecutableAssignment assignment : assignments) {
+            switch (assignment) {
+                case ExecutableSimpleAssignment s ->
+                    result.put(s.target().name(), scope.find(s.target()).orElse(RuntimeValue.NullValue.INSTANCE).raw());
+                case ExecutableDestructuringAssignment d -> {
+                    for (SymbolRef target : d.targets()) {
+                        result.put(target.name(), scope.find(target).orElse(RuntimeValue.NullValue.INSTANCE).raw());
+                    }
+                }
+            }
+        }
+        return result;
+    }
 
     private void executeAssignment(ExecutableAssignment assignment, ExecutionScope scope) {
         switch (assignment) {

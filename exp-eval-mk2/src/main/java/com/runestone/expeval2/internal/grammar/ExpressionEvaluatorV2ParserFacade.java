@@ -27,6 +27,10 @@ public final class ExpressionEvaluatorV2ParserFacade {
         return parse(input, parseExecutor::parseLogical);
     }
 
+    public ParseResult<ExpressionEvaluatorV2Parser.AssignmentStartContext> parseAssignments(String input) {
+        return parse(input, parseExecutor::parseAssignments);
+    }
+
     private <T extends ParserRuleContext> ParseResult<T> parse(String input, BiFunction<String, PredictionStrategy, T> parser) {
         String source = requireInput(input);
         try {
@@ -46,6 +50,7 @@ public final class ExpressionEvaluatorV2ParserFacade {
         switch (input.resultType()) {
             case MATH -> this.parseMath(input.input());
             case LOGICAL -> this.parseLogical(input.input());
+            case ASSIGNMENTS -> this.parseAssignments(input.input());
         }
     }
 

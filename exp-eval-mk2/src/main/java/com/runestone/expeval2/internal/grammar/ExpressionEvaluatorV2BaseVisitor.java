@@ -24,6 +24,13 @@ public class ExpressionEvaluatorV2BaseVisitor<T> extends AbstractParseTreeVisito
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
+	@Override public T visitAssignmentInput(ExpressionEvaluatorV2Parser.AssignmentInputContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
 	@Override public T visitLogicalInput(ExpressionEvaluatorV2Parser.LogicalInputContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}

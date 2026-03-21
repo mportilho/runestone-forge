@@ -40,10 +40,6 @@ final class MutableBindings {
         return Optional.ofNullable(values.get(symbolRef));
     }
 
-    public HashMap<SymbolRef, RuntimeValue> copyValues() {
-        return new HashMap<>(values);
-    }
-
     /**
      * Returns the internal map directly, without copying.
      * <p>

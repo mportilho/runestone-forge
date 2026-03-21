@@ -7,6 +7,6 @@ record ExecutionPlan(List<ExecutableAssignment> assignments, ExecutableNode resu
 
     ExecutionPlan {
         assignments = List.copyOf(Objects.requireNonNull(assignments, "assignments must not be null"));
-        Objects.requireNonNull(resultExpression, "resultExpression must not be null");
+        // resultExpression is null for assignment-only mode (AssignmentExpression)
     }
 }

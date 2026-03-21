@@ -28,6 +28,18 @@ public class ExpressionEvaluatorV2BaseListener implements ExpressionEvaluatorV2L
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterAssignmentInput(ExpressionEvaluatorV2Parser.AssignmentInputContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitAssignmentInput(ExpressionEvaluatorV2Parser.AssignmentInputContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterLogicalInput(ExpressionEvaluatorV2Parser.LogicalInputContext ctx) { }
 	/**
 	 * {@inheritDoc}

@@ -19,6 +19,18 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 */
 	void exitMathInput(ExpressionEvaluatorV2Parser.MathInputContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code assignmentInput}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#assignmentStart}.
+	 * @param ctx the parse tree
+	 */
+	void enterAssignmentInput(ExpressionEvaluatorV2Parser.AssignmentInputContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code assignmentInput}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#assignmentStart}.
+	 * @param ctx the parse tree
+	 */
+	void exitAssignmentInput(ExpressionEvaluatorV2Parser.AssignmentInputContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code logicalInput}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalStart}.
 	 * @param ctx the parse tree

@@ -17,6 +17,13 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitMathInput(ExpressionEvaluatorV2Parser.MathInputContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code assignmentInput}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#assignmentStart}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitAssignmentInput(ExpressionEvaluatorV2Parser.AssignmentInputContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code logicalInput}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalStart}.
 	 * @param ctx the parse tree

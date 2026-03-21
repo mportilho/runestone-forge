@@ -8,6 +8,7 @@ import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public final class ExpressionRuntimeSupport {
@@ -19,6 +20,7 @@ public final class ExpressionRuntimeSupport {
     private final MathEvaluator mathEvaluator;
     private final LogicalEvaluator logicalEvaluator;
     private final boolean hasAssignments;
+    private final int internalSymbolCount;
     private final int maxAuditEvents;
 
     private ExpressionRuntimeSupport(CompiledExpression compiledExpression, MutableBindings bindings,
@@ -32,6 +34,7 @@ public final class ExpressionRuntimeSupport {
         this.mathEvaluator = new MathEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService, mathContext);
         this.logicalEvaluator = new LogicalEvaluator(compiledExpression, runtimeValueFactory, runtimeCoercionService, mathContext);
         this.hasAssignments = !compiledExpression.executionPlan().assignments().isEmpty();
+        this.internalSymbolCount = compiledExpression.semanticModel().internalSymbolsByName().size();
         this.maxAuditEvents = countMaxAuditEvents(compiledExpression.executionPlan());
     }
 
@@ -41,6 +44,10 @@ public final class ExpressionRuntimeSupport {
 
     public static ExpressionRuntimeSupport compileLogical(String source, ExpressionEnvironment environment) {
         return compile(source, ExpressionResultType.LOGICAL, environment);
+    }
+
+    public static ExpressionRuntimeSupport compileAssignments(String source, ExpressionEnvironment environment) {
+        return compile(source, ExpressionResultType.ASSIGNMENTS, environment);
     }
 
     public static ExpressionRuntimeSupport compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
@@ -81,14 +88,14 @@ public final class ExpressionRuntimeSupport {
 
     ExecutionScope createExecutionScope() {
         if (hasAssignments) {
-            return ExecutionScope.fromIsolated(bindings.copyValues());
+            return ExecutionScope.from(bindings.valuesReadOnly(), internalSymbolCount);
         }
         return ExecutionScope.readOnly(bindings.valuesReadOnly());
     }
 
     private ExecutionScope createAuditedExecutionScope(AuditCollector collector) {
         if (hasAssignments) {
-            return ExecutionScope.fromIsolatedWithAudit(bindings.copyValues(), collector);
+            return ExecutionScope.fromWithAudit(bindings.valuesReadOnly(), internalSymbolCount, collector);
         }
         return ExecutionScope.readOnlyWithAudit(bindings.valuesReadOnly(), collector);
     }
@@ -113,6 +120,16 @@ public final class ExpressionRuntimeSupport {
         return new AuditResult<>(result, collector.buildTrace());
     }
 
+    public Map<String, Object> computeAssignments() {
+        return mathEvaluator.evaluateAssignments(createExecutionScope());
+    }
+
+    public AuditResult<Map<String, Object>> computeAssignmentsWithAudit() {
+        AuditCollector collector = new AuditCollector(maxAuditEvents);
+        Map<String, Object> result = mathEvaluator.evaluateAssignments(createAuditedExecutionScope(collector));
+        return new AuditResult<>(result, collector.buildTrace());
+    }
+
     private static int countMaxAuditEvents(ExecutionPlan plan) {
         int count = 0;
         for (ExecutableAssignment assignment : plan.assignments()) {
@@ -121,7 +138,10 @@ public final class ExpressionRuntimeSupport {
                 case ExecutableDestructuringAssignment d -> d.targets().size() + countNodeEvents(d.value());
             };
         }
-        return count + countNodeEvents(plan.resultExpression());
+        if (plan.resultExpression() != null) {
+            count += countNodeEvents(plan.resultExpression());
+        }
+        return count;
     }
 
     private static int countNodeEvents(ExecutableNode node) {
