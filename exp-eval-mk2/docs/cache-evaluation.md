@@ -66,32 +66,11 @@ void invalidateCache() {
 
 ---
 
-### 2. Random `ExpressionEnvironmentId` — correctness guaranteed, reuse impossible `OPEN`
+### 2. Random `ExpressionEnvironmentId` — correctness guaranteed, reuse impossible `RESOLVED`
 
-Because `build()` assigns a `UUID.randomUUID()` as the environment ID, **every call to `build()`
-produces a unique ID**, even when the configuration is identical. This has two consequences:
-
-1. **Correctness is guaranteed by construction:** a cache hit can only occur when the exact same
-   `ExpressionEnvironment` instance is reused. No two independently-built environments can ever
-   share a cache entry, so false hits are structurally impossible.
-
-2. **Cache reuse across equivalent environments is impossible:** two environments built from the
-   same providers and symbols will compile the same expression twice, doubling compilation work and
-   consuming twice the cache budget. This is a significant efficiency loss in any scenario where
-   environments are rebuilt (e.g., per-request builders, test setups, Spring context refreshes).
-
-#### Proposition
-
-Choose a strategy based on the intended environment lifecycle:
-
-**Option A — Document the immutable-instance contract (minimal change).**
-Environments must be created once and reused. Document this contract explicitly in
-`ExpressionEnvironmentBuilder.build()` and `ExpressionRuntimeSupport`. Suitable when the
-application already owns long-lived environment instances.
-
-**Option B — Content-derived ID (better cache efficiency).**
-Derive the ID deterministically from the environment configuration — e.g., a hash of the sorted
-provider class names, external symbol descriptors, and `MathContext` precision:
+`ExpressionEnvironmentBuilder.build()` now derives the environment ID deterministically via SHA-256
+over the sorted list of provider class names, external symbol descriptors, and `MathContext`
+parameters:
 
 ```java
 // ExpressionEnvironmentBuilder.java
@@ -100,19 +79,25 @@ private static String deriveEnvironmentId(
         List<Object> instanceProviders,
         Map<String, ExternalSymbolRegistration> externalSymbols,
         MathContext mathContext) {
-
     List<String> parts = new ArrayList<>();
     staticProviders.forEach(c -> parts.add("s:" + c.getName()));
-    instanceProviders.forEach(o -> parts.add("i:" + o.getClass().getName()));
-    externalSymbols.forEach((name, reg) -> parts.add("x:" + name + ":" + reg.declaredType()));
+    instanceProviders.forEach(o -> parts.add("i:" + o.getClass().getName() + "@" + System.identityHashCode(o)));
+    externalSymbols.forEach((name, reg) -> parts.add("x:" + name + ":" + reg.declaredType() + ":" + reg.overridable()));
     parts.add("mc:" + mathContext.getPrecision() + ":" + mathContext.getRoundingMode());
     Collections.sort(parts);
-    return Integer.toHexString(parts.hashCode()); // or SHA-256 for collision safety
+    String content = String.join("|", parts);
+    byte[] hash = MessageDigest.getInstance("SHA-256").digest(content.getBytes(StandardCharsets.UTF_8));
+    return HexFormat.of().formatHex(hash, 0, 8);
 }
 ```
 
-This allows independently-built environments with identical configuration to share cache entries,
-making the singleton COMPILER genuinely effective.
+Two environments built from the same static providers, external symbols, and `MathContext` now
+share the same cache entries, making the compiler cache genuinely effective for those cases.
+
+**Note on instance providers:** the identity hash code (`System.identityHashCode`) is included for
+instance-based providers. This is conservative: two distinct instances of the same class get
+different IDs even if their state is equivalent. Full reuse for instance providers requires either
+sharing the same instance or implementing content-based equality in the provider itself.
 
 ---
 
@@ -187,12 +172,11 @@ take effect. Alternatively, the JVM system properties `expeval.cache.maximumSize
 | # | Finding                                                                                          | Severity | Status   |
 |---|--------------------------------------------------------------------------------------------------|----------|----------|
 | 1 | Singleton prevents full lifecycle control (no invalidation, ClassLoader risks)                   | Medium   | Open     |
-| 2 | Random `environmentId` guarantees correctness but prevents reuse across equivalent environments  | Medium   | Open     |
+| 2 | Random `environmentId` replaced by SHA-256 content-derived ID                                   | Medium   | Resolved |
 | 3 | Null checks in `compileUncached` were dead code; exception types were inconsistent               | Low      | Resolved |
 | 4 | TTL infrastructure added via `CacheConfig`; immutability contract documentation pending          | Low      | Partial  |
 | 5 | Cache size and eviction policy were hard-coded, not configurable                                 | Low      | Resolved |
 
-The most impactful finding is **#2**: the random UUID strategy makes the cache correct but
-effectively useless whenever environments are rebuilt from the same configuration. Addressing it —
-either by enforcing long-lived environment instances (Option A) or by deriving the ID from content
-(Option B) — will have the greatest effect on actual cache efficiency.
+Finding **#2** — previously the most impactful — is resolved: environments with the same static
+providers, external symbols, and `MathContext` now share cache entries. The remaining open items
+are **#1** (singleton lifecycle) and **#4** (immutability contract documentation).
