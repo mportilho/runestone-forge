@@ -23,6 +23,14 @@ public final class AssignmentExpression {
         return new AssignmentExpression(ExpressionRuntimeSupport.compileAssignments(source, environment));
     }
 
+    public static ValidationResult validate(String source) {
+        return validate(source, ExpressionEnvironmentBuilder.empty());
+    }
+
+    public static ValidationResult validate(String source, ExpressionEnvironment environment) {
+        return ExpressionRuntimeSupport.validateAssignments(source, environment);
+    }
+
     public AssignmentExpression setValue(String symbolName, Object rawValue) {
         runtime.setValue(symbolName, rawValue);
         return this;

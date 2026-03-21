@@ -4,9 +4,11 @@ import com.runestone.expeval2.api.AuditResult;
 import com.runestone.expeval2.api.CompilationIssue;
 import com.runestone.expeval2.api.CompilationPosition;
 import com.runestone.expeval2.api.ExpressionCompilationException;
+import com.runestone.expeval2.api.ValidationResult;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.internal.ast.SourceSpan;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
+import com.runestone.expeval2.internal.grammar.ParsingException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -50,6 +52,42 @@ public final class ExpressionRuntimeSupport {
 
     public static ExpressionRuntimeSupport compileAssignments(String source, ExpressionEnvironment environment) {
         return compile(source, ExpressionResultType.ASSIGNMENTS, environment);
+    }
+
+    public static ValidationResult validateMath(String source, ExpressionEnvironment environment) {
+        return validate(source, ExpressionResultType.MATH, environment);
+    }
+
+    public static ValidationResult validateLogical(String source, ExpressionEnvironment environment) {
+        return validate(source, ExpressionResultType.LOGICAL, environment);
+    }
+
+    public static ValidationResult validateAssignments(String source, ExpressionEnvironment environment) {
+        return validate(source, ExpressionResultType.ASSIGNMENTS, environment);
+    }
+
+    public static ValidationResult validate(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
+        Objects.requireNonNull(source, "source must not be null");
+        Objects.requireNonNull(resultType, "resultType must not be null");
+        Objects.requireNonNull(environment, "environment must not be null");
+        try {
+            compile(source, resultType, environment);
+            return ValidationResult.ok(source);
+        } catch (ExpressionCompilationException e) {
+            return ValidationResult.failed(source, e.issues());
+        } catch (ParsingException e) {
+            List<CompilationIssue> issues = e.errors().stream()
+                .map(err -> new CompilationIssue(
+                    "SYNTAX_ERROR",
+                    err.message(),
+                    new CompilationPosition(err.line(), err.charPositionInLine(), err.charPositionInLine() + 1)
+                ))
+                .toList();
+            return ValidationResult.failed(
+                source,
+                issues.isEmpty() ? List.of(new CompilationIssue("SYNTAX_ERROR", "syntax error")) : issues
+            );
+        }
     }
 
     public static ExpressionRuntimeSupport compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {

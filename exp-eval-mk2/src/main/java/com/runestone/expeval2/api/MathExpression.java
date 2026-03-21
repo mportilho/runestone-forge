@@ -23,6 +23,14 @@ public final class MathExpression {
         return new MathExpression(ExpressionRuntimeSupport.compileMath(source, environment));
     }
 
+    public static ValidationResult validate(String source) {
+        return validate(source, ExpressionEnvironmentBuilder.empty());
+    }
+
+    public static ValidationResult validate(String source, ExpressionEnvironment environment) {
+        return ExpressionRuntimeSupport.validateMath(source, environment);
+    }
+
     public MathExpression setValue(String symbolName, Object rawValue) {
         runtime.setValue(symbolName, rawValue);
         return this;

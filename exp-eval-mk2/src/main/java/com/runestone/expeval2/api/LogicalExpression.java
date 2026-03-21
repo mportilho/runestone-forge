@@ -22,6 +22,14 @@ public final class LogicalExpression {
         return new LogicalExpression(ExpressionRuntimeSupport.compileLogical(source, environment));
     }
 
+    public static ValidationResult validate(String source) {
+        return validate(source, ExpressionEnvironmentBuilder.empty());
+    }
+
+    public static ValidationResult validate(String source, ExpressionEnvironment environment) {
+        return ExpressionRuntimeSupport.validateLogical(source, environment);
+    }
+
     public LogicalExpression setValue(String symbolName, Object rawValue) {
         runtime.setValue(symbolName, rawValue);
         return this;
