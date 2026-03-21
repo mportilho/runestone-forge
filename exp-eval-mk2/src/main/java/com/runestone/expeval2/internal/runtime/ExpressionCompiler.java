@@ -139,7 +139,7 @@ public final class ExpressionCompiler {
         if (semanticModel.hasErrors()) {
             throw new SemanticResolutionException(source, semanticModel.issues());
         }
-        ExecutionPlan executionPlan = planBuilder.build(semanticModel);
+        ExecutionPlan executionPlan = planBuilder.build(semanticModel, environment.runtimeServices());
         return new CompiledExpression(source, resultType, semanticModel, executionPlan);
     }
 

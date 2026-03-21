@@ -15,6 +15,7 @@ public final class FunctionDescriptor {
     private final MethodHandle invoker;
     private final MethodHandle compiledInvoker;
     private final FunctionRef functionRef;
+    private final boolean foldable;
 
     public FunctionDescriptor(
         String name,
@@ -22,6 +23,17 @@ public final class FunctionDescriptor {
         List<ResolvedType> parameterResolvedTypes,
         ResolvedType returnType,
         MethodHandle invoker
+    ) {
+        this(name, parameterTypes, parameterResolvedTypes, returnType, invoker, false);
+    }
+
+    public FunctionDescriptor(
+        String name,
+        List<Class<?>> parameterTypes,
+        List<ResolvedType> parameterResolvedTypes,
+        ResolvedType returnType,
+        MethodHandle invoker,
+        boolean foldable
     ) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("name must not be blank");
@@ -36,6 +48,7 @@ public final class FunctionDescriptor {
         }
         this.compiledInvoker = compileInvoker(invoker, this.parameterTypes.size());
         this.functionRef = new FunctionRef(this.name, this.parameterTypes.size());
+        this.foldable = foldable;
     }
 
     public String name() {
@@ -64,6 +77,10 @@ public final class FunctionDescriptor {
 
     public FunctionRef functionRef() {
         return functionRef;
+    }
+
+    public boolean isFoldable() {
+        return foldable;
     }
 
     public Object invoke(Object[] arguments) {

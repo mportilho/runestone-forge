@@ -259,11 +259,11 @@ O `runtimeServices.from(node.foldedResult(), returnType)` ainda é chamado a cad
 | `AbstractRuntimeEvaluator` unificado em `RuntimeServices` | ✅ Implementado |
 | `MutableBindings` usa `RuntimeServices` | ✅ Implementado |
 | `MathEvaluator` / `LogicalEvaluator` simplificados | ✅ Implementado |
-| `FunctionDescriptor.isFoldable()` | ⬜ Pendente |
-| `ExpressionEnvironmentBuilder` — foldable em math functions | ⬜ Pendente |
-| `ExecutableFunctionCall` — foldedArgs + foldedResult | ⬜ Pendente |
-| `ExecutionPlanBuilder` — recebe `RuntimeServices`, faz folding | ⬜ Pendente |
-| `AbstractRuntimeEvaluator` — short-circuit no caminho folded | ⬜ Pendente |
+| `FunctionDescriptor.isFoldable()` | ✅ Implementado |
+| `ExpressionEnvironmentBuilder` — foldable em math functions | ✅ Implementado |
+| `ExecutableFunctionCall` — foldedArgs + foldedResult | ✅ Implementado |
+| `ExecutionPlanBuilder` — recebe `RuntimeServices`, faz folding | ✅ Implementado |
+| `AbstractRuntimeEvaluator` — short-circuit no caminho folded | ✅ Implementado |
 
 ---
 

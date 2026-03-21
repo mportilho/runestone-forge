@@ -121,6 +121,22 @@ abstract class AbstractRuntimeEvaluator<T> {
     }
 
     private RuntimeValue evaluateFunctionCall(ExecutableFunctionCall node, ExecutionScope scope) {
+        if (node.isFolded()) {
+            RuntimeValue result = runtimeServices.from(node.foldedResult(), node.binding().returnType());
+            AuditCollector audit = scope.audit();
+            if (audit != null) {
+                audit.enterCall();
+                audit.exitCall();
+                audit.record(new AuditEvent.FunctionCall(
+                        node.binding().descriptor().name(),
+                        node.foldedArgs(),
+                        result.raw(),
+                        audit.callDepth()
+                ));
+            }
+            return result;
+        }
+
         FunctionDescriptor descriptor = node.binding().descriptor();
         int arity = descriptor.arity();
         Object[] args = new Object[arity];

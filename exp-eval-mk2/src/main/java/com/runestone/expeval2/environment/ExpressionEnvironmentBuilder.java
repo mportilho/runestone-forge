@@ -27,7 +27,7 @@ public final class ExpressionEnvironmentBuilder {
 
     private DataConversionService conversionService;
     private MathContext mathContext = MathContext.DECIMAL128;
-    private final List<Class<?>> staticProviders = new ArrayList<>();
+    private final List<StaticProviderEntry> staticProviders = new ArrayList<>();
     private final List<Object> instanceProviders = new ArrayList<>();
     private final Map<String, ExternalSymbolRegistration> externalSymbols = new LinkedHashMap<>();
 
@@ -46,7 +46,14 @@ public final class ExpressionEnvironmentBuilder {
     }
 
     public ExpressionEnvironmentBuilder registerStaticProvider(Class<?> providerClass) {
-        staticProviders.add(Objects.requireNonNull(providerClass, "providerClass must not be null"));
+        staticProviders.add(new StaticProviderEntry(
+                Objects.requireNonNull(providerClass, "providerClass must not be null"), false));
+        return this;
+    }
+
+    public ExpressionEnvironmentBuilder registerStaticProvider(Class<?> providerClass, boolean foldable) {
+        staticProviders.add(new StaticProviderEntry(
+                Objects.requireNonNull(providerClass, "providerClass must not be null"), foldable));
         return this;
     }
 
@@ -56,23 +63,23 @@ public final class ExpressionEnvironmentBuilder {
     }
 
     public ExpressionEnvironmentBuilder addComparableFunctions() {
-        return registerStaticProvider(ComparableFunctions.class);
+        return registerStaticProvider(ComparableFunctions.class, true);
     }
 
     public ExpressionEnvironmentBuilder addDateTimeFunctions() {
-        return registerStaticProvider(DateTimeFunctions.class);
+        return registerStaticProvider(DateTimeFunctions.class, true);
     }
 
     public ExpressionEnvironmentBuilder addExcelFunctions() {
-        return registerStaticProvider(ExcelFinancialFunctions.class);
+        return registerStaticProvider(ExcelFinancialFunctions.class, true);
     }
 
     public ExpressionEnvironmentBuilder addMathFunctions() {
-        return registerStaticProvider(MathFunctions.class);
+        return registerStaticProvider(MathFunctions.class, true);
     }
 
     public ExpressionEnvironmentBuilder addTrigonometryFunctions() {
-        return registerStaticProvider(TrigonometryFunctions.class);
+        return registerStaticProvider(TrigonometryFunctions.class, true);
     }
 
     public ExpressionEnvironmentBuilder addAllFunctions() {
@@ -96,8 +103,8 @@ public final class ExpressionEnvironmentBuilder {
         DataConversionService effectiveConversionService = conversionService == null ? DEFAULT_DATA_CONVERSION_SERVICE : conversionService;
 
         List<FunctionDescriptor> functionDescriptors = new ArrayList<>();
-        staticProviders.forEach(providerClass -> functionDescriptors.addAll(discoverFunctions(providerClass, null, true)));
-        instanceProviders.forEach(providerInstance -> functionDescriptors.addAll(discoverFunctions(providerInstance.getClass(), providerInstance, false)));
+        staticProviders.forEach(entry -> functionDescriptors.addAll(discoverFunctions(entry.providerClass(), null, true, entry.foldable())));
+        instanceProviders.forEach(providerInstance -> functionDescriptors.addAll(discoverFunctions(providerInstance.getClass(), providerInstance, false, false)));
         functionDescriptors.sort(Comparator.comparing(FunctionDescriptor::name).thenComparing(FunctionDescriptor::arity));
 
         Map<String, List<FunctionDescriptor>> descriptorsByName = new LinkedHashMap<>();
@@ -120,17 +127,18 @@ public final class ExpressionEnvironmentBuilder {
                 ));
         ExternalSymbolCatalog externalSymbolCatalog = new ExternalSymbolCatalog(symbolsByName);
 
-        return new ExpressionEnvironment(new ExpressionEnvironmentId(deriveEnvironmentId(staticProviders, instanceProviders, externalSymbols, mathContext)),
+        List<Class<?>> staticProviderClasses = staticProviders.stream().map(StaticProviderEntry::providerClass).toList();
+        return new ExpressionEnvironment(new ExpressionEnvironmentId(deriveEnvironmentId(staticProviderClasses, instanceProviders, externalSymbols, mathContext)),
                 functionCatalog, externalSymbolCatalog, effectiveConversionService, mathContext);
     }
 
     private static String deriveEnvironmentId(
-            List<Class<?>> staticProviders,
+            List<Class<?>> staticProviderClasses,
             List<Object> instanceProviders,
             Map<String, ExternalSymbolRegistration> externalSymbols,
             MathContext mathContext) {
         List<String> parts = new ArrayList<>();
-        staticProviders.forEach(c -> parts.add("s:" + c.getName()));
+        staticProviderClasses.forEach(c -> parts.add("s:" + c.getName()));
         instanceProviders.forEach(o -> parts.add("i:" + o.getClass().getName() + "@" + System.identityHashCode(o)));
         externalSymbols.forEach((name, reg) -> parts.add("x:" + name + ":" + reg.declaredType() + ":" + reg.overridable()));
         parts.add("mc:" + mathContext.getPrecision() + ":" + mathContext.getRoundingMode());
@@ -144,7 +152,7 @@ public final class ExpressionEnvironmentBuilder {
         }
     }
 
-    private Collection<FunctionDescriptor> discoverFunctions(Class<?> providerClass, Object providerInstance, boolean staticOnly) {
+    private Collection<FunctionDescriptor> discoverFunctions(Class<?> providerClass, Object providerInstance, boolean staticOnly, boolean foldable) {
         List<FunctionDescriptor> descriptors = new ArrayList<>();
         for (Method method : providerClass.getMethods()) {
             if (method.getDeclaringClass() == Object.class || method.isSynthetic() || method.isBridge()) {
@@ -153,12 +161,12 @@ public final class ExpressionEnvironmentBuilder {
             if (staticOnly != Modifier.isStatic(method.getModifiers())) {
                 continue;
             }
-            descriptors.add(toDescriptor(method, providerInstance));
+            descriptors.add(toDescriptor(method, providerInstance, foldable));
         }
         return descriptors;
     }
 
-    private FunctionDescriptor toDescriptor(Method method, Object providerInstance) {
+    private FunctionDescriptor toDescriptor(Method method, Object providerInstance, boolean foldable) {
         try {
             MethodHandle handle = MethodHandles.lookup().unreflect(method);
             if (providerInstance != null) {
@@ -172,10 +180,13 @@ public final class ExpressionEnvironmentBuilder {
             }
             List<Class<?>> parameterTypes = List.of(rawParams).subList(firstDataParam, rawParams.length);
             List<ResolvedType> parameterResolvedTypes = parameterTypes.stream().map(ResolvedTypes::fromJavaType).toList();
-            return new FunctionDescriptor(method.getName(), parameterTypes, parameterResolvedTypes, ResolvedTypes.fromJavaType(method.getReturnType()), handle);
+            return new FunctionDescriptor(method.getName(), parameterTypes, parameterResolvedTypes, ResolvedTypes.fromJavaType(method.getReturnType()), handle, foldable);
         } catch (IllegalAccessException exception) {
             throw new IllegalStateException("failed to create method handle for " + method, exception);
         }
+    }
+
+    private record StaticProviderEntry(Class<?> providerClass, boolean foldable) {
     }
 
     private record ExternalSymbolRegistration(
