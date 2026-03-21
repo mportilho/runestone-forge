@@ -43,7 +43,14 @@
       "Bash(ST4=\"/home/marcelo/.m2/repository/org/antlr/ST4/4.0.8/ST4-4.0.8.jar\")",
       "Bash(ANTLR_RUNTIME=\"/home/marcelo/.m2/repository/org/antlr/antlr-runtime/3.5.2/antlr-runtime-3.5.2.jar\")",
       "Bash(ANTLR4_RUNTIME=\"/home/marcelo/.m2/repository/org/antlr/antlr4-runtime/4.13.1/antlr4-runtime-4.13.1.jar\")",
-      "Bash(__NEW_LINE_c6bcafd9af9867e8__ java:*)"
+      "Bash(__NEW_LINE_c6bcafd9af9867e8__ java:*)",
+      "Bash(jar tf:*)",
+      "Bash(javap -cp ~/.m2/repository/org/openjdk/jmh/jmh-core/1.37/jmh-core-1.37.jar org.openjdk.jmh.results.RunResult)",
+      "Bash(ANTLR_JAR=\"$HOME/dev/git/temp/antlr4-4.13.1.jar\")",
+      "Bash(ANTLR_LIB=\"$HOME/dev/git/temp/antlr-lib\")",
+      "Bash(CP=\"$ANTLR_JAR:$ANTLR_LIB/antlr-runtime-3.5.3.jar:$ANTLR_LIB/ST4-4.3.4.jar:$ANTLR_LIB/antlr4-runtime-4.13.1.jar:$ANTLR_LIB/icu4j-72.1.jar\")",
+      "Bash(__NEW_LINE_2ab97d33fbeb6930__ java:*)",
+      "Bash(__NEW_LINE_1b379e7cf3ab571f__ java:*)"
     ]
   }
 }

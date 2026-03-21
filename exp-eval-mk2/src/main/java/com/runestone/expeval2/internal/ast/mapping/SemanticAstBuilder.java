@@ -68,9 +68,7 @@ public final class SemanticAstBuilder {
             List<String> targetNames = vectorOfVariables.IDENTIFIER().stream()
                     .map(TerminalNode::getText)
                     .toList();
-            ExpressionNode value = destructuringAssignment.vectorEntity() != null
-                    ? expressionVisitor.visit(destructuringAssignment.vectorEntity())
-                    : expressionVisitor.visit(destructuringAssignment.function());
+            ExpressionNode value = expressionVisitor.visit(destructuringAssignment.vectorEntity());
             return new DestructuringAssignmentNode(
                     nodeFactory.nextId("assign"),
                     nodeFactory.sourceSpan(destructuringAssignment),
