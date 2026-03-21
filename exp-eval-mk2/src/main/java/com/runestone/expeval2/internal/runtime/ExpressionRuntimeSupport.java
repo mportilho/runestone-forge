@@ -1,12 +1,15 @@
 package com.runestone.expeval2.internal.runtime;
 
 import com.runestone.expeval2.api.AuditResult;
+import com.runestone.expeval2.api.CacheConfig;
 import com.runestone.expeval2.api.CompilationIssue;
 import com.runestone.expeval2.api.CompilationPosition;
 import com.runestone.expeval2.api.ExpressionCompilationException;
 import com.runestone.expeval2.api.ValidationResult;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.internal.ast.SourceSpan;
+import com.runestone.expeval2.internal.ast.mapping.SemanticAstBuilder;
+import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2ParserFacade;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import com.runestone.expeval2.internal.grammar.ParsingException;
 
@@ -17,7 +20,52 @@ import java.util.Objects;
 
 public final class ExpressionRuntimeSupport {
 
-    private static final ExpressionCompiler COMPILER = new ExpressionCompiler();
+    private static volatile ExpressionCompiler COMPILER;
+
+    /**
+     * Configures the JVM-wide expression compiler before the first compilation.
+     *
+     * <p>This method must be called <strong>before</strong> any call to
+     * {@code compileMath}, {@code compileLogical}, {@code compileAssignments}, or {@code compile}.
+     * Once the compiler is initialized — either by an explicit call to this method or lazily on the
+     * first compilation — subsequent calls have no effect and the supplied config is silently ignored.
+     *
+     * <p>Typical usage (application startup, {@code main} or Spring {@code @Bean}):
+     * <pre>{@code
+     * ExpressionRuntimeSupport.configure(new CacheConfig(4_096, Duration.ofHours(1)));
+     * }</pre>
+     *
+     * @param cacheConfig cache settings to apply; must not be {@code null}
+     */
+    public static void configure(CacheConfig cacheConfig) {
+        Objects.requireNonNull(cacheConfig, "cacheConfig must not be null");
+        if (COMPILER == null) {
+            synchronized (ExpressionRuntimeSupport.class) {
+                if (COMPILER == null) {
+                    COMPILER = new ExpressionCompiler(
+                            new ExpressionEvaluatorV2ParserFacade(),
+                            new SemanticAstBuilder(),
+                            new SemanticResolver(),
+                            new ExecutionPlanBuilder(),
+                            cacheConfig
+                    );
+                }
+            }
+        }
+    }
+
+    private static ExpressionCompiler getCompiler() {
+        ExpressionCompiler c = COMPILER;
+        if (c == null) {
+            synchronized (ExpressionRuntimeSupport.class) {
+                c = COMPILER;
+                if (c == null) {
+                    COMPILER = c = new ExpressionCompiler();
+                }
+            }
+        }
+        return c;
+    }
 
     private final CompiledExpression compiledExpression;
     private final MutableBindings bindings;
@@ -95,7 +143,7 @@ public final class ExpressionRuntimeSupport {
         Objects.requireNonNull(resultType, "resultType must not be null");
         Objects.requireNonNull(environment, "environment must not be null");
         try {
-            CompiledExpression compiled = COMPILER.compile(source, resultType, environment);
+            CompiledExpression compiled = getCompiler().compile(source, resultType, environment);
             return from(compiled, environment);
         } catch (SemanticResolutionException e) {
             List<CompilationIssue> issues = e.issues().stream()

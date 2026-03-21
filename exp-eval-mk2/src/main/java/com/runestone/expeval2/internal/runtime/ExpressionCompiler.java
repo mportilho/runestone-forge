@@ -2,6 +2,7 @@ package com.runestone.expeval2.internal.runtime;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.runestone.expeval2.api.CacheConfig;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.environment.ExpressionEnvironmentId;
 import com.runestone.expeval2.internal.ast.ExpressionFileNode;
@@ -20,15 +21,21 @@ public final class ExpressionCompiler {
     private final Cache<ExpressionCacheKey, CompiledExpression> cache;
 
     public ExpressionCompiler() {
-        this(new ExpressionEvaluatorV2ParserFacade(), new SemanticAstBuilder(), new SemanticResolver(), new ExecutionPlanBuilder());
+        this(new ExpressionEvaluatorV2ParserFacade(), new SemanticAstBuilder(), new SemanticResolver(), new ExecutionPlanBuilder(), CacheConfig.defaults());
     }
 
-    ExpressionCompiler(ExpressionEvaluatorV2ParserFacade parserFacade, SemanticAstBuilder astBuilder, SemanticResolver semanticResolver, ExecutionPlanBuilder planBuilder) {
+    ExpressionCompiler(ExpressionEvaluatorV2ParserFacade parserFacade, SemanticAstBuilder astBuilder,
+                       SemanticResolver semanticResolver, ExecutionPlanBuilder planBuilder, CacheConfig cacheConfig) {
         this.parserFacade = Objects.requireNonNull(parserFacade, "parserFacade must not be null");
         this.astBuilder = Objects.requireNonNull(astBuilder, "astBuilder must not be null");
         this.semanticResolver = Objects.requireNonNull(semanticResolver, "semanticResolver must not be null");
         this.planBuilder = Objects.requireNonNull(planBuilder, "planBuilder must not be null");
-        this.cache = Caffeine.newBuilder().maximumSize(1_024).build();
+        Objects.requireNonNull(cacheConfig, "cacheConfig must not be null");
+        Caffeine<Object, Object> caffeine = Caffeine.newBuilder().maximumSize(cacheConfig.maximumSize());
+        if (cacheConfig.expireAfterWrite() != null) {
+            caffeine.expireAfterWrite(cacheConfig.expireAfterWrite());
+        }
+        this.cache = caffeine.build();
     }
 
     public CompiledExpression compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
