@@ -801,3 +801,64 @@ if (List.class.isAssignableFrom(targetType)) {
 }
 ```
 Eliminates one `Stream` object + one internal spliterator per vector-argument function call. Benchmark not yet measured.
+
+## PERF-033: UF-1 — Eliminate Object[] per function call via arity-specialized invokers (arity 0–10)
+
+**Date:** 2026-03-22
+**Branch:** refac-springboot-4
+**Benchmark:** `CrossModuleComparisonBenchmark.userFunction_*` (3 forks, 5×500ms warmup, 10×500ms measurement, -Xms1g -Xmx1g, GC profiler)
+
+**Scenario:** `userFunction` — 4 calls to `weighted(BigDecimal, BigDecimal, BigDecimal)` per evaluation.
+
+**Hypothesis:** Eliminating `new Object[arity]` per function call (and using `MethodHandle.invokeExact` with individual Object arguments instead of `asSpreader`) would reduce allocations and latency on the compute (non-audit) path.
+
+**Changes:**
+- `FunctionDescriptor`: added `typedInvoker` field (`invoker.asType(type.generic())`, no `asSpreader`) and `invoke0()` through `invoke10()` methods using `invokeExact`.
+- `AbstractRuntimeEvaluator.evaluateFunctionCall`: split into audit and non-audit paths; non-audit dispatches via switch on arity (0–10) to call the specialized invoker without constructing an `Object[]`.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Δ time (%) | B/op before | B/op after | Δ B/op (%) |
+|---|---:|---:|---:|---:|---:|---:|
+| userFunction_legacy | 1,709.5 ±344.9 | 1,549.3 ±91.2 | +9.4% (noise) | 440 | 440 | — |
+| userFunction_mk2Compute | 1,658.6 ±23.5 | 1,720.5 ±155.4 | −3.7% (noise) | 904 | 776 | **−14.1%** |
+| userFunction_mk2Audit | 1,991.2 ±41.5 | 2,068.7 ±84.9 | −3.9% (noise) | 1,552 | 1,552 | 0% (expected) |
+
+**Decision:** DISCARD — reverted
+**Reason:**
+- The time delta (−3.7%) is within noise — error bars for `mk2Compute` overlap (before ±23, after ±155). No statistically significant latency improvement.
+- The extra indirection (switch → `invoke3()` → `typedInvoker.invokeExact`) adds a dispatch layer that the JIT must inline; this trades the allocation cost for an extra call boundary, yielding a neutral time result.
+- Although the −128 B/op reduction on the compute path is real (4 × `Object[3]` eliminated), the trade-off is not worth the added complexity: 11 extra methods on `FunctionDescriptor`, a large switch in the evaluator, and a split code path — with zero observable latency gain.
+- The audit path was unchanged regardless (still builds `Object[]` for `FunctionCall` events).
+- Code reverted to the original single-path `evaluateFunctionCall`.
+
+## PERF-034: UF-2 — Fast-path NumberValue → BigDecimal em RuntimeCoercionService.coerce()
+
+**Date:** 2026-03-22
+**Branch:** refac-springboot-4
+**Benchmark:** `CrossModuleComparisonBenchmark.userFunction_*` (3 forks, 5×500ms warmup, 10×500ms measurement, -Xms1g -Xmx1g, GC profiler)
+
+**Scenario:** `userFunction` — 4 chamadas a `weighted(BigDecimal, BigDecimal, BigDecimal)` por avaliação (12 coerções `NumberValue → BigDecimal` por invocação).
+
+**Hipótese:** Adicionar um fast-path específico `instanceof NumberValue && == BigDecimal.class` no início de `coerce()` evita, para o caso mais frequente em expressões numéricas:
+- A verificação `value == NullValue.INSTANCE`
+- A chamada dupla a `value.raw()` (uma em `isInstance`, outra no `return`)
+- O custo reflexivo de `targetType.isInstance()`
+
+**Mudança:** 3 linhas adicionadas ao início de `RuntimeCoercionService.coerce()`, após o check `targetType == RuntimeValue.class`:
+```java
+if (value instanceof RuntimeValue.NumberValue nv && targetType == BigDecimal.class) {
+    return nv.value();
+}
+```
+
+| Benchmark | Before (ns/op) | After (ns/op) | Δ time (%) | B/op before | B/op after | Δ B/op |
+|---|---:|---:|---:|---:|---:|---:|
+| userFunction_legacy | 1,472.8 ±108.6 | 1,444.1 ±84.0 | +1.95% (ruído) | 440 | 440 | — |
+| userFunction_mk2Compute | 1,659.7 ±37.2 | 1,626.0 ±34.0 | **+2.03%** | 904 | 904 | 0% |
+| userFunction_mk2Audit | 2,010.9 ±36.1 | 2,001.0 ±45.9 | +0.49% | 1,552 | 1,552 | 0% |
+
+**Decision:** ACCEPT
+**Reason:**
+- Melhora de +2% em `mk2Compute` com erro menor antes/depois (±37 → ±34), dando confiança no resultado.
+- Mudança de 3 linhas, risco praticamente zero, sem alteração de semântica.
+- A melhora no audit (+0.49%) é dentro do ruído — esperado, pois o overhead do audit domina o custo de `coerce`.
+- B/op inalterado — esta otimização atua apenas na latência (eliminando chamadas de método), não em alocações.

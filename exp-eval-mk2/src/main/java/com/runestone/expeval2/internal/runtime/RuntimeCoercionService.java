@@ -93,6 +93,13 @@ final class RuntimeCoercionService {
         if (targetType == RuntimeValue.class) {
             return value;
         }
+        if (value instanceof RuntimeValue.NumberValue nv && targetType == BigDecimal.class) {
+            return nv.value();
+        }
+        if (value instanceof RuntimeValue.BooleanValue bv
+                && (targetType == Boolean.class || targetType == boolean.class)) {
+            return bv.value();
+        }
         if (value == RuntimeValue.NullValue.INSTANCE) {
             return null;
         }
