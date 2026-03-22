@@ -53,7 +53,9 @@
       "Bash(__NEW_LINE_1b379e7cf3ab571f__ java:*)",
       "Bash(/home/marcelo/dev/git/runestone-forge/exp-eval-mk2/docs/perf/performance-history.md:*)",
       "Bash(find /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 -name *ValidationResult*Test* -o -name *Test*ValidationResult*)",
-      "Bash(find /home/marcelo -name async-profiler* -maxdepth 5)"
+      "Bash(find /home/marcelo -name async-profiler* -maxdepth 5)",
+      "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 \"CrossModuleComparisonBenchmark.userFunction\" /tmp/performance-benchmark/before-uf1.json)",
+      "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 \"CrossModuleComparisonBenchmark.userFunction\" /tmp/performance-benchmark/after-uf1.json)"
     ]
   }
 }

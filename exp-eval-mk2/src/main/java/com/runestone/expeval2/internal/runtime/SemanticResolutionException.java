@@ -26,11 +26,11 @@ public final class SemanticResolutionException extends RuntimeException {
 
     private static String buildMessage(String source, List<SemanticIssue> issues) {
         Objects.requireNonNull(source, "source must not be null");
-        List<SemanticIssue> safeIssues = List.copyOf(Objects.requireNonNull(issues, "issues must not be null"));
-        if (safeIssues.isEmpty()) {
+        Objects.requireNonNull(issues, "issues must not be null");
+        if (issues.isEmpty()) {
             return "semantic resolution failed for expression:\n\n  " + source;
         }
-        SemanticIssue first = safeIssues.getFirst();
+        SemanticIssue first = issues.getFirst();
         String[] lines = source.split("\n", -1);
         SourceSpan span = first.sourceSpan();
         int lineIdx = span.startLine() - 1;
