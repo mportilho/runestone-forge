@@ -20,12 +20,33 @@ import java.math.BigDecimal;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Cross-module benchmark for two comparison groups over the same six scenarios:
+ * Cross-module end-to-end benchmark of the public expression APIs.
  *
+ * <p>This benchmark intentionally measures the full per-call public API cost for both engines,
+ * not just the internal evaluator hot path. That means each invocation includes the user-visible
+ * binding step required by the public contract:
+ *
+ * <ul>
+ *   <li>legacy: repeated {@link Expression#setVariable(String, Object)} calls followed by
+ *       {@link Expression#evaluate()}</li>
+ *   <li>mk2: construction of the input bindings map followed by
+ *       {@link MathExpression#compute(java.util.Map)} or
+ *       {@link MathExpression#computeWithAudit(java.util.Map)}</li>
+ * </ul>
+ *
+ * <p>Use this benchmark when the comparison target is end-to-end API cost seen by callers. It is
+ * not a pure engine benchmark; map creation and audit-result materialization are intentionally part
+ * of the measured cost. For evaluator-only measurements, use a runtime/internal benchmark instead.
+ *
+ * <p>Comparison groups:
  * <ul>
  *   <li>Group 1: legacy {@link Expression#evaluate()} vs mk2 {@link MathExpression#compute(java.util.Map)}</li>
  *   <li>Group 2: legacy {@link Expression#evaluate()} vs mk2 {@link MathExpression#computeWithAudit(java.util.Map)}</li>
  * </ul>
+ *
+ * <p>Covered scenarios: {@code literalDense}, {@code variableChurn}, {@code userFunction},
+ * {@code conditional}, and {@code powerChain}. The {@code logarithmChain} scenario is excluded
+ * from this benchmark because precision-contract differences dominate runtime and obscure API cost.
  *
  * <p>Run with {@code GCProfiler} to capture {@code B/op} ({@code gc.alloc.rate.norm}) in addition
  * to the primary {@code ns/op} metric.
@@ -109,21 +130,6 @@ public class CrossModuleComparisonBenchmark {
 
     @Benchmark
     public AuditResult<BigDecimal> powerChain_mk2Audit(PowerChainState state) {
-        return state.evaluateMk2Audit();
-    }
-
-    @Benchmark
-    public BigDecimal logarithmChain_legacy(LogarithmChainState state) {
-        return state.evaluateLegacy();
-    }
-
-    @Benchmark
-    public BigDecimal logarithmChain_mk2Compute(LogarithmChainState state) {
-        return state.evaluateMk2Compute();
-    }
-
-    @Benchmark
-    public AuditResult<BigDecimal> logarithmChain_mk2Audit(LogarithmChainState state) {
         return state.evaluateMk2Audit();
     }
 
@@ -322,42 +328,4 @@ public class CrossModuleComparisonBenchmark {
         }
     }
 
-    @State(Scope.Thread)
-    public static class LogarithmChainState {
-
-        private Expression legacy;
-        private MathExpression mk2;
-        private int legacyIndex;
-        private int mk2Index;
-
-        @Setup(Level.Trial)
-        public void setUp() {
-            legacy = CrossModuleExpressionBenchmarkSupport.newLegacyLogarithmChainExpression();
-            mk2 = CrossModuleExpressionBenchmarkSupport.newMk2LogarithmChainExpression();
-        }
-
-        private BigDecimal evaluateLegacy() {
-            CrossModuleExpressionBenchmarkSupport.applyFrame(
-                legacy,
-                CrossModuleExpressionBenchmarkSupport.variableFrame(legacyIndex++)
-            );
-            return legacy.evaluate();
-        }
-
-        private BigDecimal evaluateMk2Compute() {
-            return mk2.compute(
-                CrossModuleExpressionBenchmarkSupport.frameToMap(
-                    CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)
-                )
-            );
-        }
-
-        private AuditResult<BigDecimal> evaluateMk2Audit() {
-            return mk2.computeWithAudit(
-                CrossModuleExpressionBenchmarkSupport.frameToMap(
-                    CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)
-                )
-            );
-        }
-    }
 }

@@ -55,17 +55,15 @@ expr.addFunction("weighted", MethodType.methodType(
 ```java
 // Modo simples (sem ambiente)
 MathExpression expr = MathExpression.compile("a * b + c");
-expr.setValue("a", 2).setValue("b", 3).setValue("c", 1);
-BigDecimal result = expr.compute();
+BigDecimal result = expr.compute(Map.of("a", 2, "b", 3, "c", 1));
 
 // Com auditoria
-AuditResult<BigDecimal> audit = expr.computeWithAudit();
+AuditResult<BigDecimal> audit = expr.computeWithAudit(Map.of("a", 2, "b", 3, "c", 1));
 BigDecimal value = audit.result();
 List<AuditEvent> events = audit.events();
 ```
 
 **Características relevantes para o benchmark:**
-- `MathExpression` é mutável (assim como o legacy): `setValue()` modifica o estado interno.
 - O objeto pré-compilado pode ser reusado entre chamadas (cenário esperado de produção).
 - `compile()` executa o pipeline completo: parse → AST → semantic resolution → execution plan. Esse custo ocorre uma vez.
 - `compute()` executa apenas o `ExecutionPlan` já construído — é o caminho quente.
@@ -73,6 +71,7 @@ List<AuditEvent> events = audit.events();
 - Funções customizadas são registradas no `ExpressionEnvironment`, não na expressão.
 - `ln()` e `lb()` requerem `addMathFunctions()` no ambiente; não estão disponíveis sem isso.
 - `MathContext` default é `DECIMAL128` (34 dígitos); pode ser alterado via `withMathContext()`.
+- No benchmark cross-module atual, o custo de materializar o `Map<String, Object>` de input faz parte da medição por ser custo observado pelo chamador da API pública.
 
 **Como registrar função customizada no mk2:**
 ```java
@@ -117,6 +116,7 @@ Isso significa que **todos os benchmarks comparativos devem residir no módulo `
 |---|---|
 | Benchmark principal | `exp-eval-mk2/src/test/java/com/runestone/expeval2/perf/jmh/CrossModuleComparisonBenchmark.java` |
 | Runner rápido | `exp-eval-mk2/src/test/java/com/runestone/expeval2/perf/CrossModuleComparisonBenchmarkMain.java` |
+| Runner agregado com quadros | `exp-eval-mk2/src/test/java/com/runestone/expeval2/perf/jmh/CrossModuleBenchmarkRunner.java` |
 | Suporte compartilhado | `exp-eval-mk2/src/test/java/com/runestone/expeval2/perf/CrossModuleExpressionBenchmarkSupport.java` |
 | Fixture de função customizada | `exp-eval-mk2/src/test/java/com/runestone/expeval2/perf/CrossModuleExpressionBenchmarkSupport.CustomFunctionFixture` (nested) |
 
@@ -127,6 +127,16 @@ O arquivo `CrossModuleExpressionBenchmarkSupport.java` é o **ponto central de e
 ## 4. Cenários Implementados
 
 Todos os cenários usam as 12 variáveis `{a, b, c, d, e, f, g, h, i, j, k, l}`.
+
+### 4.0. Intenção de medição
+
+O `CrossModuleComparisonBenchmark` mede **custo fim a fim da API pública**, não apenas o hot path interno do evaluator.
+
+Por isso, o custo por chamada inclui:
+- **legacy**: `setVariable(...)` repetido conforme necessário + `evaluate()`
+- **mk2**: materialização do `Map<String, Object>` de bindings + `compute(Map)` ou `computeWithAudit(Map)`
+
+Esse desenho é intencional: o benchmark representa o custo percebido pelo chamador real das duas APIs. Se o objetivo futuro for medir apenas o motor interno, deve ser criado outro benchmark com os bindings pré-materializados fora do corpo do `@Benchmark`.
 
 ### 4.1. literalDense
 
@@ -147,11 +157,11 @@ new Expression(LITERAL_DENSE_EXPRESSION); // LITERAL_DENSE_EXPRESSION é constan
 MathExpression.compile(LITERAL_DENSE_EXPRESSION); // sem ambiente especial
 ```
 
-**Aplicação de frame:**
+**Aplicação de frame na API pública:**
 ```java
 expression.setVariable("seed", CrossModuleExpressionBenchmarkSupport.literalSeed(index++));
 // mk2:
-expression.setValue("seed", CrossModuleExpressionBenchmarkSupport.literalSeed(index++));
+expression.compute(Map.of("seed", CrossModuleExpressionBenchmarkSupport.literalSeed(index++)));
 ```
 
 ---
@@ -160,7 +170,7 @@ expression.setValue("seed", CrossModuleExpressionBenchmarkSupport.literalSeed(in
 
 **Expressão:** `a * b + c * d - e + f * g - h + i * j + k - l + (a * c) + (b * d)`
 
-**Origem:** `CrossModuleExpressionBenchmarkSupport.VARIABLE_CHURN_EXPRESSION` — cenário já existente no benchmark `CrossModuleExpressionEngineBenchmark`.
+**Origem:** `CrossModuleExpressionBenchmarkSupport.VARIABLE_CHURN_EXPRESSION` — cenário já existente no suporte compartilhado.
 
 **O que estressou:** binding de 12 variáveis por chamada, lookup de variável no escopo, aritmética mista (mul/add/sub) sem funções externas.
 
@@ -204,32 +214,7 @@ expr.addFunction("weighted",
 
 ---
 
-### 4.5. logarithmChain
-
-**Expressão:** `ln(a) + ln(b) + ln(c) + ln(d) + ln(e) + ln(f) + lb(g) + lb(h) + lb(i) + lb(j) + lb(k) + lb(l)`
-
-**Origem:** `CrossModuleExpressionBenchmarkSupport.LOGARITHM_CHAIN_EXPRESSION` — cenário já existente.
-
-**O que estressou:** despacho de funções transcendentais (`ln` = logaritmo natural, `lb` = logaritmo binário), custo de `ch.obermuhlner.BigMath` com alta precisão.
-
-**Diferença importante entre os componentes:**
-- O legacy usa a precisão default do `BigDecimal` na chamada de `BigMath`.
-- O mk2 usa `MathContext.DECIMAL128` (34 dígitos de precisão) por default.
-
-Isso faz com que o mk2 seja sistematicamente mais lento neste cenário, **independente do overhead do pipeline**. Não é uma regressão do mk2 — é diferença de contrato de precisão. Para comparação justa de pipeline, use o ambiente com `MathContext.DECIMAL64` no mk2 (ver `CrossModuleExpressionBenchmarkSupport.newMk2LogarithmChainExpressionDecimal64()`).
-
-**Ambiente necessário no mk2:**
-```java
-ExpressionEnvironment env = ExpressionEnvironment.builder()
-    .addMathFunctions()
-    .build(); // MathContext.DECIMAL128 por default
-```
-
-**Pool de dados:** `VARIABLE_FRAMES`. Todos os valores são positivos (seeds com `baseOffset=3`) para evitar domínio inválido de `ln`.
-
----
-
-### 4.6. powerChain
+### 4.5. powerChain
 
 **Expressão:** `a^2 + b^2 - c^2 + d^2 - e^2 + f^2 + g^2 - h^2 + i^2 - j^2 + k^2 - l^2`
 
@@ -248,11 +233,11 @@ O benchmark `CrossModuleComparisonBenchmark` produz três variantes por cenário
 | Sufixo do método | Componente | Modo | Incluso nos grupos |
 |---|---|---|---|
 | `_legacy` | expression-evaluator | `evaluate()` | Grupo 1, Grupo 2 (baseline) |
-| `_mk2Compute` | exp-eval-mk2 | `compute()` | Grupo 1 |
-| `_mk2Audit` | exp-eval-mk2 | `computeWithAudit()` | Grupo 2 |
+| `_mk2Compute` | exp-eval-mk2 | `compute(Map)` | Grupo 1 |
+| `_mk2Audit` | exp-eval-mk2 | `computeWithAudit(Map)` | Grupo 2 |
 
-**Grupo 1** compara o custo bruto de execução: legacy `evaluate()` vs mk2 `compute()`.
-**Grupo 2** compara o custo com rastreabilidade: legacy `evaluate()` vs mk2 `computeWithAudit()`.
+**Grupo 1** compara o custo fim a fim da API pública: legacy `evaluate()` vs mk2 `compute(Map)`.
+**Grupo 2** compara o custo fim a fim da API pública com rastreabilidade: legacy `evaluate()` vs mk2 `computeWithAudit(Map)`.
 
 Os quadros de resultados devem ser produzidos separadamente por grupo.
 
@@ -270,7 +255,7 @@ Os quadros de resultados devem ser produzidos separadamente por grupo.
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 ```
 
-Com 18 benchmarks (6 cenários × 3 variantes), em `forks=3` com 15 iterações de 500ms cada: **~40 minutos de execução total**. Requer um JVM standalone (não Maven in-process).
+ Com 15 benchmarks (5 cenários × 3 variantes), em `forks=3` com 15 iterações de 500ms cada: a execução continua sendo de **ordem de dezenas de minutos**. Requer um JVM standalone (não Maven in-process).
 
 ### 6.2. Configuração do runner rápido (`CrossModuleComparisonBenchmarkMain`)
 
@@ -281,7 +266,7 @@ measurementIterations=5, measurementTime=500ms
 GCProfiler ativo
 ```
 
-Com 18 benchmarks em `forks=0`: **~4–6 minutos de execução**.
+Com 15 benchmarks em `forks=0`: **~3–5 minutos de execução**.
 
 **Limitação do `forks=0`**: a JVM é a mesma do processo Maven. O estado de JIT e GC é contaminado pelo processo pai. Os resultados são direcionalmente corretos para comparações relativas, mas não devem ser usados como números absolutos de produção.
 
@@ -307,55 +292,51 @@ Os resultados são impressos no stdout e gravados em `/tmp/cross-module-comparis
 
 Executados com `forks=0`, JDK 21.0.10, `-Xms1g -Xmx1g` (herdado do processo Maven).
 
-### Grupo 1 — `legacy.evaluate()` vs `mk2.compute()`
+### Grupo 1 — `legacy.evaluate()` vs `mk2.compute(Map)`
 
-| Cenário | legacy ns/op | mk2.compute() ns/op | Δ tempo | legacy B/op | mk2.compute() B/op | Δ alocação |
+| Cenário | legacy ns/op | mk2.compute(Map) ns/op | Δ tempo | legacy B/op | mk2.compute(Map) B/op | Δ alocação |
 |---|---:|---:|:---:|---:|---:|:---:|
 | literalDense | 5 416 | 2 092 | **−61%** ✅ | 9 792 | 3 632 | **−63%** ✅ |
 | variableChurn | 2 113 | 1 536 | **−27%** ✅ | 2 609 | 1 064 | **−59%** ✅ |
 | powerChain | 3 320 | 2 948 | **−11%** ✅ | 4 023 | 2 280 | **−43%** ✅ |
 | userFunction | 1 644 | 1 805 | +10% ⚠️ | 1 496 | 1 384 | −7% ≈ |
 | conditional | 1 059 | 1 233 | +16% ⚠️ | 696 | 520 | **−25%** ✅ |
-| logarithmChain | 956 019 | 1 520 107 | +59% ❌¹ | 1 131 479 | 1 648 508 | +46% ❌¹ |
 
-¹ Explicado pela diferença de `MathContext`: mk2 usa `DECIMAL128`; legacy usa precisão padrão nas chamadas BigMath. Não é regressão do pipeline.
+### Grupo 2 — `legacy.evaluate()` vs `mk2.computeWithAudit(Map)`
 
-### Grupo 2 — `legacy.evaluate()` vs `mk2.computeWithAudit()`
-
-| Cenário | legacy ns/op | mk2.audit() ns/op | Δ tempo | legacy B/op | mk2.audit() B/op | Δ alocação |
+| Cenário | legacy ns/op | mk2.computeWithAudit(Map) ns/op | Δ tempo | legacy B/op | mk2.computeWithAudit(Map) B/op | Δ alocação |
 |---|---:|---:|:---:|---:|---:|:---:|
 | literalDense | 5 416 | 2 259 | **−58%** ✅ | 9 792 | 3 832 | **−61%** ✅ |
 | variableChurn | 2 113 | 1 886 | **−11%** ✅ | 2 609 | 1 680 | **−36%** ✅ |
 | powerChain | 3 320 | 3 266 | −2% ≈ | 4 023 | 2 784 | **−31%** ✅ |
 | userFunction | 1 644 | 2 188 | +33% ❌ | 1 496 | 2 032 | +36% ❌ |
 | conditional | 1 059 | 1 784 | +68% ❌ | 696 | 936 | +34% ❌ |
-| logarithmChain | 956 019 | 1 507 133 | +58% ❌¹ | 1 131 479 | 1 643 745 | +45% ❌¹ |
 
-### Overhead incremental de `computeWithAudit()` sobre `compute()`
+### Overhead incremental de `computeWithAudit(Map)` sobre `compute(Map)`
 
-| Cenário | compute() ns/op | audit() ns/op | Δ tempo | compute() B/op | audit() B/op | Δ alocação |
+| Cenário | compute(Map) ns/op | audit(Map) ns/op | Δ tempo | compute(Map) B/op | audit(Map) B/op | Δ alocação |
 |---|---:|---:|:---:|---:|---:|:---:|
 | literalDense | 2 092 | 2 259 | +8% | 3 632 | 3 832 | +6% |
 | variableChurn | 1 536 | 1 886 | +23% | 1 064 | 1 680 | +58% |
 | powerChain | 2 948 | 3 266 | +11% | 2 280 | 2 784 | +22% |
 | userFunction | 1 805 | 2 188 | +21% | 1 384 | 2 032 | +47% |
 | conditional | 1 233 | 1 784 | +45% | 520 | 936 | +80% |
-| logarithmChain | 1 520 107 | 1 507 133 | −1% ≈ | 1 648 508 | 1 643 745 | −0% ≈ |
-
-O overhead do audit em logarithmChain é desprezível porque o custo de `BigMath` domina e torna o custo de coleta de eventos insignificante.
 
 ---
 
 ## 8. Interpretação das Causas Raiz
 
+**Leitura metodológica importante:**
+Os números acima combinam custo do evaluator com custo de preparação exigido pela API pública. No legacy, isso inclui as chamadas a `setVariable(...)`; no mk2, isso inclui a materialização do `Map<String, Object>` passado a `compute(Map)` ou `computeWithAudit(Map)`.
+
 **Por que o mk2 vence em literalDense e variableChurn:**
-O pipeline de compilação do mk2 transforma a árvore AST em um `ExecutionPlan` de nós `ExecutableNode`. No caso de literalDense, os 64 literais são colapsados em um único `BigDecimal` constante durante a fase de constant folding — a expressão efetivamente executada é apenas `seed + <constante>`. O legacy percorre a árvore completa de 65 nós a cada `evaluate()`.
+Mesmo com o custo do `Map` incluído, o pipeline compilado do mk2 ainda reduz o trabalho de execução em cenários onde o plano já embute simplificações relevantes. No caso de literalDense, os 64 literais são colapsados em um único `BigDecimal` constante durante a fase de constant folding — a expressão efetivamente executada é apenas `seed + <constante>`. Em variableChurn, o custo do mapa ainda não é suficiente para neutralizar totalmente a vantagem do plano compilado em execuções estáveis.
 
 **Por que o legacy vence em conditional e userFunction:**
-Em sub-microsegundo, o custo fixo do plan walker do mk2 (varredura do `ExecutionPlan`, despacho polimórfico sobre `ExecutableNode`) excede o custo do cálculo em si para expressões simples. O legacy, por ter uma árvore mais direta para condicionais simples (`if/then/else` mapeia para um único `AbstractOperation`), tem overhead de despacho menor. Em userFunction, o registro via `MethodHandle` no legacy tem menor overhead de invocação do que a resolução via catálogo + coerção do mk2 para 4 chamadas curtas.
+Em cenários sub-microsegundo, o custo fixo do plan walker do mk2 e do preparo do `Map` pode exceder o custo do cálculo em si para expressões simples. O legacy, por usar mutação incremental do objeto `Expression` antes do `evaluate()`, tende a pagar menos overhead estrutural por chamada em condicionais curtas e em funções customizadas pequenas.
 
-**Por que logarithmChain é um comparador ruim:**
-O custo de `BigMath` para transcendentais (`ln`, `lb`) com `DECIMAL128` é ordens de magnitude maior que qualquer overhead de pipeline. Qualquer diferença de resultado entre os componentes neste cenário reflete diferença de contrato de precisão, não diferença arquitetural.
+**Por que `logarithmChain` foi removido do benchmark principal:**
+O custo de `BigMath` para transcendentais (`ln`, `lb`) com `DECIMAL128` no mk2 é dominado pela diferença de precisão em relação ao legacy. Isso torna o cenário ruim para leitura arquitetural do benchmark principal, que hoje quer responder sobre custo fim a fim da API pública. Se esse cenário voltar, ele deve entrar como benchmark separado e explicitamente contextualizado por `MathContext`.
 
 **Por que o audit piora mais em variableChurn e conditional:**
 - `variableChurn`: 12 variáveis geram 12 `VariableRead` events. Mais importante: a presença de qualquer assignment na expressão força a cópia de um `HashMap` para criar o escopo mutável, mas no variableChurn sem assignment o custo vem apenas dos 12 eventos.
@@ -401,7 +382,9 @@ O custo de `BigMath` para transcendentais (`ln`, `lb`) com `DECIMAL128` é orden
    }
    ```
 
-5. Adicionar os três métodos de benchmark (`_legacy`, `_mk2Compute`, `_mk2Audit`).
+5. Adicionar os três métodos de benchmark (`_legacy`, `_mk2Compute`, `_mk2Audit`), preservando a intenção de medir a API pública fim a fim:
+   - legacy: aplicar bindings via `setVariable(...)`
+   - mk2: materializar o `Map<String, Object>` e chamar `compute(Map)` / `computeWithAudit(Map)`
 
 6. Atualizar a seção **7 — Resultados de Referência** neste documento com os novos números.
 
@@ -413,4 +396,5 @@ O custo de `BigMath` para transcendentais (`ln`, `lb`) com `DECIMAL128` é orden
 - **`forks=0` contamina**: ao rodar via `mvn exec:java`, o JIT do Maven já aqueceu classes comuns (Caffeine, reflection, etc.). Isso favorece artificialmente o mk2, que usa Caffeine para seu cache de compilação. Para benchmarks de registro, use `forks >= 3`.
 - **Expressão `LITERAL_DENSE_EXPRESSION` é gerada em tempo de carga de classe**: o conteúdo exato pode ser verificado em `CrossModuleExpressionBenchmarkSupport.LITERAL_DENSE_EXPRESSION`.
 - **O mk2 cacheia o plano compilado**: chamar `MathExpression.compile()` com a mesma expressão e mesmo `environmentId` retorna o plano do cache Caffeine. No `@Setup(Level.Trial)`, se um benchmark anterior já compilou a mesma expressão, o custo de compilação é zero. Isso não afeta a medição de `compute()` (que não compila), mas é relevante se os benchmarks de compilação estiverem no mesmo run.
+- **O benchmark principal não mede evaluator puro**: o custo do `Map<String, Object>` no mk2 é parte deliberada da medição. Não interprete esses números como custo isolado do runtime interno.
 - **`CustomFunctionFixture`** vive como classe estática aninhada em `CrossModuleExpressionBenchmarkSupport`. Se precisar de uma função diferente para um novo cenário, crie uma classe separada em vez de modificar a existente.

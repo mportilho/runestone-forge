@@ -23,8 +23,7 @@ public final class CrossModuleBenchmarkRunner {
         "variableChurn",
         "userFunction",
         "conditional",
-        "powerChain",
-        "logarithmChain"
+        "powerChain"
     );
 
     private CrossModuleBenchmarkRunner() {
@@ -45,13 +44,13 @@ public final class CrossModuleBenchmarkRunner {
         Collection<RunResult> results = new Runner(opts).run();
         printRawResults(results);
         printComparisonGroup(
-            "Group 1 - legacy.evaluate() vs mk2.compute(Map)",
+            "Group 1 - public API end-to-end: legacy.evaluate() vs mk2.compute(Map)",
             LEGACY_SUFFIX,
             COMPUTE_SUFFIX,
             results
         );
         printComparisonGroup(
-            "Group 2 - legacy.evaluate() vs mk2.computeWithAudit(Map)",
+            "Group 2 - public API end-to-end: legacy.evaluate() vs mk2.computeWithAudit(Map)",
             LEGACY_SUFFIX,
             AUDIT_SUFFIX,
             results

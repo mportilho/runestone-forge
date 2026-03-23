@@ -20,6 +20,13 @@ Desempenho tem pelo menos duas dimensões mensuráveis diretamente no JMH:
 
 Throughput (ops/s) e tempo de warmup também podem ser relevantes, mas ns/op com GC profiler cobre a maioria dos casos de decisão arquitetural.
 
+**1.2.1. O benchmark mede o hot path interno ou o custo fim a fim da API pública?**
+Essa decisão precisa ser tomada antes da implementação do benchmark:
+- **Hot path interno**: mede apenas o custo do motor/evaluator. Nesse caso, bindings, adapters e materialização de objetos de entrada devem ficar fora do corpo do `@Benchmark`.
+- **API pública fim a fim**: mede o custo observado pelo chamador. Nesse caso, a preparação de bindings exigida pelo contrato público pode fazer parte do método de benchmark, desde que isso seja explicitado na documentação e aplicado de forma consistente aos componentes comparados.
+
+No benchmark cross-module atual deste repositório, a intenção é **API pública fim a fim**.
+
 **1.3. Existe algum modo de operação que deve ser comparado separadamente?**
 Se um dos componentes expõe modos distintos de execução (ex.: com vs. sem auditoria, com vs. sem cache), cada modo forma um *grupo de comparação* independente. Agrupamentos incorretos (ex.: misturar modo com auditoria e sem auditoria em um único quadro) produzem leituras enganosas.
 
@@ -39,8 +46,8 @@ Percorra os testes unitários de ambos os componentes e classifique as expressõ
 | **Variable Churn** | Muitas variáveis, poucas constantes, bindings trocados a cada chamada | `a * b + c * d − e + f * g − …` |
 | **User Function** | Despacho de funções registradas pelo usuário | `weighted(a,b,c) + weighted(d,e,f) + …` |
 | **Conditional** | Branching dependente de variáveis | `if a > b then a * c − d else g * h − i endif` |
-| **Math Function Chain** | Funções transcendentais em cadeia | `ln(a) + ln(b) + … + lb(k) + lb(l)` |
 | **Power Chain** | Exponenciação repetida | `a^2 + b^2 − c^2 + d^2 − …` |
+| **Math Function Chain (opcional)** | Funções transcendentais em cadeia | `ln(a) + ln(b) + … + lb(k) + lb(l)` |
 
 Cada família estressará uma parte diferente do pipeline de execução. A escolha deve cobrir ao menos: caminho puro de constantes, caminho puro de variáveis, despacho de função, e ramificação.
 
@@ -52,6 +59,8 @@ Um cenário é incluído se:
 3. Pode ser expresso com a mesma expressão de entrada nos dois componentes (ou com transformação documental clara).
 
 Um cenário é **excluído** se não existir equivalente em algum dos componentes (ex.: sintaxe suportada apenas por um deles), a não ser que o objetivo seja documentar exatamente essa diferença de cobertura.
+
+Também deve ser excluído quando a comparação for dominada por uma diferença de contrato não relacionada ao pipeline comparado. Exemplo: funções transcendentais com `MathContext` distintos entre componentes, onde o custo de precisão mascara o custo arquitetural que se queria medir.
 
 ### 2.3. Frames de dados
 
@@ -110,8 +119,8 @@ Nomeie os métodos de benchmark seguindo a convenção:
 
 Exemplos:
 - `literalDense_legacy` — componente legado no cenário literalDense
-- `literalDense_mk2Compute` — componente novo, modo `compute()`
-- `literalDense_mk2Audit` — componente novo, modo `computeWithAudit()`
+- `literalDense_mk2Compute` — componente novo, modo `compute(Map)` no benchmark público fim a fim
+- `literalDense_mk2Audit` — componente novo, modo `computeWithAudit(Map)` no benchmark público fim a fim
 
 Essa convenção permite que ferramentas de análise (incluindo o próprio JMH em modo texto) agrupem naturalmente os benchmarks por cenário e por componente.
 
@@ -149,23 +158,23 @@ Cada método deve:
 
 ```java
 @Benchmark
-public BigDecimal literalDense_legacy(LiteralDenseState s) {
+public BigDecimal variableChurn_legacy(VariableChurnState s) {
     BenchmarkSupport.applyFrame(s.legacy, BenchmarkSupport.frame(s.legacyIndex++));
     return s.legacy.evaluate();
 }
 
 @Benchmark
-public BigDecimal literalDense_mk2Compute(LiteralDenseState s) {
-    BenchmarkSupport.applyFrame(s.mk2, BenchmarkSupport.frame(s.mk2Index++));
-    return s.mk2.compute();
+public BigDecimal variableChurn_mk2Compute(VariableChurnState s) {
+    return s.mk2.compute(BenchmarkSupport.frameToMap(BenchmarkSupport.frame(s.mk2Index++)));
 }
 
 @Benchmark
-public AuditResult<BigDecimal> literalDense_mk2Audit(LiteralDenseState s) {
-    BenchmarkSupport.applyFrame(s.mk2, BenchmarkSupport.frame(s.mk2Index++));
-    return s.mk2.computeWithAudit();
+public AuditResult<BigDecimal> variableChurn_mk2Audit(VariableChurnState s) {
+    return s.mk2.computeWithAudit(BenchmarkSupport.frameToMap(BenchmarkSupport.frame(s.mk2Index++)));
 }
 ```
+
+Se a intenção for **API pública fim a fim**, a construção do `Map<String, Object>` ou qualquer outro payload exigido pelo contrato público pode ficar no corpo do benchmark. Se a intenção for **hot path interno**, esse material deve ser pré-construído no estado e apenas selecionado por índice durante a medição.
 
 ---
 
@@ -191,7 +200,7 @@ public final class BenchmarkSupport {
     }
 
     public static void applyFrame(ComponentA c, Frame f) { … }
-    public static void applyFrame(ComponentB c, Frame f) { … }
+    public static Map<String, Object> frameToMap(Frame f) { … }
 }
 ```
 
@@ -304,15 +313,17 @@ Isso permite ao leitor entender o custo **incremental** de cada modo separadamen
 
 ### 8.1. Comparar modos não equivalentes
 
-Se um componente retorna um `AuditResult<T>` (com metadados) e o outro retorna apenas `T`, a comparação direta é válida apenas se o custo dos metadados for irrelevante para o uso que se quer comparar. Documente isso explicitamente.
+Se um componente retorna um `AuditResult<T>` (com metadados) e o outro retorna apenas `T`, a comparação direta é válida apenas se o custo dos metadados fizer parte do uso que se quer comparar. Documente isso explicitamente e mantenha esse modo em um grupo separado.
 
 ### 8.2. Não isolar o setup do caminho quente
 
-Toda lógica de inicialização (compilação de expressão, registro de funções, construção de frames) deve estar em `@Setup(Level.Trial)`, nunca dentro do método de benchmark. O JMH mede apenas o corpo do método anotado com `@Benchmark`.
+Toda lógica de inicialização estrutural (compilação de expressão, registro de funções, construção do pool de frames) deve estar em `@Setup(Level.Trial)`, nunca dentro do método de benchmark. O JMH mede apenas o corpo do método anotado com `@Benchmark`.
+
+Exceção deliberada: quando o benchmark mede **API pública fim a fim**, a materialização do payload exigido em cada chamada pode ficar no corpo do benchmark, porque ela faz parte do custo observado pelo cliente.
 
 ### 8.3. Precisão matemática diferente entre componentes
 
-Se os componentes usam `MathContext` diferente (ex.: `DECIMAL128` vs `DECIMAL64` vs padrão `BigDecimal`), o tempo de cálculo de transcendentais pode variar por um fator de 2–5×. Isso não é custo do pipeline, mas da precisão. Documente qual contexto cada componente usa e considere parametrizar o benchmark por `MathContext` se a comparação for sensível a isso.
+Se os componentes usam `MathContext` diferente (ex.: `DECIMAL128` vs `DECIMAL64` vs padrão `BigDecimal`), o tempo de cálculo de transcendentais pode variar por um fator de 2–5×. Isso não é custo do pipeline, mas da precisão. Documente qual contexto cada componente usa, considere parametrizar o benchmark por `MathContext` se a comparação for sensível a isso, ou remova o cenário do benchmark principal se ele contaminar a leitura arquitetural.
 
 ### 8.4. Resultados com alta variância
 
@@ -342,6 +353,7 @@ Antes de publicar resultados, verifique:
 
 - [ ] Expressões de teste idênticas para ambos os componentes (ou diferenças documentadas).
 - [ ] Mesmo pool de frames, com seeds documentadas.
+- [ ] Intenção do benchmark declarada: hot path interno vs API pública fim a fim.
 - [ ] `@Setup(Level.Trial)` para toda inicialização.
 - [ ] Cada benchmark retorna um valor (sem void).
 - [ ] JVM idêntica (`-Xms` = `-Xmx`, mesmo JDK, mesmos flags) para ambos os componentes.
@@ -355,8 +367,9 @@ Antes de publicar resultados, verifique:
 
 ## 10. Referências Internas
 
-- `CrossModuleComparisonBenchmark.java` — benchmark de comparação entre `expression-evaluator` e `exp-eval-mk2`, com 6 cenários e 3 variantes por cenário (legacy, mk2Compute, mk2Audit).
+- `CrossModuleComparisonBenchmark.java` — benchmark de comparação entre `expression-evaluator` e `exp-eval-mk2`, com 5 cenários e 3 variantes por cenário (legacy, mk2Compute, mk2Audit).
 - `CrossModuleExpressionBenchmarkSupport.java` — suporte compartilhado: expressões, frames de variáveis, construção de componentes.
 - `CrossModuleComparisonBenchmarkMain.java` — runner de execução rápida (`forks=0`, iterações reduzidas).
+- `CrossModuleBenchmarkRunner.java` — runner agregado que imprime quadros por grupo com `ns/op` e `B/op`.
 - `docs/perf/performance-history.md` — histórico de decisões de desempenho com formato PERF-NNN.
 - `docs/runtime-internals.md` — detalhes do pipeline de compilação do exp-eval-mk2.
