@@ -20,27 +20,27 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Expression evaluator that carries all sub-expression results as raw {@code Object} values
+ * Expression evaluator that carries all sub-expression results as {@code Object} values
  * ({@link BigDecimal}, {@link Boolean}, {@link LocalDate}, etc.) with no intermediate boxing.
  *
  * <h2>Scope contract</h2>
  * <ul>
  *   <li><strong>Scope read</strong> — variables are looked up via
- *       {@link ExecutionScope#findRaw}, which avoids both {@link java.util.Optional} and wrapper
+ *       {@link ExecutionScope#find}, which avoids both {@link java.util.Optional} and wrapper
  *       allocation.</li>
- *   <li><strong>Scope write (assignments)</strong> — the raw result is stored directly via
+ *   <li><strong>Scope write (assignments)</strong> — the result is stored directly via
  *       {@link ExecutionScope#assign}.  The scope handles null-value sentinels internally.</li>
  *   <li><strong>Function arguments</strong> — coerced via
- *       {@link RuntimeServices#coerceRaw}, which fast-paths same-type arguments.</li>
+ *       {@link RuntimeServices#coerce}, which fast-paths same-type arguments.</li>
  * </ul>
  */
-abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
+abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
 
     private final CompiledExpression compiledExpression;
     private final RuntimeServices runtimeServices;
     private final MathContext mathContext;
 
-    protected AbstractRawObjectEvaluator(CompiledExpression compiledExpression,
+    protected AbstractObjectEvaluator(CompiledExpression compiledExpression,
                                          RuntimeServices runtimeServices,
                                          MathContext mathContext) {
         this.compiledExpression = Objects.requireNonNull(compiledExpression, "compiledExpression must not be null");
@@ -59,9 +59,9 @@ abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
     }
 
     /**
-     * Converts the final raw result to the evaluator's declared return type.
+     * Converts the final result to the evaluator's declared return type.
      */
-    protected abstract T convertResult(Object rawValue);
+    protected abstract T convertResult(Object value);
 
     @Override
     public final Map<String, Object> evaluateAssignments(ExecutionScope scope) {
@@ -75,13 +75,13 @@ abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
         for (ExecutableAssignment assignment : assignments) {
             switch (assignment) {
                 case ExecutableSimpleAssignment s -> {
-                    Object raw = scope.findRaw(s.target());
-                    result.put(s.target().name(), raw == ExecutionScope.UNBOUND ? null : raw);
+                    Object value = scope.find(s.target());
+                    result.put(s.target().name(), value == ExecutionScope.UNBOUND ? null : value);
                 }
                 case ExecutableDestructuringAssignment d -> {
                     for (SymbolRef target : d.targets()) {
-                        Object raw = scope.findRaw(target);
-                        result.put(target.name(), raw == ExecutionScope.UNBOUND ? null : raw);
+                        Object value = scope.find(target);
+                        result.put(target.name(), value == ExecutionScope.UNBOUND ? null : value);
                     }
                 }
             }
@@ -96,11 +96,11 @@ abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
     private void executeAssignment(ExecutableAssignment assignment, ExecutionScope scope) {
         switch (assignment) {
             case ExecutableSimpleAssignment s -> {
-                Object rawValue = evaluateExpr(s.value(), scope);
-                scope.assign(s.target(), rawValue);
+                Object value = evaluateExpr(s.value(), scope);
+                scope.assign(s.target(), value);
                 AuditCollector audit = scope.audit();
                 if (audit != null) {
-                    audit.record(new AuditEvent.AssignmentEvent(s.target().name(), rawValue));
+                    audit.record(new AuditEvent.AssignmentEvent(s.target().name(), value));
                 }
             }
             case ExecutableDestructuringAssignment d -> {
@@ -121,30 +121,30 @@ abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
     }
 
     // -------------------------------------------------------------------------
-    // Expression evaluation — returns raw Object, no boxing
+    // Expression evaluation — returns Object, no boxing
     // -------------------------------------------------------------------------
 
     private Object evaluateExpr(ExecutableNode node, ExecutionScope scope) {
         return switch (node) {
             case ExecutableLiteral lit -> lit.precomputed();
             case ExecutableDynamicLiteral dyn -> {
-                Object rawValue = scope.resolveDynamic(dyn.kind());
+                Object value = scope.resolveDynamic(dyn.kind());
                 AuditCollector audit = scope.audit();
                 if (audit != null) {
-                    audit.record(new AuditEvent.VariableRead(dyn.kind().canonicalName(), true, rawValue));
+                    audit.record(new AuditEvent.VariableRead(dyn.kind().canonicalName(), true, value));
                 }
-                yield rawValue;
+                yield value;
             }
             case ExecutableIdentifier id -> {
-                Object rawValue = scope.findRaw(id.ref());
-                if (rawValue == ExecutionScope.UNBOUND) {
+                Object value = scope.find(id.ref());
+                if (value == ExecutionScope.UNBOUND) {
                     throw unboundVariableException(id);
                 }
                 AuditCollector audit = scope.audit();
                 if (audit != null) {
-                    audit.record(new AuditEvent.VariableRead(id.ref().name(), false, rawValue));
+                    audit.record(new AuditEvent.VariableRead(id.ref().name(), false, value));
                 }
-                yield rawValue;
+                yield value;
             }
             case ExecutableFunctionCall f  -> evaluateFunctionCall(f, scope);
             case ExecutableConditional c   -> evaluateConditional(c, scope);
@@ -161,7 +161,7 @@ abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
 
     private Object evaluateFunctionCall(ExecutableFunctionCall node, ExecutionScope scope) {
         if (node.isFolded()) {
-            Object rawResult = runtimeServices.coerceToResolvedType(
+            Object result = runtimeServices.coerceToResolvedType(
                     node.foldedResult(), node.binding().returnType());
             AuditCollector audit = scope.audit();
             if (audit != null) {
@@ -170,34 +170,34 @@ abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
                 audit.record(new AuditEvent.FunctionCall(
                     node.binding().descriptor().name(),
                     node.foldedArgs(),
-                    rawResult,
+                    result,
                     audit.callDepth()
                 ));
             }
-            return rawResult;
+            return result;
         }
         FunctionDescriptor descriptor = node.binding().descriptor();
         int arity = descriptor.arity();
         Object[] args = new Object[arity];
         for (int i = 0; i < arity; i++) {
             Object evaluated = evaluateExpr(node.arguments().get(i), scope);
-            args[i] = runtimeServices.coerceRaw(evaluated, descriptor.parameterTypes().get(i));
+            args[i] = runtimeServices.coerce(evaluated, descriptor.parameterTypes().get(i));
         }
         AuditCollector audit = scope.audit();
         if (audit != null) audit.enterCall();
-        Object rawResult = runtimeServices.coerceToResolvedType(
+        Object result = runtimeServices.coerceToResolvedType(
                 descriptor.invoke(args), node.binding().returnType());
         if (audit != null) {
             audit.exitCall();
-            audit.record(new AuditEvent.FunctionCall(descriptor.name(), args, rawResult, audit.callDepth()));
+            audit.record(new AuditEvent.FunctionCall(descriptor.name(), args, result, audit.callDepth()));
         }
-        return rawResult;
+        return result;
     }
 
     private Object evaluateConditional(ExecutableConditional node, ExecutionScope scope) {
         List<ExecutableNode> conditions = node.conditions();
         for (int index = 0; index < conditions.size(); index++) {
-            if (asRawBoolean(evaluateExpr(conditions.get(index), scope))) {
+            if (asBoolean(evaluateExpr(conditions.get(index), scope))) {
                 return evaluateExpr(node.results().get(index), scope);
             }
         }
@@ -207,10 +207,10 @@ abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
     private Object evaluateUnary(ExecutableUnaryOp node, ExecutionScope scope) {
         Object operand = evaluateExpr(node.operand(), scope);
         return switch (node.operator()) {
-            case NEGATE      -> asRawBigDecimal(operand).negate();
-            case LOGICAL_NOT -> !asRawBoolean(operand);
-            case SQRT        -> asRawBigDecimal(operand).sqrt(mathContext);
-            case MODULUS     -> asRawBigDecimal(operand).abs();
+            case NEGATE      -> asBigDecimal(operand).negate();
+            case LOGICAL_NOT -> !asBoolean(operand);
+            case SQRT        -> asBigDecimal(operand).sqrt(mathContext);
+            case MODULUS     -> asBigDecimal(operand).abs();
         };
     }
 
@@ -219,27 +219,27 @@ abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
         BinaryOperator operator = node.operator();
         // Short-circuit evaluation for logical operators
         if (operator == BinaryOperator.AND || operator == BinaryOperator.NAND) {
-            boolean leftBool = asRawBoolean(left);
+            boolean leftBool = asBoolean(left);
             if (!leftBool) return operator == BinaryOperator.NAND;
         } else if (operator == BinaryOperator.OR || operator == BinaryOperator.NOR) {
-            boolean leftBool = asRawBoolean(left);
+            boolean leftBool = asBoolean(left);
             if (leftBool) return operator == BinaryOperator.OR;
         }
         Object right = evaluateExpr(node.right(), scope);
         return switch (operator) {
-            case ADD      -> asRawBigDecimal(left).add(asRawBigDecimal(right));
-            case SUBTRACT -> asRawBigDecimal(left).subtract(asRawBigDecimal(right));
-            case MULTIPLY -> asRawBigDecimal(left).multiply(asRawBigDecimal(right));
-            case DIVIDE   -> asRawBigDecimal(left).divide(asRawBigDecimal(right), mathContext);
-            case MODULO   -> asRawBigDecimal(left).remainder(asRawBigDecimal(right));
-            case POWER    -> pow(asRawBigDecimal(left), asRawBigDecimal(right));
-            case ROOT     -> BigDecimalMath.root(asRawBigDecimal(left), asRawBigDecimal(right), mathContext);
-            case AND      -> asRawBoolean(right);
-            case OR       -> asRawBoolean(right);
-            case XOR      -> asRawBoolean(left) ^ asRawBoolean(right);
-            case XNOR     -> !(asRawBoolean(left) ^ asRawBoolean(right));
-            case NAND     -> !asRawBoolean(right);
-            case NOR      -> !asRawBoolean(right);
+            case ADD      -> asBigDecimal(left).add(asBigDecimal(right));
+            case SUBTRACT -> asBigDecimal(left).subtract(asBigDecimal(right));
+            case MULTIPLY -> asBigDecimal(left).multiply(asBigDecimal(right));
+            case DIVIDE   -> asBigDecimal(left).divide(asBigDecimal(right), mathContext);
+            case MODULO   -> asBigDecimal(left).remainder(asBigDecimal(right));
+            case POWER    -> pow(asBigDecimal(left), asBigDecimal(right));
+            case ROOT     -> BigDecimalMath.root(asBigDecimal(left), asBigDecimal(right), mathContext);
+            case AND      -> asBoolean(right);
+            case OR       -> asBoolean(right);
+            case XOR      -> asBoolean(left) ^ asBoolean(right);
+            case XNOR     -> !(asBoolean(left) ^ asBoolean(right));
+            case NAND     -> !asBoolean(right);
+            case NOR      -> !asBoolean(right);
             case GREATER_THAN          -> compare(left, right) > 0;
             case GREATER_THAN_OR_EQUAL -> compare(left, right) >= 0;
             case LESS_THAN             -> compare(left, right) < 0;
@@ -250,7 +250,7 @@ abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
     }
 
     private Object evaluatePostfix(ExecutablePostfixOp node, ExecutionScope scope) {
-        BigDecimal value = asRawBigDecimal(evaluateExpr(node.operand(), scope));
+        BigDecimal value = asBigDecimal(evaluateExpr(node.operand(), scope));
         return switch (node.operator()) {
             case PERCENT   -> value.movePointRight(2);
             case FACTORIAL -> BigDecimalMath.factorial(value, mathContext);
@@ -271,22 +271,22 @@ abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
 
     private int compare(Object left, Object right) {
         if (left instanceof BigDecimal || right instanceof BigDecimal) {
-            return asRawBigDecimal(left).compareTo(asRawBigDecimal(right));
+            return asBigDecimal(left).compareTo(asBigDecimal(right));
         }
         if (left instanceof LocalDate || right instanceof LocalDate) {
-            return asRawLocalDate(left).compareTo(asRawLocalDate(right));
+            return asLocalDate(left).compareTo(asLocalDate(right));
         }
         if (left instanceof LocalTime || right instanceof LocalTime) {
-            return asRawLocalTime(left).compareTo(asRawLocalTime(right));
+            return asLocalTime(left).compareTo(asLocalTime(right));
         }
         if (left instanceof LocalDateTime || right instanceof LocalDateTime) {
-            return asRawLocalDateTime(left).compareTo(asRawLocalDateTime(right));
+            return asLocalDateTime(left).compareTo(asLocalDateTime(right));
         }
         if (left instanceof String || right instanceof String) {
-            return asRawString(left).compareTo(asRawString(right));
+            return asString(left).compareTo(asString(right));
         }
         if (left instanceof Boolean || right instanceof Boolean) {
-            return Boolean.compare(asRawBoolean(left), asRawBoolean(right));
+            return Boolean.compare(asBoolean(left), asBoolean(right));
         }
         throw new IllegalStateException("unsupported comparison between values");
     }
@@ -296,7 +296,7 @@ abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
             return left == null && right == null;
         }
         if (left instanceof BigDecimal || right instanceof BigDecimal) {
-            return asRawBigDecimal(left).compareTo(asRawBigDecimal(right)) == 0;
+            return asBigDecimal(left).compareTo(asBigDecimal(right)) == 0;
         }
         if (left instanceof List<?> leftList && right instanceof List<?> rightList) {
             if (leftList.size() != rightList.size()) return false;
@@ -309,35 +309,35 @@ abstract class AbstractRawObjectEvaluator<T> implements Evaluator<T> {
     }
 
     // -------------------------------------------------------------------------
-    // Raw type helpers — fast-path instanceof casts, fallback via RuntimeServices
+    // Type helpers — fast-path instanceof casts, fallback via RuntimeServices
     // -------------------------------------------------------------------------
 
-    private BigDecimal asRawBigDecimal(Object value) {
+    private BigDecimal asBigDecimal(Object value) {
         if (value instanceof BigDecimal bd) return bd;
         return runtimeServices.asNumber(value);
     }
 
-    private boolean asRawBoolean(Object value) {
+    private boolean asBoolean(Object value) {
         if (value instanceof Boolean b) return b;
         return runtimeServices.asBoolean(value);
     }
 
-    private String asRawString(Object value) {
+    private String asString(Object value) {
         if (value instanceof String s) return s;
         return runtimeServices.asString(value);
     }
 
-    private LocalDate asRawLocalDate(Object value) {
+    private LocalDate asLocalDate(Object value) {
         if (value instanceof LocalDate d) return d;
         return runtimeServices.asDate(value);
     }
 
-    private LocalTime asRawLocalTime(Object value) {
+    private LocalTime asLocalTime(Object value) {
         if (value instanceof LocalTime t) return t;
         return runtimeServices.asTime(value);
     }
 
-    private LocalDateTime asRawLocalDateTime(Object value) {
+    private LocalDateTime asLocalDateTime(Object value) {
         if (value instanceof LocalDateTime dt) return dt;
         return runtimeServices.asDateTime(value);
     }

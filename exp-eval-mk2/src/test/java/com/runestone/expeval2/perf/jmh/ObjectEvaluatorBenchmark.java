@@ -20,11 +20,11 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Benchmarks the six canonical evaluation scenarios (PERF-039 / PERF-040) using the
- * standard evaluator ({@link com.runestone.expeval2.internal.runtime.AbstractRawObjectEvaluator}).
+ * standard evaluator ({@link com.runestone.expeval2.internal.runtime.AbstractObjectEvaluator}).
  *
- * <p>Run via {@link RawObjectEvaluatorBenchmarkRunner} or with the JMH script:
+ * <p>Run via {@link ObjectEvaluatorBenchmarkRunner} or with the JMH script:
  * <pre>
- *   run-jmh.sh . RawObjectEvaluatorBenchmark /tmp/performance-benchmark/perf040.json
+ *   run-jmh.sh . ObjectEvaluatorBenchmark /tmp/performance-benchmark/perf040.json
  * </pre>
  */
 @BenchmarkMode(Mode.AverageTime)
@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 @Warmup(iterations = 5, time = 500, timeUnit = TimeUnit.MILLISECONDS)
 @Measurement(iterations = 10, time = 500, timeUnit = TimeUnit.MILLISECONDS)
 @Fork(value = 3, jvmArgsAppend = {"-Xms1g", "-Xmx1g"})
-public class RawObjectEvaluatorBenchmark {
+public class ObjectEvaluatorBenchmark {
 
     // ── literalDense ──────────────────────────────────────────────────────────
 

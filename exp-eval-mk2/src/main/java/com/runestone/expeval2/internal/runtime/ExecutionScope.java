@@ -11,7 +11,7 @@ import java.util.Objects;
 final class ExecutionScope {
 
     /**
-     * Sentinel returned by {@link #findRaw} when the symbol is not present in this scope.
+     * Sentinel returned by {@link #find} when the symbol is not present in this scope.
      * Distinct from {@code null}, which is a valid bound value.
      */
     static final Object UNBOUND = new Object();
@@ -19,7 +19,7 @@ final class ExecutionScope {
     private final Map<SymbolRef, Object> values;
     /**
      * Optional read-only external-binding layer used in the two-layer scope variant.
-     * When non-null, {@link #findRaw} checks {@code values} (internal/mutable) first and
+     * When non-null, {@link #find} checks {@code values} (internal/mutable) first and
      * falls back to this map for external symbols. {@link #assign} always writes only
      * to {@code values}, so the shared external layer is never mutated by assignments.
      */
@@ -77,13 +77,13 @@ final class ExecutionScope {
     }
 
     /**
-     * Returns the raw value bound to {@code symbolRef}, or {@link #UNBOUND} if no binding exists.
+     * Returns the value bound to {@code symbolRef}, or {@link #UNBOUND} if no binding exists.
      *
      * <p>Prefer this method on hot paths to avoid {@link java.util.Optional} allocation.
      * Callers must compare the return value with {@code ==} against {@link #UNBOUND} to detect
      * the absent case; a {@code null} return means the symbol is explicitly bound to a null value.
      */
-    Object findRaw(SymbolRef symbolRef) {
+    Object find(SymbolRef symbolRef) {
         Objects.requireNonNull(symbolRef, "symbolRef must not be null");
         Object v = values.getOrDefault(symbolRef, UNBOUND);
         if (v == UNBOUND && externalValues != null) {
@@ -103,7 +103,7 @@ final class ExecutionScope {
     }
 
     /**
-     * Resolves the raw value for a {@link DynamicInstant}, caching the result for the
+     * Resolves the value for a {@link DynamicInstant}, caching the result for the
      * lifetime of this scope so that repeated reads within the same evaluation return
      * the same instant.
      */

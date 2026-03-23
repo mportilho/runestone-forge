@@ -34,48 +34,44 @@ public final class RuntimeServices {
     // General coercion
     // -------------------------------------------------------------------------
 
+    /**
+     * Coerces {@code value} to {@code targetType} with a fast-path for already-matching types.
+     *
+     * <p>Returns {@code value} immediately when {@code targetType.isInstance(value)},
+     * avoiding any intermediate allocation. Falls back to the coercion service only on type mismatch.
+     */
     public Object coerce(Object value, Class<?> targetType) {
+        Objects.requireNonNull(targetType, "targetType must not be null");
+        if (value == null) return null;
+        if (targetType == Object.class || targetType.isInstance(value)) return value;
         return coercionService.coerce(value, targetType);
     }
 
     /**
-     * Coerces {@code rawValue} to {@code targetType} with a fast-path for already-matching types.
-     *
-     * <p>Returns {@code rawValue} immediately when {@code targetType.isInstance(rawValue)},
-     * avoiding any intermediate allocation. Falls back to {@link #coerce} only on type mismatch.
+     * Normalizes {@code value} to the Java type corresponding to {@code resolvedType}.
+     * Returns {@code value} unchanged when the resolved type is unknown, null, or non-scalar.
      */
-    public Object coerceRaw(Object rawValue, Class<?> targetType) {
-        Objects.requireNonNull(targetType, "targetType must not be null");
-        if (rawValue == null) return null;
-        if (targetType == Object.class || targetType.isInstance(rawValue)) return rawValue;
-        return coercionService.coerce(rawValue, targetType);
-    }
-
-    /**
-     * Normalizes {@code rawValue} to the Java type corresponding to {@code resolvedType}.
-     * Returns {@code rawValue} unchanged when the resolved type is unknown, null, or non-scalar.
-     */
-    Object coerceToResolvedType(Object rawValue, ResolvedType resolvedType) {
-        if (resolvedType == null || resolvedType == UnknownType.INSTANCE) return rawValue;
-        if (rawValue == null) return null;
+    Object coerceToResolvedType(Object value, ResolvedType resolvedType) {
+        if (resolvedType == null || resolvedType == UnknownType.INSTANCE) return value;
+        if (value == null) return null;
         if (resolvedType == VectorType.INSTANCE) {
-            if (rawValue instanceof List<?>) return rawValue;
-            if (rawValue.getClass().isArray()) {
-                int len = Array.getLength(rawValue);
+            if (value instanceof List<?>) return value;
+            if (value.getClass().isArray()) {
+                int len = Array.getLength(value);
                 List<Object> list = new ArrayList<>(len);
-                for (int i = 0; i < len; i++) list.add(Array.get(rawValue, i));
+                for (int i = 0; i < len; i++) list.add(Array.get(value, i));
                 return list;
             }
-            return rawValue;
+            return value;
         }
-        if (!(resolvedType instanceof ScalarType scalarType)) return rawValue;
+        if (!(resolvedType instanceof ScalarType scalarType)) return value;
         return switch (scalarType) {
-            case NUMBER   -> coerceRaw(rawValue, BigDecimal.class);
-            case BOOLEAN  -> coerceRaw(rawValue, Boolean.class);
-            case STRING   -> coerceRaw(rawValue, String.class);
-            case DATE     -> coerceRaw(rawValue, LocalDate.class);
-            case TIME     -> coerceRaw(rawValue, LocalTime.class);
-            case DATETIME -> coerceRaw(rawValue, LocalDateTime.class);
+            case NUMBER   -> coerce(value, BigDecimal.class);
+            case BOOLEAN  -> coerce(value, Boolean.class);
+            case STRING   -> coerce(value, String.class);
+            case DATE     -> coerce(value, LocalDate.class);
+            case TIME     -> coerce(value, LocalTime.class);
+            case DATETIME -> coerce(value, LocalDateTime.class);
         };
     }
 

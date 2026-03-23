@@ -24,7 +24,7 @@ public sealed interface AuditEvent permits
      *
      * @param name           symbol name as written in the expression
      * @param systemProvided {@code true} for built-in temporal identifiers, {@code false} for user variables
-     * @param value          the resolved raw value at evaluation time
+     * @param value          the resolved value at evaluation time
      */
     record VariableRead(String name, boolean systemProvided, Object value) implements AuditEvent {
         public VariableRead {
@@ -33,7 +33,7 @@ public sealed interface AuditEvent permits
     }
 
     /**
-     * Recorded after each function invocation, capturing the coerced input arguments and raw result.
+     * Recorded after each function invocation, capturing the coerced input arguments and result.
      *
      * <p>{@code callDepth} reflects the nesting level at the moment of the call: 0 means a
      * top-level call, 1 means called from within another function, and so on. This allows
@@ -53,7 +53,7 @@ public sealed interface AuditEvent permits
         /**
          * @param functionName name of the invoked function
          * @param inputArgs    owned array of coerced argument values; caller must not mutate after passing
-         * @param result       raw return value of the function
+         * @param result       return value of the function
          * @param callDepth    nesting depth at call time (0 = top-level call)
          */
         public FunctionCall(String functionName, Object[] inputArgs, Object result, int callDepth) {
@@ -112,7 +112,7 @@ public sealed interface AuditEvent permits
      * <p>For destructuring assignments, one event is emitted per target variable.
      *
      * @param targetName name of the variable receiving the value
-     * @param newValue   the assigned raw value
+     * @param newValue   the assigned value
      */
     record AssignmentEvent(String targetName, Object newValue) implements AuditEvent {
         public AssignmentEvent {

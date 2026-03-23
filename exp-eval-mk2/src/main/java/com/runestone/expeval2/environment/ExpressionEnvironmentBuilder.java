@@ -180,13 +180,13 @@ public final class ExpressionEnvironmentBuilder {
             if (providerInstance != null) {
                 handle = handle.bindTo(providerInstance);
             }
-            Class<?>[] rawParams = method.getParameterTypes();
+            Class<?>[] methodParams = method.getParameterTypes();
             int firstDataParam = 0;
-            if (rawParams.length > 0 && rawParams[0] == MathContext.class) {
+            if (methodParams.length > 0 && methodParams[0] == MathContext.class) {
                 handle = MethodHandles.insertArguments(handle, 0, mathContext);
                 firstDataParam = 1;
             }
-            List<Class<?>> parameterTypes = List.of(rawParams).subList(firstDataParam, rawParams.length);
+            List<Class<?>> parameterTypes = List.of(methodParams).subList(firstDataParam, methodParams.length);
             List<ResolvedType> parameterResolvedTypes = parameterTypes.stream().map(ResolvedTypes::fromJavaType).toList();
             return new FunctionDescriptor(method.getName(), parameterTypes, parameterResolvedTypes, ResolvedTypes.fromJavaType(method.getReturnType()), handle, foldable);
         } catch (IllegalAccessException exception) {

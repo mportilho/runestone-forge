@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
  * a two-table summary:
  *
  * <ol>
- *   <li>Raw results: benchmark name, ns/op, ±error, bytes/op (gc.alloc.rate.norm)</li>
+ *   <li>Standard results: benchmark name, ns/op, ±error, bytes/op (gc.alloc.rate.norm)</li>
  *   <li>Audit overhead per scenario: NoAudit vs WithAudit ns/op and allocation delta</li>
  * </ol>
  *
@@ -50,13 +50,13 @@ public final class DestructuringAssignmentBenchmarkRunner {
             .build();
 
         Collection<RunResult> results = new Runner(opts).run();
-        printRawTable(results);
+        printTable(results);
         printAuditOverheadTable(results);
     }
 
-    // ── Raw results ────────────────────────────────────────────────────────────
+    // ── Standard results ────────────────────────────────────────────────────────
 
-    private static void printRawTable(Collection<RunResult> results) {
+    private static void printTable(Collection<RunResult> results) {
         System.out.println();
         System.out.println("=".repeat(90));
         System.out.printf("%-44s  %10s  %8s  %12s%n", "Benchmark", "ns/op", "±error", "B/op");

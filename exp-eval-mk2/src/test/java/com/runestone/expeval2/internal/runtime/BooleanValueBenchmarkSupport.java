@@ -12,7 +12,7 @@ import java.util.Map;
  * Supports {@code BooleanValueBenchmark}, measuring allocation cost from evaluating
  * logical expressions that generate multiple boolean intermediate results.
  *
- * <p>The raw evaluator returns Java {@code Boolean} values directly from comparison and
+ * <p>The evaluator returns Java {@code Boolean} values directly from comparison and
  * logical operators, so the JVM's Boolean cache ({@code Boolean.TRUE} / {@code Boolean.FALSE})
  * is reused on every boolean result — zero allocation per boolean sub-expression.
  */

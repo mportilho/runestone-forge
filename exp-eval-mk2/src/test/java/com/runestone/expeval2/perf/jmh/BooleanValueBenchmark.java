@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
  * Measures allocation from evaluating logical expressions with multiple boolean
  * intermediate results.
  *
- * <p>Use {@code -prof gc} to capture {@code B/op}. Since the evaluator returns raw
+ * <p>Use {@code -prof gc} to capture {@code B/op}. Since the evaluator returns
  * {@code Boolean} values (reusing the JVM cache), boolean sub-expressions contribute
  * zero heap allocation.
  *

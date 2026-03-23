@@ -13,7 +13,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 // All DateTimeFunctions work via the expression API. Temporal parameters map to UnknownType.INSTANCE,
-// so semantic type-checking is skipped, and coercion step 3 (targetType.isInstance(value.raw()))
+// so semantic type-checking is skipped, and coercion step 3 (targetType.isInstance(value))
 // succeeds for LocalDate and LocalDateTime since both implement Temporal.
 // Date literals (DATE token, e.g. 2024-01-01) and datetime literals (DATETIME token, e.g. 2024-01-01T10:00)
 // are valid function-call arguments via the grammar's allEntityTypes rule. See runtime-internals.md §8.

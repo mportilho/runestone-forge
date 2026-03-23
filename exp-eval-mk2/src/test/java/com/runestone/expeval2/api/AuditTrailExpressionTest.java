@@ -188,7 +188,7 @@ class AuditTrailExpressionTest {
         }
 
         @Test
-        @DisplayName("FunctionCall event carries the function name, input arguments, raw result, and call depth")
+        @DisplayName("FunctionCall event carries the function name, input arguments, result, and call depth")
         void functionCallEventContainsNameInputsAndResult() {
             AuditResult<BigDecimal> result = MathExpression.compile("mean([2, 4])", WITH_MATH)
                     .computeWithAudit();

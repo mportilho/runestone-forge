@@ -32,7 +32,7 @@ public record ExpressionAuditTrace(List<AuditEvent> events, Duration evaluationT
      * and subsequent reads overwrite the value for the same name. Iteration order
      * follows first appearance.
      *
-     * @return mutable {@link LinkedHashMap} (safe to post-process) of name → raw value
+     * @return mutable {@link LinkedHashMap} (safe to post-process) of name → value
      */
     public Map<String, Object> variableSnapshot() {
         LinkedHashMap<String, Object> snapshot = new LinkedHashMap<>();
@@ -47,7 +47,7 @@ public record ExpressionAuditTrace(List<AuditEvent> events, Duration evaluationT
     }
 
     /**
-     * Ordered list of all function calls made during the evaluation, with coerced inputs and raw output.
+     * Ordered list of all function calls made during the evaluation, with coerced inputs and output.
      */
     public List<AuditEvent.FunctionCall> functionCalls() {
         return events.stream()

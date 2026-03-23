@@ -68,30 +68,30 @@ final class ExecutionPlanBuilder {
     }
 
     private ExecutableNode buildLiteral(LiteralNode lit, SemanticModel model) {
-        String raw = lit.value();
-        return switch (raw) {
+        String text = lit.value();
+        return switch (text) {
             case "currDate"     -> new ExecutableDynamicLiteral(DynamicInstant.CURR_DATE);
             case "currTime"     -> new ExecutableDynamicLiteral(DynamicInstant.CURR_TIME);
             case "currDateTime" -> new ExecutableDynamicLiteral(DynamicInstant.CURR_DATETIME);
             default -> {
                 ResolvedType resolvedType = model.findResolvedType(lit.nodeId())
                         .orElseThrow(() -> new IllegalStateException(
-                                "missing resolved type for literal '" + raw + "'"));
-                yield new ExecutableLiteral(materialize(raw, resolvedType));
+                                "missing resolved type for literal '" + text + "'"));
+                yield new ExecutableLiteral(materialize(text, resolvedType));
             }
         };
     }
 
-    private Object materialize(String raw, ResolvedType resolvedType) {
-        if (resolvedType == ScalarType.NUMBER)   return new BigDecimal(raw);
-        if (resolvedType == ScalarType.BOOLEAN)  return Boolean.parseBoolean(raw);
-        if (resolvedType == ScalarType.STRING)   return unquote(raw);
-        if (resolvedType == ScalarType.DATE)     return LocalDate.parse(raw);
-        if (resolvedType == ScalarType.TIME)     return LocalTime.parse(raw);
+    private Object materialize(String text, ResolvedType resolvedType) {
+        if (resolvedType == ScalarType.NUMBER)   return new BigDecimal(text);
+        if (resolvedType == ScalarType.BOOLEAN)  return Boolean.parseBoolean(text);
+        if (resolvedType == ScalarType.STRING)   return unquote(text);
+        if (resolvedType == ScalarType.DATE)     return LocalDate.parse(text);
+        if (resolvedType == ScalarType.TIME)     return LocalTime.parse(text);
         if (resolvedType == ScalarType.DATETIME) {
-            return raw.contains("+") || raw.endsWith("Z")
-                    ? OffsetDateTime.parse(raw).toLocalDateTime()
-                    : LocalDateTime.parse(raw);
+            return text.contains("+") || text.endsWith("Z")
+                    ? OffsetDateTime.parse(text).toLocalDateTime()
+                    : LocalDateTime.parse(text);
         }
         throw new IllegalStateException("unsupported literal type: " + resolvedType);
     }
@@ -116,12 +116,12 @@ final class ExecutionPlanBuilder {
             int arity = descriptor.arity();
             Object[] args = new Object[arity];
             for (int i = 0; i < arity; i++) {
-                args[i] = runtimeServices.coerceRaw(
-                        constantRawValue(arguments.get(i)),
+                args[i] = runtimeServices.coerce(
+                        constantValue(arguments.get(i)),
                         descriptor.parameterTypes().get(i));
             }
-            Object rawResult = descriptor.invoke(args);
-            return ExecutableFunctionCall.folded(binding, arguments, args, rawResult);
+            Object result = descriptor.invoke(args);
+            return ExecutableFunctionCall.folded(binding, arguments, args, result);
         }
 
         return ExecutableFunctionCall.of(binding, arguments);
@@ -135,7 +135,7 @@ final class ExecutionPlanBuilder {
         };
     }
 
-    private Object constantRawValue(ExecutableNode node) {
+    private Object constantValue(ExecutableNode node) {
         return switch (node) {
             case ExecutableLiteral lit    -> lit.precomputed();
             case ExecutableFunctionCall f -> f.foldedResult();

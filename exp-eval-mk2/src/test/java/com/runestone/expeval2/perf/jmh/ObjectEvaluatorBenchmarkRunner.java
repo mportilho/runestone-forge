@@ -10,14 +10,14 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.concurrent.TimeUnit;
 
-public final class RawObjectEvaluatorBenchmarkRunner {
+public final class ObjectEvaluatorBenchmarkRunner {
 
-    private RawObjectEvaluatorBenchmarkRunner() {
+    private ObjectEvaluatorBenchmarkRunner() {
     }
 
     public static void main(String[] args) throws Exception {
         Options opts = new OptionsBuilder()
-            .include(RawObjectEvaluatorBenchmark.class.getSimpleName())
+            .include(ObjectEvaluatorBenchmark.class.getSimpleName())
             .forks(1)
             .warmupIterations(3)
             .warmupTime(TimeValue.milliseconds(300))
