@@ -27,6 +27,7 @@ public final class ExpressionEnvironmentBuilder {
 
     private DataConversionService conversionService;
     private MathContext mathContext = MathContext.DECIMAL128;
+    private MathContext transcendentalMathContext = MathContext.DECIMAL64;
     private final List<StaticProviderEntry> staticProviders = new ArrayList<>();
     private final List<InstanceProviderEntry> instanceProviders = new ArrayList<>();
     private final Map<String, ExternalSymbolRegistration> externalSymbols = new LinkedHashMap<>();
@@ -42,6 +43,11 @@ public final class ExpressionEnvironmentBuilder {
 
     public ExpressionEnvironmentBuilder withMathContext(MathContext mathContext) {
         this.mathContext = Objects.requireNonNull(mathContext, "mathContext must not be null");
+        return this;
+    }
+
+    public ExpressionEnvironmentBuilder withTranscendentalMathContext(MathContext transcendentalMathContext) {
+        this.transcendentalMathContext = Objects.requireNonNull(transcendentalMathContext, "transcendentalMathContext must not be null");
         return this;
     }
 
@@ -82,7 +88,8 @@ public final class ExpressionEnvironmentBuilder {
     }
 
     public ExpressionEnvironmentBuilder addMathFunctions() {
-        return registerStaticProvider(MathFunctions.class, true);
+        return registerStaticProvider(MathFunctions.class, true)
+                .registerStaticProvider(LogarithmFunctions.class, true);
     }
 
     public ExpressionEnvironmentBuilder addTrigonometryFunctions() {
@@ -136,20 +143,22 @@ public final class ExpressionEnvironmentBuilder {
 
         List<Class<?>> staticProviderClasses = staticProviders.stream().map(StaticProviderEntry::providerClass).toList();
         List<Object> instanceObjects = instanceProviders.stream().map(InstanceProviderEntry::instance).toList();
-        return new ExpressionEnvironment(new ExpressionEnvironmentId(deriveEnvironmentId(staticProviderClasses, instanceObjects, externalSymbols, mathContext)),
-                functionCatalog, externalSymbolCatalog, effectiveConversionService, mathContext);
+        return new ExpressionEnvironment(new ExpressionEnvironmentId(deriveEnvironmentId(staticProviderClasses, instanceObjects, externalSymbols, mathContext, transcendentalMathContext)),
+                functionCatalog, externalSymbolCatalog, effectiveConversionService, mathContext, transcendentalMathContext);
     }
 
     private static String deriveEnvironmentId(
             List<Class<?>> staticProviderClasses,
             List<Object> instanceProviders,
             Map<String, ExternalSymbolRegistration> externalSymbols,
-            MathContext mathContext) {
+            MathContext mathContext,
+            MathContext transcendentalMathContext) {
         List<String> parts = new ArrayList<>();
         staticProviderClasses.forEach(c -> parts.add("s:" + c.getName()));
         instanceProviders.forEach(o -> parts.add("i:" + o.getClass().getName() + "@" + System.identityHashCode(o)));
         externalSymbols.forEach((name, reg) -> parts.add("x:" + name + ":" + reg.declaredType() + ":" + reg.overridable()));
         parts.add("mc:" + mathContext.getPrecision() + ":" + mathContext.getRoundingMode());
+        parts.add("tmc:" + transcendentalMathContext.getPrecision() + ":" + transcendentalMathContext.getRoundingMode());
         Collections.sort(parts);
         String content = String.join("|", parts);
         try {
@@ -183,7 +192,12 @@ public final class ExpressionEnvironmentBuilder {
             Class<?>[] methodParams = method.getParameterTypes();
             int firstDataParam = 0;
             if (methodParams.length > 0 && methodParams[0] == MathContext.class) {
-                handle = MethodHandles.insertArguments(handle, 0, mathContext);
+                MathContext effectiveMathContext = mathContext;
+                if (method.getDeclaringClass() == TrigonometryFunctions.class
+                    || method.getDeclaringClass() == LogarithmFunctions.class) {
+                    effectiveMathContext = transcendentalMathContext;
+                }
+                handle = MethodHandles.insertArguments(handle, 0, effectiveMathContext);
                 firstDataParam = 1;
             }
             List<Class<?>> parameterTypes = List.of(methodParams).subList(firstDataParam, methodParams.length);

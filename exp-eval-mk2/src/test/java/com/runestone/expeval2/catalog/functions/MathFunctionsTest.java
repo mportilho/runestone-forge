@@ -248,9 +248,9 @@ class MathFunctionsTest {
         @Test
         @DisplayName("Calculates natural logarithm correctly")
         void ln() {
-            assertThat(MathFunctions.ln(MC, new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
-            assertThat(MathFunctions.ln(MC, new BigDecimal("2.718281828459"))).isCloseTo(ONE, EPSILON);
-            assertThat(MathFunctions.ln(MC, new BigDecimal("10"))).isCloseTo(new BigDecimal("2.302585092994046"), EPSILON);
+            assertThat(LogarithmFunctions.ln(MC, new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
+            assertThat(LogarithmFunctions.ln(MC, new BigDecimal("2.718281828459"))).isCloseTo(ONE, EPSILON);
+            assertThat(LogarithmFunctions.ln(MC, new BigDecimal("10"))).isCloseTo(new BigDecimal("2.302585092994046"), EPSILON);
         }
     }
 
@@ -261,10 +261,10 @@ class MathFunctionsTest {
         @Test
         @DisplayName("Calculates binary logarithm correctly")
         void lb() {
-            assertThat(MathFunctions.lb(MC, new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
-            assertThat(MathFunctions.lb(MC, new BigDecimal("2"))).isCloseTo(ONE, EPSILON);
-            assertThat(MathFunctions.lb(MC, new BigDecimal("4"))).isCloseTo(new BigDecimal("2"), EPSILON);
-            assertThat(MathFunctions.lb(MC, new BigDecimal("10"))).isCloseTo(new BigDecimal("3.321928094887362"), EPSILON);
+            assertThat(LogarithmFunctions.lb(MC, new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
+            assertThat(LogarithmFunctions.lb(MC, new BigDecimal("2"))).isCloseTo(ONE, EPSILON);
+            assertThat(LogarithmFunctions.lb(MC, new BigDecimal("4"))).isCloseTo(new BigDecimal("2"), EPSILON);
+            assertThat(LogarithmFunctions.lb(MC, new BigDecimal("10"))).isCloseTo(new BigDecimal("3.321928094887362"), EPSILON);
         }
     }
 
@@ -275,11 +275,11 @@ class MathFunctionsTest {
         @Test
         @DisplayName("Calculates logarithm with specific base correctly")
         void log() {
-            assertThat(MathFunctions.log(MC, new BigDecimal("10"), new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
-            assertThat(MathFunctions.log(MC, new BigDecimal("10"), new BigDecimal("10"))).isCloseTo(ONE, EPSILON);
-            assertThat(MathFunctions.log(MC, new BigDecimal("10"), new BigDecimal("100"))).isCloseTo(new BigDecimal("2"), EPSILON);
-            assertThat(MathFunctions.log(MC, new BigDecimal("2"), new BigDecimal("8"))).isCloseTo(new BigDecimal("3"), EPSILON);
-            assertThat(MathFunctions.log(MC, new BigDecimal("3"), new BigDecimal("81"))).isCloseTo(new BigDecimal("4"), EPSILON);
+            assertThat(LogarithmFunctions.log(MC, new BigDecimal("10"), new BigDecimal("1"))).isCloseTo(ZERO, EPSILON);
+            assertThat(LogarithmFunctions.log(MC, new BigDecimal("10"), new BigDecimal("10"))).isCloseTo(ONE, EPSILON);
+            assertThat(LogarithmFunctions.log(MC, new BigDecimal("10"), new BigDecimal("100"))).isCloseTo(new BigDecimal("2"), EPSILON);
+            assertThat(LogarithmFunctions.log(MC, new BigDecimal("2"), new BigDecimal("8"))).isCloseTo(new BigDecimal("3"), EPSILON);
+            assertThat(LogarithmFunctions.log(MC, new BigDecimal("3"), new BigDecimal("81"))).isCloseTo(new BigDecimal("4"), EPSILON);
         }
     }
 
@@ -298,19 +298,19 @@ class MathFunctionsTest {
         })
         @DisplayName("Happy path: known values")
         void happyPath(double input, double expected) {
-            assertThat(MathFunctions.lnFast(input)).isCloseTo(expected, DOUBLE_EPSILON);
+            assertThat(LogarithmFunctions.lnFast(input)).isCloseTo(expected, DOUBLE_EPSILON);
         }
 
         @Test
         @DisplayName("Zero returns NEGATIVE_INFINITY")
         void zeroReturnsNegativeInfinity() {
-            assertThat(MathFunctions.lnFast(0.0)).isEqualTo(Double.NEGATIVE_INFINITY);
+            assertThat(LogarithmFunctions.lnFast(0.0)).isEqualTo(Double.NEGATIVE_INFINITY);
         }
 
         @Test
         @DisplayName("Negative value returns NaN")
         void negativeReturnsNaN() {
-            assertThat(MathFunctions.lnFast(-1.0)).isNaN();
+            assertThat(LogarithmFunctions.lnFast(-1.0)).isNaN();
         }
     }
 
@@ -330,19 +330,19 @@ class MathFunctionsTest {
         })
         @DisplayName("Happy path: known values")
         void happyPath(double input, double expected) {
-            assertThat(MathFunctions.lbFast(input)).isCloseTo(expected, DOUBLE_EPSILON);
+            assertThat(LogarithmFunctions.lbFast(input)).isCloseTo(expected, DOUBLE_EPSILON);
         }
 
         @Test
         @DisplayName("Zero returns NEGATIVE_INFINITY")
         void zeroReturnsNegativeInfinity() {
-            assertThat(MathFunctions.lbFast(0.0)).isEqualTo(Double.NEGATIVE_INFINITY);
+            assertThat(LogarithmFunctions.lbFast(0.0)).isEqualTo(Double.NEGATIVE_INFINITY);
         }
 
         @Test
         @DisplayName("Negative value returns NaN")
         void negativeReturnsNaN() {
-            assertThat(MathFunctions.lbFast(-1.0)).isNaN();
+            assertThat(LogarithmFunctions.lbFast(-1.0)).isNaN();
         }
     }
 
@@ -362,31 +362,31 @@ class MathFunctionsTest {
         })
         @DisplayName("Happy path: known values")
         void happyPath(double base, double value, double expected) {
-            assertThat(MathFunctions.logFast(base, value)).isCloseTo(expected, DOUBLE_EPSILON);
+            assertThat(LogarithmFunctions.logFast(base, value)).isCloseTo(expected, DOUBLE_EPSILON);
         }
 
         @Test
         @DisplayName("Value zero returns NEGATIVE_INFINITY")
         void valueZeroReturnsNegativeInfinity() {
-            assertThat(MathFunctions.logFast(10.0, 0.0)).isEqualTo(Double.NEGATIVE_INFINITY);
+            assertThat(LogarithmFunctions.logFast(10.0, 0.0)).isEqualTo(Double.NEGATIVE_INFINITY);
         }
 
         @Test
         @DisplayName("Negative value returns NaN")
         void negativeValueReturnsNaN() {
-            assertThat(MathFunctions.logFast(10.0, -1.0)).isNaN();
+            assertThat(LogarithmFunctions.logFast(10.0, -1.0)).isNaN();
         }
 
         @Test
         @DisplayName("Negative base returns NaN")
         void negativeBaseReturnsNaN() {
-            assertThat(MathFunctions.logFast(-2.0, 10.0)).isNaN();
+            assertThat(LogarithmFunctions.logFast(-2.0, 10.0)).isNaN();
         }
 
         @Test
         @DisplayName("Base 1 returns POSITIVE_INFINITY (log(1) = 0, positive / 0.0 in IEEE 754)")
         void baseOneReturnsInfinity() {
-            assertThat(MathFunctions.logFast(1.0, 10.0)).isEqualTo(Double.POSITIVE_INFINITY);
+            assertThat(LogarithmFunctions.logFast(1.0, 10.0)).isEqualTo(Double.POSITIVE_INFINITY);
         }
     }
 
