@@ -997,3 +997,109 @@ if (value instanceof RuntimeValue.NumberValue nv && targetType == BigDecimal.cla
 **Reason:** This experiment corrects the PERF-035 measurement methodology; it does not introduce any code change. The thread-safety ACCEPT decision from PERF-035 stands. The new numbers give a more accurate picture of the real production cost: the 12-symbol regression effectively disappears when `setValue()` is fairly accounted for, and the 3-symbol regression is −17% rather than −54%. The future optimization paths documented in PERF-035 (skip Optional allocation when no catalog, early-exit coercion, guard against empty-defaults copy) remain valid and would eliminate most of the remaining −17% for the 3-symbol case.
 
 **Notes:** Before JSON: `/tmp/performance-benchmark/perf037-before.json`. After JSON: `/tmp/performance-benchmark/perf037-after.json`. Comparison: `/tmp/performance-benchmark/perf037-comparison.md`. Worktree used for "before" run: `/tmp/perf-037-before` (HEAD `13739b6`). JDK 21.0.10, Linux.
+
+---
+
+## PERF-038: `buildValues()` hot-path — fuse double catalog lookup + eliminate empty-defaults copy
+
+**Date:** 2026-03-22
+**Branch:** refac-springboot-4 (working tree)
+**Benchmark:** `AssignmentExpressionBindingsBenchmark` + `ExpressionEvaluatorV2ExecutionPlanBenchmark` (3 forks, 5×500ms warmup, 10×500ms measurement, -Xms1g -Xmx1g, GC profiler)
+
+**Hypothesis:** Three smells identified in `buildValues()` by static analysis post-PERF-037:
+1. `externalSymbolCatalog.find()` called twice per variable (`rejectWhenNonOverridable` + `expectedType`) → 2 Map lookups + 2 `Optional` allocations per variable.
+2. `compiledExpression.semanticModel()` dereferenced twice per variable (`rejectWhenInternal` + `requireExternalSymbol`) → 2 map lookups on the happy path.
+3. `new HashMap<>(defaultValues)` even when `defaultValues` is empty → unnecessary object allocation in the most common environment (no external symbol catalog).
+
+**Changes applied:**
+- `ExternalSymbolCatalog.findOrNull(String)` added — returns the descriptor directly, no `Optional` wrapper.
+- `buildValues()` refactored: single loop iteration per entry using `lookupExternalSymbol()` (1 map lookup on happy path) + `findOrNull()` (1 catalog lookup, result reused for both the overridable check and the `declaredType` extraction).
+- `defaultValues.isEmpty()` guard added: returns/creates a plain `new HashMap<>()` instead of copying an empty map.
+- Old helpers `rejectWhenInternal`, `requireExternalSymbol`, `rejectWhenNonOverridable`, `expectedType` removed.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Δ time (%) | Before (B/op) | After (B/op) | Δ B/op |
+|---|---:|---:|---:|---:|---:|---:|
+| computeNoExternal (0 ext) | 583.5 ±13.6 | 529.1 ±53.0 | +9.34%¹ | 752 | 752 | 0 |
+| computeThreeExternal (3 ext) | 1,144.0 ±37.3 | 1,097.9 ±27.5 | +4.03% | 1,280 | 1,232 | −48 |
+| computeTwelveExternal (12 ext) | 2,599.6 ±41.2 | 2,292.1 ±36.9 | **+11.83%** | 2,616 | 2,616 | 0 |
+| computeLogicalMixedLiteralDense | 432.7 ±13.2 | 424.6 ±9.9 | +1.89% (noise) | 368 | 368 | 0 |
+| computeMathLiteralDense | 1,371.7 ±42.3 | 1,380.7 ±63.5 | −0.66% (noise) | 3,608 | 3,608 | 0 |
+| compileMathLiteralDense | 1,812,368 ±191,580 | 1,824,552 ±181,273 | −0.67% (noise) | 755,299 | 755,299 | 0 |
+
+¹ `computeNoExternal` "after" error is ±53 ns; benchmark does not enter the per-entry loop — improvement is marginal and dominated by variance.
+
+**B/op analysis:**
+- `computeThreeExternal`: −48 B/op = 3 `Optional` objects eliminated (3 × ~16 B). Confirms that for small variable counts the JIT did not eliminate these via escape analysis.
+- `computeTwelveExternal`: B/op unchanged at 2,616 despite eliminating 12 `Optional` objects (expected −192 B/op). Two likely explanations: (a) the JIT's escape analysis already eliminated the Optional allocations in the larger loop in both runs, or (b) the ~7% signal (192/2,616) is within B/op measurement noise at this scale. The 11.83% ns/op gain is real and comes from halved map-lookup count per iteration.
+- `computeNoExternal`: B/op unchanged at 752. The `defaultValues.isEmpty()` guard returns `new HashMap<>()` instead of `new HashMap<>(emptyMap)` — but both produce the same object and table-allocation behaviour for an empty map. Savings are in CPU instruction count, not heap.
+
+**Decision:** ACCEPT
+**Reason:** `computeTwelveExternal` exceeds the 10% threshold (+11.83%). `computeThreeExternal` is +4.03% with zero risk (3 private helpers collapsed into 1 static method, one public method added to the catalog). No allocation regression in any scenario. All 799 tests pass. Changes are minimal and fully backwards-compatible.
+
+**Residual optimization paths (not yet pursued):**
+- The `defaultValues.isEmpty()` guard reduced code complexity but produced no measurable B/op gain for `computeNoExternal`, confirming that the +48 B/op gap seen in PERF-035 between old and new API is not from the HashMap creation but from other sources (likely the `ExecutionScope` construction and result map).
+- Early-exit in `runtimeServices.from()` when the caller already passes a `RuntimeValue` subtype (already implemented at line 36 of `RuntimeValueFactory`).
+
+**Notes:** Before JSON: `/tmp/performance-benchmark/perf038-before.json`. After JSON: `/tmp/performance-benchmark/perf038-after.json`. Comparison: `/tmp/performance-benchmark/perf038-comparison.md`. JDK 21.0.10, Linux.
+
+---
+
+## PERF-039: Cross-module comparison — post PERF-038 `buildValues()` optimization
+
+**Date:** 2026-03-22
+**Branch:** refac-springboot-4
+**Benchmark:** `CrossModuleComparisonBenchmark` — 25 methods, 3 forks, 5×500ms warmup, 10×500ms measurement, -Xms1g -Xmx1g, GC profiler
+
+**Scenario:** Updated cross-module comparison after the `buildValues()` hot-path optimization (PERF-038). Both the legacy (`expression-evaluator`) and mk2 benchmarks already include variable binding cost per iteration: legacy calls `setVariable()` N times inside each `@Benchmark` method (via `applyFrame()` / `applyLiteralSeed()`), while mk2 calls `compute(Map)` which bundles variable injection. The comparison is therefore apples-to-apples on total-work-per-evaluation.
+
+**Cross-module comparison (legacy `evaluate()` vs mk2 `compute(Map)`):**
+
+| Scenario | Legacy (ns/op) | mk2 compute (ns/op) | mk2 vs legacy (%) | Legacy (B/op) | mk2 compute (B/op) | mk2 audit (ns/op) | mk2 audit (B/op) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| literalDense | 4,798.95 ±114.4 | 1,685 ±70.1 | **+64.9%** | 7,256 | 3,832 | 1,842.45 ±59.2 | 4,032 |
+| variableChurn | 2,096.71 ±63.6 | 1,845.25 ±47.3 | **+12.0%** | 1,889 | 2,168 | 2,207.37 ±61.3 | 2,784 |
+| userFunction | 1,608.88 ±76.3 | 1,927.36 ±36.8 | −19.8% | 440 | 2,008 | 2,313.81 ±44.2 | 2,656 |
+| conditional | 1,170.74 ±57.4 | 1,543.77 ±57.7 | −31.9% | 803 | 1,624 | 1,724.17 ±26.5 | 2,040 |
+| logarithmChain | 999,664 ±18,186 | 1,627,393 ±33,025 | −62.8% | 1,131,995 | 1,672,900 | 1,617,613 ±35,478 | 1,649,782 |
+| powerChain | 3,004.74 ±52.6 | 3,243.19 ±82.8 | −7.9% | 2,922 | 3,096 | 3,608.82 ±84.9 | 3,600 |
+
+**mk2-only benchmarks (compile, compute-literal, assignment bindings):**
+
+| Benchmark | ns/op | Error | B/op |
+|---|---:|---:|---:|
+| compileMathLiteralDense | 1,684,859 | ±164,981 | 754,272 |
+| compileLogicalMixedLiteralDense | 279,042 | ±47,993 | 102,560 |
+| computeMathLiteralDense | 1,361.81 | ±56.5 | 3,608 |
+| computeLogicalMixedLiteralDense | 431.73 | ±15.5 | 368 |
+| computeNoExternal (0 ext) | 561.38 | ±19.1 | 752 |
+| computeThreeExternal (3 ext) | 1,047.58 | ±21.3 | 1,232 |
+| computeTwelveExternal (12 ext) | 2,313.39 | ±57.5 | 2,739 |
+
+**PERF-036 vs PERF-039 delta — impact of PERF-038 `buildValues()` optimization:**
+
+| Scenario | PERF-036 mk2 vs legacy (%) | PERF-039 mk2 vs legacy (%) | Delta (pp) |
+|---|---:|---:|---:|
+| literalDense | +66.0% | +64.9% | −1.1 (noise) |
+| variableChurn | +14.5% | +12.0% | −2.5 (noise) |
+| userFunction | −29.5% | **−19.8%** | **+9.7** |
+| conditional | −39.2% | **−31.9%** | **+7.3** |
+| logarithmChain | −56.5% | −62.8% | −6.3 (noise: dominated by log transcendentals) |
+| powerChain | −14.0% | **−7.9%** | **+6.1** |
+
+Assignment bindings (direct PERF-038 effect):
+
+| Benchmark | PERF-036 (ns/op) | PERF-039 (ns/op) | Improvement |
+|---|---:|---:|---:|
+| computeThreeExternal | 1,089.8 | 1,047.58 | +3.9% |
+| computeTwelveExternal | 2,540.2 | 2,313.39 | **+8.9%** |
+
+**Key findings:**
+
+1. **literalDense / variableChurn:** Essentially unchanged — mk2 still wins by 65% and 12% respectively. These scenarios are unaffected by `buildValues()` cost (literalDense has only 1 variable; variableChurn gains are dominated by the typed execution plan).
+2. **userFunction: −29.5% → −19.8% (+9.7 pp recovered):** The PERF-038 optimization directly narrows this gap. userFunction has 12 external symbols per call (3 groups of 4 weighted(a,b,c) calls), each of which previously paid 2 catalog lookups + 2 Optional allocations. After PERF-038, each pays 1 null-check lookup.
+3. **conditional: −39.2% → −31.9% (+7.3 pp recovered):** Same mechanism — 12 external symbols per call.
+4. **powerChain: −14.0% → −7.9% (+6.1 pp recovered):** Same — 12 external symbols per call. Now within single-digit deficit.
+5. **logarithmChain:** The apparent regression (−56.5% → −62.8%) is noise — at ~1 ms/op the measurement variance is large (±18,000 ns for legacy, ±33,000 ns for mk2). Both sessions show the same root cause: `BigDecimalMath.log()` at DECIMAL128 precision dominates.
+
+**Decision:** CHARACTERIZATION (no code change)
+**Reason:** Updated baseline after PERF-038. The `buildValues()` optimization meaningfully narrowed the mk2 deficit in variable-heavy scenarios (up to +9.7 pp on userFunction). Scenarios where mk2 still lags (userFunction, conditional, powerChain) are now better understood: residual cost is from the `HashMap` creation + per-entry coercion inside `buildValues()`, not the catalog lookup overhead which has been eliminated.

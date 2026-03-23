@@ -14,7 +14,6 @@ import com.runestone.expeval2.internal.ast.mapping.SemanticAstBuilder;
 import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2ParserFacade;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import com.runestone.expeval2.internal.grammar.ParsingException;
-import com.runestone.expeval2.types.ResolvedType;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -391,46 +390,34 @@ public final class ExpressionRuntimeSupport {
      */
     private Map<SymbolRef, RuntimeValue> buildValues(Map<String, Object> userValues) {
         if (userValues == null || userValues.isEmpty()) {
-            return new HashMap<>(defaultValues);
+            return defaultValues.isEmpty() ? new HashMap<>() : new HashMap<>(defaultValues);
         }
-        Map<SymbolRef, RuntimeValue> result = new HashMap<>(defaultValues);
+        Map<SymbolRef, RuntimeValue> result = defaultValues.isEmpty()
+                ? new HashMap<>(userValues.size())
+                : new HashMap<>(defaultValues);
+        SemanticModel semanticModel = compiledExpression.semanticModel();
         for (Map.Entry<String, Object> entry : userValues.entrySet()) {
             String name = entry.getKey();
-            rejectWhenInternal(name);
-            SymbolRef ref = requireExternalSymbol(name);
-            rejectWhenNonOverridable(name);
-            result.put(ref, runtimeServices.from(entry.getValue(), expectedType(name)));
+            SymbolRef ref = lookupExternalSymbol(name, semanticModel);
+            ExternalSymbolDescriptor descriptor = externalSymbolCatalog.findOrNull(name);
+            if (descriptor != null && !descriptor.overridable()) {
+                throw new IllegalStateException("symbol '" + name + "' is not overridable");
+            }
+            result.put(ref, runtimeServices.from(entry.getValue(),
+                    descriptor != null ? descriptor.declaredType() : null));
         }
         return result;
     }
 
-    private void rejectWhenInternal(String symbolName) {
-        if (compiledExpression.semanticModel().internalSymbolsByName().containsKey(symbolName)) {
-            throw new IllegalArgumentException("symbol '" + symbolName + "' is internal to the expression");
+    private static SymbolRef lookupExternalSymbol(String name, SemanticModel semanticModel) {
+        SymbolRef ref = semanticModel.externalSymbolsByName().get(name);
+        if (ref != null) {
+            return ref;
         }
-    }
-
-    private SymbolRef requireExternalSymbol(String symbolName) {
-        Objects.requireNonNull(symbolName, "symbolName must not be null");
-        SymbolRef symbolRef = compiledExpression.semanticModel().externalSymbolsByName().get(symbolName);
-        if (symbolRef == null) {
-            throw new IllegalArgumentException("unknown external symbol '" + symbolName + "'");
+        if (semanticModel.internalSymbolsByName().containsKey(name)) {
+            throw new IllegalArgumentException("symbol '" + name + "' is internal to the expression");
         }
-        return symbolRef;
-    }
-
-    private void rejectWhenNonOverridable(String symbolName) {
-        externalSymbolCatalog.find(symbolName)
-                .filter(descriptor -> !descriptor.overridable())
-                .ifPresent(descriptor -> {
-                    throw new IllegalStateException("symbol '" + symbolName + "' is not overridable");
-                });
-    }
-
-    private ResolvedType expectedType(String symbolName) {
-        return externalSymbolCatalog.find(symbolName)
-                .map(ExternalSymbolDescriptor::declaredType)
-                .orElse(null);
+        throw new IllegalArgumentException("unknown external symbol '" + name + "'");
     }
 
     private ExecutionScope createExecutionScope(Map<String, Object> userValues) {

@@ -17,6 +17,17 @@ public final class ExternalSymbolCatalog {
         return Optional.ofNullable(symbolsByName.get(name));
     }
 
+    /**
+     * Returns the descriptor for {@code name}, or {@code null} if absent.
+     *
+     * <p>Prefer this over {@link #find(String)} in hot paths where the result is consumed
+     * immediately and the {@code Optional} allocation would be wasted.
+     */
+    public ExternalSymbolDescriptor findOrNull(String name) {
+        Objects.requireNonNull(name, "name must not be null");
+        return symbolsByName.get(name);
+    }
+
     public Map<String, ExternalSymbolDescriptor> symbolsByName() {
         return symbolsByName;
     }
