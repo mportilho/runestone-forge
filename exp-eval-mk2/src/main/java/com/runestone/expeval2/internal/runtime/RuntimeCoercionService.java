@@ -22,6 +22,15 @@ final class RuntimeCoercionService {
     public BigDecimal asNumber(Object value) {
         if (value instanceof BigDecimal bd) return bd;
         if (value == null) throw new IllegalStateException("cannot coerce null to number");
+        if (value instanceof Long || value instanceof Integer) {
+            long l = ((Number) value).longValue();
+            if (l == 0) return BigDecimal.ZERO;
+            if (l == 1) return BigDecimal.ONE;
+            if (l == 10) return BigDecimal.TEN;
+            return BigDecimal.valueOf(l);
+        }
+        if (value instanceof Double d) return BigDecimal.valueOf(d);
+        if (value instanceof Float f) return BigDecimal.valueOf(f.doubleValue());
         if (value instanceof Number n) return new BigDecimal(n.toString());
         return convert(value, BigDecimal.class);
     }
