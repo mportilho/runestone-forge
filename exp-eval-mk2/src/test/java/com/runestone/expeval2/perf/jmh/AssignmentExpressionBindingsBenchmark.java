@@ -18,24 +18,21 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Measures the cost of {@code AssignmentExpression.compute()} as the number of external symbols grows.
+ * Measures the cost of {@code AssignmentExpression.compute(Map)} as the number of external symbols grows.
  *
- * <p>The key path under investigation is {@code MutableBindings.copyValues()}, which is called
- * on every {@code compute()} invocation because {@code AssignmentExpression} always uses a mutable
- * {@link com.runestone.expeval2.internal.runtime.ExecutionScope}. The copy size is proportional to
- * the number of external symbols bound in the expression.
+ * <p>Variable values are supplied per call via a pre-allocated {@code Map<String, Object>} held in
+ * the JMH state. Each {@code compute(Map)} call copies the defaults map and merges the user values,
+ * so copy size is proportional to the number of external symbols.
  *
  * <p>Scenarios:
  * <ul>
- *   <li><b>noExternal</b> — 5 chained assignments, no external symbols. The bindings map is
- *       empty; {@code new HashMap<>(emptyMap)} is essentially a no-op.</li>
- *   <li><b>threeExternal</b> — 5 assignments that depend on 3 external variables. The bindings
- *       map holds 3 entries on every copy.</li>
- *   <li><b>twelveExternal</b> — 12 assignments that depend on 12 external variables. Maximum
- *       realistic copy size for the standard variable set.</li>
+ *   <li><b>noExternal</b> — 5 chained assignments, no external symbols. An empty map is passed;
+ *       only the internal defaults copy occurs.</li>
+ *   <li><b>threeExternal</b> — 5 assignments that depend on 3 external variables.</li>
+ *   <li><b>twelveExternal</b> — 12 assignments that depend on 12 external variables.</li>
  * </ul>
  *
- * <p>Run with {@code -prof gc} to capture {@code B/op} and isolate allocation from the HashMap copy.
+ * <p>Run with {@code -prof gc} to capture {@code B/op} and isolate allocation cost.
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
@@ -46,29 +43,30 @@ public class AssignmentExpressionBindingsBenchmark {
 
     @Benchmark
     public Map<String, Object> computeNoExternal(NoExternalState state) {
-        return state.expression.compute();
+        return state.expression.compute(state.values);
     }
 
     @Benchmark
     public Map<String, Object> computeThreeExternal(ThreeExternalState state) {
-        return state.expression.compute();
+        return state.expression.compute(state.values);
     }
 
     @Benchmark
     public Map<String, Object> computeTwelveExternal(TwelveExternalState state) {
-        return state.expression.compute();
+        return state.expression.compute(state.values);
     }
 
     // ── States ────────────────────────────────────────────────────────────────
 
     /**
      * 5 chained assignments, no external symbols.
-     * bindings.values is empty → HashMap copy is trivially cheap.
+     * Empty values map — no symbol merging overhead.
      */
     @State(Scope.Thread)
     public static class NoExternalState {
 
         AssignmentExpression expression;
+        Map<String, Object> values = Map.of();
 
         @Setup(Level.Trial)
         public void setUp() {
@@ -80,27 +78,30 @@ public class AssignmentExpressionBindingsBenchmark {
 
     /**
      * 5 assignments that reference 3 external symbols (a, b, c).
-     * bindings.values holds 3 entries — copied on every compute().
+     * values map holds 3 entries — merged on every compute().
      */
     @State(Scope.Thread)
     public static class ThreeExternalState {
 
         AssignmentExpression expression;
+        Map<String, Object> values;
 
         @Setup(Level.Trial)
         public void setUp() {
             expression = AssignmentExpression.compile(
                 "r1 = a * b; r2 = r1 + c; r3 = r2 * 2; r4 = r3 - b; r5 = r4 + a;"
             );
-            expression.setValue("a", new BigDecimal("3.500"));
-            expression.setValue("b", new BigDecimal("2.100"));
-            expression.setValue("c", new BigDecimal("7.700"));
+            values = Map.of(
+                "a", new BigDecimal("3.500"),
+                "b", new BigDecimal("2.100"),
+                "c", new BigDecimal("7.700")
+            );
         }
     }
 
     /**
      * 12 chained assignments that each reference one of 12 external symbols (a–l).
-     * bindings.values holds 12 entries — largest realistic copy at the standard variable set.
+     * values map holds 12 entries — largest realistic merge at the standard variable set.
      */
     @State(Scope.Thread)
     public static class TwelveExternalState {
@@ -122,13 +123,16 @@ public class AssignmentExpressionBindingsBenchmark {
                 """;
 
         AssignmentExpression expression;
+        Map<String, Object> values;
 
         @Setup(Level.Trial)
         public void setUp() {
             expression = AssignmentExpression.compile(EXPRESSION);
+            Map<String, Object> v = new java.util.HashMap<>();
             for (int i = 0; i < NAMES.length; i++) {
-                expression.setValue(NAMES[i], new BigDecimal(i + 1));
+                v.put(NAMES[i], new BigDecimal(i + 1));
             }
+            values = java.util.Collections.unmodifiableMap(v);
         }
     }
 }

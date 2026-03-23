@@ -14,7 +14,7 @@ import java.util.Objects;
  * <p>An assignment block is a sequence of variable assignments whose computed values are returned
  * as a {@code Map<String, Object>} keyed by symbol name. Instances are obtained via the static
  * {@code compile} factory methods. Once compiled, the same instance can be evaluated repeatedly
- * with different variable values by calling {@link #setValue} followed by {@link #compute}.
+ * by calling {@link #compute(Map)} with the desired variable values.
  *
  * <h2>Singleton vs. injected compiler</h2>
  * <p>The two-argument overload {@link #compile(String, ExpressionEnvironment)} uses the JVM-wide
@@ -24,8 +24,8 @@ import java.util.Objects;
  * where the compiler is declared as a {@code @Bean}.
  *
  * <h2>Thread safety</h2>
- * <p>Instances are <em>not</em> thread-safe. Do not share a single instance across threads;
- * instead, compile once and create one instance per thread (or per request).
+ * <p>Instances are thread-safe. The same compiled instance may be shared and evaluated
+ * concurrently; each {@link #compute(Map)} call receives its own isolated execution scope.
  */
 public final class AssignmentExpression {
 
@@ -103,40 +103,55 @@ public final class AssignmentExpression {
     }
 
     /**
-     * Sets the value of a variable symbol before evaluation.
+     * Evaluates the assignment block with the given variable values and returns the computed
+     * symbol values.
      *
-     * <p>The value is coerced to the type declared for the symbol in the expression environment.
-     * This method returns {@code this} to allow chaining:
+     * <p>The map keys are symbol names as they appear in the expression; values are coerced to
+     * the types declared in the environment. Each call receives an isolated execution scope, so
+     * this method is safe to call concurrently on the same instance.
      *
      * <pre>{@code
-     * Map<String, Object> result = expr.setValue("a", 10).setValue("b", 5).compute();
+     * Map<String, Object> result = expr.compute(Map.of("base", 100, "rate", 0.05));
      * }</pre>
      *
-     * @param symbolName name of the symbol as it appears in the expression; must not be {@code null}
-     * @param rawValue   value to bind; coercion is applied as configured in the environment
-     * @return this instance
+     * @param values variable bindings for this evaluation; must not be {@code null}
+     * @return a {@code Map} from symbol name to computed value for each assignment in the block
      */
-    public AssignmentExpression setValue(String symbolName, Object rawValue) {
-        runtime.setValue(symbolName, rawValue);
-        return this;
+    public Map<String, Object> compute(Map<String, Object> values) {
+        return runtime.computeAssignments(values);
     }
 
     /**
-     * Evaluates the assignment block and returns the computed symbol values.
+     * Evaluates the assignment block with no variable bindings and returns the computed symbol
+     * values.
+     *
+     * <p>Convenience overload for assignment blocks that contain only literals or catalog symbols
+     * whose defaults are fully specified in the environment.
      *
      * @return a {@code Map} from symbol name to computed value for each assignment in the block
      */
     public Map<String, Object> compute() {
-        return runtime.computeAssignments();
+        return compute(Map.of());
     }
 
     /**
-     * Evaluates the assignment block and returns the computed symbol values together with a full
-     * audit trace.
+     * Evaluates the assignment block with the given variable values and returns the computed
+     * symbol values together with a full audit trace.
+     *
+     * @param values variable bindings for this evaluation; must not be {@code null}
+     * @return the result map and an {@link ExpressionAuditTrace} describing each evaluation step
+     */
+    public AuditResult<Map<String, Object>> computeWithAudit(Map<String, Object> values) {
+        return runtime.computeAssignmentsWithAudit(values);
+    }
+
+    /**
+     * Evaluates the assignment block with no variable bindings and returns the computed symbol
+     * values together with a full audit trace.
      *
      * @return the result map and an {@link ExpressionAuditTrace} describing each evaluation step
      */
     public AuditResult<Map<String, Object>> computeWithAudit() {
-        return runtime.computeAssignmentsWithAudit();
+        return computeWithAudit(Map.of());
     }
 }

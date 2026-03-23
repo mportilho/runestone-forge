@@ -16,14 +16,14 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Tests for the audit trail feature: {@link MathExpression#computeWithAudit()} and
- * {@link LogicalExpression#computeWithAudit()}.
+ * Tests for the audit trail feature: {@link MathExpression#computeWithAudit(Map)} and
+ * {@link LogicalExpression#computeWithAudit(Map)}.
  *
  * <p>Skipped categories:
  * <ul>
  *   <li>Null / Invalid input — compile-time and runtime error paths are covered by the existing
  *       expression engine tests; {@code computeWithAudit()} adds no new error paths.
- *   <li>Concurrency — evaluation is single-threaded per scope by design.
+ *   <li>Concurrency — instances are now thread-safe; each call receives an isolated scope.
  * </ul>
  */
 @DisplayName("Audit trail — computeWithAudit()")
@@ -44,30 +44,28 @@ class AuditTrailExpressionTest {
         @Test
         @DisplayName("computeWithAudit() returns the same numeric value as compute()")
         void mathComputeWithAuditReturnsSameValueAsCompute() {
-            MathExpression expr = MathExpression.compile("x + y", EMPTY)
-                    .setValue("x", new BigDecimal("3"))
-                    .setValue("y", new BigDecimal("7"));
+            MathExpression expr = MathExpression.compile("x + y", EMPTY);
+            Map<String, Object> vals = Map.of("x", new BigDecimal("3"), "y", new BigDecimal("7"));
 
-            assertThat(expr.computeWithAudit().value())
-                    .isEqualByComparingTo(expr.compute());
+            assertThat(expr.computeWithAudit(vals).value())
+                    .isEqualByComparingTo(expr.compute(vals));
         }
 
         @Test
         @DisplayName("computeWithAudit() returns the same boolean value as compute()")
         void logicalComputeWithAuditReturnsSameValueAsCompute() {
-            LogicalExpression expr = LogicalExpression.compile("x > 0", EMPTY)
-                    .setValue("x", new BigDecimal("5"));
+            LogicalExpression expr = LogicalExpression.compile("x > 0", EMPTY);
+            Map<String, Object> vals = Map.of("x", new BigDecimal("5"));
 
-            assertThat(expr.computeWithAudit().value())
-                    .isEqualTo(expr.compute());
+            assertThat(expr.computeWithAudit(vals).value())
+                    .isEqualTo(expr.compute(vals));
         }
 
         @Test
         @DisplayName("evaluationTime in the trace is non-negative")
         void evaluationTimeIsNonNegative() {
             AuditResult<BigDecimal> result = MathExpression.compile("x + 1", EMPTY)
-                    .setValue("x", BigDecimal.ONE)
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("x", BigDecimal.ONE));
 
             assertThat(result.trace().evaluationTime().toNanos()).isGreaterThanOrEqualTo(0);
         }
@@ -75,11 +73,11 @@ class AuditTrailExpressionTest {
         @Test
         @DisplayName("successive calls on the same expression produce independent trace instances")
         void subsequentCallsProduceIndependentTraces() {
-            MathExpression expr = MathExpression.compile("x", EMPTY)
-                    .setValue("x", BigDecimal.TEN);
+            MathExpression expr = MathExpression.compile("x", EMPTY);
+            Map<String, Object> vals = Map.of("x", BigDecimal.TEN);
 
-            AuditResult<BigDecimal> first = expr.computeWithAudit();
-            AuditResult<BigDecimal> second = expr.computeWithAudit();
+            AuditResult<BigDecimal> first = expr.computeWithAudit(vals);
+            AuditResult<BigDecimal> second = expr.computeWithAudit(vals);
 
             assertThat(first.trace()).isNotSameAs(second.trace());
             assertThat(first.trace().events()).isNotSameAs(second.trace().events());
@@ -98,8 +96,7 @@ class AuditTrailExpressionTest {
         @DisplayName("a single variable emits exactly one VariableRead event with the correct fields")
         void singleVariableEmitsOneVariableReadEvent() {
             AuditResult<BigDecimal> result = MathExpression.compile("x", EMPTY)
-                    .setValue("x", new BigDecimal("42"))
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("x", new BigDecimal("42")));
 
             assertThat(result.trace().events())
                     .singleElement()
@@ -114,9 +111,7 @@ class AuditTrailExpressionTest {
         @DisplayName("two distinct variables each emit one VariableRead event in left-to-right order")
         void multipleDistinctVariablesEachEmitOneEventInOrder() {
             AuditResult<BigDecimal> result = MathExpression.compile("x + y", EMPTY)
-                    .setValue("x", new BigDecimal("3"))
-                    .setValue("y", new BigDecimal("7"))
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("x", new BigDecimal("3"), "y", new BigDecimal("7")));
 
             List<AuditEvent.VariableRead> reads = result.trace().events().stream()
                     .filter(AuditEvent.VariableRead.class::isInstance)
@@ -132,8 +127,7 @@ class AuditTrailExpressionTest {
         @DisplayName("same variable read twice in one expression emits two VariableRead events")
         void sameVariableReadTwiceEmitsTwoEvents() {
             AuditResult<BigDecimal> result = MathExpression.compile("x + x", EMPTY)
-                    .setValue("x", new BigDecimal("5"))
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("x", new BigDecimal("5")));
 
             long readCount = result.trace().events().stream()
                     .filter(AuditEvent.VariableRead.class::isInstance)
@@ -146,9 +140,7 @@ class AuditTrailExpressionTest {
         @DisplayName("variableSnapshot contains all variable names mapped to their resolved values")
         void variableSnapshotContainsAllVariablesWithTheirValues() {
             AuditResult<BigDecimal> result = MathExpression.compile("a + b", EMPTY)
-                    .setValue("a", new BigDecimal("10"))
-                    .setValue("b", new BigDecimal("20"))
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("a", new BigDecimal("10"), "b", new BigDecimal("20")));
 
             assertThat(result.trace().variableSnapshot())
                     .containsEntry("a", new BigDecimal("10"))
@@ -159,8 +151,7 @@ class AuditTrailExpressionTest {
         @DisplayName("variableSnapshot has one entry per name even when the variable is read twice")
         void variableSnapshotHasOneEntryPerVariableName() {
             AuditResult<BigDecimal> result = MathExpression.compile("x + x", EMPTY)
-                    .setValue("x", new BigDecimal("9"))
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("x", new BigDecimal("9")));
 
             assertThat(result.trace().variableSnapshot())
                     .hasSize(1)
@@ -229,8 +220,7 @@ class AuditTrailExpressionTest {
         @DisplayName("pure arithmetic expression produces no FunctionCall events")
         void expressionWithNoFunctionCallsHasEmptyFunctionCallsList() {
             AuditResult<BigDecimal> result = MathExpression.compile("x * 2 + 1", EMPTY)
-                    .setValue("x", new BigDecimal("3"))
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("x", new BigDecimal("3")));
 
             assertThat(result.trace().functionCalls()).isEmpty();
         }
@@ -307,8 +297,7 @@ class AuditTrailExpressionTest {
         @DisplayName("dynamic literal and user variable coexist in variableSnapshot")
         void dynamicLiteralAndUserVariableBothAppearInVariableSnapshot() {
             AuditResult<Boolean> result = LogicalExpression.compile("age > 0 and currDate = currDate", EMPTY)
-                    .setValue("age", new BigDecimal("25"))
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("age", new BigDecimal("25")));
 
             assertThat(result.trace().variableSnapshot())
                     .containsKeys("age", "currDate");
@@ -346,8 +335,7 @@ class AuditTrailExpressionTest {
         void simpleAssignmentEmitsOneAssignmentEvent() {
             AuditResult<BigDecimal> result = MathExpression.compile("fee = 10; fee + principal",
                             ExpressionEnvironment.builder().build())
-                    .setValue("principal", new BigDecimal("90"))
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("principal", new BigDecimal("90")));
 
             List<AuditEvent.AssignmentEvent> assignments = result.trace().events().stream()
                     .filter(AuditEvent.AssignmentEvent.class::isInstance)
@@ -484,9 +472,7 @@ class AuditTrailExpressionTest {
         void andShortCircuitSkipsRightVariableWhenLeftIsFalse() {
             // x < 0 evaluates to false (x=1), so y on the right is never read
             AuditResult<Boolean> result = LogicalExpression.compile("x < 0 and y > 0", EMPTY)
-                    .setValue("x", new BigDecimal("1"))
-                    .setValue("y", new BigDecimal("10"))
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("x", new BigDecimal("1"), "y", new BigDecimal("10")));
 
             assertThat(result.value()).isFalse();
             List<String> readNames = result.trace().events().stream()
@@ -502,9 +488,7 @@ class AuditTrailExpressionTest {
         void orShortCircuitSkipsRightVariableWhenLeftIsTrue() {
             // x > 0 evaluates to true (x=5), so y on the right is never read
             AuditResult<Boolean> result = LogicalExpression.compile("x > 0 or y > 0", EMPTY)
-                    .setValue("x", new BigDecimal("5"))
-                    .setValue("y", new BigDecimal("10"))
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("x", new BigDecimal("5"), "y", new BigDecimal("10")));
 
             assertThat(result.value()).isTrue();
             List<String> readNames = result.trace().events().stream()
@@ -520,9 +504,7 @@ class AuditTrailExpressionTest {
         void andEvaluatesRightVariableWhenLeftIsTrue() {
             // x > 0 is true (x=5), so y is also read
             AuditResult<Boolean> result = LogicalExpression.compile("x > 0 and y > 0", EMPTY)
-                    .setValue("x", new BigDecimal("5"))
-                    .setValue("y", new BigDecimal("10"))
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("x", new BigDecimal("5"), "y", new BigDecimal("10")));
 
             List<String> readNames = result.trace().events().stream()
                     .filter(AuditEvent.VariableRead.class::isInstance)

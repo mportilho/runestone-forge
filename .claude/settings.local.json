@@ -55,7 +55,15 @@
       "Bash(find /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 -name *ValidationResult*Test* -o -name *Test*ValidationResult*)",
       "Bash(find /home/marcelo -name async-profiler* -maxdepth 5)",
       "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 \"CrossModuleComparisonBenchmark.userFunction\" /tmp/performance-benchmark/before-uf1.json)",
-      "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 \"CrossModuleComparisonBenchmark.userFunction\" /tmp/performance-benchmark/after-uf1.json)"
+      "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 \"CrossModuleComparisonBenchmark.userFunction\" /tmp/performance-benchmark/after-uf1.json)",
+      "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 \"CrossModuleComparisonBenchmark.userFunction\" /tmp/performance-benchmark/before-uf2.json)",
+      "Bash(SKILL_SCRIPTS=/home/marcelo/.claire/skills/performance-benchmark/scripts SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 \"CrossModuleComparisonBenchmark.userFunction\" /tmp/performance-benchmark/after-uf2.json)",
+      "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 \"CrossModuleComparisonBenchmark.userFunction_mk2Compute\" /tmp/performance-benchmark/smoke-test.json)",
+      "Bash(__NEW_LINE_7543b8a279e43004__ echo:*)",
+      "Bash($SKILL_SCRIPTS/run-jmh.sh . \"AssignmentExpressionBindingsBenchmark|ExpressionEvaluatorV2ExecutionPlanBenchmark\" \"/tmp/performance-benchmark/after.json\")",
+      "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh exp-eval-mk2 \"CrossModuleComparisonBenchmark\" \"/tmp/performance-benchmark/cross-module.json\")",
+      "Bash($SKILL_SCRIPTS/run-jmh.sh /tmp/perf-037-before/exp-eval-mk2 \"AssignmentExpressionBindingsBenchmark|ExpressionEvaluatorV2ExecutionPlanBenchmark\" \"/tmp/performance-benchmark/perf037-before.json\")",
+      "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 \"AssignmentExpressionBindingsBenchmark|ExpressionEvaluatorV2ExecutionPlanBenchmark\" \"/tmp/performance-benchmark/perf037-after.json\")"
     ]
   }
 }

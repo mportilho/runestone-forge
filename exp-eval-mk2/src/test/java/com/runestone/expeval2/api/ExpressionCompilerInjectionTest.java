@@ -51,8 +51,7 @@ class ExpressionCompilerInjectionTest {
             var compiler = new ExpressionCompiler(CacheConfig.defaults());
 
             BigDecimal result = MathExpression.compile("x * 2", env, compiler)
-                    .setValue("x", 5)
-                    .compute();
+                    .compute(Map.of("x", 5));
 
             assertThat(result).isEqualByComparingTo("10");
         }
@@ -150,8 +149,7 @@ class ExpressionCompilerInjectionTest {
 
             Map<String, Object> result = AssignmentExpression
                     .compile("base = 100; tax = base * rate;", env, compiler)
-                    .setValue("rate", new BigDecimal("0.10"))
-                    .compute();
+                    .compute(Map.of("rate", new BigDecimal("0.10")));
 
             assertThat(result).containsKey("base").containsKey("tax");
             assertThat((BigDecimal) result.get("base")).isEqualByComparingTo("100");

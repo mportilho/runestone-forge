@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 import static java.math.BigDecimal.ONE;
 import static java.math.BigDecimal.ZERO;
@@ -134,8 +135,7 @@ class TrigonometryFunctionsExpressionTest {
     @DisplayName("sin via variable argument")
     void sinViaVariable() {
         BigDecimal result = MathExpression.compile("sin(x)", ENV)
-                .setValue("x", ZERO)
-                .compute();
+                .compute(Map.of("x", ZERO));
         assertThat(result).isCloseTo(ZERO, EPSILON);
     }
 
@@ -150,8 +150,7 @@ class TrigonometryFunctionsExpressionTest {
     @DisplayName("sin² + cos² = 1 (Pythagorean identity)")
     void pythagoreanIdentity() {
         BigDecimal result = MathExpression.compile("sin(x) * sin(x) + cos(x) * cos(x)", ENV)
-                .setValue("x", new BigDecimal("0.7853981633974483"))
-                .compute();
+                .compute(Map.of("x", new BigDecimal("0.7853981633974483")));
         assertThat(result).isCloseTo(ONE, Assertions.within(new BigDecimal("0.00000001")));
     }
 }

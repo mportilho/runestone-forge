@@ -100,8 +100,7 @@ class AssignmentExpressionTest {
         @DisplayName("external symbol used in assignment is resolved")
         void externalSymbolUsedInAssignment() {
             Map<String, Object> result = AssignmentExpression.compile("dobro = extVal * 2;")
-                    .setValue("extVal", new BigDecimal("7"))
-                    .compute();
+                    .compute(Map.of("extVal", new BigDecimal("7")));
 
             assertThat((BigDecimal) result.get("dobro")).isEqualByComparingTo("14");
         }
@@ -249,12 +248,12 @@ class AssignmentExpressionTest {
         }
 
         @Test
-        @DisplayName("compiled expression can be reused with different setValue calls")
+        @DisplayName("compiled expression can be reused with different variable values")
         void reusableWithDifferentValues() {
             AssignmentExpression expr = AssignmentExpression.compile("resultado = base * 10;");
 
-            Map<String, Object> r1 = expr.setValue("base", new BigDecimal("3")).compute();
-            Map<String, Object> r2 = expr.setValue("base", new BigDecimal("5")).compute();
+            Map<String, Object> r1 = expr.compute(Map.of("base", new BigDecimal("3")));
+            Map<String, Object> r2 = expr.compute(Map.of("base", new BigDecimal("5")));
 
             assertThat((BigDecimal) r1.get("resultado")).isEqualByComparingTo("30");
             assertThat((BigDecimal) r2.get("resultado")).isEqualByComparingTo("50");

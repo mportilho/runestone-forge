@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,8 +64,7 @@ class ConstantFoldingExpressionTest {
         void foldedLnMultipliedByVariableYieldsCorrectProduct() {
             // ln(1.05) ≈ 0.04879016417; 0.04879016417 * 100 ≈ 4.879016417
             BigDecimal result = MathExpression.compile("ln(1.05) * n", ENV)
-                    .setValue("n", new BigDecimal("100"))
-                    .compute();
+                    .compute(Map.of("n", new BigDecimal("100")));
 
             BigDecimal expected = new BigDecimal("100").multiply(
                     MathExpression.compile("ln(1.05)", ENV).compute());
@@ -95,8 +95,7 @@ class ConstantFoldingExpressionTest {
             // ln(1.05) as folded literal vs ln(x) where x=1.05 must agree
             BigDecimal foldedResult = MathExpression.compile("ln(1.05)", ENV).compute();
             BigDecimal nonFoldedResult = MathExpression.compile("ln(x)", ENV)
-                    .setValue("x", new BigDecimal("1.05"))
-                    .compute();
+                    .compute(Map.of("x", new BigDecimal("1.05")));
 
             assertThat(foldedResult).isCloseTo(nonFoldedResult, EPSILON);
         }
@@ -126,11 +125,11 @@ class ConstantFoldingExpressionTest {
         @Test
         @DisplayName("folded constant combined with variable remains stable across calls with same input")
         void foldedWithVariableStableAcrossCalls() {
-            MathExpression expr = MathExpression.compile("ln(1.05) * n", ENV)
-                    .setValue("n", new BigDecimal("50"));
+            MathExpression expr = MathExpression.compile("ln(1.05) * n", ENV);
+            Map<String, Object> vars = Map.of("n", new BigDecimal("50"));
 
-            BigDecimal first = expr.compute();
-            BigDecimal second = expr.compute();
+            BigDecimal first = expr.compute(vars);
+            BigDecimal second = expr.compute(vars);
 
             assertThat(first).isEqualByComparingTo(second);
         }
@@ -227,8 +226,7 @@ class ConstantFoldingExpressionTest {
         @DisplayName("ln(variable) still emits a FunctionCall event via the normal (non-folded) path")
         void nonFoldedCallAlsoEmitsFunctionCallEvent() {
             AuditResult<BigDecimal> result = MathExpression.compile("ln(x)", ENV)
-                    .setValue("x", new BigDecimal("1.05"))
-                    .computeWithAudit();
+                    .computeWithAudit(Map.of("x", new BigDecimal("1.05")));
 
             assertThat(result.trace().functionCalls()).hasSize(1);
             assertThat(result.trace().functionCalls().getFirst().functionName()).isEqualTo("ln");

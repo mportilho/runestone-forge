@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,12 +38,10 @@ class ExcelFinancialFunctionsExpressionTest {
         @DisplayName("npv via variable vector bound at evaluation time")
         void npvViaVariableVector() {
             BigDecimal result = MathExpression.compile("npv(rate, cfs)", ENV)
-                    .setValue("rate", new BigDecimal("0.1"))
-                    .setValue("cfs", java.util.List.of(
+                    .compute(Map.of("rate", new BigDecimal("0.1"), "cfs", java.util.List.of(
                             new BigDecimal("100"),
                             new BigDecimal("200"),
-                            new BigDecimal("300")))
-                    .compute();
+                            new BigDecimal("300"))));
             assertThat(result).isCloseTo(new BigDecimal("481.5928"), EPSILON);
         }
 
@@ -94,11 +93,11 @@ class ExcelFinancialFunctionsExpressionTest {
         @DisplayName("fv via variables")
         void fvViaVariables() {
             BigDecimal result = MathExpression.compile("fv(rate, nper, pmt, pv, false)", ENV)
-                    .setValue("rate", new BigDecimal("0.05"))
-                    .setValue("nper", new BigDecimal("10"))
-                    .setValue("pmt", new BigDecimal("-100"))
-                    .setValue("pv", new BigDecimal("-1000"))
-                    .compute();
+                    .compute(Map.of(
+                            "rate", new BigDecimal("0.05"),
+                            "nper", new BigDecimal("10"),
+                            "pmt", new BigDecimal("-100"),
+                            "pv", new BigDecimal("-1000")));
             assertThat(result).isCloseTo(new BigDecimal("2886.6838"), EPSILON);
         }
 
@@ -142,11 +141,11 @@ class ExcelFinancialFunctionsExpressionTest {
         @DisplayName("pv via variables")
         void pvViaVariables() {
             BigDecimal result = MathExpression.compile("pv(rate, nper, pmt, fv, false)", ENV)
-                    .setValue("rate", new BigDecimal("0.05"))
-                    .setValue("nper", new BigDecimal("10"))
-                    .setValue("pmt", new BigDecimal("-100"))
-                    .setValue("fv", new BigDecimal("1000"))
-                    .compute();
+                    .compute(Map.of(
+                            "rate", new BigDecimal("0.05"),
+                            "nper", new BigDecimal("10"),
+                            "pmt", new BigDecimal("-100"),
+                            "fv", new BigDecimal("1000")));
             assertThat(result).isCloseTo(new BigDecimal("158.2602"), EPSILON);
         }
 
@@ -198,11 +197,11 @@ class ExcelFinancialFunctionsExpressionTest {
         @DisplayName("pmt via variables")
         void pmtViaVariables() {
             BigDecimal result = MathExpression.compile("pmt(rate, nper, pv, fv, false)", ENV)
-                    .setValue("rate", new BigDecimal("0.05"))
-                    .setValue("nper", new BigDecimal("10"))
-                    .setValue("pv", new BigDecimal("1000"))
-                    .setValue("fv", new BigDecimal("0"))
-                    .compute();
+                    .compute(Map.of(
+                            "rate", new BigDecimal("0.05"),
+                            "nper", new BigDecimal("10"),
+                            "pv", new BigDecimal("1000"),
+                            "fv", new BigDecimal("0")));
             assertThat(result).isCloseTo(new BigDecimal("-129.5045"), EPSILON);
         }
 
@@ -238,11 +237,11 @@ class ExcelFinancialFunctionsExpressionTest {
         @DisplayName("nper via variables")
         void nperViaVariables() {
             BigDecimal result = MathExpression.compile("nper(rate, pmt, pv, fv, false)", ENV)
-                    .setValue("rate", new BigDecimal("0.05"))
-                    .setValue("pmt", new BigDecimal("-129.50457"))
-                    .setValue("pv", new BigDecimal("1000"))
-                    .setValue("fv", new BigDecimal("0"))
-                    .compute();
+                    .compute(Map.of(
+                            "rate", new BigDecimal("0.05"),
+                            "pmt", new BigDecimal("-129.50457"),
+                            "pv", new BigDecimal("1000"),
+                            "fv", new BigDecimal("0")));
             assertThat(result).isCloseTo(new BigDecimal("10.0"), EPSILON);
         }
 
@@ -266,9 +265,7 @@ class ExcelFinancialFunctionsExpressionTest {
             // invest 1000 for 10 periods at 5%, then discount back
             BigDecimal fvResult = MathExpression.compile("fv(0.05, 10, 0, -1000, false)", ENV).compute();
             BigDecimal pvResult = MathExpression.compile("pv(rate, 10, 0, fv, false)", ENV)
-                    .setValue("rate", new BigDecimal("0.05"))
-                    .setValue("fv", fvResult)
-                    .compute();
+                    .compute(Map.of("rate", new BigDecimal("0.05"), "fv", fvResult));
             assertThat(pvResult).isCloseTo(new BigDecimal("-1000"), EPSILON);
         }
     }

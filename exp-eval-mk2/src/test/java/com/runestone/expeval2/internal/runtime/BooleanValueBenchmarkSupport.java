@@ -5,6 +5,8 @@ import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Supports {@code BooleanValueBenchmark}, measuring allocation cost from evaluating
@@ -63,10 +65,11 @@ public final class BooleanValueBenchmarkSupport {
      * so no short-circuit exits and all 9 BooleanValue allocations occur.
      */
     public boolean evaluateBoolChain() {
+        Map<String, Object> values = new HashMap<>();
         for (int i = 0; i < CHAIN_VARS.length; i++) {
-            chainRuntime.setValue(CHAIN_VARS[i], (i % 2 == 0) ? HI : LO);
+            values.put(CHAIN_VARS[i], (i % 2 == 0) ? HI : LO);
         }
-        return chainRuntime.computeLogical();
+        return chainRuntime.computeLogical(values);
     }
 
     /**
@@ -74,9 +77,10 @@ public final class BooleanValueBenchmarkSupport {
      * all comparisons pass; no short-circuit exits and all 19 BooleanValue allocations occur.
      */
     public boolean evaluateBoolWide() {
+        Map<String, Object> values = new HashMap<>();
         for (int i = 0; i < WIDE_VARS.length; i++) {
-            wideRuntime.setValue(WIDE_VARS[i], WIDE_VALS[i]);
+            values.put(WIDE_VARS[i], WIDE_VALS[i]);
         }
-        return wideRuntime.computeLogical();
+        return wideRuntime.computeLogical(values);
     }
 }

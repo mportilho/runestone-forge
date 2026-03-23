@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -223,14 +224,14 @@ class ExpressionEnvironmentBuilderFoldableInstanceProviderTest {
                     .registerInstanceProvider(fixture, true)
                     .build();
 
-            MathExpression expr = MathExpression.compile("counted(x)", env, freshCompiler)
-                    .setValue("x", new BigDecimal("5"));
+            MathExpression expr = MathExpression.compile("counted(x)", env, freshCompiler);
             assertThat(fixture.callCount.get())
                     .as("must not be invoked at build time when arg is a variable")
                     .isEqualTo(0);
 
-            expr.compute();
-            expr.compute();
+            Map<String, Object> vars = Map.of("x", new BigDecimal("5"));
+            expr.compute(vars);
+            expr.compute(vars);
             assertThat(fixture.callCount.get())
                     .as("must be invoked on each compute() when arg is a variable")
                     .isEqualTo(2);

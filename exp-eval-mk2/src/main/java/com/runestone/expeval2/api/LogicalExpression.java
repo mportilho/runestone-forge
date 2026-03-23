@@ -5,14 +5,15 @@ import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval2.internal.runtime.ExpressionCompiler;
 import com.runestone.expeval2.internal.runtime.ExpressionRuntimeSupport;
 
+import java.util.Map;
 import java.util.Objects;
 
 /**
  * A compiled, reusable logical expression.
  *
  * <p>Instances are obtained via the static {@code compile} factory methods. Once compiled, the same
- * instance can be evaluated repeatedly with different variable values by calling {@link #setValue}
- * followed by {@link #compute}.
+ * instance can be evaluated repeatedly by calling {@link #compute(Map)} with the desired variable
+ * values.
  *
  * <h2>Singleton vs. injected compiler</h2>
  * <p>The two-argument overload {@link #compile(String, ExpressionEnvironment)} uses the JVM-wide
@@ -22,8 +23,8 @@ import java.util.Objects;
  * where the compiler is declared as a {@code @Bean}.
  *
  * <h2>Thread safety</h2>
- * <p>Instances are <em>not</em> thread-safe. Do not share a single instance across threads;
- * instead, compile once and create one instance per thread (or per request).
+ * <p>Instances are thread-safe. The same compiled instance may be shared and evaluated
+ * concurrently; each {@link #compute(Map)} call receives its own isolated execution scope.
  */
 public final class LogicalExpression {
 
@@ -101,39 +102,53 @@ public final class LogicalExpression {
     }
 
     /**
-     * Sets the value of a variable symbol before evaluation.
+     * Evaluates the expression with the given variable values and returns the boolean result.
      *
-     * <p>The value is coerced to the type declared for the symbol in the expression environment.
-     * This method returns {@code this} to allow chaining:
+     * <p>The map keys are symbol names as they appear in the expression; values are coerced to
+     * the types declared in the environment. Each call receives an isolated execution scope, so
+     * this method is safe to call concurrently on the same instance.
      *
      * <pre>{@code
-     * boolean result = expr.setValue("a", 10).setValue("b", 5).compute();
+     * boolean result = expr.compute(Map.of("a", 10, "b", 5));
      * }</pre>
      *
-     * @param symbolName name of the symbol as it appears in the expression; must not be {@code null}
-     * @param rawValue   value to bind; coercion is applied as configured in the environment
-     * @return this instance
+     * @param values variable bindings for this evaluation; must not be {@code null}
+     * @return the computed boolean result
      */
-    public LogicalExpression setValue(String symbolName, Object rawValue) {
-        runtime.setValue(symbolName, rawValue);
-        return this;
+    public boolean compute(Map<String, Object> values) {
+        return runtime.computeLogical(values);
     }
 
     /**
-     * Evaluates the expression and returns the boolean result.
+     * Evaluates the expression with no variable bindings and returns the boolean result.
+     *
+     * <p>Convenience overload for expressions that contain only literals or catalog symbols
+     * whose defaults are fully specified in the environment.
      *
      * @return the computed boolean result
      */
     public boolean compute() {
-        return runtime.computeLogical();
+        return compute(Map.of());
     }
 
     /**
-     * Evaluates the expression and returns the boolean result together with a full audit trace.
+     * Evaluates the expression with the given variable values and returns the boolean result
+     * together with a full audit trace.
+     *
+     * @param values variable bindings for this evaluation; must not be {@code null}
+     * @return the result and an {@link ExpressionAuditTrace} describing each evaluation step
+     */
+    public AuditResult<Boolean> computeWithAudit(Map<String, Object> values) {
+        return runtime.computeLogicalWithAudit(values);
+    }
+
+    /**
+     * Evaluates the expression with no variable bindings and returns the boolean result together
+     * with a full audit trace.
      *
      * @return the result and an {@link ExpressionAuditTrace} describing each evaluation step
      */
     public AuditResult<Boolean> computeWithAudit() {
-        return runtime.computeLogicalWithAudit();
+        return computeWithAudit(Map.of());
     }
 }

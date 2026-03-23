@@ -6,15 +6,20 @@ import com.runestone.expeval2.api.CompilationIssue;
 import com.runestone.expeval2.api.CompilationPosition;
 import com.runestone.expeval2.api.ExpressionCompilationException;
 import com.runestone.expeval2.api.ValidationResult;
+import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
+import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.internal.ast.SourceSpan;
 import com.runestone.expeval2.internal.ast.mapping.SemanticAstBuilder;
 import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2ParserFacade;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import com.runestone.expeval2.internal.grammar.ParsingException;
+import com.runestone.expeval2.types.ResolvedType;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,10 +34,12 @@ import java.util.stream.Collectors;
  *   <li><strong>Static factory</strong> — the {@code compileMath}, {@code compileLogical}, and
  *       {@code compileAssignments} methods compile a source string and return a ready-to-evaluate
  *       instance backed by the JVM-wide {@link ExpressionCompiler} singleton.</li>
- *   <li><strong>Evaluation context</strong> — each instance holds the compiled plan, the mutable
- *       symbol bindings, and the evaluators for a single expression. Call {@link #setValue} to
- *       supply variable values, then {@code computeMath} / {@code computeLogical} /
- *       {@code computeAssignments} to evaluate.</li>
+ *   <li><strong>Evaluation context</strong> — each instance holds the compiled plan and the
+ *       evaluators for a single expression. Call {@code computeMath} / {@code computeLogical} /
+ *       {@code computeAssignments} with a {@code Map<String, Object>} of variable values to
+ *       evaluate. The same instance may safely be called concurrently from multiple threads
+ *       because there is no mutable per-instance state; each call receives its own
+ *       {@link ExecutionScope}.</li>
  * </ol>
  *
  * <h2>JVM-wide singleton lifecycle</h2>
@@ -53,8 +60,9 @@ import java.util.stream.Collectors;
  * }</pre>
  *
  * <h2>Thread safety</h2>
- * <p>The static factory methods are thread-safe. Individual instances are <em>not</em> thread-safe:
- * {@link #setValue} mutates shared bindings and must not be called concurrently on the same instance.
+ * <p>All static factory methods and all instance {@code compute*} methods are thread-safe.
+ * Compiled instances hold no mutable state: variable values are supplied per call via a
+ * {@code Map<String, Object>} and each call builds its own {@link ExecutionScope}.
  */
 public final class ExpressionRuntimeSupport {
 
@@ -144,18 +152,29 @@ public final class ExpressionRuntimeSupport {
     }
 
     private final CompiledExpression compiledExpression;
-    private final MutableBindings bindings;
+    /**
+     * Immutable snapshot of default values seeded from the {@link ExternalSymbolCatalog} at
+     * compile time. Shared across all {@code compute*} calls; never mutated after construction.
+     */
+    private final Map<SymbolRef, RuntimeValue> defaultValues;
+    private final ExternalSymbolCatalog externalSymbolCatalog;
+    private final RuntimeServices runtimeServices;
     private final MathEvaluator mathEvaluator;
     private final LogicalEvaluator logicalEvaluator;
     private final boolean hasAssignments;
     private final int internalSymbolCount;
     private final int maxAuditEvents;
 
-    private ExpressionRuntimeSupport(CompiledExpression compiledExpression, MutableBindings bindings,
-                                     RuntimeServices runtimeServices, MathContext mathContext) {
+    private ExpressionRuntimeSupport(CompiledExpression compiledExpression,
+                                     Map<SymbolRef, RuntimeValue> defaultValues,
+                                     ExternalSymbolCatalog externalSymbolCatalog,
+                                     RuntimeServices runtimeServices,
+                                     MathContext mathContext) {
         this.compiledExpression = Objects.requireNonNull(compiledExpression, "compiledExpression must not be null");
-        this.bindings = Objects.requireNonNull(bindings, "bindings must not be null");
-        Objects.requireNonNull(runtimeServices, "runtimeServices must not be null");
+        this.defaultValues = Collections.unmodifiableMap(
+                Objects.requireNonNull(defaultValues, "defaultValues must not be null"));
+        this.externalSymbolCatalog = Objects.requireNonNull(externalSymbolCatalog, "externalSymbolCatalog must not be null");
+        this.runtimeServices = Objects.requireNonNull(runtimeServices, "runtimeServices must not be null");
         Objects.requireNonNull(mathContext, "mathContext must not be null");
         this.mathEvaluator = new MathEvaluator(compiledExpression, runtimeServices, mathContext);
         this.logicalEvaluator = new LogicalEvaluator(compiledExpression, runtimeServices, mathContext);
@@ -340,63 +359,123 @@ public final class ExpressionRuntimeSupport {
     static ExpressionRuntimeSupport from(CompiledExpression compiledExpression, ExpressionEnvironment environment) {
         Objects.requireNonNull(environment, "environment must not be null");
         RuntimeServices runtimeServices = environment.runtimeServices();
-        return new ExpressionRuntimeSupport(
-                compiledExpression,
-                MutableBindings.from(
-                        compiledExpression.semanticModel(),
-                        environment.externalSymbolCatalog(),
-                        runtimeServices
-                ),
-                runtimeServices,
-                environment.mathContext()
+        ExternalSymbolCatalog catalog = environment.externalSymbolCatalog();
+        SemanticModel semanticModel = compiledExpression.semanticModel();
+        Map<SymbolRef, RuntimeValue> defaults = seedDefaults(semanticModel, catalog, runtimeServices);
+        return new ExpressionRuntimeSupport(compiledExpression, defaults, catalog, runtimeServices, environment.mathContext());
+    }
+
+    private static Map<SymbolRef, RuntimeValue> seedDefaults(SemanticModel semanticModel,
+                                                              ExternalSymbolCatalog catalog,
+                                                              RuntimeServices runtimeServices) {
+        Map<SymbolRef, RuntimeValue> defaults = new HashMap<>();
+        semanticModel.externalSymbolsByName().forEach((name, symbolRef) ->
+                catalog.find(name)
+                        .ifPresent(descriptor -> defaults.put(
+                                symbolRef,
+                                runtimeServices.from(descriptor.defaultValue(), descriptor.declaredType())
+                        ))
         );
+        return defaults;
     }
 
-    public void setValue(String symbolName, Object rawValue) {
-        bindings.setValue(symbolName, rawValue);
-    }
-
-    ExecutionScope createExecutionScope() {
-        if (hasAssignments) {
-            return ExecutionScope.from(bindings.valuesReadOnly(), internalSymbolCount);
+    /**
+     * Builds the per-call values map by merging catalog defaults with the caller-supplied values.
+     *
+     * <p>Validation mirrors the rules that previously lived in {@code MutableBindings}:
+     * internal symbols cannot be overridden, and non-overridable external symbols cannot be
+     * overridden either.
+     *
+     * @param userValues caller-supplied variable values; may be {@code null} or empty
+     * @return a fresh, mutable map ready to back an {@link ExecutionScope}
+     */
+    private Map<SymbolRef, RuntimeValue> buildValues(Map<String, Object> userValues) {
+        if (userValues == null || userValues.isEmpty()) {
+            return new HashMap<>(defaultValues);
         }
-        return ExecutionScope.readOnly(bindings.valuesReadOnly());
-    }
-
-    private ExecutionScope createAuditedExecutionScope(AuditCollector collector) {
-        if (hasAssignments) {
-            return ExecutionScope.fromWithAudit(bindings.valuesReadOnly(), internalSymbolCount, collector);
+        Map<SymbolRef, RuntimeValue> result = new HashMap<>(defaultValues);
+        for (Map.Entry<String, Object> entry : userValues.entrySet()) {
+            String name = entry.getKey();
+            rejectWhenInternal(name);
+            SymbolRef ref = requireExternalSymbol(name);
+            rejectWhenNonOverridable(name);
+            result.put(ref, runtimeServices.from(entry.getValue(), expectedType(name)));
         }
-        return ExecutionScope.readOnlyWithAudit(bindings.valuesReadOnly(), collector);
+        return result;
     }
 
-    public BigDecimal computeMath() {
-        return mathEvaluator.evaluate(createExecutionScope());
+    private void rejectWhenInternal(String symbolName) {
+        if (compiledExpression.semanticModel().internalSymbolsByName().containsKey(symbolName)) {
+            throw new IllegalArgumentException("symbol '" + symbolName + "' is internal to the expression");
+        }
     }
 
-    public boolean computeLogical() {
-        return logicalEvaluator.evaluate(createExecutionScope());
+    private SymbolRef requireExternalSymbol(String symbolName) {
+        Objects.requireNonNull(symbolName, "symbolName must not be null");
+        SymbolRef symbolRef = compiledExpression.semanticModel().externalSymbolsByName().get(symbolName);
+        if (symbolRef == null) {
+            throw new IllegalArgumentException("unknown external symbol '" + symbolName + "'");
+        }
+        return symbolRef;
     }
 
-    public AuditResult<BigDecimal> computeMathWithAudit() {
+    private void rejectWhenNonOverridable(String symbolName) {
+        externalSymbolCatalog.find(symbolName)
+                .filter(descriptor -> !descriptor.overridable())
+                .ifPresent(descriptor -> {
+                    throw new IllegalStateException("symbol '" + symbolName + "' is not overridable");
+                });
+    }
+
+    private ResolvedType expectedType(String symbolName) {
+        return externalSymbolCatalog.find(symbolName)
+                .map(ExternalSymbolDescriptor::declaredType)
+                .orElse(null);
+    }
+
+    private ExecutionScope createExecutionScope(Map<String, Object> userValues) {
+        Map<SymbolRef, RuntimeValue> values = buildValues(userValues);
+        if (hasAssignments) {
+            return ExecutionScope.from(values, internalSymbolCount);
+        }
+        return ExecutionScope.readOnly(values);
+    }
+
+    private ExecutionScope createAuditedExecutionScope(Map<String, Object> userValues, AuditCollector collector) {
+        Map<SymbolRef, RuntimeValue> values = buildValues(userValues);
+        if (hasAssignments) {
+            return ExecutionScope.fromWithAudit(values, internalSymbolCount, collector);
+        }
+        return ExecutionScope.readOnlyWithAudit(values, collector);
+    }
+
+    public BigDecimal computeMath(Map<String, Object> values) {
+        return mathEvaluator.evaluate(createExecutionScope(values));
+    }
+
+    public boolean computeLogical(Map<String, Object> values) {
+        return logicalEvaluator.evaluate(createExecutionScope(values));
+    }
+
+    public AuditResult<BigDecimal> computeMathWithAudit(Map<String, Object> values) {
         AuditCollector collector = new AuditCollector(maxAuditEvents);
-        BigDecimal result = mathEvaluator.evaluate(createAuditedExecutionScope(collector));
+        BigDecimal result = mathEvaluator.evaluate(createAuditedExecutionScope(values, collector));
         return new AuditResult<>(result, collector.buildTrace());
     }
 
-    public AuditResult<Boolean> computeLogicalWithAudit() {
+    public AuditResult<Boolean> computeLogicalWithAudit(Map<String, Object> values) {
         AuditCollector collector = new AuditCollector(maxAuditEvents);
-        boolean result = logicalEvaluator.evaluate(createAuditedExecutionScope(collector));
+        boolean result = logicalEvaluator.evaluate(createAuditedExecutionScope(values, collector));
         return new AuditResult<>(result, collector.buildTrace());
     }
 
-    public Map<String, Object> computeAssignments() {
-        return mathEvaluator.evaluateAssignments(createExecutionScope());
+    public Map<String, Object> computeAssignments(Map<String, Object> values) {
+        return mathEvaluator.evaluateAssignments(createExecutionScope(values));
     }
 
-    public AuditResult<Map<String, Object>> computeAssignmentsWithAudit() {
+    public AuditResult<Map<String, Object>> computeAssignmentsWithAudit(Map<String, Object> values) {
         AuditCollector collector = new AuditCollector(maxAuditEvents);
-        Map<String, Object> result = mathEvaluator.evaluateAssignments(createAuditedExecutionScope(collector));
+        Map<String, Object> result = mathEvaluator.evaluateAssignments(createAuditedExecutionScope(values, collector));
         return new AuditResult<>(result, collector.buildTrace());
     }
 

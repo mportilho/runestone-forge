@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,9 +37,7 @@ class DateTimeFunctionsExpressionTest {
         @DisplayName("daysBetween with variable LocalDate values")
         void daysBetweenVariables() {
             BigDecimal result = MathExpression.compile("daysBetween(d1, d2)", ENV)
-                    .setValue("d1", LocalDate.of(2024, 1, 1))
-                    .setValue("d2", LocalDate.of(2024, 12, 31))
-                    .compute();
+                    .compute(Map.of("d1", LocalDate.of(2024, 1, 1), "d2", LocalDate.of(2024, 12, 31)));
             assertThat(result).isEqualByComparingTo(new BigDecimal("365"));
         }
 
@@ -46,9 +45,7 @@ class DateTimeFunctionsExpressionTest {
         @DisplayName("daysBetween of same date = 0")
         void daysBetweenSameDate() {
             BigDecimal result = MathExpression.compile("daysBetween(d1, d2)", ENV)
-                    .setValue("d1", LocalDate.of(2024, 6, 15))
-                    .setValue("d2", LocalDate.of(2024, 6, 15))
-                    .compute();
+                    .compute(Map.of("d1", LocalDate.of(2024, 6, 15), "d2", LocalDate.of(2024, 6, 15)));
             assertThat(result).isEqualByComparingTo(BigDecimal.ZERO);
         }
 
@@ -75,9 +72,7 @@ class DateTimeFunctionsExpressionTest {
         @DisplayName("monthsBetween with variable dates: 6 months")
         void monthsBetweenSixMonths() {
             BigDecimal result = MathExpression.compile("monthsBetween(d1, d2)", ENV)
-                    .setValue("d1", LocalDate.of(2024, 1, 1))
-                    .setValue("d2", LocalDate.of(2024, 7, 1))
-                    .compute();
+                    .compute(Map.of("d1", LocalDate.of(2024, 1, 1), "d2", LocalDate.of(2024, 7, 1)));
             assertThat(result).isEqualByComparingTo(new BigDecimal("6"));
         }
 
@@ -85,9 +80,7 @@ class DateTimeFunctionsExpressionTest {
         @DisplayName("monthsBetween within same calendar month = 0")
         void monthsBetweenSameMonth() {
             BigDecimal result = MathExpression.compile("monthsBetween(d1, d2)", ENV)
-                    .setValue("d1", LocalDate.of(2024, 6, 1))
-                    .setValue("d2", LocalDate.of(2024, 6, 30))
-                    .compute();
+                    .compute(Map.of("d1", LocalDate.of(2024, 6, 1), "d2", LocalDate.of(2024, 6, 30)));
             assertThat(result).isEqualByComparingTo(BigDecimal.ZERO);
         }
 
@@ -114,9 +107,7 @@ class DateTimeFunctionsExpressionTest {
         @DisplayName("yearsBetween with variable dates: 24 years")
         void yearsBetweenVariables() {
             BigDecimal result = MathExpression.compile("yearsBetween(d1, d2)", ENV)
-                    .setValue("d1", LocalDate.of(2000, 1, 1))
-                    .setValue("d2", LocalDate.of(2024, 1, 1))
-                    .compute();
+                    .compute(Map.of("d1", LocalDate.of(2000, 1, 1), "d2", LocalDate.of(2024, 1, 1)));
             assertThat(result).isEqualByComparingTo(new BigDecimal("24"));
         }
 
@@ -124,9 +115,7 @@ class DateTimeFunctionsExpressionTest {
         @DisplayName("yearsBetween within same year = 0")
         void yearsBetweenSameYear() {
             BigDecimal result = MathExpression.compile("yearsBetween(d1, d2)", ENV)
-                    .setValue("d1", LocalDate.of(2024, 1, 1))
-                    .setValue("d2", LocalDate.of(2024, 12, 31))
-                    .compute();
+                    .compute(Map.of("d1", LocalDate.of(2024, 1, 1), "d2", LocalDate.of(2024, 12, 31)));
             assertThat(result).isEqualByComparingTo(BigDecimal.ZERO);
         }
 
@@ -153,9 +142,7 @@ class DateTimeFunctionsExpressionTest {
         @DisplayName("hoursBetween with variable LocalDateTime: 12 hours apart")
         void hoursBetweenVariables() {
             BigDecimal result = MathExpression.compile("hoursBetween(dt1, dt2)", ENV)
-                    .setValue("dt1", LocalDateTime.of(2024, 1, 1, 8, 0))
-                    .setValue("dt2", LocalDateTime.of(2024, 1, 1, 20, 0))
-                    .compute();
+                    .compute(Map.of("dt1", LocalDateTime.of(2024, 1, 1, 8, 0), "dt2", LocalDateTime.of(2024, 1, 1, 20, 0)));
             assertThat(result).isEqualByComparingTo(new BigDecimal("12"));
         }
 
@@ -163,9 +150,7 @@ class DateTimeFunctionsExpressionTest {
         @DisplayName("hoursBetween same datetime = 0")
         void hoursBetweenSameDatetime() {
             BigDecimal result = MathExpression.compile("hoursBetween(dt1, dt2)", ENV)
-                    .setValue("dt1", LocalDateTime.of(2024, 6, 15, 10, 30))
-                    .setValue("dt2", LocalDateTime.of(2024, 6, 15, 10, 30))
-                    .compute();
+                    .compute(Map.of("dt1", LocalDateTime.of(2024, 6, 15, 10, 30), "dt2", LocalDateTime.of(2024, 6, 15, 10, 30)));
             assertThat(result).isEqualByComparingTo(BigDecimal.ZERO);
         }
     }
@@ -185,9 +170,7 @@ class DateTimeFunctionsExpressionTest {
         @DisplayName("minutesBetween with variable LocalDateTime: 30 minutes apart")
         void minutesBetweenVariables() {
             BigDecimal result = MathExpression.compile("minutesBetween(dt1, dt2)", ENV)
-                    .setValue("dt1", LocalDateTime.of(2024, 1, 1, 9, 0))
-                    .setValue("dt2", LocalDateTime.of(2024, 1, 1, 9, 30))
-                    .compute();
+                    .compute(Map.of("dt1", LocalDateTime.of(2024, 1, 1, 9, 0), "dt2", LocalDateTime.of(2024, 1, 1, 9, 30)));
             assertThat(result).isEqualByComparingTo(new BigDecimal("30"));
         }
 
@@ -214,9 +197,7 @@ class DateTimeFunctionsExpressionTest {
         @DisplayName("secondsBetween with variable LocalDateTime: 90 seconds apart")
         void secondsBetweenVariables() {
             BigDecimal result = MathExpression.compile("secondsBetween(dt1, dt2)", ENV)
-                    .setValue("dt1", LocalDateTime.of(2024, 1, 1, 0, 0, 0))
-                    .setValue("dt2", LocalDateTime.of(2024, 1, 1, 0, 1, 30))
-                    .compute();
+                    .compute(Map.of("dt1", LocalDateTime.of(2024, 1, 1, 0, 0, 0), "dt2", LocalDateTime.of(2024, 1, 1, 0, 1, 30)));
             assertThat(result).isEqualByComparingTo(new BigDecimal("90"));
         }
 
@@ -224,9 +205,7 @@ class DateTimeFunctionsExpressionTest {
         @DisplayName("secondsBetween same datetime = 0")
         void secondsBetweenSameDatetime() {
             BigDecimal result = MathExpression.compile("secondsBetween(dt1, dt2)", ENV)
-                    .setValue("dt1", LocalDateTime.of(2024, 6, 1, 12, 0, 0))
-                    .setValue("dt2", LocalDateTime.of(2024, 6, 1, 12, 0, 0))
-                    .compute();
+                    .compute(Map.of("dt1", LocalDateTime.of(2024, 6, 1, 12, 0, 0), "dt2", LocalDateTime.of(2024, 6, 1, 12, 0, 0)));
             assertThat(result).isEqualByComparingTo(BigDecimal.ZERO);
         }
     }

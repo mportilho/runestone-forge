@@ -5,7 +5,10 @@ import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,8 +23,7 @@ class ExpressionFacadeTest {
             .build();
 
         BigDecimal result = MathExpression.compile("bonus(principal) * rate", environment)
-            .setValue("principal", 200)
-            .compute();
+            .compute(Map.of("principal", 200));
 
         assertThat(result).isEqualByComparingTo("10.00");
     }
@@ -31,7 +33,7 @@ class ExpressionFacadeTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
         MathExpression expression = MathExpression.compile("fee = 10; fee + principal", environment);
 
-        assertThatThrownBy(() -> expression.setValue("fee", 20))
+        assertThatThrownBy(() -> expression.compute(Map.of("fee", 20)))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("internal");
     }
@@ -41,10 +43,9 @@ class ExpressionFacadeTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
             .registerExternalSymbol("rate", new BigDecimal("0.10"), false)
             .build();
-        MathExpression expression = MathExpression.compile("principal * rate", environment)
-            .setValue("principal", 100);
+        MathExpression expression = MathExpression.compile("principal * rate", environment);
 
-        assertThatThrownBy(() -> expression.setValue("rate", 0.20))
+        assertThatThrownBy(() -> expression.compute(Map.of("principal", 100, "rate", 0.20)))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("not overridable");
     }
@@ -56,8 +57,7 @@ class ExpressionFacadeTest {
             .build();
 
         boolean result = LogicalExpression.compile("principal > threshold", environment)
-            .setValue("principal", 12)
-            .compute();
+            .compute(Map.of("principal", 12));
 
         assertThat(result).isTrue();
     }
@@ -132,19 +132,19 @@ class ExpressionFacadeTest {
     @Test
     void shouldHandleNullEquality() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
-        boolean result = LogicalExpression.compile("x = 1", environment)
-            .setValue("x", null)
-            .compute();
+        Map<String, Object> vals = new HashMap<>();
+        vals.put("x", null);
+        boolean result = LogicalExpression.compile("x = 1", environment).compute(vals);
         assertThat(result).isFalse();
     }
 
     @Test
     void shouldHandleNullSelfEquality() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
-        boolean result = LogicalExpression.compile("x = y", environment)
-            .setValue("x", null)
-            .setValue("y", null)
-            .compute();
+        Map<String, Object> vals = new HashMap<>();
+        vals.put("x", null);
+        vals.put("y", null);
+        boolean result = LogicalExpression.compile("x = y", environment).compute(vals);
         assertThat(result).isTrue();
     }
 
@@ -152,9 +152,7 @@ class ExpressionFacadeTest {
     void shouldHandleVectorEqualityWithDifferentScales() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
         boolean result = LogicalExpression.compile("x = y", environment)
-            .setValue("x", List.of(new BigDecimal("1")))
-            .setValue("y", List.of(new BigDecimal("1.0")))
-            .compute();
+            .compute(Map.of("x", List.of(new BigDecimal("1")), "y", List.of(new BigDecimal("1.0"))));
         assertThat(result).isTrue();
     }
 
@@ -162,9 +160,10 @@ class ExpressionFacadeTest {
     void shouldHandleVectorEqualityWithNull() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
         boolean result = LogicalExpression.compile("x = y", environment)
-            .setValue("x", java.util.Arrays.asList(null, new BigDecimal("1")))
-            .setValue("y", java.util.Arrays.asList(null, new BigDecimal("1.0")))
-            .compute();
+            .compute(Map.of(
+                "x", Arrays.asList(null, new BigDecimal("1")),
+                "y", Arrays.asList(null, new BigDecimal("1.0"))
+            ));
         assertThat(result).isTrue();
     }
 

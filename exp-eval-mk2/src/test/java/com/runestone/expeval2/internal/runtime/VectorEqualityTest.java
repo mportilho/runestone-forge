@@ -8,7 +8,9 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -26,9 +28,9 @@ class VectorEqualityTest {
         @DisplayName("Identical numeric vectors are equal")
         void identicalNumericVectorsAreEqual() {
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", List.of(new BigDecimal("1"), new BigDecimal("2")))
-                    .setValue("v2", List.of(new BigDecimal("1"), new BigDecimal("2")))
-                    .compute();
+                    .compute(Map.of(
+                            "v1", List.of(new BigDecimal("1"), new BigDecimal("2")),
+                            "v2", List.of(new BigDecimal("1"), new BigDecimal("2"))));
             assertThat(result).isTrue();
         }
 
@@ -36,9 +38,9 @@ class VectorEqualityTest {
         @DisplayName("Vectors with numbers of different scales are equal")
         void vectorsWithDifferentScalesAreEqual() {
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", List.of(new BigDecimal("1.0")))
-                    .setValue("v2", List.of(new BigDecimal("1.000")))
-                    .compute();
+                    .compute(Map.of(
+                            "v1", List.of(new BigDecimal("1.0")),
+                            "v2", List.of(new BigDecimal("1.000"))));
             assertThat(result).isTrue();
         }
 
@@ -46,9 +48,9 @@ class VectorEqualityTest {
         @DisplayName("Vectors with mixed types are equal if elements are identical")
         void mixedTypeVectorsAreEqual() {
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", List.of(new BigDecimal("1"), "text", true))
-                    .setValue("v2", List.of(new BigDecimal("1.0"), "text", true))
-                    .compute();
+                    .compute(Map.of(
+                            "v1", List.of(new BigDecimal("1"), "text", true),
+                            "v2", List.of(new BigDecimal("1.0"), "text", true)));
             assertThat(result).isTrue();
         }
 
@@ -56,9 +58,9 @@ class VectorEqualityTest {
         @DisplayName("Nested vectors are compared recursively")
         void nestedVectorsAreEqualRecursively() {
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", List.of(List.of(new BigDecimal("1")), new BigDecimal("2")))
-                    .setValue("v2", List.of(List.of(new BigDecimal("1.0")), new BigDecimal("2.0")))
-                    .compute();
+                    .compute(Map.of(
+                            "v1", List.of(List.of(new BigDecimal("1")), new BigDecimal("2")),
+                            "v2", List.of(List.of(new BigDecimal("1.0")), new BigDecimal("2.0"))));
             assertThat(result).isTrue();
         }
     }
@@ -71,9 +73,9 @@ class VectorEqualityTest {
         @DisplayName("Vectors of different sizes are not equal")
         void differentSizeVectorsAreNotEqual() {
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", List.of(new BigDecimal("1"), new BigDecimal("2")))
-                    .setValue("v2", List.of(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3")))
-                    .compute();
+                    .compute(Map.of(
+                            "v1", List.of(new BigDecimal("1"), new BigDecimal("2")),
+                            "v2", List.of(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3"))));
             assertThat(result).isFalse();
         }
 
@@ -81,9 +83,9 @@ class VectorEqualityTest {
         @DisplayName("Vectors with different element order are not equal")
         void differentElementOrderIsNotEqual() {
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", List.of(new BigDecimal("1"), new BigDecimal("2")))
-                    .setValue("v2", List.of(new BigDecimal("2"), new BigDecimal("1")))
-                    .compute();
+                    .compute(Map.of(
+                            "v1", List.of(new BigDecimal("1"), new BigDecimal("2")),
+                            "v2", List.of(new BigDecimal("2"), new BigDecimal("1"))));
             assertThat(result).isFalse();
         }
 
@@ -91,9 +93,9 @@ class VectorEqualityTest {
         @DisplayName("Empty vectors are equal")
         void emptyVectorsAreEqual() {
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", List.of())
-                    .setValue("v2", List.of())
-                    .compute();
+                    .compute(Map.of(
+                            "v1", List.of(),
+                            "v2", List.of()));
             assertThat(result).isTrue();
         }
     }
@@ -105,30 +107,33 @@ class VectorEqualityTest {
         @Test
         @DisplayName("Vectors with null elements are equal if nulls are in the same position")
         void vectorsWithNullElementsAreEqual() {
+            HashMap<String, Object> vars = new HashMap<>();
+            vars.put("v1", Arrays.asList(null, new BigDecimal("1")));
+            vars.put("v2", Arrays.asList(null, new BigDecimal("1.0")));
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", Arrays.asList(null, new BigDecimal("1")))
-                    .setValue("v2", Arrays.asList(null, new BigDecimal("1.0")))
-                    .compute();
+                    .compute(vars);
             assertThat(result).isTrue();
         }
 
         @Test
         @DisplayName("Vector is not equal to a null value")
         void vectorIsNotEqualToNullValue() {
+            HashMap<String, Object> vars = new HashMap<>();
+            vars.put("v1", List.of(new BigDecimal("1")));
+            vars.put("v2", null);
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", List.of(new BigDecimal("1")))
-                    .setValue("v2", null)
-                    .compute();
+                    .compute(vars);
             assertThat(result).isFalse();
         }
 
         @Test
         @DisplayName("Null element vs non-null element in vector results in non-equality")
         void nullVsNonNullInVectorIsNotEqual() {
+            HashMap<String, Object> vars = new HashMap<>();
+            vars.put("v1", Arrays.asList(null, new BigDecimal("1")));
+            vars.put("v2", Arrays.asList(new BigDecimal("2"), new BigDecimal("1")));
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", Arrays.asList(null, new BigDecimal("1")))
-                    .setValue("v2", Arrays.asList(new BigDecimal("2"), new BigDecimal("1")))
-                    .compute();
+                    .compute(vars);
             assertThat(result).isFalse();
         }
     }
@@ -141,9 +146,9 @@ class VectorEqualityTest {
         @DisplayName("Vectors with different element values are not equal")
         void vectorsWithDifferentValuesAreNotEqual() {
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", List.of(new BigDecimal("1")))
-                    .setValue("v2", List.of(new BigDecimal("2")))
-                    .compute();
+                    .compute(Map.of(
+                            "v1", List.of(new BigDecimal("1")),
+                            "v2", List.of(new BigDecimal("2"))));
             assertThat(result).isFalse();
         }
 
@@ -152,9 +157,9 @@ class VectorEqualityTest {
         void vectorsWithDifferentTypesAreNotEqual() {
             // String vs Boolean - no number coercion path
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", List.of("true"))
-                    .setValue("v2", List.of(true))
-                    .compute();
+                    .compute(Map.of(
+                            "v1", List.of("true"),
+                            "v2", List.of(true)));
             assertThat(result).isFalse();
         }
 
@@ -163,9 +168,9 @@ class VectorEqualityTest {
         void vectorsWithCoercibleTypesAreEqual() {
             // Engine coerces to Number if one side is Number. "1" coerces to 1.
             boolean result = LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", List.of(new BigDecimal("1")))
-                    .setValue("v2", List.of("1"))
-                    .compute();
+                    .compute(Map.of(
+                            "v1", List.of(new BigDecimal("1")),
+                            "v2", List.of("1")));
             assertThat(result).isTrue();
         }
 
@@ -173,9 +178,9 @@ class VectorEqualityTest {
         @DisplayName("Comparing Number with non-coercible String in vector throws Exception (Engine Behavior)")
         void comparingNumberWithNonCoercibleStringThrowsException() {
             assertThatThrownBy(() -> LogicalExpression.compile("v1 = v2", env)
-                    .setValue("v1", List.of(new BigDecimal("1")))
-                    .setValue("v2", List.of("abc"))
-                    .compute())
+                    .compute(Map.of(
+                            "v1", List.of(new BigDecimal("1")),
+                            "v2", List.of("abc"))))
                     .isInstanceOf(RuntimeException.class); // NumberFormatException propagated
         }
     }
@@ -187,9 +192,9 @@ class VectorEqualityTest {
         @DisplayName("Greater than comparison between vectors is not supported")
         void greaterThanBetweenVectorsThrowsException() {
             assertThatThrownBy(() -> LogicalExpression.compile("v1 > v2", env)
-                    .setValue("v1", List.of(new BigDecimal("1")))
-                    .setValue("v2", List.of(new BigDecimal("2")))
-                    .compute())
+                    .compute(Map.of(
+                            "v1", List.of(new BigDecimal("1")),
+                            "v2", List.of(new BigDecimal("2")))))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("unsupported comparison");
         }

@@ -16,6 +16,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @BenchmarkMode(Mode.AverageTime)
@@ -113,11 +114,7 @@ public class CrossModuleExpressionEngineBenchmark {
         }
 
         private BigDecimal evaluateMk2() {
-            CrossModuleExpressionBenchmarkSupport.applyLiteralSeed(
-                mk2,
-                CrossModuleExpressionBenchmarkSupport.literalSeed(mk2Index++)
-            );
-            return mk2.compute();
+            return mk2.compute(CrossModuleExpressionBenchmarkSupport.literalSeedToMap(CrossModuleExpressionBenchmarkSupport.literalSeed(mk2Index++)));
         }
     }
 
@@ -144,11 +141,7 @@ public class CrossModuleExpressionEngineBenchmark {
         }
 
         private BigDecimal evaluateMk2() {
-            CrossModuleExpressionBenchmarkSupport.applyFrame(
-                mk2,
-                CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)
-            );
-            return mk2.compute();
+            return mk2.compute(CrossModuleExpressionBenchmarkSupport.frameToMap(CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)));
         }
     }
 
@@ -175,11 +168,7 @@ public class CrossModuleExpressionEngineBenchmark {
         }
 
         private BigDecimal evaluateMk2() {
-            CrossModuleExpressionBenchmarkSupport.applyFrame(
-                mk2,
-                CrossModuleExpressionBenchmarkSupport.userFunctionFrame(mk2Index++)
-            );
-            return mk2.compute();
+            return mk2.compute(CrossModuleExpressionBenchmarkSupport.frameToMap(CrossModuleExpressionBenchmarkSupport.userFunctionFrame(mk2Index++)));
         }
     }
 
@@ -206,11 +195,7 @@ public class CrossModuleExpressionEngineBenchmark {
         }
 
         private BigDecimal evaluateMk2() {
-            CrossModuleExpressionBenchmarkSupport.applyFrame(
-                mk2,
-                CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)
-            );
-            return mk2.compute();
+            return mk2.compute(CrossModuleExpressionBenchmarkSupport.frameToMap(CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)));
         }
     }
 
@@ -237,11 +222,7 @@ public class CrossModuleExpressionEngineBenchmark {
         }
 
         private BigDecimal evaluateMk2() {
-            CrossModuleExpressionBenchmarkSupport.applyFrame(
-                mk2,
-                CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)
-            );
-            return mk2.compute();
+            return mk2.compute(CrossModuleExpressionBenchmarkSupport.frameToMap(CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)));
         }
     }
 
@@ -257,11 +238,7 @@ public class CrossModuleExpressionEngineBenchmark {
         }
 
         private BigDecimal evaluateMk2() {
-            CrossModuleExpressionBenchmarkSupport.applyFrame(
-                mk2,
-                CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)
-            );
-            return mk2.compute();
+            return mk2.compute(CrossModuleExpressionBenchmarkSupport.frameToMap(CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)));
         }
     }
 
@@ -288,11 +265,7 @@ public class CrossModuleExpressionEngineBenchmark {
         }
 
         private BigDecimal evaluateMk2() {
-            CrossModuleExpressionBenchmarkSupport.applyFrame(
-                mk2,
-                CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)
-            );
-            return mk2.compute();
+            return mk2.compute(CrossModuleExpressionBenchmarkSupport.frameToMap(CrossModuleExpressionBenchmarkSupport.variableFrame(mk2Index++)));
         }
     }
 }

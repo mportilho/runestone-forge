@@ -16,6 +16,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -42,60 +43,36 @@ public class AuditOverheadBenchmark {
 
     @Benchmark
     public BigDecimal variableChurnNoAudit(VariableChurnAuditState state) {
-        CrossModuleExpressionBenchmarkSupport.applyFrame(
-            state.expression,
-            CrossModuleExpressionBenchmarkSupport.variableFrame(state.index++)
-        );
-        return state.expression.compute();
+        return state.expression.compute(CrossModuleExpressionBenchmarkSupport.frameToMap(CrossModuleExpressionBenchmarkSupport.variableFrame(state.index++)));
     }
 
     @Benchmark
     public AuditResult<BigDecimal> variableChurnWithAudit(VariableChurnAuditState state) {
-        CrossModuleExpressionBenchmarkSupport.applyFrame(
-            state.expression,
-            CrossModuleExpressionBenchmarkSupport.variableFrame(state.index++)
-        );
-        return state.expression.computeWithAudit();
+        return state.expression.computeWithAudit(CrossModuleExpressionBenchmarkSupport.frameToMap(CrossModuleExpressionBenchmarkSupport.variableFrame(state.index++)));
     }
 
     // ── assignedVariable ──────────────────────────────────────────────────────
 
     @Benchmark
     public BigDecimal assignedVariableNoAudit(AssignedVariableAuditState state) {
-        CrossModuleExpressionBenchmarkSupport.applyFrame(
-            state.expression,
-            CrossModuleExpressionBenchmarkSupport.variableFrame(state.index++)
-        );
-        return state.expression.compute();
+        return state.expression.compute(CrossModuleExpressionBenchmarkSupport.frameToMap(CrossModuleExpressionBenchmarkSupport.variableFrame(state.index++)));
     }
 
     @Benchmark
     public AuditResult<BigDecimal> assignedVariableWithAudit(AssignedVariableAuditState state) {
-        CrossModuleExpressionBenchmarkSupport.applyFrame(
-            state.expression,
-            CrossModuleExpressionBenchmarkSupport.variableFrame(state.index++)
-        );
-        return state.expression.computeWithAudit();
+        return state.expression.computeWithAudit(CrossModuleExpressionBenchmarkSupport.frameToMap(CrossModuleExpressionBenchmarkSupport.variableFrame(state.index++)));
     }
 
     // ── userFunction ──────────────────────────────────────────────────────────
 
     @Benchmark
     public BigDecimal userFunctionNoAudit(UserFunctionAuditState state) {
-        CrossModuleExpressionBenchmarkSupport.applyFrame(
-            state.expression,
-            CrossModuleExpressionBenchmarkSupport.userFunctionFrame(state.index++)
-        );
-        return state.expression.compute();
+        return state.expression.compute(CrossModuleExpressionBenchmarkSupport.frameToMap(CrossModuleExpressionBenchmarkSupport.userFunctionFrame(state.index++)));
     }
 
     @Benchmark
     public AuditResult<BigDecimal> userFunctionWithAudit(UserFunctionAuditState state) {
-        CrossModuleExpressionBenchmarkSupport.applyFrame(
-            state.expression,
-            CrossModuleExpressionBenchmarkSupport.userFunctionFrame(state.index++)
-        );
-        return state.expression.computeWithAudit();
+        return state.expression.computeWithAudit(CrossModuleExpressionBenchmarkSupport.frameToMap(CrossModuleExpressionBenchmarkSupport.userFunctionFrame(state.index++)));
     }
 
     // ── States ────────────────────────────────────────────────────────────────

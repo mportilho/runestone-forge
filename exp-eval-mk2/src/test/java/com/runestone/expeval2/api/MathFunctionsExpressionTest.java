@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 import static java.math.BigDecimal.ONE;
 import static java.math.BigDecimal.ZERO;
@@ -34,11 +35,10 @@ class MathFunctionsExpressionTest {
         @DisplayName("mean via variable vector bound at evaluation time")
         void meanViaVariableVector() {
             BigDecimal result = MathExpression.compile("mean(nums)", ENV)
-                    .setValue("nums", java.util.List.of(
+                    .compute(Map.of("nums", java.util.List.of(
                             new BigDecimal("10"),
                             new BigDecimal("20"),
-                            new BigDecimal("30")))
-                    .compute();
+                            new BigDecimal("30"))));
             assertThat(result).isCloseTo(new BigDecimal("20"), EPSILON);
         }
 
@@ -64,8 +64,7 @@ class MathFunctionsExpressionTest {
         @DisplayName("ln(x) via variable: ln(1) = 0")
         void lnViaVariable() {
             BigDecimal result = MathExpression.compile("ln(x)", ENV)
-                    .setValue("x", ONE)
-                    .compute();
+                    .compute(Map.of("x", ONE));
             assertThat(result).isCloseTo(ZERO, EPSILON);
         }
 
@@ -111,8 +110,7 @@ class MathFunctionsExpressionTest {
         @DisplayName("lb via variable: lb(x) with x=4 → 2")
         void lbViaVariable() {
             BigDecimal result = MathExpression.compile("lb(x)", ENV)
-                    .setValue("x", new BigDecimal("4"))
-                    .compute();
+                    .compute(Map.of("x", new BigDecimal("4")));
             assertThat(result).isCloseTo(new BigDecimal("2"), EPSILON);
         }
 
@@ -146,9 +144,7 @@ class MathFunctionsExpressionTest {
         @DisplayName("log(base, value) via variables: log(10, 1000) = 3")
         void logViaVariables() {
             BigDecimal result = MathExpression.compile("log(base, value)", ENV)
-                    .setValue("base", new BigDecimal("10"))
-                    .setValue("value", new BigDecimal("1000"))
-                    .compute();
+                    .compute(Map.of("base", new BigDecimal("10"), "value", new BigDecimal("1000")));
             assertThat(result).isCloseTo(new BigDecimal("3"), EPSILON);
         }
 
@@ -175,8 +171,7 @@ class MathFunctionsExpressionTest {
         @DisplayName("rule3d(1, 1, x) = x — identity when origin equals result")
         void directRuleIdentityWhenOriginEqualsResult() {
             BigDecimal result = MathExpression.compile("rule3d(1, 1, x)", ENV)
-                    .setValue("x", new BigDecimal("42"))
-                    .compute();
+                    .compute(Map.of("x", new BigDecimal("42")));
             assertThat(result).isCloseTo(new BigDecimal("42"), EPSILON);
         }
 
@@ -184,10 +179,7 @@ class MathFunctionsExpressionTest {
         @DisplayName("rule3d via variables: rule3d(a, b, c)")
         void directRuleViaVariables() {
             BigDecimal result = MathExpression.compile("rule3d(a, b, c)", ENV)
-                    .setValue("a", new BigDecimal("200"))
-                    .setValue("b", new BigDecimal("50"))
-                    .setValue("c", new BigDecimal("100"))
-                    .compute();
+                    .compute(Map.of("a", new BigDecimal("200"), "b", new BigDecimal("50"), "c", new BigDecimal("100")));
             assertThat(result).isCloseTo(new BigDecimal("25"), EPSILON);
         }
 
@@ -214,8 +206,7 @@ class MathFunctionsExpressionTest {
         @DisplayName("rule3i(x, 20, x) = 20 — same origin1 and origin2 yields same result")
         void inverseRuleSameOrigins() {
             BigDecimal result = MathExpression.compile("rule3i(x, 20, x)", ENV)
-                    .setValue("x", new BigDecimal("100"))
-                    .compute();
+                    .compute(Map.of("x", new BigDecimal("100")));
             assertThat(result).isCloseTo(new BigDecimal("20"), EPSILON);
         }
 
@@ -223,10 +214,7 @@ class MathFunctionsExpressionTest {
         @DisplayName("rule3i via variables: rule3i(a, b, c)")
         void inverseRuleViaVariables() {
             BigDecimal result = MathExpression.compile("rule3i(a, b, c)", ENV)
-                    .setValue("a", new BigDecimal("100"))
-                    .setValue("b", new BigDecimal("30"))
-                    .setValue("c", new BigDecimal("150"))
-                    .compute();
+                    .compute(Map.of("a", new BigDecimal("100"), "b", new BigDecimal("30"), "c", new BigDecimal("150")));
             assertThat(result).isCloseTo(new BigDecimal("20"), EPSILON);
         }
 
@@ -253,11 +241,10 @@ class MathFunctionsExpressionTest {
         @DisplayName("geometricMean via variable vector: geometricMean([4, 1, 0.03125]) = 0.5")
         void geometricMeanViaVariableVector() {
             BigDecimal result = MathExpression.compile("geometricMean(nums)", ENV)
-                    .setValue("nums", java.util.List.of(
+                    .compute(Map.of("nums", java.util.List.of(
                             new BigDecimal("4"),
                             new BigDecimal("1"),
-                            new BigDecimal("0.03125")))
-                    .compute();
+                            new BigDecimal("0.03125"))));
             assertThat(result).isCloseTo(new BigDecimal("0.5"), EPSILON);
         }
 
@@ -284,11 +271,10 @@ class MathFunctionsExpressionTest {
         @DisplayName("harmonicMean via variable vector")
         void harmonicMeanViaVariableVector() {
             BigDecimal result = MathExpression.compile("harmonicMean(nums)", ENV)
-                    .setValue("nums", java.util.List.of(
+                    .compute(Map.of("nums", java.util.List.of(
                             new BigDecimal("1"),
                             new BigDecimal("4"),
-                            new BigDecimal("4")))
-                    .compute();
+                            new BigDecimal("4"))));
             assertThat(result).isCloseTo(new BigDecimal("2"), EPSILON);
         }
 
@@ -316,7 +302,7 @@ class MathFunctionsExpressionTest {
         @DisplayName("meanDev via variable vector")
         void meanDevViaVariableVector() {
             BigDecimal result = MathExpression.compile("meanDev(nums)", ENV)
-                    .setValue("nums", java.util.List.of(
+                    .compute(Map.of("nums", java.util.List.of(
                             new BigDecimal("3"),
                             new BigDecimal("6"),
                             new BigDecimal("6"),
@@ -324,8 +310,7 @@ class MathFunctionsExpressionTest {
                             new BigDecimal("8"),
                             new BigDecimal("11"),
                             new BigDecimal("15"),
-                            new BigDecimal("16")))
-                    .compute();
+                            new BigDecimal("16"))));
             assertThat(result).isCloseTo(new BigDecimal("3.75"), EPSILON);
         }
 
@@ -361,7 +346,7 @@ class MathFunctionsExpressionTest {
         @DisplayName("variance via variable vector")
         void varianceViaVariableVector() {
             BigDecimal result = MathExpression.compile("variance(nums, 0)", ENV)
-                    .setValue("nums", java.util.List.of(
+                    .compute(Map.of("nums", java.util.List.of(
                             new BigDecimal("2"),
                             new BigDecimal("4"),
                             new BigDecimal("4"),
@@ -369,8 +354,7 @@ class MathFunctionsExpressionTest {
                             new BigDecimal("5"),
                             new BigDecimal("5"),
                             new BigDecimal("7"),
-                            new BigDecimal("9")))
-                    .compute();
+                            new BigDecimal("9"))));
             assertThat(result).isCloseTo(new BigDecimal("4"), EPSILON);
         }
 
@@ -406,7 +390,7 @@ class MathFunctionsExpressionTest {
         @DisplayName("stdDev via variable vector")
         void stdDevViaVariableVector() {
             BigDecimal result = MathExpression.compile("stdDev(nums, 0)", ENV)
-                    .setValue("nums", java.util.List.of(
+                    .compute(Map.of("nums", java.util.List.of(
                             new BigDecimal("2"),
                             new BigDecimal("4"),
                             new BigDecimal("4"),
@@ -414,8 +398,7 @@ class MathFunctionsExpressionTest {
                             new BigDecimal("5"),
                             new BigDecimal("5"),
                             new BigDecimal("7"),
-                            new BigDecimal("9")))
-                    .compute();
+                            new BigDecimal("9"))));
             assertThat(result).isCloseTo(new BigDecimal("2"), EPSILON);
         }
 

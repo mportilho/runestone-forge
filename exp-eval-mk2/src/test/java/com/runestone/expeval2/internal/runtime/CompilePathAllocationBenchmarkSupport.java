@@ -5,6 +5,8 @@ import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Supports {@code CompilePathAllocationBenchmark}, isolating three allocation smells
@@ -101,9 +103,10 @@ public final class CompilePathAllocationBenchmarkSupport {
      * separately from the compile-path allocation measured by the other methods.
      */
     public BigDecimal evaluateFunction(ExpressionRuntimeSupport runtime, BigDecimal value) {
+        Map<String, Object> values = new HashMap<>();
         for (String name : new String[]{"a","b","c","d","e","f","g","h"}) {
-            runtime.setValue(name, value);
+            values.put(name, value);
         }
-        return runtime.computeMath();
+        return runtime.computeMath(values);
     }
 }

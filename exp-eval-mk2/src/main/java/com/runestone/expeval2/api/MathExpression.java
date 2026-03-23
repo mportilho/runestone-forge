@@ -6,14 +6,15 @@ import com.runestone.expeval2.internal.runtime.ExpressionCompiler;
 import com.runestone.expeval2.internal.runtime.ExpressionRuntimeSupport;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.Objects;
 
 /**
  * A compiled, reusable mathematical expression.
  *
  * <p>Instances are obtained via the static {@code compile} factory methods. Once compiled, the same
- * instance can be evaluated repeatedly with different variable values by calling {@link #setValue}
- * followed by {@link #compute}.
+ * instance can be evaluated repeatedly by calling {@link #compute(Map)} with the desired variable
+ * values.
  *
  * <h2>Singleton vs. injected compiler</h2>
  * <p>The two-argument overload {@link #compile(String, ExpressionEnvironment)} uses the JVM-wide
@@ -23,8 +24,8 @@ import java.util.Objects;
  * where the compiler is declared as a {@code @Bean}.
  *
  * <h2>Thread safety</h2>
- * <p>Instances are <em>not</em> thread-safe. Do not share a single instance across threads;
- * instead, compile once and create one instance per thread (or per request).
+ * <p>Instances are thread-safe. The same compiled instance may be shared and evaluated
+ * concurrently; each {@link #compute(Map)} call receives its own isolated execution scope.
  */
 public final class MathExpression {
 
@@ -102,39 +103,53 @@ public final class MathExpression {
     }
 
     /**
-     * Sets the value of a variable symbol before evaluation.
+     * Evaluates the expression with the given variable values and returns the numeric result.
      *
-     * <p>The value is coerced to the type declared for the symbol in the expression environment.
-     * This method returns {@code this} to allow chaining:
+     * <p>The map keys are symbol names as they appear in the expression; values are coerced to
+     * the types declared in the environment. Each call receives an isolated execution scope, so
+     * this method is safe to call concurrently on the same instance.
      *
      * <pre>{@code
-     * BigDecimal result = expr.setValue("a", 10).setValue("b", 5).compute();
+     * BigDecimal result = expr.compute(Map.of("a", 10, "b", 5));
      * }</pre>
      *
-     * @param symbolName name of the symbol as it appears in the expression; must not be {@code null}
-     * @param rawValue   value to bind; coercion is applied as configured in the environment
-     * @return this instance
+     * @param values variable bindings for this evaluation; must not be {@code null}
+     * @return the computed {@link BigDecimal} result
      */
-    public MathExpression setValue(String symbolName, Object rawValue) {
-        runtime.setValue(symbolName, rawValue);
-        return this;
+    public BigDecimal compute(Map<String, Object> values) {
+        return runtime.computeMath(values);
     }
 
     /**
-     * Evaluates the expression and returns the numeric result.
+     * Evaluates the expression with no variable bindings and returns the numeric result.
+     *
+     * <p>Convenience overload for expressions that contain only literals or catalog symbols
+     * whose defaults are fully specified in the environment.
      *
      * @return the computed {@link BigDecimal} result
      */
     public BigDecimal compute() {
-        return runtime.computeMath();
+        return compute(Map.of());
     }
 
     /**
-     * Evaluates the expression and returns the numeric result together with a full audit trace.
+     * Evaluates the expression with the given variable values and returns the numeric result
+     * together with a full audit trace.
+     *
+     * @param values variable bindings for this evaluation; must not be {@code null}
+     * @return the result and an {@link ExpressionAuditTrace} describing each evaluation step
+     */
+    public AuditResult<BigDecimal> computeWithAudit(Map<String, Object> values) {
+        return runtime.computeMathWithAudit(values);
+    }
+
+    /**
+     * Evaluates the expression with no variable bindings and returns the numeric result together
+     * with a full audit trace.
      *
      * @return the result and an {@link ExpressionAuditTrace} describing each evaluation step
      */
     public AuditResult<BigDecimal> computeWithAudit() {
-        return runtime.computeMathWithAudit();
+        return computeWithAudit(Map.of());
     }
 }

@@ -14,6 +14,7 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 
+import java.util.Map;
 import java.util.StringJoiner;
 import java.util.concurrent.TimeUnit;
 
@@ -44,12 +45,12 @@ public class ExpressionEvaluatorV2ExecutionPlanBenchmark {
 
     @Benchmark
     public Object computeMathLiteralDense(ComputeState state) {
-        return state.mathRuntime.computeMath();
+        return state.mathRuntime.computeMath(Map.of());
     }
 
     @Benchmark
     public boolean computeLogicalMixedLiteralDense(ComputeState state) {
-        return state.logicalRuntime.computeLogical();
+        return state.logicalRuntime.computeLogical(Map.of());
     }
 
     @State(Scope.Benchmark)

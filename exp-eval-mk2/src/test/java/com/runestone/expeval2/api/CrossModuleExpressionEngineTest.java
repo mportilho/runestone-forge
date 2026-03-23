@@ -76,25 +76,24 @@ class CrossModuleExpressionEngineTest {
     private static void assertEquivalentForLiteralSeed(Expression legacy, MathExpression mk2, int seedIndex) {
         BigDecimal seed = CrossModuleExpressionBenchmarkSupport.literalSeed(seedIndex);
         CrossModuleExpressionBenchmarkSupport.applyLiteralSeed(legacy, seed);
-        CrossModuleExpressionBenchmarkSupport.applyLiteralSeed(mk2, seed);
 
-        assertThat(legacy.<BigDecimal>evaluate()).isEqualByComparingTo(mk2.compute());
+        assertThat(legacy.<BigDecimal>evaluate()).isEqualByComparingTo(
+                mk2.compute(CrossModuleExpressionBenchmarkSupport.literalSeedToMap(seed)));
     }
 
     private static void assertEquivalentForFrame(Expression legacy, MathExpression mk2,
                                                  CrossModuleExpressionBenchmarkSupport.Frame frame) {
         CrossModuleExpressionBenchmarkSupport.applyFrame(legacy, frame);
-        CrossModuleExpressionBenchmarkSupport.applyFrame(mk2, frame);
 
-        assertThat(legacy.<BigDecimal>evaluate()).isEqualByComparingTo(mk2.compute());
+        assertThat(legacy.<BigDecimal>evaluate()).isEqualByComparingTo(
+                mk2.compute(CrossModuleExpressionBenchmarkSupport.frameToMap(frame)));
     }
 
     private static void assertApproximatelyEquivalentForFrame(Expression legacy, MathExpression mk2,
                                                               CrossModuleExpressionBenchmarkSupport.Frame frame) {
         CrossModuleExpressionBenchmarkSupport.applyFrame(legacy, frame);
-        CrossModuleExpressionBenchmarkSupport.applyFrame(mk2, frame);
 
         assertThat(legacy.<BigDecimal>evaluate().doubleValue())
-            .isCloseTo(mk2.compute().doubleValue(), offset(1e-9));
+            .isCloseTo(mk2.compute(CrossModuleExpressionBenchmarkSupport.frameToMap(frame)).doubleValue(), offset(1e-9));
     }
 }

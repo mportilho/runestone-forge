@@ -8,6 +8,8 @@ import com.runestone.expeval2.environment.ExpressionEnvironmentBuilder;
 import java.lang.invoke.MethodType;
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.StringJoiner;
 
 public final class CrossModuleExpressionBenchmarkSupport {
@@ -127,19 +129,21 @@ public final class CrossModuleExpressionBenchmarkSupport {
         expression.setVariable("seed", seed);
     }
 
-    public static void applyLiteralSeed(MathExpression expression, BigDecimal seed) {
-        expression.setValue("seed", seed);
+    public static Map<String, Object> literalSeedToMap(BigDecimal seed) {
+        return Map.of("seed", seed);
+    }
+
+    public static Map<String, Object> frameToMap(Frame frame) {
+        Map<String, Object> map = new HashMap<>(VARIABLE_NAMES.length * 2);
+        for (int index = 0; index < VARIABLE_NAMES.length; index++) {
+            map.put(VARIABLE_NAMES[index], frame.values[index]);
+        }
+        return map;
     }
 
     public static void applyFrame(Expression expression, Frame frame) {
         for (int index = 0; index < VARIABLE_NAMES.length; index++) {
             expression.setVariable(VARIABLE_NAMES[index], frame.values[index]);
-        }
-    }
-
-    public static void applyFrame(MathExpression expression, Frame frame) {
-        for (int index = 0; index < VARIABLE_NAMES.length; index++) {
-            expression.setValue(VARIABLE_NAMES[index], frame.values[index]);
         }
     }
 

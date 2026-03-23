@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 import static java.math.BigDecimal.ONE;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -69,12 +70,11 @@ class ComparableFunctionsExpressionTest {
         @DisplayName("max via variable vector bound at evaluation time")
         void maxViaVariable() {
             BigDecimal result = MathExpression.compile("max(nums)", ENV)
-                    .setValue("nums", List.of(
+                    .compute(Map.of("nums", List.of(
                             new BigDecimal("7"),
                             new BigDecimal("3"),
                             new BigDecimal("9"),
-                            new BigDecimal("1")))
-                    .compute();
+                            new BigDecimal("1"))));
             assertThat(result).isCloseTo(new BigDecimal("9"), EPSILON);
         }
 
@@ -143,12 +143,11 @@ class ComparableFunctionsExpressionTest {
         @DisplayName("min via variable vector bound at evaluation time")
         void minViaVariable() {
             BigDecimal result = MathExpression.compile("min(nums)", ENV)
-                    .setValue("nums", List.of(
+                    .compute(Map.of("nums", List.of(
                             new BigDecimal("7"),
                             new BigDecimal("3"),
                             new BigDecimal("9"),
-                            new BigDecimal("1")))
-                    .compute();
+                            new BigDecimal("1"))));
             assertThat(result).isCloseTo(ONE, EPSILON);
         }
 
@@ -182,11 +181,9 @@ class ComparableFunctionsExpressionTest {
         @DisplayName("max and min on same vector of variables")
         void maxAndMinOnVariables() {
             BigDecimal maxResult = MathExpression.compile("max(nums)", ENV)
-                    .setValue("nums", List.of(new BigDecimal("5"), new BigDecimal("1"), new BigDecimal("9")))
-                    .compute();
+                    .compute(Map.of("nums", List.of(new BigDecimal("5"), new BigDecimal("1"), new BigDecimal("9"))));
             BigDecimal minResult = MathExpression.compile("min(nums)", ENV)
-                    .setValue("nums", List.of(new BigDecimal("5"), new BigDecimal("1"), new BigDecimal("9")))
-                    .compute();
+                    .compute(Map.of("nums", List.of(new BigDecimal("5"), new BigDecimal("1"), new BigDecimal("9"))));
             assertThat(maxResult).isCloseTo(new BigDecimal("9"), EPSILON);
             assertThat(minResult).isCloseTo(ONE, EPSILON);
         }
