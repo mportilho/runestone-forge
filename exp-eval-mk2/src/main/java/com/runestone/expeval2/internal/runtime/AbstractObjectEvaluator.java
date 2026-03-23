@@ -168,22 +168,102 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                 audit.enterCall();
                 audit.exitCall();
                 audit.record(new AuditEvent.FunctionCall(
-                    node.binding().descriptor().name(),
-                    node.foldedArgs(),
-                    result,
-                    audit.callDepth()
+                        node.binding().descriptor().name(),
+                        node.foldedArgs(),
+                        result,
+                        audit.callDepth()
                 ));
             }
             return result;
         }
+
         FunctionDescriptor descriptor = node.binding().descriptor();
         int arity = descriptor.arity();
-        Object[] args = new Object[arity];
-        for (int i = 0; i < arity; i++) {
-            Object evaluated = evaluateExpr(node.arguments().get(i), scope);
-            args[i] = runtimeServices.coerce(evaluated, descriptor.parameterTypes().get(i));
-        }
         AuditCollector audit = scope.audit();
+
+        if (audit == null) {
+            List<ExecutableNode> argsNodes = node.arguments();
+            List<Class<?>> paramTypes = descriptor.parameterTypes();
+            return switch (arity) {
+                case 0 -> runtimeServices.coerceToResolvedType(descriptor.invoke(), node.binding().returnType());
+                case 1 -> {
+                    Object a1 = evaluateExpr(argsNodes.get(0), scope);
+                    a1 = runtimeServices.coerce(a1, paramTypes.get(0));
+                    yield runtimeServices.coerceToResolvedType(descriptor.invoke(a1), node.binding().returnType());
+                }
+                case 2 -> {
+                    Object a1 = evaluateExpr(argsNodes.get(0), scope);
+                    a1 = runtimeServices.coerce(a1, paramTypes.get(0));
+                    Object a2 = evaluateExpr(argsNodes.get(1), scope);
+                    a2 = runtimeServices.coerce(a2, paramTypes.get(1));
+                    yield runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2), node.binding().returnType());
+                }
+                case 3 -> {
+                    Object a1 = evaluateExpr(argsNodes.get(0), scope);
+                    a1 = runtimeServices.coerce(a1, paramTypes.get(0));
+                    Object a2 = evaluateExpr(argsNodes.get(1), scope);
+                    a2 = runtimeServices.coerce(a2, paramTypes.get(1));
+                    Object a3 = evaluateExpr(argsNodes.get(2), scope);
+                    a3 = runtimeServices.coerce(a3, paramTypes.get(2));
+                    yield runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3), node.binding().returnType());
+                }
+                case 4 -> {
+                    Object a1 = evaluateExpr(argsNodes.get(0), scope);
+                    a1 = runtimeServices.coerce(a1, paramTypes.get(0));
+                    Object a2 = evaluateExpr(argsNodes.get(1), scope);
+                    a2 = runtimeServices.coerce(a2, paramTypes.get(1));
+                    Object a3 = evaluateExpr(argsNodes.get(2), scope);
+                    a3 = runtimeServices.coerce(a3, paramTypes.get(2));
+                    Object a4 = evaluateExpr(argsNodes.get(3), scope);
+                    a4 = runtimeServices.coerce(a4, paramTypes.get(3));
+                    yield runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3, a4), node.binding().returnType());
+                }
+                case 5 -> {
+                    Object a1 = evaluateExpr(argsNodes.get(0), scope);
+                    a1 = runtimeServices.coerce(a1, paramTypes.get(0));
+                    Object a2 = evaluateExpr(argsNodes.get(1), scope);
+                    a2 = runtimeServices.coerce(a2, paramTypes.get(1));
+                    Object a3 = evaluateExpr(argsNodes.get(2), scope);
+                    a3 = runtimeServices.coerce(a3, paramTypes.get(2));
+                    Object a4 = evaluateExpr(argsNodes.get(3), scope);
+                    a4 = runtimeServices.coerce(a4, paramTypes.get(3));
+                    Object a5 = evaluateExpr(argsNodes.get(4), scope);
+                    a5 = runtimeServices.coerce(a5, paramTypes.get(4));
+                    yield runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3, a4, a5), node.binding().returnType());
+                }
+                case 6 -> {
+                    Object a1 = evaluateExpr(argsNodes.get(0), scope);
+                    a1 = runtimeServices.coerce(a1, paramTypes.get(0));
+                    Object a2 = evaluateExpr(argsNodes.get(1), scope);
+                    a2 = runtimeServices.coerce(a2, paramTypes.get(1));
+                    Object a3 = evaluateExpr(argsNodes.get(2), scope);
+                    a3 = runtimeServices.coerce(a3, paramTypes.get(2));
+                    Object a4 = evaluateExpr(argsNodes.get(3), scope);
+                    a4 = runtimeServices.coerce(a4, paramTypes.get(3));
+                    Object a5 = evaluateExpr(argsNodes.get(4), scope);
+                    a5 = runtimeServices.coerce(a5, paramTypes.get(4));
+                    Object a6 = evaluateExpr(argsNodes.get(5), scope);
+                    a6 = runtimeServices.coerce(a6, paramTypes.get(5));
+                    yield runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3, a4, a5, a6), node.binding().returnType());
+                }
+                default -> {
+                    Object[] args = new Object[arity];
+                    for (int i = 0; i < arity; i++) {
+                        Object evaluated = evaluateExpr(argsNodes.get(i), scope);
+                        args[i] = runtimeServices.coerce(evaluated, paramTypes.get(i));
+                    }
+                    yield runtimeServices.coerceToResolvedType(descriptor.invoke(args), node.binding().returnType());
+                }
+            };
+        }
+
+        Object[] args = new Object[arity];
+        List<ExecutableNode> argsNodes = node.arguments();
+        List<Class<?>> paramTypes = descriptor.parameterTypes();
+        for (int i = 0; i < arity; i++) {
+            Object evaluated = evaluateExpr(argsNodes.get(i), scope);
+            args[i] = runtimeServices.coerce(evaluated, paramTypes.get(i));
+        }
         if (audit != null) audit.enterCall();
         Object result = runtimeServices.coerceToResolvedType(
                 descriptor.invoke(args), node.binding().returnType());

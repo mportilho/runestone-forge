@@ -14,6 +14,7 @@ public final class FunctionDescriptor {
     private final List<ResolvedType> parameterResolvedTypes;
     private final ResolvedType returnType;
     private final MethodHandle invoker;
+    private final MethodHandle genericInvoker;
     private final MethodHandle compiledInvoker;
     private final FunctionRef functionRef;
     private final boolean foldable;
@@ -47,8 +48,10 @@ public final class FunctionDescriptor {
         if (this.parameterTypes.size() != this.parameterResolvedTypes.size()) {
             throw new IllegalArgumentException("parameterResolvedTypes must match parameterTypes size");
         }
-        this.compiledInvoker = compileInvoker(invoker, this.parameterTypes.size());
-        this.functionRef = new FunctionRef(this.name, this.parameterTypes.size());
+        int arity = this.parameterTypes.size();
+        this.genericInvoker = invoker.asType(java.lang.invoke.MethodType.genericMethodType(arity));
+        this.compiledInvoker = compileInvoker(invoker, arity);
+        this.functionRef = new FunctionRef(this.name, arity);
         this.foldable = foldable;
     }
 
@@ -82,6 +85,76 @@ public final class FunctionDescriptor {
 
     public boolean isFoldable() {
         return foldable;
+    }
+
+    public Object invoke() {
+        try {
+            return genericInvoker.invokeExact();
+        } catch (Error error) {
+            throw error;
+        } catch (Throwable throwable) {
+            throw new FunctionInvocationException(name, throwable);
+        }
+    }
+
+    public Object invoke(Object a1) {
+        try {
+            return genericInvoker.invokeExact(a1);
+        } catch (Error error) {
+            throw error;
+        } catch (Throwable throwable) {
+            throw new FunctionInvocationException(name, throwable);
+        }
+    }
+
+    public Object invoke(Object a1, Object a2) {
+        try {
+            return genericInvoker.invokeExact(a1, a2);
+        } catch (Error error) {
+            throw error;
+        } catch (Throwable throwable) {
+            throw new FunctionInvocationException(name, throwable);
+        }
+    }
+
+    public Object invoke(Object a1, Object a2, Object a3) {
+        try {
+            return genericInvoker.invokeExact(a1, a2, a3);
+        } catch (Error error) {
+            throw error;
+        } catch (Throwable throwable) {
+            throw new FunctionInvocationException(name, throwable);
+        }
+    }
+
+    public Object invoke(Object a1, Object a2, Object a3, Object a4) {
+        try {
+            return genericInvoker.invokeExact(a1, a2, a3, a4);
+        } catch (Error error) {
+            throw error;
+        } catch (Throwable throwable) {
+            throw new FunctionInvocationException(name, throwable);
+        }
+    }
+
+    public Object invoke(Object a1, Object a2, Object a3, Object a4, Object a5) {
+        try {
+            return genericInvoker.invokeExact(a1, a2, a3, a4, a5);
+        } catch (Error error) {
+            throw error;
+        } catch (Throwable throwable) {
+            throw new FunctionInvocationException(name, throwable);
+        }
+    }
+
+    public Object invoke(Object a1, Object a2, Object a3, Object a4, Object a5, Object a6) {
+        try {
+            return genericInvoker.invokeExact(a1, a2, a3, a4, a5, a6);
+        } catch (Error error) {
+            throw error;
+        } catch (Throwable throwable) {
+            throw new FunctionInvocationException(name, throwable);
+        }
     }
 
     public Object invoke(Object[] arguments) {
