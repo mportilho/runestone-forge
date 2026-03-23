@@ -17,15 +17,14 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Measures allocation from evaluating logical expressions with multiple boolean
- * intermediate results, isolating the {@link com.runestone.expeval2.internal.runtime.RuntimeValue.BooleanValue}
- * allocation pattern.
+ * intermediate results.
  *
- * <p>Use {@code -prof gc} to capture {@code B/op}. The {@code boolChain} benchmark (5 comparisons,
- * 4 AND operations) should show ~144 B/op attributable to boolean wrapping:
- * up to 9 new {@code BooleanValue} (16 B each) = 144 B per evaluation.
+ * <p>Use {@code -prof gc} to capture {@code B/op}. Since the evaluator returns raw
+ * {@code Boolean} values (reusing the JVM cache), boolean sub-expressions contribute
+ * zero heap allocation.
  *
- * <p>The {@code boolWide} benchmark (10 comparisons, 9 AND operations) exercises a wider
- * boolean chain that prevents short-circuit exits, maximising BooleanValue allocations.
+ * <p>The {@code boolChain} benchmark exercises 5 comparisons and 4 AND operations;
+ * {@code boolWide} exercises 10 comparisons and 9 AND operations with no short-circuit exits.
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)

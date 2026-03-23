@@ -2,17 +2,17 @@ package com.runestone.expeval2.internal.runtime;
 
 import java.math.MathContext;
 
-final class LogicalEvaluator extends AbstractRuntimeEvaluator<Boolean> {
+final class LogicalEvaluator extends AbstractRawObjectEvaluator<Boolean> {
 
     LogicalEvaluator(CompiledExpression compiledExpression, RuntimeServices runtimeServices, MathContext mathContext) {
         super(compiledExpression, runtimeServices, mathContext);
     }
 
     @Override
-    protected Boolean convertResult(RuntimeValue value) {
-        return switch (value) {
-            case RuntimeValue.BooleanValue booleanValue -> booleanValue.value();
-            default -> throw new IllegalStateException("expression did not produce a logical result");
-        };
+    protected Boolean convertResult(Object rawValue) {
+        if (rawValue instanceof Boolean b) {
+            return b;
+        }
+        throw new IllegalStateException("expression did not produce a logical result");
     }
 }

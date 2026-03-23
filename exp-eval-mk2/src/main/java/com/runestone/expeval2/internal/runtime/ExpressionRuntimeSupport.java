@@ -70,17 +70,8 @@ public final class ExpressionRuntimeSupport {
     /**
      * Configures the JVM-wide expression compiler <strong>before the first compilation</strong>.
      *
-     * <p>If the singleton has already been initialized — either by a previous call to this method
-     * or lazily on the first compilation — the call is silently ignored. Use
-     * {@link #reconfigure(CacheConfig)} when you need to replace an already-initialized compiler.
-     *
-     * <p>Typical usage (application startup or {@code main}):
-     * <pre>{@code
-     * ExpressionRuntimeSupport.configure(new CacheConfig(4_096, Duration.ofHours(1)));
-     * }</pre>
-     *
-     * @param cacheConfig cache settings to apply; must not be {@code null}
-     * @see #reconfigure(CacheConfig)
+     * <p>If the singleton has already been initialized the call is silently ignored.
+     * Use {@link #reconfigure(CacheConfig)} when you need to replace an already-initialized compiler.
      */
     public static void configure(CacheConfig cacheConfig) {
         Objects.requireNonNull(cacheConfig, "cacheConfig must not be null");
@@ -97,22 +88,7 @@ public final class ExpressionRuntimeSupport {
      * Replaces the JVM-wide expression compiler with a new instance built from {@code cacheConfig}.
      *
      * <p>Unlike {@link #configure(CacheConfig)}, this method always takes effect — even after the
-     * singleton has been initialized. Compilations already in progress hold a reference to the old
-     * compiler and complete normally; all subsequent compilations use the new instance and its
-     * empty cache.
-     *
-     * <p>Use this method when a function-catalog update requires both a cache flush and new cache
-     * settings, or when the previous {@link #configure(CacheConfig)} call must be overridden at
-     * runtime:
-     *
-     * <pre>{@code
-     * // After reloading the function catalog, start fresh with a larger cache:
-     * ExpressionRuntimeSupport.reconfigure(new CacheConfig(8_192, Duration.ofHours(2)));
-     * }</pre>
-     *
-     * @param cacheConfig new cache settings; must not be {@code null}
-     * @see #configure(CacheConfig)
-     * @see #invalidateCache()
+     * singleton has been initialized.
      */
     public static void reconfigure(CacheConfig cacheConfig) {
         Objects.requireNonNull(cacheConfig, "cacheConfig must not be null");
@@ -123,15 +99,6 @@ public final class ExpressionRuntimeSupport {
 
     /**
      * Removes all entries from the JVM-wide compiler cache without replacing the compiler instance.
-     *
-     * <p>Use this when cached expressions may have become stale — for example after updating a
-     * function provider or external symbol — but the current cache configuration should be kept.
-     * Compilations already in progress complete normally; only subsequent cache lookups are affected.
-     *
-     * <p>If a full reconfiguration is also required, use {@link #reconfigure(CacheConfig)} instead,
-     * which both replaces the compiler and discards its cache in a single step.
-     *
-     * @see #reconfigure(CacheConfig)
      */
     public static void invalidateCache() {
         getCompiler().invalidateCache();
@@ -155,17 +122,17 @@ public final class ExpressionRuntimeSupport {
      * Immutable snapshot of default values seeded from the {@link ExternalSymbolCatalog} at
      * compile time. Shared across all {@code compute*} calls; never mutated after construction.
      */
-    private final Map<SymbolRef, RuntimeValue> defaultValues;
+    private final Map<SymbolRef, Object> defaultValues;
     private final ExternalSymbolCatalog externalSymbolCatalog;
     private final RuntimeServices runtimeServices;
-    private final MathEvaluator mathEvaluator;
-    private final LogicalEvaluator logicalEvaluator;
+    private final Evaluator<BigDecimal> mathEvaluator;
+    private final Evaluator<Boolean> logicalEvaluator;
     private final boolean hasAssignments;
     private final int internalSymbolCount;
     private final int maxAuditEvents;
 
     private ExpressionRuntimeSupport(CompiledExpression compiledExpression,
-                                     Map<SymbolRef, RuntimeValue> defaultValues,
+                                     Map<SymbolRef, Object> defaultValues,
                                      ExternalSymbolCatalog externalSymbolCatalog,
                                      RuntimeServices runtimeServices,
                                      MathContext mathContext) {
@@ -182,13 +149,12 @@ public final class ExpressionRuntimeSupport {
         this.maxAuditEvents = countMaxAuditEvents(compiledExpression.executionPlan());
     }
 
+    // -------------------------------------------------------------------------
+    // Static factory methods
+    // -------------------------------------------------------------------------
+
     /**
      * Compiles a math expression using the JVM-wide singleton compiler.
-     *
-     * @param source      expression source text; must not be blank
-     * @param environment execution environment; must not be {@code null}
-     * @return a ready-to-evaluate runtime instance
-     * @throws ExpressionCompilationException if the expression has semantic errors
      */
     public static ExpressionRuntimeSupport compileMath(String source, ExpressionEnvironment environment) {
         return compile(source, ExpressionResultType.MATH, environment);
@@ -196,20 +162,6 @@ public final class ExpressionRuntimeSupport {
 
     /**
      * Compiles a math expression using an explicit {@link ExpressionCompiler}.
-     *
-     * <p>Use this overload when the singleton model is unsuitable and the compiler is managed
-     * externally — for example as a Spring {@code @Bean} or in isolated test contexts:
-     *
-     * <pre>{@code
-     * ExpressionRuntimeSupport runtime =
-     *         ExpressionRuntimeSupport.compileMath(source, environment, myCompiler);
-     * }</pre>
-     *
-     * @param source      expression source text; must not be blank
-     * @param environment execution environment; must not be {@code null}
-     * @param compiler    compiler instance to use; must not be {@code null}
-     * @return a ready-to-evaluate runtime instance
-     * @throws ExpressionCompilationException if the expression has semantic errors
      */
     public static ExpressionRuntimeSupport compileMath(String source, ExpressionEnvironment environment, ExpressionCompiler compiler) {
         return compile(source, ExpressionResultType.MATH, environment, compiler);
@@ -217,11 +169,6 @@ public final class ExpressionRuntimeSupport {
 
     /**
      * Compiles a logical expression using the JVM-wide singleton compiler.
-     *
-     * @param source      expression source text; must not be blank
-     * @param environment execution environment; must not be {@code null}
-     * @return a ready-to-evaluate runtime instance
-     * @throws ExpressionCompilationException if the expression has semantic errors
      */
     public static ExpressionRuntimeSupport compileLogical(String source, ExpressionEnvironment environment) {
         return compile(source, ExpressionResultType.LOGICAL, environment);
@@ -229,12 +176,6 @@ public final class ExpressionRuntimeSupport {
 
     /**
      * Compiles a logical expression using an explicit {@link ExpressionCompiler}.
-     *
-     * @param source      expression source text; must not be blank
-     * @param environment execution environment; must not be {@code null}
-     * @param compiler    compiler instance to use; must not be {@code null}
-     * @return a ready-to-evaluate runtime instance
-     * @throws ExpressionCompilationException if the expression has semantic errors
      */
     public static ExpressionRuntimeSupport compileLogical(String source, ExpressionEnvironment environment, ExpressionCompiler compiler) {
         return compile(source, ExpressionResultType.LOGICAL, environment, compiler);
@@ -242,11 +183,6 @@ public final class ExpressionRuntimeSupport {
 
     /**
      * Compiles an assignment block using the JVM-wide singleton compiler.
-     *
-     * @param source      expression source text; must not be blank
-     * @param environment execution environment; must not be {@code null}
-     * @return a ready-to-evaluate runtime instance
-     * @throws ExpressionCompilationException if the expression has semantic errors
      */
     public static ExpressionRuntimeSupport compileAssignments(String source, ExpressionEnvironment environment) {
         return compile(source, ExpressionResultType.ASSIGNMENTS, environment);
@@ -254,12 +190,6 @@ public final class ExpressionRuntimeSupport {
 
     /**
      * Compiles an assignment block using an explicit {@link ExpressionCompiler}.
-     *
-     * @param source      expression source text; must not be blank
-     * @param environment execution environment; must not be {@code null}
-     * @param compiler    compiler instance to use; must not be {@code null}
-     * @return a ready-to-evaluate runtime instance
-     * @throws ExpressionCompilationException if the expression has semantic errors
      */
     public static ExpressionRuntimeSupport compileAssignments(String source, ExpressionEnvironment environment, ExpressionCompiler compiler) {
         return compile(source, ExpressionResultType.ASSIGNMENTS, environment, compiler);
@@ -309,12 +239,6 @@ public final class ExpressionRuntimeSupport {
 
     /**
      * Compiles an expression using the JVM-wide singleton compiler.
-     *
-     * @param source      expression source text; must not be blank
-     * @param resultType  expected result kind; must not be {@code null}
-     * @param environment execution environment; must not be {@code null}
-     * @return a ready-to-evaluate runtime instance
-     * @throws ExpressionCompilationException if the expression has semantic errors
      */
     public static ExpressionRuntimeSupport compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
         return compile(source, resultType, environment, getCompiler());
@@ -322,17 +246,6 @@ public final class ExpressionRuntimeSupport {
 
     /**
      * Compiles an expression using an explicit {@link ExpressionCompiler}.
-     *
-     * <p>This is the base overload used by all other {@code compile*} methods. It is the correct
-     * entry point when the compiler is managed externally (DI) and full control over caching and
-     * lifecycle is required.
-     *
-     * @param source      expression source text; must not be blank
-     * @param resultType  expected result kind; must not be {@code null}
-     * @param environment execution environment; must not be {@code null}
-     * @param compiler    compiler instance to use; must not be {@code null}
-     * @return a ready-to-evaluate runtime instance
-     * @throws ExpressionCompilationException if the expression has semantic errors
      */
     public static ExpressionRuntimeSupport compile(String source, ExpressionResultType resultType,
                                                     ExpressionEnvironment environment, ExpressionCompiler compiler) {
@@ -360,19 +273,20 @@ public final class ExpressionRuntimeSupport {
         RuntimeServices runtimeServices = environment.runtimeServices();
         ExternalSymbolCatalog catalog = environment.externalSymbolCatalog();
         SemanticModel semanticModel = compiledExpression.semanticModel();
-        Map<SymbolRef, RuntimeValue> defaults = seedDefaults(semanticModel, catalog, runtimeServices);
-        return new ExpressionRuntimeSupport(compiledExpression, defaults, catalog, runtimeServices, environment.mathContext());
+        Map<SymbolRef, Object> defaults = seedDefaults(semanticModel, catalog, runtimeServices);
+        return new ExpressionRuntimeSupport(compiledExpression, defaults, catalog, runtimeServices,
+            environment.mathContext());
     }
 
-    private static Map<SymbolRef, RuntimeValue> seedDefaults(SemanticModel semanticModel,
-                                                              ExternalSymbolCatalog catalog,
-                                                              RuntimeServices runtimeServices) {
-        Map<SymbolRef, RuntimeValue> defaults = new HashMap<>();
+    private static Map<SymbolRef, Object> seedDefaults(SemanticModel semanticModel,
+                                                        ExternalSymbolCatalog catalog,
+                                                        RuntimeServices runtimeServices) {
+        Map<SymbolRef, Object> defaults = new HashMap<>();
         semanticModel.externalSymbolsByName().forEach((name, symbolRef) ->
                 catalog.find(name)
                         .ifPresent(descriptor -> defaults.put(
                                 symbolRef,
-                                runtimeServices.from(descriptor.defaultValue(), descriptor.declaredType())
+                                runtimeServices.coerceToResolvedType(descriptor.defaultValue(), descriptor.declaredType())
                         ))
         );
         return defaults;
@@ -380,19 +294,12 @@ public final class ExpressionRuntimeSupport {
 
     /**
      * Builds the per-call values map by merging catalog defaults with the caller-supplied values.
-     *
-     * <p>Validation mirrors the rules that previously lived in {@code MutableBindings}:
-     * internal symbols cannot be overridden, and non-overridable external symbols cannot be
-     * overridden either.
-     *
-     * @param userValues caller-supplied variable values; may be {@code null} or empty
-     * @return a fresh, mutable map ready to back an {@link ExecutionScope}
      */
-    private Map<SymbolRef, RuntimeValue> buildValues(Map<String, Object> userValues) {
+    private Map<SymbolRef, Object> buildValues(Map<String, Object> userValues) {
         if (userValues == null || userValues.isEmpty()) {
             return defaultValues.isEmpty() ? new HashMap<>() : new HashMap<>(defaultValues);
         }
-        Map<SymbolRef, RuntimeValue> result = defaultValues.isEmpty()
+        Map<SymbolRef, Object> result = defaultValues.isEmpty()
                 ? new HashMap<>(userValues.size())
                 : new HashMap<>(defaultValues);
         SemanticModel semanticModel = compiledExpression.semanticModel();
@@ -403,7 +310,8 @@ public final class ExpressionRuntimeSupport {
             if (descriptor != null && !descriptor.overridable()) {
                 throw new IllegalStateException("symbol '" + name + "' is not overridable");
             }
-            result.put(ref, runtimeServices.from(entry.getValue(),
+            result.put(ref, runtimeServices.coerceToResolvedType(
+                    entry.getValue(),
                     descriptor != null ? descriptor.declaredType() : null));
         }
         return result;
@@ -421,7 +329,7 @@ public final class ExpressionRuntimeSupport {
     }
 
     private ExecutionScope createExecutionScope(Map<String, Object> userValues) {
-        Map<SymbolRef, RuntimeValue> values = buildValues(userValues);
+        Map<SymbolRef, Object> values = buildValues(userValues);
         if (hasAssignments) {
             return ExecutionScope.from(values, internalSymbolCount);
         }
@@ -429,12 +337,16 @@ public final class ExpressionRuntimeSupport {
     }
 
     private ExecutionScope createAuditedExecutionScope(Map<String, Object> userValues, AuditCollector collector) {
-        Map<SymbolRef, RuntimeValue> values = buildValues(userValues);
+        Map<SymbolRef, Object> values = buildValues(userValues);
         if (hasAssignments) {
             return ExecutionScope.fromWithAudit(values, internalSymbolCount, collector);
         }
         return ExecutionScope.readOnlyWithAudit(values, collector);
     }
+
+    // -------------------------------------------------------------------------
+    // Evaluation
+    // -------------------------------------------------------------------------
 
     public BigDecimal computeMath(Map<String, Object> values) {
         return mathEvaluator.evaluate(createExecutionScope(values));
@@ -466,6 +378,10 @@ public final class ExpressionRuntimeSupport {
         return new AuditResult<>(result, collector.buildTrace());
     }
 
+    // -------------------------------------------------------------------------
+    // Audit size estimation
+    // -------------------------------------------------------------------------
+
     private static int countMaxAuditEvents(ExecutionPlan plan) {
         int count = 0;
         for (ExecutableAssignment assignment : plan.assignments()) {
@@ -487,30 +403,21 @@ public final class ExpressionRuntimeSupport {
             case ExecutableIdentifier ignored -> 1;
             case ExecutableFunctionCall f -> {
                 int sum = 1;
-                for (ExecutableNode arg : f.arguments()) {
-                    sum += countNodeEvents(arg);
-                }
+                for (ExecutableNode arg : f.arguments()) sum += countNodeEvents(arg);
                 yield sum;
             }
             case ExecutableBinaryOp b -> countNodeEvents(b.left()) + countNodeEvents(b.right());
             case ExecutableUnaryOp u -> countNodeEvents(u.operand());
             case ExecutablePostfixOp p -> countNodeEvents(p.operand());
             case ExecutableConditional c -> {
-                // Upper bound: count all branches; only one condition+result path runs at runtime.
                 int sum = 0;
-                for (ExecutableNode cond : c.conditions()) {
-                    sum += countNodeEvents(cond);
-                }
-                for (ExecutableNode res : c.results()) {
-                    sum += countNodeEvents(res);
-                }
+                for (ExecutableNode cond : c.conditions()) sum += countNodeEvents(cond);
+                for (ExecutableNode res : c.results()) sum += countNodeEvents(res);
                 yield sum + countNodeEvents(c.elseExpression());
             }
             case ExecutableVectorLiteral v -> {
                 int sum = 0;
-                for (ExecutableNode el : v.elements()) {
-                    sum += countNodeEvents(el);
-                }
+                for (ExecutableNode el : v.elements()) sum += countNodeEvents(el);
                 yield sum;
             }
         };

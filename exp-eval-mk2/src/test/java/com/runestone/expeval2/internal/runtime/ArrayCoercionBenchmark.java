@@ -17,24 +17,22 @@ import java.util.concurrent.TimeUnit;
 public class ArrayCoercionBenchmark {
 
     private RuntimeCoercionService coercionService;
-    private RuntimeValue.VectorValue bigDecimalVector;
-    private RuntimeValue.VectorValue doubleVector;
+    private List<Object> bigDecimalVector;
+    private List<Object> doubleVector;
 
     @Setup
     public void setup() {
         coercionService = new RuntimeCoercionService(new DefaultDataConversionService());
-        
-        List<RuntimeValue> bdElements = new ArrayList<>();
-        for (int i = 0; i < 100; i++) {
-            bdElements.add(new RuntimeValue.NumberValue(BigDecimal.valueOf(i)));
-        }
-        bigDecimalVector = new RuntimeValue.VectorValue(bdElements);
 
-        List<RuntimeValue> dElements = new ArrayList<>();
+        bigDecimalVector = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
-            dElements.add(new RuntimeValue.NumberValue(BigDecimal.valueOf(i)));
+            bigDecimalVector.add(BigDecimal.valueOf(i));
         }
-        doubleVector = new RuntimeValue.VectorValue(dElements);
+
+        doubleVector = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            doubleVector.add(BigDecimal.valueOf(i));
+        }
     }
 
     @Benchmark

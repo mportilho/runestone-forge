@@ -21,42 +21,42 @@ class ExecutionScopeTest {
     class TypeResolution {
 
         @Test
-        @DisplayName("CURR_DATE produces a DateValue wrapping today's date")
-        void currDateProducesDateValue() {
+        @DisplayName("CURR_DATE produces today's date")
+        void currDateProducesLocalDate() {
             ExecutionScope scope = ExecutionScope.readOnly(Map.of());
             LocalDate before = LocalDate.now();
 
-            RuntimeValue result = scope.resolveDynamic(DynamicInstant.CURR_DATE);
+            Object result = scope.resolveDynamic(DynamicInstant.CURR_DATE);
 
             LocalDate after = LocalDate.now();
-            assertThat(result).isInstanceOf(RuntimeValue.DateValue.class);
-            assertThat((LocalDate) ((RuntimeValue.DateValue) result).raw()).isBetween(before, after);
+            assertThat(result).isInstanceOf(LocalDate.class);
+            assertThat((LocalDate) result).isBetween(before, after);
         }
 
         @Test
-        @DisplayName("CURR_TIME produces a TimeValue wrapping the current time")
-        void currTimeProducesTimeValue() {
+        @DisplayName("CURR_TIME produces the current time")
+        void currTimeProducesLocalTime() {
             ExecutionScope scope = ExecutionScope.readOnly(Map.of());
             LocalTime before = LocalTime.now();
 
-            RuntimeValue result = scope.resolveDynamic(DynamicInstant.CURR_TIME);
+            Object result = scope.resolveDynamic(DynamicInstant.CURR_TIME);
 
             LocalTime after = LocalTime.now();
-            assertThat(result).isInstanceOf(RuntimeValue.TimeValue.class);
-            assertThat((LocalTime) ((RuntimeValue.TimeValue) result).raw()).isBetween(before, after);
+            assertThat(result).isInstanceOf(LocalTime.class);
+            assertThat((LocalTime) result).isBetween(before, after);
         }
 
         @Test
-        @DisplayName("CURR_DATETIME produces a DateTimeValue wrapping the current date-time")
-        void currDateTimeProducesDateTimeValue() {
+        @DisplayName("CURR_DATETIME produces the current date-time")
+        void currDateTimeProducesLocalDateTime() {
             ExecutionScope scope = ExecutionScope.readOnly(Map.of());
             LocalDateTime before = LocalDateTime.now();
 
-            RuntimeValue result = scope.resolveDynamic(DynamicInstant.CURR_DATETIME);
+            Object result = scope.resolveDynamic(DynamicInstant.CURR_DATETIME);
 
             LocalDateTime after = LocalDateTime.now();
-            assertThat(result).isInstanceOf(RuntimeValue.DateTimeValue.class);
-            assertThat((LocalDateTime) ((RuntimeValue.DateTimeValue) result).raw()).isBetween(before, after);
+            assertThat(result).isInstanceOf(LocalDateTime.class);
+            assertThat((LocalDateTime) result).isBetween(before, after);
         }
     }
 
@@ -69,8 +69,8 @@ class ExecutionScopeTest {
         void currDateCachedWithinScope() {
             ExecutionScope scope = ExecutionScope.readOnly(Map.of());
 
-            RuntimeValue first = scope.resolveDynamic(DynamicInstant.CURR_DATE);
-            RuntimeValue second = scope.resolveDynamic(DynamicInstant.CURR_DATE);
+            Object first = scope.resolveDynamic(DynamicInstant.CURR_DATE);
+            Object second = scope.resolveDynamic(DynamicInstant.CURR_DATE);
 
             assertThat(first).isSameAs(second);
         }
@@ -80,8 +80,8 @@ class ExecutionScopeTest {
         void currTimeCachedWithinScope() {
             ExecutionScope scope = ExecutionScope.readOnly(Map.of());
 
-            RuntimeValue first = scope.resolveDynamic(DynamicInstant.CURR_TIME);
-            RuntimeValue second = scope.resolveDynamic(DynamicInstant.CURR_TIME);
+            Object first = scope.resolveDynamic(DynamicInstant.CURR_TIME);
+            Object second = scope.resolveDynamic(DynamicInstant.CURR_TIME);
 
             assertThat(first).isSameAs(second);
         }
@@ -91,8 +91,8 @@ class ExecutionScopeTest {
         void currDateTimeCachedWithinScope() {
             ExecutionScope scope = ExecutionScope.readOnly(Map.of());
 
-            RuntimeValue first = scope.resolveDynamic(DynamicInstant.CURR_DATETIME);
-            RuntimeValue second = scope.resolveDynamic(DynamicInstant.CURR_DATETIME);
+            Object first = scope.resolveDynamic(DynamicInstant.CURR_DATETIME);
+            Object second = scope.resolveDynamic(DynamicInstant.CURR_DATETIME);
 
             assertThat(first).isSameAs(second);
         }
@@ -102,12 +102,12 @@ class ExecutionScopeTest {
         void allKindsCachedIndependently() {
             ExecutionScope scope = ExecutionScope.readOnly(Map.of());
 
-            RuntimeValue date1 = scope.resolveDynamic(DynamicInstant.CURR_DATE);
-            RuntimeValue time1 = scope.resolveDynamic(DynamicInstant.CURR_TIME);
-            RuntimeValue datetime1 = scope.resolveDynamic(DynamicInstant.CURR_DATETIME);
-            RuntimeValue date2 = scope.resolveDynamic(DynamicInstant.CURR_DATE);
-            RuntimeValue time2 = scope.resolveDynamic(DynamicInstant.CURR_TIME);
-            RuntimeValue datetime2 = scope.resolveDynamic(DynamicInstant.CURR_DATETIME);
+            Object date1     = scope.resolveDynamic(DynamicInstant.CURR_DATE);
+            Object time1     = scope.resolveDynamic(DynamicInstant.CURR_TIME);
+            Object datetime1 = scope.resolveDynamic(DynamicInstant.CURR_DATETIME);
+            Object date2     = scope.resolveDynamic(DynamicInstant.CURR_DATE);
+            Object time2     = scope.resolveDynamic(DynamicInstant.CURR_TIME);
+            Object datetime2 = scope.resolveDynamic(DynamicInstant.CURR_DATETIME);
 
             assertThat(date1).isSameAs(date2);
             assertThat(time1).isSameAs(time2);
@@ -117,11 +117,11 @@ class ExecutionScopeTest {
         @Test
         @DisplayName("two different scope instances do not share the dynamic cache")
         void separateScopesHaveIndependentCaches() {
-            ExecutionScope firstScope = ExecutionScope.readOnly(Map.of());
+            ExecutionScope firstScope  = ExecutionScope.readOnly(Map.of());
             ExecutionScope secondScope = ExecutionScope.readOnly(Map.of());
 
-            RuntimeValue fromFirst = firstScope.resolveDynamic(DynamicInstant.CURR_DATE);
-            RuntimeValue fromSecond = secondScope.resolveDynamic(DynamicInstant.CURR_DATE);
+            Object fromFirst  = firstScope.resolveDynamic(DynamicInstant.CURR_DATE);
+            Object fromSecond = secondScope.resolveDynamic(DynamicInstant.CURR_DATE);
 
             assertThat(fromFirst).isNotSameAs(fromSecond);
         }
@@ -131,8 +131,8 @@ class ExecutionScopeTest {
         void fromIsolatedScopeCachesDynamicValues() {
             ExecutionScope scope = ExecutionScope.from(new HashMap<>(), 2);
 
-            RuntimeValue first = scope.resolveDynamic(DynamicInstant.CURR_DATE);
-            RuntimeValue second = scope.resolveDynamic(DynamicInstant.CURR_DATE);
+            Object first  = scope.resolveDynamic(DynamicInstant.CURR_DATE);
+            Object second = scope.resolveDynamic(DynamicInstant.CURR_DATE);
 
             assertThat(first).isSameAs(second);
         }

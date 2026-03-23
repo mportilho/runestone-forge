@@ -70,8 +70,8 @@ final class ExecutionPlanBuilder {
     private ExecutableNode buildLiteral(LiteralNode lit, SemanticModel model) {
         String raw = lit.value();
         return switch (raw) {
-            case "currDate" -> new ExecutableDynamicLiteral(DynamicInstant.CURR_DATE);
-            case "currTime" -> new ExecutableDynamicLiteral(DynamicInstant.CURR_TIME);
+            case "currDate"     -> new ExecutableDynamicLiteral(DynamicInstant.CURR_DATE);
+            case "currTime"     -> new ExecutableDynamicLiteral(DynamicInstant.CURR_TIME);
             case "currDateTime" -> new ExecutableDynamicLiteral(DynamicInstant.CURR_DATETIME);
             default -> {
                 ResolvedType resolvedType = model.findResolvedType(lit.nodeId())
@@ -82,26 +82,16 @@ final class ExecutionPlanBuilder {
         };
     }
 
-    private RuntimeValue materialize(String raw, ResolvedType resolvedType) {
-        if (resolvedType == ScalarType.NUMBER) {
-            return new RuntimeValue.NumberValue(new BigDecimal(raw));
-        }
-        if (resolvedType == ScalarType.BOOLEAN) {
-            return new RuntimeValue.BooleanValue(Boolean.parseBoolean(raw));
-        }
-        if (resolvedType == ScalarType.STRING) {
-            return new RuntimeValue.StringValue(unquote(raw));
-        }
-        if (resolvedType == ScalarType.DATE) {
-            return new RuntimeValue.DateValue(LocalDate.parse(raw));
-        }
-        if (resolvedType == ScalarType.TIME) {
-            return new RuntimeValue.TimeValue(LocalTime.parse(raw));
-        }
+    private Object materialize(String raw, ResolvedType resolvedType) {
+        if (resolvedType == ScalarType.NUMBER)   return new BigDecimal(raw);
+        if (resolvedType == ScalarType.BOOLEAN)  return Boolean.parseBoolean(raw);
+        if (resolvedType == ScalarType.STRING)   return unquote(raw);
+        if (resolvedType == ScalarType.DATE)     return LocalDate.parse(raw);
+        if (resolvedType == ScalarType.TIME)     return LocalTime.parse(raw);
         if (resolvedType == ScalarType.DATETIME) {
             return raw.contains("+") || raw.endsWith("Z")
-                    ? new RuntimeValue.DateTimeValue(OffsetDateTime.parse(raw).toLocalDateTime())
-                    : new RuntimeValue.DateTimeValue(LocalDateTime.parse(raw));
+                    ? OffsetDateTime.parse(raw).toLocalDateTime()
+                    : LocalDateTime.parse(raw);
         }
         throw new IllegalStateException("unsupported literal type: " + resolvedType);
     }
@@ -126,8 +116,9 @@ final class ExecutionPlanBuilder {
             int arity = descriptor.arity();
             Object[] args = new Object[arity];
             for (int i = 0; i < arity; i++) {
-                RuntimeValue rv = constantRuntimeValue(arguments.get(i), runtimeServices);
-                args[i] = runtimeServices.coerce(rv, descriptor.parameterTypes().get(i));
+                args[i] = runtimeServices.coerceRaw(
+                        constantRawValue(arguments.get(i)),
+                        descriptor.parameterTypes().get(i));
             }
             Object rawResult = descriptor.invoke(args);
             return ExecutableFunctionCall.folded(binding, arguments, args, rawResult);
@@ -139,15 +130,15 @@ final class ExecutionPlanBuilder {
     private boolean isConstantNode(ExecutableNode node) {
         return switch (node) {
             case ExecutableLiteral ignored -> true;
-            case ExecutableFunctionCall f -> f.isFolded();
+            case ExecutableFunctionCall f  -> f.isFolded();
             default -> false;
         };
     }
 
-    private RuntimeValue constantRuntimeValue(ExecutableNode node, RuntimeServices runtimeServices) {
+    private Object constantRawValue(ExecutableNode node) {
         return switch (node) {
-            case ExecutableLiteral lit -> lit.precomputed();
-            case ExecutableFunctionCall f -> runtimeServices.from(f.foldedResult(), f.binding().returnType());
+            case ExecutableLiteral lit    -> lit.precomputed();
+            case ExecutableFunctionCall f -> f.foldedResult();
             default -> throw new IllegalStateException("not a constant node: " + node);
         };
     }

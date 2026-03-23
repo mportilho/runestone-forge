@@ -88,6 +88,10 @@ public final class CrossModuleExpressionBenchmarkSupport {
         return MathExpression.compile(LOGARITHM_CHAIN_EXPRESSION, logarithmEnvironment());
     }
 
+    public static ExpressionEnvironment emptyEnvironment() {
+        return ExpressionEnvironmentBuilder.empty();
+    }
+
     public static ExpressionEnvironment logarithmEnvironment() {
         return ExpressionEnvironment.builder()
             .addMathFunctions()

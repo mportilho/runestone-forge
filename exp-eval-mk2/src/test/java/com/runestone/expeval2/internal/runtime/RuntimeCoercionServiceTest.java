@@ -16,12 +16,9 @@ class RuntimeCoercionServiceTest {
             new RuntimeCoercionService(new DefaultDataConversionService());
 
     @Test
-    @DisplayName("coerces numeric vector to Comparable array")
-    void coercesNumericVectorToComparableArray() {
-        RuntimeValue.VectorValue vector = new RuntimeValue.VectorValue(List.of(
-                new RuntimeValue.NumberValue(new BigDecimal("10")),
-                new RuntimeValue.NumberValue(new BigDecimal("20"))
-        ));
+    @DisplayName("coerces numeric list to Comparable array")
+    void coercesNumericListToComparableArray() {
+        List<Object> vector = List.of(new BigDecimal("10"), new BigDecimal("20"));
 
         Object result = coercionService.coerce(vector, Comparable[].class);
 
@@ -33,12 +30,9 @@ class RuntimeCoercionServiceTest {
     }
 
     @Test
-    @DisplayName("coerces string vector to String array")
-    void coercesStringVectorToStringArray() {
-        RuntimeValue.VectorValue vector = new RuntimeValue.VectorValue(List.of(
-                new RuntimeValue.StringValue("alpha"),
-                new RuntimeValue.StringValue("beta")
-        ));
+    @DisplayName("coerces string list to String array")
+    void coercesStringListToStringArray() {
+        List<Object> vector = List.of("alpha", "beta");
 
         Object result = coercionService.coerce(vector, String[].class);
 
@@ -49,7 +43,7 @@ class RuntimeCoercionServiceTest {
     @Test
     @DisplayName("coerces numeric scalar to primitive and boxed number targets")
     void coercesNumericScalarToPrimitiveAndBoxedNumberTargets() {
-        RuntimeValue.NumberValue value = new RuntimeValue.NumberValue(new BigDecimal("42"));
+        BigDecimal value = new BigDecimal("42");
 
         assertThat(coercionService.coerce(value, double.class)).isEqualTo(42.0d);
         assertThat(coercionService.coerce(value, Double.class)).isEqualTo(42.0d);

@@ -67,7 +67,13 @@
       "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 \"AssignmentExpressionBindingsBenchmark|ExpressionEvaluatorV2ExecutionPlanBenchmark\" \"/tmp/performance-benchmark/perf038-before.json\")",
       "Bash($SKILL_SCRIPTS/run-jmh.sh /home/marcelo/dev/git/runestone-forge/exp-eval-mk2 \"AssignmentExpressionBindingsBenchmark|ExpressionEvaluatorV2ExecutionPlanBenchmark\" \"/tmp/performance-benchmark/perf038-after.json\")",
       "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh exp-eval-mk2 \"CrossModuleComparisonBenchmark\" \"/tmp/performance-benchmark/cross-module-perf040.json\")",
-      "Bash(wait)"
+      "Bash(wait)",
+      "Bash(mkdir -p /tmp/performance-benchmark)",
+      "Bash(/home/marcelo/.claude/skills/performance-benchmark/scripts/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"RawObjectEvaluatorBenchmark\" \"/tmp/performance-benchmark/perf040.json\")",
+      "Bash(/home/marcelo/.claude/skills/performance-benchmark/scripts/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"RawObjectEvaluatorBenchmark.powerChain\" \"/tmp/performance-benchmark/perf040-powerchain-rerun.json\")",
+      "Bash(cd:*)",
+      "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh /tmp/perf-041-before/exp-eval-mk2 \"RawObjectEvaluatorBenchmark\" \"/tmp/performance-benchmark/perf041-before.json\")",
+      "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"RawObjectEvaluatorBenchmark\" \"/tmp/performance-benchmark/perf041-after.json\")"
     ]
   }
 }

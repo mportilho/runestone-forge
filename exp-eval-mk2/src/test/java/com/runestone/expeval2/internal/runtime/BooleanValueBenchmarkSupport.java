@@ -12,16 +12,9 @@ import java.util.Map;
  * Supports {@code BooleanValueBenchmark}, measuring allocation cost from evaluating
  * logical expressions that generate multiple boolean intermediate results.
  *
- * <p><b>Smell under investigation:</b> {@link RuntimeValue.BooleanValue} has no static singleton
- * constants for {@code true} and {@code false}. Every comparison ({@code a > b}) and every boolean
- * binary operator ({@code AND}, {@code OR}) in {@link AbstractRuntimeEvaluator} creates a new
- * {@code BooleanValue} record — 16 B each. For a five-comparison AND chain this is up to
- * 9 allocations × 16 B = 144 B per {@code compute()} call that could be eliminated with two
- * static constants.
- *
- * <p><b>Fix:</b> Add {@code BooleanValue.TRUE} and {@code BooleanValue.FALSE} static instances to
- * {@link RuntimeValue.BooleanValue} and replace every {@code new RuntimeValue.BooleanValue(b)}
- * in {@link AbstractRuntimeEvaluator} with the appropriate constant.
+ * <p>The raw evaluator returns Java {@code Boolean} values directly from comparison and
+ * logical operators, so the JVM's Boolean cache ({@code Boolean.TRUE} / {@code Boolean.FALSE})
+ * is reused on every boolean result — zero allocation per boolean sub-expression.
  */
 public final class BooleanValueBenchmarkSupport {
 
