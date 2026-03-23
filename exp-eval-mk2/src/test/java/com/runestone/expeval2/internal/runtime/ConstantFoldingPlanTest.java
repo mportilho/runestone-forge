@@ -175,9 +175,19 @@ class ConstantFoldingPlanTest {
         }
 
         @Test
-        @DisplayName("mean([1, 2, 3]) is not folded — vector literal is not an ExecutableLiteral")
-        void meanWithVectorLiteralIsNotFolded() {
+        @DisplayName("mean([1, 2, 3]) is folded — vector literal is now foldable if all elements are constant")
+        void meanWithVectorLiteralIsFolded() {
             CompiledExpression compiled = compile("mean([1, 2, 3])");
+
+            ExecutableFunctionCall call = resultFunctionCall(compiled);
+
+            assertThat(call.isFolded()).isTrue();
+        }
+
+        @Test
+        @DisplayName("mean([1, x, 3]) is not folded — vector literal contains a variable")
+        void meanWithDynamicVectorLiteralIsNotFolded() {
+            CompiledExpression compiled = compile("mean([1, x, 3])");
 
             ExecutableFunctionCall call = resultFunctionCall(compiled);
 

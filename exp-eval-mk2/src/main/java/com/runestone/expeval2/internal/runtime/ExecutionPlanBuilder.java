@@ -61,9 +61,16 @@ final class ExecutionPlanBuilder {
                     c.results().stream().map(res -> buildNode(res, model, runtimeServices)).toList(),
                     buildNode(c.elseExpression(), model, runtimeServices)
             );
-            case VectorLiteralNode v -> new ExecutableVectorLiteral(
-                    v.elements().stream().map(e -> buildNode(e, model, runtimeServices)).toList()
-            );
+            case VectorLiteralNode v -> {
+                List<ExecutableNode> elements = v.elements().stream()
+                        .map(e -> buildNode(e, model, runtimeServices))
+                        .toList();
+                if (elements.stream().allMatch(this::isConstantNode)) {
+                    List<Object> foldedValues = elements.stream().map(this::constantValue).toList();
+                    yield new ExecutableVectorLiteral(elements, foldedValues);
+                }
+                yield new ExecutableVectorLiteral(elements);
+            }
         };
     }
 
@@ -129,16 +136,18 @@ final class ExecutionPlanBuilder {
 
     private boolean isConstantNode(ExecutableNode node) {
         return switch (node) {
-            case ExecutableLiteral ignored -> true;
-            case ExecutableFunctionCall f  -> f.isFolded();
+            case ExecutableLiteral ignored       -> true;
+            case ExecutableFunctionCall f        -> f.isFolded();
+            case ExecutableVectorLiteral v       -> v.isFolded();
             default -> false;
         };
     }
 
     private Object constantValue(ExecutableNode node) {
         return switch (node) {
-            case ExecutableLiteral lit    -> lit.precomputed();
-            case ExecutableFunctionCall f -> f.foldedResult();
+            case ExecutableLiteral lit           -> lit.precomputed();
+            case ExecutableFunctionCall f        -> f.foldedResult();
+            case ExecutableVectorLiteral v       -> v.foldedValue();
             default -> throw new IllegalStateException("not a constant node: " + node);
         };
     }

@@ -338,6 +338,9 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     }
 
     private List<Object> evaluateVector(ExecutableVectorLiteral node, ExecutionScope scope) {
+        if (node.isFolded()) {
+            return node.foldedValue();
+        }
         List<Object> elements = new ArrayList<>(node.elements().size());
         for (ExecutableNode element : node.elements()) {
             elements.add(evaluateExpr(element, scope));

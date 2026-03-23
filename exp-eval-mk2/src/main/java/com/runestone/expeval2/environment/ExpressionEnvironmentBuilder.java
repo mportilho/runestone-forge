@@ -27,7 +27,7 @@ public final class ExpressionEnvironmentBuilder {
 
     private DataConversionService conversionService;
     private MathContext mathContext = MathContext.DECIMAL128;
-    private MathContext transcendentalMathContext = MathContext.DECIMAL64;
+    private MathContext transcendentalMathContext = MathContext.DECIMAL128;
     private final List<StaticProviderEntry> staticProviders = new ArrayList<>();
     private final List<InstanceProviderEntry> instanceProviders = new ArrayList<>();
     private final Map<String, ExternalSymbolRegistration> externalSymbols = new LinkedHashMap<>();
