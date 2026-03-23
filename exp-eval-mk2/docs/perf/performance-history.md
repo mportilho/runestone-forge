@@ -61,18 +61,6 @@
 | logarithmChain | 999,664 ±18,186 | 1,627,393 ±33,025 | −62.8% | 1,131,995 | 1,672,900 | 1,617,613 ±35,478 | 1,649,782 |
 | powerChain | 3,004.74 ±52.6 | 3,243.19 ±82.8 | −7.9% | 2,922 | 3,096 | 3,608.82 ±84.9 | 3,600 |
 
-**mk2-only benchmarks (compile, compute-literal, assignment bindings):**
-
-| Benchmark | ns/op | Error | B/op |
-|---|---:|---:|---:|
-| compileMathLiteralDense | 1,684,859 | ±164,981 | 754,272 |
-| compileLogicalMixedLiteralDense | 279,042 | ±47,993 | 102,560 |
-| computeMathLiteralDense | 1,361.81 | ±56.5 | 3,608 |
-| computeLogicalMixedLiteralDense | 431.73 | ±15.5 | 368 |
-| computeNoExternal (0 ext) | 561.38 | ±19.1 | 752 |
-| computeThreeExternal (3 ext) | 1,047.58 | ±21.3 | 1,232 |
-| computeTwelveExternal (12 ext) | 2,313.39 | ±57.5 | 2,739 |
-
 **PERF-036 vs PERF-039 delta — impact of PERF-038 `buildValues()` optimization:**
 
 | Scenario | PERF-036 mk2 vs legacy (%) | PERF-039 mk2 vs legacy (%) | Delta (pp) |
@@ -83,13 +71,6 @@
 | conditional | −39.2% | **−31.9%** | **+7.3** |
 | logarithmChain | −56.5% | −62.8% | −6.3 (noise: dominated by log transcendentals) |
 | powerChain | −14.0% | **−7.9%** | **+6.1** |
-
-Assignment bindings (direct PERF-038 effect):
-
-| Benchmark | PERF-036 (ns/op) | PERF-039 (ns/op) | Improvement |
-|---|---:|---:|---:|
-| computeThreeExternal | 1,089.8 | 1,047.58 | +3.9% |
-| computeTwelveExternal | 2,540.2 | 2,313.39 | **+8.9%** |
 
 **Key findings:**
 
