@@ -420,14 +420,81 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             Object current,
             ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke) {
         int arity = methodInvoke.arguments().size();
-        Object[] args = new Object[arity + 1];
-        args[0] = current;
-        for (int index = 0; index < arity; index++) {
-            Object evaluated = evaluateExpr(methodInvoke.arguments().get(index), scope);
-            args[index + 1] = runtimeServices.coerce(evaluated, methodInvoke.parameterTypes().get(index));
-        }
+        List<ExecutableNode> arguments = methodInvoke.arguments();
+        List<Class<?>> parameterTypes = methodInvoke.parameterTypes();
         try {
-            Object result = methodInvoke.handle().invokeWithArguments(args);
+            Object result = switch (arity) {
+                case 0 -> methodInvoke.handle().invoke(current);
+                case 1 -> {
+                    Object a1 = evaluateExpr(arguments.get(0), scope);
+                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
+                    yield methodInvoke.handle().invoke(current, a1);
+                }
+                case 2 -> {
+                    Object a1 = evaluateExpr(arguments.get(0), scope);
+                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
+                    Object a2 = evaluateExpr(arguments.get(1), scope);
+                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
+                    yield methodInvoke.handle().invoke(current, a1, a2);
+                }
+                case 3 -> {
+                    Object a1 = evaluateExpr(arguments.get(0), scope);
+                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
+                    Object a2 = evaluateExpr(arguments.get(1), scope);
+                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
+                    Object a3 = evaluateExpr(arguments.get(2), scope);
+                    a3 = runtimeServices.coerce(a3, parameterTypes.get(2));
+                    yield methodInvoke.handle().invoke(current, a1, a2, a3);
+                }
+                case 4 -> {
+                    Object a1 = evaluateExpr(arguments.get(0), scope);
+                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
+                    Object a2 = evaluateExpr(arguments.get(1), scope);
+                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
+                    Object a3 = evaluateExpr(arguments.get(2), scope);
+                    a3 = runtimeServices.coerce(a3, parameterTypes.get(2));
+                    Object a4 = evaluateExpr(arguments.get(3), scope);
+                    a4 = runtimeServices.coerce(a4, parameterTypes.get(3));
+                    yield methodInvoke.handle().invoke(current, a1, a2, a3, a4);
+                }
+                case 5 -> {
+                    Object a1 = evaluateExpr(arguments.get(0), scope);
+                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
+                    Object a2 = evaluateExpr(arguments.get(1), scope);
+                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
+                    Object a3 = evaluateExpr(arguments.get(2), scope);
+                    a3 = runtimeServices.coerce(a3, parameterTypes.get(2));
+                    Object a4 = evaluateExpr(arguments.get(3), scope);
+                    a4 = runtimeServices.coerce(a4, parameterTypes.get(3));
+                    Object a5 = evaluateExpr(arguments.get(4), scope);
+                    a5 = runtimeServices.coerce(a5, parameterTypes.get(4));
+                    yield methodInvoke.handle().invoke(current, a1, a2, a3, a4, a5);
+                }
+                case 6 -> {
+                    Object a1 = evaluateExpr(arguments.get(0), scope);
+                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
+                    Object a2 = evaluateExpr(arguments.get(1), scope);
+                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
+                    Object a3 = evaluateExpr(arguments.get(2), scope);
+                    a3 = runtimeServices.coerce(a3, parameterTypes.get(2));
+                    Object a4 = evaluateExpr(arguments.get(3), scope);
+                    a4 = runtimeServices.coerce(a4, parameterTypes.get(3));
+                    Object a5 = evaluateExpr(arguments.get(4), scope);
+                    a5 = runtimeServices.coerce(a5, parameterTypes.get(4));
+                    Object a6 = evaluateExpr(arguments.get(5), scope);
+                    a6 = runtimeServices.coerce(a6, parameterTypes.get(5));
+                    yield methodInvoke.handle().invoke(current, a1, a2, a3, a4, a5, a6);
+                }
+                default -> {
+                    Object[] args = new Object[arity + 1];
+                    args[0] = current;
+                    for (int index = 0; index < arity; index++) {
+                        Object evaluated = evaluateExpr(arguments.get(index), scope);
+                        args[index + 1] = runtimeServices.coerce(evaluated, parameterTypes.get(index));
+                    }
+                    yield methodInvoke.handle().invokeWithArguments(args);
+                }
+            };
             return runtimeServices.coerceToResolvedType(result, methodInvoke.returnType());
         } catch (Error error) {
             throw error;
