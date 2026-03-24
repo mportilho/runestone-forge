@@ -10,5 +10,6 @@ sealed interface ExecutableNode permits
         ExecutableFunctionCall,
         ExecutableConditional,
         ExecutableSimpleConditional,
-        ExecutableVectorLiteral {
+        ExecutableVectorLiteral,
+        ExecutablePropertyChain {
 }

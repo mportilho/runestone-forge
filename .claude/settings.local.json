@@ -73,7 +73,15 @@
       "Bash(/home/marcelo/.claude/skills/performance-benchmark/scripts/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"RawObjectEvaluatorBenchmark.powerChain\" \"/tmp/performance-benchmark/perf040-powerchain-rerun.json\")",
       "Bash(cd:*)",
       "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh /tmp/perf-041-before/exp-eval-mk2 \"RawObjectEvaluatorBenchmark\" \"/tmp/performance-benchmark/perf041-before.json\")",
-      "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"RawObjectEvaluatorBenchmark\" \"/tmp/performance-benchmark/perf041-after.json\")"
+      "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh /home/marcelo/udev/git/runestone-forge/exp-eval-mk2 \"RawObjectEvaluatorBenchmark\" \"/tmp/performance-benchmark/perf041-after.json\")",
+      "Bash(find ~/dev/git/temp -name *.jar)",
+      "Bash(find ~ -name antlr4*.jar)",
+      "Bash(find ~ -name antlr4-4*.jar -not -name *runtime* -not -name *sources* -not -name *javadoc* -not -name *annotations*)",
+      "Bash(ANTLR_JAR=~/.m2/repository/org/antlr/antlr4/4.13.1/antlr4-4.13.1.jar)",
+      "Bash(ANTLR_JAR=~/.local/share/JetBrains/IntelliJIdea2024.3/antlr-intellij-plugin-v4/lib/antlr4-4.13.2.jar)",
+      "Bash(find ~/.local ~/.m2 ~ -name antlr-complete*.jar -o -name antlr4-complete*.jar)",
+      "Bash(__NEW_LINE_ff750bbe20d6924c__ cp:*)",
+      "Bash(__NEW_LINE_ff750bbe20d6924c__ echo:*)"
     ]
   }
 }

@@ -3,6 +3,7 @@ package com.runestone.expeval2.environment;
 import com.runestone.converters.DataConversionService;
 import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.FunctionCatalog;
+import com.runestone.expeval2.catalog.TypeHintCatalog;
 import com.runestone.expeval2.internal.runtime.RuntimeServices;
 
 import java.math.MathContext;
@@ -13,16 +14,20 @@ public final class ExpressionEnvironment {
     private final ExpressionEnvironmentId environmentId;
     private final FunctionCatalog functionCatalog;
     private final ExternalSymbolCatalog externalSymbolCatalog;
+    private final TypeHintCatalog typeHintCatalog;
     private final DataConversionService dataConversionService;
     private final MathContext mathContext;
     private final MathContext transcendentalMathContext;
     private final RuntimeServices runtimeServices;
 
-    ExpressionEnvironment(ExpressionEnvironmentId environmentId, FunctionCatalog functionCatalog, ExternalSymbolCatalog externalSymbolCatalog,
-                          DataConversionService dataConversionService, MathContext mathContext, MathContext transcendentalMathContext) {
+    ExpressionEnvironment(ExpressionEnvironmentId environmentId, FunctionCatalog functionCatalog,
+                          ExternalSymbolCatalog externalSymbolCatalog, TypeHintCatalog typeHintCatalog,
+                          DataConversionService dataConversionService, MathContext mathContext,
+                          MathContext transcendentalMathContext) {
         this.environmentId = Objects.requireNonNull(environmentId, "environmentId must not be null");
         this.functionCatalog = Objects.requireNonNull(functionCatalog, "functionCatalog must not be null");
         this.externalSymbolCatalog = Objects.requireNonNull(externalSymbolCatalog, "externalSymbolCatalog must not be null");
+        this.typeHintCatalog = Objects.requireNonNull(typeHintCatalog, "typeHintCatalog must not be null");
         this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService must not be null");
         this.mathContext = Objects.requireNonNull(mathContext, "mathContext must not be null");
         this.transcendentalMathContext = Objects.requireNonNull(transcendentalMathContext, "transcendentalMathContext must not be null");
@@ -43,6 +48,10 @@ public final class ExpressionEnvironment {
 
     public ExternalSymbolCatalog externalSymbolCatalog() {
         return externalSymbolCatalog;
+    }
+
+    public TypeHintCatalog typeHintCatalog() {
+        return typeHintCatalog;
     }
 
     public DataConversionService getDataConversionService() {

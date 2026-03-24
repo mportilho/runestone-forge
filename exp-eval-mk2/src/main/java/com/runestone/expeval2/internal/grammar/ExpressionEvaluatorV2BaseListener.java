@@ -1,4 +1,5 @@
-// Generated from exp-eval-mk2/src/main/antlr4/com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4 by ANTLR 4.13.1
+// Generated from com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4 by ANTLR 4.13.1
+package com.runestone.expeval2.internal.grammar;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ErrorNode;
@@ -419,6 +420,30 @@ public class ExpressionEvaluatorV2BaseListener implements ExpressionEvaluatorV2L
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitIdentifierReferenceTarget(ExpressionEvaluatorV2Parser.IdentifierReferenceTargetContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterPropertyAccess(ExpressionEvaluatorV2Parser.PropertyAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitPropertyAccess(ExpressionEvaluatorV2Parser.PropertyAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterMethodCallAccess(ExpressionEvaluatorV2Parser.MethodCallAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitMethodCallAccess(ExpressionEvaluatorV2Parser.MethodCallAccessContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *

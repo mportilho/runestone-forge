@@ -2,6 +2,7 @@ package com.runestone.expeval2.internal.runtime;
 
 import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.FunctionCatalog;
+import com.runestone.expeval2.catalog.TypeHintCatalog;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 
 import java.util.Objects;
@@ -11,11 +12,14 @@ public final class ResolutionContext {
     private final ExpressionResultType resultType;
     private final FunctionCatalog functionCatalog;
     private final ExternalSymbolCatalog externalSymbolCatalog;
+    private final TypeHintCatalog typeHintCatalog;
 
-    public ResolutionContext(ExpressionResultType resultType, FunctionCatalog functionCatalog, ExternalSymbolCatalog externalSymbolCatalog) {
+    public ResolutionContext(ExpressionResultType resultType, FunctionCatalog functionCatalog,
+                             ExternalSymbolCatalog externalSymbolCatalog, TypeHintCatalog typeHintCatalog) {
         this.resultType = Objects.requireNonNull(resultType, "resultType must not be null");
         this.functionCatalog = Objects.requireNonNull(functionCatalog, "functionCatalog must not be null");
         this.externalSymbolCatalog = Objects.requireNonNull(externalSymbolCatalog, "externalSymbolCatalog must not be null");
+        this.typeHintCatalog = Objects.requireNonNull(typeHintCatalog, "typeHintCatalog must not be null");
     }
 
     public ExpressionResultType resultType() {
@@ -28,5 +32,9 @@ public final class ResolutionContext {
 
     public ExternalSymbolCatalog externalSymbolCatalog() {
         return externalSymbolCatalog;
+    }
+
+    public TypeHintCatalog typeHintCatalog() {
+        return typeHintCatalog;
     }
 }

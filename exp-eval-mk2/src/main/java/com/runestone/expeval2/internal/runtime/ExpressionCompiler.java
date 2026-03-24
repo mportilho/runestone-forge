@@ -134,12 +134,17 @@ public final class ExpressionCompiler {
             case LOGICAL -> astBuilder.buildLogical(parserFacade.parseLogical(source).root());
             case ASSIGNMENTS -> astBuilder.buildAssignmentFile(parserFacade.parseAssignments(source).root());
         };
-        ResolutionContext resolutionContext = new ResolutionContext(resultType, environment.functionCatalog(), environment.externalSymbolCatalog());
+        ResolutionContext resolutionContext = new ResolutionContext(resultType, environment.functionCatalog(), environment.externalSymbolCatalog(), environment.typeHintCatalog());
         SemanticModel semanticModel = semanticResolver.resolve(ast, resolutionContext);
         if (semanticModel.hasErrors()) {
             throw new SemanticResolutionException(source, semanticModel.issues());
         }
-        ExecutionPlan executionPlan = planBuilder.build(semanticModel, environment.runtimeServices());
+        ExecutionPlan executionPlan = planBuilder.build(
+                semanticModel,
+                environment.runtimeServices(),
+                environment.externalSymbolCatalog(),
+                environment.typeHintCatalog()
+        );
         return new CompiledExpression(source, resultType, semanticModel, executionPlan);
     }
 

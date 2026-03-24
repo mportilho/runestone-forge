@@ -1,4 +1,5 @@
-// Generated from exp-eval-mk2/src/main/antlr4/com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4 by ANTLR 4.13.1
+// Generated from com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4 by ANTLR 4.13.1
+package com.runestone.expeval2.internal.grammar;
 import org.antlr.v4.runtime.tree.ParseTreeVisitor;
 
 /**
@@ -247,6 +248,20 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitIdentifierReferenceTarget(ExpressionEvaluatorV2Parser.IdentifierReferenceTargetContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code propertyAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#memberChain}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPropertyAccess(ExpressionEvaluatorV2Parser.PropertyAccessContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code methodCallAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#memberChain}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMethodCallAccess(ExpressionEvaluatorV2Parser.MethodCallAccessContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code greaterThanOperator}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#comparisonOperator}.

@@ -11,12 +11,17 @@ import com.runestone.expeval2.internal.ast.IdentifierNode;
 import com.runestone.expeval2.internal.ast.LiteralNode;
 import com.runestone.expeval2.internal.ast.NodeId;
 import com.runestone.expeval2.internal.ast.PostfixOperationNode;
+import com.runestone.expeval2.internal.ast.PropertyChainNode;
 import com.runestone.expeval2.internal.ast.SimpleAssignmentNode;
 import com.runestone.expeval2.internal.ast.SourceSpan;
 import com.runestone.expeval2.internal.ast.UnaryOperationNode;
 import com.runestone.expeval2.internal.ast.VectorLiteralNode;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
+import com.runestone.expeval2.catalog.MethodDescriptor;
+import com.runestone.expeval2.catalog.PropertyDescriptor;
+import com.runestone.expeval2.catalog.TypeMetadata;
+import com.runestone.expeval2.types.ObjectType;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import com.runestone.expeval2.types.ResolvedType;
 import com.runestone.expeval2.types.ResolvedTypes;
@@ -49,10 +54,18 @@ public final class SemanticResolver {
         }
         if (file.resultExpression() != null) {
             ResolvedType resultType = session.resolveExpression(file.resultExpression());
-            if (context.resultType() == ExpressionResultType.MATH && resultType != UnknownType.INSTANCE && resultType != ScalarType.NUMBER) {
+            boolean tolerateUnknownPropertyChain = file.resultExpression() instanceof PropertyChainNode
+                    && resultType == UnknownType.INSTANCE;
+            if (!tolerateUnknownPropertyChain
+                    && context.resultType() == ExpressionResultType.MATH
+                    && resultType != UnknownType.INSTANCE
+                    && resultType != ScalarType.NUMBER) {
                 session.error("RESULT_TYPE_MISMATCH", "math expressions must resolve to NUMBER", file.resultExpression().sourceSpan());
             }
-            if (context.resultType() == ExpressionResultType.LOGICAL && resultType != UnknownType.INSTANCE && resultType != ScalarType.BOOLEAN) {
+            if (!tolerateUnknownPropertyChain
+                    && context.resultType() == ExpressionResultType.LOGICAL
+                    && resultType != UnknownType.INSTANCE
+                    && resultType != ScalarType.BOOLEAN) {
                 session.error("RESULT_TYPE_MISMATCH", "logical expressions must resolve to BOOLEAN", file.resultExpression().sourceSpan());
             }
             session.resolvedTypes.put(file.nodeId(), resultType);
@@ -129,6 +142,7 @@ public final class SemanticResolver {
             ResolvedType resolvedType = switch (node) {
                 case LiteralNode literalNode -> inferLiteralType(literalNode);
                 case IdentifierNode identifierNode -> resolveIdentifier(identifierNode);
+                case PropertyChainNode propertyChainNode -> resolvePropertyChain(propertyChainNode);
                 case FunctionCallNode functionCallNode -> resolveFunctionCall(functionCallNode);
                 case ConditionalNode conditionalNode -> resolveConditional(conditionalNode);
                 case UnaryOperationNode unaryOperationNode -> resolveUnary(unaryOperationNode);
@@ -179,6 +193,132 @@ public final class SemanticResolver {
             return context.externalSymbolCatalog().find(node.name())
                 .map(ExternalSymbolDescriptor::declaredType)
                 .orElse(UnknownType.INSTANCE);
+        }
+
+        private ResolvedType resolvePropertyChain(PropertyChainNode node) {
+            ResolvedType current = resolveRootType(node);
+
+            for (PropertyChainNode.MemberAccess access : node.chain()) {
+                List<ResolvedType> argumentTypes = access instanceof PropertyChainNode.MethodCallAccess methodCall
+                        ? methodCall.arguments().stream().map(this::resolveExpression).toList()
+                        : List.of();
+                if (current == UnknownType.INSTANCE) {
+                    continue;
+                }
+                if (!(current instanceof ObjectType objectType)) {
+                    error("INVALID_MEMBER_ACCESS",
+                            "type " + current + " does not support member access", node.sourceSpan());
+                    return UnknownType.INSTANCE;
+                }
+                TypeMetadata metadata = context.typeHintCatalog()
+                        .find(objectType.javaClass()).orElse(null);
+                if (metadata == null) {
+                    // Class present but hint not registered — UnknownType, no error.
+                    current = UnknownType.INSTANCE;
+                    continue;
+                }
+                current = switch (access) {
+                    case PropertyChainNode.PropertyAccess propertyAccess ->
+                            resolveProperty(metadata, propertyAccess, node.sourceSpan());
+                    case PropertyChainNode.MethodCallAccess methodCall ->
+                            resolveMethod(metadata, methodCall, argumentTypes, node.sourceSpan());
+                };
+            }
+            return current;
+        }
+
+        private ResolvedType resolveRootType(PropertyChainNode node) {
+            SymbolRef symbolRef = internalSymbolsByName.get(node.rootIdentifier());
+            if (symbolRef != null) {
+                symbolByNodeId.put(node.nodeId(), symbolRef);
+                return internalTypes.getOrDefault(symbolRef, UnknownType.INSTANCE);
+            }
+
+            symbolRef = externalSymbolsByName.computeIfAbsent(
+                    node.rootIdentifier(), name -> new SymbolRef(name, SymbolKind.EXTERNAL));
+            symbolByNodeId.put(node.nodeId(), symbolRef);
+            return context.externalSymbolCatalog().find(node.rootIdentifier())
+                    .map(ExternalSymbolDescriptor::declaredType)
+                    .orElse(UnknownType.INSTANCE);
+        }
+
+        private ResolvedType resolveProperty(
+                TypeMetadata metadata,
+                PropertyChainNode.PropertyAccess access,
+                SourceSpan sourceSpan) {
+            PropertyDescriptor descriptor = metadata.properties().get(access.name());
+            if (descriptor == null) {
+                error("UNKNOWN_PROPERTY",
+                        "property '" + access.name() + "' not found on " + metadata.javaClass().getSimpleName(),
+                        sourceSpan);
+                return UnknownType.INSTANCE;
+            }
+            return descriptor.resolvedType();
+        }
+
+        private ResolvedType resolveMethod(
+                TypeMetadata metadata,
+                PropertyChainNode.MethodCallAccess access,
+                List<ResolvedType> argumentTypes,
+                SourceSpan sourceSpan) {
+            List<MethodDescriptor> candidates = metadata.methods().get(access.name());
+            if (candidates == null || candidates.isEmpty()) {
+                error("UNKNOWN_METHOD",
+                        "method '" + access.name() + "' not found on " + metadata.javaClass().getSimpleName(),
+                        sourceSpan);
+                return UnknownType.INSTANCE;
+            }
+
+            int expectedArity = access.arguments().size();
+            List<MethodDescriptor> arityMatches = candidates.stream()
+                    .filter(candidate -> candidate.arity() == expectedArity)
+                    .toList();
+            if (arityMatches.isEmpty()) {
+                error("INVALID_METHOD_ARITY",
+                        "invalid arity for method '" + access.name() + "' on " + metadata.javaClass().getSimpleName(),
+                        sourceSpan);
+                return UnknownType.INSTANCE;
+            }
+
+            MethodDescriptor exactMatch = null;
+            for (MethodDescriptor candidate : arityMatches) {
+                if (!matchesMethodArguments(candidate, argumentTypes)) {
+                    continue;
+                }
+                if (exactMatch != null) {
+                    error("AMBIGUOUS_METHOD",
+                            "ambiguous method call '" + access.name() + "' on " + metadata.javaClass().getSimpleName(),
+                            sourceSpan);
+                    return UnknownType.INSTANCE;
+                }
+                exactMatch = candidate;
+            }
+            if (exactMatch == null) {
+                error("INCOMPATIBLE_METHOD_ARGUMENTS",
+                        "incompatible arguments for method '" + access.name() + "' on " + metadata.javaClass().getSimpleName(),
+                        sourceSpan);
+                return UnknownType.INSTANCE;
+            }
+            return exactMatch.returnType();
+        }
+
+        private boolean matchesMethodArguments(MethodDescriptor descriptor, List<ResolvedType> argumentTypes) {
+            for (int index = 0; index < argumentTypes.size(); index++) {
+                ResolvedType actualType = argumentTypes.get(index);
+                ResolvedType expectedType = resolveJavaType(descriptor.parameterTypes().get(index));
+                if (actualType != UnknownType.INSTANCE
+                        && expectedType != UnknownType.INSTANCE
+                        && !actualType.equals(expectedType)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private ResolvedType resolveJavaType(Class<?> javaType) {
+            return context.typeHintCatalog().isRegistered(javaType)
+                    ? new ObjectType(javaType)
+                    : ResolvedTypes.fromJavaType(javaType);
         }
 
         private ResolvedType resolveFunctionCall(FunctionCallNode node) {

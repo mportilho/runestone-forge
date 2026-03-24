@@ -8,6 +8,8 @@ import com.runestone.expeval2.catalog.FunctionDescriptor;
 import com.runestone.expeval2.internal.ast.BinaryOperator;
 import com.runestone.expeval2.internal.ast.SourceSpan;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
@@ -146,6 +148,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                 }
                 yield value;
             }
+            case ExecutablePropertyChain chain -> evaluatePropertyChain(chain, scope);
             case ExecutableFunctionCall f  -> evaluateFunctionCall(f, scope);
             case ExecutableConditional c   -> evaluateConditional(c, scope);
             case ExecutableSimpleConditional sc -> evaluateSimpleConditional(sc, scope);
@@ -354,6 +357,191 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             elements.add(evaluateExpr(element, scope));
         }
         return elements;
+    }
+
+    private Object evaluatePropertyChain(ExecutablePropertyChain node, ExecutionScope scope) {
+        Object current = scope.find(node.root());
+        if (current == ExecutionScope.UNBOUND) {
+            throw new ExpressionEvaluationException(
+                    compiledExpression.source(), "UNBOUND_VARIABLE",
+                    "variable '" + node.root().name() + "' has no value; call setValue(\""
+                            + node.root().name() + "\", ...) before compute()", null);
+        }
+        for (ExecutablePropertyChain.ExecutableAccess access : node.chain()) {
+            if (current == null) {
+                throw new ExpressionEvaluationException(
+                        compiledExpression.source(), "NULL_IN_CHAIN",
+                        "null value encountered navigating '" + node.root().name() + "'", null);
+            }
+            current = switch (access) {
+                case ExecutablePropertyChain.ExecutableFieldGet fieldGet ->
+                        invokeGetter(node, current, fieldGet);
+                case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke ->
+                        invokeMethod(node, scope, current, methodInvoke);
+                case ExecutablePropertyChain.ReflectivePropertyAccess propertyAccess ->
+                        resolvePropertyReflective(compiledExpression.source(), current, propertyAccess.name());
+                case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke -> {
+                    Object[] args = new Object[reflectiveMethodInvoke.arguments().size()];
+                    for (int index = 0; index < reflectiveMethodInvoke.arguments().size(); index++) {
+                        args[index] = evaluateExpr(reflectiveMethodInvoke.arguments().get(index), scope);
+                    }
+                    yield invokeMethodReflective(compiledExpression.source(), current, reflectiveMethodInvoke.name(), args);
+                }
+            };
+        }
+        return current;
+    }
+
+    private Object invokeGetter(
+            ExecutablePropertyChain node,
+            Object current,
+            ExecutablePropertyChain.ExecutableFieldGet fieldGet) {
+        try {
+            Object result = fieldGet.getter().invoke(current);
+            return runtimeServices.coerceToResolvedType(result, fieldGet.resolvedType());
+        } catch (Error error) {
+            throw error;
+        } catch (Throwable throwable) {
+            ExpressionEvaluationException exception = new ExpressionEvaluationException(
+                    compiledExpression.source(),
+                    "PROPERTY_ACCESS_ERROR",
+                    "error accessing '" + fieldGet.name() + "' while navigating '" + node.root().name()
+                            + "': " + throwable.getMessage(),
+                    null
+            );
+            exception.initCause(throwable);
+            throw exception;
+        }
+    }
+
+    private Object invokeMethod(
+            ExecutablePropertyChain node,
+            ExecutionScope scope,
+            Object current,
+            ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke) {
+        int arity = methodInvoke.arguments().size();
+        Object[] args = new Object[arity + 1];
+        args[0] = current;
+        for (int index = 0; index < arity; index++) {
+            Object evaluated = evaluateExpr(methodInvoke.arguments().get(index), scope);
+            args[index + 1] = runtimeServices.coerce(evaluated, methodInvoke.parameterTypes().get(index));
+        }
+        try {
+            Object result = methodInvoke.handle().invokeWithArguments(args);
+            return runtimeServices.coerceToResolvedType(result, methodInvoke.returnType());
+        } catch (Error error) {
+            throw error;
+        } catch (Throwable throwable) {
+            ExpressionEvaluationException exception = new ExpressionEvaluationException(
+                    compiledExpression.source(),
+                    "METHOD_INVOKE_ERROR",
+                    "error invoking '" + methodInvoke.name() + "' while navigating '" + node.root().name()
+                            + "': " + throwable.getMessage(),
+                    null
+            );
+            exception.initCause(throwable);
+            throw exception;
+        }
+    }
+
+    private static Object resolvePropertyReflective(String source, Object target, String name) {
+        Class<?> cls = target.getClass();
+        // 1. Record components (works for both public and package-private records)
+        if (cls.isRecord()) {
+            for (java.lang.reflect.RecordComponent comp : cls.getRecordComponents()) {
+                if (comp.getName().equals(name)) {
+                    try {
+                        Method accessor = comp.getAccessor();
+                        accessor.setAccessible(true);
+                        return accessor.invoke(target);
+                    } catch (Exception e) {
+                        throw new ExpressionEvaluationException(source, "PROPERTY_ACCESS_ERROR",
+                                "error accessing '" + name + "': " + e.getMessage(), null);
+                    }
+                }
+            }
+        }
+        // 2. Standard getter getXxx() — walk declared methods to handle non-public classes
+        String getter = "get" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        Method getterMethod = findDeclaredMethod(cls, getter, 0);
+        if (getterMethod != null) {
+            try {
+                getterMethod.setAccessible(true);
+                return getterMethod.invoke(target);
+            } catch (Exception e) {
+                throw new ExpressionEvaluationException(source, "PROPERTY_ACCESS_ERROR",
+                        "error invoking '" + getter + "': " + e.getMessage(), null);
+            }
+        }
+        // 3. Boolean getter isXxx()
+        String isGetter = "is" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        Method isGetterMethod = findDeclaredMethod(cls, isGetter, 0);
+        if (isGetterMethod != null) {
+            try {
+                isGetterMethod.setAccessible(true);
+                return isGetterMethod.invoke(target);
+            } catch (Exception e) {
+                throw new ExpressionEvaluationException(source, "PROPERTY_ACCESS_ERROR",
+                        "error invoking '" + isGetter + "': " + e.getMessage(), null);
+            }
+        }
+        // 4. Declared field (fallback — includes public fields on non-public classes)
+        java.lang.reflect.Field field = findDeclaredField(cls, name);
+        if (field != null) {
+            try {
+                field.setAccessible(true);
+                return field.get(target);
+            } catch (Exception e) {
+                throw new ExpressionEvaluationException(source, "PROPERTY_ACCESS_ERROR",
+                        "error accessing field '" + name + "': " + e.getMessage(), null);
+            }
+        }
+        throw new ExpressionEvaluationException(source, "UNKNOWN_PROPERTY",
+                "property '" + name + "' not found on " + cls.getSimpleName(), null);
+    }
+
+    private static Object invokeMethodReflective(String source, Object target, String name, Object[] args) {
+        Class<?> cls = target.getClass();
+        // Walk declared methods (handles package-private methods on non-public inner classes)
+        for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (Method method : c.getDeclaredMethods()) {
+                if (!method.getName().equals(name)) continue;
+                if (method.getParameterCount() != args.length) continue;
+                if (Modifier.isStatic(method.getModifiers())) continue;
+                try {
+                    method.setAccessible(true);
+                    return method.invoke(target, args);
+                } catch (Exception e) {
+                    throw new ExpressionEvaluationException(source, "METHOD_INVOKE_ERROR",
+                            "error invoking '" + name + "': " + e.getMessage(), null);
+                }
+            }
+        }
+        throw new ExpressionEvaluationException(source, "UNKNOWN_METHOD",
+                "method '" + name + "' with " + args.length + " argument(s) not found on " + cls.getSimpleName(), null);
+    }
+
+    private static Method findDeclaredMethod(Class<?> cls, String name, int paramCount) {
+        for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (Method m : c.getDeclaredMethods()) {
+                if (m.getName().equals(name) && m.getParameterCount() == paramCount
+                        && !Modifier.isStatic(m.getModifiers())) {
+                    return m;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static java.lang.reflect.Field findDeclaredField(Class<?> cls, String name) {
+        for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
+            try {
+                return c.getDeclaredField(name);
+            } catch (NoSuchFieldException ignored) {
+                // continue to superclass
+            }
+        }
+        return null;
     }
 
     // -------------------------------------------------------------------------

@@ -213,7 +213,14 @@ function
 
 referenceTarget
     : function                                                           # functionReferenceTarget
-    | IDENTIFIER                                                         # identifierReferenceTarget
+    | IDENTIFIER memberChain*                                            # identifierReferenceTarget
+    ;
+
+memberChain
+    : PERIOD IDENTIFIER                                                  # propertyAccess
+    | PERIOD IDENTIFIER LPAREN
+          (allEntityTypes (COMMA allEntityTypes)*)?
+      RPAREN                                                             # methodCallAccess
     ;
 
 comparisonOperator

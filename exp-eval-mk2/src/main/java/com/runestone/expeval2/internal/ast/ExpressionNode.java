@@ -7,6 +7,7 @@ public sealed interface ExpressionNode extends Node permits
     IdentifierNode,
     LiteralNode,
     PostfixOperationNode,
+    PropertyChainNode,
     UnaryOperationNode,
     VectorLiteralNode {
 }

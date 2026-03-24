@@ -6,14 +6,21 @@ import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.catalog.FunctionCatalog;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
+import com.runestone.expeval2.catalog.MethodDescriptor;
+import com.runestone.expeval2.catalog.PropertyDescriptor;
+import com.runestone.expeval2.catalog.TypeHintCatalog;
+import com.runestone.expeval2.catalog.TypeMetadata;
 import com.runestone.expeval2.catalog.functions.*;
+import com.runestone.expeval2.types.ObjectType;
 import com.runestone.expeval2.types.ResolvedType;
 import com.runestone.expeval2.types.ResolvedTypes;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.RecordComponent;
 import java.math.MathContext;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -31,6 +38,7 @@ public final class ExpressionEnvironmentBuilder {
     private final List<StaticProviderEntry> staticProviders = new ArrayList<>();
     private final List<InstanceProviderEntry> instanceProviders = new ArrayList<>();
     private final Map<String, ExternalSymbolRegistration> externalSymbols = new LinkedHashMap<>();
+    private final List<Class<?>> typeHints = new ArrayList<>();
 
     public static ExpressionEnvironment empty() {
         return EMPTY_ENVIRONMENT;
@@ -104,6 +112,12 @@ public final class ExpressionEnvironmentBuilder {
                 .addTrigonometryFunctions();
     }
 
+    public ExpressionEnvironmentBuilder registerTypeHint(Class<?> type) {
+        Objects.requireNonNull(type, "type must not be null");
+        typeHints.add(type);
+        return this;
+    }
+
     public ExpressionEnvironmentBuilder registerExternalSymbol(String name, Object defaultValue, boolean overridable) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("name must not be blank");
@@ -128,13 +142,14 @@ public final class ExpressionEnvironmentBuilder {
         FunctionCatalog functionCatalog = new FunctionCatalog(descriptorsByName);
 
         Map<String, ExternalSymbolDescriptor> symbolsByName = new LinkedHashMap<>();
+        TypeHintCatalog typeHintCatalog = buildTypeHintCatalog(typeHints);
         externalSymbols.values().stream()
                 .sorted(Comparator.comparing(ExternalSymbolRegistration::name))
                 .forEach(registration -> symbolsByName.put(
                         registration.name(),
                         new ExternalSymbolDescriptor(
                                 registration.name(),
-                                registration.declaredType(),
+                                resolveDeclaredType(registration.defaultValue().getClass(), typeHintCatalog),
                                 registration.defaultValue(),
                                 registration.overridable()
                         )
@@ -143,20 +158,22 @@ public final class ExpressionEnvironmentBuilder {
 
         List<Class<?>> staticProviderClasses = staticProviders.stream().map(StaticProviderEntry::providerClass).toList();
         List<Object> instanceObjects = instanceProviders.stream().map(InstanceProviderEntry::instance).toList();
-        return new ExpressionEnvironment(new ExpressionEnvironmentId(deriveEnvironmentId(staticProviderClasses, instanceObjects, externalSymbols, mathContext, transcendentalMathContext)),
-                functionCatalog, externalSymbolCatalog, effectiveConversionService, mathContext, transcendentalMathContext);
+        return new ExpressionEnvironment(new ExpressionEnvironmentId(deriveEnvironmentId(staticProviderClasses, instanceObjects, externalSymbols, typeHints, mathContext, transcendentalMathContext)),
+                functionCatalog, externalSymbolCatalog, typeHintCatalog, effectiveConversionService, mathContext, transcendentalMathContext);
     }
 
     private static String deriveEnvironmentId(
             List<Class<?>> staticProviderClasses,
             List<Object> instanceProviders,
             Map<String, ExternalSymbolRegistration> externalSymbols,
+            List<Class<?>> typeHints,
             MathContext mathContext,
             MathContext transcendentalMathContext) {
         List<String> parts = new ArrayList<>();
         staticProviderClasses.forEach(c -> parts.add("s:" + c.getName()));
         instanceProviders.forEach(o -> parts.add("i:" + o.getClass().getName() + "@" + System.identityHashCode(o)));
         externalSymbols.forEach((name, reg) -> parts.add("x:" + name + ":" + reg.declaredType() + ":" + reg.overridable()));
+        typeHints.forEach(c -> parts.add("th:" + c.getName()));
         parts.add("mc:" + mathContext.getPrecision() + ":" + mathContext.getRoundingMode());
         parts.add("tmc:" + transcendentalMathContext.getPrecision() + ":" + transcendentalMathContext.getRoundingMode());
         Collections.sort(parts);
@@ -205,6 +222,152 @@ public final class ExpressionEnvironmentBuilder {
             return new FunctionDescriptor(method.getName(), parameterTypes, parameterResolvedTypes, ResolvedTypes.fromJavaType(method.getReturnType()), handle, foldable);
         } catch (IllegalAccessException exception) {
             throw new IllegalStateException("failed to create method handle for " + method, exception);
+        }
+    }
+
+    private TypeHintCatalog buildTypeHintCatalog(List<Class<?>> types) {
+        if (types.isEmpty()) {
+            return TypeHintCatalog.EMPTY;
+        }
+        Set<Class<?>> registeredTypes = new LinkedHashSet<>(types);
+        Map<Class<?>, TypeMetadata> metadataByType = new LinkedHashMap<>();
+        for (Class<?> type : registeredTypes) {
+            metadataByType.put(type, discoverTypeMetadata(type, registeredTypes));
+        }
+        return new TypeHintCatalog(metadataByType);
+    }
+
+    private TypeMetadata discoverTypeMetadata(Class<?> type, Set<Class<?>> registeredTypes) {
+        Map<String, PropertyDescriptor> properties = new LinkedHashMap<>();
+        Map<String, List<MethodDescriptor>> methods = new LinkedHashMap<>();
+
+        discoverRecordProperties(type, properties, registeredTypes);
+        discoverGetterProperties(type, properties, registeredTypes);
+        discoverFieldProperties(type, properties, registeredTypes);
+        discoverMethods(type, methods, registeredTypes);
+
+        return new TypeMetadata(type, properties, methods);
+    }
+
+    private void discoverRecordProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
+        if (!type.isRecord()) {
+            return;
+        }
+        for (RecordComponent component : type.getRecordComponents()) {
+            Method accessor = component.getAccessor();
+            properties.putIfAbsent(component.getName(), new PropertyDescriptor(
+                    component.getName(),
+                    unreflect(accessor),
+                    resolveDeclaredType(component.getType(), registeredTypes)
+            ));
+        }
+    }
+
+    private void discoverGetterProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
+        for (Method method : type.getMethods()) {
+            if (method.getDeclaringClass() == Object.class
+                    || method.isSynthetic()
+                    || method.isBridge()
+                    || Modifier.isStatic(method.getModifiers())) {
+                continue;
+            }
+            String propertyName = propertyNameFromGetter(method);
+            if (propertyName == null) {
+                continue;
+            }
+            properties.putIfAbsent(propertyName, new PropertyDescriptor(
+                    propertyName,
+                    unreflect(method),
+                    resolveDeclaredType(method.getReturnType(), registeredTypes)
+            ));
+        }
+    }
+
+    private void discoverFieldProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
+        for (Field field : type.getFields()) {
+            if (field.isSynthetic() || Modifier.isStatic(field.getModifiers())) {
+                continue;
+            }
+            properties.putIfAbsent(field.getName(), new PropertyDescriptor(
+                    field.getName(),
+                    unreflectGetter(field),
+                    resolveDeclaredType(field.getType(), registeredTypes)
+            ));
+        }
+    }
+
+    private void discoverMethods(Class<?> type, Map<String, List<MethodDescriptor>> methods, Set<Class<?>> registeredTypes) {
+        Set<String> seenSignatures = new LinkedHashSet<>();
+        for (Method method : type.getMethods()) {
+            if (method.getDeclaringClass() == Object.class
+                    || method.isSynthetic()
+                    || method.isBridge()
+                    || Modifier.isStatic(method.getModifiers())) {
+                continue;
+            }
+            String signature = method.getName() + List.of(method.getParameterTypes());
+            if (!seenSignatures.add(signature)) {
+                continue;
+            }
+            List<Class<?>> parameterTypes = List.of(method.getParameterTypes());
+            methods.computeIfAbsent(method.getName(), ignored -> new ArrayList<>())
+                    .add(new MethodDescriptor(
+                            method.getName(),
+                            unreflect(method),
+                            parameterTypes,
+                            resolveDeclaredType(method.getReturnType(), registeredTypes)
+                    ));
+        }
+    }
+
+    private String propertyNameFromGetter(Method method) {
+        if (method.getParameterCount() != 0 || method.getReturnType() == void.class) {
+            return null;
+        }
+        String methodName = method.getName();
+        if (methodName.startsWith("get") && methodName.length() > 3) {
+            return decapitalize(methodName.substring(3));
+        }
+        if ((method.getReturnType() == boolean.class || method.getReturnType() == Boolean.class)
+                && methodName.startsWith("is") && methodName.length() > 2) {
+            return decapitalize(methodName.substring(2));
+        }
+        return null;
+    }
+
+    private String decapitalize(String value) {
+        if (value.isEmpty()) {
+            return value;
+        }
+        if (value.length() > 1 && Character.isUpperCase(value.charAt(0)) && Character.isUpperCase(value.charAt(1))) {
+            return value;
+        }
+        return Character.toLowerCase(value.charAt(0)) + value.substring(1);
+    }
+
+    private ResolvedType resolveDeclaredType(Class<?> javaType, Set<Class<?>> registeredTypes) {
+        return registeredTypes.contains(javaType) ? new ObjectType(javaType) : ResolvedTypes.fromJavaType(javaType);
+    }
+
+    private ResolvedType resolveDeclaredType(Class<?> javaType, TypeHintCatalog typeHintCatalog) {
+        return typeHintCatalog.isRegistered(javaType) ? new ObjectType(javaType) : ResolvedTypes.fromJavaType(javaType);
+    }
+
+    private MethodHandle unreflect(Method method) {
+        try {
+            method.setAccessible(true);
+            return MethodHandles.lookup().unreflect(method);
+        } catch (IllegalAccessException exception) {
+            throw new IllegalStateException("failed to create method handle for " + method, exception);
+        }
+    }
+
+    private MethodHandle unreflectGetter(Field field) {
+        try {
+            field.setAccessible(true);
+            return MethodHandles.lookup().unreflectGetter(field);
+        } catch (IllegalAccessException exception) {
+            throw new IllegalStateException("failed to create field getter for " + field, exception);
         }
     }
 

@@ -1,4 +1,5 @@
-// Generated from exp-eval-mk2/src/main/antlr4/com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4 by ANTLR 4.13.1
+// Generated from com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4 by ANTLR 4.13.1
+package com.runestone.expeval2.internal.grammar;
 import org.antlr.v4.runtime.tree.ParseTreeListener;
 
 /**
@@ -414,6 +415,30 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitIdentifierReferenceTarget(ExpressionEvaluatorV2Parser.IdentifierReferenceTargetContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code propertyAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void enterPropertyAccess(ExpressionEvaluatorV2Parser.PropertyAccessContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code propertyAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void exitPropertyAccess(ExpressionEvaluatorV2Parser.PropertyAccessContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code methodCallAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void enterMethodCallAccess(ExpressionEvaluatorV2Parser.MethodCallAccessContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code methodCallAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void exitMethodCallAccess(ExpressionEvaluatorV2Parser.MethodCallAccessContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code greaterThanOperator}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#comparisonOperator}.

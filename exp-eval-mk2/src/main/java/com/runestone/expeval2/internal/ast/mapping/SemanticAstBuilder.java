@@ -379,10 +379,36 @@ public final class SemanticAstBuilder {
 
         @Override
         public ExpressionNode visitIdentifierReferenceTarget(ExpressionEvaluatorV2Parser.IdentifierReferenceTargetContext ctx) {
-            return new IdentifierNode(
-                    nodeFactory.nextId("identifier"),
+            String rootIdentifier = ctx.IDENTIFIER().getText();
+            List<ExpressionEvaluatorV2Parser.MemberChainContext> memberChains = ctx.memberChain();
+            if (memberChains.isEmpty()) {
+                return new IdentifierNode(
+                        nodeFactory.nextId("identifier"),
+                        nodeFactory.sourceSpan(ctx),
+                        rootIdentifier
+                );
+            }
+            List<PropertyChainNode.MemberAccess> chain = new ArrayList<>();
+            for (ExpressionEvaluatorV2Parser.MemberChainContext member : memberChains) {
+                PropertyChainNode.MemberAccess access = switch (member) {
+                    case ExpressionEvaluatorV2Parser.PropertyAccessContext p ->
+                            new PropertyChainNode.PropertyAccess(p.IDENTIFIER().getText());
+                    case ExpressionEvaluatorV2Parser.MethodCallAccessContext m -> {
+                        List<ExpressionNode> args = m.allEntityTypes().stream()
+                                .map(this::visitAllEntityType)
+                                .toList();
+                        yield new PropertyChainNode.MethodCallAccess(m.IDENTIFIER().getText(), args);
+                    }
+                    default -> throw new IllegalStateException(
+                            "unsupported memberChain context: " + member.getClass().getSimpleName());
+                };
+                chain.add(access);
+            }
+            return new PropertyChainNode(
+                    nodeFactory.nextId("propertyChain"),
                     nodeFactory.sourceSpan(ctx),
-                    ctx.IDENTIFIER().getText()
+                    rootIdentifier,
+                    chain
             );
         }
 

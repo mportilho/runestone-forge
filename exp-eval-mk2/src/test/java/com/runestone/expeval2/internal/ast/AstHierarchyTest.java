@@ -42,6 +42,7 @@ class AstHierarchyTest {
             IdentifierNode.class.getName(),
             LiteralNode.class.getName(),
             PostfixOperationNode.class.getName(),
+            PropertyChainNode.class.getName(),
             UnaryOperationNode.class.getName(),
             VectorLiteralNode.class.getName()
         );

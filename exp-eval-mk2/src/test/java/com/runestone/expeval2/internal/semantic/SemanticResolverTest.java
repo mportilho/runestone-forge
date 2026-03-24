@@ -143,6 +143,12 @@ class SemanticResolverTest {
             }
             case com.runestone.expeval2.internal.ast.LiteralNode ignoredLiteral -> {
             }
+            case com.runestone.expeval2.internal.ast.PropertyChainNode propertyChainNode ->
+                propertyChainNode.chain().forEach(access -> {
+                    if (access instanceof com.runestone.expeval2.internal.ast.PropertyChainNode.MethodCallAccess m) {
+                        m.arguments().forEach(arg -> collect(arg, nodes));
+                    }
+                });
         }
     }
 
