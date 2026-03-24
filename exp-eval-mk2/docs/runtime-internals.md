@@ -13,11 +13,14 @@ source string
   → SemanticAstBuilder             (parse tree → typed AST Nodes)
   → SemanticResolver               (AST → SemanticModel with SymbolRef + ResolvedType)
   → ExecutionPlanBuilder           (SemanticModel → ExecutionPlan of ExecutableNode)
-  → MathEvaluator / LogicalEvaluator (ExecutionPlan + ExecutionScope → RuntimeValue)
+  → MathEvaluator / LogicalEvaluator (ExecutionPlan + ExecutionScope → plain Java Object)
 ```
 
 Compiled expressions are cached in `ExpressionCompiler` by `(source, environmentId, resultType)` via Caffeine.
-Cache size and TTL are configurable — see section 10.
+Cache size and TTL are configurable — see section 9.
+
+> **Runtime value representation**: The runtime works with plain Java objects (`BigDecimal`, `Boolean`, `String`,
+> `LocalDate`, `LocalTime`, `LocalDateTime`, `List<Object>`). There is no `RuntimeValue` wrapper type.
 
 ---
 
@@ -37,7 +40,7 @@ Cache size and TTL are configurable — see section 10.
 |---|---|
 | `BigDecimal`, `Integer`, `Long`, etc. (any `Number`) | `ScalarType.NUMBER` |
 | `boolean` / `Boolean` | `ScalarType.BOOLEAN` |
-| `String` | `ScalarType.STRING` |
+| `CharSequence` / `String` | `ScalarType.STRING` |
 | `LocalDate` | `ScalarType.DATE` |
 | `LocalTime` | `ScalarType.TIME` |
 | `LocalDateTime` | `ScalarType.DATETIME` |
@@ -46,133 +49,95 @@ Cache size and TTL are configurable — see section 10.
 
 > **Key implication**: `DateTimeFunctions` parameters are typed `Temporal` → `UnknownType.INSTANCE`, so semantic type-checking is always skipped for those arguments.
 
----
+### `ResolvedTypes.merge(left, right)`
 
-## 3. RuntimeValue variants
-
-| Subtype | `raw()` returns | Created from |
-|---|---|---|
-| `NumberValue(BigDecimal)` | `BigDecimal` | Numbers |
-| `BooleanValue(boolean)` | `Boolean` | booleans |
-| `StringValue(String)` | `String` | strings |
-| `DateValue(LocalDate)` | `LocalDate` | LocalDate |
-| `TimeValue(LocalTime)` | `LocalTime` | LocalTime |
-| `DateTimeValue(LocalDateTime)` | `LocalDateTime` | LocalDateTime |
-| `VectorValue(List<RuntimeValue>)` | `List<RuntimeValue>` | arrays / iterables |
-| `NullValue.INSTANCE` | `null` | null inputs |
-
-> **Critical**: `VectorValue.raw()` returns `List<RuntimeValue>`, **not** the original array.
-> This is the source of the array-coercion limitation described in section 5.
+- Both equal → return left.
+- Either is `UnknownType` → return the other (known) type.
+- Otherwise → return `UnknownType.INSTANCE`.
 
 ---
 
-## 4. RuntimeCoercionService.coerce() — resolution order
+## 3. RuntimeCoercionService.coerce() — resolution order
 
-Called for every function argument before invocation (`AbstractRuntimeEvaluator.evaluateFunctionCall`).
+Called for every function argument before invocation (`AbstractObjectEvaluator`).
 
 ```
-coerce(RuntimeValue value, Class<?> targetType):
-  1. targetType == RuntimeValue.class          → return value as-is
-  2. value == NullValue                        → return null
-  3. targetType.isInstance(value.raw())        → return value.raw() directly   ← Temporal works here
-  4. targetType == BigDecimal.class            → asNumber(value)
-  5. targetType == Double / double             → asDouble(value)
-  6. targetType == Integer / int               → asInt(value)
-  7. targetType == Long / long                 → asLong(value)
-  8. targetType == Boolean / boolean           → asBoolean(value)
-  9. targetType == String                      → asString(value)
- 10. targetType == LocalDate                   → asDate(value)
- 11. targetType == LocalTime                   → asTime(value)
- 12. targetType == LocalDateTime               → asDateTime(value)
- 13. List.isAssignableFrom(targetType) && VectorValue → elements().stream().map(raw()).toList()
- 14. fallback: conversionService.convert(value.raw(), targetType)
+coerce(Object value, Class<?> targetType):
+  1. value == null                             → return null
+  2. targetType == Object.class
+     OR targetType.isInstance(value)           → return value as-is   ← Temporal works here
+  3. targetType == BigDecimal.class            → asNumber(value)
+  4. targetType == Double / double             → asDouble(value)
+  5. targetType == Integer / int               → asInt(value)
+  6. targetType == Long / long                 → asLong(value)
+  7. targetType == Boolean / boolean           → asBoolean(value)
+  8. targetType == String                      → asString(value)
+  9. targetType == LocalDate                   → asDate(value)
+ 10. targetType == LocalTime                   → asTime(value)
+ 11. targetType == LocalDateTime               → asDateTime(value)
+ 12. value instanceof List<?> elements:
+       a. List.isAssignableFrom(targetType)    → new ArrayList<>(elements)
+       b. !targetType.isArray()                → conversionService.convert(value, targetType)
+       c. targetType.isArray()                 → see array coercion (section 4)
+ 13. fallback: conversionService.convert(value, targetType)
 ```
 
-Step 3 is why `DateTimeFunctions(Temporal, Temporal)` works: `Temporal.isInstance(LocalDate)` = true.
+Step 2 is why `DateTimeFunctions(Temporal, Temporal)` works: `Temporal.isInstance(LocalDate)` = true.
 
-Step 14 falls to `DefaultDataConversionService`, which has **no converter** for `List<RuntimeValue> → T[]`.
+Step 13 falls to `DefaultDataConversionService`.
 
 ---
 
-## 5. Array-parameter coercion — implemented fix
+## 4. Array-parameter coercion
 
 ### Root cause (historical)
 
 When a catalog function takes an array parameter (e.g., `mean(BigDecimal[] p)`), the expression engine:
 
-1. Evaluates the argument as a `VectorValue` wrapping `List<RuntimeValue>`.
-2. Calls `coerce(VectorValue, BigDecimal[].class)`.
-3. `BigDecimal[].class.isInstance(List<RuntimeValue>)` = **false** → steps 3–10 did not match.
-4. Fell to `DefaultDataConversionService.convert(List<RuntimeValue>, BigDecimal[].class)` → no converter → threw `NoDataConverterFoundException`.
+1. Evaluates the argument as a `List<Object>`.
+2. Calls `coerce(List<Object>, BigDecimal[].class)`.
+3. List step branches to array coercion (step 12c).
 
-### Fix applied — specialized arrays, reference-array fast path, reflective primitive fallback
+### Implementation — specialized fast paths + reflective fallback
 
 ```java
-if (targetType.isArray() && value instanceof RuntimeValue.VectorValue(List<RuntimeValue> elements)) {
-    int n = elements.size();
-    Class<?> componentType = targetType.getComponentType();
+// reached when: value instanceof List<?> elements AND targetType.isArray()
+int n = elements.size();
+Class<?> componentType = targetType.getComponentType();
 
-    if (componentType == BigDecimal.class) {
-        BigDecimal[] array = new BigDecimal[n];
-        for (int i = 0; i < n; i++) {
-            array[i] = asNumber(elements.get(i));
-        }
-        return array;
-    }
-    if (componentType == double.class) {
-        double[] array = new double[n];
-        for (int i = 0; i < n; i++) {
-            array[i] = asDouble(elements.get(i));
-        }
-        return array;
-    }
-    if (componentType == int.class) {
-        int[] array = new int[n];
-        for (int i = 0; i < n; i++) {
-            array[i] = asInt(elements.get(i));
-        }
-        return array;
-    }
-    if (componentType == long.class) {
-        long[] array = new long[n];
-        for (int i = 0; i < n; i++) {
-            array[i] = asLong(elements.get(i));
-        }
-        return array;
-    }
-    if (!componentType.isPrimitive()) {
-        Object[] array = (Object[]) java.lang.reflect.Array.newInstance(componentType, n);
-        for (int i = 0; i < n; i++) {
-            array[i] = coerce(elements.get(i), componentType);
-        }
-        return array;
-    }
-
-    Object array = java.lang.reflect.Array.newInstance(componentType, n);
-    for (int i = 0; i < n; i++) {
-        Array.set(array, i, coerce(elements.get(i), componentType));
-    }
+if (componentType == BigDecimal.class) { ... }  // direct loop, no reflection
+if (componentType == double.class)    { ... }  // direct loop
+if (componentType == int.class)       { ... }  // direct loop
+if (componentType == long.class)      { ... }  // direct loop
+if (!componentType.isPrimitive()) {
+    Object[] array = (Object[]) Array.newInstance(componentType, n);
+    for (int i = 0; i < n; i++) array[i] = coerce(elements.get(i), componentType);
     return array;
 }
+// remaining primitive types — reflective fallback
+Object array = Array.newInstance(componentType, n);
+for (int i = 0; i < n; i++) Array.set(array, i, coerce(elements.get(i), componentType));
+return array;
 ```
 
 `BigDecimal[]` and the primitive fast paths avoid reflective writes entirely. Reference arrays such as `Comparable[]` also avoid `Array.set(...)` via a direct `Object[]` write path; only unsupported primitive arrays still use the reflective fallback.
 
-### Functions now working via the expression API (after fix)
+### Functions working via the expression API
 
-| Catalog class | Now working | Still not working |
+| Catalog class | Working | Not working |
 |---|---|---|
 | `TrigonometryFunctions` | all | — |
-| `MathFunctions` | `ln`, `lb`, `log`, `rule3d`, `rule3i`, and now all array-param methods | — |
+| `MathFunctions` | all (incl. array-param methods) | — |
+| `LogarithmFunctions` | all | — |
 | `DateTimeFunctions` | all | — |
-| `ExcelFinancialFunctions` | `fv`, `pv`, `pmt`, `nper`, and now `npv` | — |
+| `ExcelFinancialFunctions` | `fv`, `pv`, `pmt`, `nper`, `npv` | — |
 | `ComparableFunctions` | `max(T[])`, `min(T[])` | — |
 
-> **Grammar constraint**: The empty vector literal `[]` is not valid syntax (`vectorOfEntitiesOperation` requires ≥ 1 element), so empty-array edge cases cannot be exercised via the expression API.
+> **Grammar constraint**: The empty vector literal `[]` is not valid syntax (`vectorEntity` requires ≥ 1 element), so empty-array edge cases cannot be exercised via the expression API.
 
 ---
 
-## 6. Overload disambiguation
+## 5. Overload disambiguation
 
 The `SemanticResolver` resolves overloaded function names via `matchesArguments()`:
 
@@ -195,37 +160,38 @@ The `int` parameters in the second overload are coerced at runtime via `DefaultD
 
 ---
 
-## 7. RuntimeValueFactory.from() — wrapping raw values
+## 6. Constant folding
 
-Called when seeding values from `setValue()` and when wrapping function return values.
+`ExecutionPlanBuilder` can pre-compute nodes at build time to avoid repeated evaluation at runtime.
 
-```
-from(Object rawValue, ResolvedType expectedType):
-  - null                        → NullValue
-  - already a RuntimeValue      → return as-is
-  - expectedType == null or UNKNOWN → derive type from rawValue.getClass()
-  - effectiveType == VECTOR     → toVector(rawValue)  [handles arrays and Iterables]
-  - effectiveType == NUMBER     → NumberValue(convert(rawValue, BigDecimal.class))
-  - effectiveType == BOOLEAN    → BooleanValue(convert(rawValue, Boolean.class))
-  - etc.
-  - fallback switch on rawValue:
-      LocalDate    → DateValue
-      LocalTime    → TimeValue
-      LocalDateTime → DateTimeValue
-      Number       → NumberValue(convert(..., BigDecimal.class))
-      CharSequence → StringValue
-      Iterable/array → toVector(rawValue)
-```
+### Vector literal folding
 
-`setValue("name", LocalDate.of(...))` creates a `DateValue` via the fallback switch (step: `LocalDate → DateValue`).
+`ExecutableVectorLiteral` pre-computes all-constant vectors at build time and stores a `foldedValue: List<Object>`.
+`isFolded()` returns true when `foldedValue != null`; the evaluator skips element evaluation in that case.
 
-### Return value wrapping for array-returning functions
+### Function call folding
 
-`distribute` and `spread` return `BigDecimal[]`. `RuntimeValueFactory.from(BigDecimal[], NUMBER_VECTOR)` → `toVector()` converts each element to `NumberValue` → `VectorValue(List<NumberValue>)`. This is correct for assignment contexts.
+`ExecutableFunctionCall` stores `foldedArgs` and `foldedResult` when:
+- The `FunctionDescriptor` is marked `foldable = true` (all built-in catalog providers are foldable by default).
+- All arguments are constant or themselves pre-computed.
 
-### Long return type (DateTimeFunctions)
+`isFolded()` returns `foldedResult != null`. The evaluator short-circuits directly to `foldedResult`.
 
-All `DateTimeFunctions` return `Long`. `ResolvedTypes.fromJavaType(Long.class)` = `ScalarType.NUMBER`. So `RuntimeValueFactory.from(365L, NUMBER)` → `NumberValue(BigDecimal.valueOf(365))`. `MathEvaluator.compute()` returns a `BigDecimal`. ✓
+---
+
+## 7. ExecutionScope — two-layer architecture
+
+`ExecutionScope` separates external (predefined) symbols from internal (assignment) symbols to keep concurrent evaluation safe.
+
+- **External layer**: shared, read-only `Map<SymbolRef, Object>` built once per evaluation call from the user-supplied `Map<String, Object>` merged with external symbol defaults.
+- **Internal layer**: fresh mutable `HashMap` pre-sized to `internalSymbolCount`; used exclusively for assignment targets.
+
+The sentinel `ExecutionScope.UNBOUND` (distinct from `null`) marks missing bindings so that explicit `null` values are propagated correctly.
+
+### Dynamic instant caching
+
+`currDate`, `currTime`, and `currDateTime` are evaluated once per scope and cached in an `EnumMap<DynamicInstant, Object>` on the scope.
+Subsequent reads within the same evaluation return the same instant, ensuring consistency.
 
 ---
 
@@ -238,10 +204,6 @@ Because ANTLR's lexer is deterministic and greedy, `2024-01-01` is tokenized as 
 (not `NUMBER MINUS NUMBER MINUS NUMBER`), and `2024-01-01T10:00` as a single `DATETIME` token.
 As a result, `daysBetween(2024-01-01, 2024-12-31)` and `hoursBetween(2024-01-01T00:00, 2024-01-02T00:00)`
 both parse and evaluate correctly.
-
-Verified in `DateTimeFunctionsExpressionTest`.
-
-
 
 ### Date and time literals
 
@@ -264,7 +226,23 @@ Arguments use the `allEntityTypes` rule, which accepts `mathExpression`, `logica
 
 ### Vector literal
 
-`[1, 2, 3]` is a valid vector literal that compiles as `ExecutableVectorLiteral` → `VectorValue` at runtime. Array-parameter functions consume it through the coercion path described in section 5.
+`[1, 2, 3]` is a valid vector literal that compiles as `ExecutableVectorLiteral` → `List<Object>` at runtime. Array-parameter functions consume it through the coercion path described in section 4.
+
+### Assignment expressions
+
+`IDENTIFIER = value ;` (simple) or `[id1, id2, ...] = vectorExpr ;` (destructuring).
+The operator is `=` and each statement is terminated by `;`.
+
+### Conditional expressions
+
+```
+if condition then value elsif condition then value else value endif
+```
+
+Also available in function-call syntax: `if(cond ; val ; cond ; val ; ... ; else_val)`.
+Conditionals are valid in all entity contexts (math, logical, string, date, time, datetime, vector).
+
+Internally, a single `if/then/else/endif` compiles to the optimised `ExecutableSimpleConditional`; multi-branch conditions compile to `ExecutableConditional`.
 
 ---
 
@@ -272,14 +250,21 @@ Arguments use the `allEntityTypes` rule, which accepts `mathExpression`, `logica
 
 | Method | Registers |
 |---|---|
-| `addMathFunctions()` | `MathFunctions` |
+| `addMathFunctions()` | `MathFunctions` + `LogarithmFunctions` |
 | `addTrigonometryFunctions()` | `TrigonometryFunctions` |
 | `addComparableFunctions()` | `ComparableFunctions` |
-| `addExcelFunctions()` | `ExcelFinancialFunctions` (BigDecimal overloads) |
+| `addExcelFunctions()` | `ExcelFinancialFunctions` |
 | `addDateTimeFunctions()` | `DateTimeFunctions` |
 | `addAllFunctions()` | All of the above |
 
+`registerStaticProvider(Class<?>, boolean foldable)` and `registerInstanceProvider(Object, boolean foldable)` are the low-level registration methods.
+
 `registerStaticProvider(Class<?>)` discovers all public static methods via `getMethods()`.
+
+**MathContext injection**: If the first parameter of a provider method is `MathContext`, it is bound at environment-build time:
+- `TrigonometryFunctions` and `LogarithmFunctions` receive `transcendentalMathContext` (default `DECIMAL128`).
+- All other providers receive `mathContext` (default `DECIMAL128`).
+- The `MathContext` parameter is hidden from the expression call site (arity seen by the catalog is reduced by 1).
 
 > **Default environment**: `ExpressionEnvironmentBuilder.empty()` — and the no-environment overloads on `MathExpression`, `LogicalExpression`, and `AssignmentExpression` all use `empty()`. No functions are registered by default. An expression that calls any function without an explicit environment with that function registered will fail with `UNKNOWN_FUNCTION`.
 
@@ -328,7 +313,7 @@ The three-argument `compile` overloads exist on `MathExpression`, `LogicalExpres
 
 ### Cache key
 
-Two compilations share an entry when `(source, environmentId, resultType)` are identical. `ExpressionEnvironmentId` is derived deterministically from the environment's function providers, external symbols, and `MathContext`, so environments built from identical configurations share cache entries automatically.
+Two compilations share an entry when `(source, environmentId, resultType)` are identical. `ExpressionEnvironmentId` is a 16-character hex string derived from SHA-256 of the sorted list of provider class names, instance identity hash codes, external symbol names/types/overridability, and both `MathContext` settings — so environments built from identical configurations share cache entries automatically.
 
 ---
 
@@ -421,18 +406,15 @@ Returns a human-readable string. For semantic/syntax errors with a position, for
 ```java
 // Math — returns BigDecimal
 BigDecimal result = MathExpression.compile("a + b * c")
-        .setValue("a", 1).setValue("b", 2).setValue("c", 3)
-        .compute(); // 7
+        .compute(Map.of("a", 1, "b", 2, "c", 3)); // 7
 
 // Logical — returns boolean
 boolean ok = LogicalExpression.compile("x > 10")
-        .setValue("x", 15)
-        .compute(); // true
+        .compute(Map.of("x", 15)); // true
 
 // Assignments — returns Map<String, Object>
 Map<String, Object> vars = AssignmentExpression.compile("x = a + 1; y = x * 2;")
-        .setValue("a", 5)
-        .compute(); // {x=6, y=12}
+        .compute(Map.of("a", 5)); // {x=6, y=12}
 ```
 
 ### Functions and external symbols
@@ -445,8 +427,7 @@ ExpressionEnvironment env = ExpressionEnvironment.builder()
         .build();
 
 BigDecimal result = MathExpression.compile("sin(x) + rate", env)
-        .setValue("x", new BigDecimal("1.5707963267948966"))
-        .compute();
+        .compute(Map.of("x", new BigDecimal("1.5707963267948966")));
 ```
 
 ### Validation with metadata
@@ -472,8 +453,7 @@ vr.formatMessage();     // "expression is valid: mean([principal, 2]) + rate"
 ExpressionEnvironment env = ExpressionEnvironment.builder().addMathFunctions().build();
 
 AuditResult<BigDecimal> audit = MathExpression.compile("mean([a, b])", env)
-        .setValue("a", 2).setValue("b", 4)
-        .computeWithAudit();
+        .computeWithAudit(Map.of("a", 2, "b", 4));
 
 audit.value();                              // 3
 audit.trace().evaluationTime();            // Duration
@@ -489,9 +469,9 @@ ExpressionEnvironment dateEnv = ExpressionEnvironment.builder()
         .build();
 
 BigDecimal days = MathExpression.compile("daysBetween(d1, d2)", dateEnv)
-        .setValue("d1", LocalDate.of(2024, 1, 1))
-        .setValue("d2", LocalDate.of(2024, 12, 31))
-        .compute(); // 365
+        .compute(Map.of(
+                "d1", LocalDate.of(2024, 1, 1),
+                "d2", LocalDate.of(2024, 12, 31))); // 365
 ```
 
 ### Spring DI with injected compiler
