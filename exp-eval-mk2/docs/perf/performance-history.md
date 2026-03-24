@@ -1,63 +1,3 @@
-## PERF-044: Cross-module public API benchmark baseline (`expression-evaluator` vs `exp-eval-mk2`)
-
-**Date:** 2026-03-23
-**Branch:** refac-springboot-4 (working tree, uncommitted)
-**Benchmark:** `CrossModuleComparisonBenchmark` — 15 methods, 3 forks, 5×500ms warmup, 10×500ms measurement, `-Xms1g -Xmx1g`, GC profiler
-
-**Hypothesis:** Capture the current end-to-end public API baseline between the legacy `expression-evaluator` and `exp-eval-mk2` across the 5 shared scenarios after consolidating the cross benchmark to a single canonical JMH suite. This benchmark intentionally measures caller-visible API cost, not evaluator-only hot paths.
-
-**Changes applied:** None. Measurement-only baseline run.
-
-**Benchmark contract:**
-- legacy path includes repeated `setVariable(...)` followed by `evaluate()`
-- mk2 compute path includes bindings-map materialization followed by `compute(Map)`
-- mk2 audit path includes bindings-map materialization followed by `computeWithAudit(Map)`
-- `logarithmChain` is intentionally excluded because precision-contract differences dominate runtime and would distort the API-level comparison
-
-**Group 1: `legacy.evaluate()` vs `mk2.compute(Map)`**
-
-| Scenario | Legacy (ns/op) | mk2 compute (ns/op) | Δ (%) | Legacy (B/op) | mk2 compute (B/op) | Δ B/op |
-|---|---:|---:|---:|---:|---:|---:|
-| literalDense | 3,423.2 ±124.5 | 2,106.7 ±76.6 | **+38.5%** | 7,256.0 | 2,720.0 | **−4,536.0** |
-| variableChurn | 1,808.6 ±312.8 | 723.6 ±29.1 | **+60.0%** | 2,208.9 | 1,736.0 | **−472.9** |
-| userFunction | 1,259.7 ±199.3 | 564.2 ±27.7 | **+55.2%** | 440.0 | 1,576.0 | **+1,136.0** |
-| conditional | 923.7 ±104.1 | 578.8 ±86.7 | **+37.3%** | 802.7 | 1,336.0 | **+533.3** |
-| powerChain | 1,739.8 ±94.4 | 1,653.3 ±71.0 | **+5.0%** | 2,655.2 | 2,536.0 | **−119.2** |
-
-**Group 2: `legacy.evaluate()` vs `mk2.computeWithAudit(Map)`**
-
-| Scenario | Legacy (ns/op) | mk2 audit (ns/op) | Δ (%) | Legacy (B/op) | mk2 audit (B/op) | Δ B/op |
-|---|---:|---:|---:|---:|---:|---:|
-| literalDense | 3,423.2 ±124.5 | 2,220.2 ±73.6 | **+35.1%** | 7,256.0 | 2,930.7 | **−4,325.3** |
-| variableChurn | 1,808.6 ±312.8 | 839.6 ±26.3 | **+53.6%** | 2,208.9 | 2,352.0 | **+143.1** |
-| userFunction | 1,259.7 ±199.3 | 800.5 ±28.3 | **+36.5%** | 440.0 | 2,352.0 | **+1,912.0** |
-| conditional | 923.7 ±104.1 | 672.5 ±62.6 | **+27.2%** | 802.7 | 1,728.0 | **+925.3** |
-| powerChain | 1,739.8 ±94.4 | 1,842.2 ±140.8 | **−5.9%** | 2,655.2 | 3,040.0 | **+384.8** |
-
-**Audit overhead: `mk2.computeWithAudit(Map)` vs `mk2.compute(Map)`**
-
-| Scenario | Compute (ns/op) | Audit (ns/op) | Δ (%) | Compute (B/op) | Audit (B/op) | Δ B/op |
-|---|---:|---:|---:|---:|---:|---:|
-| literalDense | 2,106.7 ±76.6 | 2,220.2 ±73.6 | +5.4% | 2,720.0 | 2,930.7 | +210.7 |
-| variableChurn | 723.6 ±29.1 | 839.6 ±26.3 | +16.0% | 1,736.0 | 2,352.0 | +616.0 |
-| userFunction | 564.2 ±27.7 | 800.5 ±28.3 | +41.9% | 1,576.0 | 2,352.0 | +776.0 |
-| conditional | 578.8 ±86.7 | 672.5 ±62.6 | +16.2% | 1,336.0 | 1,728.0 | +392.0 |
-| powerChain | 1,653.3 ±71.0 | 1,842.2 ±140.8 | +11.4% | 2,536.0 | 3,040.0 | +504.0 |
-
-**Analysis:**
-
-1. `mk2.compute(Map)` is faster than legacy in all 5 scenarios. The largest wins are `variableChurn` (+60.0%) and `userFunction` (+55.2%). `powerChain` is effectively near-parity (+5.0%).
-2. `mk2.computeWithAudit(Map)` remains faster than legacy in 4 of 5 scenarios. The only exception is `powerChain`, where audit overhead pushes mk2 to a 5.9% regression relative to legacy.
-3. Allocation behavior depends on the scenario. `literalDense` is materially better on mk2 in both compute and audit modes. `userFunction` and `conditional` show clear latency wins for mk2, but with substantially higher `B/op`, which is consistent with end-to-end API measurement that includes map materialization and audit object creation.
-4. Audit overhead is modest for `literalDense` (+5.4%) but significant for `userFunction` (+41.9%) and noticeable for `variableChurn` / `conditional` (about +16%). For callers that do not need provenance, `compute(Map)` remains the cheaper mk2 entry point.
-
-**Decision:** BASELINE SNAPSHOT
-**Reason:** No code changes were evaluated in this run. The purpose was to capture the canonical cross-module, end-to-end API baseline after consolidating the suite to 5 scenarios and a single benchmark class.
-
-**Notes:** JSON results: `/tmp/performance-benchmark/cross-module-comparison-20260323.json`. Run completed in 00:06:13 on JDK 21.0.6, Linux. HEAD at measurement time: `71172d0`.
-
----
-
 ## PERF-041: `RuntimeValue` elimination — full refactoring impact (boxed baseline → raw-everywhere)
 
 **Date:** 2026-03-23
@@ -177,3 +117,63 @@
 **Reason:** The optimization achieves a major performance gain (+29%) and significant allocation reduction (−31%) in the most common coercion scenario (`Long`/`Integer`). The implementation is simple, safe, and targets a known hotspot. Although `Double` coercion was not improved (due to JDK's internal `toString()` usage in `valueOf`), it did not regress significantly.
 
 **Notes:** Baseline and optimized runs captured in the same session to ensure comparability. Comparison: `/tmp/performance-benchmark/comparison.md`. JDK 21.0.6, Linux.
+
+---
+
+## PERF-044: Cross-module public API benchmark baseline (`expression-evaluator` vs `exp-eval-mk2`)
+
+**Date:** 2026-03-23
+**Branch:** refac-springboot-4 (working tree, uncommitted)
+**Benchmark:** `CrossModuleComparisonBenchmark` — 15 methods, 3 forks, 5×500ms warmup, 10×500ms measurement, `-Xms1g -Xmx1g`, GC profiler
+
+**Hypothesis:** Capture the current end-to-end public API baseline between the legacy `expression-evaluator` and `exp-eval-mk2` across the 5 shared scenarios after consolidating the cross benchmark to a single canonical JMH suite. This benchmark intentionally measures caller-visible API cost, not evaluator-only hot paths.
+
+**Changes applied:** None. Measurement-only baseline run.
+
+**Benchmark contract:**
+- legacy path includes repeated `setVariable(...)` followed by `evaluate()`
+- mk2 compute path includes bindings-map materialization followed by `compute(Map)`
+- mk2 audit path includes bindings-map materialization followed by `computeWithAudit(Map)`
+- `logarithmChain` is intentionally excluded because precision-contract differences dominate runtime and would distort the API-level comparison
+
+**Group 1: `legacy.evaluate()` vs `mk2.compute(Map)`**
+
+| Scenario | Legacy (ns/op) | mk2 compute (ns/op) | Δ (%) | Legacy (B/op) | mk2 compute (B/op) | Δ B/op |
+|---|---:|---:|---:|---:|---:|---:|
+| literalDense | 3,423.2 ±124.5 | 2,106.7 ±76.6 | **+38.5%** | 7,256.0 | 2,720.0 | **−4,536.0** |
+| variableChurn | 1,808.6 ±312.8 | 723.6 ±29.1 | **+60.0%** | 2,208.9 | 1,736.0 | **−472.9** |
+| userFunction | 1,259.7 ±199.3 | 564.2 ±27.7 | **+55.2%** | 440.0 | 1,576.0 | **+1,136.0** |
+| conditional | 923.7 ±104.1 | 578.8 ±86.7 | **+37.3%** | 802.7 | 1,336.0 | **+533.3** |
+| powerChain | 1,739.8 ±94.4 | 1,653.3 ±71.0 | **+5.0%** | 2,655.2 | 2,536.0 | **−119.2** |
+
+**Group 2: `legacy.evaluate()` vs `mk2.computeWithAudit(Map)`**
+
+| Scenario | Legacy (ns/op) | mk2 audit (ns/op) | Δ (%) | Legacy (B/op) | mk2 audit (B/op) | Δ B/op |
+|---|---:|---:|---:|---:|---:|---:|
+| literalDense | 3,423.2 ±124.5 | 2,220.2 ±73.6 | **+35.1%** | 7,256.0 | 2,930.7 | **−4,325.3** |
+| variableChurn | 1,808.6 ±312.8 | 839.6 ±26.3 | **+53.6%** | 2,208.9 | 2,352.0 | **+143.1** |
+| userFunction | 1,259.7 ±199.3 | 800.5 ±28.3 | **+36.5%** | 440.0 | 2,352.0 | **+1,912.0** |
+| conditional | 923.7 ±104.1 | 672.5 ±62.6 | **+27.2%** | 802.7 | 1,728.0 | **+925.3** |
+| powerChain | 1,739.8 ±94.4 | 1,842.2 ±140.8 | **−5.9%** | 2,655.2 | 3,040.0 | **+384.8** |
+
+**Audit overhead: `mk2.computeWithAudit(Map)` vs `mk2.compute(Map)`**
+
+| Scenario | Compute (ns/op) | Audit (ns/op) | Δ (%) | Compute (B/op) | Audit (B/op) | Δ B/op |
+|---|---:|---:|---:|---:|---:|---:|
+| literalDense | 2,106.7 ±76.6 | 2,220.2 ±73.6 | +5.4% | 2,720.0 | 2,930.7 | +210.7 |
+| variableChurn | 723.6 ±29.1 | 839.6 ±26.3 | +16.0% | 1,736.0 | 2,352.0 | +616.0 |
+| userFunction | 564.2 ±27.7 | 800.5 ±28.3 | +41.9% | 1,576.0 | 2,352.0 | +776.0 |
+| conditional | 578.8 ±86.7 | 672.5 ±62.6 | +16.2% | 1,336.0 | 1,728.0 | +392.0 |
+| powerChain | 1,653.3 ±71.0 | 1,842.2 ±140.8 | +11.4% | 2,536.0 | 3,040.0 | +504.0 |
+
+**Analysis:**
+
+1. `mk2.compute(Map)` is faster than legacy in all 5 scenarios. The largest wins are `variableChurn` (+60.0%) and `userFunction` (+55.2%). `powerChain` is effectively near-parity (+5.0%).
+2. `mk2.computeWithAudit(Map)` remains faster than legacy in 4 of 5 scenarios. The only exception is `powerChain`, where audit overhead pushes mk2 to a 5.9% regression relative to legacy.
+3. Allocation behavior depends on the scenario. `literalDense` is materially better on mk2 in both compute and audit modes. `userFunction` and `conditional` show clear latency wins for mk2, but with substantially higher `B/op`, which is consistent with end-to-end API measurement that includes map materialization and audit object creation.
+4. Audit overhead is modest for `literalDense` (+5.4%) but significant for `userFunction` (+41.9%) and noticeable for `variableChurn` / `conditional` (about +16%). For callers that do not need provenance, `compute(Map)` remains the cheaper mk2 entry point.
+
+**Decision:** BASELINE SNAPSHOT
+**Reason:** No code changes were evaluated in this run. The purpose was to capture the canonical cross-module, end-to-end API baseline after consolidating the suite to 5 scenarios and a single benchmark class.
+
+**Notes:** JSON results: `/tmp/performance-benchmark/cross-module-comparison-20260323.json`. Run completed in 00:06:13 on JDK 21.0.6, Linux. HEAD at measurement time: `71172d0`.
