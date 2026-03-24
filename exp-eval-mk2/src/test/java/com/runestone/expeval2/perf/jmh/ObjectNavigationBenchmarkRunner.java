@@ -20,7 +20,7 @@ public final class ObjectNavigationBenchmarkRunner {
     public static void main(String[] args) throws Exception {
         Options options = new OptionsBuilder()
                 .include(ObjectNavigationBenchmark.class.getSimpleName())
-                .forks(1)
+                .forks(0)
                 .warmupIterations(3)
                 .warmupTime(TimeValue.milliseconds(300))
                 .measurementIterations(5)
