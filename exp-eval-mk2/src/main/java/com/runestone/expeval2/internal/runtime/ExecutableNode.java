@@ -9,5 +9,6 @@ sealed interface ExecutableNode permits
         ExecutablePostfixOp,
         ExecutableFunctionCall,
         ExecutableConditional,
+        ExecutableSimpleConditional,
         ExecutableVectorLiteral {
 }

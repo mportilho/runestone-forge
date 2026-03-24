@@ -148,6 +148,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             }
             case ExecutableFunctionCall f  -> evaluateFunctionCall(f, scope);
             case ExecutableConditional c   -> evaluateConditional(c, scope);
+            case ExecutableSimpleConditional sc -> evaluateSimpleConditional(sc, scope);
             case ExecutableUnaryOp u       -> evaluateUnary(u, scope);
             case ExecutableBinaryOp b      -> evaluateBinary(b, scope);
             case ExecutablePostfixOp p     -> evaluatePostfix(p, scope);
@@ -280,6 +281,13 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             if (asBoolean(evaluateExpr(conditions.get(index), scope))) {
                 return evaluateExpr(node.results().get(index), scope);
             }
+        }
+        return evaluateExpr(node.elseExpression(), scope);
+    }
+
+    private Object evaluateSimpleConditional(ExecutableSimpleConditional node, ExecutionScope scope) {
+        if (asBoolean(evaluateExpr(node.condition(), scope))) {
+            return evaluateExpr(node.thenExpression(), scope);
         }
         return evaluateExpr(node.elseExpression(), scope);
     }

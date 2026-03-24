@@ -20,7 +20,58 @@ final class ExecutionPlanBuilder {
                 .map(assignment -> buildAssignment(assignment, model, runtimeServices))
                 .toList();
         ExecutableNode resultNode = ast.resultExpression() != null ? buildNode(ast.resultExpression(), model, runtimeServices) : null;
-        return new ExecutionPlan(assignments, resultNode);
+        int maxAuditEvents = countMaxAuditEvents(assignments, resultNode);
+        return new ExecutionPlan(assignments, resultNode, maxAuditEvents);
+    }
+
+    private int countMaxAuditEvents(List<ExecutableAssignment> assignments, ExecutableNode resultExpression) {
+        int count = 0;
+        for (ExecutableAssignment assignment : assignments) {
+            count += switch (assignment) {
+                case ExecutableSimpleAssignment s -> 1 + countNodeEvents(s.value());
+                case ExecutableDestructuringAssignment d -> d.targets().size() + countNodeEvents(d.value());
+            };
+        }
+        if (resultExpression != null) {
+            count += countNodeEvents(resultExpression);
+        }
+        return count;
+    }
+
+    private int countNodeEvents(ExecutableNode node) {
+        return switch (node) {
+            case ExecutableLiteral ignored -> 0;
+            case ExecutableDynamicLiteral ignored -> 1;
+            case ExecutableIdentifier ignored -> 1;
+            case ExecutableFunctionCall f -> {
+                int sum = 1;
+                for (ExecutableNode arg : f.arguments()) sum += countNodeEvents(arg);
+                yield sum;
+            }
+            case ExecutableBinaryOp b -> countNodeEvents(b.left()) + countNodeEvents(b.right());
+            case ExecutableUnaryOp u -> countNodeEvents(u.operand());
+            case ExecutablePostfixOp p -> countNodeEvents(p.operand());
+            case ExecutableConditional c -> {
+                int condCost = 0;
+                for (ExecutableNode cond : c.conditions()) condCost += countNodeEvents(cond);
+
+                int maxBranchCost = countNodeEvents(c.elseExpression());
+                for (ExecutableNode res : c.results()) {
+                    maxBranchCost = Math.max(maxBranchCost, countNodeEvents(res));
+                }
+                yield condCost + maxBranchCost;
+            }
+            case ExecutableSimpleConditional sc -> {
+                int condCost = countNodeEvents(sc.condition());
+                int maxBranchCost = Math.max(countNodeEvents(sc.thenExpression()), countNodeEvents(sc.elseExpression()));
+                yield condCost + maxBranchCost;
+            }
+            case ExecutableVectorLiteral v -> {
+                int sum = 0;
+                for (ExecutableNode el : v.elements()) sum += countNodeEvents(el);
+                yield sum;
+            }
+        };
     }
 
     private ExecutableAssignment buildAssignment(AssignmentNode assignment, SemanticModel model, RuntimeServices runtimeServices) {
@@ -56,11 +107,20 @@ final class ExecutionPlanBuilder {
                     p.operator(),
                     buildNode(p.operand(), model, runtimeServices)
             );
-            case ConditionalNode c -> new ExecutableConditional(
-                    c.conditions().stream().map(cond -> buildNode(cond, model, runtimeServices)).toList(),
-                    c.results().stream().map(res -> buildNode(res, model, runtimeServices)).toList(),
-                    buildNode(c.elseExpression(), model, runtimeServices)
-            );
+            case ConditionalNode c -> {
+                if (c.conditions().size() == 1) {
+                    yield new ExecutableSimpleConditional(
+                            buildNode(c.conditions().get(0), model, runtimeServices),
+                            buildNode(c.results().get(0), model, runtimeServices),
+                            buildNode(c.elseExpression(), model, runtimeServices)
+                    );
+                }
+                yield new ExecutableConditional(
+                        c.conditions().stream().map(cond -> buildNode(cond, model, runtimeServices)).toList(),
+                        c.results().stream().map(res -> buildNode(res, model, runtimeServices)).toList(),
+                        buildNode(c.elseExpression(), model, runtimeServices)
+                );
+            }
             case VectorLiteralNode v -> {
                 List<ExecutableNode> elements = v.elements().stream()
                         .map(e -> buildNode(e, model, runtimeServices))

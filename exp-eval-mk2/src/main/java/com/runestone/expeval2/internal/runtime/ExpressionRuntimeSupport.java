@@ -146,7 +146,7 @@ public final class ExpressionRuntimeSupport {
         this.logicalEvaluator = new LogicalEvaluator(compiledExpression, runtimeServices, mathContext);
         this.hasAssignments = !compiledExpression.executionPlan().assignments().isEmpty();
         this.internalSymbolCount = compiledExpression.semanticModel().internalSymbolsByName().size();
-        this.maxAuditEvents = countMaxAuditEvents(compiledExpression.executionPlan());
+        this.maxAuditEvents = compiledExpression.executionPlan().maxAuditEvents();
     }
 
     // -------------------------------------------------------------------------
@@ -376,51 +376,6 @@ public final class ExpressionRuntimeSupport {
         AuditCollector collector = new AuditCollector(maxAuditEvents);
         Map<String, Object> result = mathEvaluator.evaluateAssignments(createAuditedExecutionScope(values, collector));
         return new AuditResult<>(result, collector.buildTrace());
-    }
-
-    // -------------------------------------------------------------------------
-    // Audit size estimation
-    // -------------------------------------------------------------------------
-
-    private static int countMaxAuditEvents(ExecutionPlan plan) {
-        int count = 0;
-        for (ExecutableAssignment assignment : plan.assignments()) {
-            count += switch (assignment) {
-                case ExecutableSimpleAssignment s -> 1 + countNodeEvents(s.value());
-                case ExecutableDestructuringAssignment d -> d.targets().size() + countNodeEvents(d.value());
-            };
-        }
-        if (plan.resultExpression() != null) {
-            count += countNodeEvents(plan.resultExpression());
-        }
-        return count;
-    }
-
-    private static int countNodeEvents(ExecutableNode node) {
-        return switch (node) {
-            case ExecutableLiteral ignored -> 0;
-            case ExecutableDynamicLiteral ignored -> 1;
-            case ExecutableIdentifier ignored -> 1;
-            case ExecutableFunctionCall f -> {
-                int sum = 1;
-                for (ExecutableNode arg : f.arguments()) sum += countNodeEvents(arg);
-                yield sum;
-            }
-            case ExecutableBinaryOp b -> countNodeEvents(b.left()) + countNodeEvents(b.right());
-            case ExecutableUnaryOp u -> countNodeEvents(u.operand());
-            case ExecutablePostfixOp p -> countNodeEvents(p.operand());
-            case ExecutableConditional c -> {
-                int sum = 0;
-                for (ExecutableNode cond : c.conditions()) sum += countNodeEvents(cond);
-                for (ExecutableNode res : c.results()) sum += countNodeEvents(res);
-                yield sum + countNodeEvents(c.elseExpression());
-            }
-            case ExecutableVectorLiteral v -> {
-                int sum = 0;
-                for (ExecutableNode el : v.elements()) sum += countNodeEvents(el);
-                yield sum;
-            }
-        };
     }
 
     public CompiledExpression getCompiledExpression() {
