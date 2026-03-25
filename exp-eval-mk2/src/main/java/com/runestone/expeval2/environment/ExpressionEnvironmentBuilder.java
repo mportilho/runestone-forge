@@ -11,6 +11,7 @@ import com.runestone.expeval2.catalog.PropertyDescriptor;
 import com.runestone.expeval2.catalog.TypeHintCatalog;
 import com.runestone.expeval2.catalog.TypeMetadata;
 import com.runestone.expeval2.catalog.functions.*;
+import com.runestone.expeval2.internal.runtime.TypeIntrospectionSupport;
 import com.runestone.expeval2.types.ObjectType;
 import com.runestone.expeval2.types.ResolvedType;
 import com.runestone.expeval2.types.ResolvedTypes;
@@ -249,21 +250,20 @@ public final class ExpressionEnvironmentBuilder {
         return new TypeMetadata(type, properties, methods);
     }
 
-    private void discoverRecordProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
+    private static void discoverRecordProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
         if (!type.isRecord()) {
             return;
         }
         for (RecordComponent component : type.getRecordComponents()) {
-            Method accessor = component.getAccessor();
             properties.putIfAbsent(component.getName(), new PropertyDescriptor(
                     component.getName(),
-                    unreflect(accessor),
+                    TypeIntrospectionSupport.unreflect(component.getAccessor()),
                     resolveDeclaredType(component.getType(), registeredTypes)
             ));
         }
     }
 
-    private void discoverGetterProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
+    private static void discoverGetterProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
         for (Method method : type.getMethods()) {
             if (method.getDeclaringClass() == Object.class
                     || method.isSynthetic()
@@ -271,32 +271,32 @@ public final class ExpressionEnvironmentBuilder {
                     || Modifier.isStatic(method.getModifiers())) {
                 continue;
             }
-            String propertyName = propertyNameFromGetter(method);
+            String propertyName = TypeIntrospectionSupport.propertyNameFromGetter(method);
             if (propertyName == null) {
                 continue;
             }
             properties.putIfAbsent(propertyName, new PropertyDescriptor(
                     propertyName,
-                    unreflect(method),
+                    TypeIntrospectionSupport.unreflect(method),
                     resolveDeclaredType(method.getReturnType(), registeredTypes)
             ));
         }
     }
 
-    private void discoverFieldProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
+    private static void discoverFieldProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
         for (Field field : type.getFields()) {
             if (field.isSynthetic() || Modifier.isStatic(field.getModifiers())) {
                 continue;
             }
             properties.putIfAbsent(field.getName(), new PropertyDescriptor(
                     field.getName(),
-                    unreflectGetter(field),
+                    TypeIntrospectionSupport.unreflectGetter(field),
                     resolveDeclaredType(field.getType(), registeredTypes)
             ));
         }
     }
 
-    private void discoverMethods(Class<?> type, Map<String, List<MethodDescriptor>> methods, Set<Class<?>> registeredTypes) {
+    private static void discoverMethods(Class<?> type, Map<String, List<MethodDescriptor>> methods, Set<Class<?>> registeredTypes) {
         Set<String> seenSignatures = new LinkedHashSet<>();
         for (Method method : type.getMethods()) {
             if (method.getDeclaringClass() == Object.class
@@ -313,62 +313,19 @@ public final class ExpressionEnvironmentBuilder {
             methods.computeIfAbsent(method.getName(), ignored -> new ArrayList<>())
                     .add(new MethodDescriptor(
                             method.getName(),
-                            unreflect(method),
+                            TypeIntrospectionSupport.unreflect(method),
                             parameterTypes,
                             resolveDeclaredType(method.getReturnType(), registeredTypes)
                     ));
         }
     }
 
-    private String propertyNameFromGetter(Method method) {
-        if (method.getParameterCount() != 0 || method.getReturnType() == void.class) {
-            return null;
-        }
-        String methodName = method.getName();
-        if (methodName.startsWith("get") && methodName.length() > 3) {
-            return decapitalize(methodName.substring(3));
-        }
-        if ((method.getReturnType() == boolean.class || method.getReturnType() == Boolean.class)
-                && methodName.startsWith("is") && methodName.length() > 2) {
-            return decapitalize(methodName.substring(2));
-        }
-        return null;
-    }
-
-    private String decapitalize(String value) {
-        if (value.isEmpty()) {
-            return value;
-        }
-        if (value.length() > 1 && Character.isUpperCase(value.charAt(0)) && Character.isUpperCase(value.charAt(1))) {
-            return value;
-        }
-        return Character.toLowerCase(value.charAt(0)) + value.substring(1);
-    }
-
-    private ResolvedType resolveDeclaredType(Class<?> javaType, Set<Class<?>> registeredTypes) {
+    private static ResolvedType resolveDeclaredType(Class<?> javaType, Set<Class<?>> registeredTypes) {
         return registeredTypes.contains(javaType) ? new ObjectType(javaType) : ResolvedTypes.fromJavaType(javaType);
     }
 
     private ResolvedType resolveDeclaredType(Class<?> javaType, TypeHintCatalog typeHintCatalog) {
         return typeHintCatalog.isRegistered(javaType) ? new ObjectType(javaType) : ResolvedTypes.fromJavaType(javaType);
-    }
-
-    private MethodHandle unreflect(Method method) {
-        try {
-            method.setAccessible(true);
-            return MethodHandles.lookup().unreflect(method);
-        } catch (IllegalAccessException exception) {
-            throw new IllegalStateException("failed to create method handle for " + method, exception);
-        }
-    }
-
-    private MethodHandle unreflectGetter(Field field) {
-        try {
-            field.setAccessible(true);
-            return MethodHandles.lookup().unreflectGetter(field);
-        } catch (IllegalAccessException exception) {
-            throw new IllegalStateException("failed to create field getter for " + field, exception);
-        }
     }
 
     private record StaticProviderEntry(Class<?> providerClass, boolean foldable) {

@@ -1,7 +1,6 @@
 package com.runestone.expeval2.perf.jmh;
 
 import org.openjdk.jmh.profile.GCProfiler;
-import org.openjdk.jmh.profile.StackProfiler;
 import org.openjdk.jmh.results.RunResult;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
@@ -27,7 +26,6 @@ public final class ObjectNavigationBenchmarkRunner {
                 .measurementTime(TimeValue.milliseconds(500))
                 .timeUnit(TimeUnit.NANOSECONDS)
                 .addProfiler(GCProfiler.class)
-                .addProfiler(StackProfiler.class)
                 .build();
 
         Collection<RunResult> results = new Runner(options).run();

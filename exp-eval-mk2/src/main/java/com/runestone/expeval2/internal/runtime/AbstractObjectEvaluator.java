@@ -8,8 +8,7 @@ import com.runestone.expeval2.catalog.FunctionDescriptor;
 import com.runestone.expeval2.internal.ast.BinaryOperator;
 import com.runestone.expeval2.internal.ast.SourceSpan;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
+import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
@@ -513,102 +512,56 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
 
     private static Object resolvePropertyReflective(String source, Object target, String name) {
         Class<?> cls = target.getClass();
-        // 1. Record components (works for both public and package-private records)
-        if (cls.isRecord()) {
-            for (java.lang.reflect.RecordComponent comp : cls.getRecordComponents()) {
-                if (comp.getName().equals(name)) {
-                    try {
-                        Method accessor = comp.getAccessor();
-                        accessor.setAccessible(true);
-                        return accessor.invoke(target);
-                    } catch (Exception e) {
-                        throw new ExpressionEvaluationException(source, "PROPERTY_ACCESS_ERROR",
-                                "error accessing '" + name + "': " + e.getMessage(), null);
-                    }
-                }
-            }
+        MethodHandle handle = ReflectiveAccessCache.property(cls, name);
+        if (handle == null) {
+            throw new ExpressionEvaluationException(source, "UNKNOWN_PROPERTY",
+                    "property '" + name + "' not found on " + cls.getSimpleName(), null);
         }
-        // 2. Standard getter getXxx() — walk declared methods to handle non-public classes
-        String getter = "get" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
-        Method getterMethod = findDeclaredMethod(cls, getter, 0);
-        if (getterMethod != null) {
-            try {
-                getterMethod.setAccessible(true);
-                return getterMethod.invoke(target);
-            } catch (Exception e) {
-                throw new ExpressionEvaluationException(source, "PROPERTY_ACCESS_ERROR",
-                        "error invoking '" + getter + "': " + e.getMessage(), null);
-            }
+        try {
+            return handle.invoke(target);
+        } catch (Error error) {
+            throw error;
+        } catch (Throwable throwable) {
+            ExpressionEvaluationException exception = new ExpressionEvaluationException(
+                    source, "PROPERTY_ACCESS_ERROR",
+                    "error accessing '" + name + "': " + throwable.getMessage(), null);
+            exception.initCause(throwable);
+            throw exception;
         }
-        // 3. Boolean getter isXxx()
-        String isGetter = "is" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
-        Method isGetterMethod = findDeclaredMethod(cls, isGetter, 0);
-        if (isGetterMethod != null) {
-            try {
-                isGetterMethod.setAccessible(true);
-                return isGetterMethod.invoke(target);
-            } catch (Exception e) {
-                throw new ExpressionEvaluationException(source, "PROPERTY_ACCESS_ERROR",
-                        "error invoking '" + isGetter + "': " + e.getMessage(), null);
-            }
-        }
-        // 4. Declared field (fallback — includes public fields on non-public classes)
-        java.lang.reflect.Field field = findDeclaredField(cls, name);
-        if (field != null) {
-            try {
-                field.setAccessible(true);
-                return field.get(target);
-            } catch (Exception e) {
-                throw new ExpressionEvaluationException(source, "PROPERTY_ACCESS_ERROR",
-                        "error accessing field '" + name + "': " + e.getMessage(), null);
-            }
-        }
-        throw new ExpressionEvaluationException(source, "UNKNOWN_PROPERTY",
-                "property '" + name + "' not found on " + cls.getSimpleName(), null);
     }
 
     private static Object invokeMethodReflective(String source, Object target, String name, Object[] args) {
         Class<?> cls = target.getClass();
-        // Walk declared methods (handles package-private methods on non-public inner classes)
-        for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
-            for (Method method : c.getDeclaredMethods()) {
-                if (!method.getName().equals(name)) continue;
-                if (method.getParameterCount() != args.length) continue;
-                if (Modifier.isStatic(method.getModifiers())) continue;
-                try {
-                    method.setAccessible(true);
-                    return method.invoke(target, args);
-                } catch (Exception e) {
-                    throw new ExpressionEvaluationException(source, "METHOD_INVOKE_ERROR",
-                            "error invoking '" + name + "': " + e.getMessage(), null);
+        MethodHandle handle = ReflectiveAccessCache.method(cls, name, args.length);
+        if (handle == null) {
+            throw new ExpressionEvaluationException(source, "UNKNOWN_METHOD",
+                    "method '" + name + "' with " + args.length + " argument(s) not found on " + cls.getSimpleName(), null);
+        }
+        try {
+            return switch (args.length) {
+                case 0 -> handle.invoke(target);
+                case 1 -> handle.invoke(target, args[0]);
+                case 2 -> handle.invoke(target, args[0], args[1]);
+                case 3 -> handle.invoke(target, args[0], args[1], args[2]);
+                case 4 -> handle.invoke(target, args[0], args[1], args[2], args[3]);
+                case 5 -> handle.invoke(target, args[0], args[1], args[2], args[3], args[4]);
+                case 6 -> handle.invoke(target, args[0], args[1], args[2], args[3], args[4], args[5]);
+                default -> {
+                    Object[] fullArgs = new Object[args.length + 1];
+                    fullArgs[0] = target;
+                    System.arraycopy(args, 0, fullArgs, 1, args.length);
+                    yield handle.invokeWithArguments(fullArgs);
                 }
-            }
+            };
+        } catch (Error error) {
+            throw error;
+        } catch (Throwable throwable) {
+            ExpressionEvaluationException exception = new ExpressionEvaluationException(
+                    source, "METHOD_INVOKE_ERROR",
+                    "error invoking '" + name + "': " + throwable.getMessage(), null);
+            exception.initCause(throwable);
+            throw exception;
         }
-        throw new ExpressionEvaluationException(source, "UNKNOWN_METHOD",
-                "method '" + name + "' with " + args.length + " argument(s) not found on " + cls.getSimpleName(), null);
-    }
-
-    private static Method findDeclaredMethod(Class<?> cls, String name, int paramCount) {
-        for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
-            for (Method m : c.getDeclaredMethods()) {
-                if (m.getName().equals(name) && m.getParameterCount() == paramCount
-                        && !Modifier.isStatic(m.getModifiers())) {
-                    return m;
-                }
-            }
-        }
-        return null;
-    }
-
-    private static java.lang.reflect.Field findDeclaredField(Class<?> cls, String name) {
-        for (Class<?> c = cls; c != null && c != Object.class; c = c.getSuperclass()) {
-            try {
-                return c.getDeclaredField(name);
-            } catch (NoSuchFieldException ignored) {
-                // continue to superclass
-            }
-        }
-        return null;
     }
 
     // -------------------------------------------------------------------------
