@@ -2,12 +2,10 @@ package com.runestone.expeval2.internal.runtime;
 
 import com.runestone.expeval2.api.*;
 import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
-import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.internal.ast.SourceSpan;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import com.runestone.expeval2.internal.grammar.ParsingException;
-import com.runestone.expeval2.types.ResolvedType;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -265,44 +263,13 @@ public final class ExpressionRuntimeSupport {
     static ExpressionRuntimeSupport from(CompiledExpression compiledExpression, ExpressionEnvironment environment) {
         Objects.requireNonNull(environment, "environment must not be null");
         RuntimeServices runtimeServices = environment.runtimeServices();
-        ExternalSymbolCatalog catalog = environment.externalSymbolCatalog();
         SemanticModel semanticModel = compiledExpression.semanticModel();
-        Map<SymbolRef, Object> defaults = seedDefaults(semanticModel, catalog, runtimeServices);
-        Map<String, ExternalBindingPlan> bindings = seedExternalBindingPlans(semanticModel, catalog);
+        Map<SymbolRef, Object> defaults = compiledExpression.executionPlan().defaults();
+        Map<String, ExternalBindingPlan> bindings = compiledExpression.executionPlan().externalBindings();
         return new ExpressionRuntimeSupport(compiledExpression, defaults, bindings, semanticModel.internalSymbolsByName().keySet(), runtimeServices,
                 environment.mathContext());
     }
 
-    private static Map<SymbolRef, Object> seedDefaults(SemanticModel semanticModel, ExternalSymbolCatalog catalog, RuntimeServices runtimeServices) {
-        if (semanticModel.externalSymbolsByName().isEmpty()) {
-            return Map.of();
-        }
-        Map<SymbolRef, Object> defaults = new HashMap<>();
-        semanticModel.externalSymbolsByName().forEach((name, symbolRef) ->
-                catalog.find(name)
-                        .ifPresent(descriptor -> defaults.put(
-                                symbolRef,
-                                runtimeServices.coerceToResolvedType(descriptor.defaultValue(), descriptor.declaredType())
-                        ))
-        );
-        return defaults;
-    }
-
-    private static Map<String, ExternalBindingPlan> seedExternalBindingPlans(SemanticModel semanticModel, ExternalSymbolCatalog catalog) {
-        if (semanticModel.externalSymbolsByName().isEmpty()) {
-            return Map.of();
-        }
-        Map<String, ExternalBindingPlan> bindings = new HashMap<>();
-        semanticModel.externalSymbolsByName().forEach((name, symbolRef) -> {
-            ExternalSymbolDescriptor descriptor = catalog.findOrNull(name);
-            bindings.put(name, new ExternalBindingPlan(
-                    symbolRef,
-                    descriptor != null ? descriptor.declaredType() : null,
-                    descriptor == null || descriptor.overridable()
-            ));
-        });
-        return bindings;
-    }
 
     /**
      * Builds the per-call overrides map, leaving immutable defaults shared across evaluations.
@@ -414,6 +381,4 @@ public final class ExpressionRuntimeSupport {
         return compiledExpression;
     }
 
-    private record ExternalBindingPlan(SymbolRef symbolRef, ResolvedType declaredType, boolean overridable) {
-    }
 }

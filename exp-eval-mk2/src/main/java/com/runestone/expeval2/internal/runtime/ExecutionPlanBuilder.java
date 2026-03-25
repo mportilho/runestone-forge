@@ -1,30 +1,8 @@
 package com.runestone.expeval2.internal.runtime;
 
-import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
-import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
-import com.runestone.expeval2.catalog.FunctionDescriptor;
-import com.runestone.expeval2.catalog.MethodDescriptor;
-import com.runestone.expeval2.catalog.TypeHintCatalog;
-import com.runestone.expeval2.catalog.TypeMetadata;
-import com.runestone.expeval2.internal.ast.AssignmentNode;
-import com.runestone.expeval2.internal.ast.BinaryOperationNode;
-import com.runestone.expeval2.internal.ast.ConditionalNode;
-import com.runestone.expeval2.internal.ast.DestructuringAssignmentNode;
-import com.runestone.expeval2.internal.ast.ExpressionFileNode;
-import com.runestone.expeval2.internal.ast.ExpressionNode;
-import com.runestone.expeval2.internal.ast.FunctionCallNode;
-import com.runestone.expeval2.internal.ast.IdentifierNode;
-import com.runestone.expeval2.internal.ast.LiteralNode;
-import com.runestone.expeval2.internal.ast.PostfixOperationNode;
-import com.runestone.expeval2.internal.ast.PropertyChainNode;
-import com.runestone.expeval2.internal.ast.SimpleAssignmentNode;
-import com.runestone.expeval2.internal.ast.UnaryOperationNode;
-import com.runestone.expeval2.internal.ast.VectorLiteralNode;
-import com.runestone.expeval2.types.ObjectType;
-import com.runestone.expeval2.types.ResolvedType;
-import com.runestone.expeval2.types.ResolvedTypes;
-import com.runestone.expeval2.types.ScalarType;
-import com.runestone.expeval2.types.UnknownType;
+import com.runestone.expeval2.catalog.*;
+import com.runestone.expeval2.internal.ast.*;
+import com.runestone.expeval2.types.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -32,15 +10,13 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 final class ExecutionPlanBuilder {
 
-    ExecutionPlan build(
-            SemanticModel model,
-            RuntimeServices runtimeServices,
-            ExternalSymbolCatalog externalSymbolCatalog,
-            TypeHintCatalog typeHintCatalog) {
+    ExecutionPlan build(SemanticModel model, RuntimeServices runtimeServices, ExternalSymbolCatalog externalSymbolCatalog, TypeHintCatalog typeHintCatalog) {
         ExpressionFileNode ast = model.ast();
         List<ExecutableAssignment> assignments = ast.assignments().stream()
                 .map(assignment -> buildAssignment(assignment, model, runtimeServices, externalSymbolCatalog, typeHintCatalog))
@@ -49,7 +25,40 @@ final class ExecutionPlanBuilder {
                 ? buildNode(ast.resultExpression(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog)
                 : null;
         int maxAuditEvents = countMaxAuditEvents(assignments, resultNode);
-        return new ExecutionPlan(assignments, resultNode, maxAuditEvents);
+        Map<SymbolRef, Object> defaults = seedDefaults(model, externalSymbolCatalog, runtimeServices);
+        Map<String, ExternalBindingPlan> externalBindingPlans = seedExternalBindingPlans(model, externalSymbolCatalog);
+        return new ExecutionPlan(assignments, resultNode, defaults, externalBindingPlans, maxAuditEvents);
+    }
+
+    private static Map<SymbolRef, Object> seedDefaults(SemanticModel semanticModel, ExternalSymbolCatalog catalog, RuntimeServices runtimeServices) {
+        if (semanticModel.externalSymbolsByName().isEmpty()) {
+            return Map.of();
+        }
+        Map<SymbolRef, Object> defaults = new HashMap<>();
+        semanticModel.externalSymbolsByName().forEach((name, symbolRef) ->
+                catalog.find(name)
+                        .ifPresent(descriptor -> defaults.put(
+                                symbolRef,
+                                runtimeServices.coerceToResolvedType(descriptor.defaultValue(), descriptor.declaredType())
+                        ))
+        );
+        return defaults;
+    }
+
+    private static Map<String, ExternalBindingPlan> seedExternalBindingPlans(SemanticModel semanticModel, ExternalSymbolCatalog catalog) {
+        if (semanticModel.externalSymbolsByName().isEmpty()) {
+            return Map.of();
+        }
+        Map<String, ExternalBindingPlan> bindings = new HashMap<>();
+        semanticModel.externalSymbolsByName().forEach((name, symbolRef) -> {
+            ExternalSymbolDescriptor descriptor = catalog.findOrNull(name);
+            bindings.put(name, new ExternalBindingPlan(
+                    symbolRef,
+                    descriptor != null ? descriptor.declaredType() : null,
+                    descriptor == null || descriptor.overridable()
+            ));
+        });
+        return bindings;
     }
 
     private int countMaxAuditEvents(List<ExecutableAssignment> assignments, ExecutableNode resultExpression) {
@@ -158,7 +167,8 @@ final class ExecutionPlanBuilder {
             case IdentifierNode id -> buildIdentifier(id, model);
             case PropertyChainNode chain -> buildPropertyChain(
                     chain, model, runtimeServices, externalSymbolCatalog, typeHintCatalog);
-            case FunctionCallNode f -> buildFunctionCall(f, model, runtimeServices, externalSymbolCatalog, typeHintCatalog);
+            case FunctionCallNode f ->
+                    buildFunctionCall(f, model, runtimeServices, externalSymbolCatalog, typeHintCatalog);
             case BinaryOperationNode b -> new ExecutableBinaryOp(
                     b.operator(),
                     buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog),
@@ -248,7 +258,7 @@ final class ExecutionPlanBuilder {
                 var descriptor = metadata.properties().get(propertyAccess.name());
                 if (descriptor == null) {
                     throw new IllegalStateException("missing property metadata for '" + propertyAccess.name()
-                            + "' on " + metadata.javaClass().getName());
+                                                    + "' on " + metadata.javaClass().getName());
                 }
                 yield new ExecutablePropertyChain.ExecutableFieldGet(
                         propertyAccess.name(),
@@ -290,7 +300,7 @@ final class ExecutionPlanBuilder {
                 var descriptor = metadata.properties().get(propertyAccess.name());
                 if (descriptor == null) {
                     throw new IllegalStateException("missing property metadata for '" + propertyAccess.name()
-                            + "' on " + metadata.javaClass().getName());
+                                                    + "' on " + metadata.javaClass().getName());
                 }
                 yield descriptor.resolvedType();
             }
@@ -307,7 +317,7 @@ final class ExecutionPlanBuilder {
         List<MethodDescriptor> candidates = metadata.methods().get(methodCall.name());
         if (candidates == null || candidates.isEmpty()) {
             throw new IllegalStateException("missing method metadata for '" + methodCall.name()
-                    + "' on " + metadata.javaClass().getName());
+                                            + "' on " + metadata.javaClass().getName());
         }
 
         List<MethodDescriptor> arityMatches = candidates.stream()
@@ -315,8 +325,8 @@ final class ExecutionPlanBuilder {
                 .toList();
         if (arityMatches.isEmpty()) {
             throw new IllegalStateException("missing method overload for '" + methodCall.name()
-                    + "' with arity " + methodCall.arguments().size()
-                    + " on " + metadata.javaClass().getName());
+                                            + "' with arity " + methodCall.arguments().size()
+                                            + " on " + metadata.javaClass().getName());
         }
 
         List<ResolvedType> argumentTypes = methodCall.arguments().stream()
@@ -330,13 +340,13 @@ final class ExecutionPlanBuilder {
             }
             if (match != null) {
                 throw new IllegalStateException("ambiguous method metadata for '" + methodCall.name()
-                        + "' on " + metadata.javaClass().getName());
+                                                + "' on " + metadata.javaClass().getName());
             }
             match = candidate;
         }
         if (match == null) {
             throw new IllegalStateException("missing compatible method overload for '" + methodCall.name()
-                    + "' on " + metadata.javaClass().getName());
+                                            + "' on " + metadata.javaClass().getName());
         }
         return match;
     }
@@ -349,8 +359,8 @@ final class ExecutionPlanBuilder {
             ResolvedType actualType = argumentTypes.get(index);
             ResolvedType expectedType = resolveJavaType(descriptor.parameterTypes().get(index), typeHintCatalog);
             if (actualType != UnknownType.INSTANCE
-                    && expectedType != UnknownType.INSTANCE
-                    && !actualType.equals(expectedType)) {
+                && expectedType != UnknownType.INSTANCE
+                && !actualType.equals(expectedType)) {
                 return false;
             }
         }
@@ -395,8 +405,8 @@ final class ExecutionPlanBuilder {
     private ExecutableNode buildLiteral(LiteralNode lit, SemanticModel model) {
         String text = lit.value();
         return switch (text) {
-            case "currDate"     -> new ExecutableDynamicLiteral(DynamicInstant.CURR_DATE);
-            case "currTime"     -> new ExecutableDynamicLiteral(DynamicInstant.CURR_TIME);
+            case "currDate" -> new ExecutableDynamicLiteral(DynamicInstant.CURR_DATE);
+            case "currTime" -> new ExecutableDynamicLiteral(DynamicInstant.CURR_TIME);
             case "currDateTime" -> new ExecutableDynamicLiteral(DynamicInstant.CURR_DATETIME);
             default -> {
                 ResolvedType resolvedType = model.findResolvedType(lit.nodeId())
@@ -408,11 +418,11 @@ final class ExecutionPlanBuilder {
     }
 
     private Object materialize(String text, ResolvedType resolvedType) {
-        if (resolvedType == ScalarType.NUMBER)   return new BigDecimal(text);
-        if (resolvedType == ScalarType.BOOLEAN)  return Boolean.parseBoolean(text);
-        if (resolvedType == ScalarType.STRING)   return unquote(text);
-        if (resolvedType == ScalarType.DATE)     return LocalDate.parse(text);
-        if (resolvedType == ScalarType.TIME)     return LocalTime.parse(text);
+        if (resolvedType == ScalarType.NUMBER) return new BigDecimal(text);
+        if (resolvedType == ScalarType.BOOLEAN) return Boolean.parseBoolean(text);
+        if (resolvedType == ScalarType.STRING) return unquote(text);
+        if (resolvedType == ScalarType.DATE) return LocalDate.parse(text);
+        if (resolvedType == ScalarType.TIME) return LocalTime.parse(text);
         if (resolvedType == ScalarType.DATETIME) {
             return text.contains("+") || text.endsWith("Z")
                     ? OffsetDateTime.parse(text).toLocalDateTime()
@@ -459,18 +469,18 @@ final class ExecutionPlanBuilder {
 
     private boolean isConstantNode(ExecutableNode node) {
         return switch (node) {
-            case ExecutableLiteral ignored       -> true;
-            case ExecutableFunctionCall f        -> f.isFolded();
-            case ExecutableVectorLiteral v       -> v.isFolded();
+            case ExecutableLiteral ignored -> true;
+            case ExecutableFunctionCall f -> f.isFolded();
+            case ExecutableVectorLiteral v -> v.isFolded();
             default -> false;
         };
     }
 
     private Object constantValue(ExecutableNode node) {
         return switch (node) {
-            case ExecutableLiteral lit           -> lit.precomputed();
-            case ExecutableFunctionCall f        -> f.foldedResult();
-            case ExecutableVectorLiteral v       -> v.foldedValue();
+            case ExecutableLiteral lit -> lit.precomputed();
+            case ExecutableFunctionCall f -> f.foldedResult();
+            case ExecutableVectorLiteral v -> v.foldedValue();
             default -> throw new IllegalStateException("not a constant node: " + node);
         };
     }
