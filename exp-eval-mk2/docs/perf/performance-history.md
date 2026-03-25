@@ -1,3 +1,43 @@
+## PERF-045: Overlay de bindings em `buildValues()` — evitar copia de defaults por chamada
+
+**Date:** 2026-03-25
+**Branch:** refac-springboot-4 (working tree)
+**Benchmark:** `BindingsOverlayBenchmark` — 5 methods, 3 forks, 5×500ms warmup, 10×500ms measurement, `-Xms1g -Xmx1g`, GC profiler
+
+**Hypothesis:** `ExpressionRuntimeSupport.buildValues(...)` copia `defaultValues` a cada `compute(Map)`, mesmo quando o chamador nao sobrescreve nada ou sobrescreve apenas 1-2 simbolos. Trocar a materializacao por um overlay de bindings deve reduzir latencia e `B/op` nos cenarios com muitos defaults, preservando o comportamento publico.
+
+**Changes applied:**
+- `ExpressionRuntimeSupport`: `buildValues(...)` foi substituido por `buildOverrides(...)`, que materializa apenas os overrides da chamada.
+- `ExpressionRuntimeSupport`: metadados de binding externo passaram a ser precomputados uma vez por expressao compilada (`name -> SymbolRef + ResolvedType + overridable`).
+- `ExpressionRuntimeSupport`: fast path quando `userValues` esta vazio, reutilizando `defaultValues` diretamente.
+- `ExecutionScope`: suporte a lookup em ate 3 camadas (`internal -> overrides -> defaults`), incluindo variantes com audit.
+- `ExpressionFacadeTest`: cobertura adicionada para assignment expressions com defaults apenas e com override parcial sobre defaults.
+- `BindingsBenchmarkSupport` / `BindingsOverlayBenchmark`: novo JMH focado em defaults + overrides, separado dos cenarios de navegacao.
+
+**Results (Before = baseline, After = overlay):**
+
+| Scenario | Before (ns/op) | After (ns/op) | Δ (%) | Before (B/op) | After (B/op) | Δ B/op |
+|---|---:|---:|---:|---:|---:|---:|
+| manyDefaultsNoOverrides | 445.8 ±3.0 | 303.7 ±6.9 | **+31.87%** | 1,216 | 520 | **−696** |
+| manyDefaultsOneOverride | 466.8 ±4.5 | 350.5 ±6.1 | **+24.92%** | 1,336 | 768 | **−568** |
+| manyDefaultsTwoOverrides | 483.2 ±4.1 | 364.2 ±1.8 | **+24.63%** | 1,336 | 808 | **−528** |
+| noDefaultsOneOverride | 33.8 ±0.6 | 32.3 ±0.6 | +4.45% | 200 | 208 | +8 |
+| noDefaultsTwoOverrides | 52.4 ±0.9 | 53.0 ±1.0 | −1.16% | 240 | 248 | +8 |
+
+**Analysis:**
+
+1. **Target scenarios with many defaults improved strongly:** all three scenarios that stress the old `new HashMap<>(defaultValues)` path improved by 24% to 32%, with 528 to 696 fewer bytes allocated per operation. This is measured data and directly supports the overlay hypothesis.
+2. **The biggest win is the empty-override case:** `manyDefaultsNoOverrides` improved by +31.87% and cut allocation from 1,216 B/op to 520 B/op because the runtime now reuses the immutable defaults map instead of copying it.
+3. **Sparse overrides now scale with the override count:** `manyDefaultsOneOverride` and `manyDefaultsTwoOverrides` still allocate for the per-call override map, but no longer pay for copying 16 default bindings on every evaluation.
+4. **No-default scenarios stayed near flat:** the small `B/op` increase (+8 B/op) and the `-1.16%` delta in `noDefaultsTwoOverrides` indicate a minor fixed overhead from the new lookup structure, but this is outside the target hotspot and is materially smaller than the gain in the default-heavy cases.
+
+**Decision:** ACCEPT
+**Reason:** The optimization addresses the documented hotspot with clear, repeatable gains in the target scenarios and no semantic regressions in the validated API tests. The slight overhead in no-default scenarios is acceptable given the 24% to 32% gains where defaults are present.
+
+**Verification:** `mvn -q -pl exp-eval-mk2 -Dtest=ExpressionFacadeTest,ObjectNavigationTest test` passed after the change. A clean `mvn -q -pl exp-eval-mk2 clean test-compile -DskipTests` also passed before the final benchmark run.
+
+---
+
 ## PERF-041: `RuntimeValue` elimination — full refactoring impact (boxed baseline → raw-everywhere)
 
 **Date:** 2026-03-23

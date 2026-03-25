@@ -1,28 +1,17 @@
 package com.runestone.expeval2.internal.runtime;
 
-import com.runestone.expeval2.api.AuditResult;
-import com.runestone.expeval2.api.CacheConfig;
-import com.runestone.expeval2.api.CompilationIssue;
-import com.runestone.expeval2.api.CompilationPosition;
-import com.runestone.expeval2.api.ExpressionCompilationException;
-import com.runestone.expeval2.api.ValidationResult;
+import com.runestone.expeval2.api.*;
 import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval2.environment.ExpressionEnvironment;
 import com.runestone.expeval2.internal.ast.SourceSpan;
-import com.runestone.expeval2.internal.ast.mapping.SemanticAstBuilder;
-import com.runestone.expeval2.internal.grammar.ExpressionEvaluatorV2ParserFacade;
 import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import com.runestone.expeval2.internal.grammar.ParsingException;
+import com.runestone.expeval2.types.ResolvedType;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -123,7 +112,11 @@ public final class ExpressionRuntimeSupport {
      * compile time. Shared across all {@code compute*} calls; never mutated after construction.
      */
     private final Map<SymbolRef, Object> defaultValues;
-    private final ExternalSymbolCatalog externalSymbolCatalog;
+    /**
+     * Precomputed binding metadata for external symbols referenced by this expression.
+     */
+    private final Map<String, ExternalBindingPlan> externalBindingsByName;
+    private final Set<String> internalSymbolNames;
     private final RuntimeServices runtimeServices;
     private final Evaluator<BigDecimal> mathEvaluator;
     private final Evaluator<Boolean> logicalEvaluator;
@@ -133,13 +126,14 @@ public final class ExpressionRuntimeSupport {
 
     private ExpressionRuntimeSupport(CompiledExpression compiledExpression,
                                      Map<SymbolRef, Object> defaultValues,
-                                     ExternalSymbolCatalog externalSymbolCatalog,
+                                     Map<String, ExternalBindingPlan> externalBindingsByName,
+                                     Set<String> internalSymbolNames,
                                      RuntimeServices runtimeServices,
                                      MathContext mathContext) {
         this.compiledExpression = Objects.requireNonNull(compiledExpression, "compiledExpression must not be null");
-        this.defaultValues = Collections.unmodifiableMap(
-                Objects.requireNonNull(defaultValues, "defaultValues must not be null"));
-        this.externalSymbolCatalog = Objects.requireNonNull(externalSymbolCatalog, "externalSymbolCatalog must not be null");
+        this.defaultValues = Objects.requireNonNull(defaultValues, "defaultValues must not be null");
+        this.externalBindingsByName = Objects.requireNonNull(externalBindingsByName, "externalBindingsByName must not be null");
+        this.internalSymbolNames = Objects.requireNonNull(internalSymbolNames, "internalSymbolNames must not be null");
         this.runtimeServices = Objects.requireNonNull(runtimeServices, "runtimeServices must not be null");
         Objects.requireNonNull(mathContext, "mathContext must not be null");
         this.mathEvaluator = new MathEvaluator(compiledExpression, runtimeServices, mathContext);
@@ -224,15 +218,15 @@ public final class ExpressionRuntimeSupport {
             return ValidationResult.failed(source, e.issues());
         } catch (ParsingException e) {
             List<CompilationIssue> issues = e.errors().stream()
-                .map(err -> new CompilationIssue(
-                    "SYNTAX_ERROR",
-                    err.message(),
-                    new CompilationPosition(err.line(), err.charPositionInLine(), err.charPositionInLine() + 1)
-                ))
-                .toList();
+                    .map(err -> new CompilationIssue(
+                            "SYNTAX_ERROR",
+                            err.message(),
+                            new CompilationPosition(err.line(), err.charPositionInLine(), err.charPositionInLine() + 1)
+                    ))
+                    .toList();
             return ValidationResult.failed(
-                source,
-                issues.isEmpty() ? List.of(new CompilationIssue("SYNTAX_ERROR", "syntax error")) : issues
+                    source,
+                    issues.isEmpty() ? List.of(new CompilationIssue("SYNTAX_ERROR", "syntax error")) : issues
             );
         }
     }
@@ -248,7 +242,7 @@ public final class ExpressionRuntimeSupport {
      * Compiles an expression using an explicit {@link ExpressionCompiler}.
      */
     public static ExpressionRuntimeSupport compile(String source, ExpressionResultType resultType,
-                                                    ExpressionEnvironment environment, ExpressionCompiler compiler) {
+                                                   ExpressionEnvironment environment, ExpressionCompiler compiler) {
         Objects.requireNonNull(source, "source must not be null");
         Objects.requireNonNull(resultType, "resultType must not be null");
         Objects.requireNonNull(environment, "environment must not be null");
@@ -258,12 +252,12 @@ public final class ExpressionRuntimeSupport {
             return from(compiled, environment);
         } catch (SemanticResolutionException e) {
             List<CompilationIssue> issues = e.issues().stream()
-                .map(issue -> {
-                    SourceSpan span = issue.sourceSpan();
-                    CompilationPosition position = new CompilationPosition(span.startLine(), span.startColumn(), span.endColumn());
-                    return new CompilationIssue(issue.code(), issue.message(), position);
-                })
-                .toList();
+                    .map(issue -> {
+                        SourceSpan span = issue.sourceSpan();
+                        CompilationPosition position = new CompilationPosition(span.startLine(), span.startColumn(), span.endColumn());
+                        return new CompilationIssue(issue.code(), issue.message(), position);
+                    })
+                    .toList();
             throw new ExpressionCompilationException(source, issues, e);
         }
     }
@@ -274,13 +268,15 @@ public final class ExpressionRuntimeSupport {
         ExternalSymbolCatalog catalog = environment.externalSymbolCatalog();
         SemanticModel semanticModel = compiledExpression.semanticModel();
         Map<SymbolRef, Object> defaults = seedDefaults(semanticModel, catalog, runtimeServices);
-        return new ExpressionRuntimeSupport(compiledExpression, defaults, catalog, runtimeServices,
-            environment.mathContext());
+        Map<String, ExternalBindingPlan> bindings = seedExternalBindingPlans(semanticModel, catalog);
+        return new ExpressionRuntimeSupport(compiledExpression, defaults, bindings, semanticModel.internalSymbolsByName().keySet(), runtimeServices,
+                environment.mathContext());
     }
 
-    private static Map<SymbolRef, Object> seedDefaults(SemanticModel semanticModel,
-                                                        ExternalSymbolCatalog catalog,
-                                                        RuntimeServices runtimeServices) {
+    private static Map<SymbolRef, Object> seedDefaults(SemanticModel semanticModel, ExternalSymbolCatalog catalog, RuntimeServices runtimeServices) {
+        if (semanticModel.externalSymbolsByName().isEmpty()) {
+            return Map.of();
+        }
         Map<SymbolRef, Object> defaults = new HashMap<>();
         semanticModel.externalSymbolsByName().forEach((name, symbolRef) ->
                 catalog.find(name)
@@ -292,56 +288,92 @@ public final class ExpressionRuntimeSupport {
         return defaults;
     }
 
-    /**
-     * Builds the per-call values map by merging catalog defaults with the caller-supplied values.
-     */
-    private Map<SymbolRef, Object> buildValues(Map<String, Object> userValues) {
-        if (userValues == null || userValues.isEmpty()) {
-            return defaultValues.isEmpty() ? new HashMap<>() : new HashMap<>(defaultValues);
+    private static Map<String, ExternalBindingPlan> seedExternalBindingPlans(SemanticModel semanticModel, ExternalSymbolCatalog catalog) {
+        if (semanticModel.externalSymbolsByName().isEmpty()) {
+            return Map.of();
         }
-        Map<SymbolRef, Object> result = defaultValues.isEmpty()
-                ? new HashMap<>(userValues.size())
-                : new HashMap<>(defaultValues);
-        SemanticModel semanticModel = compiledExpression.semanticModel();
+        Map<String, ExternalBindingPlan> bindings = new HashMap<>();
+        semanticModel.externalSymbolsByName().forEach((name, symbolRef) -> {
+            ExternalSymbolDescriptor descriptor = catalog.findOrNull(name);
+            bindings.put(name, new ExternalBindingPlan(
+                    symbolRef,
+                    descriptor != null ? descriptor.declaredType() : null,
+                    descriptor == null || descriptor.overridable()
+            ));
+        });
+        return bindings;
+    }
+
+    /**
+     * Builds the per-call overrides map, leaving immutable defaults shared across evaluations.
+     */
+    private Map<SymbolRef, Object> buildOverrides(Map<String, Object> userValues) {
+        if (userValues == null || userValues.isEmpty()) {
+            return Map.of();
+        }
+        Map<SymbolRef, Object> result = new HashMap<>(userValues.size());
         for (Map.Entry<String, Object> entry : userValues.entrySet()) {
             String name = entry.getKey();
-            SymbolRef ref = lookupExternalSymbol(name, semanticModel);
-            ExternalSymbolDescriptor descriptor = externalSymbolCatalog.findOrNull(name);
-            if (descriptor != null && !descriptor.overridable()) {
+            ExternalBindingPlan binding = lookupExternalBinding(name);
+            if (!binding.overridable()) {
                 throw new IllegalStateException("symbol '" + name + "' is not overridable");
             }
-            result.put(ref, runtimeServices.coerceToResolvedType(
+            result.put(binding.symbolRef(), runtimeServices.coerceToResolvedType(
                     entry.getValue(),
-                    descriptor != null ? descriptor.declaredType() : null));
+                    binding.declaredType()));
         }
         return result;
     }
 
-    private static SymbolRef lookupExternalSymbol(String name, SemanticModel semanticModel) {
-        SymbolRef ref = semanticModel.externalSymbolsByName().get(name);
-        if (ref != null) {
-            return ref;
+    private ExternalBindingPlan lookupExternalBinding(String name) {
+        ExternalBindingPlan binding = externalBindingsByName.get(name);
+        if (binding != null) {
+            return binding;
         }
-        if (semanticModel.internalSymbolsByName().containsKey(name)) {
+        if (internalSymbolNames.contains(name)) {
             throw new IllegalArgumentException("symbol '" + name + "' is internal to the expression");
         }
         throw new IllegalArgumentException("unknown external symbol '" + name + "'");
     }
 
     private ExecutionScope createExecutionScope(Map<String, Object> userValues) {
-        Map<SymbolRef, Object> values = buildValues(userValues);
-        if (hasAssignments) {
-            return ExecutionScope.from(values, internalSymbolCount);
+        if (userValues == null || userValues.isEmpty()) {
+            if (hasAssignments) {
+                return ExecutionScope.from(defaultValues, internalSymbolCount);
+            }
+            return ExecutionScope.readOnly(defaultValues);
         }
-        return ExecutionScope.readOnly(values);
+        Map<SymbolRef, Object> overrides = buildOverrides(userValues);
+        if (hasAssignments) {
+            if (defaultValues.isEmpty()) {
+                return ExecutionScope.from(overrides, internalSymbolCount);
+            }
+            return ExecutionScope.from(overrides, defaultValues, internalSymbolCount);
+        }
+        if (defaultValues.isEmpty()) {
+            return ExecutionScope.readOnly(overrides);
+        }
+        return ExecutionScope.readOnly(overrides, defaultValues);
     }
 
     private ExecutionScope createAuditedExecutionScope(Map<String, Object> userValues, AuditCollector collector) {
-        Map<SymbolRef, Object> values = buildValues(userValues);
-        if (hasAssignments) {
-            return ExecutionScope.fromWithAudit(values, internalSymbolCount, collector);
+        if (userValues == null || userValues.isEmpty()) {
+            if (hasAssignments) {
+                return ExecutionScope.fromWithAudit(defaultValues, internalSymbolCount, collector);
+            }
+            return ExecutionScope.readOnlyWithAudit(defaultValues, collector);
         }
-        return ExecutionScope.readOnlyWithAudit(values, collector);
+        Map<SymbolRef, Object> overrides = buildOverrides(userValues);
+        if (hasAssignments) {
+            if (defaultValues.isEmpty()) {
+                return ExecutionScope.fromWithAudit(overrides, internalSymbolCount, collector);
+            }
+            return ExecutionScope.fromWithAudit(overrides, defaultValues, internalSymbolCount, collector);
+        }
+        if (defaultValues.isEmpty()) {
+            return ExecutionScope.readOnlyWithAudit(overrides, collector);
+        }
+        return ExecutionScope.readOnlyWithAudit(overrides, defaultValues, collector);
     }
 
     // -------------------------------------------------------------------------
@@ -380,5 +412,8 @@ public final class ExpressionRuntimeSupport {
 
     public CompiledExpression getCompiledExpression() {
         return compiledExpression;
+    }
+
+    private record ExternalBindingPlan(SymbolRef symbolRef, ResolvedType declaredType, boolean overridable) {
     }
 }

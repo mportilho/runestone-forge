@@ -63,6 +63,37 @@ class ExpressionFacadeTest {
     }
 
     @Test
+    void shouldComputeAssignmentExpressionsUsingOnlyEnvironmentDefaults() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+            .registerExternalSymbol("a", BigDecimal.ONE, true)
+            .registerExternalSymbol("b", new BigDecimal("2"), true)
+            .build();
+
+        Map<String, Object> result = AssignmentExpression.compile("x = a + b; y = x + 1;", environment)
+            .compute();
+
+        assertThat(result)
+            .containsEntry("x", new BigDecimal("3"))
+            .containsEntry("y", new BigDecimal("4"));
+    }
+
+    @Test
+    void shouldLetAssignmentExpressionsOverrideSubsetOfEnvironmentDefaults() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+            .registerExternalSymbol("a", BigDecimal.ONE, true)
+            .registerExternalSymbol("b", new BigDecimal("2"), true)
+            .registerExternalSymbol("c", new BigDecimal("3"), true)
+            .build();
+
+        Map<String, Object> result = AssignmentExpression.compile("x = a + b; y = x + c;", environment)
+            .compute(Map.of("a", 10));
+
+        assertThat(result)
+            .containsEntry("x", new BigDecimal("12"))
+            .containsEntry("y", new BigDecimal("15"));
+    }
+
+    @Test
     void shouldComputePowWithNonIntegerExponentAtDecimal128Precision() {
         // double gives 1.4142135623730951 (rounds up at the 17th decimal place)
         // DECIMAL128 correctly gives 1.41421356237309504880... (true value)

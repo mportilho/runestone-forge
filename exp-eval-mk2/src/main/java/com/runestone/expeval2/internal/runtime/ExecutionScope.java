@@ -18,20 +18,29 @@ final class ExecutionScope {
 
     private final Map<SymbolRef, Object> values;
     /**
-     * Optional read-only external-binding layer used in the two-layer scope variant.
-     * When non-null, {@link #find} checks {@code values} (internal/mutable) first and
-     * falls back to this map for external symbols. {@link #assign} always writes only
-     * to {@code values}, so the shared external layer is never mutated by assignments.
+     * Optional read-only second layer checked after {@link #values}.
+     * This is used for caller-provided overrides in mutable scopes and for shared defaults in
+     * read-only scopes backed by an overrides map.
      */
-    private final Map<SymbolRef, Object> externalValues;
+    private final Map<SymbolRef, Object> secondaryValues;
+    /**
+     * Optional read-only third layer checked after {@link #secondaryValues}.
+     * This is used for immutable catalog defaults when assignments are active and the scope needs
+     * both an internal mutable layer and a per-call overrides layer.
+     */
+    private final Map<SymbolRef, Object> tertiaryValues;
     private final boolean mutable;
     private final AuditCollector audit;
     private EnumMap<DynamicInstant, Object> dynamicCache;
 
-    private ExecutionScope(Map<SymbolRef, Object> values, Map<SymbolRef, Object> externalValues,
-                           boolean mutable, AuditCollector audit) {
+    private ExecutionScope(Map<SymbolRef, Object> values,
+                           Map<SymbolRef, Object> secondaryValues,
+                           Map<SymbolRef, Object> tertiaryValues,
+                           boolean mutable,
+                           AuditCollector audit) {
         this.values = Objects.requireNonNull(values, "values must not be null");
-        this.externalValues = externalValues; // nullable
+        this.secondaryValues = secondaryValues; // nullable
+        this.tertiaryValues = tertiaryValues; // nullable
         this.mutable = mutable;
         this.audit = audit;
     }
@@ -42,30 +51,71 @@ final class ExecutionScope {
      */
     static ExecutionScope from(Map<SymbolRef, Object> sharedExternal, int internalCapacity) {
         Objects.requireNonNull(sharedExternal, "sharedExternal must not be null");
-        return new ExecutionScope(new HashMap<>(internalCapacity), sharedExternal, true, null);
+        return new ExecutionScope(new HashMap<>(internalCapacity), sharedExternal, null, true, null);
+    }
+
+    /**
+     * Creates a three-layer mutable scope: internal assignment results, per-call overrides, and
+     * immutable defaults.
+     */
+    static ExecutionScope from(Map<SymbolRef, Object> overrides,
+                               Map<SymbolRef, Object> defaults,
+                               int internalCapacity) {
+        Objects.requireNonNull(overrides, "overrides must not be null");
+        Objects.requireNonNull(defaults, "defaults must not be null");
+        return new ExecutionScope(new HashMap<>(internalCapacity), overrides, defaults, true, null);
     }
 
     /**
      * Creates a read-only scope backed by a shared map.
      */
     static ExecutionScope readOnly(Map<SymbolRef, Object> sharedValues) {
-        return new ExecutionScope(Objects.requireNonNull(sharedValues, "sharedValues must not be null"), null, false, null);
+        return new ExecutionScope(Objects.requireNonNull(sharedValues, "sharedValues must not be null"), null, null, false, null);
+    }
+
+    /**
+     * Creates a read-only scope backed by a per-call overrides layer plus immutable defaults.
+     */
+    static ExecutionScope readOnly(Map<SymbolRef, Object> overrides, Map<SymbolRef, Object> defaults) {
+        Objects.requireNonNull(overrides, "overrides must not be null");
+        Objects.requireNonNull(defaults, "defaults must not be null");
+        return new ExecutionScope(overrides, defaults, null, false, null);
     }
 
     static ExecutionScope fromWithAudit(Map<SymbolRef, Object> sharedExternal,
                                         int internalCapacity, AuditCollector audit) {
         Objects.requireNonNull(sharedExternal, "sharedExternal must not be null");
         Objects.requireNonNull(audit, "audit must not be null");
-        return new ExecutionScope(new HashMap<>(internalCapacity), sharedExternal, true, audit);
+        return new ExecutionScope(new HashMap<>(internalCapacity), sharedExternal, null, true, audit);
+    }
+
+    static ExecutionScope fromWithAudit(Map<SymbolRef, Object> overrides,
+                                        Map<SymbolRef, Object> defaults,
+                                        int internalCapacity,
+                                        AuditCollector audit) {
+        Objects.requireNonNull(overrides, "overrides must not be null");
+        Objects.requireNonNull(defaults, "defaults must not be null");
+        Objects.requireNonNull(audit, "audit must not be null");
+        return new ExecutionScope(new HashMap<>(internalCapacity), overrides, defaults, true, audit);
     }
 
     static ExecutionScope readOnlyWithAudit(Map<SymbolRef, Object> sharedValues, AuditCollector audit) {
         return new ExecutionScope(
                 Objects.requireNonNull(sharedValues, "sharedValues must not be null"),
                 null,
+                null,
                 false,
                 Objects.requireNonNull(audit, "audit must not be null")
         );
+    }
+
+    static ExecutionScope readOnlyWithAudit(Map<SymbolRef, Object> overrides,
+                                            Map<SymbolRef, Object> defaults,
+                                            AuditCollector audit) {
+        Objects.requireNonNull(overrides, "overrides must not be null");
+        Objects.requireNonNull(defaults, "defaults must not be null");
+        Objects.requireNonNull(audit, "audit must not be null");
+        return new ExecutionScope(overrides, defaults, null, false, audit);
     }
 
     boolean hasAudit() {
@@ -86,8 +136,11 @@ final class ExecutionScope {
     Object find(SymbolRef symbolRef) {
         Objects.requireNonNull(symbolRef, "symbolRef must not be null");
         Object v = values.getOrDefault(symbolRef, UNBOUND);
-        if (v == UNBOUND && externalValues != null) {
-            v = externalValues.getOrDefault(symbolRef, UNBOUND);
+        if (v == UNBOUND && secondaryValues != null) {
+            v = secondaryValues.getOrDefault(symbolRef, UNBOUND);
+        }
+        if (v == UNBOUND && tertiaryValues != null) {
+            v = tertiaryValues.getOrDefault(symbolRef, UNBOUND);
         }
         return v;
     }
