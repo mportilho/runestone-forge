@@ -265,21 +265,8 @@ assignmentValue
 genericEntity
     : IF logicalExpression THEN genericEntity (ELSEIF logicalExpression THEN genericEntity)* ELSE genericEntity ENDIF # genericDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) genericEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) genericEntity)* (COMMA | SEMI) genericEntity RPAREN # genericFunctionDecisionExpression
-    | genericBase NULLCOALESCE genericBase                                                                                                 # nullCoalesceOperation
-    | genericBase                                                                                                                          # genericBaseOperation
-    ;
-
-genericBase
-    : castExpression                                                     # castExpressionBase
-    | NULL                                                               # nullLiteralOperation
-    | STRING                                                             # stringLiteralBase
-    | NUMBER                                                             # numericLiteralBase
-    | (TRUE | FALSE)                                                     # booleanLiteralBase
-    | DATE                                                               # dateLiteralBase
-    | TIME                                                               # timeLiteralBase
-    | DATETIME TIME_OFFSET?                                              # datetimeLiteralBase
-    | LBRACKET allEntityTypes (COMMA allEntityTypes)* RBRACKET          # vectorLiteralBase
-    | referenceTarget                                                    # referenceTargetBase
+    | castExpression                                                                                                                       # castExpressionOperation
+    | referenceTarget                                                                                                                      # referenceTargetOperation
     ;
 
 castExpression
@@ -300,22 +287,21 @@ logicalEntity
     : (TRUE | FALSE)                                                                                           # logicalConstantOperation
     | IF logicalExpression THEN logicalExpression (ELSEIF logicalExpression THEN logicalExpression)* ELSE logicalExpression ENDIF # logicalDecisionOperation
     | IF LPAREN logicalExpression (COMMA | SEMI) logicalExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) logicalExpression)* (COMMA | SEMI) logicalExpression RPAREN # logicalFunctionDecisionOperation
-    | BOOLEAN_TYPE? referenceTarget                                                                            # logicalReferenceOperation
+    | BOOLEAN_TYPE? referenceTarget (NULLCOALESCE logicalEntity)?                                                        # logicalReferenceOperation
     ;
 
 numericEntity
     : IF logicalExpression THEN mathExpression (ELSEIF logicalExpression THEN mathExpression)* ELSE mathExpression ENDIF # mathDecisionOperation
     | IF LPAREN logicalExpression (COMMA | SEMI) mathExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) mathExpression)* (COMMA | SEMI) mathExpression RPAREN # mathFunctionDecisionOperation
     | NUMBER                                                                                                             # numericConstantOperation
-    // Identifiers may resolve to user variables or semantic built-ins such as E/pi.
-    | NUMBER_TYPE? referenceTarget                                                                                       # numericReferenceOperation
+    | NUMBER_TYPE? referenceTarget (NULLCOALESCE numericEntity)?                                                         # numericReferenceOperation
     ;
 
 stringEntity
     : IF logicalExpression THEN stringEntity (ELSEIF logicalExpression THEN stringEntity)* ELSE stringEntity ENDIF # stringDecisionOperation
     | IF LPAREN logicalExpression (COMMA | SEMI) stringEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) stringEntity)* (COMMA | SEMI) stringEntity RPAREN # stringFunctionDecisionOperation
     | STRING                                                                                                    # stringConstantOperation
-    | STRING_TYPE? referenceTarget                                                                             # stringReferenceOperation
+    | STRING_TYPE? referenceTarget (NULLCOALESCE stringEntity)?                                                 # stringReferenceOperation
     ;
 
 dateEntity
@@ -323,7 +309,7 @@ dateEntity
     | IF LPAREN logicalExpression (COMMA | SEMI) dateEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateEntity)* (COMMA | SEMI) dateEntity RPAREN # dateFunctionDecisionOperation
     | DATE                                                                                                     # dateConstantOperation
     | NOW_DATE                                                                                                 # dateCurrentValueOperation
-    | DATE_TYPE? referenceTarget                                                                               # dateReferenceOperation
+    | DATE_TYPE? referenceTarget (NULLCOALESCE dateEntity)?                                                    # dateReferenceOperation
     ;
 
 timeEntity
@@ -331,7 +317,7 @@ timeEntity
     | IF LPAREN logicalExpression (COMMA | SEMI) timeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) timeEntity)* (COMMA | SEMI) timeEntity RPAREN # timeFunctionDecisionOperation
     | TIME                                                                                                     # timeConstantOperation
     | NOW_TIME                                                                                                 # timeCurrentValueOperation
-    | TIME_TYPE? referenceTarget                                                                               # timeReferenceOperation
+    | TIME_TYPE? referenceTarget (NULLCOALESCE timeEntity)?                                                    # timeReferenceOperation
     ;
 
 dateTimeEntity
@@ -339,14 +325,14 @@ dateTimeEntity
     | IF LPAREN logicalExpression (COMMA | SEMI) dateTimeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateTimeEntity)* (COMMA | SEMI) dateTimeEntity RPAREN # dateTimeFunctionDecisionOperation
     | DATETIME TIME_OFFSET?                                                                                    # dateTimeConstantOperation
     | NOW_DATETIME                                                                                             # dateTimeCurrentValueOperation
-    | DATETIME_TYPE? referenceTarget                                                                           # dateTimeReferenceOperation
+    | DATETIME_TYPE? referenceTarget (NULLCOALESCE dateTimeEntity)?                                            # dateTimeReferenceOperation
     ;
 
 vectorEntity
     : IF logicalExpression THEN vectorEntity (ELSEIF logicalExpression THEN vectorEntity)* ELSE vectorEntity ENDIF # vectorDecisionOperation
     | IF LPAREN logicalExpression (COMMA | SEMI) vectorEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) vectorEntity)* (COMMA | SEMI) vectorEntity RPAREN # vectorFunctionDecisionOperation
-    | LBRACKET allEntityTypes (COMMA allEntityTypes)* RBRACKET # vectorOfEntitiesOperation
-    | VECTOR_TYPE? referenceTarget                             # vectorReferenceOperation
+    | LBRACKET allEntityTypes (COMMA allEntityTypes)* RBRACKET                               # vectorOfEntitiesOperation
+    | VECTOR_TYPE? referenceTarget (NULLCOALESCE vectorEntity)?                              # vectorReferenceOperation
     ;
 
 vectorOfVariables
