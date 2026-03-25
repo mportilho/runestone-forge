@@ -393,11 +393,19 @@ public final class SemanticAstBuilder {
                 PropertyChainNode.MemberAccess access = switch (member) {
                     case ExpressionEvaluatorV2Parser.PropertyAccessContext p ->
                             new PropertyChainNode.PropertyAccess(p.IDENTIFIER().getText());
+                    case ExpressionEvaluatorV2Parser.SafePropertyAccessContext sp ->
+                            new PropertyChainNode.SafePropertyAccess(sp.IDENTIFIER().getText());
                     case ExpressionEvaluatorV2Parser.MethodCallAccessContext m -> {
                         List<ExpressionNode> args = m.allEntityTypes().stream()
                                 .map(this::visitAllEntityType)
                                 .toList();
                         yield new PropertyChainNode.MethodCallAccess(m.IDENTIFIER().getText(), args);
+                    }
+                    case ExpressionEvaluatorV2Parser.SafeMethodCallAccessContext sm -> {
+                        List<ExpressionNode> args = sm.allEntityTypes().stream()
+                                .map(this::visitAllEntityType)
+                                .toList();
+                        yield new PropertyChainNode.SafeMethodCallAccess(sm.IDENTIFIER().getText(), args);
                     }
                     default -> throw new IllegalStateException(
                             "unsupported memberChain context: " + member.getClass().getSimpleName());
@@ -573,7 +581,74 @@ public final class SemanticAstBuilder {
         }
 
         @Override
-        public ExpressionNode visitCastExpressionOperation(ExpressionEvaluatorV2Parser.CastExpressionOperationContext ctx) {
+        public ExpressionNode visitGenericBaseOperation(ExpressionEvaluatorV2Parser.GenericBaseOperationContext ctx) {
+            return visit(ctx.genericBase());
+        }
+
+        @Override
+        public ExpressionNode visitNullCoalesceOperation(ExpressionEvaluatorV2Parser.NullCoalesceOperationContext ctx) {
+            ExpressionNode left = visit(ctx.genericBase(0));
+            ExpressionNode right = visit(ctx.genericBase(1));
+            return new BinaryOperationNode(
+                    nodeFactory.nextId("binary"),
+                    nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
+                    BinaryOperator.NULL_COALESCE,
+                    left,
+                    right
+            );
+        }
+
+        @Override
+        public ExpressionNode visitNullLiteralOperation(ExpressionEvaluatorV2Parser.NullLiteralOperationContext ctx) {
+            return literal(ctx, "null");
+        }
+
+        @Override
+        public ExpressionNode visitStringLiteralBase(ExpressionEvaluatorV2Parser.StringLiteralBaseContext ctx) {
+            return literal(ctx, ctx.STRING().getText());
+        }
+
+        @Override
+        public ExpressionNode visitNumericLiteralBase(ExpressionEvaluatorV2Parser.NumericLiteralBaseContext ctx) {
+            return literal(ctx, ctx.NUMBER().getText());
+        }
+
+        @Override
+        public ExpressionNode visitBooleanLiteralBase(ExpressionEvaluatorV2Parser.BooleanLiteralBaseContext ctx) {
+            return literal(ctx, ctx.getText());
+        }
+
+        @Override
+        public ExpressionNode visitDateLiteralBase(ExpressionEvaluatorV2Parser.DateLiteralBaseContext ctx) {
+            return literal(ctx, ctx.DATE().getText());
+        }
+
+        @Override
+        public ExpressionNode visitTimeLiteralBase(ExpressionEvaluatorV2Parser.TimeLiteralBaseContext ctx) {
+            return literal(ctx, ctx.TIME().getText());
+        }
+
+        @Override
+        public ExpressionNode visitDatetimeLiteralBase(ExpressionEvaluatorV2Parser.DatetimeLiteralBaseContext ctx) {
+            String value = ctx.TIME_OFFSET() == null
+                    ? ctx.DATETIME().getText()
+                    : ctx.DATETIME().getText() + ctx.TIME_OFFSET().getText();
+            return literal(ctx, value);
+        }
+
+        @Override
+        public ExpressionNode visitVectorLiteralBase(ExpressionEvaluatorV2Parser.VectorLiteralBaseContext ctx) {
+            return new VectorLiteralNode(
+                    nodeFactory.nextId("vector"),
+                    nodeFactory.sourceSpan(ctx),
+                    ctx.allEntityTypes().stream()
+                            .map(this::visitAllEntityType)
+                            .toList()
+            );
+        }
+
+        @Override
+        public ExpressionNode visitCastExpressionBase(ExpressionEvaluatorV2Parser.CastExpressionBaseContext ctx) {
             return visit(ctx.castExpression());
         }
 
@@ -583,7 +658,7 @@ public final class SemanticAstBuilder {
         }
 
         @Override
-        public ExpressionNode visitReferenceTargetOperation(ExpressionEvaluatorV2Parser.ReferenceTargetOperationContext ctx) {
+        public ExpressionNode visitReferenceTargetBase(ExpressionEvaluatorV2Parser.ReferenceTargetBaseContext ctx) {
             return visit(ctx.referenceTarget());
         }
 
@@ -713,6 +788,9 @@ public final class SemanticAstBuilder {
             }
             if (ctx instanceof ExpressionEvaluatorV2Parser.VectorEntityTypeContext vectorEntityType) {
                 return visit(vectorEntityType.vectorEntity());
+            }
+            if (ctx instanceof ExpressionEvaluatorV2Parser.NullEntityTypeContext nullEntityType) {
+                return literal(nullEntityType, "null");
             }
             throw new IllegalStateException("unsupported allEntityTypes context: " + ctx.getClass().getSimpleName());
         }

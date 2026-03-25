@@ -52,6 +52,12 @@ public final class ResolvedTypes {
         if (left.equals(right)) {
             return left;
         }
+        if (left == NullType.INSTANCE) {
+            return right;
+        }
+        if (right == NullType.INSTANCE) {
+            return left;
+        }
         if (left == UnknownType.INSTANCE) {
             return right;
         }

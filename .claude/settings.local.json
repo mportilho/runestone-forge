@@ -81,7 +81,12 @@
       "Bash(ANTLR_JAR=~/.local/share/JetBrains/IntelliJIdea2024.3/antlr-intellij-plugin-v4/lib/antlr4-4.13.2.jar)",
       "Bash(find ~/.local ~/.m2 ~ -name antlr-complete*.jar -o -name antlr4-complete*.jar)",
       "Bash(__NEW_LINE_ff750bbe20d6924c__ cp:*)",
-      "Bash(__NEW_LINE_ff750bbe20d6924c__ echo:*)"
+      "Bash(__NEW_LINE_ff750bbe20d6924c__ echo:*)",
+      "Bash(find /home/marcelo -name antlr4*.jar)",
+      "Bash(find /home/marcelo/.m2 -path */antlr4/4.13.1/*.jar)",
+      "Bash(ANTLR4_JAR=/home/marcelo/.m2/repository/org/antlr/antlr4/4.13.1/antlr4-4.13.1.jar)",
+      "Bash(find /home/marcelo/.m2 -name ST4-*.jar)",
+      "Bash(find /home/marcelo/.m2 -name icu4j-*.jar)"
     ]
   }
 }

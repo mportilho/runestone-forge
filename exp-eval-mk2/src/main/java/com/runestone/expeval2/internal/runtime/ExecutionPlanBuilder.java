@@ -2,6 +2,7 @@ package com.runestone.expeval2.internal.runtime;
 
 import com.runestone.expeval2.catalog.*;
 import com.runestone.expeval2.internal.ast.*;
+import com.runestone.expeval2.internal.ast.BinaryOperator;
 import com.runestone.expeval2.types.*;
 
 import java.math.BigDecimal;
@@ -109,6 +110,8 @@ final class ExecutionPlanBuilder {
                 for (ExecutableNode el : v.elements()) sum += countNodeEvents(el);
                 yield sum;
             }
+            case ExecutableNullCoalesce nc ->
+                    countNodeEvents(nc.left()) + countNodeEvents(nc.right());
         };
     }
 
@@ -169,6 +172,10 @@ final class ExecutionPlanBuilder {
                     chain, model, runtimeServices, externalSymbolCatalog, typeHintCatalog);
             case FunctionCallNode f ->
                     buildFunctionCall(f, model, runtimeServices, externalSymbolCatalog, typeHintCatalog);
+            case BinaryOperationNode b when b.operator() == BinaryOperator.NULL_COALESCE -> new ExecutableNullCoalesce(
+                    buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog),
+                    buildNode(b.right(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog)
+            );
             case BinaryOperationNode b -> new ExecutableBinaryOp(
                     b.operator(),
                     buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog),
@@ -226,22 +233,30 @@ final class ExecutionPlanBuilder {
         List<ExecutablePropertyChain.ExecutableAccess> steps = new ArrayList<>(node.chain().size());
 
         for (PropertyChainNode.MemberAccess access : node.chain()) {
-            List<ExecutableNode> argumentNodes = access instanceof PropertyChainNode.MethodCallAccess methodCall
-                    ? methodCall.arguments().stream()
-                    .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog))
-                    .toList()
-                    : List.of();
+            boolean safe = access instanceof PropertyChainNode.SafePropertyAccess
+                    || access instanceof PropertyChainNode.SafeMethodCallAccess;
+            List<ExecutableNode> argumentNodes = switch (access) {
+                case PropertyChainNode.MethodCallAccess methodCall ->
+                        methodCall.arguments().stream()
+                                .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog))
+                                .toList();
+                case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
+                        safeMethodCall.arguments().stream()
+                                .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog))
+                                .toList();
+                default -> List.of();
+            };
 
             if (currentType instanceof ObjectType objectType) {
                 TypeMetadata metadata = typeHintCatalog.find(objectType.javaClass()).orElse(null);
                 if (metadata != null) {
-                    steps.add(buildStaticAccess(access, argumentNodes, model, metadata, typeHintCatalog));
+                    steps.add(buildStaticAccess(access, argumentNodes, model, metadata, typeHintCatalog, safe));
                     currentType = nextType(access, model, metadata, typeHintCatalog);
                     continue;
                 }
             }
 
-            steps.add(buildReflectiveAccess(access, argumentNodes));
+            steps.add(buildReflectiveAccess(access, argumentNodes, safe));
             currentType = UnknownType.INSTANCE;
         }
         return new ExecutablePropertyChain(root, steps);
@@ -252,7 +267,8 @@ final class ExecutionPlanBuilder {
             List<ExecutableNode> argumentNodes,
             SemanticModel model,
             TypeMetadata metadata,
-            TypeHintCatalog typeHintCatalog) {
+            TypeHintCatalog typeHintCatalog,
+            boolean safe) {
         return switch (access) {
             case PropertyChainNode.PropertyAccess propertyAccess -> {
                 var descriptor = metadata.properties().get(propertyAccess.name());
@@ -263,7 +279,21 @@ final class ExecutionPlanBuilder {
                 yield new ExecutablePropertyChain.ExecutableFieldGet(
                         propertyAccess.name(),
                         descriptor.getter(),
-                        descriptor.resolvedType()
+                        descriptor.resolvedType(),
+                        safe
+                );
+            }
+            case PropertyChainNode.SafePropertyAccess safePropertyAccess -> {
+                var descriptor = metadata.properties().get(safePropertyAccess.name());
+                if (descriptor == null) {
+                    throw new IllegalStateException("missing property metadata for '" + safePropertyAccess.name()
+                                                    + "' on " + metadata.javaClass().getName());
+                }
+                yield new ExecutablePropertyChain.ExecutableFieldGet(
+                        safePropertyAccess.name(),
+                        descriptor.getter(),
+                        descriptor.resolvedType(),
+                        true
                 );
             }
             case PropertyChainNode.MethodCallAccess methodCall -> {
@@ -273,7 +303,21 @@ final class ExecutionPlanBuilder {
                         descriptor.handle(),
                         argumentNodes,
                         descriptor.parameterTypes(),
-                        descriptor.returnType()
+                        descriptor.returnType(),
+                        safe
+                );
+            }
+            case PropertyChainNode.SafeMethodCallAccess safeMethodCall -> {
+                PropertyChainNode.MethodCallAccess asMethodCall =
+                        new PropertyChainNode.MethodCallAccess(safeMethodCall.name(), safeMethodCall.arguments());
+                MethodDescriptor descriptor = resolveMethodDescriptor(metadata, asMethodCall, model, typeHintCatalog);
+                yield new ExecutablePropertyChain.ExecutableMethodInvoke(
+                        safeMethodCall.name(),
+                        descriptor.handle(),
+                        argumentNodes,
+                        descriptor.parameterTypes(),
+                        descriptor.returnType(),
+                        true
                 );
             }
         };
@@ -281,12 +325,17 @@ final class ExecutionPlanBuilder {
 
     private ExecutablePropertyChain.ExecutableAccess buildReflectiveAccess(
             PropertyChainNode.MemberAccess access,
-            List<ExecutableNode> argumentNodes) {
+            List<ExecutableNode> argumentNodes,
+            boolean safe) {
         return switch (access) {
             case PropertyChainNode.PropertyAccess propertyAccess ->
-                    new ExecutablePropertyChain.ReflectivePropertyAccess(propertyAccess.name());
+                    new ExecutablePropertyChain.ReflectivePropertyAccess(propertyAccess.name(), safe);
+            case PropertyChainNode.SafePropertyAccess safePropertyAccess ->
+                    new ExecutablePropertyChain.ReflectivePropertyAccess(safePropertyAccess.name(), true);
             case PropertyChainNode.MethodCallAccess methodCall ->
-                    new ExecutablePropertyChain.ReflectiveMethodInvoke(methodCall.name(), argumentNodes);
+                    new ExecutablePropertyChain.ReflectiveMethodInvoke(methodCall.name(), argumentNodes, safe);
+            case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
+                    new ExecutablePropertyChain.ReflectiveMethodInvoke(safeMethodCall.name(), argumentNodes, true);
         };
     }
 
@@ -304,8 +353,20 @@ final class ExecutionPlanBuilder {
                 }
                 yield descriptor.resolvedType();
             }
+            case PropertyChainNode.SafePropertyAccess safePropertyAccess -> {
+                var descriptor = metadata.properties().get(safePropertyAccess.name());
+                if (descriptor == null) {
+                    throw new IllegalStateException("missing property metadata for '" + safePropertyAccess.name()
+                                                    + "' on " + metadata.javaClass().getName());
+                }
+                yield descriptor.resolvedType();
+            }
             case PropertyChainNode.MethodCallAccess methodCall ->
                     resolveMethodDescriptor(metadata, methodCall, model, typeHintCatalog).returnType();
+            case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
+                    resolveMethodDescriptor(metadata,
+                            new PropertyChainNode.MethodCallAccess(safeMethodCall.name(), safeMethodCall.arguments()),
+                            model, typeHintCatalog).returnType();
         };
     }
 
@@ -418,6 +479,7 @@ final class ExecutionPlanBuilder {
     }
 
     private Object materialize(String text, ResolvedType resolvedType) {
+        if (resolvedType == NullType.INSTANCE) return null;
         if (resolvedType == ScalarType.NUMBER) return new BigDecimal(text);
         if (resolvedType == ScalarType.BOOLEAN) return Boolean.parseBoolean(text);
         if (resolvedType == ScalarType.STRING) return unquote(text);

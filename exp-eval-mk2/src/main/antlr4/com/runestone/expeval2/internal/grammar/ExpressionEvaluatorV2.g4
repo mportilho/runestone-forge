@@ -30,6 +30,8 @@ ELSE      : 'else' ;
 ELSEIF    : 'elsif' ;
 ENDIF     : 'endif' ;
 
+NULL  : 'null' ;
+
 AND   : 'and' ;
 OR    : 'or' ;
 XOR   : 'xor' ;
@@ -72,6 +74,8 @@ RBRACKET           : ']' ;
 COMMA              : ',' ;
 SEMI               : ';' ;
 PERIOD             : '.' ;
+NULLCOALESCE       : '??' ;
+SAFE_NAV           : '?.' ;
 // Literals
 IDENTIFIER : IdentifierText ;
 STRING     : '"' ( '\\' [btnfr"'\\] | ~[\r\n\\"] )* '"';
@@ -218,9 +222,13 @@ referenceTarget
 
 memberChain
     : PERIOD IDENTIFIER                                                  # propertyAccess
+    | SAFE_NAV IDENTIFIER                                                # safePropertyAccess
     | PERIOD IDENTIFIER LPAREN
           (allEntityTypes (COMMA allEntityTypes)*)?
       RPAREN                                                             # methodCallAccess
+    | SAFE_NAV IDENTIFIER LPAREN
+          (allEntityTypes (COMMA allEntityTypes)*)?
+      RPAREN                                                             # safeMethodCallAccess
     ;
 
 comparisonOperator
@@ -240,6 +248,7 @@ allEntityTypes
     | dateTimeEntity                                                     # dateTimeEntityType
     | stringEntity                                                       # stringEntityType
     | vectorEntity                                                       # vectorEntityType
+    | NULL                                                               # nullEntityType
     ;
 
 assignmentValue
@@ -256,8 +265,21 @@ assignmentValue
 genericEntity
     : IF logicalExpression THEN genericEntity (ELSEIF logicalExpression THEN genericEntity)* ELSE genericEntity ENDIF # genericDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) genericEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) genericEntity)* (COMMA | SEMI) genericEntity RPAREN # genericFunctionDecisionExpression
-    | castExpression                                                                                                                       # castExpressionOperation
-    | referenceTarget                                                                                                                      # referenceTargetOperation
+    | genericBase NULLCOALESCE genericBase                                                                                                 # nullCoalesceOperation
+    | genericBase                                                                                                                          # genericBaseOperation
+    ;
+
+genericBase
+    : castExpression                                                     # castExpressionBase
+    | NULL                                                               # nullLiteralOperation
+    | STRING                                                             # stringLiteralBase
+    | NUMBER                                                             # numericLiteralBase
+    | (TRUE | FALSE)                                                     # booleanLiteralBase
+    | DATE                                                               # dateLiteralBase
+    | TIME                                                               # timeLiteralBase
+    | DATETIME TIME_OFFSET?                                              # datetimeLiteralBase
+    | LBRACKET allEntityTypes (COMMA allEntityTypes)* RBRACKET          # vectorLiteralBase
+    | referenceTarget                                                    # referenceTargetBase
     ;
 
 castExpression

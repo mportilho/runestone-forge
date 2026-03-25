@@ -256,12 +256,26 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitPropertyAccess(ExpressionEvaluatorV2Parser.PropertyAccessContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code safePropertyAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#memberChain}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitSafePropertyAccess(ExpressionEvaluatorV2Parser.SafePropertyAccessContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code methodCallAccess}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#memberChain}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	T visitMethodCallAccess(ExpressionEvaluatorV2Parser.MethodCallAccessContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code safeMethodCallAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#memberChain}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitSafeMethodCallAccess(ExpressionEvaluatorV2Parser.SafeMethodCallAccessContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code greaterThanOperator}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#comparisonOperator}.
@@ -354,6 +368,13 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitVectorEntityType(ExpressionEvaluatorV2Parser.VectorEntityTypeContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code nullEntityType}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#allEntityTypes}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitNullEntityType(ExpressionEvaluatorV2Parser.NullEntityTypeContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code genericAssignmentValue}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#assignmentValue}.
 	 * @param ctx the parse tree
@@ -424,19 +445,89 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitGenericFunctionDecisionExpression(ExpressionEvaluatorV2Parser.GenericFunctionDecisionExpressionContext ctx);
 	/**
-	 * Visit a parse tree produced by the {@code castExpressionOperation}
+	 * Visit a parse tree produced by the {@code nullCoalesceOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericEntity}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
-	T visitCastExpressionOperation(ExpressionEvaluatorV2Parser.CastExpressionOperationContext ctx);
+	T visitNullCoalesceOperation(ExpressionEvaluatorV2Parser.NullCoalesceOperationContext ctx);
 	/**
-	 * Visit a parse tree produced by the {@code referenceTargetOperation}
+	 * Visit a parse tree produced by the {@code genericBaseOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericEntity}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
-	T visitReferenceTargetOperation(ExpressionEvaluatorV2Parser.ReferenceTargetOperationContext ctx);
+	T visitGenericBaseOperation(ExpressionEvaluatorV2Parser.GenericBaseOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code castExpressionBase}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitCastExpressionBase(ExpressionEvaluatorV2Parser.CastExpressionBaseContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code nullLiteralOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitNullLiteralOperation(ExpressionEvaluatorV2Parser.NullLiteralOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code stringLiteralBase}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitStringLiteralBase(ExpressionEvaluatorV2Parser.StringLiteralBaseContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code numericLiteralBase}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitNumericLiteralBase(ExpressionEvaluatorV2Parser.NumericLiteralBaseContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code booleanLiteralBase}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitBooleanLiteralBase(ExpressionEvaluatorV2Parser.BooleanLiteralBaseContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code dateLiteralBase}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDateLiteralBase(ExpressionEvaluatorV2Parser.DateLiteralBaseContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code timeLiteralBase}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTimeLiteralBase(ExpressionEvaluatorV2Parser.TimeLiteralBaseContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code datetimeLiteralBase}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDatetimeLiteralBase(ExpressionEvaluatorV2Parser.DatetimeLiteralBaseContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code vectorLiteralBase}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitVectorLiteralBase(ExpressionEvaluatorV2Parser.VectorLiteralBaseContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code referenceTargetBase}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitReferenceTargetBase(ExpressionEvaluatorV2Parser.ReferenceTargetBaseContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code typeCastOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#castExpression}.

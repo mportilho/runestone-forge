@@ -33,7 +33,8 @@ record ExecutablePropertyChain(
     record ExecutableFieldGet(
             String name,
             MethodHandle getter,
-            ResolvedType resolvedType
+            ResolvedType resolvedType,
+            boolean safe
     ) implements ExecutableAccess {
 
         ExecutableFieldGet {
@@ -48,7 +49,8 @@ record ExecutablePropertyChain(
             MethodHandle handle,
             List<ExecutableNode> arguments,
             List<Class<?>> parameterTypes,
-            ResolvedType returnType
+            ResolvedType returnType,
+            boolean safe
     ) implements ExecutableAccess {
 
         ExecutableMethodInvoke {
@@ -63,13 +65,13 @@ record ExecutablePropertyChain(
         }
     }
 
-    record ReflectivePropertyAccess(String name) implements ExecutableAccess {
+    record ReflectivePropertyAccess(String name, boolean safe) implements ExecutableAccess {
         ReflectivePropertyAccess {
             Objects.requireNonNull(name, "name must not be null");
         }
     }
 
-    record ReflectiveMethodInvoke(String name, List<ExecutableNode> arguments) implements ExecutableAccess {
+    record ReflectiveMethodInvoke(String name, List<ExecutableNode> arguments, boolean safe) implements ExecutableAccess {
         ReflectiveMethodInvoke {
             Objects.requireNonNull(name, "name must not be null");
             arguments = List.copyOf(Objects.requireNonNull(arguments, "arguments must not be null"));

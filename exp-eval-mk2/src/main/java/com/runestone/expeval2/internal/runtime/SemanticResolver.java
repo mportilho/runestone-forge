@@ -26,6 +26,7 @@ import com.runestone.expeval2.internal.grammar.ExpressionResultType;
 import com.runestone.expeval2.types.ResolvedType;
 import com.runestone.expeval2.types.ResolvedTypes;
 import com.runestone.expeval2.types.ScalarType;
+import com.runestone.expeval2.types.NullType;
 import com.runestone.expeval2.types.UnknownType;
 import com.runestone.expeval2.types.VectorType;
 
@@ -156,6 +157,9 @@ public final class SemanticResolver {
 
         private ResolvedType inferLiteralType(LiteralNode node) {
             String value = node.value();
+            if ("null".equals(value)) {
+                return NullType.INSTANCE;
+            }
             if ("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)) {
                 return ScalarType.BOOLEAN;
             }
@@ -199,13 +203,26 @@ public final class SemanticResolver {
             ResolvedType current = resolveRootType(node);
 
             for (PropertyChainNode.MemberAccess access : node.chain()) {
-                List<ResolvedType> argumentTypes = access instanceof PropertyChainNode.MethodCallAccess methodCall
-                        ? methodCall.arguments().stream().map(this::resolveExpression).toList()
-                        : List.of();
-                if (current == UnknownType.INSTANCE) {
+                boolean isSafe = access instanceof PropertyChainNode.SafePropertyAccess
+                        || access instanceof PropertyChainNode.SafeMethodCallAccess;
+                List<ResolvedType> argumentTypes = switch (access) {
+                    case PropertyChainNode.MethodCallAccess methodCall ->
+                            methodCall.arguments().stream().map(this::resolveExpression).toList();
+                    case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
+                            safeMethodCall.arguments().stream().map(this::resolveExpression).toList();
+                    default -> List.of();
+                };
+                if (current == UnknownType.INSTANCE || current == NullType.INSTANCE) {
+                    if (isSafe) {
+                        current = NullType.INSTANCE;
+                    }
                     continue;
                 }
                 if (!(current instanceof ObjectType objectType)) {
+                    if (isSafe) {
+                        current = NullType.INSTANCE;
+                        continue;
+                    }
                     error("INVALID_MEMBER_ACCESS",
                             "type " + current + " does not support member access", node.sourceSpan());
                     return UnknownType.INSTANCE;
@@ -220,8 +237,14 @@ public final class SemanticResolver {
                 current = switch (access) {
                     case PropertyChainNode.PropertyAccess propertyAccess ->
                             resolveProperty(metadata, propertyAccess, node.sourceSpan());
+                    case PropertyChainNode.SafePropertyAccess safePropertyAccess ->
+                            resolveProperty(metadata, new PropertyChainNode.PropertyAccess(safePropertyAccess.name()), node.sourceSpan());
                     case PropertyChainNode.MethodCallAccess methodCall ->
                             resolveMethod(metadata, methodCall, argumentTypes, node.sourceSpan());
+                    case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
+                            resolveMethod(metadata,
+                                    new PropertyChainNode.MethodCallAccess(safeMethodCall.name(), safeMethodCall.arguments()),
+                                    argumentTypes, node.sourceSpan());
                 };
             }
             return current;
@@ -360,6 +383,9 @@ public final class SemanticResolver {
             for (int index = 0; index < argumentTypes.size(); index++) {
                 ResolvedType actualType = argumentTypes.get(index);
                 ResolvedType expectedType = descriptor.parameterResolvedTypes().get(index);
+                if (actualType == NullType.INSTANCE || expectedType == NullType.INSTANCE) {
+                    continue;
+                }
                 if (actualType != UnknownType.INSTANCE && expectedType != UnknownType.INSTANCE && !actualType.equals(expectedType)) {
                     return false;
                 }
@@ -401,6 +427,7 @@ public final class SemanticResolver {
                     }
                     yield ScalarType.BOOLEAN;
                 }
+                case NULL_COALESCE -> ResolvedTypes.merge(leftType, rightType);
             };
         }
 
@@ -425,7 +452,7 @@ public final class SemanticResolver {
             String operation,
             SourceSpan sourceSpan
         ) {
-            if (actualType != UnknownType.INSTANCE && actualType != expectedType) {
+            if (actualType != UnknownType.INSTANCE && actualType != NullType.INSTANCE && actualType != expectedType) {
                 error("TYPE_MISMATCH", operation + " expects " + expectedType + " but found " + actualType, sourceSpan);
                 return UnknownType.INSTANCE;
             }
@@ -434,6 +461,9 @@ public final class SemanticResolver {
 
         private boolean compatibleComparison(ResolvedType leftType, ResolvedType rightType) {
             if (leftType == UnknownType.INSTANCE || rightType == UnknownType.INSTANCE) {
+                return true;
+            }
+            if (leftType == NullType.INSTANCE || rightType == NullType.INSTANCE) {
                 return true;
             }
             return leftType.equals(rightType);

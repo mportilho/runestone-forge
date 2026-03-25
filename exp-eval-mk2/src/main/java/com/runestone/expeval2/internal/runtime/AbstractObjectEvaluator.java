@@ -155,6 +155,10 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             case ExecutableBinaryOp b      -> evaluateBinary(b, scope);
             case ExecutablePostfixOp p     -> evaluatePostfix(p, scope);
             case ExecutableVectorLiteral v -> evaluateVector(v, scope);
+            case ExecutableNullCoalesce nc -> {
+                Object leftVal = evaluateExpr(nc.left(), scope);
+                yield leftVal != null ? leftVal : evaluateExpr(nc.right(), scope);
+            }
         };
     }
 
@@ -336,6 +340,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             case LESS_THAN_OR_EQUAL    -> compare(left, right) <= 0;
             case EQUAL                 -> compareEquality(left, right);
             case NOT_EQUAL             -> !compareEquality(left, right);
+            case NULL_COALESCE         -> throw new IllegalStateException("NULL_COALESCE must be handled as ExecutableNullCoalesce");
         };
     }
 
@@ -368,6 +373,9 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         }
         for (ExecutablePropertyChain.ExecutableAccess access : node.chain()) {
             if (current == null) {
+                if (isSafeAccess(access)) {
+                    return null;
+                }
                 throw new ExpressionEvaluationException(
                         compiledExpression.source(), "NULL_IN_CHAIN",
                         "null value encountered navigating '" + node.root().name() + "'", null);
@@ -389,6 +397,15 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             };
         }
         return current;
+    }
+
+    private static boolean isSafeAccess(ExecutablePropertyChain.ExecutableAccess access) {
+        return switch (access) {
+            case ExecutablePropertyChain.ExecutableFieldGet fieldGet -> fieldGet.safe();
+            case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke -> methodInvoke.safe();
+            case ExecutablePropertyChain.ReflectivePropertyAccess propertyAccess -> propertyAccess.safe();
+            case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke -> reflectiveMethodInvoke.safe();
+        };
     }
 
     private Object invokeGetter(
