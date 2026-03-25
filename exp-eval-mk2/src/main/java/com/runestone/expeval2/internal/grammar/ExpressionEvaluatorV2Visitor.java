@@ -1,5 +1,4 @@
-// Generated from com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4 by ANTLR 4.13.1
-package com.runestone.expeval2.internal.grammar;
+// Generated from exp-eval-mk2/src/main/antlr4/com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4 by ANTLR 4.13.1
 import org.antlr.v4.runtime.tree.ParseTreeVisitor;
 
 /**
@@ -445,89 +444,19 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitGenericFunctionDecisionExpression(ExpressionEvaluatorV2Parser.GenericFunctionDecisionExpressionContext ctx);
 	/**
-	 * Visit a parse tree produced by the {@code nullCoalesceOperation}
+	 * Visit a parse tree produced by the {@code castExpressionOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericEntity}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
-	T visitNullCoalesceOperation(ExpressionEvaluatorV2Parser.NullCoalesceOperationContext ctx);
+	T visitCastExpressionOperation(ExpressionEvaluatorV2Parser.CastExpressionOperationContext ctx);
 	/**
-	 * Visit a parse tree produced by the {@code genericBaseOperation}
+	 * Visit a parse tree produced by the {@code referenceTargetOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericEntity}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
-	T visitGenericBaseOperation(ExpressionEvaluatorV2Parser.GenericBaseOperationContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code castExpressionBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitCastExpressionBase(ExpressionEvaluatorV2Parser.CastExpressionBaseContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code nullLiteralOperation}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitNullLiteralOperation(ExpressionEvaluatorV2Parser.NullLiteralOperationContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code stringLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitStringLiteralBase(ExpressionEvaluatorV2Parser.StringLiteralBaseContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code numericLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitNumericLiteralBase(ExpressionEvaluatorV2Parser.NumericLiteralBaseContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code booleanLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitBooleanLiteralBase(ExpressionEvaluatorV2Parser.BooleanLiteralBaseContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code dateLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitDateLiteralBase(ExpressionEvaluatorV2Parser.DateLiteralBaseContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code timeLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitTimeLiteralBase(ExpressionEvaluatorV2Parser.TimeLiteralBaseContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code datetimeLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitDatetimeLiteralBase(ExpressionEvaluatorV2Parser.DatetimeLiteralBaseContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code vectorLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitVectorLiteralBase(ExpressionEvaluatorV2Parser.VectorLiteralBaseContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code referenceTargetBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitReferenceTargetBase(ExpressionEvaluatorV2Parser.ReferenceTargetBaseContext ctx);
+	T visitReferenceTargetOperation(ExpressionEvaluatorV2Parser.ReferenceTargetOperationContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code typeCastOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#castExpression}.

@@ -86,7 +86,11 @@
       "Bash(find /home/marcelo/.m2 -path */antlr4/4.13.1/*.jar)",
       "Bash(ANTLR4_JAR=/home/marcelo/.m2/repository/org/antlr/antlr4/4.13.1/antlr4-4.13.1.jar)",
       "Bash(find /home/marcelo/.m2 -name ST4-*.jar)",
-      "Bash(find /home/marcelo/.m2 -name icu4j-*.jar)"
+      "Bash(find /home/marcelo/.m2 -name icu4j-*.jar)",
+      "Bash(unzip -p ~/dev/git/temp/antlr4-4.13.1.jar META-INF/MANIFEST.MF)",
+      "Bash(unzip -l ~/dev/git/temp/antlr-lib/antlr-runtime-3.5.3.jar)",
+      "Bash(unzip -l ~/dev/git/temp/antlr4-4.13.1.jar)",
+      "Bash(head -10 grep -n \"^    public\\\\|static.*compile\\\\|compute\" exp-eval-mk2/src/main/java/com/runestone/expeval2/api/LogicalExpression.java)"
     ]
   }
 }

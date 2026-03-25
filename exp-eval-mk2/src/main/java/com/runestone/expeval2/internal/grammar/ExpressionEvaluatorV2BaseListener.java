@@ -1,5 +1,4 @@
-// Generated from com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4 by ANTLR 4.13.1
-package com.runestone.expeval2.internal.grammar;
+// Generated from exp-eval-mk2/src/main/antlr4/com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4 by ANTLR 4.13.1
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ErrorNode;
@@ -761,145 +760,25 @@ public class ExpressionEvaluatorV2BaseListener implements ExpressionEvaluatorV2L
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void enterNullCoalesceOperation(ExpressionEvaluatorV2Parser.NullCoalesceOperationContext ctx) { }
+	@Override public void enterCastExpressionOperation(ExpressionEvaluatorV2Parser.CastExpressionOperationContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void exitNullCoalesceOperation(ExpressionEvaluatorV2Parser.NullCoalesceOperationContext ctx) { }
+	@Override public void exitCastExpressionOperation(ExpressionEvaluatorV2Parser.CastExpressionOperationContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void enterGenericBaseOperation(ExpressionEvaluatorV2Parser.GenericBaseOperationContext ctx) { }
+	@Override public void enterReferenceTargetOperation(ExpressionEvaluatorV2Parser.ReferenceTargetOperationContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void exitGenericBaseOperation(ExpressionEvaluatorV2Parser.GenericBaseOperationContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterCastExpressionBase(ExpressionEvaluatorV2Parser.CastExpressionBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitCastExpressionBase(ExpressionEvaluatorV2Parser.CastExpressionBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterNullLiteralOperation(ExpressionEvaluatorV2Parser.NullLiteralOperationContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitNullLiteralOperation(ExpressionEvaluatorV2Parser.NullLiteralOperationContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterStringLiteralBase(ExpressionEvaluatorV2Parser.StringLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitStringLiteralBase(ExpressionEvaluatorV2Parser.StringLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterNumericLiteralBase(ExpressionEvaluatorV2Parser.NumericLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitNumericLiteralBase(ExpressionEvaluatorV2Parser.NumericLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterBooleanLiteralBase(ExpressionEvaluatorV2Parser.BooleanLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitBooleanLiteralBase(ExpressionEvaluatorV2Parser.BooleanLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterDateLiteralBase(ExpressionEvaluatorV2Parser.DateLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitDateLiteralBase(ExpressionEvaluatorV2Parser.DateLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterTimeLiteralBase(ExpressionEvaluatorV2Parser.TimeLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitTimeLiteralBase(ExpressionEvaluatorV2Parser.TimeLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterDatetimeLiteralBase(ExpressionEvaluatorV2Parser.DatetimeLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitDatetimeLiteralBase(ExpressionEvaluatorV2Parser.DatetimeLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterVectorLiteralBase(ExpressionEvaluatorV2Parser.VectorLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitVectorLiteralBase(ExpressionEvaluatorV2Parser.VectorLiteralBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterReferenceTargetBase(ExpressionEvaluatorV2Parser.ReferenceTargetBaseContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitReferenceTargetBase(ExpressionEvaluatorV2Parser.ReferenceTargetBaseContext ctx) { }
+	@Override public void exitReferenceTargetOperation(ExpressionEvaluatorV2Parser.ReferenceTargetOperationContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *

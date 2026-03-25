@@ -1,5 +1,4 @@
-// Generated from com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4 by ANTLR 4.13.1
-package com.runestone.expeval2.internal.grammar;
+// Generated from exp-eval-mk2/src/main/antlr4/com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4 by ANTLR 4.13.1
 import org.antlr.v4.runtime.tree.ParseTreeListener;
 
 /**
@@ -752,149 +751,29 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 */
 	void exitGenericFunctionDecisionExpression(ExpressionEvaluatorV2Parser.GenericFunctionDecisionExpressionContext ctx);
 	/**
-	 * Enter a parse tree produced by the {@code nullCoalesceOperation}
+	 * Enter a parse tree produced by the {@code castExpressionOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericEntity}.
 	 * @param ctx the parse tree
 	 */
-	void enterNullCoalesceOperation(ExpressionEvaluatorV2Parser.NullCoalesceOperationContext ctx);
+	void enterCastExpressionOperation(ExpressionEvaluatorV2Parser.CastExpressionOperationContext ctx);
 	/**
-	 * Exit a parse tree produced by the {@code nullCoalesceOperation}
+	 * Exit a parse tree produced by the {@code castExpressionOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericEntity}.
 	 * @param ctx the parse tree
 	 */
-	void exitNullCoalesceOperation(ExpressionEvaluatorV2Parser.NullCoalesceOperationContext ctx);
+	void exitCastExpressionOperation(ExpressionEvaluatorV2Parser.CastExpressionOperationContext ctx);
 	/**
-	 * Enter a parse tree produced by the {@code genericBaseOperation}
+	 * Enter a parse tree produced by the {@code referenceTargetOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericEntity}.
 	 * @param ctx the parse tree
 	 */
-	void enterGenericBaseOperation(ExpressionEvaluatorV2Parser.GenericBaseOperationContext ctx);
+	void enterReferenceTargetOperation(ExpressionEvaluatorV2Parser.ReferenceTargetOperationContext ctx);
 	/**
-	 * Exit a parse tree produced by the {@code genericBaseOperation}
+	 * Exit a parse tree produced by the {@code referenceTargetOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericEntity}.
 	 * @param ctx the parse tree
 	 */
-	void exitGenericBaseOperation(ExpressionEvaluatorV2Parser.GenericBaseOperationContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code castExpressionBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void enterCastExpressionBase(ExpressionEvaluatorV2Parser.CastExpressionBaseContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code castExpressionBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void exitCastExpressionBase(ExpressionEvaluatorV2Parser.CastExpressionBaseContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code nullLiteralOperation}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void enterNullLiteralOperation(ExpressionEvaluatorV2Parser.NullLiteralOperationContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code nullLiteralOperation}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void exitNullLiteralOperation(ExpressionEvaluatorV2Parser.NullLiteralOperationContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code stringLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void enterStringLiteralBase(ExpressionEvaluatorV2Parser.StringLiteralBaseContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code stringLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void exitStringLiteralBase(ExpressionEvaluatorV2Parser.StringLiteralBaseContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code numericLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void enterNumericLiteralBase(ExpressionEvaluatorV2Parser.NumericLiteralBaseContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code numericLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void exitNumericLiteralBase(ExpressionEvaluatorV2Parser.NumericLiteralBaseContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code booleanLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void enterBooleanLiteralBase(ExpressionEvaluatorV2Parser.BooleanLiteralBaseContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code booleanLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void exitBooleanLiteralBase(ExpressionEvaluatorV2Parser.BooleanLiteralBaseContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code dateLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void enterDateLiteralBase(ExpressionEvaluatorV2Parser.DateLiteralBaseContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code dateLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void exitDateLiteralBase(ExpressionEvaluatorV2Parser.DateLiteralBaseContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code timeLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void enterTimeLiteralBase(ExpressionEvaluatorV2Parser.TimeLiteralBaseContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code timeLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void exitTimeLiteralBase(ExpressionEvaluatorV2Parser.TimeLiteralBaseContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code datetimeLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void enterDatetimeLiteralBase(ExpressionEvaluatorV2Parser.DatetimeLiteralBaseContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code datetimeLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void exitDatetimeLiteralBase(ExpressionEvaluatorV2Parser.DatetimeLiteralBaseContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code vectorLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void enterVectorLiteralBase(ExpressionEvaluatorV2Parser.VectorLiteralBaseContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code vectorLiteralBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void exitVectorLiteralBase(ExpressionEvaluatorV2Parser.VectorLiteralBaseContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code referenceTargetBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void enterReferenceTargetBase(ExpressionEvaluatorV2Parser.ReferenceTargetBaseContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code referenceTargetBase}
-	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#genericBase}.
-	 * @param ctx the parse tree
-	 */
-	void exitReferenceTargetBase(ExpressionEvaluatorV2Parser.ReferenceTargetBaseContext ctx);
+	void exitReferenceTargetOperation(ExpressionEvaluatorV2Parser.ReferenceTargetOperationContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code typeCastOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#castExpression}.

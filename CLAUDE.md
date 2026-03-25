@@ -101,30 +101,46 @@ Compiled expressions are cached in `ExpressionCompiler` by `(source, environment
 
 - ALWAYS load the java-guidelines skill if present when working with Java files on this project.
 
-## Local ANTLR Tool Jar
+## Regenerating the ANTLR Grammar
 
-To avoid downloading the ANTLR tool repeatedly, reuse the local jar at (path may vary by environment):
+> **Important:** The jar at `~/dev/git/temp/antlr4-4.13.1.jar` is **not** a self-contained uber-jar and
+> **does not work** directly — even with the sibling jars from `~/dev/git/temp/antlr-lib/` on the
+> classpath, the JVM cannot initialize `org.antlr.v4.Tool`.  Use the Maven local cache instead.
 
-`~/dev/git/temp/antlr4-4.13.1.jar`
-
-Tool dependencies cached locally:
-
-- `~/dev/git/temp/antlr-lib/antlr-runtime-3.5.3.jar`
-- `~/dev/git/temp/antlr-lib/ST4-4.3.4.jar`
-- `~/dev/git/temp/antlr-lib/antlr4-runtime-4.13.1.jar`
-- `~/dev/git/temp/antlr-lib/icu4j-72.1.jar`
-
-ANTLR regeneration command for `exp-eval-mk2`:
+### Step 1 — ensure the jars are present in the Maven cache
 
 ```shell
-java -cp ~/dev/git/temp/antlr4-4.13.1.jar:~/dev/git/temp/antlr-lib/antlr-runtime-3.5.3.jar:~/dev/git/temp/antlr-lib/ST4-4.3.4.jar:~/dev/git/temp/antlr-lib/antlr4-runtime-4.13.1.jar:~/dev/git/temp/antlr-lib/icu4j-72.1.jar \
+mvn dependency:get -Dartifact=org.antlr:antlr4:4.13.1
+```
+
+This is a no-op if the jar is already cached.
+
+### Step 2 — regenerate
+
+> **Why temp dir:** ANTLR always emits `.tokens` and `.interp` alongside the `.java` files.
+> Generating directly into `src/main/java` would pollute the source tree with those artifacts.
+> The command below generates into a temp directory and copies only the `.java` files across.
+
+```shell
+ANTLR_TOOL=~/.m2/repository/org/antlr/antlr4/4.13.1/antlr4-4.13.1.jar
+ANTLR_RT=~/.m2/repository/org/antlr/antlr4-runtime/4.13.1/antlr4-runtime-4.13.1.jar
+ANTLR3_RT=~/.m2/repository/org/antlr/antlr-runtime/3.5.3/antlr-runtime-3.5.3.jar
+ST4=~/.m2/repository/org/antlr/ST4/4.3.4/ST4-4.3.4.jar
+ICU4J=$(find ~/.m2/repository -name "icu4j-*.jar" | head -1)
+GRAMMAR_OUT=exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/grammar
+TMPDIR=$(mktemp -d)
+
+java -cp "${ANTLR_TOOL}:${ANTLR_RT}:${ANTLR3_RT}:${ST4}:${ICU4J}" \
   org.antlr.v4.Tool \
   -Dlanguage=Java \
   -visitor \
   -listener \
   -Xexact-output-dir \
-  -o exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/grammar \
+  -o "${TMPDIR}" \
   exp-eval-mk2/src/main/antlr4/com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4
+
+cp "${TMPDIR}"/*.java "${GRAMMAR_OUT}/"
+rm -rf "${TMPDIR}"
 ```
 
-For diagnostics such as `-Xlog`, also pass `-o /tmp/antlr-diagnostics` (or another scratch directory) to avoid generating parser artifacts under the ANTLR source tree.
+For diagnostics such as `-Xlog`, omit the `cp`/`rm` steps and inspect `${TMPDIR}` directly.

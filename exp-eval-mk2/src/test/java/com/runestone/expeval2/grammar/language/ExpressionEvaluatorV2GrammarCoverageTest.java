@@ -75,7 +75,24 @@ class ExpressionEvaluatorV2GrammarCoverageTest {
             Arguments.of("vector decision assignment", "items = if true then [1] elsif false then [2] else [3] endif; 1"),
             Arguments.of("vector functional decision assignment", "items = if(true, [1], false, [2], [3]); 1"),
             Arguments.of("destructuring assignment from vector literal", "[left,right] = [1,2]; 1"),
-            Arguments.of("destructuring assignment from function", "[left,right] = makeVec(); 1")
+            Arguments.of("destructuring assignment from function", "[left,right] = makeVec(); 1"),
+            Arguments.of("string coalesce with string constant fallback", "result = name ?? \"padrão\"; 1"),
+            Arguments.of("numeric coalesce with numeric constant fallback", "result = amount ?? 0; 1"),
+            Arguments.of("boolean coalesce with boolean constant fallback", "result = flag ?? false; 1"),
+            Arguments.of("date coalesce with date constant fallback", "result = startDate ?? 2024-01-01; 1"),
+            Arguments.of("date coalesce with current date fallback", "result = startDate ?? currDate; 1"),
+            Arguments.of("time coalesce with time constant fallback", "result = startTime ?? 10:00; 1"),
+            Arguments.of("time coalesce with current time fallback", "result = startTime ?? currTime; 1"),
+            Arguments.of("datetime coalesce with datetime constant fallback", "result = createdAt ?? 2024-01-01T10:00; 1"),
+            Arguments.of("datetime coalesce with current datetime fallback", "result = createdAt ?? currDateTime; 1"),
+            Arguments.of("vector coalesce with vector literal fallback", "result = items ?? [1, 2]; 1"),
+            Arguments.of("typed string coalesce", "result = <text>name ?? \"padrão\"; 1"),
+            Arguments.of("typed numeric coalesce", "result = <number>amount ?? 0; 1"),
+            Arguments.of("typed boolean coalesce", "result = <bool>flag ?? true; 1"),
+            Arguments.of("chained coalesce string", "result = a ?? b ?? \"último\"; 1"),
+            Arguments.of("coalesce with function reference as fallback", "result = name ?? resolveDefault(); 1"),
+            Arguments.of("coalesce with function reference on left", "result = resolve() ?? \"fallback\"; 1"),
+            Arguments.of("safe navigation combined with coalesce", "result = obj?.nome ?? \"anônimo\"; 1")
         );
     }
 
