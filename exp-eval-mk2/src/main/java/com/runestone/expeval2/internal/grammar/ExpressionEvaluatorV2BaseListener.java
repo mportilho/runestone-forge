@@ -185,6 +185,30 @@ public class ExpressionEvaluatorV2BaseListener implements ExpressionEvaluatorV2L
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterRegexMatchOperation(ExpressionEvaluatorV2Parser.RegexMatchOperationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitRegexMatchOperation(ExpressionEvaluatorV2Parser.RegexMatchOperationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterRegexNotMatchOperation(ExpressionEvaluatorV2Parser.RegexNotMatchOperationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitRegexNotMatchOperation(ExpressionEvaluatorV2Parser.RegexNotMatchOperationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterLogicalBitwiseOperation(ExpressionEvaluatorV2Parser.LogicalBitwiseOperationContext ctx) { }
 	/**
 	 * {@inheritDoc}

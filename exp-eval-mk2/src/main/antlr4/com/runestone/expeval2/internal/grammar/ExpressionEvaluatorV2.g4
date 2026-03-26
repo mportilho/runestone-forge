@@ -54,13 +54,15 @@ EXPONENTIATION: '^' ;
 ROOT          : 'root' | '\u221A' ;
 SQRT          : 'sqrt' ;
 
-GT  : '>' ;
-GE  : '>=' ;
-LT  : '<' ;
-LE  : '<=' ;
-EQ  : '=' ;
-NEQ : '!=' | '<>' ;
-NOT : '~' | '\u00AC' ;
+GT              : '>' ;
+GE              : '>=' ;
+LT              : '<' ;
+LE              : '<=' ;
+EQ              : '=' ;
+NEQ             : '!=' | '<>' ;
+NOT             : '~' | '\u00AC' ;
+REGEX_MATCH     : '=~' ;
+REGEX_NOT_MATCH : '!~' ;
 
 // Date/time current-value tokens
 NOW_DATE     : 'currDate' ;
@@ -158,6 +160,8 @@ logicalComparisonExpression
     | dateEntity comparisonOperator dateEntity                                # dateComparisonOperation
     | timeEntity comparisonOperator timeEntity                                # timeComparisonOperation
     | dateTimeEntity comparisonOperator dateTimeEntity                        # dateTimeComparisonOperation
+    | stringConcatExpression REGEX_MATCH STRING                               # regexMatchOperation
+    | stringConcatExpression REGEX_NOT_MATCH STRING                           # regexNotMatchOperation
     ;
 
 logicalBitwiseExpression

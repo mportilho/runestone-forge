@@ -176,6 +176,30 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 */
 	void exitDateTimeComparisonOperation(ExpressionEvaluatorV2Parser.DateTimeComparisonOperationContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code regexMatchOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterRegexMatchOperation(ExpressionEvaluatorV2Parser.RegexMatchOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code regexMatchOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitRegexMatchOperation(ExpressionEvaluatorV2Parser.RegexMatchOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code regexNotMatchOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterRegexNotMatchOperation(ExpressionEvaluatorV2Parser.RegexNotMatchOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code regexNotMatchOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitRegexNotMatchOperation(ExpressionEvaluatorV2Parser.RegexNotMatchOperationContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code logicalBitwiseOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalBitwiseExpression}.
 	 * @param ctx the parse tree

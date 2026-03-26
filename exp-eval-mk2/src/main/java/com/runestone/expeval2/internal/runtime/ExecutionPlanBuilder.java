@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 final class ExecutionPlanBuilder {
 
@@ -112,6 +113,7 @@ final class ExecutionPlanBuilder {
             }
             case ExecutableNullCoalesce nc ->
                     countNodeEvents(nc.left()) + countNodeEvents(nc.right());
+            case ExecutableRegexOp r -> countNodeEvents(r.subject());
         };
     }
 
@@ -176,6 +178,13 @@ final class ExecutionPlanBuilder {
                     buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog),
                     buildNode(b.right(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog)
             );
+            case BinaryOperationNode b when b.operator() == BinaryOperator.REGEX_MATCH
+                                         || b.operator() == BinaryOperator.REGEX_NOT_MATCH -> {
+                boolean negate = b.operator() == BinaryOperator.REGEX_NOT_MATCH;
+                ExecutableNode subjectNode = buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog);
+                LiteralNode patternLit = (LiteralNode) b.right();
+                yield new ExecutableRegexOp(subjectNode, Pattern.compile(unquote(patternLit.value())), negate);
+            }
             case BinaryOperationNode b -> new ExecutableBinaryOp(
                     b.operator(),
                     buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog),

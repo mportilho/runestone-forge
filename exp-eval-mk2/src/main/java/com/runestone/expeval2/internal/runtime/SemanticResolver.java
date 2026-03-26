@@ -432,6 +432,11 @@ public final class SemanticResolver {
                     expectType(leftType, ScalarType.STRING, "string concatenation", node.left().sourceSpan());
                     yield expectType(rightType, ScalarType.STRING, "string concatenation", node.right().sourceSpan());
                 }
+                case REGEX_MATCH, REGEX_NOT_MATCH -> {
+                    expectType(leftType, ScalarType.STRING, "regex match subject", node.left().sourceSpan());
+                    expectType(rightType, ScalarType.STRING, "regex match pattern", node.right().sourceSpan());
+                    yield ScalarType.BOOLEAN;
+                }
             };
         }
 

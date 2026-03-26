@@ -303,6 +303,20 @@ public final class SemanticAstBuilder {
         }
 
         @Override
+        public ExpressionNode visitRegexMatchOperation(ExpressionEvaluatorV2Parser.RegexMatchOperationContext ctx) {
+            ExpressionNode subject = visit(ctx.stringConcatExpression());
+            LiteralNode pattern = new LiteralNode(nodeFactory.nextId("literal"), nodeFactory.sourceSpan(ctx.STRING().getSymbol()), ctx.STRING().getText());
+            return new BinaryOperationNode(nodeFactory.nextId("binary"), nodeFactory.sourceSpan(ctx), BinaryOperator.REGEX_MATCH, subject, pattern);
+        }
+
+        @Override
+        public ExpressionNode visitRegexNotMatchOperation(ExpressionEvaluatorV2Parser.RegexNotMatchOperationContext ctx) {
+            ExpressionNode subject = visit(ctx.stringConcatExpression());
+            LiteralNode pattern = new LiteralNode(nodeFactory.nextId("literal"), nodeFactory.sourceSpan(ctx.STRING().getSymbol()), ctx.STRING().getText());
+            return new BinaryOperationNode(nodeFactory.nextId("binary"), nodeFactory.sourceSpan(ctx), BinaryOperator.REGEX_NOT_MATCH, subject, pattern);
+        }
+
+        @Override
         public ExpressionNode visitDateComparisonOperation(ExpressionEvaluatorV2Parser.DateComparisonOperationContext ctx) {
             return comparisonNode(ctx.dateEntity(0), ctx.comparisonOperator(), ctx.dateEntity(1));
         }

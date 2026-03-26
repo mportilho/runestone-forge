@@ -21,5 +21,7 @@ public enum BinaryOperator {
     EQUAL,
     NOT_EQUAL,
     NULL_COALESCE,
-    CONCATENATE
+    CONCATENATE,
+    REGEX_MATCH,
+    REGEX_NOT_MATCH
 }

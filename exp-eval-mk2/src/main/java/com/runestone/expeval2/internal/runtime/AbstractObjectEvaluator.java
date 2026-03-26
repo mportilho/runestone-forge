@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /**
  * Expression evaluator that carries all sub-expression results as {@code Object} values
@@ -159,6 +160,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                 Object leftVal = evaluateExpr(nc.left(), scope);
                 yield leftVal != null ? leftVal : evaluateExpr(nc.right(), scope);
             }
+            case ExecutableRegexOp r -> evaluateRegex(r, scope);
         };
     }
 
@@ -342,7 +344,14 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             case NOT_EQUAL             -> !compareEquality(left, right);
             case CONCATENATE           -> asString(left) + asString(right);
             case NULL_COALESCE         -> throw new IllegalStateException("NULL_COALESCE must be handled as ExecutableNullCoalesce");
+            case REGEX_MATCH, REGEX_NOT_MATCH -> throw new IllegalStateException("REGEX_MATCH/REGEX_NOT_MATCH must be handled as ExecutableRegexOp");
         };
+    }
+
+    private Object evaluateRegex(ExecutableRegexOp node, ExecutionScope scope) {
+        String subject = asString(evaluateExpr(node.subject(), scope));
+        boolean matches = node.pattern().matcher(subject).find();
+        return node.negate() != matches;
     }
 
     private Object evaluatePostfix(ExecutablePostfixOp node, ExecutionScope scope) {

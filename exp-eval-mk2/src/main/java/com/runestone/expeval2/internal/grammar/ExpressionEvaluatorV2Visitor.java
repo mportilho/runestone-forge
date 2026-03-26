@@ -109,6 +109,20 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitDateTimeComparisonOperation(ExpressionEvaluatorV2Parser.DateTimeComparisonOperationContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code regexMatchOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitRegexMatchOperation(ExpressionEvaluatorV2Parser.RegexMatchOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code regexNotMatchOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitRegexNotMatchOperation(ExpressionEvaluatorV2Parser.RegexNotMatchOperationContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code logicalBitwiseOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalBitwiseExpression}.
 	 * @param ctx the parse tree

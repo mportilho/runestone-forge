@@ -12,5 +12,6 @@ sealed interface ExecutableNode permits
         ExecutableSimpleConditional,
         ExecutableVectorLiteral,
         ExecutablePropertyChain,
-        ExecutableNullCoalesce {
+        ExecutableNullCoalesce,
+        ExecutableRegexOp {
 }
