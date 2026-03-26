@@ -578,6 +578,13 @@ public class ExpressionEvaluatorV2BaseVisitor<T> extends AbstractParseTreeVisito
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
+	@Override public T visitStringConcatenationOperation(ExpressionEvaluatorV2Parser.StringConcatenationOperationContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
 	@Override public T visitStringDecisionOperation(ExpressionEvaluatorV2Parser.StringDecisionOperationContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}

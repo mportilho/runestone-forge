@@ -105,7 +105,7 @@ public final class SemanticAstBuilder {
             return expressionVisitor.visit(genericAssignmentValue.genericEntity());
         }
         if (assignmentValue instanceof ExpressionEvaluatorV2Parser.StringAssignmentValueContext stringAssignmentValue) {
-            return expressionVisitor.visit(stringAssignmentValue.stringEntity());
+            return expressionVisitor.visit(stringAssignmentValue.stringConcatExpression());
         }
         if (assignmentValue instanceof ExpressionEvaluatorV2Parser.DateAssignmentValueContext dateAssignmentValue) {
             return expressionVisitor.visit(dateAssignmentValue.dateEntity());
@@ -299,7 +299,7 @@ public final class SemanticAstBuilder {
 
         @Override
         public ExpressionNode visitStringComparisonOperation(ExpressionEvaluatorV2Parser.StringComparisonOperationContext ctx) {
-            return comparisonNode(ctx.stringEntity(0), ctx.comparisonOperator(), ctx.stringEntity(1));
+            return comparisonNode(ctx.stringConcatExpression(0), ctx.comparisonOperator(), ctx.stringConcatExpression(1));
         }
 
         @Override
@@ -491,6 +491,22 @@ public final class SemanticAstBuilder {
         }
 
         @Override
+        public ExpressionNode visitStringConcatenationOperation(ExpressionEvaluatorV2Parser.StringConcatenationOperationContext ctx) {
+            ExpressionNode current = visit(ctx.stringEntity(0));
+            for (int index = 1; index < ctx.stringEntity().size(); index++) {
+                ExpressionNode right = visit(ctx.stringEntity(index));
+                current = new BinaryOperationNode(
+                        nodeFactory.nextId("binary"),
+                        nodeFactory.sourceSpan(current.sourceSpan(), right.sourceSpan()),
+                        BinaryOperator.CONCATENATE,
+                        current,
+                        right
+                );
+            }
+            return current;
+        }
+
+        @Override
         public ExpressionNode visitStringConstantOperation(ExpressionEvaluatorV2Parser.StringConstantOperationContext ctx) {
             return new LiteralNode(
                     nodeFactory.nextId("literal"),
@@ -502,10 +518,10 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitStringReferenceOperation(ExpressionEvaluatorV2Parser.StringReferenceOperationContext ctx) {
             ExpressionNode left = visit(ctx.referenceTarget());
-            if (ctx.stringEntity() == null) {
+            if (ctx.stringConcatExpression() == null) {
                 return left;
             }
-            ExpressionNode right = visit(ctx.stringEntity());
+            ExpressionNode right = visit(ctx.stringConcatExpression());
             return new BinaryOperationNode(
                     nodeFactory.nextId("binary"),
                     nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
@@ -517,12 +533,12 @@ public final class SemanticAstBuilder {
 
         @Override
         public ExpressionNode visitStringDecisionOperation(ExpressionEvaluatorV2Parser.StringDecisionOperationContext ctx) {
-            return conditionalNode(ctx, ctx.logicalExpression(), ctx.stringEntity());
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.stringConcatExpression());
         }
 
         @Override
         public ExpressionNode visitStringFunctionDecisionOperation(ExpressionEvaluatorV2Parser.StringFunctionDecisionOperationContext ctx) {
-            return conditionalNode(ctx, ctx.logicalExpression(), ctx.stringEntity());
+            return conditionalNode(ctx, ctx.logicalExpression(), ctx.stringConcatExpression());
         }
 
         @Override
@@ -785,7 +801,7 @@ public final class SemanticAstBuilder {
                 return visit(logicalEntityType.logicalExpression());
             }
             if (ctx instanceof ExpressionEvaluatorV2Parser.StringEntityTypeContext stringEntityType) {
-                return visit(stringEntityType.stringEntity());
+                return visit(stringEntityType.stringConcatExpression());
             }
             if (ctx instanceof ExpressionEvaluatorV2Parser.DateEntityTypeContext dateEntityType) {
                 return visit(dateEntityType.dateEntity());

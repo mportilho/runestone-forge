@@ -428,6 +428,10 @@ public final class SemanticResolver {
                     yield ScalarType.BOOLEAN;
                 }
                 case NULL_COALESCE -> ResolvedTypes.merge(leftType, rightType);
+                case CONCATENATE -> {
+                    expectType(leftType, ScalarType.STRING, "string concatenation", node.left().sourceSpan());
+                    yield expectType(rightType, ScalarType.STRING, "string concatenation", node.right().sourceSpan());
+                }
             };
         }
 

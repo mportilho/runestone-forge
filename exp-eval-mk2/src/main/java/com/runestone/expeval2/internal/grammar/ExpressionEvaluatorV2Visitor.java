@@ -571,6 +571,13 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitNumericReferenceOperation(ExpressionEvaluatorV2Parser.NumericReferenceOperationContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code stringConcatenationOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#stringConcatExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitStringConcatenationOperation(ExpressionEvaluatorV2Parser.StringConcatenationOperationContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code stringDecisionOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#stringEntity}.
 	 * @param ctx the parse tree

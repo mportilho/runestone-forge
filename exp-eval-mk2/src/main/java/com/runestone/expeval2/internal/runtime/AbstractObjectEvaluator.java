@@ -340,6 +340,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             case LESS_THAN_OR_EQUAL    -> compare(left, right) <= 0;
             case EQUAL                 -> compareEquality(left, right);
             case NOT_EQUAL             -> !compareEquality(left, right);
+            case CONCATENATE           -> asString(left) + asString(right);
             case NULL_COALESCE         -> throw new IllegalStateException("NULL_COALESCE must be handled as ExecutableNullCoalesce");
         };
     }

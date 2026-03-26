@@ -20,5 +20,6 @@ public enum BinaryOperator {
     LESS_THAN_OR_EQUAL,
     EQUAL,
     NOT_EQUAL,
-    NULL_COALESCE
+    NULL_COALESCE,
+    CONCATENATE
 }

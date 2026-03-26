@@ -92,7 +92,12 @@ class ExpressionEvaluatorV2GrammarCoverageTest {
             Arguments.of("chained coalesce string", "result = a ?? b ?? \"último\"; 1"),
             Arguments.of("coalesce with function reference as fallback", "result = name ?? resolveDefault(); 1"),
             Arguments.of("coalesce with function reference on left", "result = resolve() ?? \"fallback\"; 1"),
-            Arguments.of("safe navigation combined with coalesce", "result = obj?.nome ?? \"anônimo\"; 1")
+            Arguments.of("safe navigation combined with coalesce", "result = obj?.nome ?? \"anônimo\"; 1"),
+            Arguments.of("string concat two literals", "result = \"hello\" || \" world\"; 1"),
+            Arguments.of("string concat variable chain", "result = a || \" \" || b; 1"),
+            Arguments.of("string concat with typed variable", "result = <text>firstName || \" \" || <text>lastName; 1"),
+            Arguments.of("string concat in decision branch", "result = if true then \"a\" || suffix else \"c\" endif; 1"),
+            Arguments.of("string concat with coalesce fallback", "result = name ?? \"anon\" || \"!\"; 1")
         );
     }
 
@@ -113,7 +118,8 @@ class ExpressionEvaluatorV2GrammarCoverageTest {
             Arguments.of("date comparison", "<date>startDate <= currDate"),
             Arguments.of("time comparison", "<time>startTime < currTime"),
             Arguments.of("datetime comparison", "<datetime>startAt >= currDateTime"),
-            Arguments.of("logical input with leading assignments", "value = if true then foo else bar endif; items = [1, true]; 1 < 2 and isReady()")
+            Arguments.of("logical input with leading assignments", "value = if true then foo else bar endif; items = [1, true]; 1 < 2 and isReady()"),
+            Arguments.of("string concat comparison", "\"hello\" || \" world\" = \"hello world\"")
         );
     }
 }

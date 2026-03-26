@@ -977,6 +977,18 @@ public class ExpressionEvaluatorV2BaseListener implements ExpressionEvaluatorV2L
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterStringConcatenationOperation(ExpressionEvaluatorV2Parser.StringConcatenationOperationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitStringConcatenationOperation(ExpressionEvaluatorV2Parser.StringConcatenationOperationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterStringDecisionOperation(ExpressionEvaluatorV2Parser.StringDecisionOperationContext ctx) { }
 	/**
 	 * {@inheritDoc}

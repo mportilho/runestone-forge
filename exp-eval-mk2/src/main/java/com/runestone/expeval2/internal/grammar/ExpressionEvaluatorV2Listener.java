@@ -968,6 +968,18 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 */
 	void exitNumericReferenceOperation(ExpressionEvaluatorV2Parser.NumericReferenceOperationContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code stringConcatenationOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#stringConcatExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterStringConcatenationOperation(ExpressionEvaluatorV2Parser.StringConcatenationOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code stringConcatenationOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#stringConcatExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitStringConcatenationOperation(ExpressionEvaluatorV2Parser.StringConcatenationOperationContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code stringDecisionOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#stringEntity}.
 	 * @param ctx the parse tree

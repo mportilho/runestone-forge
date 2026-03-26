@@ -48,6 +48,7 @@ MINUS         : '-' ;
 PERCENT       : '%' ;
 MODULO        : 'mod' ;
 MODULUS       : '|' ;
+CONCAT        : '||' ;
 EXCLAMATION   : '!' ;
 EXPONENTIATION: '^' ;
 ROOT          : 'root' | '\u221A' ;
@@ -153,7 +154,7 @@ logicalAndExpression
 logicalComparisonExpression
     : logicalBitwiseExpression (comparisonOperator logicalBitwiseExpression)? # logicalComparisonOperation
     | mathExpression comparisonOperator mathExpression                        # mathComparisonOperation
-    | stringEntity comparisonOperator stringEntity                            # stringComparisonOperation
+    | stringConcatExpression comparisonOperator stringConcatExpression        # stringComparisonOperation
     | dateEntity comparisonOperator dateEntity                                # dateComparisonOperation
     | timeEntity comparisonOperator timeEntity                                # timeComparisonOperation
     | dateTimeEntity comparisonOperator dateTimeEntity                        # dateTimeComparisonOperation
@@ -246,7 +247,7 @@ allEntityTypes
     | dateEntity                                                         # dateEntityType
     | timeEntity                                                         # timeEntityType
     | dateTimeEntity                                                     # dateTimeEntityType
-    | stringEntity                                                       # stringEntityType
+    | stringConcatExpression                                             # stringEntityType
     | vectorEntity                                                       # vectorEntityType
     | NULL                                                               # nullEntityType
     ;
@@ -258,7 +259,7 @@ assignmentValue
     | dateEntity                                                         # dateAssignmentValue
     | timeEntity                                                         # timeAssignmentValue
     | dateTimeEntity                                                     # dateTimeAssignmentValue
-    | stringEntity                                                       # stringAssignmentValue
+    | stringConcatExpression                                             # stringAssignmentValue
     | vectorEntity                                                       # vectorAssignmentValue
     ;
 
@@ -297,11 +298,15 @@ numericEntity
     | NUMBER_TYPE? referenceTarget (NULLCOALESCE numericEntity)?                                                         # numericReferenceOperation
     ;
 
+stringConcatExpression
+    : stringEntity (CONCAT stringEntity)*                                                                       # stringConcatenationOperation
+    ;
+
 stringEntity
-    : IF logicalExpression THEN stringEntity (ELSEIF logicalExpression THEN stringEntity)* ELSE stringEntity ENDIF # stringDecisionOperation
-    | IF LPAREN logicalExpression (COMMA | SEMI) stringEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) stringEntity)* (COMMA | SEMI) stringEntity RPAREN # stringFunctionDecisionOperation
+    : IF logicalExpression THEN stringConcatExpression (ELSEIF logicalExpression THEN stringConcatExpression)* ELSE stringConcatExpression ENDIF # stringDecisionOperation
+    | IF LPAREN logicalExpression (COMMA | SEMI) stringConcatExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) stringConcatExpression)* (COMMA | SEMI) stringConcatExpression RPAREN # stringFunctionDecisionOperation
     | STRING                                                                                                    # stringConstantOperation
-    | STRING_TYPE? referenceTarget (NULLCOALESCE stringEntity)?                                                 # stringReferenceOperation
+    | STRING_TYPE? referenceTarget (NULLCOALESCE stringConcatExpression)?                                       # stringReferenceOperation
     ;
 
 dateEntity
