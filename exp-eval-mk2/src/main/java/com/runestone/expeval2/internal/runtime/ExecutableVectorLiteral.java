@@ -1,5 +1,6 @@
 package com.runestone.expeval2.internal.runtime;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -13,8 +14,8 @@ public final class ExecutableVectorLiteral implements ExecutableNode {
     }
 
     public ExecutableVectorLiteral(List<ExecutableNode> elements, List<Object> foldedValue) {
-        this.elements = List.copyOf(Objects.requireNonNull(elements, "elements must not be null"));
-        this.foldedValue = foldedValue != null ? List.copyOf(foldedValue) : null;
+        this.elements = Collections.unmodifiableList(Objects.requireNonNull(elements, "elements must not be null"));
+        this.foldedValue = foldedValue != null ? Collections.unmodifiableList(foldedValue) : null;
     }
 
     public List<ExecutableNode> elements() {

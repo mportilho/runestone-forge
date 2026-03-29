@@ -90,7 +90,26 @@
       "Bash(unzip -p ~/dev/git/temp/antlr4-4.13.1.jar META-INF/MANIFEST.MF)",
       "Bash(unzip -l ~/dev/git/temp/antlr-lib/antlr-runtime-3.5.3.jar)",
       "Bash(unzip -l ~/dev/git/temp/antlr4-4.13.1.jar)",
-      "Bash(head -10 grep -n \"^    public\\\\|static.*compile\\\\|compute\" exp-eval-mk2/src/main/java/com/runestone/expeval2/api/LogicalExpression.java)"
+      "Bash(head -10 grep -n \"^    public\\\\|static.*compile\\\\|compute\" exp-eval-mk2/src/main/java/com/runestone/expeval2/api/LogicalExpression.java)",
+      "mcp__jcodemunch__resolve_repo",
+      "mcp__jcodemunch__index_folder",
+      "mcp__jcodemunch__get_file_tree",
+      "Bash(tail -c 5000 /tmp/claude-1000/-home-marcelo-dev-git-runestone-forge/abb21aa4-1d36-402d-8abc-3c5cf39dff87/tasks/a225ebee9d5d81429.output)",
+      "mcp__jcodemunch__index_repo",
+      "mcp__jcodemunch__get_repo_outline",
+      "mcp__jcodemunch__search_symbols",
+      "mcp__jcodemunch__get_symbol_source",
+      "mcp__jcodemunch__get_context_bundle",
+      "mcp__jcodemunch__search_text",
+      "mcp__jcodemunch__get_file_content",
+      "mcp__jcodemunch__get_file_outline",
+      "mcp__jcodemunch__get_ranked_context",
+      "Bash(mvn clean:*)",
+      "Bash(mvn test:*)",
+      "Bash(cat /home/marcelo/dev/git/runestone-forge/exp-eval-mk2/target/surefire-reports/*.txt)",
+      "Bash(find /home/marcelo/dev/git/runestone-forge/exp-eval-mk2/target/surefire-reports -name *.xml)",
+      "Bash(xargs cat:*)",
+      "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh exp-eval-mk2 \"MembershipBenchmark\" \"/tmp/performance-benchmark/membership-baseline.json\")"
     ]
   }
 }

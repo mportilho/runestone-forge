@@ -79,6 +79,9 @@ SEMI               : ';' ;
 PERIOD             : '.' ;
 NULLCOALESCE       : '??' ;
 SAFE_NAV           : '?.' ;
+IN      : 'in' ;
+NOT_KW  : 'not' ;
+
 // Literals
 IDENTIFIER : IdentifierText ;
 STRING     : '"' ( '\\' [btnfr"'\\] | ~[\r\n\\"] )* '"';
@@ -162,6 +165,18 @@ logicalComparisonExpression
     | dateTimeEntity comparisonOperator dateTimeEntity                        # dateTimeComparisonOperation
     | stringConcatExpression REGEX_MATCH STRING                               # regexMatchOperation
     | stringConcatExpression REGEX_NOT_MATCH STRING                           # regexNotMatchOperation
+    | mathExpression IN vectorEntity                                          # mathInOperation
+    | stringConcatExpression IN vectorEntity                                  # stringInOperation
+    | dateEntity IN vectorEntity                                              # dateInOperation
+    | timeEntity IN vectorEntity                                              # timeInOperation
+    | dateTimeEntity IN vectorEntity                                          # dateTimeInOperation
+    | logicalBitwiseExpression IN vectorEntity                                # logicalInOperation
+    | mathExpression NOT_KW IN vectorEntity                                   # mathNotInOperation
+    | stringConcatExpression NOT_KW IN vectorEntity                           # stringNotInOperation
+    | dateEntity NOT_KW IN vectorEntity                                       # dateNotInOperation
+    | timeEntity NOT_KW IN vectorEntity                                       # timeNotInOperation
+    | dateTimeEntity NOT_KW IN vectorEntity                                   # dateTimeNotInOperation
+    | logicalBitwiseExpression NOT_KW IN vectorEntity                         # logicalNotInOperation
     ;
 
 logicalBitwiseExpression

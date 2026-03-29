@@ -437,6 +437,14 @@ public final class SemanticResolver {
                     expectType(rightType, ScalarType.STRING, "regex match pattern", node.right().sourceSpan());
                     yield ScalarType.BOOLEAN;
                 }
+                case IN, NOT_IN -> {
+                    if (rightType != UnknownType.INSTANCE && rightType != VectorType.INSTANCE) {
+                        error("TYPE_MISMATCH",
+                              "membership operator expects a vector right operand but found " + rightType,
+                              node.right().sourceSpan());
+                    }
+                    yield ScalarType.BOOLEAN;
+                }
             };
         }
 

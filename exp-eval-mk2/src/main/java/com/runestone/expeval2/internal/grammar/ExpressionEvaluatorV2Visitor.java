@@ -123,6 +123,90 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitRegexNotMatchOperation(ExpressionEvaluatorV2Parser.RegexNotMatchOperationContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code mathInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMathInOperation(ExpressionEvaluatorV2Parser.MathInOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code stringInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitStringInOperation(ExpressionEvaluatorV2Parser.StringInOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code dateInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDateInOperation(ExpressionEvaluatorV2Parser.DateInOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code timeInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTimeInOperation(ExpressionEvaluatorV2Parser.TimeInOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code dateTimeInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDateTimeInOperation(ExpressionEvaluatorV2Parser.DateTimeInOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code logicalInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitLogicalInOperation(ExpressionEvaluatorV2Parser.LogicalInOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code mathNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMathNotInOperation(ExpressionEvaluatorV2Parser.MathNotInOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code stringNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitStringNotInOperation(ExpressionEvaluatorV2Parser.StringNotInOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code dateNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDateNotInOperation(ExpressionEvaluatorV2Parser.DateNotInOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code timeNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTimeNotInOperation(ExpressionEvaluatorV2Parser.TimeNotInOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code dateTimeNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDateTimeNotInOperation(ExpressionEvaluatorV2Parser.DateTimeNotInOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code logicalNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitLogicalNotInOperation(ExpressionEvaluatorV2Parser.LogicalNotInOperationContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code logicalBitwiseOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalBitwiseExpression}.
 	 * @param ctx the parse tree

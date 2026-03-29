@@ -200,6 +200,150 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 */
 	void exitRegexNotMatchOperation(ExpressionEvaluatorV2Parser.RegexNotMatchOperationContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code mathInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterMathInOperation(ExpressionEvaluatorV2Parser.MathInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code mathInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitMathInOperation(ExpressionEvaluatorV2Parser.MathInOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code stringInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterStringInOperation(ExpressionEvaluatorV2Parser.StringInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code stringInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitStringInOperation(ExpressionEvaluatorV2Parser.StringInOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code dateInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterDateInOperation(ExpressionEvaluatorV2Parser.DateInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code dateInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitDateInOperation(ExpressionEvaluatorV2Parser.DateInOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code timeInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterTimeInOperation(ExpressionEvaluatorV2Parser.TimeInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code timeInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitTimeInOperation(ExpressionEvaluatorV2Parser.TimeInOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code dateTimeInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterDateTimeInOperation(ExpressionEvaluatorV2Parser.DateTimeInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code dateTimeInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitDateTimeInOperation(ExpressionEvaluatorV2Parser.DateTimeInOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code logicalInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterLogicalInOperation(ExpressionEvaluatorV2Parser.LogicalInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code logicalInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitLogicalInOperation(ExpressionEvaluatorV2Parser.LogicalInOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code mathNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterMathNotInOperation(ExpressionEvaluatorV2Parser.MathNotInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code mathNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitMathNotInOperation(ExpressionEvaluatorV2Parser.MathNotInOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code stringNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterStringNotInOperation(ExpressionEvaluatorV2Parser.StringNotInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code stringNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitStringNotInOperation(ExpressionEvaluatorV2Parser.StringNotInOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code dateNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterDateNotInOperation(ExpressionEvaluatorV2Parser.DateNotInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code dateNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitDateNotInOperation(ExpressionEvaluatorV2Parser.DateNotInOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code timeNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterTimeNotInOperation(ExpressionEvaluatorV2Parser.TimeNotInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code timeNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitTimeNotInOperation(ExpressionEvaluatorV2Parser.TimeNotInOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code dateTimeNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterDateTimeNotInOperation(ExpressionEvaluatorV2Parser.DateTimeNotInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code dateTimeNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitDateTimeNotInOperation(ExpressionEvaluatorV2Parser.DateTimeNotInOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code logicalNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterLogicalNotInOperation(ExpressionEvaluatorV2Parser.LogicalNotInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code logicalNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitLogicalNotInOperation(ExpressionEvaluatorV2Parser.LogicalNotInOperationContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code logicalBitwiseOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalBitwiseExpression}.
 	 * @param ctx the parse tree

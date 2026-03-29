@@ -317,6 +317,66 @@ public final class SemanticAstBuilder {
         }
 
         @Override
+        public ExpressionNode visitMathInOperation(ExpressionEvaluatorV2Parser.MathInOperationContext ctx) {
+            return membershipNode(ctx.mathExpression(), ctx.vectorEntity(), BinaryOperator.IN);
+        }
+
+        @Override
+        public ExpressionNode visitStringInOperation(ExpressionEvaluatorV2Parser.StringInOperationContext ctx) {
+            return membershipNode(ctx.stringConcatExpression(), ctx.vectorEntity(), BinaryOperator.IN);
+        }
+
+        @Override
+        public ExpressionNode visitDateInOperation(ExpressionEvaluatorV2Parser.DateInOperationContext ctx) {
+            return membershipNode(ctx.dateEntity(), ctx.vectorEntity(), BinaryOperator.IN);
+        }
+
+        @Override
+        public ExpressionNode visitTimeInOperation(ExpressionEvaluatorV2Parser.TimeInOperationContext ctx) {
+            return membershipNode(ctx.timeEntity(), ctx.vectorEntity(), BinaryOperator.IN);
+        }
+
+        @Override
+        public ExpressionNode visitDateTimeInOperation(ExpressionEvaluatorV2Parser.DateTimeInOperationContext ctx) {
+            return membershipNode(ctx.dateTimeEntity(), ctx.vectorEntity(), BinaryOperator.IN);
+        }
+
+        @Override
+        public ExpressionNode visitLogicalInOperation(ExpressionEvaluatorV2Parser.LogicalInOperationContext ctx) {
+            return membershipNode(ctx.logicalBitwiseExpression(), ctx.vectorEntity(), BinaryOperator.IN);
+        }
+
+        @Override
+        public ExpressionNode visitMathNotInOperation(ExpressionEvaluatorV2Parser.MathNotInOperationContext ctx) {
+            return membershipNode(ctx.mathExpression(), ctx.vectorEntity(), BinaryOperator.NOT_IN);
+        }
+
+        @Override
+        public ExpressionNode visitStringNotInOperation(ExpressionEvaluatorV2Parser.StringNotInOperationContext ctx) {
+            return membershipNode(ctx.stringConcatExpression(), ctx.vectorEntity(), BinaryOperator.NOT_IN);
+        }
+
+        @Override
+        public ExpressionNode visitDateNotInOperation(ExpressionEvaluatorV2Parser.DateNotInOperationContext ctx) {
+            return membershipNode(ctx.dateEntity(), ctx.vectorEntity(), BinaryOperator.NOT_IN);
+        }
+
+        @Override
+        public ExpressionNode visitTimeNotInOperation(ExpressionEvaluatorV2Parser.TimeNotInOperationContext ctx) {
+            return membershipNode(ctx.timeEntity(), ctx.vectorEntity(), BinaryOperator.NOT_IN);
+        }
+
+        @Override
+        public ExpressionNode visitDateTimeNotInOperation(ExpressionEvaluatorV2Parser.DateTimeNotInOperationContext ctx) {
+            return membershipNode(ctx.dateTimeEntity(), ctx.vectorEntity(), BinaryOperator.NOT_IN);
+        }
+
+        @Override
+        public ExpressionNode visitLogicalNotInOperation(ExpressionEvaluatorV2Parser.LogicalNotInOperationContext ctx) {
+            return membershipNode(ctx.logicalBitwiseExpression(), ctx.vectorEntity(), BinaryOperator.NOT_IN);
+        }
+
+        @Override
         public ExpressionNode visitDateComparisonOperation(ExpressionEvaluatorV2Parser.DateComparisonOperationContext ctx) {
             return comparisonNode(ctx.dateEntity(0), ctx.comparisonOperator(), ctx.dateEntity(1));
         }
@@ -726,6 +786,18 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitVectorFunctionDecisionOperation(ExpressionEvaluatorV2Parser.VectorFunctionDecisionOperationContext ctx) {
             return conditionalNode(ctx, ctx.logicalExpression(), ctx.vectorEntity());
+        }
+
+        private ExpressionNode membershipNode(ParserRuleContext leftContext, ParserRuleContext rightContext, BinaryOperator operator) {
+            ExpressionNode left = visit(leftContext);
+            ExpressionNode right = visit(rightContext);
+            return new BinaryOperationNode(
+                    nodeFactory.nextId("binary"),
+                    nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
+                    operator,
+                    left,
+                    right
+            );
         }
 
         private ExpressionNode comparisonNode(

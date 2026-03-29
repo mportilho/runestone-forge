@@ -342,6 +342,20 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             case LESS_THAN_OR_EQUAL    -> compare(left, right) <= 0;
             case EQUAL                 -> compareEquality(left, right);
             case NOT_EQUAL             -> !compareEquality(left, right);
+            case IN -> {
+                List<?> vector = asList(right);
+                for (Object element : vector) {
+                    if (compareEquality(left, element)) yield true;
+                }
+                yield false;
+            }
+            case NOT_IN -> {
+                List<?> vector = asList(right);
+                for (Object element : vector) {
+                    if (compareEquality(left, element)) yield false;
+                }
+                yield true;
+            }
             case CONCATENATE           -> asString(left) + asString(right);
             case NULL_COALESCE         -> throw new IllegalStateException("NULL_COALESCE must be handled as ExecutableNullCoalesce");
             case REGEX_MATCH, REGEX_NOT_MATCH -> throw new IllegalStateException("REGEX_MATCH/REGEX_NOT_MATCH must be handled as ExecutableRegexOp");
@@ -615,6 +629,12 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             return Boolean.compare(asBoolean(left), asBoolean(right));
         }
         throw new IllegalStateException("unsupported comparison between values");
+    }
+
+    private List<?> asList(Object value) {
+        if (value instanceof List<?> list) return list;
+        throw new IllegalStateException(
+                "expected a List but found: " + (value == null ? "null" : value.getClass().getName()));
     }
 
     private boolean compareEquality(Object left, Object right) {

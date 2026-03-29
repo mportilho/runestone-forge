@@ -1,3 +1,48 @@
+## PERF-046: Operadores `in` / `not in` — baseline de membros em vetor
+
+**Date:** 2026-03-28
+**Branch:** refac-springboot-4 (working tree)
+**Benchmark:** `MembershipBenchmark` — 8 methods, 3 forks, 5×500ms warmup, 10×500ms measurement, `-Xms1g -Xmx1g`, GC profiler
+
+**Hypothesis:** A nova implementação de `IN`/`NOT_IN` em `AbstractObjectEvaluator` usa varredura linear (`O(n)`) com `compareEquality` por elemento. A questão é se isso exige otimização (ex: pré-computação de `HashSet`) ou se o desempenho é adequado para o uso previsto.
+
+**No changes applied (baseline only).**
+
+**Results:**
+
+| Scenario | ns/op | ±Error | B/op | Notes |
+|---|---:|---:|---:|---|
+| numericHitFirst  | 35.5 | ±1.2 | 40 | BigDecimal hit índice 0, 5 elementos |
+| numericHitLast   | 43.3 | ±1.3 | 40 | BigDecimal hit índice 4, 5 elementos |
+| numericMiss      | 45.6 | ±1.3 | 40 | BigDecimal miss full-scan, 5 elementos |
+| notInMiss        | 45.0 | ±2.0 | 40 | `not in` miss full-scan, 5 elementos |
+| numericLargeHit  | 99.9 | ±5.3 | 40 | BigDecimal hit índice 49, 50 elementos |
+| numericLargeMiss | 107.8 | ±2.8 | 40 | BigDecimal miss full-scan, 50 elementos |
+| stringMiss       | 84.6 | ±3.4 | 40 | String miss full-scan, 5 elementos |
+| externalVectorHit | 243.8 | ±22.6 | 208 | List dinâmica, hit índice 49, 50 elementos |
+
+**Analysis:**
+
+1. **B/op = 40 para todos os vetores literais**: o vetor folded é reutilizado sem alocação por chamada. Os 40 B são overhead do framework de avaliação (ExecutionScope), não do operador de membros. A implementação não aloca ArrayList por chamada.
+2. **Escala linear esperada**: 5 elementos → ~45 ns, 50 elementos → ~108 ns. Custo por elemento ~1.4–2 ns. O JIT elimina praticamente todo overhead do loop.
+3. **`stringMiss` (84 ns) é ~85% mais lento que `numericMiss` (45 ns) para o mesmo vetor (5 elementos)**: causa identificada em `compareEquality` — o caminho BigDecimal chega na 2ª branch (1 `instanceof`), enquanto String percorre 3 branches (`null`, `BigDecimal`, `List`) antes de `Objects.equals`. Com 5 elementos, essa diferença acumula (~7.8 ns/elemento em strings vs ~1.5 ns/elemento em BigDecimal).
+4. **`externalVectorHit` (243 ns, 208 B/op)**: o overhead não é do scan de 50 elementos (~108 ns) — é da infra de bindings dinâmicos (overlay map). Mesma raiz do PERF-045.
+5. **HashSet para BigDecimal é inviável**: `BigDecimal.hashCode()` não é consistente com `compareTo()` (`new BigDecimal("1.0").hashCode() != new BigDecimal("1").hashCode()`). Implementar HashSet exigiria normalização via `stripTrailingZeros()` em todos os elementos antes de inserção — custo pré-pago que só compensa vetores grandes com alta frequência de avaliação.
+
+**Discarded hypotheses:**
+- `HashSet` para vetores BigDecimal literais: inviável sem normalização; risco de regressão silenciosa.
+- `HashSet` para vetores de strings literais: viável, mas `stringMiss` não é o cenário crítico na prática e a saving (~50 ns para 5 elementos) não justifica a complexidade.
+
+**Candidate for future investigation:**
+- Reordenar branches em `compareEquality` — adicionar `left instanceof String` antes da verificação BigDecimal poderia melhorar o caminho String sem custo para BigDecimal. Requer benchmark dedicado.
+
+**Decision:** ADJUST
+**Reason:** A implementação está correta e adequada para o uso atual. B/op é mínimo para vetores literais. A latência escala linearmente com o tamanho do vetor a ~2 ns/elemento. Nenhuma otimização justificada pelos dados medidos. O comportamento de `stringMiss` é um candidato para investigação futura, não para ação imediata.
+
+**Verification:** `mvn -q -pl exp-eval-mk2 -Dtest=MembershipExpressionTest test` passou antes da medição.
+
+---
+
 ## PERF-045: Overlay de bindings em `buildValues()` — evitar copia de defaults por chamada
 
 **Date:** 2026-03-25
