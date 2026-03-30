@@ -165,6 +165,13 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitLogicalInOperation(ExpressionEvaluatorV2Parser.LogicalInOperationContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code nullInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitNullInOperation(ExpressionEvaluatorV2Parser.NullInOperationContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code mathNotInOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
 	 * @param ctx the parse tree
@@ -206,6 +213,13 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitLogicalNotInOperation(ExpressionEvaluatorV2Parser.LogicalNotInOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code nullNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitNullNotInOperation(ExpressionEvaluatorV2Parser.NullNotInOperationContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code logicalBitwiseOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalBitwiseExpression}.

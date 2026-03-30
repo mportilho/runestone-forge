@@ -272,6 +272,18 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 */
 	void exitLogicalInOperation(ExpressionEvaluatorV2Parser.LogicalInOperationContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code nullInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterNullInOperation(ExpressionEvaluatorV2Parser.NullInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code nullInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitNullInOperation(ExpressionEvaluatorV2Parser.NullInOperationContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code mathNotInOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
 	 * @param ctx the parse tree
@@ -343,6 +355,18 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitLogicalNotInOperation(ExpressionEvaluatorV2Parser.LogicalNotInOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code nullNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterNullNotInOperation(ExpressionEvaluatorV2Parser.NullNotInOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code nullNotInOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitNullNotInOperation(ExpressionEvaluatorV2Parser.NullNotInOperationContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code logicalBitwiseOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalBitwiseExpression}.

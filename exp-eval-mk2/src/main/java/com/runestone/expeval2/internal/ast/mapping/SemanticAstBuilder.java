@@ -377,6 +377,32 @@ public final class SemanticAstBuilder {
         }
 
         @Override
+        public ExpressionNode visitNullInOperation(ExpressionEvaluatorV2Parser.NullInOperationContext ctx) {
+            LiteralNode left = new LiteralNode(nodeFactory.nextId("literal"), nodeFactory.sourceSpan(ctx.NULL().getSymbol()), "null");
+            ExpressionNode right = visit(ctx.vectorEntity());
+            return new BinaryOperationNode(
+                    nodeFactory.nextId("binary"),
+                    nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
+                    BinaryOperator.IN,
+                    left,
+                    right
+            );
+        }
+
+        @Override
+        public ExpressionNode visitNullNotInOperation(ExpressionEvaluatorV2Parser.NullNotInOperationContext ctx) {
+            LiteralNode left = new LiteralNode(nodeFactory.nextId("literal"), nodeFactory.sourceSpan(ctx.NULL().getSymbol()), "null");
+            ExpressionNode right = visit(ctx.vectorEntity());
+            return new BinaryOperationNode(
+                    nodeFactory.nextId("binary"),
+                    nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
+                    BinaryOperator.NOT_IN,
+                    left,
+                    right
+            );
+        }
+
+        @Override
         public ExpressionNode visitDateComparisonOperation(ExpressionEvaluatorV2Parser.DateComparisonOperationContext ctx) {
             return comparisonNode(ctx.dateEntity(0), ctx.comparisonOperator(), ctx.dateEntity(1));
         }

@@ -171,12 +171,14 @@ logicalComparisonExpression
     | timeEntity IN vectorEntity                                              # timeInOperation
     | dateTimeEntity IN vectorEntity                                          # dateTimeInOperation
     | logicalBitwiseExpression IN vectorEntity                                # logicalInOperation
+    | NULL IN vectorEntity                                                    # nullInOperation
     | mathExpression NOT_KW IN vectorEntity                                   # mathNotInOperation
     | stringConcatExpression NOT_KW IN vectorEntity                           # stringNotInOperation
     | dateEntity NOT_KW IN vectorEntity                                       # dateNotInOperation
     | timeEntity NOT_KW IN vectorEntity                                       # timeNotInOperation
     | dateTimeEntity NOT_KW IN vectorEntity                                   # dateTimeNotInOperation
     | logicalBitwiseExpression NOT_KW IN vectorEntity                         # logicalNotInOperation
+    | NULL NOT_KW IN vectorEntity                                             # nullNotInOperation
     ;
 
 logicalBitwiseExpression

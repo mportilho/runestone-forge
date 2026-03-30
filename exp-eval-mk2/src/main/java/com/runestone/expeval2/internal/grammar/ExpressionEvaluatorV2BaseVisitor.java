@@ -172,6 +172,13 @@ public class ExpressionEvaluatorV2BaseVisitor<T> extends AbstractParseTreeVisito
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
+	@Override public T visitNullInOperation(ExpressionEvaluatorV2Parser.NullInOperationContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
 	@Override public T visitMathNotInOperation(ExpressionEvaluatorV2Parser.MathNotInOperationContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
@@ -208,6 +215,13 @@ public class ExpressionEvaluatorV2BaseVisitor<T> extends AbstractParseTreeVisito
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
 	@Override public T visitLogicalNotInOperation(ExpressionEvaluatorV2Parser.LogicalNotInOperationContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
+	@Override public T visitNullNotInOperation(ExpressionEvaluatorV2Parser.NullNotInOperationContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
 	 *

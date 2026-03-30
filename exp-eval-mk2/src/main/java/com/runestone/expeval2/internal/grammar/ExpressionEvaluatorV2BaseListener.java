@@ -281,6 +281,18 @@ public class ExpressionEvaluatorV2BaseListener implements ExpressionEvaluatorV2L
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterNullInOperation(ExpressionEvaluatorV2Parser.NullInOperationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitNullInOperation(ExpressionEvaluatorV2Parser.NullInOperationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterMathNotInOperation(ExpressionEvaluatorV2Parser.MathNotInOperationContext ctx) { }
 	/**
 	 * {@inheritDoc}
@@ -348,6 +360,18 @@ public class ExpressionEvaluatorV2BaseListener implements ExpressionEvaluatorV2L
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitLogicalNotInOperation(ExpressionEvaluatorV2Parser.LogicalNotInOperationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterNullNotInOperation(ExpressionEvaluatorV2Parser.NullNotInOperationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitNullNotInOperation(ExpressionEvaluatorV2Parser.NullNotInOperationContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
