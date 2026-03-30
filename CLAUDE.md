@@ -103,25 +103,29 @@ Compiled expressions are cached in `ExpressionCompiler` by `(source, environment
 
 ## Regenerating the ANTLR Grammar
 
+The default Maven build no longer regenerates the grammar. Generated Java sources remain versioned in
+`exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/grammar`, so normal `mvn test` / `mvn compile`
+does not touch them or recreate stray `.tokens` files under `src/main/java`.
+
+### Regenerate the committed Java sources
+
+```shell
+mvn -pl exp-eval-mk2 -Pantlr-generate generate-sources
+```
+
+This profile generates into `exp-eval-mk2/target/generated-sources/antlr4` and then copies only the
+generated `.java` files back into
+`exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/grammar`.
+
+### For ANTLR diagnostics
+
 > **Important:** The jar at `~/dev/git/temp/antlr4-4.13.1.jar` is **not** a self-contained uber-jar and
 > **does not work** directly — even with the sibling jars from `~/dev/git/temp/antlr-lib/` on the
-> classpath, the JVM cannot initialize `org.antlr.v4.Tool`.  Use the Maven local cache instead.
-
-### Step 1 — ensure the jars are present in the Maven cache
+> classpath, the JVM cannot initialize `org.antlr.v4.Tool`. Use the Maven local cache instead.
 
 ```shell
 mvn dependency:get -Dartifact=org.antlr:antlr4:4.13.1
-```
 
-This is a no-op if the jar is already cached.
-
-### Step 2 — regenerate
-
-> **Why temp dir:** ANTLR always emits `.tokens` and `.interp` alongside the `.java` files.
-> Generating directly into `src/main/java` would pollute the source tree with those artifacts.
-> The command below generates into a temp directory and copies only the `.java` files across.
-
-```shell
 ANTLR_TOOL=~/.m2/repository/org/antlr/antlr4/4.13.1/antlr4-4.13.1.jar
 ANTLR_RT=~/.m2/repository/org/antlr/antlr4-runtime/4.13.1/antlr4-runtime-4.13.1.jar
 ANTLR3_RT=~/.m2/repository/org/antlr/antlr-runtime/3.5.3/antlr-runtime-3.5.3.jar

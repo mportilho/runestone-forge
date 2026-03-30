@@ -101,6 +101,10 @@ public final class ExpressionEnvironmentBuilder {
                 .registerStaticProvider(LogarithmFunctions.class, true);
     }
 
+    public ExpressionEnvironmentBuilder addStringFunctions() {
+        return registerStaticProvider(StringFunctions.class, true);
+    }
+
     public ExpressionEnvironmentBuilder addTrigonometryFunctions() {
         return registerStaticProvider(TrigonometryFunctions.class, true);
     }
@@ -110,6 +114,7 @@ public final class ExpressionEnvironmentBuilder {
                 .addDateTimeFunctions()
                 .addExcelFunctions()
                 .addMathFunctions()
+                .addStringFunctions()
                 .addTrigonometryFunctions();
     }
 

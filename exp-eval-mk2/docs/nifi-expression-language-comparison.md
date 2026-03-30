@@ -88,7 +88,6 @@ BETWEEN : 'between' ;
 | `length` | `length(String)` |
 | `split` | `split(String, String)` → vetor |
 | `join` | `join(vector, String)` |
-| `getDelimitedField` | `getDelimitedField(String, int, String)` (extração de campo CSV) |
 
 #### Encoding / Hashing
 
