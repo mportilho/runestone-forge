@@ -149,6 +149,11 @@ class SemanticResolverTest {
                         m.arguments().forEach(arg -> collect(arg, nodes));
                     }
                 });
+            case com.runestone.expeval2.internal.ast.TernaryOperationNode ternaryOperationNode -> {
+                collect(ternaryOperationNode.first(), nodes);
+                collect(ternaryOperationNode.second(), nodes);
+                collect(ternaryOperationNode.third(), nodes);
+            }
         }
     }
 

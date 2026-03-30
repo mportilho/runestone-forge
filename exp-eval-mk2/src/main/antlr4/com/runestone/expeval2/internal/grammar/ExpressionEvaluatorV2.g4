@@ -81,6 +81,7 @@ NULLCOALESCE       : '??' ;
 SAFE_NAV           : '?.' ;
 IN      : 'in' ;
 NOT_KW  : 'not' ;
+BETWEEN : 'between' ;
 
 // Literals
 IDENTIFIER : IdentifierText ;
@@ -179,6 +180,16 @@ logicalComparisonExpression
     | dateTimeEntity NOT_KW IN vectorEntity                                   # dateTimeNotInOperation
     | logicalBitwiseExpression NOT_KW IN vectorEntity                         # logicalNotInOperation
     | NULL NOT_KW IN vectorEntity                                             # nullNotInOperation
+    | mathExpression BETWEEN mathExpression AND mathExpression                # mathBetweenOperation
+    | stringConcatExpression BETWEEN stringConcatExpression AND stringConcatExpression # stringBetweenOperation
+    | dateEntity BETWEEN dateEntity AND dateEntity                            # dateBetweenOperation
+    | timeEntity BETWEEN timeEntity AND timeEntity                            # timeBetweenOperation
+    | dateTimeEntity BETWEEN dateTimeEntity AND dateTimeEntity                # dateTimeBetweenOperation
+    | mathExpression NOT_KW BETWEEN mathExpression AND mathExpression         # mathNotBetweenOperation
+    | stringConcatExpression NOT_KW BETWEEN stringConcatExpression AND stringConcatExpression # stringNotBetweenOperation
+    | dateEntity NOT_KW BETWEEN dateEntity AND dateEntity                     # dateNotBetweenOperation
+    | timeEntity NOT_KW BETWEEN timeEntity AND timeEntity                     # timeNotBetweenOperation
+    | dateTimeEntity NOT_KW BETWEEN dateTimeEntity AND dateTimeEntity         # dateTimeNotBetweenOperation
     ;
 
 logicalBitwiseExpression

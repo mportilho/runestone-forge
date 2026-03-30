@@ -7,6 +7,7 @@ import com.runestone.expeval2.api.ExpressionEvaluationException;
 import com.runestone.expeval2.catalog.FunctionDescriptor;
 import com.runestone.expeval2.internal.ast.BinaryOperator;
 import com.runestone.expeval2.internal.ast.SourceSpan;
+import com.runestone.expeval2.internal.ast.TernaryOperator;
 
 import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
@@ -154,6 +155,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             case ExecutableSimpleConditional sc -> evaluateSimpleConditional(sc, scope);
             case ExecutableUnaryOp u       -> evaluateUnary(u, scope);
             case ExecutableBinaryOp b      -> evaluateBinary(b, scope);
+            case ExecutableTernaryOp t     -> evaluateTernary(t, scope);
             case ExecutablePostfixOp p     -> evaluatePostfix(p, scope);
             case ExecutableVectorLiteral v -> evaluateVector(v, scope);
             case ExecutableNullCoalesce nc -> {
@@ -360,6 +362,14 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             case NULL_COALESCE         -> throw new IllegalStateException("NULL_COALESCE must be handled as ExecutableNullCoalesce");
             case REGEX_MATCH, REGEX_NOT_MATCH -> throw new IllegalStateException("REGEX_MATCH/REGEX_NOT_MATCH must be handled as ExecutableRegexOp");
         };
+    }
+
+    private Object evaluateTernary(ExecutableTernaryOp node, ExecutionScope scope) {
+        Object value = evaluateExpr(node.first(),  scope);
+        Object lower = evaluateExpr(node.second(), scope);
+        Object upper = evaluateExpr(node.third(),  scope);
+        boolean inRange = compare(value, lower) >= 0 && compare(value, upper) <= 0;
+        return (node.operator() == TernaryOperator.BETWEEN) == inRange;
     }
 
     private Object evaluateRegex(ExecutableRegexOp node, ExecutionScope scope) {

@@ -3,6 +3,7 @@ package com.runestone.expeval2.internal.runtime;
 import com.runestone.expeval2.catalog.*;
 import com.runestone.expeval2.internal.ast.*;
 import com.runestone.expeval2.internal.ast.BinaryOperator;
+import com.runestone.expeval2.internal.ast.TernaryOperationNode;
 import com.runestone.expeval2.types.*;
 
 import java.math.BigDecimal;
@@ -89,6 +90,7 @@ final class ExecutionPlanBuilder {
                 yield sum;
             }
             case ExecutableBinaryOp b -> countNodeEvents(b.left()) + countNodeEvents(b.right());
+            case ExecutableTernaryOp t -> countNodeEvents(t.first()) + countNodeEvents(t.second()) + countNodeEvents(t.third());
             case ExecutableUnaryOp u -> countNodeEvents(u.operand());
             case ExecutablePostfixOp p -> countNodeEvents(p.operand());
             case ExecutableConditional c -> {
@@ -189,6 +191,12 @@ final class ExecutionPlanBuilder {
                     b.operator(),
                     buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog),
                     buildNode(b.right(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog)
+            );
+            case TernaryOperationNode t -> new ExecutableTernaryOp(
+                    t.operator(),
+                    buildNode(t.first(),  model, runtimeServices, externalSymbolCatalog, typeHintCatalog),
+                    buildNode(t.second(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog),
+                    buildNode(t.third(),  model, runtimeServices, externalSymbolCatalog, typeHintCatalog)
             );
             case UnaryOperationNode u -> new ExecutableUnaryOp(
                     u.operator(),

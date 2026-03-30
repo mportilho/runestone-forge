@@ -221,6 +221,76 @@ public interface ExpressionEvaluatorV2Visitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitNullNotInOperation(ExpressionEvaluatorV2Parser.NullNotInOperationContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code mathBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMathBetweenOperation(ExpressionEvaluatorV2Parser.MathBetweenOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code stringBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitStringBetweenOperation(ExpressionEvaluatorV2Parser.StringBetweenOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code dateBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDateBetweenOperation(ExpressionEvaluatorV2Parser.DateBetweenOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code timeBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTimeBetweenOperation(ExpressionEvaluatorV2Parser.TimeBetweenOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code dateTimeBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDateTimeBetweenOperation(ExpressionEvaluatorV2Parser.DateTimeBetweenOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code mathNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMathNotBetweenOperation(ExpressionEvaluatorV2Parser.MathNotBetweenOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code stringNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitStringNotBetweenOperation(ExpressionEvaluatorV2Parser.StringNotBetweenOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code dateNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDateNotBetweenOperation(ExpressionEvaluatorV2Parser.DateNotBetweenOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code timeNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTimeNotBetweenOperation(ExpressionEvaluatorV2Parser.TimeNotBetweenOperationContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code dateTimeNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDateTimeNotBetweenOperation(ExpressionEvaluatorV2Parser.DateTimeNotBetweenOperationContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code logicalBitwiseOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalBitwiseExpression}.
 	 * @param ctx the parse tree

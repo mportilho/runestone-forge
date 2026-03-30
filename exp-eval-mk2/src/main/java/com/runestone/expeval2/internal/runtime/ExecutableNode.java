@@ -5,6 +5,7 @@ sealed interface ExecutableNode permits
         ExecutableDynamicLiteral,
         ExecutableIdentifier,
         ExecutableBinaryOp,
+        ExecutableTernaryOp,
         ExecutableUnaryOp,
         ExecutablePostfixOp,
         ExecutableFunctionCall,

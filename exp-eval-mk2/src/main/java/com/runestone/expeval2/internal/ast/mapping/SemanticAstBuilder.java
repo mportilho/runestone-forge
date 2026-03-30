@@ -814,6 +814,74 @@ public final class SemanticAstBuilder {
             return conditionalNode(ctx, ctx.logicalExpression(), ctx.vectorEntity());
         }
 
+        @Override
+        public ExpressionNode visitMathBetweenOperation(ExpressionEvaluatorV2Parser.MathBetweenOperationContext ctx) {
+            return betweenNode(ctx.mathExpression(0), ctx.mathExpression(1), ctx.mathExpression(2), TernaryOperator.BETWEEN);
+        }
+
+        @Override
+        public ExpressionNode visitStringBetweenOperation(ExpressionEvaluatorV2Parser.StringBetweenOperationContext ctx) {
+            return betweenNode(ctx.stringConcatExpression(0), ctx.stringConcatExpression(1), ctx.stringConcatExpression(2), TernaryOperator.BETWEEN);
+        }
+
+        @Override
+        public ExpressionNode visitDateBetweenOperation(ExpressionEvaluatorV2Parser.DateBetweenOperationContext ctx) {
+            return betweenNode(ctx.dateEntity(0), ctx.dateEntity(1), ctx.dateEntity(2), TernaryOperator.BETWEEN);
+        }
+
+        @Override
+        public ExpressionNode visitTimeBetweenOperation(ExpressionEvaluatorV2Parser.TimeBetweenOperationContext ctx) {
+            return betweenNode(ctx.timeEntity(0), ctx.timeEntity(1), ctx.timeEntity(2), TernaryOperator.BETWEEN);
+        }
+
+        @Override
+        public ExpressionNode visitDateTimeBetweenOperation(ExpressionEvaluatorV2Parser.DateTimeBetweenOperationContext ctx) {
+            return betweenNode(ctx.dateTimeEntity(0), ctx.dateTimeEntity(1), ctx.dateTimeEntity(2), TernaryOperator.BETWEEN);
+        }
+
+        @Override
+        public ExpressionNode visitMathNotBetweenOperation(ExpressionEvaluatorV2Parser.MathNotBetweenOperationContext ctx) {
+            return betweenNode(ctx.mathExpression(0), ctx.mathExpression(1), ctx.mathExpression(2), TernaryOperator.NOT_BETWEEN);
+        }
+
+        @Override
+        public ExpressionNode visitStringNotBetweenOperation(ExpressionEvaluatorV2Parser.StringNotBetweenOperationContext ctx) {
+            return betweenNode(ctx.stringConcatExpression(0), ctx.stringConcatExpression(1), ctx.stringConcatExpression(2), TernaryOperator.NOT_BETWEEN);
+        }
+
+        @Override
+        public ExpressionNode visitDateNotBetweenOperation(ExpressionEvaluatorV2Parser.DateNotBetweenOperationContext ctx) {
+            return betweenNode(ctx.dateEntity(0), ctx.dateEntity(1), ctx.dateEntity(2), TernaryOperator.NOT_BETWEEN);
+        }
+
+        @Override
+        public ExpressionNode visitTimeNotBetweenOperation(ExpressionEvaluatorV2Parser.TimeNotBetweenOperationContext ctx) {
+            return betweenNode(ctx.timeEntity(0), ctx.timeEntity(1), ctx.timeEntity(2), TernaryOperator.NOT_BETWEEN);
+        }
+
+        @Override
+        public ExpressionNode visitDateTimeNotBetweenOperation(ExpressionEvaluatorV2Parser.DateTimeNotBetweenOperationContext ctx) {
+            return betweenNode(ctx.dateTimeEntity(0), ctx.dateTimeEntity(1), ctx.dateTimeEntity(2), TernaryOperator.NOT_BETWEEN);
+        }
+
+        private ExpressionNode betweenNode(
+                ParserRuleContext valueContext,
+                ParserRuleContext lowerContext,
+                ParserRuleContext upperContext,
+                TernaryOperator operator) {
+            ExpressionNode value = visit(valueContext);
+            ExpressionNode lower = visit(lowerContext);
+            ExpressionNode upper = visit(upperContext);
+            return new TernaryOperationNode(
+                    nodeFactory.nextId("ternary"),
+                    nodeFactory.sourceSpan(value.sourceSpan(), upper.sourceSpan()),
+                    operator,
+                    value,
+                    lower,
+                    upper
+            );
+        }
+
         private ExpressionNode membershipNode(ParserRuleContext leftContext, ParserRuleContext rightContext, BinaryOperator operator) {
             ExpressionNode left = visit(leftContext);
             ExpressionNode right = visit(rightContext);

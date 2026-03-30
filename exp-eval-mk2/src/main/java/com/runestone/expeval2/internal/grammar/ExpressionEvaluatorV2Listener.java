@@ -368,6 +368,126 @@ public interface ExpressionEvaluatorV2Listener extends ParseTreeListener {
 	 */
 	void exitNullNotInOperation(ExpressionEvaluatorV2Parser.NullNotInOperationContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code mathBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterMathBetweenOperation(ExpressionEvaluatorV2Parser.MathBetweenOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code mathBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitMathBetweenOperation(ExpressionEvaluatorV2Parser.MathBetweenOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code stringBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterStringBetweenOperation(ExpressionEvaluatorV2Parser.StringBetweenOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code stringBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitStringBetweenOperation(ExpressionEvaluatorV2Parser.StringBetweenOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code dateBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterDateBetweenOperation(ExpressionEvaluatorV2Parser.DateBetweenOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code dateBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitDateBetweenOperation(ExpressionEvaluatorV2Parser.DateBetweenOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code timeBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterTimeBetweenOperation(ExpressionEvaluatorV2Parser.TimeBetweenOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code timeBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitTimeBetweenOperation(ExpressionEvaluatorV2Parser.TimeBetweenOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code dateTimeBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterDateTimeBetweenOperation(ExpressionEvaluatorV2Parser.DateTimeBetweenOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code dateTimeBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitDateTimeBetweenOperation(ExpressionEvaluatorV2Parser.DateTimeBetweenOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code mathNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterMathNotBetweenOperation(ExpressionEvaluatorV2Parser.MathNotBetweenOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code mathNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitMathNotBetweenOperation(ExpressionEvaluatorV2Parser.MathNotBetweenOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code stringNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterStringNotBetweenOperation(ExpressionEvaluatorV2Parser.StringNotBetweenOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code stringNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitStringNotBetweenOperation(ExpressionEvaluatorV2Parser.StringNotBetweenOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code dateNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterDateNotBetweenOperation(ExpressionEvaluatorV2Parser.DateNotBetweenOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code dateNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitDateNotBetweenOperation(ExpressionEvaluatorV2Parser.DateNotBetweenOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code timeNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterTimeNotBetweenOperation(ExpressionEvaluatorV2Parser.TimeNotBetweenOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code timeNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitTimeNotBetweenOperation(ExpressionEvaluatorV2Parser.TimeNotBetweenOperationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code dateTimeNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterDateTimeNotBetweenOperation(ExpressionEvaluatorV2Parser.DateTimeNotBetweenOperationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code dateTimeNotBetweenOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalComparisonExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitDateTimeNotBetweenOperation(ExpressionEvaluatorV2Parser.DateTimeNotBetweenOperationContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code logicalBitwiseOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorV2Parser#logicalBitwiseExpression}.
 	 * @param ctx the parse tree

@@ -1,3 +1,39 @@
+## PERF-047: Cache bounded de `Pattern` em `StringFunctions`
+
+**Date:** 2026-03-30
+**Branch:** refac-springboot-4 (working tree)
+**Benchmark:** `StringFunctionsRegexBenchmark` — baseline e cached no mesmo JMH, 3 forks, 5×500ms warmup, 10×500ms measurement, `-Xms1g -Xmx1g`, GC profiler, JDK 21.0.6
+
+**Hypothesis:** `replaceAll` e `split` recompilam regex em toda chamada. Um cache bounded de `Pattern` deve reduzir latencia e `B/op` quando a mesma regex e reutilizada entre avaliacoes.
+
+**Changes applied:**
+- `StringFunctions`: cache estatico bounded de `Pattern` com Caffeine.
+- `StringFunctions`: `replaceAll` passou a usar `compiledPattern(regex).matcher(text).replaceAll(...)`.
+- `StringFunctions`: `split` passou a reutilizar `compiledPattern(regex).split(...)`.
+- `StringFunctionsTest`: cobertura direta para `replaceAll` com grupo de captura e `split` com delimitador regex.
+- `StringFunctionsRegexBenchmark`: benchmark JMH dedicado comparando baseline embutido vs implementacao com cache.
+
+**Results (Before = baseline methods, After = cached methods):**
+
+| Scenario | Before (ns/op) | After (ns/op) | Δ (%) | Before (B/op) | After (B/op) | Δ B/op |
+|---|---:|---:|---:|---:|---:|---:|
+| replaceAll | 321.702 ±7.303 | 271.733 ±7.318 | **+15.53%** | 1000.004 | 496.004 | **−504.000** |
+| split | 477.980 ±19.465 | 475.395 ±8.241 | +0.54% | 1826.673 | 1376.007 | **−450.666** |
+
+**Analysis:**
+
+1. **`replaceAll` confirmou o hotspot esperado:** a troca para `Pattern` cacheado reduziu a latencia em 15.53% e cortou 504 B/op. Isso e dado medido e justifica manter a mudanca.
+2. **`split` ficou praticamente neutro em latencia:** +0.54% esta dentro da zona de ruido para esse protocolo, entao nao ha evidencia forte de ganho em `ns/op`.
+3. **`split` ainda reduziu alocacao de forma material:** o corte de 450.666 B/op indica que o cache removeu a alocacao recorrente do `Pattern`, mesmo quando o custo total do split continua dominando o tempo.
+4. **Inferencia:** o ganho depende de reutilizacao da mesma regex. Se a workload usar regex altamente cardinalizada, o beneficio cai e o cache passa a atuar apenas como protecao bounded, nao como acelerador frequente.
+
+**Decision:** ACCEPT
+**Reason:** `replaceAll` teve ganho claro de latencia e alocacao no caminho alvo, e `split` reduziu `B/op` sem regressao relevante. O risco e baixo porque a semantica publica foi preservada e o cache e bounded.
+
+**Verification:** `StringFunctionsTest` e `StringFunctionsExpressionTest` passaram antes da medicao. `test-compile` do modulo tambem passou com o benchmark novo.
+
+---
+
 ## PERF-046: Operadores `in` / `not in` — baseline de membros em vetor
 
 **Date:** 2026-03-28

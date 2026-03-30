@@ -14,6 +14,7 @@ import com.runestone.expeval2.internal.ast.PostfixOperationNode;
 import com.runestone.expeval2.internal.ast.PropertyChainNode;
 import com.runestone.expeval2.internal.ast.SimpleAssignmentNode;
 import com.runestone.expeval2.internal.ast.SourceSpan;
+import com.runestone.expeval2.internal.ast.TernaryOperationNode;
 import com.runestone.expeval2.internal.ast.UnaryOperationNode;
 import com.runestone.expeval2.internal.ast.VectorLiteralNode;
 import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
@@ -148,6 +149,7 @@ public final class SemanticResolver {
                 case ConditionalNode conditionalNode -> resolveConditional(conditionalNode);
                 case UnaryOperationNode unaryOperationNode -> resolveUnary(unaryOperationNode);
                 case BinaryOperationNode binaryOperationNode -> resolveBinary(binaryOperationNode);
+                case TernaryOperationNode ternaryOperationNode -> resolveTernary(ternaryOperationNode);
                 case PostfixOperationNode postfixOperationNode -> resolvePostfix(postfixOperationNode);
                 case VectorLiteralNode vectorLiteralNode -> resolveVector(vectorLiteralNode);
             };
@@ -446,6 +448,16 @@ public final class SemanticResolver {
                     yield ScalarType.BOOLEAN;
                 }
             };
+        }
+
+        private ResolvedType resolveTernary(TernaryOperationNode node) {
+            ResolvedType valueType = resolveExpression(node.first());
+            ResolvedType lowerType = resolveExpression(node.second());
+            ResolvedType upperType = resolveExpression(node.third());
+            if (!compatibleComparison(valueType, lowerType) || !compatibleComparison(valueType, upperType)) {
+                error("INCOMPATIBLE_COMPARISON", "between operator uses incompatible operand types", node.sourceSpan());
+            }
+            return ScalarType.BOOLEAN;
         }
 
         private ResolvedType resolvePostfix(PostfixOperationNode node) {

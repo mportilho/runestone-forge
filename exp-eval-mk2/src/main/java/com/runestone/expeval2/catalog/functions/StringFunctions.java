@@ -24,6 +24,9 @@
 
 package com.runestone.expeval2.catalog.functions;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -38,7 +41,11 @@ import java.util.regex.Pattern;
  */
 public class StringFunctions {
 
+    private static final long REGEX_CACHE_MAX_SIZE = 128;
     private static final String SPACE = " ";
+    private static final Cache<String, Pattern> REGEX_CACHE = Caffeine.newBuilder()
+            .maximumSize(REGEX_CACHE_MAX_SIZE)
+            .build();
 
     public static String toUpper(String value) {
         return requireText(value).toUpperCase(Locale.ROOT);
@@ -147,7 +154,10 @@ public class StringFunctions {
     }
 
     public static String replaceAll(String value, String regex, String replacement) {
-        return requireText(value).replaceAll(requireString(regex, "regex"), requireString(replacement, "replacement"));
+        String text = requireText(value);
+        String regexText = requireString(regex, "regex");
+        String replacementText = requireString(replacement, "replacement");
+        return compiledPattern(regexText).matcher(text).replaceAll(replacementText);
     }
 
     public static Integer indexOf(String value, String token) {
@@ -183,7 +193,7 @@ public class StringFunctions {
     }
 
     public static List<String> split(String value, String regex) {
-        return Arrays.asList(Pattern.compile(requireString(regex, "regex")).split(requireText(value), -1));
+        return Arrays.asList(compiledPattern(requireString(regex, "regex")).split(requireText(value), -1));
     }
 
     public static String join(List<?> values, String delimiter) {
@@ -226,6 +236,10 @@ public class StringFunctions {
             throw new IllegalArgumentException("padding must not be empty");
         }
         return value;
+    }
+
+    private static Pattern compiledPattern(String regex) {
+        return REGEX_CACHE.get(regex, Pattern::compile);
     }
 
     private static String requireString(String value, String argumentName) {
