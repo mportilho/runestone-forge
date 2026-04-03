@@ -304,12 +304,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
 
     private Object evaluateUnary(ExecutableUnaryOp node, ExecutionScope scope) {
         Object operand = evaluateExpr(node.operand(), scope);
-        return switch (node.operator()) {
-            case NEGATE      -> asBigDecimal(operand).negate();
-            case LOGICAL_NOT -> !asBoolean(operand);
-            case SQRT        -> asBigDecimal(operand).sqrt(mathContext);
-            case MODULUS     -> asBigDecimal(operand).abs();
-        };
+        return OperatorEvaluator.evaluateUnary(node.operator(), operand, runtimeServices, mathContext);
     }
 
     private Object evaluateBinary(ExecutableBinaryOp node, ExecutionScope scope) {
@@ -324,52 +319,14 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             if (leftBool) return operator == BinaryOperator.OR;
         }
         Object right = evaluateExpr(node.right(), scope);
-        return switch (operator) {
-            case ADD      -> asBigDecimal(left).add(asBigDecimal(right));
-            case SUBTRACT -> asBigDecimal(left).subtract(asBigDecimal(right));
-            case MULTIPLY -> asBigDecimal(left).multiply(asBigDecimal(right));
-            case DIVIDE   -> asBigDecimal(left).divide(asBigDecimal(right), mathContext);
-            case MODULO   -> asBigDecimal(left).remainder(asBigDecimal(right));
-            case POWER    -> pow(asBigDecimal(left), asBigDecimal(right));
-            case ROOT     -> BigDecimalMath.root(asBigDecimal(left), asBigDecimal(right), mathContext);
-            case AND      -> asBoolean(right);
-            case OR       -> asBoolean(right);
-            case XOR      -> asBoolean(left) ^ asBoolean(right);
-            case XNOR     -> !(asBoolean(left) ^ asBoolean(right));
-            case NAND     -> !asBoolean(right);
-            case NOR      -> !asBoolean(right);
-            case GREATER_THAN          -> compare(left, right) > 0;
-            case GREATER_THAN_OR_EQUAL -> compare(left, right) >= 0;
-            case LESS_THAN             -> compare(left, right) < 0;
-            case LESS_THAN_OR_EQUAL    -> compare(left, right) <= 0;
-            case EQUAL                 -> compareEquality(left, right);
-            case NOT_EQUAL             -> !compareEquality(left, right);
-            case IN -> {
-                List<?> vector = asList(right);
-                for (Object element : vector) {
-                    if (compareEquality(left, element)) yield true;
-                }
-                yield false;
-            }
-            case NOT_IN -> {
-                List<?> vector = asList(right);
-                for (Object element : vector) {
-                    if (compareEquality(left, element)) yield false;
-                }
-                yield true;
-            }
-            case CONCATENATE           -> asString(left) + asString(right);
-            case NULL_COALESCE         -> throw new IllegalStateException("NULL_COALESCE must be handled as ExecutableNullCoalesce");
-            case REGEX_MATCH, REGEX_NOT_MATCH -> throw new IllegalStateException("REGEX_MATCH/REGEX_NOT_MATCH must be handled as ExecutableRegexOp");
-        };
+        return OperatorEvaluator.evaluateBinary(operator, left, right, runtimeServices, mathContext);
     }
 
     private Object evaluateTernary(ExecutableTernaryOp node, ExecutionScope scope) {
         Object value = evaluateExpr(node.first(),  scope);
         Object lower = evaluateExpr(node.second(), scope);
         Object upper = evaluateExpr(node.third(),  scope);
-        boolean inRange = compare(value, lower) >= 0 && compare(value, upper) <= 0;
-        return (node.operator() == TernaryOperator.BETWEEN) == inRange;
+        return OperatorEvaluator.evaluateTernary(node.operator(), value, lower, upper, runtimeServices);
     }
 
     private Object evaluateRegex(ExecutableRegexOp node, ExecutionScope scope) {
@@ -379,11 +336,8 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     }
 
     private Object evaluatePostfix(ExecutablePostfixOp node, ExecutionScope scope) {
-        BigDecimal value = asBigDecimal(evaluateExpr(node.operand(), scope));
-        return switch (node.operator()) {
-            case PERCENT   -> value.movePointRight(2);
-            case FACTORIAL -> BigDecimalMath.factorial(value, mathContext);
-        };
+        Object operand = evaluateExpr(node.operand(), scope);
+        return OperatorEvaluator.evaluatePostfix(node.operator(), operand, runtimeServices, mathContext);
     }
 
     private List<Object> evaluateVector(ExecutableVectorLiteral node, ExecutionScope scope) {

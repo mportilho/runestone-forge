@@ -212,9 +212,9 @@ class ConstantFoldingExpressionTest {
         @Test
         @DisplayName("two folded function calls in one expression emit two FunctionCall events")
         void twoFoldedCallsEmitTwoEvents() {
-            // ln(1.05) + lb(256) — both are folded; both must appear in the audit
-            AuditResult<BigDecimal> result = MathExpression.compile("ln(1.05) + lb(256)", ENV)
-                    .computeWithAudit();
+            // x + ln(1.05) + y + lb(256) — both function calls are folded; both must appear in the audit
+            AuditResult<BigDecimal> result = MathExpression.compile("x + ln(1.05) + y + lb(256)", ENV)
+                    .computeWithAudit(Map.of("x", BigDecimal.ONE, "y", BigDecimal.ONE));
 
             List<AuditEvent.FunctionCall> calls = result.trace().functionCalls();
             assertThat(calls).hasSize(2)

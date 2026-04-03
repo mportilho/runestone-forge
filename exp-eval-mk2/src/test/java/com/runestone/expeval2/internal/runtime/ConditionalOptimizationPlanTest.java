@@ -21,7 +21,7 @@ class ConditionalOptimizationPlanTest {
     @Test
     @DisplayName("if-then-else with 1 condition uses ExecutableSimpleConditional")
     void simpleConditionalUsesSpecializedNode() {
-        CompiledExpression compiled = compile("if 1 > 0 then 1 else 0 endif");
+        CompiledExpression compiled = compile("if x > 0 then 1 else 0 endif");
 
         ExecutableNode result = compiled.executionPlan().resultExpression();
         assertThat(result).isInstanceOf(ExecutableSimpleConditional.class);
@@ -35,7 +35,7 @@ class ConditionalOptimizationPlanTest {
     @Test
     @DisplayName("if-then-elseif-then-else with 2 conditions uses ExecutableConditional")
     void multipleConditionsUseGeneralNode() {
-        CompiledExpression compiled = compile("if 1 > 0 then 1 elsif 2 > 0 then 2 else 0 endif");
+        CompiledExpression compiled = compile("if x > 0 then 1 elsif y > 0 then 2 else 0 endif");
 
         ExecutableNode result = compiled.executionPlan().resultExpression();
         assertThat(result).isInstanceOf(ExecutableConditional.class);

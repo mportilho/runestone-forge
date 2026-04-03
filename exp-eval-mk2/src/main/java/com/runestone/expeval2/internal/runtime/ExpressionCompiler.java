@@ -143,7 +143,8 @@ public final class ExpressionCompiler {
                 semanticModel,
                 environment.runtimeServices(),
                 environment.externalSymbolCatalog(),
-                environment.typeHintCatalog()
+                environment.typeHintCatalog(),
+                environment.mathContext()
         );
         return new CompiledExpression(source, resultType, semanticModel, executionPlan);
     }

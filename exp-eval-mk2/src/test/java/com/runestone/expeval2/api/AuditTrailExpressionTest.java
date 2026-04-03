@@ -203,9 +203,9 @@ class AuditTrailExpressionTest {
         @Test
         @DisplayName("multiple function calls are emitted in left-to-right evaluation order")
         void multipleFunctionCallsAreEmittedInEvaluationOrder() {
-            // mean([4,6])=5 is evaluated before mean([1,2,3])=2
-            AuditResult<BigDecimal> result = MathExpression.compile("mean([4, 6]) + mean([1, 2, 3])", WITH_MATH)
-                    .computeWithAudit();
+            // mean([x, 6])=5 is evaluated before mean([1, y, 3])=2. Use variables to prevent outer addition from folding.
+            AuditResult<BigDecimal> result = MathExpression.compile("mean([x, 6]) + mean([1, y, 3])", WITH_MATH)
+                    .computeWithAudit(Map.of("x", new BigDecimal("4"), "y", new BigDecimal("2")));
 
             List<AuditEvent.FunctionCall> calls = result.trace().functionCalls();
             assertThat(calls)
