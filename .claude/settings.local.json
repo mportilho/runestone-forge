@@ -109,7 +109,9 @@
       "Bash(cat /home/marcelo/dev/git/runestone-forge/exp-eval-mk2/target/surefire-reports/*.txt)",
       "Bash(find /home/marcelo/dev/git/runestone-forge/exp-eval-mk2/target/surefire-reports -name *.xml)",
       "Bash(xargs cat:*)",
-      "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh exp-eval-mk2 \"MembershipBenchmark\" \"/tmp/performance-benchmark/membership-baseline.json\")"
+      "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh exp-eval-mk2 \"MembershipBenchmark\" \"/tmp/performance-benchmark/membership-baseline.json\")",
+      "Bash(find exp-eval-mk2/src -type f -name \"*.java\" -exec grep -l \"SymbolRef\" {} \\\\;)",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && grep -n \"SymbolRef\" {}')"
     ]
   }
 }

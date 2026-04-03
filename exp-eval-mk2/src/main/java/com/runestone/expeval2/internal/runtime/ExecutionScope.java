@@ -3,9 +3,8 @@ package com.runestone.expeval2.internal.runtime;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 
 final class ExecutionScope {
@@ -16,92 +15,93 @@ final class ExecutionScope {
      */
     static final Object UNBOUND = new Object();
 
-    private final Map<SymbolRef, Object> values;
     /**
-     * Optional read-only second layer checked after {@link #values}.
-     * This is used for caller-provided overrides in mutable scopes and for shared defaults in
-     * read-only scopes backed by an overrides map.
+     * Layer 1. In mutable scopes: internal assignment results.
+     * In read-only scopes with single layer: provided values.
+     * In read-only scopes with two layers: provided overrides.
      */
-    private final Map<SymbolRef, Object> secondaryValues;
+    private final Object[] layer1;
     /**
-     * Optional read-only third layer checked after {@link #secondaryValues}.
-     * This is used for immutable catalog defaults when assignments are active and the scope needs
-     * both an internal mutable layer and a per-call overrides layer.
+     * Layer 2. In mutable scopes: external overrides.
+     * In read-only scopes with two layers: default values.
      */
-    private final Map<SymbolRef, Object> tertiaryValues;
+    private final Object[] layer2;
+    /**
+     * Layer 3. In mutable scopes: default values.
+     */
+    private final Object[] layer3;
+    
     private final boolean mutable;
     private final AuditCollector audit;
     private EnumMap<DynamicInstant, Object> dynamicCache;
 
-    private ExecutionScope(Map<SymbolRef, Object> values,
-                           Map<SymbolRef, Object> secondaryValues,
-                           Map<SymbolRef, Object> tertiaryValues,
+    private ExecutionScope(Object[] layer1,
+                           Object[] layer2,
+                           Object[] layer3,
                            boolean mutable,
                            AuditCollector audit) {
-        this.values = Objects.requireNonNull(values, "values must not be null");
-        this.secondaryValues = secondaryValues; // nullable
-        this.tertiaryValues = tertiaryValues; // nullable
+        this.layer1 = layer1;
+        this.layer2 = layer2;
+        this.layer3 = layer3;
         this.mutable = mutable;
         this.audit = audit;
     }
 
     /**
-     * Creates a two-layer mutable scope: a fresh internal map (pre-sized to {@code internalCapacity})
-     * for assignment results, backed by a shared read-only external-binding layer.
+     * Mutable: internal results (layer1), external shared (layer2).
      */
-    static ExecutionScope from(Map<SymbolRef, Object> sharedExternal, int internalCapacity) {
-        Objects.requireNonNull(sharedExternal, "sharedExternal must not be null");
-        return new ExecutionScope(new HashMap<>(internalCapacity), sharedExternal, null, true, null);
+    static ExecutionScope from(Object[] sharedExternal, int internalCapacity) {
+        Object[] internal = new Object[internalCapacity];
+        Arrays.fill(internal, UNBOUND);
+        return new ExecutionScope(internal, sharedExternal, null, true, null);
     }
 
     /**
-     * Creates a three-layer mutable scope: internal assignment results, per-call overrides, and
-     * immutable defaults.
+     * Mutable: internal results (layer1), overrides (layer2), defaults (layer3).
      */
-    static ExecutionScope from(Map<SymbolRef, Object> overrides,
-                               Map<SymbolRef, Object> defaults,
+    static ExecutionScope from(Object[] overrides,
+                               Object[] defaults,
                                int internalCapacity) {
-        Objects.requireNonNull(overrides, "overrides must not be null");
-        Objects.requireNonNull(defaults, "defaults must not be null");
-        return new ExecutionScope(new HashMap<>(internalCapacity), overrides, defaults, true, null);
+        Object[] internal = new Object[internalCapacity];
+        Arrays.fill(internal, UNBOUND);
+        return new ExecutionScope(internal, overrides, defaults, true, null);
     }
 
     /**
-     * Creates a read-only scope backed by a shared map.
+     * Read-only: shared values (layer1).
      */
-    static ExecutionScope readOnly(Map<SymbolRef, Object> sharedValues) {
-        return new ExecutionScope(Objects.requireNonNull(sharedValues, "sharedValues must not be null"), null, null, false, null);
+    static ExecutionScope readOnly(Object[] sharedValues) {
+        return new ExecutionScope(sharedValues, null, null, false, null);
     }
 
     /**
-     * Creates a read-only scope backed by a per-call overrides layer plus immutable defaults.
+     * Read-only: overrides (layer1), defaults (layer2).
      */
-    static ExecutionScope readOnly(Map<SymbolRef, Object> overrides, Map<SymbolRef, Object> defaults) {
-        Objects.requireNonNull(overrides, "overrides must not be null");
-        Objects.requireNonNull(defaults, "defaults must not be null");
+    static ExecutionScope readOnly(Object[] overrides, Object[] defaults) {
         return new ExecutionScope(overrides, defaults, null, false, null);
     }
 
-    static ExecutionScope fromWithAudit(Map<SymbolRef, Object> sharedExternal,
+    static ExecutionScope fromWithAudit(Object[] sharedExternal,
                                         int internalCapacity, AuditCollector audit) {
-        Objects.requireNonNull(sharedExternal, "sharedExternal must not be null");
         Objects.requireNonNull(audit, "audit must not be null");
-        return new ExecutionScope(new HashMap<>(internalCapacity), sharedExternal, null, true, audit);
+        Object[] internal = new Object[internalCapacity];
+        Arrays.fill(internal, UNBOUND);
+        return new ExecutionScope(internal, sharedExternal, null, true, audit);
     }
 
-    static ExecutionScope fromWithAudit(Map<SymbolRef, Object> overrides,
-                                        Map<SymbolRef, Object> defaults,
+    static ExecutionScope fromWithAudit(Object[] overrides,
+                                        Object[] defaults,
                                         int internalCapacity,
                                         AuditCollector audit) {
-        Objects.requireNonNull(overrides, "overrides must not be null");
-        Objects.requireNonNull(defaults, "defaults must not be null");
         Objects.requireNonNull(audit, "audit must not be null");
-        return new ExecutionScope(new HashMap<>(internalCapacity), overrides, defaults, true, audit);
+        Object[] internal = new Object[internalCapacity];
+        Arrays.fill(internal, UNBOUND);
+        return new ExecutionScope(internal, overrides, defaults, true, audit);
     }
 
-    static ExecutionScope readOnlyWithAudit(Map<SymbolRef, Object> sharedValues, AuditCollector audit) {
+    static ExecutionScope readOnlyWithAudit(Object[] sharedValues, AuditCollector audit) {
         return new ExecutionScope(
-                Objects.requireNonNull(sharedValues, "sharedValues must not be null"),
+                sharedValues,
                 null,
                 null,
                 false,
@@ -109,11 +109,9 @@ final class ExecutionScope {
         );
     }
 
-    static ExecutionScope readOnlyWithAudit(Map<SymbolRef, Object> overrides,
-                                            Map<SymbolRef, Object> defaults,
+    static ExecutionScope readOnlyWithAudit(Object[] overrides,
+                                            Object[] defaults,
                                             AuditCollector audit) {
-        Objects.requireNonNull(overrides, "overrides must not be null");
-        Objects.requireNonNull(defaults, "defaults must not be null");
         Objects.requireNonNull(audit, "audit must not be null");
         return new ExecutionScope(overrides, defaults, null, false, audit);
     }
@@ -127,39 +125,85 @@ final class ExecutionScope {
     }
 
     /**
-     * Returns the value bound to {@code symbolRef}, or {@link #UNBOUND} if no binding exists.
+     * Looks up the value bound to {@code symbolRef} in this scope.
      *
-     * <p>Prefer this method on hot paths to avoid {@link java.util.Optional} allocation.
-     * Callers must compare the return value with {@code ==} against {@link #UNBOUND} to detect
-     * the absent case; a {@code null} return means the symbol is explicitly bound to a null value.
+     * <p>Returns {@link #UNBOUND} — not {@code null} — when the symbol has no value in this scope.
+     * {@code null} is a valid bound value (e.g., a nullable external parameter set to null by the
+     * caller) and is therefore distinct from the absence of a binding.
+     *
+     * <p><strong>Index contract:</strong> A {@code symbolRef} with {@code index() < 0} (the sentinel
+     * value present before {@code assignIndices()} runs in {@code ExecutionPlanBuilder}) always returns
+     * {@link #UNBOUND}. This prevents partially-constructed symbols from silently returning stale data.
+     *
+     * <p><strong>INTERNAL symbols:</strong>
+     * <ul>
+     *   <li>Mutable scope — layer 1 holds assignment results; returns the value at
+     *       {@code symbolRef.index()} in layer 1, or {@link #UNBOUND} if the slot has not been
+     *       written yet.</li>
+     *   <li>Read-only scope — always returns {@link #UNBOUND}. Internal symbols represent intermediate
+     *       results computed during an evaluation run; a read-only scope has no internal-result layer,
+     *       so there is nothing to look up.</li>
+     * </ul>
+     *
+     * <p><strong>EXTERNAL symbols:</strong>
+     * <ul>
+     *   <li>Mutable scope — layer 2 holds per-call overrides; layer 3 (when present) holds compiled
+     *       defaults. Layers are checked in that order; the first non-{@link #UNBOUND} value wins.</li>
+     *   <li>Read-only scope — layer 1 holds overrides; layer 2 (when present) holds defaults. Same
+     *       priority rule applies.</li>
+     * </ul>
+     *
+     * @param symbolRef the symbol to look up; must not be {@code null}
+     * @return the bound value, {@code null} if the symbol is explicitly bound to null,
+     *         or {@link #UNBOUND} if not bound in this scope
+     * @throws NullPointerException if {@code symbolRef} is {@code null}
      */
     Object find(SymbolRef symbolRef) {
         Objects.requireNonNull(symbolRef, "symbolRef must not be null");
-        Object v = values.getOrDefault(symbolRef, UNBOUND);
-        if (v == UNBOUND && secondaryValues != null) {
-            v = secondaryValues.getOrDefault(symbolRef, UNBOUND);
+        int idx = symbolRef.index();
+        if (idx < 0) return UNBOUND;
+
+        if (symbolRef.kind() == SymbolKind.INTERNAL) {
+            if (mutable) {
+                // Internal is always layer1 in mutable
+                return (layer1 != null && idx < layer1.length) ? layer1[idx] : UNBOUND;
+            } else {
+                return UNBOUND;
+            }
+        } else {
+            // EXTERNAL
+            if (mutable) {
+                // Layer 2 (overrides) then Layer 3 (defaults)
+                Object v = (layer2 != null && idx < layer2.length) ? layer2[idx] : UNBOUND;
+                if (v == UNBOUND && layer3 != null && idx < layer3.length) {
+                    v = layer3[idx];
+                }
+                return v;
+            } else {
+                // Read-only: Layer 1 then Layer 2
+                Object v = (layer1 != null && idx < layer1.length) ? layer1[idx] : UNBOUND;
+                if (v == UNBOUND && layer2 != null && idx < layer2.length) {
+                    v = layer2[idx];
+                }
+                return v;
+            }
         }
-        if (v == UNBOUND && tertiaryValues != null) {
-            v = tertiaryValues.getOrDefault(symbolRef, UNBOUND);
-        }
-        return v;
     }
 
     void assign(SymbolRef symbolRef, Object value) {
         if (!mutable) {
             throw new IllegalStateException("assign() is not allowed on a read-only ExecutionScope");
         }
-        values.put(
-                Objects.requireNonNull(symbolRef, "symbolRef must not be null"),
-                value
-        );
+        if (symbolRef.kind() != SymbolKind.INTERNAL) {
+            throw new IllegalStateException("cannot assign to external symbol: " + symbolRef.name());
+        }
+        int idx = symbolRef.index();
+        if (idx < 0 || idx >= layer1.length) {
+            throw new IllegalStateException("invalid internal symbol index: " + idx);
+        }
+        layer1[idx] = value;
     }
 
-    /**
-     * Resolves the value for a {@link DynamicInstant}, caching the result for the
-     * lifetime of this scope so that repeated reads within the same evaluation return
-     * the same instant.
-     */
     Object resolveDynamic(DynamicInstant kind) {
         if (dynamicCache == null) {
             dynamicCache = new EnumMap<>(DynamicInstant.class);

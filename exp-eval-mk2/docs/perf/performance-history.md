@@ -1,4 +1,44 @@
-## PERF-047: Cache bounded de `Pattern` em `StringFunctions`
+## PERF-048: Bindings posicionais (Arrays) e Fast-paths de coerção numérica
+
+**Date:** 2026-04-03
+**Branch:** refac-springboot-4 (working tree)
+**Benchmark:** `CrossModuleComparisonBenchmark` e `AuditOverheadBenchmark`, 3 forks, 5×500ms warmup, 10×500ms measurement, `-Xms1g -Xmx1g`, GC profiler
+
+**Hypothesis:** O uso de `HashMap` para lookup de variáveis no `ExecutionScope` e a coerção via `toString()` em `RuntimeCoercionService` geram churn de memória e overhead de CPU. Substituir por acesso indexado (Arrays) e fast-paths para tipos numéricos deve reduzir a latência e `B/op`.
+
+**Changes applied:**
+- `ExecutionScope`: substituição de `Map<SymbolRef, Object>` por `Object[]` em três camadas (internal, overrides, defaults).
+- `SymbolRef`: adicionado campo `index` atribuído em tempo de compilação.
+- `ExecutionPlanBuilder`: lógica de atribuição de índices globais para símbolos internos e externos.
+- `ExpressionRuntimeSupport`: refatoração para construir vetores de overrides em vez de mapas.
+- `RuntimeCoercionService`: caminhos rápidos para `Integer`, `Long`, `Short`, `Byte` e `BigInteger` evitando `toString()`.
+
+**Results (Before = stashed baseline, After = current optimized):**
+
+| Scenario | Before (ns/op) | After (ns/op) | Δ (%) | Before (B/op) | After (B/op) | Δ B/op |
+|---|---:|---:|---:|---:|---:|---:|
+| variableChurnNoAudit | 1,159.4 ±34.9 | 930.0 ±21.0 | **+19.78%** | 1,744 | 1,296 | **−448** |
+| userFunctionNoAudit | 1,176.6 ±58.9 | 957.6 ±20.5 | **+18.62%** | 1,584 | 1,136 | **−448** |
+| assignedVariableNoAudit | 1,101.7 ±27.0 | 860.8 ±54.6 | **+21.87%** | 1,712 | 1,160 | **−552** |
+| conditional_mk2Compute | 871.2 ±27.2 | 702.9 ±31.0 | **+19.31%** | 1,344 | 896 | **−448** |
+| powerChain_mk2Compute | 2,416.8 ±52.9 | 2,250.3 ±98.5 | +6.89% | 2,544 | 2,096 | **−448** |
+| literalDense_mk2Compute | 1,657.6 ±107.3 | 1,565.7 ±53.8 | +5.54% | 2,749 | 2,656 | **−93** |
+
+**Analysis:**
+
+1. **Ganhos generalizados em ns/op:** O acesso posicional removeu o custo de hash e busca por string no caminho crítico. Cenários com muitas variáveis (`variableChurn`, `conditional`) tiveram ganho de ~20%.
+2. **Redução drástica de alocação (B/op):** A economia de 448 bytes em quase todos os cenários corresponde exatamente à eliminação da criação de `HashMap` e `SymbolRef` intermediários por chamada de `compute()`.
+3. **Fast-path de coerção:** O ganho em `assignedVariableNoAudit` (+21.87%) reflete tanto o acesso por array quanto a eliminação de `toString()` para os tipos numéricos passados no benchmark.
+4. **Impacto em expressões complexas:** No `powerChain`, o ganho foi menor (6.89%) porque o custo aritmético do `BigDecimal.pow` continua dominando a execução, embora a redução de alocação tenha sido mantida.
+
+**Decision:** ACCEPT
+**Reason:** Melhoria consistente de performance (>15% em média) e redução de alocação (~25-30%) sem alteração na semântica da API pública. O risco de regressão foi mitigado por 1052 testes automatizados aprovados.
+
+**Verification:** Todos os testes do módulo `exp-eval-mk2` passaram. Benchmarks capturados em ambiente controlado com isolamento de forks.
+
+---
+
+
 
 **Date:** 2026-03-30
 **Branch:** refac-springboot-4 (working tree)

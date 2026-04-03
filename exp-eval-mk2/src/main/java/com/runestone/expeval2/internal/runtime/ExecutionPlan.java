@@ -7,8 +7,9 @@ import java.util.Objects;
 record ExecutionPlan(
         List<ExecutableAssignment> assignments,
         ExecutableNode resultExpression,
-        Map<SymbolRef, Object> defaults,
+        Object[] defaults,
         Map<String, ExternalBindingPlan> externalBindings,
+        int externalSymbolsCount,
         int maxAuditEvents) {
 
     ExecutionPlan {

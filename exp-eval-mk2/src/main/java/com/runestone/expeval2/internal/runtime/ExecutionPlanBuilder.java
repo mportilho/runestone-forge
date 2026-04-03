@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,9 @@ import java.util.regex.Pattern;
 final class ExecutionPlanBuilder {
 
     ExecutionPlan build(SemanticModel model, RuntimeServices runtimeServices, ExternalSymbolCatalog externalSymbolCatalog, TypeHintCatalog typeHintCatalog) {
+        // 1. Assign indices to symbols
+        assignIndices(model);
+
         ExpressionFileNode ast = model.ast();
         List<ExecutableAssignment> assignments = ast.assignments().stream()
                 .map(assignment -> buildAssignment(assignment, model, runtimeServices, externalSymbolCatalog, typeHintCatalog))
@@ -28,23 +32,57 @@ final class ExecutionPlanBuilder {
                 ? buildNode(ast.resultExpression(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog)
                 : null;
         int maxAuditEvents = countMaxAuditEvents(assignments, resultNode);
-        Map<SymbolRef, Object> defaults = seedDefaults(model, externalSymbolCatalog, runtimeServices);
+
+        int externalSymbolsCount = model.externalSymbolsByName().size();
+        Object[] defaults = seedDefaults(model, externalSymbolCatalog, runtimeServices, externalSymbolsCount);
         Map<String, ExternalBindingPlan> externalBindingPlans = seedExternalBindingPlans(model, externalSymbolCatalog);
-        return new ExecutionPlan(assignments, resultNode, defaults, externalBindingPlans, maxAuditEvents);
+
+        return new ExecutionPlan(assignments, resultNode, defaults, externalBindingPlans, externalSymbolsCount, maxAuditEvents);
     }
 
-    private static Map<SymbolRef, Object> seedDefaults(SemanticModel semanticModel, ExternalSymbolCatalog catalog, RuntimeServices runtimeServices) {
-        if (semanticModel.externalSymbolsByName().isEmpty()) {
-            return Map.of();
+    /**
+     * Assigns stable, zero-based integer indices to all internal and external symbols in
+     * {@code model}. Symbols within each group are processed in alphabetical order to ensure
+     * that indices are deterministic across JVM runs and independent of Map iteration order.
+     *
+     * <p>This method must be called <strong>exactly once</strong> per {@link SemanticModel},
+     * before any array-backed structures (defaults, binding plans) are built from that model.
+     * The resulting indices are embedded into the {@link SymbolRef} objects and must agree with
+     * the array sizes and positions produced by {@code seedDefaults()} and
+     * {@code seedExternalBindingPlans()}. Do NOT change the ordering without updating those methods.
+     */
+    private void assignIndices(SemanticModel model) {
+        int internalIdx = 0;
+        List<String> sortedInternalNames = new ArrayList<>(model.internalSymbolsByName().keySet());
+        // Alphabetical order guarantees a stable name→position mapping across separate compilations
+        // of the same expression, regardless of the underlying Map's iteration order.
+        Collections.sort(sortedInternalNames);
+        for (String name : sortedInternalNames) {
+            model.internalSymbolsByName().get(name).setIndex(internalIdx++);
         }
-        Map<SymbolRef, Object> defaults = new HashMap<>();
-        semanticModel.externalSymbolsByName().forEach((name, symbolRef) ->
-                catalog.find(name)
-                        .ifPresent(descriptor -> defaults.put(
-                                symbolRef,
-                                runtimeServices.coerceToResolvedType(descriptor.defaultValue(), descriptor.declaredType())
-                        ))
-        );
+
+        int externalIdx = 0;
+        List<String> sortedExternalNames = new ArrayList<>(model.externalSymbolsByName().keySet());
+        // Same rationale: stable ordering ensures seedDefaults() and seedExternalBindingPlans()
+        // write to the correct array positions for every symbol.
+        Collections.sort(sortedExternalNames);
+        for (String name : sortedExternalNames) {
+            model.externalSymbolsByName().get(name).setIndex(externalIdx++);
+        }
+    }
+
+    private static Object[] seedDefaults(SemanticModel semanticModel, ExternalSymbolCatalog catalog, RuntimeServices runtimeServices, int externalSymbolsCount) {
+        if (externalSymbolsCount == 0) {
+            return new Object[0];
+        }
+        Object[] defaults = new Object[externalSymbolsCount];
+        java.util.Arrays.fill(defaults, ExecutionScope.UNBOUND);
+        semanticModel.externalSymbolsByName().forEach((name, symbolRef) -> {
+            catalog.find(name)
+                    .ifPresent(descriptor -> defaults[symbolRef.index()] =
+                            runtimeServices.coerceToResolvedType(descriptor.defaultValue(), descriptor.declaredType())
+                    );
+        });
         return defaults;
     }
 

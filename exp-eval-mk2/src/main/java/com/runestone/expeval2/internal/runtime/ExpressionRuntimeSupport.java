@@ -109,7 +109,7 @@ public final class ExpressionRuntimeSupport {
      * Immutable snapshot of default values seeded from the {@link ExternalSymbolCatalog} at
      * compile time. Shared across all {@code compute*} calls; never mutated after construction.
      */
-    private final Map<SymbolRef, Object> defaultValues;
+    private final Object[] defaultValues;
     /**
      * Precomputed binding metadata for external symbols referenced by this expression.
      */
@@ -120,10 +120,11 @@ public final class ExpressionRuntimeSupport {
     private final Evaluator<Boolean> logicalEvaluator;
     private final boolean hasAssignments;
     private final int internalSymbolCount;
+    private final int externalSymbolCount;
     private final int maxAuditEvents;
 
     private ExpressionRuntimeSupport(CompiledExpression compiledExpression,
-                                     Map<SymbolRef, Object> defaultValues,
+                                     Object[] defaultValues,
                                      Map<String, ExternalBindingPlan> externalBindingsByName,
                                      Set<String> internalSymbolNames,
                                      RuntimeServices runtimeServices,
@@ -138,6 +139,7 @@ public final class ExpressionRuntimeSupport {
         this.logicalEvaluator = new LogicalEvaluator(compiledExpression, runtimeServices, mathContext);
         this.hasAssignments = !compiledExpression.executionPlan().assignments().isEmpty();
         this.internalSymbolCount = compiledExpression.semanticModel().internalSymbolsByName().size();
+        this.externalSymbolCount = compiledExpression.executionPlan().externalSymbolsCount();
         this.maxAuditEvents = compiledExpression.executionPlan().maxAuditEvents();
     }
 
@@ -264,7 +266,7 @@ public final class ExpressionRuntimeSupport {
         Objects.requireNonNull(environment, "environment must not be null");
         RuntimeServices runtimeServices = environment.runtimeServices();
         SemanticModel semanticModel = compiledExpression.semanticModel();
-        Map<SymbolRef, Object> defaults = compiledExpression.executionPlan().defaults();
+        Object[] defaults = compiledExpression.executionPlan().defaults();
         Map<String, ExternalBindingPlan> bindings = compiledExpression.executionPlan().externalBindings();
         return new ExpressionRuntimeSupport(compiledExpression, defaults, bindings, semanticModel.internalSymbolsByName().keySet(), runtimeServices,
                 environment.mathContext());
@@ -272,22 +274,23 @@ public final class ExpressionRuntimeSupport {
 
 
     /**
-     * Builds the per-call overrides map, leaving immutable defaults shared across evaluations.
+     * Builds the per-call overrides array, leaving immutable defaults shared across evaluations.
      */
-    private Map<SymbolRef, Object> buildOverrides(Map<String, Object> userValues) {
+    private Object[] buildOverrides(Map<String, Object> userValues) {
         if (userValues == null || userValues.isEmpty()) {
-            return Map.of();
+            return null;
         }
-        Map<SymbolRef, Object> result = new HashMap<>(userValues.size());
+        Object[] result = new Object[externalSymbolCount];
+        Arrays.fill(result, ExecutionScope.UNBOUND);
         for (Map.Entry<String, Object> entry : userValues.entrySet()) {
             String name = entry.getKey();
             ExternalBindingPlan binding = lookupExternalBinding(name);
             if (!binding.overridable()) {
                 throw new IllegalStateException("symbol '" + name + "' is not overridable");
             }
-            result.put(binding.symbolRef(), runtimeServices.coerceToResolvedType(
+            result[binding.index()] = runtimeServices.coerceToResolvedType(
                     entry.getValue(),
-                    binding.declaredType()));
+                    binding.declaredType());
         }
         return result;
     }
@@ -310,14 +313,14 @@ public final class ExpressionRuntimeSupport {
             }
             return ExecutionScope.readOnly(defaultValues);
         }
-        Map<SymbolRef, Object> overrides = buildOverrides(userValues);
+        Object[] overrides = buildOverrides(userValues);
         if (hasAssignments) {
-            if (defaultValues.isEmpty()) {
+            if (defaultValues.length == 0) {
                 return ExecutionScope.from(overrides, internalSymbolCount);
             }
             return ExecutionScope.from(overrides, defaultValues, internalSymbolCount);
         }
-        if (defaultValues.isEmpty()) {
+        if (defaultValues.length == 0) {
             return ExecutionScope.readOnly(overrides);
         }
         return ExecutionScope.readOnly(overrides, defaultValues);
@@ -330,14 +333,14 @@ public final class ExpressionRuntimeSupport {
             }
             return ExecutionScope.readOnlyWithAudit(defaultValues, collector);
         }
-        Map<SymbolRef, Object> overrides = buildOverrides(userValues);
+        Object[] overrides = buildOverrides(userValues);
         if (hasAssignments) {
-            if (defaultValues.isEmpty()) {
+            if (defaultValues.length == 0) {
                 return ExecutionScope.fromWithAudit(overrides, internalSymbolCount, collector);
             }
             return ExecutionScope.fromWithAudit(overrides, defaultValues, internalSymbolCount, collector);
         }
-        if (defaultValues.isEmpty()) {
+        if (defaultValues.length == 0) {
             return ExecutionScope.readOnlyWithAudit(overrides, collector);
         }
         return ExecutionScope.readOnlyWithAudit(overrides, defaultValues, collector);
