@@ -7,6 +7,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -314,6 +316,169 @@ class ConstantFoldingExpressionTest {
             assertThat(CountedFunctions.CALL_COUNT.get())
                     .as("neither call must be invoked during compute()")
                     .isEqualTo(2);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Constant propagation — variable assigned a constant is substituted
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("Constant propagation — internal variable assigned a constant value is inlined")
+    class ConstantPropagation {
+
+        // Concurrency: foldedSymbols is local to build() — thread-safe by design; no concurrent tests needed.
+        // Null: `x = null` is invalid syntax (rejected at parse time); null propagation is not applicable.
+
+        // --- Happy path ---
+
+        @Test
+        @DisplayName("x = 10; x + 5 computes 15")
+        void simpleVariablePropagation() {
+            BigDecimal result = MathExpression.compile("x = 10; x + 5", ENV).compute();
+
+            assertThat(result).isEqualByComparingTo("15");
+        }
+
+        @Test
+        @DisplayName("x = 2; y = x * 3; y + x computes 8 (two-level chain)")
+        void twoLevelChainedPropagation() {
+            BigDecimal result = MathExpression.compile("x = 2; y = x * 3; y + x", ENV).compute();
+
+            assertThat(result).isEqualByComparingTo("8");
+        }
+
+        @Test
+        @DisplayName("x = 2; y = x * 3; z = y + x; z computes 8 (three-level chain)")
+        void threeLevelChainedPropagation() {
+            BigDecimal result = MathExpression.compile("x = 2; y = x * 3; z = y + x; z", ENV).compute();
+
+            assertThat(result).isEqualByComparingTo("8");
+        }
+
+        @Test
+        @DisplayName("x = 5; x * x computes 25 — variable used multiple times in the result")
+        void variableUsedMultipleTimesInResult() {
+            BigDecimal result = MathExpression.compile("x = 5; x * x", ENV).compute();
+
+            assertThat(result).isEqualByComparingTo("25");
+        }
+
+        @Test
+        @DisplayName("x = 10; x + n computes correctly when external n is provided")
+        void propagatedConstantCombinedWithExternal() {
+            BigDecimal result = MathExpression.compile("x = 10; x + n", ENV)
+                    .compute(Map.of("n", new BigDecimal("5")));
+
+            assertThat(result).isEqualByComparingTo("15");
+        }
+
+        @Test
+        @DisplayName("x = 10; ln(x) propagates x into the function and folds it")
+        void propagatedConstantAllowsFunctionFolding() {
+            BigDecimal result = MathExpression.compile("x = 10; ln(x)", ENV).compute();
+            BigDecimal expected = MathExpression.compile("ln(10)", ENV).compute();
+
+            assertThat(result).isCloseTo(expected, EPSILON);
+        }
+
+        @Test
+        @DisplayName("x = 10; y = ln(x); y + 1 — chain through foldable function produces correct value")
+        void propagationThroughFoldableFunction() {
+            BigDecimal result = MathExpression.compile("x = 10; y = ln(x); y + 1", ENV).compute();
+            BigDecimal expected = MathExpression.compile("ln(10) + 1", ENV).compute();
+
+            assertThat(result).isCloseTo(expected, EPSILON);
+        }
+
+        // --- Boundary / edge ---
+
+        @ParameterizedTest(name = "x = {0}; x + 0 returns {0}")
+        @CsvSource({
+            "0,    0",
+            "1,    1",
+            "-1,   -1",
+            "100,  100",
+            "0.5,  0.5"
+        })
+        @DisplayName("x = <value>; x + 0 — propagation preserves boundary numeric values")
+        void boundaryNumericValues(String value, String expected) {
+            BigDecimal result = MathExpression.compile("x = " + value + "; x + 0", ENV).compute();
+
+            assertThat(result).isEqualByComparingTo(expected);
+        }
+
+        @Test
+        @DisplayName("x = 10; if (x > 5) then 100 else 0 endif — propagation folds conditional to then-branch")
+        void propagationFoldsConditionalBranch() {
+            BigDecimal result = MathExpression.compile("x = 10; if (x > 5) then 100 else 0 endif", ENV).compute();
+
+            assertThat(result).isEqualByComparingTo("100");
+        }
+
+        // --- State transitions (re-assignment) ---
+
+        @Test
+        @DisplayName("x = 1; x = n; x + 3 — re-assignment to non-constant, runtime value of n is used")
+        void reAssignmentToNonConstantUsesRuntimeValue() {
+            BigDecimal result = MathExpression.compile("x = 1; x = n; x + 3", ENV)
+                    .compute(Map.of("n", new BigDecimal("7")));
+
+            // Must be 10 (7 + 3), NOT 4 (old constant 1 + 3)
+            assertThat(result).isEqualByComparingTo("10");
+        }
+
+        @Test
+        @DisplayName("x = 1; x = x + 2; x — re-assignment to new constant updates propagated value to 3")
+        void reAssignmentToNewConstantPropagatesUpdatedValue() {
+            BigDecimal result = MathExpression.compile("x = 1; x = x + 2; x", ENV).compute();
+
+            assertThat(result).isEqualByComparingTo("3");
+        }
+
+        // --- Variable depending on external (not folded — runtime path) ---
+
+        @Test
+        @DisplayName("x = n + 1; x + 5 computes correctly at runtime when x depends on an external")
+        void variableDependingOnExternalEvaluatesCorrectly() {
+            BigDecimal result = MathExpression.compile("x = n + 1; x + 5", ENV)
+                    .compute(Map.of("n", new BigDecimal("4")));
+
+            assertThat(result).isEqualByComparingTo("10");
+        }
+
+        // --- Type coverage ---
+
+        @Test
+        @DisplayName("x = 10; y = 5; x > y computes true (numeric propagation in logical expression)")
+        void numericPropagationInLogicalExpression() {
+            boolean result = LogicalExpression.compile("x = 10; y = 5; x > y", ENV).compute();
+
+            assertThat(result).isTrue();
+        }
+
+        @Test
+        @DisplayName("x = 10; y = 5; x between y and 20 computes true (propagation into ternary operator)")
+        void propagationIntoTernaryOperator() {
+            boolean result = LogicalExpression.compile("x = 10; y = 5; x between y and 20", ENV).compute();
+
+            assertThat(result).isTrue();
+        }
+
+        // --- Idempotency ---
+
+        @Test
+        @DisplayName("successive compute() calls on a propagated expression return the same result")
+        void successiveCallsReturnSameResult() {
+            MathExpression expr = MathExpression.compile("x = 2; y = x * 3; y + x", ENV);
+
+            BigDecimal first = expr.compute();
+            BigDecimal second = expr.compute();
+            BigDecimal third = expr.compute();
+
+            assertThat(first).isEqualByComparingTo(second);
+            assertThat(second).isEqualByComparingTo(third);
+            assertThat(first).isEqualByComparingTo("8");
         }
     }
 

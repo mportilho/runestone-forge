@@ -302,6 +302,139 @@ class ConstantFoldingPlanTest {
     }
 
     // -----------------------------------------------------------------------
+    // Constant propagation — internal variable assigned a constant value
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("Constant propagation — internal variable assigned a constant is substituted as literal")
+    class ConstantPropagation {
+
+        // --- Happy path ---
+
+        @Test
+        @DisplayName("x = 10; x + 5 — result is folded to literal 15")
+        void simpleVariablePropagation() {
+            CompiledExpression compiled = compileAssignments("x = 10; x + 5");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(new BigDecimal("15"));
+        }
+
+        @Test
+        @DisplayName("x = 10; y = x + 5; y * 2 — chained assignment for y folded to 15, result folded to 30")
+        void chainedAssignmentFolded() {
+            CompiledExpression compiled = compileAssignments("x = 10; y = x + 5; y * 2");
+
+            ExecutionPlan plan = compiled.executionPlan();
+            ExecutableSimpleAssignment yAssignment = (ExecutableSimpleAssignment) plan.assignments().get(1);
+            assertThat(yAssignment.value()).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) yAssignment.value()).precomputed()).isEqualTo(new BigDecimal("15"));
+
+            assertThat(plan.resultExpression()).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) plan.resultExpression()).precomputed()).isEqualTo(new BigDecimal("30"));
+        }
+
+        @Test
+        @DisplayName("x = 2; y = x * 3; z = y + x; z — three-level chain folds to 8")
+        void threeLevelChainFolded() {
+            CompiledExpression compiled = compileAssignments("x = 2; y = x * 3; z = y + x; z");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(new BigDecimal("8"));
+        }
+
+        @Test
+        @DisplayName("x = 5; x + x — variable referenced twice in result folds to 10")
+        void variableUsedMultipleTimesInResult() {
+            CompiledExpression compiled = compileAssignments("x = 5; x + x");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(new BigDecimal("10"));
+        }
+
+        @Test
+        @DisplayName("x = 10; y = ln(x); y + 0 — propagation through a foldable function folds y to ln(10)")
+        void propagationThroughFoldableFunction() {
+            CompiledExpression compiled = compileAssignments("x = 10; y = ln(x); y + 0");
+
+            ExecutionPlan plan = compiled.executionPlan();
+            // Assignment for y must be a folded function call (ln called once at build time)
+            ExecutableSimpleAssignment yAssignment = (ExecutableSimpleAssignment) plan.assignments().get(1);
+            assertThat(yAssignment.value()).isInstanceOf(ExecutableFunctionCall.class);
+            assertThat(((ExecutableFunctionCall) yAssignment.value()).isFolded()).isTrue();
+
+            // y + 0 must further fold to ExecutableLiteral
+            assertThat(plan.resultExpression()).isInstanceOf(ExecutableLiteral.class);
+        }
+
+        @Test
+        @DisplayName("x = 10; y = 5; x > y — numeric propagation in logical context folds to literal true")
+        void numericPropagationInLogicalContext() {
+            CompiledExpression compiled = compileLogical("x = 10; y = 5; x > y");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(true);
+        }
+
+        // --- Boundary / edge ---
+
+        @Test
+        @DisplayName("x = 10; 42 — dead assignment stays in plan even though x is never read in the result")
+        void deadAssignmentRemainsInPlan() {
+            CompiledExpression compiled = compileAssignments("x = 10; 42");
+
+            ExecutionPlan plan = compiled.executionPlan();
+            assertThat(plan.assignments()).hasSize(1);
+            assertThat(plan.resultExpression()).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) plan.resultExpression()).precomputed()).isEqualTo(new BigDecimal("42"));
+        }
+
+        // --- State transitions (re-assignment) ---
+
+        @Test
+        @DisplayName("x = 1; x = n; x + 3 — re-assignment to a non-constant removes x from propagation map")
+        void reAssignmentToNonConstantInvalidatesPropagation() {
+            CompiledExpression compiled = compileAssignments("x = 1; x = n; x + 3");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+
+            // x was removed from foldedSymbols after the second assignment, so x + 3 cannot fold
+            assertThat(result).isNotInstanceOf(ExecutableLiteral.class);
+        }
+
+        @Test
+        @DisplayName("x = 1; x = x + 2; x — re-assignment to a new constant updates the propagated value to 3")
+        void reAssignmentToConstantUpdatesPropagation() {
+            CompiledExpression compiled = compileAssignments("x = 1; x = x + 2; x");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(new BigDecimal("3"));
+        }
+
+        // --- Non-foldable (negative) ---
+
+        @Test
+        @DisplayName("x = n + 1; x + 5 — result is NOT folded because x depends on external n")
+        void variableDependingOnExternalIsNotFolded() {
+            CompiledExpression compiled = compileAssignments("x = n + 1; x + 5");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+
+            assertThat(result).isNotInstanceOf(ExecutableLiteral.class);
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
@@ -311,6 +444,10 @@ class ConstantFoldingPlanTest {
 
     private CompiledExpression compileLogical(String source) {
         return compiler.compile(source, ExpressionResultType.LOGICAL, ENV);
+    }
+
+    private CompiledExpression compileAssignments(String source) {
+        return compiler.compile(source, ExpressionResultType.MATH, ENV);
     }
 
     private static ExecutableFunctionCall resultFunctionCall(CompiledExpression compiled) {
