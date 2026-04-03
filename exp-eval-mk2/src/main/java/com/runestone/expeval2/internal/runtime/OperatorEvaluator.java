@@ -77,7 +77,7 @@ final class OperatorEvaluator {
     static Object evaluatePostfix(PostfixOperator operator, Object operand, RuntimeServices runtimeServices, MathContext mathContext) {
         BigDecimal value = asBigDecimal(operand, runtimeServices);
         return switch (operator) {
-            case PERCENT   -> value.movePointRight(2);
+            case PERCENT   -> value.movePointLeft(2);
             case FACTORIAL -> BigDecimalMath.factorial(value, mathContext);
         };
     }

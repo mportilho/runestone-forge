@@ -275,22 +275,38 @@ final class ExecutionPlanBuilder {
                 yield new ExecutablePostfixOp(p.operator(), operand);
             }
             case ConditionalNode c -> {
-                if (c.conditions().size() == 1) {
-                    yield new ExecutableSimpleConditional(
-                            buildNode(c.conditions().get(0), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext),
-                            buildNode(c.results().get(0), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext),
-                            buildNode(c.elseExpression(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext)
-                    );
+                List<ExecutableNode> conditions = new ArrayList<>();
+                List<ExecutableNode> results = new ArrayList<>();
+                ExecutableNode elseExpr = null;
+
+                for (int i = 0; i < c.conditions().size(); i++) {
+                    ExecutableNode condNode = buildNode(c.conditions().get(i), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext);
+                    if (isConstantNode(condNode)) {
+                        Object val = constantValue(condNode);
+                        if (Boolean.TRUE.equals(val)) {
+                            elseExpr = buildNode(c.results().get(i), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext);
+                            break;
+                        }
+                        // If constant false, just skip this branch
+                    } else {
+                        conditions.add(condNode);
+                        results.add(buildNode(c.results().get(i), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext));
+                    }
                 }
-                yield new ExecutableConditional(
-                        c.conditions().stream()
-                                .map(cond -> buildNode(cond, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext))
-                                .toList(),
-                        c.results().stream()
-                                .map(res -> buildNode(res, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext))
-                                .toList(),
-                        buildNode(c.elseExpression(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext)
-                );
+
+                if (elseExpr == null) {
+                    elseExpr = buildNode(c.elseExpression(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext);
+                }
+
+                if (conditions.isEmpty()) {
+                    yield elseExpr;
+                }
+
+                if (conditions.size() == 1) {
+                    yield new ExecutableSimpleConditional(conditions.get(0), results.get(0), elseExpr);
+                }
+
+                yield new ExecutableConditional(conditions, results, elseExpr);
             }
             case VectorLiteralNode v -> {
                 List<ExecutableNode> elements = v.elements().stream()

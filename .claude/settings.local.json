@@ -111,7 +111,14 @@
       "Bash(xargs cat:*)",
       "Bash(SKILL_SCRIPTS=/home/marcelo/.claude/skills/performance-benchmark/scripts $SKILL_SCRIPTS/run-jmh.sh exp-eval-mk2 \"MembershipBenchmark\" \"/tmp/performance-benchmark/membership-baseline.json\")",
       "Bash(find exp-eval-mk2/src -type f -name \"*.java\" -exec grep -l \"SymbolRef\" {} \\\\;)",
-      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && grep -n \"SymbolRef\" {}')"
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && grep -n \"SymbolRef\" {}')",
+      "Bash(mkdir -p /tmp/scope-opt-after)",
+      "Bash(cp exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExecutionPlan.java exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExecutionPlanBuilder.java exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExecutionScope.java exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExpressionRuntimeSupport.java /tmp/scope-opt-after/)",
+      "Bash(/home/marcelo/.claude/skills/performance-benchmark/scripts/run-jmh.sh exp-eval-mk2:*)",
+      "Bash(cp /tmp/scope-opt-after/ExecutionPlan.java exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExecutionPlan.java)",
+      "Bash(cp /tmp/scope-opt-after/ExecutionPlanBuilder.java exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExecutionPlanBuilder.java)",
+      "Bash(cp /tmp/scope-opt-after/ExecutionScope.java exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExecutionScope.java)",
+      "Bash(cp /tmp/scope-opt-after/ExpressionRuntimeSupport.java exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExpressionRuntimeSupport.java)"
     ]
   }
 }

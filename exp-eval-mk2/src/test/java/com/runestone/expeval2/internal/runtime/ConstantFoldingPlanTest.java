@@ -27,7 +27,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ConstantFoldingPlanTest {
 
     private static final ExpressionEnvironment ENV =
-            ExpressionEnvironment.builder().addMathFunctions().build();
+            ExpressionEnvironment.builder()
+                    .addMathFunctions()
+                    .addStringFunctions()
+                    .build();
 
     private final ExpressionCompiler compiler = new ExpressionCompiler();
 
@@ -118,6 +121,119 @@ class ConstantFoldingPlanTest {
         }
     }
 
+    @Nested
+    @DisplayName("Operators folding → reduced to ExecutableLiteral")
+    class OperatorsFolding {
+
+        @Test
+        @DisplayName("Binary arithmetic (1 + 2 * 3) is folded to 7")
+        void binaryArithmeticIsFolded() {
+            CompiledExpression compiled = compile("1 + 2 * 3");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(new BigDecimal("7"));
+        }
+
+        @Test
+        @DisplayName("String function (toUpper(\"a\") = \"A\") is folded")
+        void stringConcatenationIsFolded() {
+            // Strings must use DOUBLE QUOTES, and equality is '='
+            CompiledExpression compiled = compileLogical("toUpper(\"a\") = \"A\"");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+            // The whole comparison (BinaryOp) should be folded to true
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(true);
+        }
+
+        @Test
+        @DisplayName("Logical comparison (10 > 5) is folded to true")
+        void logicalComparisonIsFolded() {
+            CompiledExpression compiled = compileLogical("10 > 5");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(true);
+        }
+
+        @Test
+        @DisplayName("Unary operator (-10) is folded to -10")
+        void unaryOperatorIsFolded() {
+            CompiledExpression compiled = compile("-10");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(new BigDecimal("-10"));
+        }
+
+        @Test
+        @DisplayName("Postfix operator (10%) is folded (divided by 100)")
+        void postfixOperatorIsFolded() {
+            CompiledExpression compiled = compile("10%");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat((BigDecimal) ((ExecutableLiteral) result).precomputed()).isEqualByComparingTo("0.1");
+        }
+
+        @Test
+        @DisplayName("Ternary between (5 between 1 and 10) is folded to true")
+        void ternaryBetweenIsFolded() {
+            CompiledExpression compiled = compileLogical("5 between 1 and 10");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(true);
+        }
+
+        @Test
+        @DisplayName("Null coalescing (x ?? 2) is partially folded if x is known (not possible with pure literals on LHS in grammar)")
+        void nullCoalescingFolding() {
+            // Since literals on LHS of ?? are restricted by grammar/semantics, 
+            // we test it via a context where it's allowed or simply skip if not applicable for pure folding.
+            // But we can test: if x is a folded function call.
+            CompiledExpression compiled = compile("ln(1) ?? 2");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat((BigDecimal) ((ExecutableLiteral) result).precomputed()).isEqualByComparingTo("0");
+        }
+    }
+
+    @Nested
+    @DisplayName("Vector folding")
+    class VectorFolding {
+
+        @Test
+        @DisplayName("mean([1, 2, 3]) is folded")
+        void allLiteralVectorIsFolded() {
+            // Vectors are usually arguments to functions. We test folding of the vector within the function.
+            CompiledExpression compiled = compile("mean([1, 2, 3])");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+            // Functions remain as ExecutableFunctionCall but marked as folded to preserve audit trail
+            assertThat(result).isInstanceOf(ExecutableFunctionCall.class);
+            ExecutableFunctionCall call = (ExecutableFunctionCall) result;
+            assertThat(call.isFolded()).isTrue();
+            assertThat((BigDecimal) call.foldedResult()).isEqualByComparingTo("2");
+        }
+
+        @Test
+        @DisplayName("mean([1, x, 3]) is NOT folded")
+        void vectorWithVariableIsNotFolded() {
+            CompiledExpression compiled = compile("mean([1, x, 3])");
+
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+            assertThat(result).isInstanceOf(ExecutableFunctionCall.class);
+            ExecutableFunctionCall call = (ExecutableFunctionCall) result;
+            assertThat(call.isFolded()).isFalse();
+            
+            ExecutableVectorLiteral vector = (ExecutableVectorLiteral) call.arguments().get(0);
+            assertThat(vector.isFolded()).isFalse();
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Non-foldable cases — isFolded() must remain false
     // -----------------------------------------------------------------------
@@ -175,23 +291,13 @@ class ConstantFoldingPlanTest {
         }
 
         @Test
-        @DisplayName("mean([1, 2, 3]) is folded — vector literal is now foldable if all elements are constant")
+        @DisplayName("mean([1, 2, 3]) in logical context is folded")
         void meanWithVectorLiteralIsFolded() {
-            CompiledExpression compiled = compile("mean([1, 2, 3])");
+            CompiledExpression compiled = compileLogical("mean([1, 2, 3]) > 0");
 
-            ExecutableFunctionCall call = resultFunctionCall(compiled);
-
-            assertThat(call.isFolded()).isTrue();
-        }
-
-        @Test
-        @DisplayName("mean([1, x, 3]) is not folded — vector literal contains a variable")
-        void meanWithDynamicVectorLiteralIsNotFolded() {
-            CompiledExpression compiled = compile("mean([1, x, 3])");
-
-            ExecutableFunctionCall call = resultFunctionCall(compiled);
-
-            assertThat(call.isFolded()).isFalse();
+            ExecutableNode result = compiled.executionPlan().resultExpression();
+            assertThat(result).isInstanceOf(ExecutableLiteral.class);
+            assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(true);
         }
     }
 
@@ -201,6 +307,10 @@ class ConstantFoldingPlanTest {
 
     private CompiledExpression compile(String source) {
         return compiler.compile(source, ExpressionResultType.MATH, ENV);
+    }
+
+    private CompiledExpression compileLogical(String source) {
+        return compiler.compile(source, ExpressionResultType.LOGICAL, ENV);
     }
 
     private static ExecutableFunctionCall resultFunctionCall(CompiledExpression compiled) {
