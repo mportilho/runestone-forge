@@ -17,6 +17,21 @@ class StringFunctionsExpressionTest {
     private static final ExpressionEnvironment ALL_FUNCTIONS_ENV = ExpressionEnvironment.builder().addAllFunctions().build();
 
     @Nested
+    @DisplayName("concatenation")
+    class Concatenation {
+
+        @Test
+        @DisplayName("concat joins a vector of strings in an expression")
+        void joinsMultipleStrings() {
+            Object value = AssignmentExpression.compile("x = concat([\"run\", \"stone\", \"-\", \"forge\"]);", ENV)
+                    .compute()
+                    .get("x");
+
+            assertThat(value).isEqualTo("runstone-forge");
+        }
+    }
+
+    @Nested
     @DisplayName("registration")
     class Registration {
 

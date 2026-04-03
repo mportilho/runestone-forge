@@ -47,6 +47,15 @@ public class StringFunctions {
             .maximumSize(REGEX_CACHE_MAX_SIZE)
             .build();
 
+    public static String concat(String[] values) {
+        Objects.requireNonNull(values, "values must not be null");
+        StringBuilder builder = new StringBuilder();
+        for (String value : values) {
+            builder.append(requireString(value, "value"));
+        }
+        return builder.toString();
+    }
+
     public static String toUpper(String value) {
         return requireText(value).toUpperCase(Locale.ROOT);
     }

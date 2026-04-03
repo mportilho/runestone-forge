@@ -15,6 +15,27 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 class StringFunctionsTest {
 
     @Nested
+    @DisplayName("concat()")
+    class ConcatTests {
+
+        @Test
+        @DisplayName("Concatenates multiple strings")
+        void concatenatesMultipleStrings() {
+            assertThat(StringFunctions.concat(new String[]{"alpha", "beta", "gamma"})).isEqualTo("alphabetagamma");
+            assertThat(StringFunctions.concat(new String[]{"alpha"})).isEqualTo("alpha");
+            assertThat(StringFunctions.concat(new String[]{})).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Rejects null arguments in array")
+        void rejectsNullArguments() {
+            assertThatNullPointerException()
+                    .isThrownBy(() -> StringFunctions.concat(new String[]{"alpha", null, "gamma"}))
+                    .withMessage("value must not be null");
+        }
+    }
+
+    @Nested
     @DisplayName("substring family")
     class SubstringFamilyTests {
 
