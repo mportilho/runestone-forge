@@ -28,10 +28,6 @@ Este guia nao cobre:
 - interpretacao detalhada dos hot spots
 - mudancas no benchmark em si
 
-Para a leitura tecnica da avaliacao, ver:
-
-- `exp-eval-mk2/docs/perf/object-navigation-hotspot-evaluation.md`
-
 ## 3. Pre-requisitos
 
 ## 3.1 Compilacao do modulo

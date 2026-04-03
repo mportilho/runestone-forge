@@ -22,7 +22,7 @@ final class RuntimeCoercionService {
     public BigDecimal asNumber(Object value) {
         if (value instanceof BigDecimal bd) return bd;
         if (value == null) throw new IllegalStateException("cannot coerce null to number");
-        if (value instanceof Long || value instanceof Integer) {
+        if (value instanceof Integer || value instanceof Long || value instanceof Short || value instanceof Byte) {
             long l = ((Number) value).longValue();
             if (l == 0) return BigDecimal.ZERO;
             if (l == 1) return BigDecimal.ONE;
@@ -31,6 +31,7 @@ final class RuntimeCoercionService {
         }
         if (value instanceof Double d) return BigDecimal.valueOf(d);
         if (value instanceof Float f) return BigDecimal.valueOf(f.doubleValue());
+        if (value instanceof java.math.BigInteger bi) return new BigDecimal(bi);
         if (value instanceof Number n) return new BigDecimal(n.toString());
         return convert(value, BigDecimal.class);
     }
