@@ -14,7 +14,7 @@ import java.util.Objects;
  * For dynamic chains without hints, runtime reflection remains as a fallback.
  */
 record ExecutablePropertyChain(
-        SymbolRef root,
+        ExecutableNode root,
         List<ExecutableAccess> chain
 ) implements ExecutableNode {
 

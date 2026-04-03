@@ -54,7 +54,7 @@ class ConstantFoldingOperatorsTest {
         ExecutableNode result = compiled.executionPlan().resultExpression();
 
         assertThat(result).isInstanceOf(ExecutableLiteral.class);
-        assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(new BigDecimal("5000"));
+        assertThat(((ExecutableLiteral) result).precomputed()).isEqualTo(new BigDecimal("0.50"));
     }
 
     private CompiledExpression compile(String source) {

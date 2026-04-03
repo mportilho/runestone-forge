@@ -29,6 +29,14 @@ final class ExecutionPlanBuilder {
         // Process assignments sequentially so each one can propagate its constant value
         // to later assignments and to the result expression.
         Map<SymbolRef, Object> foldedSymbols = new HashMap<>();
+
+        model.externalSymbolsByName().forEach((name, symbolRef) -> {
+            ExternalSymbolDescriptor descriptor = externalSymbolCatalog.findOrNull(name);
+            if (descriptor != null && !descriptor.overridable()) {
+                foldedSymbols.put(symbolRef, runtimeServices.coerceToResolvedType(descriptor.defaultValue(), descriptor.declaredType()));
+            }
+        });
+
         List<ExecutableAssignment> assignments = new ArrayList<>();
         for (AssignmentNode assignment : ast.assignments()) {
             assignments.add(buildAssignment(assignment, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols));
@@ -163,7 +171,7 @@ final class ExecutionPlanBuilder {
     }
 
     private int countPropertyChainEvents(ExecutablePropertyChain chain) {
-        int count = 1;
+        int count = countNodeEvents(chain.root());
         for (ExecutablePropertyChain.ExecutableAccess access : chain.chain()) {
             if (access instanceof ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke) {
                 for (ExecutableNode argument : methodInvoke.arguments()) {
@@ -338,10 +346,18 @@ final class ExecutionPlanBuilder {
             TypeHintCatalog typeHintCatalog,
             MathContext mathContext,
             Map<SymbolRef, Object> foldedSymbols) {
-        SymbolRef root = model.findSymbol(node.nodeId())
+        SymbolRef rootRef = model.findSymbol(node.nodeId())
                 .orElseThrow(() -> new IllegalStateException(
                         "missing symbol for property chain '" + node.rootIdentifier() + "'"));
-        ResolvedType currentType = resolveRootType(root, model, externalSymbolCatalog);
+
+        ExecutableNode root;
+        if (foldedSymbols.containsKey(rootRef)) {
+            root = new ExecutableLiteral(foldedSymbols.get(rootRef));
+        } else {
+            root = new ExecutableIdentifier(rootRef, node.sourceSpan());
+        }
+
+        ResolvedType currentType = resolveRootType(rootRef, model, externalSymbolCatalog);
         List<ExecutablePropertyChain.ExecutableAccess> steps = new ArrayList<>(node.chain().size());
 
         for (PropertyChainNode.MemberAccess access : node.chain()) {

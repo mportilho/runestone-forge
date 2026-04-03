@@ -352,13 +352,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     }
 
     private Object evaluatePropertyChain(ExecutablePropertyChain node, ExecutionScope scope) {
-        Object current = scope.find(node.root());
-        if (current == ExecutionScope.UNBOUND) {
-            throw new ExpressionEvaluationException(
-                    compiledExpression.source(), "UNBOUND_VARIABLE",
-                    "variable '" + node.root().name() + "' has no value; call setValue(\""
-                            + node.root().name() + "\", ...) before compute()", null);
-        }
+        Object current = evaluateExpr(node.root(), scope);
         for (ExecutablePropertyChain.ExecutableAccess access : node.chain()) {
             if (current == null) {
                 if (isSafeAccess(access)) {
@@ -366,7 +360,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                 }
                 throw new ExpressionEvaluationException(
                         compiledExpression.source(), "NULL_IN_CHAIN",
-                        "null value encountered navigating '" + node.root().name() + "'", null);
+                        "null value encountered navigating '" + rootName(node.root()) + "'", null);
             }
             current = switch (access) {
                 case ExecutablePropertyChain.ExecutableFieldGet fieldGet ->
@@ -385,6 +379,13 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             };
         }
         return current;
+    }
+
+    private static String rootName(ExecutableNode root) {
+        if (root instanceof ExecutableIdentifier id) {
+            return id.ref().name();
+        }
+        return "[constant]";
     }
 
     private static boolean isSafeAccess(ExecutablePropertyChain.ExecutableAccess access) {
@@ -409,7 +410,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             ExpressionEvaluationException exception = new ExpressionEvaluationException(
                     compiledExpression.source(),
                     "PROPERTY_ACCESS_ERROR",
-                    "error accessing '" + fieldGet.name() + "' while navigating '" + node.root().name()
+                    "error accessing '" + fieldGet.name() + "' while navigating '" + rootName(node.root())
                             + "': " + throwable.getMessage(),
                     null
             );
@@ -506,7 +507,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             ExpressionEvaluationException exception = new ExpressionEvaluationException(
                     compiledExpression.source(),
                     "METHOD_INVOKE_ERROR",
-                    "error invoking '" + methodInvoke.name() + "' while navigating '" + node.root().name()
+                    "error invoking '" + methodInvoke.name() + "' while navigating '" + rootName(node.root())
                             + "': " + throwable.getMessage(),
                     null
             );

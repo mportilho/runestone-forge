@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 /**
@@ -479,6 +480,106 @@ class ConstantFoldingExpressionTest {
             assertThat(first).isEqualByComparingTo(second);
             assertThat(second).isEqualByComparingTo(third);
             assertThat(first).isEqualByComparingTo("8");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // External variable folding — non-overridable constants are substituted
+    // -----------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("External variable folding — non-overridable constants are substituted")
+    class ExternalVariableFolding {
+
+        @BeforeEach
+        void resetCounter() {
+            CountedFunctions.CALL_COUNT.set(0);
+        }
+
+        @Test
+        @DisplayName("non-overridable external variable is folded, allowing function folding")
+        void nonOverridableExternalIsFolded() {
+            ExpressionEnvironment env = ExpressionEnvironment.builder()
+                    .registerExternalSymbol("CONST_PI", new BigDecimal("3.14159"), false) // overridable = false
+                    .registerStaticProvider(CountedFunctions.class, true) // foldable = true
+                    .build();
+
+            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+
+            // If CONST_PI is folded to 3.14159, then counted(3.14159) can be folded at compile time.
+            MathExpression expr = MathExpression.compile("counted(CONST_PI)", env, freshCompiler);
+
+            assertThat(CountedFunctions.CALL_COUNT.get())
+                    .as("function should be called exactly once at compile time if variable is folded")
+                    .isEqualTo(1);
+
+            expr.compute();
+            assertThat(CountedFunctions.CALL_COUNT.get())
+                    .as("function should not be called again during compute")
+                    .isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("overridable external variable is NOT folded")
+        void overridableExternalIsNotFolded() {
+            ExpressionEnvironment env = ExpressionEnvironment.builder()
+                    .registerExternalSymbol("VAR_X", new BigDecimal("10"), true) // overridable = true
+                    .registerStaticProvider(CountedFunctions.class, true) // foldable = true
+                    .build();
+
+            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+
+            MathExpression expr = MathExpression.compile("counted(VAR_X)", env, freshCompiler);
+
+            assertThat(CountedFunctions.CALL_COUNT.get())
+                    .as("function should NOT be called at compile time if variable is overridable")
+                    .isEqualTo(0);
+
+            expr.compute();
+            assertThat(CountedFunctions.CALL_COUNT.get())
+                    .as("function should be called during compute")
+                    .isEqualTo(1);
+
+            // Verification with override
+            expr.compute(Map.of("VAR_X", new BigDecimal("20")));
+            assertThat(CountedFunctions.CALL_COUNT.get())
+                    .as("function should be called again with overriden value")
+                    .isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("non-overridable external variable (Integer) is coerced to BigDecimal and folded")
+        void foldedExternalCoercion() {
+            ExpressionEnvironment env = ExpressionEnvironment.builder()
+                    .registerExternalSymbol("CONST_INT", 123, false) // Integer, overridable = false
+                    .registerStaticProvider(CountedFunctions.class, true) // foldable = true
+                    .build();
+
+            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+
+            MathExpression expr = MathExpression.compile("counted(CONST_INT)", env, freshCompiler);
+
+            assertThat(CountedFunctions.CALL_COUNT.get())
+                    .as("should be folded even if original external is Integer")
+                    .isEqualTo(1);
+
+            BigDecimal result = expr.compute();
+            assertThat(result).isEqualByComparingTo("123");
+        }
+
+        @Test
+        @DisplayName("non-overridable external variable throws exception if passed in compute overrides")
+        void nonOverridableThrowsIfPassedInCompute() {
+            ExpressionEnvironment env = ExpressionEnvironment.builder()
+                    .registerExternalSymbol("CONST_X", new BigDecimal("100"), false)
+                    .build();
+
+            MathExpression expr = MathExpression.compile("CONST_X + 1", env);
+
+            // The system currently throws IllegalStateException if a non-overridable symbol is provided in compute().
+            assertThatThrownBy(() -> expr.compute(Map.of("CONST_X", new BigDecimal("200"))))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("symbol 'CONST_X' is not overridable");
         }
     }
 
