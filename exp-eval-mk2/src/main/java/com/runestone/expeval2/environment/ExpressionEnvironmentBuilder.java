@@ -1,15 +1,9 @@
 package com.runestone.expeval2.environment;
 
+import ch.obermuhlner.math.big.BigDecimalMath;
 import com.runestone.converters.DataConversionService;
 import com.runestone.converters.impl.DefaultDataConversionService;
-import com.runestone.expeval2.catalog.ExternalSymbolCatalog;
-import com.runestone.expeval2.catalog.ExternalSymbolDescriptor;
-import com.runestone.expeval2.catalog.FunctionCatalog;
-import com.runestone.expeval2.catalog.FunctionDescriptor;
-import com.runestone.expeval2.catalog.MethodDescriptor;
-import com.runestone.expeval2.catalog.PropertyDescriptor;
-import com.runestone.expeval2.catalog.TypeHintCatalog;
-import com.runestone.expeval2.catalog.TypeMetadata;
+import com.runestone.expeval2.catalog.*;
 import com.runestone.expeval2.catalog.functions.*;
 import com.runestone.expeval2.internal.runtime.TypeIntrospectionSupport;
 import com.runestone.expeval2.types.ObjectType;
@@ -22,6 +16,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.RecordComponent;
+import java.math.BigDecimal;
 import java.math.MathContext;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -140,6 +135,16 @@ public final class ExpressionEnvironmentBuilder {
         staticProviders.forEach(entry -> functionDescriptors.addAll(discoverFunctions(entry.providerClass(), null, true, entry.foldable())));
         instanceProviders.forEach(entry -> functionDescriptors.addAll(discoverFunctions(entry.instance().getClass(), entry.instance(), false, entry.foldable())));
         functionDescriptors.sort(Comparator.comparing(FunctionDescriptor::name).thenComparing(FunctionDescriptor::arity));
+
+        if (staticProviders.stream().anyMatch(entry -> entry.providerClass() == TrigonometryFunctions.class)) {
+            BigDecimal pi = BigDecimalMath.pi(mathContext);
+            BigDecimal tau = pi.multiply(BigDecimal.valueOf(2));
+            this.registerExternalSymbol("pi", pi, false)
+                    .registerExternalSymbol("π", pi, false)
+                    .registerExternalSymbol("e", BigDecimalMath.e(mathContext), false)
+                    .registerExternalSymbol("tau", tau, false)
+                    .registerExternalSymbol("τ", tau, false);
+        }
 
         Map<String, List<FunctionDescriptor>> descriptorsByName = new LinkedHashMap<>();
         functionDescriptors.forEach(descriptor ->
@@ -271,9 +276,9 @@ public final class ExpressionEnvironmentBuilder {
     private static void discoverGetterProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
         for (Method method : type.getMethods()) {
             if (method.getDeclaringClass() == Object.class
-                    || method.isSynthetic()
-                    || method.isBridge()
-                    || Modifier.isStatic(method.getModifiers())) {
+                || method.isSynthetic()
+                || method.isBridge()
+                || Modifier.isStatic(method.getModifiers())) {
                 continue;
             }
             String propertyName = TypeIntrospectionSupport.propertyNameFromGetter(method);
@@ -305,9 +310,9 @@ public final class ExpressionEnvironmentBuilder {
         Set<String> seenSignatures = new LinkedHashSet<>();
         for (Method method : type.getMethods()) {
             if (method.getDeclaringClass() == Object.class
-                    || method.isSynthetic()
-                    || method.isBridge()
-                    || Modifier.isStatic(method.getModifiers())) {
+                || method.isSynthetic()
+                || method.isBridge()
+                || Modifier.isStatic(method.getModifiers())) {
                 continue;
             }
             String signature = method.getName() + List.of(method.getParameterTypes());
