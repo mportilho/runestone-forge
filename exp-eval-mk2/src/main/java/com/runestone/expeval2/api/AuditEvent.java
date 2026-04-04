@@ -48,19 +48,16 @@ public sealed interface AuditEvent permits
         private final String functionName;
         private final Object[] inputArgs;
         private final Object result;
-        private final int callDepth;
 
         /**
          * @param functionName name of the invoked function
          * @param inputArgs    owned array of coerced argument values; caller must not mutate after passing
          * @param result       return value of the function
-         * @param callDepth    nesting depth at call time (0 = top-level call)
          */
-        public FunctionCall(String functionName, Object[] inputArgs, Object result, int callDepth) {
+        public FunctionCall(String functionName, Object[] inputArgs, Object result) {
             this.functionName = Objects.requireNonNull(functionName, "functionName must not be null");
             this.inputArgs = Objects.requireNonNull(inputArgs, "inputArgs must not be null");
             this.result = result;
-            this.callDepth = callDepth;
         }
 
         public String functionName() {
@@ -80,29 +77,24 @@ public sealed interface AuditEvent permits
             return result;
         }
 
-        public int callDepth() {
-            return callDepth;
-        }
-
         @Override
         public boolean equals(Object obj) {
             if (this == obj) return true;
             if (!(obj instanceof FunctionCall other)) return false;
-            return callDepth == other.callDepth
-                    && functionName.equals(other.functionName)
-                    && Arrays.equals(inputArgs, other.inputArgs)
-                    && Objects.equals(result, other.result);
+            return functionName.equals(other.functionName)
+                   && Arrays.equals(inputArgs, other.inputArgs)
+                   && Objects.equals(result, other.result);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(functionName, Arrays.hashCode(inputArgs), result, callDepth);
+            return Objects.hash(functionName, Arrays.hashCode(inputArgs), result);
         }
 
         @Override
         public String toString() {
-            return "FunctionCall[functionName=%s, inputArgs=%s, result=%s, callDepth=%d]"
-                    .formatted(functionName, Arrays.toString(inputArgs), result, callDepth);
+            return "FunctionCall[functionName=%s, inputArgs=%s, result=%s]"
+                    .formatted(functionName, Arrays.toString(inputArgs), result);
         }
     }
 

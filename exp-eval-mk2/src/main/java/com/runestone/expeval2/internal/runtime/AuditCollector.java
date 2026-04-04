@@ -23,7 +23,6 @@ final class AuditCollector {
 
     private final long startNanos = System.nanoTime();
     private final List<AuditEvent> events;
-    private int callDepth = 0;
 
     AuditCollector(int initialCapacity) {
         this.events = new ArrayList<>(initialCapacity);
@@ -31,18 +30,6 @@ final class AuditCollector {
 
     void record(AuditEvent event) {
         events.add(event);
-    }
-
-    void enterCall() {
-        callDepth++;
-    }
-
-    void exitCall() {
-        callDepth--;
-    }
-
-    int callDepth() {
-        return callDepth;
     }
 
     ExpressionAuditTrace buildTrace() {

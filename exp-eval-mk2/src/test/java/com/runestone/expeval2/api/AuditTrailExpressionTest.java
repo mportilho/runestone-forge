@@ -193,7 +193,8 @@ class AuditTrailExpressionTest {
         @Test
         @DisplayName("navigation on an overridable external variable that is null at runtime throws Exception with correct message")
         void propertyChainOnNullRoot() {
-            record User(String name) {}
+            record User(String name) {
+            }
             User defaultUser = new User("Alice");
             ExpressionEnvironment env = ExpressionEnvironment.builder()
                     .registerExternalSymbol("VAR_X", defaultUser, true)
@@ -213,9 +214,11 @@ class AuditTrailExpressionTest {
         @Test
         @DisplayName("navigation on a folded constant root that results in null intermediate value")
         void propertyChainOnFoldedRootNullIntermediate() {
-            record Inner(String name) {}
-            record Outer(Inner inner) {}
-            
+            record Inner(String name) {
+            }
+            record Outer(Inner inner) {
+            }
+
             Outer outer = new Outer(null);
             ExpressionEnvironment env = ExpressionEnvironment.builder()
                     .registerExternalSymbol("CONST_OUTER", outer, false)
@@ -251,7 +254,7 @@ class AuditTrailExpressionTest {
             // OR I will fix the implementation to emit events even for folded constants if required.
             // Re-reading ExecutionPlanBuilder: buildIdentifier returns ExecutableLiteral if folded.
             // AbstractObjectEvaluator.evaluateExpr(ExecutableLiteral) just returns the value. No record().
-            
+
             assertThat(result.trace().events())
                     .filteredOn(AuditEvent.VariableRead.class::isInstance)
                     .isEmpty();
@@ -285,7 +288,6 @@ class AuditTrailExpressionTest {
             assertThat(call.functionName()).isEqualTo("mean");
             assertThat(call.inputArgs()).isNotEmpty();
             assertThat((BigDecimal) call.result()).isEqualByComparingTo("3");
-            assertThat(call.callDepth()).isGreaterThanOrEqualTo(0);
         }
 
         @Test
