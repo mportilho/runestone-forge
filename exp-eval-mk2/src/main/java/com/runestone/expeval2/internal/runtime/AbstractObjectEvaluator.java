@@ -1,6 +1,5 @@
 package com.runestone.expeval2.internal.runtime;
 
-import ch.obermuhlner.math.big.BigDecimalMath;
 import com.runestone.expeval2.api.AuditEvent;
 import com.runestone.expeval2.api.CompilationPosition;
 import com.runestone.expeval2.api.ExpressionEvaluationException;
@@ -12,9 +11,10 @@ import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.*;
+
+import static com.runestone.expeval2.internal.runtime.OperatorEvaluator.asBoolean;
+import static com.runestone.expeval2.internal.runtime.OperatorEvaluator.asString;
 
 /**
  * Expression evaluator that carries all sub-expression results as {@code Object} values
@@ -278,7 +278,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     private Object evaluateConditional(ExecutableConditional node, ExecutionScope scope) {
         List<ExecutableNode> conditions = node.conditions();
         for (int index = 0; index < conditions.size(); index++) {
-            if (asBoolean(evaluateExpr(conditions.get(index), scope))) {
+            if (asBoolean(evaluateExpr(conditions.get(index), scope), runtimeServices)) {
                 return evaluateExpr(node.results().get(index), scope);
             }
         }
@@ -286,7 +286,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     }
 
     private Object evaluateSimpleConditional(ExecutableSimpleConditional node, ExecutionScope scope) {
-        if (asBoolean(evaluateExpr(node.condition(), scope))) {
+        if (asBoolean(evaluateExpr(node.condition(), scope), runtimeServices)) {
             return evaluateExpr(node.thenExpression(), scope);
         }
         return evaluateExpr(node.elseExpression(), scope);
@@ -302,10 +302,10 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         BinaryOperator operator = node.operator();
         // Short-circuit evaluation for logical operators
         if (operator == BinaryOperator.AND || operator == BinaryOperator.NAND) {
-            boolean leftBool = asBoolean(left);
+            boolean leftBool = asBoolean(left, runtimeServices);
             if (!leftBool) return operator == BinaryOperator.NAND;
         } else if (operator == BinaryOperator.OR || operator == BinaryOperator.NOR) {
-            boolean leftBool = asBoolean(left);
+            boolean leftBool = asBoolean(left, runtimeServices);
             if (leftBool) return operator == BinaryOperator.OR;
         }
         Object right = evaluateExpr(node.right(), scope);
@@ -320,7 +320,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     }
 
     private Object evaluateRegex(ExecutableRegexOp node, ExecutionScope scope) {
-        String subject = asString(evaluateExpr(node.subject(), scope));
+        String subject = asString(evaluateExpr(node.subject(), scope), runtimeServices);
         boolean matches = node.pattern().matcher(subject).find();
         return node.negate() != matches;
     }
@@ -420,8 +420,8 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             Object result = switch (arity) {
                 case 0 -> methodInvoke.handle().invoke(current);
                 case 1 -> {
-                    Object a1 = evaluateExpr(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
+                    Object a1 = evaluateExpr(arguments.getFirst(), scope);
+                    a1 = runtimeServices.coerce(a1, parameterTypes.getFirst());
                     yield methodInvoke.handle().invoke(current, a1);
                 }
                 case 2 -> {
@@ -557,101 +557,6 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             exception.initCause(throwable);
             throw exception;
         }
-    }
-
-    // -------------------------------------------------------------------------
-    // Comparison helpers
-    // -------------------------------------------------------------------------
-
-    private int compare(Object left, Object right) {
-        if (left instanceof BigDecimal || right instanceof BigDecimal) {
-            return asBigDecimal(left).compareTo(asBigDecimal(right));
-        }
-        if (left instanceof LocalDate || right instanceof LocalDate) {
-            return asLocalDate(left).compareTo(asLocalDate(right));
-        }
-        if (left instanceof LocalTime || right instanceof LocalTime) {
-            return asLocalTime(left).compareTo(asLocalTime(right));
-        }
-        if (left instanceof LocalDateTime || right instanceof LocalDateTime) {
-            return asLocalDateTime(left).compareTo(asLocalDateTime(right));
-        }
-        if (left instanceof String || right instanceof String) {
-            return asString(left).compareTo(asString(right));
-        }
-        if (left instanceof Boolean || right instanceof Boolean) {
-            return Boolean.compare(asBoolean(left), asBoolean(right));
-        }
-        throw new IllegalStateException("unsupported comparison between values");
-    }
-
-    private List<?> asList(Object value) {
-        if (value instanceof List<?> list) return list;
-        throw new IllegalStateException(
-                "expected a List but found: " + (value == null ? "null" : value.getClass().getName()));
-    }
-
-    private boolean compareEquality(Object left, Object right) {
-        if (left == null || right == null) {
-            return left == null && right == null;
-        }
-        if (left instanceof BigDecimal || right instanceof BigDecimal) {
-            return asBigDecimal(left).compareTo(asBigDecimal(right)) == 0;
-        }
-        if (left instanceof List<?> leftList && right instanceof List<?> rightList) {
-            if (leftList.size() != rightList.size()) return false;
-            for (int i = 0; i < leftList.size(); i++) {
-                if (!compareEquality(leftList.get(i), rightList.get(i))) return false;
-            }
-            return true;
-        }
-        return Objects.equals(left, right);
-    }
-
-    // -------------------------------------------------------------------------
-    // Type helpers — fast-path instanceof casts, fallback via RuntimeServices
-    // -------------------------------------------------------------------------
-
-    private BigDecimal asBigDecimal(Object value) {
-        if (value instanceof BigDecimal bd) return bd;
-        return runtimeServices.asNumber(value);
-    }
-
-    private boolean asBoolean(Object value) {
-        if (value instanceof Boolean b) return b;
-        return runtimeServices.asBoolean(value);
-    }
-
-    private String asString(Object value) {
-        if (value instanceof String s) return s;
-        return runtimeServices.asString(value);
-    }
-
-    private LocalDate asLocalDate(Object value) {
-        if (value instanceof LocalDate d) return d;
-        return runtimeServices.asDate(value);
-    }
-
-    private LocalTime asLocalTime(Object value) {
-        if (value instanceof LocalTime t) return t;
-        return runtimeServices.asTime(value);
-    }
-
-    private LocalDateTime asLocalDateTime(Object value) {
-        if (value instanceof LocalDateTime dt) return dt;
-        return runtimeServices.asDateTime(value);
-    }
-
-    // -------------------------------------------------------------------------
-    // Math helpers
-    // -------------------------------------------------------------------------
-
-    private BigDecimal pow(BigDecimal base, BigDecimal exponent) {
-        BigDecimal normalized = exponent.stripTrailingZeros();
-        if (normalized.scale() <= 0 && normalized.precision() <= 9) {
-            return base.pow(normalized.intValue(), mathContext);
-        }
-        return BigDecimalMath.pow(base, exponent, mathContext);
     }
 
     // -------------------------------------------------------------------------
