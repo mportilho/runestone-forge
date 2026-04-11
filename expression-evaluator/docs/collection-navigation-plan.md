@@ -49,7 +49,7 @@ Invocadas ao final de um path; recebem implicitamente a collection acumulada com
 |---|---|
 | `in` | Esquerda existe na direita |
 | `nin` | Esquerda não existe na direita |
-| `=~` / `!~` | Correspondência de regex (suporta `/padrão/flags`) |
+| `=~` / `!~` | Correspondência de regex reutilizando o formato atual da linguagem (`STRING`) |
 | `and` / `or` | Combinação de múltiplas condições dentro do mesmo `?(...)` |
 
 ### Exemplos (baseados no grafo de objetos abaixo)
@@ -86,7 +86,7 @@ Invocadas ao final de um path; recebem implicitamente a collection acumulada com
 | `store.book[?(@.price < 10)]` | Livros mais baratos que 10 |
 | `store.book[?(@.price < 10 and @.isbn)]` | Múltiplas condições no mesmo filtro |
 | `store..book[?(@.price <= store.expensive)]` | Filtro com referência ao escopo externo |
-| `store..book[?(@.author =~ /.*REES/i)]` | Filtro com regex case-insensitive |
+| `store..book[?(@.author =~ "(?i).*REES")]` | Filtro com regex case-insensitive |
 | `store..*` | Todos os valores do grafo |
 | `store..book..length()` | Número de livros |
 | `store..price..customEval(2, true)` | Equivale a `customEval(store..price, 2, true)` |
@@ -178,20 +178,17 @@ DOUBLE_PERIOD : '..' ;
 QUESTION      : '?' ;
 AT            : '@' ;
 COLON_OP      : ':' ;     // token real para slices
-REGEX_FLAGS   : [gimsuy]+ ;
 ```
 
 > **Nota sobre `COLON_OP`:** O fragment `Colon` usado em `TIME` e `DATETIME` não é afetado — esses tokens têm prioridade por aparecerem antes. `COLON_OP` só é reconhecido dentro de `[...]`, contexto onde `TIME`/`DATETIME` nunca ocorrem.
 
 > **Nota sobre `DOUBLE_PERIOD`:** Deve aparecer **antes** de `PERIOD` no lexer para que `..` não seja lexado como dois pontos separados.
 
-### Regex literal
+### Regex em filtros
 
-```antlr
-regexLiteral : DIV ~[/]* DIV REGEX_FLAGS? ;
-```
+Reutiliza exatamente o regex já suportado pela linguagem: o operando direito de `=~` / `!~` continua sendo um `STRING`.
 
-Reutiliza `DIV` como delimitador (não é ambíguo pois regex só aparece dentro de `filterRelation`).
+Flags devem ser expressas inline no próprio padrão Java regex, por exemplo `(?i)` para case-insensitive.
 
 ### Novas regras de subscript
 
@@ -219,8 +216,8 @@ filterAtom
 
 filterRelation
     : filterValue comparisonOperator filterValue
-    | filterValue REGEX_MATCH regexLiteral
-    | filterValue REGEX_NOT_MATCH regexLiteral
+    | filterValue REGEX_MATCH STRING
+    | filterValue REGEX_NOT_MATCH STRING
     | filterValue                               // truthy check: @.isbn (non-null)
     ;
 
@@ -393,7 +390,7 @@ VectorAggregationStep → ExecutableVectorAggregation(kind)
 
 Atualizar `countNodeEvents` para contabilizar events em predicados de filtro e expressões de índice.
 
-Regex em filtros: estender `buildRegexNode` para aceitar `/pattern/flags`. Flags mapeiam para bitmask `java.util.regex.Pattern`.
+Regex em filtros: reutilizar o fluxo atual de `REGEX_MATCH` / `REGEX_NOT_MATCH` com `STRING`, inclusive compilação via `Pattern.compile(unquote(...))`. Não há novo literal `/.../flags`; flags continuam inline no padrão, por exemplo `(?i).*REES`.
 
 ---
 
@@ -649,7 +646,7 @@ store.book[?(@.isbn)].title                          → títulos com ISBN
 store.book[?(@.price < 10)].title                    → títulos baratos
 store.book[?(@.price < 10 and @.isbn)].title         → títulos baratos com ISBN
 store..book[?(@.price <= store.expensive)]            → outer-scope ref
-store.book[?(@.author =~ /.*REES/i)].title           → ["Sayings of the Century"]
+store.book[?(@.author =~ "(?i).*REES")].title        → ["Sayings of the Century"]
 
 // Deep scan
 store..author                  → todos os autores
