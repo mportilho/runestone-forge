@@ -1,489 +1,700 @@
 # expression-evaluator — Runtime Internals Reference
 
-Verified findings about the runtime architecture, type system, and coercion behavior of the `expression-evaluator` module.
-Use this document as the starting point before investigating the codebase from scratch.
+Verified reference for the current `expression-evaluator` runtime. Use this document before reverse-engineering behavior from scattered tests or implementation details.
 
 ---
 
-## 1. Compilation Pipeline
+## 1. Public Surface
 
-```
+### Compile-time entry points
+
+- `MathExpression.compile(...)`
+- `LogicalExpression.compile(...)`
+- `AssignmentExpression.compile(...)`
+- `MathExpression.validate(...)`
+- `LogicalExpression.validate(...)`
+- `AssignmentExpression.validate(...)`
+
+### Evaluation entry points
+
+- `MathExpression.compute(...)` → `BigDecimal`
+- `LogicalExpression.compute(...)` → `boolean`
+- `AssignmentExpression.compute(...)` → `Map<String, Object>`
+- `computeWithAudit(...)` on all three APIs → `AuditResult<T>`
+
+### Runtime configuration
+
+- `ExpressionEnvironment.builder()`
+- `ExpressionEnvironmentBuilder.empty()`
+- `CacheConfig`
+- `ExpressionRuntimeSupport`
+- `ExpressionCompiler`
+
+The default environment is empty. No function providers are registered unless the caller adds them explicitly.
+
+---
+
+## 2. End-to-End Pipeline
+
+```text
 source string
-  → ExpressionEvaluatorParserFacade (ANTLR, SLL + LL fallback)
-  → SemanticAstBuilder             (parse tree → typed AST Nodes)
-  → SemanticResolver               (AST → SemanticModel with SymbolRef + ResolvedType)
-  → ExecutionPlanBuilder           (SemanticModel → ExecutionPlan of ExecutableNode)
-  → MathEvaluator / LogicalEvaluator (ExecutionPlan + ExecutionScope → plain Java Object)
+  -> ExpressionEvaluatorParserFacade
+  -> SemanticAstBuilder
+  -> SemanticResolver
+  -> ExecutionPlanBuilder
+  -> MathEvaluator / LogicalEvaluator
 ```
 
-Compiled expressions are cached in `ExpressionCompiler` by `(source, environmentId, resultType)` via Caffeine.
-Cache size and TTL are configurable — see section 9.
+### Stage responsibilities
 
-> **Runtime value representation**: The runtime works with plain Java objects (`BigDecimal`, `Boolean`, `String`,
-> `LocalDate`, `LocalTime`, `LocalDateTime`, `List<Object>`). There is no `RuntimeValue` wrapper type.
+1. `ExpressionEvaluatorParserFacade`
+   Wraps the ANTLR parser and uses `PredictionStrategy` to try `SLL` first, then `LL` fallback.
+2. `SemanticAstBuilder`
+   Converts parse trees into typed AST nodes under `internal.ast`.
+3. `SemanticResolver`
+   Resolves identifiers, assignments, function overloads, property chains, and `ResolvedType`s into a `SemanticModel`.
+4. `ExecutionPlanBuilder`
+   Assigns deterministic symbol indices, seeds external defaults, folds constants, compiles regex patterns, and produces an `ExecutionPlan`.
+5. `MathEvaluator` / `LogicalEvaluator`
+   Execute the compiled plan inside an `ExecutionScope`.
+
+`ExpressionCompiler` caches the compiled result by `(source, environmentId, resultType)`.
 
 ---
 
-## 2. Type System
+## 3. Runtime Value Model
 
-### ResolvedType hierarchy
+The engine carries plain Java objects through the runtime. There is no dedicated `RuntimeValue` wrapper layer.
 
-| Class | Instances | Maps from Java types |
-|---|---|---|
-| `ScalarType` | `NUMBER`, `BOOLEAN`, `STRING`, `DATE`, `TIME`, `DATETIME` | Numbers, boolean, String, LocalDate, LocalTime, LocalDateTime |
-| `VectorType` | `VectorType.INSTANCE` | Arrays, Collections |
-| `UnknownType` | `UnknownType.INSTANCE` | `Temporal`, `Object`, and anything not recognised |
+### Common runtime shapes
 
-### `ResolvedTypes.fromJavaType(Class<?>)` — key mappings
-
-| Java type | ResolvedType |
+| Expression kind | Runtime representation |
 |---|---|
-| `BigDecimal`, `Integer`, `Long`, etc. (any `Number`) | `ScalarType.NUMBER` |
-| `boolean` / `Boolean` | `ScalarType.BOOLEAN` |
-| `CharSequence` / `String` | `ScalarType.STRING` |
+| number | `BigDecimal` |
+| boolean | `Boolean` |
+| text | `String` |
+| date | `LocalDate` |
+| time | `LocalTime` |
+| datetime | `LocalDateTime` |
+| vector | `List<Object>` |
+| object navigation roots and members | arbitrary Java objects |
+
+Normalization happens through `RuntimeServices.coerceToResolvedType(...)` at the edges:
+
+- external symbol defaults
+- external symbol overrides
+- function results
+- property/method return values when the member has a resolved type
+
+---
+
+## 4. Environment Assembly
+
+`ExpressionEnvironmentBuilder` constructs the runtime contract:
+
+- function catalog
+- external symbol catalog
+- type-hint catalog
+- data conversion service
+- `MathContext`
+- transcendental `MathContext`
+- deterministic `ExpressionEnvironmentId`
+
+### Built-in provider helpers
+
+| Builder method | Registers |
+|---|---|
+| `addComparableFunctions()` | `ComparableFunctions` |
+| `addDateTimeFunctions()` | `DateTimeFunctions` |
+| `addExcelFunctions()` | `ExcelFinancialFunctions` |
+| `addMathFunctions()` | `MathFunctions` + `LogarithmFunctions` |
+| `addStringFunctions()` | `StringFunctions` |
+| `addTrigonometryFunctions()` | `TrigonometryFunctions` |
+| `addAllFunctions()` | all of the above |
+
+### Provider discovery rules
+
+- `registerStaticProvider(Class<?>)` discovers public static methods via `getMethods()`.
+- `registerInstanceProvider(Object)` discovers public instance methods on the given object.
+- Each discovered method becomes a `FunctionDescriptor`.
+- A leading `MathContext` parameter is injected at environment-build time and is hidden from expression-call arity.
+
+### `MathContext` injection
+
+- `TrigonometryFunctions` and `LogarithmFunctions` receive `transcendentalMathContext`.
+- All other providers receive `mathContext`.
+- Both contexts default to `MathContext.DECIMAL128`.
+
+### Trigonometric constants
+
+If `TrigonometryFunctions` is registered, the builder also registers these non-overridable external symbols:
+
+- `pi`
+- `π`
+- `e`
+- `tau`
+- `τ`
+
+### Environment identity
+
+`ExpressionEnvironmentId` is derived from a sorted list of:
+
+- static provider class names
+- instance provider class names plus identity hash codes
+- external symbol names, declared types, and overridability
+- registered type hints
+- both `MathContext` settings
+
+The builder hashes that content with SHA-256 and stores the first 8 bytes as a 16-character hex string.
+
+---
+
+## 5. Type System
+
+### `ResolvedType` variants in active use
+
+| Type | Meaning | Produced by |
+|---|---|---|
+| `ScalarType` | number, boolean, string, date, time, datetime | literals, function signatures, coercible Java types |
+| `VectorType.INSTANCE` | vectors | arrays, collections, vector literals |
+| `ObjectType(javaClass)` | typed object navigation target | registered type hints and hinted member return types |
+| `UnknownType.INSTANCE` | runtime-known but semantically unresolved | unhinted objects, unknown symbols, ambiguous dynamic cases |
+| `NullType.INSTANCE` | null value in the type lattice | literal `null`, safe-navigation propagation |
+
+### `ResolvedTypes.fromJavaType(Class<?>)`
+
+| Java type | Resolved type |
+|---|---|
+| primitive numeric types, `Number`, `BigDecimal`, `BigInteger` | `ScalarType.NUMBER` |
+| `boolean`, `Boolean` | `ScalarType.BOOLEAN` |
+| `CharSequence`, `String` | `ScalarType.STRING` |
 | `LocalDate` | `ScalarType.DATE` |
 | `LocalTime` | `ScalarType.TIME` |
 | `LocalDateTime` | `ScalarType.DATETIME` |
-| Any array or `Collection` subtype | `VectorType.INSTANCE` |
-| `Temporal`, `Object`, unrecognised | `UnknownType.INSTANCE` |
+| arrays, `Collection` | `VectorType.INSTANCE` |
+| anything else | `UnknownType.INSTANCE` |
 
-> **Key implication**: `DateTimeFunctions` parameters are typed `Temporal` → `UnknownType.INSTANCE`, so semantic type-checking is always skipped for those arguments.
+`ObjectType` is not returned by `ResolvedTypes.fromJavaType(...)`. It is introduced only when a class is registered through `registerTypeHint(...)`.
 
 ### `ResolvedTypes.merge(left, right)`
 
-- Both equal → return left.
-- Either is `UnknownType` → return the other (known) type.
-- Otherwise → return `UnknownType.INSTANCE`.
+The merge rules are:
+
+1. same type → keep it
+2. `NullType` on one side → return the other side
+3. `UnknownType` on one side → return the other side
+4. otherwise → `UnknownType.INSTANCE`
+
+That rule is used heavily in conditionals and `??`.
 
 ---
 
-## 3. RuntimeCoercionService.coerce() — resolution order
+## 6. Type Hints And Object Navigation
 
-Called for every function argument before invocation (`AbstractObjectEvaluator`).
+`registerTypeHint(Class<?>)` is the switch that turns object navigation from "best effort" into statically-known navigation.
 
-```
-coerce(Object value, Class<?> targetType):
-  1. value == null                             → return null
-  2. targetType == Object.class
-     OR targetType.isInstance(value)           → return value as-is   ← Temporal works here
-  3. targetType == BigDecimal.class            → asNumber(value)
-  4. targetType == Double / double             → asDouble(value)
-  5. targetType == Integer / int               → asInt(value)
-  6. targetType == Long / long                 → asLong(value)
-  7. targetType == Boolean / boolean           → asBoolean(value)
-  8. targetType == String                      → asString(value)
-  9. targetType == LocalDate                   → asDate(value)
- 10. targetType == LocalTime                   → asTime(value)
- 11. targetType == LocalDateTime               → asDateTime(value)
- 12. value instanceof List<?> elements:
-       a. List.isAssignableFrom(targetType)    → new ArrayList<>(elements)
-       b. !targetType.isArray()                → conversionService.convert(value, targetType)
-       c. targetType.isArray()                 → see array coercion (section 4)
- 13. fallback: conversionService.convert(value, targetType)
-```
+### Metadata discovery
 
-Step 2 is why `DateTimeFunctions(Temporal, Temporal)` works: `Temporal.isInstance(LocalDate)` = true.
+For each registered type, the builder creates `TypeMetadata` with:
 
-Step 13 falls to `DefaultDataConversionService`.
+1. record component accessors
+2. zero-arg JavaBean getters (`getXxx()` and boolean `isXxx()`)
+3. public fields
+4. instance methods
+
+For members that return another registered type, the resolved type becomes `ObjectType(thatClass)`, which enables multi-hop typed navigation.
+
+### Semantic behavior
+
+`SemanticResolver` resolves a chain from left to right:
+
+- root symbol
+- property or method access
+- optional safe navigation
+
+If the current type is `ObjectType`, the resolver validates:
+
+- property existence
+- method existence
+- method arity
+- overload ambiguity
+- argument compatibility
+
+If the current type is `UnknownType`, the resolver tolerates the chain and keeps the result as `UnknownType`. This is why property chains can still compile without registered type hints.
+
+### Runtime behavior
+
+`ExecutablePropertyChain` has two execution modes:
+
+- typed access with precomputed `MethodHandle`s
+- reflective fallback through `ReflectiveAccessCache`
+
+### Null handling in chains
+
+- `obj.prop` or `obj.method()` throws `ExpressionEvaluationException` with code `NULL_IN_CHAIN` when a null intermediate value is reached.
+- `obj?.prop` or `obj?.method()` returns `null` for the rest of the chain.
+- `??` can be used after a reference expression to provide a default.
 
 ---
 
-## 4. Array-parameter coercion
+## 7. External Symbols And Execution Scope
 
-### Root cause (historical)
+### External symbol registration
 
-When a catalog function takes an array parameter (e.g., `mean(BigDecimal[] p)`), the expression engine:
+`registerExternalSymbol(name, defaultValue, overridable)` records:
 
-1. Evaluates the argument as a `List<Object>`.
-2. Calls `coerce(List<Object>, BigDecimal[].class)`.
-3. List step branches to array coercion (step 12c).
+- symbol name
+- declared type
+- default value
+- overridability
 
-### Implementation — specialized fast paths + reflective fallback
+The declared type comes from the default value class, except when that class is a registered type hint. In that case the declared type becomes `ObjectType`.
 
-```java
-// reached when: value instanceof List<?> elements AND targetType.isArray()
-int n = elements.size();
-Class<?> componentType = targetType.getComponentType();
+### Compile-time treatment
 
-if (componentType == BigDecimal.class) { ... }  // direct loop, no reflection
-if (componentType == double.class)    { ... }  // direct loop
-if (componentType == int.class)       { ... }  // direct loop
-if (componentType == long.class)      { ... }  // direct loop
-if (!componentType.isPrimitive()) {
-    Object[] array = (Object[]) Array.newInstance(componentType, n);
-    for (int i = 0; i < n; i++) array[i] = coerce(elements.get(i), componentType);
-    return array;
-}
-// remaining primitive types — reflective fallback
-Object array = Array.newInstance(componentType, n);
-for (int i = 0; i < n; i++) Array.set(array, i, coerce(elements.get(i), componentType));
-return array;
+During plan building:
+
+- external and internal symbols receive deterministic zero-based indices, sorted alphabetically within each group
+- defaults are stored in an array aligned with external symbol indices
+- binding metadata is stored in `ExternalBindingPlan`
+- non-overridable external symbols are inserted into the folding map immediately
+
+That last rule means constants registered as non-overridable can be folded into `ExecutableLiteral`s before runtime.
+
+### `ExecutionScope` layout
+
+`ExecutionScope` uses array-backed layers, not maps.
+
+#### Mutable scopes
+
+Used when the expression has assignments.
+
+- layer 1: internal assignment results
+- layer 2: external overrides
+- layer 3: external defaults
+
+#### Read-only scopes
+
+Used when the expression has no assignments.
+
+- layer 1: shared values or overrides
+- layer 2: defaults when needed
+
+### `UNBOUND`
+
+`ExecutionScope.UNBOUND` is a sentinel distinct from `null`.
+
+- `UNBOUND` means "no binding exists"
+- `null` means "binding exists and its value is null"
+
+This distinction matters for:
+
+- nullable inputs
+- destructuring assignments with missing elements
+- null-coalescing logic
+- audit correctness
+
+### Dynamic instants
+
+`currDate`, `currTime`, and `currDateTime` are resolved once per scope and cached in an `EnumMap<DynamicInstant, Object>`.
+
+Repeated reads inside one evaluation return the same instant.
+
+---
+
+## 8. Runtime Coercion
+
+There are two coercion layers:
+
+1. `RuntimeServices.coerce(...)`
+   Coerces to a specific Java parameter type.
+2. `RuntimeServices.coerceToResolvedType(...)`
+   Normalizes values to a semantic type when the runtime already knows the expected `ResolvedType`.
+
+### `RuntimeCoercionService.coerce(value, targetType)` order
+
+```text
+1. targetType null check
+2. value == null -> null
+3. targetType == Object.class or targetType.isInstance(value) -> value
+4. BigDecimal
+5. Double / double
+6. Integer / int
+7. Long / long
+8. Boolean / boolean
+9. String
+10. LocalDate
+11. LocalTime
+12. LocalDateTime
+13. List handling
+14. conversionService.convert(...)
 ```
 
-`BigDecimal[]` and the primitive fast paths avoid reflective writes entirely. Reference arrays such as `Comparable[]` also avoid `Array.set(...)` via a direct `Object[]` write path; only unsupported primitive arrays still use the reflective fallback.
+### List handling
 
-### Functions working via the expression API
+If the runtime value is `List<?>`:
 
-| Catalog class | Working | Not working |
+- target `List` → copy into `new ArrayList<>(elements)`
+- non-array target → delegate to `conversionService`
+- array target → build an array element-by-element
+
+Array coercion has specialized fast paths for:
+
+- `BigDecimal[]`
+- `double[]`
+- `int[]`
+- `long[]`
+
+Reference arrays use a direct `Object[]` write path. Unsupported primitive arrays fall back to reflective `Array.set(...)`.
+
+### `coerceToResolvedType(...)`
+
+Important cases:
+
+- `UnknownType` and `null` resolved type → return value unchanged
+- `VectorType` → arrays are converted to `List<Object>`; lists are preserved
+- scalar types → convert to `BigDecimal`, `Boolean`, `String`, `LocalDate`, `LocalTime`, or `LocalDateTime`
+- `ObjectType` → value is preserved
+
+This method is used when:
+
+- seeding external defaults
+- applying user overrides
+- returning function results
+- returning typed property/method results
+
+---
+
+## 9. Semantic Resolution And Overloads
+
+### Function overload resolution
+
+`SemanticResolver` resolves function calls by:
+
+1. candidate name
+2. exact arity
+3. compatible argument types
+
+Compatibility rule:
+
+- if actual type is `UnknownType` or `NullType`, it does not reject the candidate
+- if expected type is `UnknownType`, it does not reject the candidate
+- otherwise actual and expected types must match exactly
+
+Failure modes:
+
+- no name match → `UNKNOWN_FUNCTION`
+- name match but no arity match → `INVALID_FUNCTION_ARITY`
+- arity match but no compatible overload → `INCOMPATIBLE_FUNCTION_ARGUMENTS`
+- more than one compatible overload → `AMBIGUOUS_FUNCTION`
+
+### Method overload resolution
+
+Typed member-method calls use the same overall shape:
+
+- filter by name
+- filter by arity
+- compare resolved argument types against method parameter Java types converted through `resolveJavaType(...)`
+
+Failure modes:
+
+- `UNKNOWN_METHOD`
+- `INVALID_METHOD_ARITY`
+- `INCOMPATIBLE_METHOD_ARGUMENTS`
+- `AMBIGUOUS_METHOD`
+
+### Top-level result type checks
+
+After semantic resolution:
+
+- math expressions must resolve to `ScalarType.NUMBER`
+- logical expressions must resolve to `ScalarType.BOOLEAN`
+
+One special tolerance exists: a top-level property chain that still resolves to `UnknownType` is accepted so dynamic navigation without type hints can compile.
+
+---
+
+## 10. Plan Building And Constant Folding
+
+`ExecutionPlanBuilder` is where most runtime optimizations happen.
+
+### Constant sources
+
+The folding map starts with:
+
+- non-overridable external symbols
+
+Then it grows as the builder walks assignments and expressions.
+
+### Folding behavior
+
+The builder folds:
+
+- binary operators when both sides are constant
+- unary operators when the operand is constant
+- postfix operators when the operand is constant
+- `between` when all three operands are constant
+- `??` when the left side is a known non-null constant
+- foldable function calls when every argument is constant
+- vector literals when every element is constant
+- conditionals with constant conditions
+
+### Assignment propagation
+
+Simple assignments participate in constant propagation:
+
+- `x = 10; x + 5` can collapse to a literal result
+- reassignment to a non-constant removes the old folded value
+- reassignment to a new constant updates the propagated value
+
+Destructuring assignments do not publish per-target constant bindings during plan build.
+
+### Folded function calls keep audit data
+
+`ExecutableFunctionCall.folded(...)` stores:
+
+- original executable arguments
+- folded argument values
+- precomputed result
+
+At runtime the evaluator returns the folded result directly, but still emits a `FunctionCall` audit event.
+
+### Regex compilation
+
+Regex operators:
+
+- `=~`
+- `!~`
+
+are compiled into `ExecutableRegexOp` during plan build. The `Pattern` is created once at compile time, not per evaluation.
+
+### Audit sizing
+
+`ExecutionPlanBuilder` computes `maxAuditEvents`, and `ExpressionRuntimeSupport` uses that to pre-size the single-use `AuditCollector`.
+
+---
+
+## 11. Audit Trail
+
+`computeWithAudit(...)` returns:
+
+- value
+- `ExpressionAuditTrace`
+
+### Event types
+
+`AuditEvent` is a sealed interface with:
+
+- `VariableRead`
+- `FunctionCall`
+- `AssignmentEvent`
+
+### What gets recorded
+
+- every identifier read
+- every dynamic instant read
+- every function invocation
+- every assignment target write
+
+Notes:
+
+- dynamic instants are marked as `systemProvided = true`
+- ordinary identifiers are marked as `systemProvided = false`
+- destructuring assignments emit one `AssignmentEvent` per target
+- folded function calls still emit `FunctionCall`
+
+### Convenience views
+
+`ExpressionAuditTrace` exposes:
+
+- `events()`
+- `evaluationTime()`
+- `variableSnapshot()`
+- `functionCalls()`
+
+`variableSnapshot()` is computed in event order and keeps the last seen value for each variable name.
+
+---
+
+## 12. Grammar Notes That Matter In Practice
+
+The grammar file is:
+
+- `expression-evaluator/src/main/antlr4/com/runestone/expeval/internal/grammar/ExpressionEvaluator.g4`
+
+### Entry points
+
+- `mathStart`
+- `logicalStart`
+- `assignmentStart`
+
+Math and logical inputs may contain leading assignment statements before the final expression.
+
+### Assignments
+
+Simple assignment:
+
+```text
+x = value;
+```
+
+Destructuring assignment:
+
+```text
+[a, b, c] = [1, 2, 3];
+```
+
+### Function calls
+
+Function arguments accept comma or semicolon as separators:
+
+```text
+max(1, 2)
+if(cond; thenValue; elseValue)
+```
+
+### Object navigation
+
+- property access: `obj.prop`
+- safe property access: `obj?.prop`
+- method call: `obj.method(arg)`
+- safe method call: `obj?.method(arg)`
+
+### Null coalescing
+
+Reference entities can use `??`:
+
+```text
+<text>user.name ?? "anonymous"
+```
+
+### Type-hinted references
+
+Reference expressions may be prefixed with:
+
+- `<bool>`
+- `<number>`
+- `<text>`
+- `<date>`
+- `<time>`
+- `<datetime>`
+- `<vector>`
+
+Examples:
+
+- `<number>tax`
+- `<date>pedido.data`
+- `<vector>items ?? [1, 2, 3]`
+
+### Cast expressions
+
+The grammar also supports explicit casts:
+
+```text
+<number>(value)
+<text>(obj.codigo)
+```
+
+### Literals
+
+| Token | Example | Runtime type |
 |---|---|---|
-| `TrigonometryFunctions` | all | — |
-| `MathFunctions` | all (incl. array-param methods) | — |
-| `LogarithmFunctions` | all | — |
-| `DateTimeFunctions` | all | — |
-| `ExcelFinancialFunctions` | `fv`, `pv`, `pmt`, `nper`, `npv` | — |
-| `ComparableFunctions` | `max(T[])`, `min(T[])` | — |
-
-> **Grammar constraint**: The empty vector literal `[]` is not valid syntax (`vectorEntity` requires ≥ 1 element), so empty-array edge cases cannot be exercised via the expression API.
-
----
-
-## 5. Overload disambiguation
-
-The `SemanticResolver` resolves overloaded function names via `matchesArguments()`:
-
-- If the **actual** argument type **or** the **expected** parameter type is `UnknownType.INSTANCE`, the check is **skipped** (always passes). This is how `DateTimeFunctions` parameters work.
-- Otherwise, `actualType == expectedType` must hold.
-- If multiple overloads match → `AMBIGUOUS_FUNCTION` semantic error.
-- `FunctionCatalog.findExact(name, arity)` returns empty when there are multiple candidates with the same arity, forcing explicit disambiguation via `findCandidates`.
-
-### ExcelFinancialFunctions overload disambiguation
-
-`fv`, `pmt` each have two 5-argument overloads:
-- `fv(BigDecimal, BigDecimal, BigDecimal, BigDecimal, boolean)` — 5th param: `BOOLEAN`
-- `fv(BigDecimal, int, BigDecimal, BigDecimal, int)` — 5th param: `NUMBER`
-
-Disambiguation in expressions:
-- `fv(0.05, 10, -100, -1000, false)` → 5th arg is BOOLEAN → resolves to the first overload ✓
-- `fv(0.05, 10, -100, -1000, 0)` → 5th arg is NUMBER → resolves to the second overload ✓
-
-The `int` parameters in the second overload are coerced at runtime via `DefaultDataConversionService.convertPrimitiveTypes()` → `number.intValue()`.
-
----
-
-## 6. Constant folding
-
-`ExecutionPlanBuilder` can pre-compute nodes at build time to avoid repeated evaluation at runtime.
-
-### Vector literal folding
-
-`ExecutableVectorLiteral` pre-computes all-constant vectors at build time and stores a `foldedValue: List<Object>`.
-`isFolded()` returns true when `foldedValue != null`; the evaluator skips element evaluation in that case.
-
-### Function call folding
-
-`ExecutableFunctionCall` stores `foldedArgs` and `foldedResult` when:
-- The `FunctionDescriptor` is marked `foldable = true` (all built-in catalog providers are foldable by default).
-- All arguments are constant or themselves pre-computed.
-
-`isFolded()` returns `foldedResult != null`. The evaluator short-circuits directly to `foldedResult`.
-
----
-
-## 7. ExecutionScope — two-layer architecture
-
-`ExecutionScope` separates external (predefined) symbols from internal (assignment) symbols to keep concurrent evaluation safe.
-
-- **External layer**: shared, read-only `Map<SymbolRef, Object>` built once per evaluation call from the user-supplied `Map<String, Object>` merged with external symbol defaults.
-- **Internal layer**: fresh mutable `HashMap` pre-sized to `internalSymbolCount`; used exclusively for assignment targets.
-
-The sentinel `ExecutionScope.UNBOUND` (distinct from `null`) marks missing bindings so that explicit `null` values are propagated correctly.
-
-### Dynamic instant caching
-
-`currDate`, `currTime`, and `currDateTime` are evaluated once per scope and cached in an `EnumMap<DynamicInstant, Object>` on the scope.
-Subsequent reads within the same evaluation return the same instant, ensuring consistency.
-
----
-
-## 8. Expression grammar — key points for test authoring
-
-### Confirmed: date/datetime literals work as function-call arguments
-
-The `allEntityTypes` grammar rule (used for function call arguments) includes `dateEntity` and `dateTimeEntity`.
-Because ANTLR's lexer is deterministic and greedy, `2024-01-01` is tokenized as a single `DATE` token
-(not `NUMBER MINUS NUMBER MINUS NUMBER`), and `2024-01-01T10:00` as a single `DATETIME` token.
-As a result, `daysBetween(2024-01-01, 2024-12-31)` and `hoursBetween(2024-01-01T00:00, 2024-01-02T00:00)`
-both parse and evaluate correctly.
-
-### Date and time literals
-
-| Grammar token | Example | Java type |
-|---|---|---|
+| `NUMBER` | `10`, `3.14`, `0xFF` | `BigDecimal` |
+| `STRING` | `"abc"` | `String` |
 | `DATE` | `2024-12-31` | `LocalDate` |
-| `DATETIME` | `2024-12-31T12:30` | `LocalDateTime` |
 | `TIME` | `12:30` | `LocalTime` |
-| `currDate` | `currDate` | `LocalDate.now()` |
-| `currDateTime` | `currDateTime` | `LocalDateTime.now()` |
-| `currTime` | `currTime` | `LocalTime.now()` |
+| `DATETIME` | `2024-12-31T12:30` | `LocalDateTime` |
+| `NOW_DATE` | `currDate` | `LocalDate` |
+| `NOW_TIME` | `currTime` | `LocalTime` |
+| `NOW_DATETIME` | `currDateTime` | `LocalDateTime` |
+| `NULL` | `null` | `null` |
 
-### Type-hinted variable references
+`DATETIME` may optionally be followed by `TIME_OFFSET`, but semantic/runtime handling currently normalizes datetime values as `LocalDateTime`.
 
-`<date>varName`, `<datetime>varName`, `<time>varName`, `<number>varName` — explicit type annotation in the expression. Without annotation, the type is inferred from the context or defaults to `UnknownType`.
+### Collection operators
 
-### Function call arguments
+- membership: `x in [1, 2, 3]`
+- negative membership: `x not in [1, 2, 3]`
+- range test: `x between 1 and 10`
+- negative range test: `x not between 1 and 10`
 
-Arguments use the `allEntityTypes` rule, which accepts `mathExpression`, `logicalExpression`, `dateEntity`, `timeEntity`, `dateTimeEntity`, `stringEntity`, or `vectorEntity`. Unary minus (`-100`) parses correctly as a `mathExpression`.
+### Regex operators
 
-### Vector literal
+- `text =~ "pattern"`
+- `text !~ "pattern"`
 
-`[1, 2, 3]` is a valid vector literal that compiles as `ExecutableVectorLiteral` → `List<Object>` at runtime. Array-parameter functions consume it through the coercion path described in section 4.
+### Vector literals
 
-### Assignment expressions
+Vectors require at least one element:
 
-`IDENTIFIER = value ;` (simple) or `[id1, id2, ...] = vectorExpr ;` (destructuring).
-The operator is `=` and each statement is terminated by `;`.
-
-### Conditional expressions
-
+```text
+[1, 2, 3]
 ```
-if condition then value elsif condition then value else value endif
-```
 
-Also available in function-call syntax: `if(cond ; val ; cond ; val ; ... ; else_val)`.
-Conditionals are valid in all entity contexts (math, logical, string, date, time, datetime, vector).
-
-Internally, a single `if/then/else/endif` compiles to the optimised `ExecutableSimpleConditional`; multi-branch conditions compile to `ExecutableConditional`.
+The empty vector literal `[]` is not valid grammar.
 
 ---
 
-## 9. ExpressionEnvironmentBuilder — convenience methods
+## 13. Cache And Lifecycle
 
-| Method | Registers |
-|---|---|
-| `addMathFunctions()` | `MathFunctions` + `LogarithmFunctions` |
-| `addTrigonometryFunctions()` | `TrigonometryFunctions` |
-| `addComparableFunctions()` | `ComparableFunctions` |
-| `addExcelFunctions()` | `ExcelFinancialFunctions` |
-| `addDateTimeFunctions()` | `DateTimeFunctions` |
-| `addAllFunctions()` | All of the above |
-
-`registerStaticProvider(Class<?>, boolean foldable)` and `registerInstanceProvider(Object, boolean foldable)` are the low-level registration methods.
-
-`registerStaticProvider(Class<?>)` discovers all public static methods via `getMethods()`.
-
-**MathContext injection**: If the first parameter of a provider method is `MathContext`, it is bound at environment-build time:
-- `TrigonometryFunctions` and `LogarithmFunctions` receive `transcendentalMathContext` (default `DECIMAL128`).
-- All other providers receive `mathContext` (default `DECIMAL128`).
-- The `MathContext` parameter is hidden from the expression call site (arity seen by the catalog is reduced by 1).
-
-> **Default environment**: `ExpressionEnvironmentBuilder.empty()` — and the no-environment overloads on `MathExpression`, `LogicalExpression`, and `AssignmentExpression` all use `empty()`. No functions are registered by default. An expression that calls any function without an explicit environment with that function registered will fail with `UNKNOWN_FUNCTION`.
-
----
-
-## 10. Cache configuration
-
-`ExpressionCompiler` is configurable and can be used both as a JVM-wide singleton and as an injectable component.
-
-### CacheConfig record
+### `CacheConfig`
 
 ```java
 public record CacheConfig(long maximumSize, Duration expireAfterWrite)
 ```
 
-- `maximumSize` — maximum Caffeine cache entries; must be positive.
-- `expireAfterWrite` — TTL per entry; `null` disables expiration.
-- `CacheConfig.defaults()` — reads `expeval.cache.maximumSize` (default 1 024) and `expeval.cache.ttlSeconds` (default 0 = no TTL) from system properties.
+Defaults come from JVM properties:
 
-### Singleton lifecycle via ExpressionRuntimeSupport
+- `expeval.cache.maximumSize` default `1024`
+- `expeval.cache.ttlSeconds` default `0` meaning no TTL
 
-```java
-// Configure before first compilation (silently ignored if already initialized)
-ExpressionRuntimeSupport.configure(new CacheConfig(4_096, Duration.ofHours(1)));
+### Singleton compiler lifecycle
 
-// Replace the singleton at any time (atomically)
-ExpressionRuntimeSupport.reconfigure(new CacheConfig(8_192, null));
+`ExpressionRuntimeSupport` manages a lazily-initialized JVM-wide `ExpressionCompiler`.
 
-// Clear cache entries without replacing the compiler
-ExpressionRuntimeSupport.invalidateCache();
-```
+Available controls:
 
-### DI / Spring @Bean pattern
+- `configure(CacheConfig)`
+  Applies only if the singleton has not been initialized yet.
+- `reconfigure(CacheConfig)`
+  Replaces the singleton immediately.
+- `invalidateCache()`
+  Clears cached entries without replacing the compiler.
 
-```java
-@Bean
-public ExpressionCompiler expressionCompiler() {
-    return new ExpressionCompiler(new CacheConfig(4_096, Duration.ofHours(1)));
-}
+### DI use case
 
-// Then pass the injected compiler to the three-argument compile overload:
-MathExpression expr = MathExpression.compile("a + b", environment, compiler);
-```
-
-The three-argument `compile` overloads exist on `MathExpression`, `LogicalExpression`, and `AssignmentExpression`.
-
-### Cache key
-
-Two compilations share an entry when `(source, environmentId, resultType)` are identical. `ExpressionEnvironmentId` is a 16-character hex string derived from SHA-256 of the sorted list of provider class names, instance identity hash codes, external symbol names/types/overridability, and both `MathContext` settings — so environments built from identical configurations share cache entries automatically.
+The public APIs also expose overloads that accept an explicit `ExpressionCompiler`, which is the right choice when the compiler lifecycle should be controlled by DI or tests.
 
 ---
 
-## 11. Audit trail
+## 14. Useful Test Anchors
 
-`computeWithAudit()` is available on all three expression types and returns `AuditResult<T>`.
+When changing runtime behavior, these tests are the fastest high-signal anchors:
 
-### AuditResult
-
-```java
-public record AuditResult<T>(T value, ExpressionAuditTrace trace)
-```
-
-- `T` is `BigDecimal` (math), `Boolean` (logical), or `Map<String, Object>` (assignments).
-
-### ExpressionAuditTrace
-
-```java
-public record ExpressionAuditTrace(List<AuditEvent> events, Duration evaluationTime)
-```
-
-Convenience views:
-- `variableSnapshot()` — `LinkedHashMap<String, Object>` of all variable names to their last-seen value during evaluation (assignments first, then reads; iteration order follows first appearance).
-- `functionCalls()` — ordered `List<AuditEvent.FunctionCall>` of all function calls during evaluation.
-
-### AuditEvent — sealed interface with three permits
-
-| Subtype | When emitted | Key fields |
-|---|---|---|
-| `VariableRead(name, systemProvided, value)` | Each time an identifier is resolved | `systemProvided=true` for `currDate`/`currTime`/`currDateTime` |
-| `FunctionCall(functionName, inputArgs, result, callDepth)` | After each function invocation | `callDepth=0` for top-level, ≥1 for nested; `inputArgs()` returns immutable `List<Object>` |
-| `AssignmentEvent(targetName, newValue)` | After each variable assignment (one per target for destructuring) | — |
-
-> **Hot-path note**: `FunctionCall` uses `Object[]` internally and wraps to `List.copyOf(...)` only on `inputArgs()`, deferring allocation to read time. `AuditCollector` is pre-sized from the execution plan's estimated event count to avoid `ArrayList` growth during evaluation.
+- `api/ObjectNavigationTest`
+- `api/ObjectNavigationCircularReferenceTest`
+- `api/AuditTrailExpressionTest`
+- `api/ExpressionValidationTest`
+- `api/DynamicLiteralExpressionTest`
+- `internal/runtime/RuntimeCoercionServiceTest`
+- `internal/runtime/ConstantFoldingPlanTest`
+- `internal/runtime/ConditionalOptimizationPlanTest`
+- `internal/runtime/ObjectNavigationPlanTest`
+- `internal/runtime/ExecutionScopeTest`
+- `internal/runtime/NullMembershipTest`
+- `internal/semantic/SemanticResolverTest`
 
 ---
 
-## 12. ValidationResult — compile-time metadata
+## 15. Maintenance Rule
 
-`validate()` on each expression type returns `ValidationResult` without throwing.
+If you change any of the following, update this document in the same change:
 
-```java
-public record ValidationResult(
-    String source,
-    boolean valid,
-    List<CompilationIssue> issues,
-    Set<String> assignedVariables,
-    Set<String> userVariables,
-    Set<String> functions)
-```
-
-| Field | Content when `valid=true` | Content when `valid=false` |
-|---|---|---|
-| `issues` | empty | one or more `CompilationIssue` with `code`, `message`, optional `position` |
-| `assignedVariables` | names of variables assigned within the expression (internal symbols) | empty |
-| `userVariables` | names of variables that must be supplied at evaluation time (external/free symbols) | empty |
-| `functions` | deduplicated names of all functions called in the expression | empty |
-
-All three sets are unmodifiable (`Set.copyOf`). `failed()` always produces empty sets.
-
-### Issue codes
-
-| Code | Cause |
-|---|---|
-| `SYNTAX_ERROR` | ANTLR parse failure |
-| `UNKNOWN_FUNCTION` | function name not in `FunctionCatalog` |
-| `INVALID_FUNCTION_ARITY` | wrong number of arguments |
-| `INCOMPATIBLE_FUNCTION_ARGUMENTS` | argument types do not match any overload |
-| `AMBIGUOUS_FUNCTION` | multiple overloads match |
-| `INCOMPATIBLE_COMPARISON` | comparison operands have incompatible types |
-
-`CompilationIssue.position()` carries `(line, column, endColumn)` for semantic errors and syntax errors; it is `null` for issues without a source location.
-
-### formatMessage()
-
-Returns a human-readable string. For semantic/syntax errors with a position, formats the source line with a caret pointer:
-
-```
-  principal * rate + unknown()
-                     ^^^^^^^^^
-  UNKNOWN_FUNCTION at 1:19 — unknown function 'unknown'
-```
-
----
-
-## 13. Public API usage pattern
-
-### Three expression types
-
-```java
-// Math — returns BigDecimal
-BigDecimal result = MathExpression.compile("a + b * c")
-        .compute(Map.of("a", 1, "b", 2, "c", 3)); // 7
-
-// Logical — returns boolean
-boolean ok = LogicalExpression.compile("x > 10")
-        .compute(Map.of("x", 15)); // true
-
-// Assignments — returns Map<String, Object>
-Map<String, Object> vars = AssignmentExpression.compile("x = a + 1; y = x * 2;")
-        .compute(Map.of("a", 5)); // {x=6, y=12}
-```
-
-### Functions and external symbols
-
-```java
-ExpressionEnvironment env = ExpressionEnvironment.builder()
-        .addMathFunctions()
-        .addTrigonometryFunctions()
-        .registerExternalSymbol("rate", BigDecimal.valueOf(0.05), false)
-        .build();
-
-BigDecimal result = MathExpression.compile("sin(x) + rate", env)
-        .compute(Map.of("x", new BigDecimal("1.5707963267948966")));
-```
-
-### Validation with metadata
-
-```java
-ExpressionEnvironment env = ExpressionEnvironment.builder()
-        .addMathFunctions()
-        .registerExternalSymbol("principal", BigDecimal.ONE, false)
-        .build();
-
-ValidationResult vr = MathExpression.validate("mean([principal, 2]) + rate", env);
-
-vr.valid();             // true
-vr.userVariables();     // {"principal", "rate"}  — rate is a free variable
-vr.assignedVariables(); // {} — no assignments in this expression
-vr.functions();         // {"mean"}
-vr.formatMessage();     // "expression is valid: mean([principal, 2]) + rate"
-```
-
-### Audit trail
-
-```java
-ExpressionEnvironment env = ExpressionEnvironment.builder().addMathFunctions().build();
-
-AuditResult<BigDecimal> audit = MathExpression.compile("mean([a, b])", env)
-        .computeWithAudit(Map.of("a", 2, "b", 4));
-
-audit.value();                              // 3
-audit.trace().evaluationTime();            // Duration
-audit.trace().variableSnapshot();          // {a=2, b=4}
-audit.trace().functionCalls().getFirst().functionName(); // "mean"
-```
-
-### Date functions
-
-```java
-ExpressionEnvironment dateEnv = ExpressionEnvironment.builder()
-        .addDateTimeFunctions()
-        .build();
-
-BigDecimal days = MathExpression.compile("daysBetween(d1, d2)", dateEnv)
-        .compute(Map.of(
-                "d1", LocalDate.of(2024, 1, 1),
-                "d2", LocalDate.of(2024, 12, 31))); // 365
-```
-
-### Spring DI with injected compiler
-
-```java
-@Bean
-public ExpressionCompiler expressionCompiler() {
-    return new ExpressionCompiler(new CacheConfig(4_096, Duration.ofHours(1)));
-}
-
-// In a service:
-@Autowired ExpressionCompiler compiler;
-
-MathExpression expr = MathExpression.compile("a + b", environment, compiler);
-```
+- grammar or accepted syntax
+- type-hint behavior
+- symbol resolution rules
+- overload disambiguation
+- coercion semantics
+- constant folding
+- audit trail behavior
+- compiler cache lifecycle
