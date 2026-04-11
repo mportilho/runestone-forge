@@ -8,8 +8,7 @@ This file provides guidance to AI agents (Gemini CLI, Claude Code, etc.) when wo
 
 1. **runestone-toolkit** — Core utilities (memoization, caching, data conversion, assertions). No Spring dependency.
 2. **dynamic-filter-resolver** — Dynamic filtering framework for Spring Data JPA repositories, with OpenAPI integration.
-3. **expression-evaluator** — ANTLR 4-based mathematical/logical expression parser and evaluator.
-4. **exp-eval-mk2** — Second iteration of the expression evaluator, fully implemented. Richer type system (scalar, vector, unknown), compilation pipeline with semantic resolution, and Caffeine-based expression cache.
+3. **expression-evaluator** — Redesigned expression evaluator with a multi-phase compilation pipeline, richer type system (scalar, vector, unknown), and Caffeine-based expression cache.
 
 ## Build & Test Commands
 
@@ -58,23 +57,15 @@ Enables annotating REST controller parameters with filter definitions that are a
 Key pattern: `FilterOperation<R>` strategy interface with multiple JPA `Specification` implementations (Equals, Like, Between, Greater, etc.).
 
 ### expression-evaluator
-Parses and evaluates expressions using an ANTLR 4 grammar (`ExpressionEvaluator.g4`).
-- `com.runestone.expeval.expression.calculator` — `ExpressionCalculator` is the main entry point.
-- `com.runestone.expeval.operation` — Composite tree of `AbstractOperation` nodes: `values` (constants/variables), `math` (log, trig, etc.), `logic` (boolean), `datetime`.
-- Supports arbitrary-precision arithmetic via Big-Math 2.3.2.
-
-Key pattern: `AbstractOperation` forms a composite tree; each node computes its result by recursively evaluating children. Variable values are supplied via context maps at evaluation time.
-
-### exp-eval-mk2
 A redesigned expression evaluator with a multi-phase compilation pipeline and richer type system.
 
-Public API (package `com.runestone.expeval2.api`, `environment` and `catalog`):
+Public API (package `com.runestone.expeval.api`, `environment` and `catalog`):
 - `ExpressionEnvironment` — built via `ExpressionEnvironmentBuilder`; configures the runtime (function catalog, external symbols, data conversion). Scoped by `ExpressionEnvironmentId` for cache keying.
 - `MathExpression`, `LogicalExpression` — compiled, reusable expression objects.
 - `FunctionCatalog`, `ExternalSymbolCatalog` — central repositories for available functions and external symbols.
 
 Compilation pipeline (all internal, coordinated by `ExpressionCompiler`):
-1. **Parse** — `ExpressionEvaluatorV2ParserFacade` wraps the ANTLR grammar; supports `SLL` with `LL` fallback via `PredictionStrategy`.
+1. **Parse** — `ExpressionEvaluatorParserFacade` wraps the ANTLR grammar; supports `SLL` with `LL` fallback via `PredictionStrategy`.
 2. **AST** — `SemanticAstBuilder` maps the ANTLR parse tree to typed `Node` subclasses (`BinaryOperationNode`, `FunctionCallNode`, `ConditionalNode`, `VectorLiteralNode`, etc.) in `internal.ast`.
 3. **Semantic resolution** — `SemanticResolver` walks the AST against `FunctionCatalog` and `ExternalSymbolCatalog`, producing a `SemanticModel` with `SymbolRef` bindings and typed `ResolvedType` annotations.
 4. **Execution plan** — `ExecutionPlanBuilder` converts the resolved AST to an `ExecutionPlan` of `ExecutableNode` objects (e.g., `ExecutableBinaryOp`, `ExecutableFunctionCall`, `ExecutableConditional`).
@@ -95,7 +86,7 @@ Compiled expressions are cached in `ExpressionCompiler` by `(source, environment
 
 ## Key Reference Documents
 
-- **`exp-eval-mk2/docs/runtime-internals.md`** — Verified findings about the exp-eval-mk2 runtime: compilation pipeline, type system, `RuntimeValue` variants, `RuntimeCoercionService` coercion order, array-parameter coercion fix, overload disambiguation rules, `RuntimeValueFactory` wrapping logic, grammar syntax for date/datetime literals and type-hinted variables, and `ExpressionEnvironmentBuilder` convenience methods. Read this before exploring the exp-eval-mk2 internals from scratch.
+- **`expression-evaluator/docs/runtime-internals.md`** — Verified findings about the expression-evaluator runtime: compilation pipeline, type system, `RuntimeValue` variants, `RuntimeCoercionService` coercion order, array-parameter coercion fix, overload disambiguation rules, `RuntimeValueFactory` wrapping logic, grammar syntax for date/datetime literals and type-hinted variables, and `ExpressionEnvironmentBuilder` convenience methods. Read this before exploring the expression-evaluator internals from scratch.
 
 ## Agent Skills
 
@@ -104,18 +95,18 @@ Compiled expressions are cached in `ExpressionCompiler` by `(source, environment
 ## Regenerating the ANTLR Grammar
 
 The default Maven build no longer regenerates the grammar. Generated Java sources remain versioned in
-`exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/grammar`, so normal `mvn test` / `mvn compile`
+`expression-evaluator/src/main/java/com/runestone/expeval/internal/grammar`, so normal `mvn test` / `mvn compile`
 does not touch them or recreate stray `.tokens` files under `src/main/java`.
 
 ### Regenerate the committed Java sources
 
 ```shell
-mvn -pl exp-eval-mk2 -Pantlr-generate generate-sources
+mvn -pl expression-evaluator -Pantlr-generate generate-sources
 ```
 
-This profile generates into `exp-eval-mk2/target/generated-sources/antlr4` and then copies only the
+This profile generates into `expression-evaluator/target/generated-sources/antlr4` and then copies only the
 generated `.java` files back into
-`exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/grammar`.
+`expression-evaluator/src/main/java/com/runestone/expeval/internal/grammar`.
 
 ### For ANTLR diagnostics
 
@@ -131,7 +122,7 @@ ANTLR_RT=~/.m2/repository/org/antlr/antlr4-runtime/4.13.1/antlr4-runtime-4.13.1.
 ANTLR3_RT=~/.m2/repository/org/antlr/antlr-runtime/3.5.3/antlr-runtime-3.5.3.jar
 ST4=~/.m2/repository/org/antlr/ST4/4.3.4/ST4-4.3.4.jar
 ICU4J=$(find ~/.m2/repository -name "icu4j-*.jar" | head -1)
-GRAMMAR_OUT=exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/grammar
+GRAMMAR_OUT=expression-evaluator/src/main/java/com/runestone/expeval/internal/grammar
 TMPDIR=$(mktemp -d)
 
 java -cp "${ANTLR_TOOL}:${ANTLR_RT}:${ANTLR3_RT}:${ST4}:${ICU4J}" \
@@ -141,7 +132,7 @@ java -cp "${ANTLR_TOOL}:${ANTLR_RT}:${ANTLR3_RT}:${ST4}:${ICU4J}" \
   -listener \
   -Xexact-output-dir \
   -o "${TMPDIR}" \
-  exp-eval-mk2/src/main/antlr4/com/runestone/expeval2/internal/grammar/ExpressionEvaluatorV2.g4
+  expression-evaluator/src/main/antlr4/com/runestone/expeval/internal/grammar/ExpressionEvaluator.g4
 
 cp "${TMPDIR}"/*.java "${GRAMMAR_OUT}/"
 rm -rf "${TMPDIR}"

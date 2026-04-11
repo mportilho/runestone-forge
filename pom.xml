@@ -23,7 +23,6 @@
         <module>runestone-toolkit</module>
         <module>dynamic-filter-resolver</module>
         <module>expression-evaluator</module>
-        <module>exp-eval-mk2</module>
     </modules>
 
     <dependencyManagement>

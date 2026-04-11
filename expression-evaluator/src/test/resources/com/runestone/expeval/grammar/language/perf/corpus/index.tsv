@@ -1,0 +1,4 @@
+loan-payment-projection	MATH	com/runestone/expeval/grammar/language/perf/corpus/math/loan-payment-projection.expr
+portfolio-discount-allocation	MATH	com/runestone/expeval/grammar/language/perf/corpus/math/portfolio-discount-allocation.expr
+customer-eligibility-gate	LOGICAL	com/runestone/expeval/grammar/language/perf/corpus/logical/customer-eligibility-gate.expr
+settlement-window-check	LOGICAL	com/runestone/expeval/grammar/language/perf/corpus/logical/settlement-window-check.expr

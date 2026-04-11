@@ -12,6 +12,9 @@
 
     <properties>
         <jmh.version>1.37</jmh.version>
+        <antlr4.version>4.13.1</antlr4.version>
+        <antlr4.generated.directory>${project.build.directory}/generated-sources/antlr4</antlr4.generated.directory>
+        <antlr4.checkedin.directory>${project.basedir}/src/main/java/com/runestone/expeval/internal/grammar</antlr4.checkedin.directory>
     </properties>
 
     <build>
@@ -38,6 +41,56 @@
         </plugins>
     </build>
 
+    <profiles>
+        <profile>
+            <id>antlr-generate</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.antlr</groupId>
+                        <artifactId>antlr4-maven-plugin</artifactId>
+                        <version>${antlr4.version}</version>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>antlr4</goal>
+                                </goals>
+                                <configuration>
+                                    <listener>true</listener>
+                                    <visitor>true</visitor>
+                                    <outputDirectory>${antlr4.generated.directory}</outputDirectory>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <phase>generate-sources</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <copy todir="${antlr4.checkedin.directory}"
+                                              overwrite="true"
+                                              preservelastmodified="true">
+                                            <fileset dir="${antlr4.generated.directory}/com/runestone/expeval/internal/grammar"
+                                                     includes="*.java"/>
+                                        </copy>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
     <dependencies>
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
@@ -51,7 +104,7 @@
         <dependency>
             <groupId>org.antlr</groupId>
             <artifactId>antlr4-runtime</artifactId>
-            <version>4.13.1</version>
+            <version>${antlr4.version}</version>
         </dependency>
         <dependency>
             <groupId>ch.obermuhlner</groupId>
