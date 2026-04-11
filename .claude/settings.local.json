@@ -118,7 +118,8 @@
       "Bash(cp /tmp/scope-opt-after/ExecutionPlan.java exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExecutionPlan.java)",
       "Bash(cp /tmp/scope-opt-after/ExecutionPlanBuilder.java exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExecutionPlanBuilder.java)",
       "Bash(cp /tmp/scope-opt-after/ExecutionScope.java exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExecutionScope.java)",
-      "Bash(cp /tmp/scope-opt-after/ExpressionRuntimeSupport.java exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExpressionRuntimeSupport.java)"
+      "Bash(cp /tmp/scope-opt-after/ExpressionRuntimeSupport.java exp-eval-mk2/src/main/java/com/runestone/expeval2/internal/runtime/ExpressionRuntimeSupport.java)",
+      "Bash(wc -l /home/marcelo/dev/git/runestone-forge/expression-evaluator/src/main/java/com/runestone/expeval/internal/runtime/*.java)"
     ]
   }
 }
