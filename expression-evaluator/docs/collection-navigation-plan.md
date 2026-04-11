@@ -50,7 +50,7 @@ Invocadas ao final de um path; recebem implicitamente a collection acumulada com
 | `in` | Esquerda existe na direita |
 | `nin` | Esquerda não existe na direita |
 | `=~` / `!~` | Correspondência de regex (suporta `/padrão/flags`) |
-| `and` / `or` | Combinação de condições |
+| `and` / `or` | Combinação de múltiplas condições dentro do mesmo `?(...)` |
 
 ### Exemplos (baseados no grafo de objetos abaixo)
 
@@ -84,7 +84,7 @@ Invocadas ao final de um path; recebem implicitamente a collection acumulada com
 | `store..book[2:]` | Do índice 2 ao final |
 | `store..book[?(@.isbn)]` | Livros com ISBN |
 | `store.book[?(@.price < 10)]` | Livros mais baratos que 10 |
-| `store.book[?(@.price < 10) and ?(@.isbn)]` | Múltiplos filtros |
+| `store.book[?(@.price < 10 and @.isbn)]` | Múltiplas condições no mesmo filtro |
 | `store..book[?(@.price <= store.expensive)]` | Filtro com referência ao escopo externo |
 | `store..book[?(@.author =~ /.*REES/i)]` | Filtro com regex case-insensitive |
 | `store..*` | Todos os valores do grafo |
@@ -312,7 +312,7 @@ Adicionar ao `ExpressionVisitor`:
 - `visitDeepScanWildcard` → `DeepScanStep(null)`
 - `visitCollectionFunctionAccess` → `buildCollectionFunctionStep(name, args)`
 
-**`buildFilterPredicate`:** Nova classe interna `FilterPredicateVisitor` que transforma o contexto ANTLR `filterPredicate` em `ExpressionNode` (usando `BinaryOperationNode` com `AND`/`OR`, `REGEX_MATCH`, etc.).
+**`buildFilterPredicate`:** Nova classe interna `FilterPredicateVisitor` que transforma o contexto ANTLR `filterPredicate` em `ExpressionNode` (usando `BinaryOperationNode` com `AND`/`OR`, `REGEX_MATCH`, etc.). `and` e `or` combinam `filterRelation`s dentro do mesmo `?()`, por exemplo `?(@.price < 10 and @.isbn)`.
 
 **`buildCollectionFunctionStep`:**
 ```java
@@ -647,6 +647,7 @@ store.book[*].author           → lista com 4 autores
 // Filtro
 store.book[?(@.isbn)].title                          → títulos com ISBN
 store.book[?(@.price < 10)].title                    → títulos baratos
+store.book[?(@.price < 10 and @.isbn)].title         → títulos baratos com ISBN
 store..book[?(@.price <= store.expensive)]            → outer-scope ref
 store.book[?(@.author =~ /.*REES/i)].title           → ["Sayings of the Century"]
 
