@@ -24,9 +24,9 @@ O `expression-evaluator` já suporta navegação em objetos via dot-notation (`o
 | `[start:end]` | Slice — da posição `start` (inclusive) até `end` (exclusive) |
 | `[?(<expr>)]` | Filtro — mantém elementos onde `<expr>` é verdadeiro |
 
-### Funções de Collection (sufixo `..`)
+### Funções de Collection/Map (sufixo `..`)
 
-Invocadas ao final de um path; recebem implicitamente a collection acumulada como primeiro argumento lógico:
+Invocadas ao final de um path; recebem implicitamente a collection ou o mapa acumulado como primeiro argumento lógico:
 
 | Função | Saída |
 |---|---|
@@ -35,14 +35,15 @@ Invocadas ao final de um path; recebem implicitamente a collection acumulada com
 | `..min()` | Mínimo — `BigDecimal` |
 | `..max()` | Máximo — `BigDecimal` |
 | `..count()` / `..length()` / `..size()` | Cardinalidade — `BigDecimal` |
-| `..<func>(arg1, arg2, ...)` | Chama função do `FunctionCatalog` como `func(<collection>, arg1, arg2, ...)` |
+| `..<func>(arg1, arg2, ...)` | Chama função do `FunctionCatalog` como `func(<target>, arg1, arg2, ...)`, onde `<target>` pode ser collection ou map |
 
 **Convenção para funções customizadas via `ExpressionEnvironmentBuilder`:**
 
 - `registerStaticProvider(...)` e `registerInstanceProvider(...)` continuam descobrindo funções normalmente; não é necessária nova API pública.
 - Em `store..price..customEval(2, true)`, a resolução trata a chamada como `customEval(store..price, 2, true)`.
-- O primeiro parâmetro declarado da função customizada, após o eventual `MathContext` injetado pelo builder, deve ser a collection corrente (`Collection`, `List` ou equivalente coerível para vetor).
-- Funções cujo primeiro parâmetro não seja collection continuam disponíveis apenas como chamadas globais normais, por exemplo `customEval(store..price, 2, true)`.
+- Em `store.bookByIsbn..customEval(true)`, a resolução trata a chamada como `customEval(store.bookByIsbn, true)`.
+- O primeiro parâmetro declarado da função customizada, após o eventual `MathContext` injetado pelo builder, deve ser o target corrente: `Collection`, `List`, `Map` ou equivalente coerível.
+- Funções cujo primeiro parâmetro não seja compatível com o target corrente continuam disponíveis apenas como chamadas globais normais, por exemplo `customEval(store..price, 2, true)`.
 
 ### Operadores de Filtro Adicionais (dentro de `[?(...)]`)
 
@@ -108,6 +109,7 @@ Invocadas ao final de um path; recebem implicitamente a collection acumulada com
 | `store.bookByIsbn[?(@.key =~ "^0-553" and @.value.price < 10)]` | Filtra mapa por chave e valor, preservando `Map<K,V>` |
 | `store.bookByIsbn..keys()` | Collection com as chaves do mapa |
 | `store.bookByIsbn..values()..count()` | Cardinalidade dos values do mapa |
+| `store.bookByIsbn..customEval(true)` | Equivale a `customEval(store.bookByIsbn, true)` |
 | `store..*` | Todos os valores do grafo |
 | `store..book..length()` | Número de livros |
 | `store..price..customEval(2, true)` | Equivale a `customEval(store..price, 2, true)` |
@@ -129,7 +131,7 @@ Invocadas ao final de um path; recebem implicitamente a collection acumulada com
 | `FunctionDescriptor.java` | Binding da collection implícita como primeiro argumento |
 | `ResolvedType.java` | Adição de `CollectionType`/`MapType` |
 | `PropertyDescriptor.java` | Campo `elementType` |
-| `ExpressionEnvironmentBuilder.java` | Introspecção de generic type parameters + contrato do primeiro parâmetro collection |
+| `ExpressionEnvironmentBuilder.java` | Introspecção de generic type parameters + contrato do primeiro parâmetro collection/map |
 
 ---
 
@@ -203,7 +205,7 @@ Esse helper deve ser reutilizado em:
 
 **Filtro sobre mapa:** sem novo `ResolvedType` público para entry. O `SemanticResolver` cria uma metadata sintética apenas para o contexto de filtro de mapa, expondo `@.key` e `@.value` como propriedades válidas do current element.
 
-**Contrato adicional para funções de collection:** Nenhuma mudança de API pública no builder. A extensão é semântica: `path..fn(a, b)` passa a ser elegível quando existir um `FunctionDescriptor` compatível com `fn(path, a, b)`, isto é, com primeiro parâmetro compatível com collection/vector após a eventual injeção de `MathContext`.
+**Contrato adicional para funções de collection/map:** Nenhuma mudança de API pública no builder. A extensão é semântica: `path..fn(a, b)` passa a ser elegível quando existir um `FunctionDescriptor` compatível com `fn(path, a, b)`, isto é, com primeiro parâmetro compatível com collection/vector/map após a eventual injeção de `MathContext`.
 
 ---
 
@@ -422,6 +424,7 @@ Estender `resolvePropertyChain` com propagação de tipo para os novos steps:
 | `WildcardStep` em `MapType` | `MapType(K, V)` | `CollectionType(V)` |
 | `FilterPredicateStep` em `MapType` | `MapType(K, V)` | `MapType(K, V)` |
 | `MapProjectionStep(KEYS/VALUES)` | `MapType(K, V)` | `CollectionType(K)` / `CollectionType(V)` |
+| `CollectionFunctionStep(name, args)` | `MapType(K, V)` | `descriptor.returnType()` |
 | `CollectionSliceStep` | `CollectionType(E)` / `VectorType` | mesmo que entrada |
 | `WildcardStep` | `CollectionType(E)` | `CollectionType(E)` — ativa vector mode |
 | `FilterPredicateStep` | `CollectionType(E)` | `CollectionType(E)` |
@@ -436,20 +439,20 @@ Estender `resolvePropertyChain` com propagação de tipo para os novos steps:
 - collection: resolver o sub-tree em sub-sessão com `"@"` resolvendo para o `elementType` da `CollectionType` corrente;
 - map: resolver `@.key` e `@.value` como aliases especiais do contexto corrente, sem criar objetos intermediários por entry.
 
-**Resolução de funções de collection:** `..<name>(arg1, arg2)` monta uma lista lógica de argumentos `[collectionAtual, arg1, arg2]` e procura candidatos no `FunctionCatalog` com aridade `argumentosExplícitos + 1`. Apenas descritores cujo primeiro parâmetro seja compatível com collection/vector participam da seleção. O binding final continua sendo `ResolvedFunctionBinding`, sem introduzir um catálogo paralelo.
+**Resolução de funções de collection/map:** `..<name>(arg1, arg2)` monta uma lista lógica de argumentos `[targetAtual, arg1, arg2]` e procura candidatos no `FunctionCatalog` com aridade `argumentosExplícitos + 1`. Apenas descritores cujo primeiro parâmetro seja compatível com o target corrente (`Collection`, `VectorType` ou `MapType`) participam da seleção. O binding final continua sendo `ResolvedFunctionBinding`, sem introduzir um catálogo paralelo.
 
-**Built-ins de map:** `..keys()` e `..values()` são tratados como built-ins sobre `MapType`. `..keys()` retorna `CollectionType(K)` e `..values()` retorna `CollectionType(V)`. Não dependem de overloads do `FunctionCatalog` na primeira versão.
+**Built-ins de map:** `..keys()` e `..values()` são tratados como built-ins sobre `MapType`. `..keys()` retorna `CollectionType(K)` e `..values()` retorna `CollectionType(V)`. Não dependem de overloads do `FunctionCatalog` na primeira versão e têm prioridade sobre funções registradas com o mesmo nome.
 
-**Propagação após função customizada:** Se `descriptor.returnType()` for `CollectionType` ou `VectorType.INSTANCE`, a chain permanece em vector mode e pode continuar com novos steps. Se o retorno for escalar ou objeto, a chain volta ao modo escalar.
+**Propagação após função customizada:** Se `descriptor.returnType()` for `CollectionType` ou `VectorType.INSTANCE`, a chain permanece em collection mode e pode continuar com novos steps. Se o retorno for `MapType`, a chain volta ao modo map. Se o retorno for escalar ou objeto, a chain volta ao modo escalar.
 
 **Erros semânticos novos:**
 - `INVALID_CURRENT_ELEMENT` — `@` fora de um predicado de filtro
 - `INVALID_MEMBER_ACCESS` — `CollectionIndexStep`/`MapKeyStep`/`WildcardStep` em tipo incompatível
 - `INVALID_MAP_PROPERTY_ACCESS` — `map.foo` é inválido; mapas só aceitam `["foo"]`, `[*]`, `.*`, filtro e `..keys()/..values()`
 - `INVALID_MAP_SUBSCRIPT` — combinações como `["a","b"]` ou `["a", 0]`
-- `TYPE_MISMATCH` — `VectorAggregationStep`/`CollectionFunctionStep` em tipo não-collection
+- `TYPE_MISMATCH` — `VectorAggregationStep` em tipo não-collection
 - `UNKNOWN_COLLECTION_FUNCTION` — nenhuma função elegível encontrada após `..`
-- `INCOMPATIBLE_COLLECTION_FUNCTION_ARGUMENTS` — overloads existem, mas não aceitam os argumentos após inserir a collection como argumento 0
+- `INCOMPATIBLE_COLLECTION_FUNCTION_ARGUMENTS` — overloads existem, mas não aceitam os argumentos após inserir o target corrente como argumento 0
 
 ---
 
@@ -466,7 +469,7 @@ WildcardStep          → ExecutableWildcard()
 CollectionSliceStep   → ExecutableSliceAccess(startNode?, endNode?)
 FilterPredicateStep   → ExecutableFilterPredicate(buildNode(predicate))
 DeepScanStep          → ExecutableDeepScan(propertyName?)
-CollectionFunctionStep → ExecutableCollectionFunction(binding, explicitArgumentNodes, vectorResult)
+CollectionFunctionStep → ExecutableCollectionFunction(binding, explicitArgumentNodes, resultMode)
 Map built-ins (keys/values) → ExecutableMapProjection(KEYS/VALUES)
 VectorAggregationStep → ExecutableVectorAggregation(kind)
 ```
@@ -498,10 +501,12 @@ record ExecutableDeepScan(@Nullable String propertyName) implements ExecutableAc
 record ExecutableCollectionFunction(
     ResolvedFunctionBinding binding,
     List<ExecutableNode> arguments,
-    boolean vectorResult
+    ResultMode resultMode
 ) implements ExecutableAccess {}
 record ExecutableMapProjection(MapProjectionKind kind) implements ExecutableAccess {}
 record ExecutableVectorAggregation(VectorAggregationKind kind) implements ExecutableAccess {}
+
+enum ResultMode { SCALAR, COLLECTION, MAP }
 ```
 
 ---
@@ -565,7 +570,11 @@ case ExecutableDeepScan scan -> {
     yield applyDeepScan(current, scan);
 }
 case ExecutableCollectionFunction function -> {
-    mode = function.vectorResult() ? NavigationMode.COLLECTION : NavigationMode.SCALAR;
+    mode = switch (function.resultMode()) {
+        case COLLECTION -> NavigationMode.COLLECTION;
+        case MAP -> NavigationMode.MAP;
+        case SCALAR -> NavigationMode.SCALAR;
+    };
     yield applyCollectionFunction(current, function, scope);
 }
 case ExecutableMapProjection projection -> {
@@ -688,6 +697,8 @@ private Object applyCollectionFunction(Object current, ExecutableCollectionFunct
     return runtimeServices.coerceToResolvedType(result, function.binding().returnType());
 }
 ```
+
+`current` pode ser `Collection`, `List`, `Map` ou valor já coerível para o primeiro parâmetro esperado pelo descritor.
 
 Idealmente, extrair um helper comum para invocação de `ResolvedFunctionBinding` e reutilizá-lo em `evaluateFunctionCall(...)` e `applyCollectionFunction(...)`, evitando duplicação de coerção, auditoria e tratamento de exceções.
 
@@ -816,13 +827,16 @@ store.book[*].price..sum()     → 53.92
 store..book..count()           → 4
 
 // Função custom via ExpressionEnvironmentBuilder
+store.bookByIsbn..customEval(true)    → equivale a customEval(store.bookByIsbn, true)
 store..price..customEval(2, true)   → equivale a customEval(store..price, 2, true)
 store..price..normalize()..count()  → chaining continua se normalize() retornar collection
+store.bookByIsbn..normalizeMap()..keys() → chaining continua se normalizeMap() retornar map
 
 // Erros semânticos esperados
 @.price (fora de filtro)       → INVALID_CURRENT_ELEMENT
 store.expensive..sum()         → TYPE_MISMATCH (scalar, não collection)
 store..price..round(2)         → UNKNOWN_COLLECTION_FUNCTION se não existir overload com 1º parâmetro collection
+store.bookByIsbn..round(2)     → UNKNOWN_COLLECTION_FUNCTION se não existir overload com 1º parâmetro map
 store.bookByIsbn.foo           → INVALID_MAP_PROPERTY_ACCESS
 ```
 
