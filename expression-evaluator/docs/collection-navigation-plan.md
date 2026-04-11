@@ -2,9 +2,9 @@
 
 ## Contexto
 
-O `expression-evaluator` já suporta navegação em objetos via dot-notation (`obj.prop`, `obj?.method(args)`). O objetivo é estender a gramática e o runtime para suportar navegação em collections e maps com sintaxe JSONPath, incluindo indexação (`[0]`), wildcards (`[*]`), deep scan (`..`), slices (`[0:2]`), filtros (`[?(@.price < 10)]`) e funções de agregação (`..sum()`).
+O `expression-evaluator` já suporta navegação em objetos via dot-notation (`obj.prop`, `obj?.method(args)`). O objetivo é estender a gramática e o runtime para suportar navegação em collections e maps com sintaxe JSONPath, incluindo indexação (`[0]`), wildcards (`[*]`), deep scan (`..`), slices (`[0:2]`), filtros (`[?(@.price < 10)]`) e funções de collection (`..sum()`, `..customEval(2, true)`).
 
-**Motivação:** Permitir expressões como `store.book[*].author`, `store..price`, `store.book[?(@.price < 10)].title` e `store.book[*].price..sum()` diretamente na linguagem de expressões.
+**Motivação:** Permitir expressões como `store.book[*].author`, `store..price`, `store.book[?(@.price < 10)].title`, `store.book[*].price..sum()` e `store..price..customEval(2, true)` diretamente na linguagem de expressões.
 
 ---
 
@@ -23,9 +23,9 @@ O `expression-evaluator` já suporta navegação em objetos via dot-notation (`o
 | `[start:end]` | Slice — da posição `start` (inclusive) até `end` (exclusive) |
 | `[?(<expr>)]` | Filtro — mantém elementos onde `<expr>` é verdadeiro |
 
-### Funções de Agregação (sufixo `..`)
+### Funções de Collection (sufixo `..`)
 
-Invocadas ao final de um path; recebem implicitamente a lista acumulada:
+Invocadas ao final de um path; recebem implicitamente a collection acumulada como primeiro argumento lógico:
 
 | Função | Saída |
 |---|---|
@@ -34,6 +34,14 @@ Invocadas ao final de um path; recebem implicitamente a lista acumulada:
 | `..min()` | Mínimo — `BigDecimal` |
 | `..max()` | Máximo — `BigDecimal` |
 | `..count()` / `..length()` / `..size()` | Cardinalidade — `BigDecimal` |
+| `..<func>(arg1, arg2, ...)` | Chama função do `FunctionCatalog` como `func(<collection>, arg1, arg2, ...)` |
+
+**Convenção para funções customizadas via `ExpressionEnvironmentBuilder`:**
+
+- `registerStaticProvider(...)` e `registerInstanceProvider(...)` continuam descobrindo funções normalmente; não é necessária nova API pública.
+- Em `store..price..customEval(2, true)`, a resolução trata a chamada como `customEval(store..price, 2, true)`.
+- O primeiro parâmetro declarado da função customizada, após o eventual `MathContext` injetado pelo builder, deve ser a collection corrente (`Collection`, `List` ou equivalente coerível para vetor).
+- Funções cujo primeiro parâmetro não seja collection continuam disponíveis apenas como chamadas globais normais, por exemplo `customEval(store..price, 2, true)`.
 
 ### Operadores de Filtro Adicionais (dentro de `[?(...)]`)
 
@@ -81,6 +89,7 @@ Invocadas ao final de um path; recebem implicitamente a lista acumulada:
 | `store..book[?(@.author =~ /.*REES/i)]` | Filtro com regex case-insensitive |
 | `store..*` | Todos os valores do grafo |
 | `store..book..length()` | Número de livros |
+| `store..price..customEval(2, true)` | Equivale a `customEval(store..price, 2, true)` |
 
 ---
 
@@ -95,9 +104,11 @@ Invocadas ao final de um path; recebem implicitamente a lista acumulada:
 | `SemanticAstBuilder.java` | Mapeamento dos novos contextos ANTLR |
 | `SemanticResolver.java` | Propagação de `CollectionType` |
 | `ExecutionPlanBuilder.java` | Compilação dos novos steps |
+| `FunctionCatalog.java` | Reuso da resolução de overloads para `..<func>(...)` |
+| `FunctionDescriptor.java` | Binding da collection implícita como primeiro argumento |
 | `ResolvedType.java` | Adição de `CollectionType` |
 | `PropertyDescriptor.java` | Campo `elementType` |
-| `ExpressionEnvironmentBuilder.java` | Introspecção de generic type parameters |
+| `ExpressionEnvironmentBuilder.java` | Introspecção de generic type parameters + contrato do primeiro parâmetro collection |
 
 ---
 
@@ -149,6 +160,8 @@ public sealed interface ResolvedType
 **Modificar `PropertyDescriptor.java`:** Adicionar `@Nullable ResolvedType elementType`.
 
 **Modificar `ExpressionEnvironmentBuilder.discoverTypeMetadata`:** Usar `java.lang.reflect.ParameterizedType` para extrair o tipo `E` de `Collection<E>` ou `List<E>`. Se `E` está registrado via `registerTypeHint`, `elementType = ObjectType(E.class)`. Caso contrário, `elementType = ResolvedTypes.fromJavaType(E)`.
+
+**Contrato adicional para funções de collection:** Nenhuma mudança de API pública no builder. A extensão é semântica: `path..fn(a, b)` passa a ser elegível quando existir um `FunctionDescriptor` compatível com `fn(path, a, b)`, isto é, com primeiro parâmetro compatível com collection/vector após a eventual injeção de `MathContext`.
 
 ---
 
@@ -230,7 +243,7 @@ memberChain
     | DOUBLE_PERIOD IDENTIFIER                                        # deepScanProperty
     | DOUBLE_PERIOD IDENTIFIER LPAREN
           (allEntityTypes (COMMA allEntityTypes)*)?
-      RPAREN                                                          # deepScanVectorFunction
+      RPAREN                                                          # collectionFunctionAccess
     | PERIOD IDENTIFIER                                               # propertyAccess        (existente)
     | SAFE_NAV IDENTIFIER                                             # safePropertyAccess    (existente)
     | PERIOD IDENTIFIER LPAREN ... RPAREN                             # methodCallAccess      (existente)
@@ -251,7 +264,7 @@ Adicionar ao `sealed interface MemberAccess` como inner records (padrão existen
 public sealed interface MemberAccess permits
     PropertyAccess, SafePropertyAccess, MethodCallAccess, SafeMethodCallAccess,
     CollectionIndexStep, CollectionSliceStep, WildcardStep,
-    FilterPredicateStep, DeepScanStep, VectorAggregationStep {}
+    FilterPredicateStep, DeepScanStep, CollectionFunctionStep, VectorAggregationStep {}
 
 // [0], [-1], [0,1]
 record CollectionIndexStep(List<ExpressionNode> indices) implements MemberAccess { ... }
@@ -270,6 +283,9 @@ record FilterPredicateStep(ExpressionNode predicate) implements MemberAccess { .
 
 // ..author, ..*
 record DeepScanStep(@Nullable String propertyName) implements MemberAccess { ... }
+
+// ..customEval(2, true)
+record CollectionFunctionStep(String name, List<ExpressionNode> arguments) implements MemberAccess { ... }
 
 // ..sum(), ..avg(), ..count()
 record VectorAggregationStep(VectorAggregationKind kind) implements MemberAccess { ... }
@@ -294,9 +310,19 @@ Adicionar ao `ExpressionVisitor`:
 
 - `visitDeepScanProperty` → `DeepScanStep("propertyName")`
 - `visitDeepScanWildcard` → `DeepScanStep(null)`
-- `visitDeepScanVectorFunction` → `VectorAggregationStep(resolveAggregationKind(name))`
+- `visitCollectionFunctionAccess` → `buildCollectionFunctionStep(name, args)`
 
 **`buildFilterPredicate`:** Nova classe interna `FilterPredicateVisitor` que transforma o contexto ANTLR `filterPredicate` em `ExpressionNode` (usando `BinaryOperationNode` com `AND`/`OR`, `REGEX_MATCH`, etc.).
+
+**`buildCollectionFunctionStep`:**
+```java
+private PropertyChainNode.MemberAccess buildCollectionFunctionStep(String name, List<ExpressionNode> arguments) {
+    if (isBuiltInVectorAggregation(name)) {
+        return new PropertyChainNode.VectorAggregationStep(resolveAggregationKind(name));
+    }
+    return new PropertyChainNode.CollectionFunctionStep(name, arguments);
+}
+```
 
 **`resolveAggregationKind`:**
 ```java
@@ -307,7 +333,7 @@ static VectorAggregationKind resolveAggregationKind(String name) {
         case "min"                     -> MIN;
         case "max"                     -> MAX;
         case "count", "length", "size" -> COUNT;
-        default -> throw new SemanticIssue(UNKNOWN_VECTOR_FUNCTION, ...);
+        default -> throw new IllegalArgumentException("unsupported built-in aggregation: " + name);
     };
 }
 ```
@@ -329,17 +355,23 @@ Estender `resolvePropertyChain` com propagação de tipo para os novos steps:
 | `FilterPredicateStep` | `CollectionType(E)` | `CollectionType(E)` |
 | `DeepScanStep(name)` | `ObjectType(C)` | `CollectionType(resolveProperty(name, C))` |
 | `DeepScanStep(null)` | `ObjectType(C)` | `CollectionType(UnknownType)` |
+| `CollectionFunctionStep(name, args)` | `CollectionType(E)` / `VectorType` | `descriptor.returnType()` |
 | `VectorAggregationStep(COUNT)` | `CollectionType(E)` | `ScalarType.NUMBER` |
 | `VectorAggregationStep(SUM/AVG/MIN/MAX)` | `CollectionType(E)` | `ScalarType.NUMBER` |
 | `PropertyAccess` em vector mode | `CollectionType(E)` | `CollectionType(resolveProperty(prop, E))` |
 
 **Resolução de predicados de filtro:** Resolver o sub-tree em sub-sessão com `"@"` resolvendo para o `elementType` da `CollectionType` corrente.
 
+**Resolução de funções de collection:** `..<name>(arg1, arg2)` monta uma lista lógica de argumentos `[collectionAtual, arg1, arg2]` e procura candidatos no `FunctionCatalog` com aridade `argumentosExplícitos + 1`. Apenas descritores cujo primeiro parâmetro seja compatível com collection/vector participam da seleção. O binding final continua sendo `ResolvedFunctionBinding`, sem introduzir um catálogo paralelo.
+
+**Propagação após função customizada:** Se `descriptor.returnType()` for `CollectionType` ou `VectorType.INSTANCE`, a chain permanece em vector mode e pode continuar com novos steps. Se o retorno for escalar ou objeto, a chain volta ao modo escalar.
+
 **Erros semânticos novos:**
 - `INVALID_CURRENT_ELEMENT` — `@` fora de um predicado de filtro
 - `INVALID_MEMBER_ACCESS` — `CollectionIndexStep`/`WildcardStep` em tipo não-collection
-- `TYPE_MISMATCH` — `VectorAggregationStep` em tipo não-collection
-- `UNKNOWN_VECTOR_FUNCTION` — nome de função desconhecida após `..`
+- `TYPE_MISMATCH` — `VectorAggregationStep`/`CollectionFunctionStep` em tipo não-collection
+- `UNKNOWN_COLLECTION_FUNCTION` — nenhuma função elegível encontrada após `..`
+- `INCOMPATIBLE_COLLECTION_FUNCTION_ARGUMENTS` — overloads existem, mas não aceitam os argumentos após inserir a collection como argumento 0
 
 ---
 
@@ -355,6 +387,7 @@ WildcardStep          → ExecutableWildcard()
 CollectionSliceStep   → ExecutableSliceAccess(startNode?, endNode?)
 FilterPredicateStep   → ExecutableFilterPredicate(buildNode(predicate))
 DeepScanStep          → ExecutableDeepScan(propertyName?)
+CollectionFunctionStep → ExecutableCollectionFunction(binding, explicitArgumentNodes, vectorResult)
 VectorAggregationStep → ExecutableVectorAggregation(kind)
 ```
 
@@ -373,13 +406,19 @@ sealed interface ExecutableAccess permits
     ExecutableFieldGet, ExecutableMethodInvoke,
     ReflectivePropertyAccess, ReflectiveMethodInvoke,
     ExecutableIndexAccess, ExecutableSliceAccess, ExecutableWildcard,
-    ExecutableFilterPredicate, ExecutableDeepScan, ExecutableVectorAggregation {}
+    ExecutableFilterPredicate, ExecutableDeepScan,
+    ExecutableCollectionFunction, ExecutableVectorAggregation {}
 
 record ExecutableIndexAccess(List<ExecutableNode> indices, boolean single) implements ExecutableAccess {}
 record ExecutableSliceAccess(@Nullable ExecutableNode start, @Nullable ExecutableNode end) implements ExecutableAccess {}
 record ExecutableWildcard() implements ExecutableAccess {}
 record ExecutableFilterPredicate(ExecutableNode predicate) implements ExecutableAccess {}
 record ExecutableDeepScan(@Nullable String propertyName) implements ExecutableAccess {}
+record ExecutableCollectionFunction(
+    ResolvedFunctionBinding binding,
+    List<ExecutableNode> arguments,
+    boolean vectorResult
+) implements ExecutableAccess {}
 record ExecutableVectorAggregation(VectorAggregationKind kind) implements ExecutableAccess {}
 ```
 
@@ -420,6 +459,10 @@ case ExecutableFilterPredicate filter -> {
 case ExecutableDeepScan scan -> {
     vectorMode = true;
     yield applyDeepScan(current, scan);
+}
+case ExecutableCollectionFunction function -> {
+    vectorMode = function.vectorResult();
+    yield applyCollectionFunction(current, function, scope);
 }
 case ExecutableVectorAggregation agg -> {
     vectorMode = false;
@@ -485,6 +528,23 @@ private List<Object> applyDeepScan(Object root, ExecutableDeepScan scan) {
 
 **`applyAggregation`:** Loop simples; sem `Stream` nas operações críticas (avaliar com JMH se necessário).
 
+**`applyCollectionFunction`:**
+```java
+private Object applyCollectionFunction(Object current, ExecutableCollectionFunction function, ExecutionScope scope) {
+    FunctionDescriptor descriptor = function.binding().descriptor();
+    Object[] args = new Object[descriptor.arity()];
+    args[0] = runtimeServices.coerce(current, descriptor.parameterTypes().getFirst());
+    for (int index = 0; index < function.arguments().size(); index++) {
+        Object value = evaluateExpr(function.arguments().get(index), scope);
+        args[index + 1] = runtimeServices.coerce(value, descriptor.parameterTypes().get(index + 1));
+    }
+    Object result = descriptor.invoke(args);
+    return runtimeServices.coerceToResolvedType(result, function.binding().returnType());
+}
+```
+
+Idealmente, extrair um helper comum para invocação de `ResolvedFunctionBinding` e reutilizá-lo em `evaluateFunctionCall(...)` e `applyCollectionFunction(...)`, evitando duplicação de coerção, auditoria e tratamento de exceções.
+
 **`mapElements`:** `ArrayList` pré-alocado com `list.size()`:
 ```java
 private List<Object> mapElements(Object collection, ThrowingFunction<Object, Object> mapper) {
@@ -511,7 +571,7 @@ private List<Object> mapElements(Object collection, ThrowingFunction<Object, Obj
 | Identity hash em `Set<Integer>` para ciclos | `applyDeepScan` — evita `IdentityHashMap` |
 | Regex compilado em `ExecutionPlanBuilder` | Uma vez, na compilação |
 | `intValueExact()` para índices | `applyIndex` — evita perda silenciosa de `intValue()` |
-| `MethodHandle` precompilado para typed path | Existente — mantido nos novos steps |
+| `MethodHandle` precompilado para typed path e function catalog | Existente — mantido nos novos steps |
 
 ---
 
@@ -532,10 +592,10 @@ catalog/
   PropertyDescriptor.java          (modificado: +elementType)
 
 internal/ast/
-  PropertyChainNode.java           (modificado: +6 MemberAccess variants)
+  PropertyChainNode.java           (modificado: +7 MemberAccess variants)
 
 internal/runtime/
-  ExecutablePropertyChain.java     (modificado: +6 ExecutableAccess variants)
+  ExecutablePropertyChain.java     (modificado: +7 ExecutableAccess variants)
   AbstractObjectEvaluator.java     (modificado: currentFilterElement + helpers)
   SemanticResolver.java            (modificado: CollectionType propagation)
   ExecutionPlanBuilder.java        (modificado: compilação dos novos steps)
@@ -550,9 +610,9 @@ internal/runtime/
 |---|---|---|
 | P1 | Reorganização | Mover `TypeIntrospectionSupport`/`ReflectiveAccessCache`; criar `internal.navigation`; `CollectionType`; `PropertyDescriptor.elementType` |
 | P2 | Gramática + AST | Tokens, regras ANTLR, `MemberAccess` variants, `SemanticAstBuilder` extensions |
-| P3 | Semântica | `SemanticResolver` com propagação de `CollectionType` e novos erros |
-| P4 | Execution Plan | `ExecutionPlanBuilder` + `ExecutableAccess` variants |
-| P5 | Avaliador core | Index, slice, wildcard, filter, agregação em `AbstractObjectEvaluator` |
+| P3 | Semântica | `SemanticResolver` com propagação de `CollectionType`, binding de `..<func>(...)` e novos erros |
+| P4 | Execution Plan | `ExecutionPlanBuilder` + `ExecutableAccess` variants, incluindo função de collection |
+| P5 | Avaliador core | Index, slice, wildcard, filter, agregação e função customizada em `AbstractObjectEvaluator` |
 | P6 | Deep scan | `applyDeepScan` com BFS + detecção de ciclos |
 | P7 | Testes | `CollectionNavigationTest` + suite de regressão |
 
@@ -598,9 +658,14 @@ store..price                   → todos os preços
 store.book[*].price..sum()     → 53.92
 store..book..count()           → 4
 
+// Função custom via ExpressionEnvironmentBuilder
+store..price..customEval(2, true)   → equivale a customEval(store..price, 2, true)
+store..price..normalize()..count()  → chaining continua se normalize() retornar collection
+
 // Erros semânticos esperados
 @.price (fora de filtro)       → INVALID_CURRENT_ELEMENT
 store.expensive..sum()         → TYPE_MISMATCH (scalar, não collection)
+store..price..round(2)         → UNKNOWN_COLLECTION_FUNCTION se não existir overload com 1º parâmetro collection
 ```
 
 ### Comandos
