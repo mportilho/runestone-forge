@@ -35,6 +35,8 @@ mvn clean test -pl expression-evaluator -Dtest=ExpressionCalculatorTest#methodNa
 mvn versions:set -DnewVersion=1.2.0 versions:commit
 ```
 
+> Never commit automatically
+
 > **JDK 21 test note**: Tests require `-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true` for Mockito/ByteBuddy. These flags are already configured in each module's `pom.xml` under `maven-surefire-plugin`.
 >
 > **Sandbox note**: In restricted sandboxed environments, the full Maven test suite may still fail during Mockito initialization with ByteBuddy self-attach errors even with the Surefire flags configured. If that happens, rerun the same Maven test command outside the sandbox before treating it as a code regression.
