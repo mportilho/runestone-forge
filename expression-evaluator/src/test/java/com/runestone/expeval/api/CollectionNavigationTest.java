@@ -816,4 +816,221 @@ class CollectionNavigationTest {
             }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Maps with complex object keys
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("Filter on maps with complex object keys")
+    class MapComplexKeyFilter {
+
+        record UserId(long id, String domain) {
+            @Override
+            public String toString() {
+                return id + "@" + domain;
+            }
+        }
+
+        record Account(long accountId, String type, BigDecimal balance) {}
+
+        @Test
+        @DisplayName("filter map entries by key's numeric property (id < threshold)")
+        void shouldFilterMapEntriesByKeyProperty() {
+            // Map<UserId, Account> with 3 entries; filter by UserId.id < 2
+            UserId key1 = new UserId(1, "acme.com");
+            UserId key2 = new UserId(2, "acme.com");
+            UserId key3 = new UserId(3, "acme.com");
+
+            var accountMap = Map.of(
+                    key1, new Account(100, "checking", new BigDecimal("5000")),
+                    key2, new Account(200, "savings", new BigDecimal("10000")),
+                    key3, new Account(300, "investment", new BigDecimal("25000"))
+            );
+
+            // Filter by key's id property
+            BigDecimal result = MathExpression.compile(
+                    "accounts..keys()[?(@.id < maxId)]..count()",
+                    ExpressionEnvironment.builder()
+                            .registerExternalSymbol("accounts", accountMap, true)
+                            .registerExternalSymbol("maxId", 3, true)
+                            .build())
+                    .compute(Map.of(
+                            "accounts", accountMap,
+                            "maxId", 3
+                    ));
+
+            assertThat(result).isEqualByComparingTo("2");  // key1 (id=1) and key2 (id=2)
+        }
+
+        @Test
+        @DisplayName("filter map keys by string property (domain matching)")
+        void shouldFilterMapKeysByStringProperty() {
+            UserId acme1 = new UserId(1, "acme.com");
+            UserId acme2 = new UserId(2, "acme.com");
+            UserId corp1 = new UserId(3, "corp.net");
+
+            var accounts = Map.of(
+                    acme1, new Account(100, "checking", new BigDecimal("5000")),
+                    acme2, new Account(200, "savings", new BigDecimal("10000")),
+                    corp1, new Account(300, "business", new BigDecimal("50000"))
+            );
+
+            // Count keys with domain = "acme.com"
+            BigDecimal result = MathExpression.compile(
+                    "accounts..keys()[?(@.domain = targetDomain)]..count()",
+                    ExpressionEnvironment.builder()
+                            .registerExternalSymbol("accounts", accounts, true)
+                            .registerExternalSymbol("targetDomain", "acme.com", true)
+                            .build())
+                    .compute(Map.of(
+                            "accounts", accounts,
+                            "targetDomain", "acme.com"
+                    ));
+
+            assertThat(result).isEqualByComparingTo("2");  // acme1 and acme2
+        }
+
+        @Test
+        @DisplayName("filter map keys with AND condition on key properties")
+        void shouldFilterMapKeysWithAndCondition() {
+            UserId user1 = new UserId(10, "domain1");
+            UserId user2 = new UserId(20, "domain1");
+            UserId user3 = new UserId(30, "domain2");
+
+            var data = Map.of(
+                    user1, "value1",
+                    user2, "value2",
+                    user3, "value3"
+            );
+
+            // Filter keys where id >= 15 AND domain = "domain1"
+            BigDecimal result = MathExpression.compile(
+                    "collection..keys()[?(@.id >= minId and @.domain = dom)]..count()",
+                    ExpressionEnvironment.builder()
+                            .registerExternalSymbol("collection", data, true)
+                            .registerExternalSymbol("minId", 15, true)
+                            .registerExternalSymbol("dom", "domain1", true)
+                            .build())
+                    .compute(Map.of(
+                            "collection", data,
+                            "minId", 15,
+                            "dom", "domain1"
+                    ));
+
+            assertThat(result).isEqualByComparingTo("1");  // Only user2 (id=20, domain1)
+        }
+
+        @Test
+        @DisplayName("filter map keys with OR condition")
+        void shouldFilterMapKeysWithOrCondition() {
+            UserId key1 = new UserId(5, "org1");
+            UserId key2 = new UserId(15, "org2");
+            UserId key3 = new UserId(25, "org1");
+            UserId key4 = new UserId(35, "org3");
+
+            var items = Map.of(
+                    key1, "item1",
+                    key2, "item2",
+                    key3, "item3",
+                    key4, "item4"
+            );
+
+            // Filter keys where id > 20 OR domain = "org1"
+            BigDecimal result = MathExpression.compile(
+                    "items..keys()[?(@.id > threshold or @.domain = org)]..count()",
+                    ExpressionEnvironment.builder()
+                            .registerExternalSymbol("items", items, true)
+                            .registerExternalSymbol("threshold", 20, true)
+                            .registerExternalSymbol("org", "org1", true)
+                            .build())
+                    .compute(Map.of(
+                            "items", items,
+                            "threshold", 20,
+                            "org", "org1"
+                    ));
+
+            assertThat(result).isEqualByComparingTo("3");  // key1 (org1), key3 (org1), key4 (id=35)
+        }
+
+        @Test
+        @DisplayName("access and aggregate values for entries whose keys match filter")
+        void shouldAggregateValuesForFilteredKeys() {
+            UserId acme1 = new UserId(1, "acme");
+            UserId acme2 = new UserId(2, "acme");
+            UserId beta1 = new UserId(1, "beta");
+
+            var balances = Map.of(
+                    acme1, new BigDecimal("1000"),
+                    acme2, new BigDecimal("2000"),
+                    beta1, new BigDecimal("5000")
+            );
+
+            // Sum balances for entries where key domain = "acme"
+            BigDecimal result = MathExpression.compile(
+                    "accounts..keys()[?(@.domain = domain)]..count()",
+                    ExpressionEnvironment.builder()
+                            .registerExternalSymbol("accounts", balances, true)
+                            .registerExternalSymbol("domain", "acme", true)
+                            .build())
+                    .compute(Map.of(
+                            "accounts", balances,
+                            "domain", "acme"
+                    ));
+
+            assertThat(result).isEqualByComparingTo("2");  // acme1 and acme2
+        }
+
+        @Test
+        @DisplayName("filter map keys when no entries match the condition")
+        void shouldReturnZeroWhenNoKeysMatch() {
+            UserId key1 = new UserId(1, "test1");
+            UserId key2 = new UserId(2, "test2");
+
+            var data = Map.of(
+                    key1, "value1",
+                    key2, "value2"
+            );
+
+            BigDecimal result = MathExpression.compile(
+                    "records..keys()[?(@.id > threshold)]..count()",
+                    ExpressionEnvironment.builder()
+                            .registerExternalSymbol("records", data, true)
+                            .registerExternalSymbol("threshold", 100, true)
+                            .build())
+                    .compute(Map.of(
+                            "records", data,
+                            "threshold", 100
+                    ));
+
+            assertThat(result).isEqualByComparingTo("0");
+        }
+
+        @Test
+        @DisplayName("filter map keys when all entries match the condition")
+        void shouldReturnAllWhenAllKeysMatch() {
+            UserId key1 = new UserId(1, "high");
+            UserId key2 = new UserId(2, "high");
+            UserId key3 = new UserId(3, "high");
+
+            var collection = Map.of(
+                    key1, "data1",
+                    key2, "data2",
+                    key3, "data3"
+            );
+
+            BigDecimal result = MathExpression.compile(
+                    "collection..keys()[?(@.domain = high)]..count()",
+                    ExpressionEnvironment.builder()
+                            .registerExternalSymbol("collection", collection, true)
+                            .registerExternalSymbol("high", "high", true)
+                            .build())
+                    .compute(Map.of(
+                            "collection", collection,
+                            "high", "high"
+                    ));
+
+            assertThat(result).isEqualByComparingTo("3");  // All keys match
+        }
+    }
 }
