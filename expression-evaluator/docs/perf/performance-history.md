@@ -2,7 +2,7 @@
 
 ## Known Hot-Paths & Discarded Hypotheses
 
-- None recorded yet.
+- `compileTypedNestedProperty`: removing `Optional` wrappers from hot lookup sites and caching legacy-chain classification did not produce a win worth keeping; the measurable compile-path waste was duplicated typed-access resolution inside `ExecutionPlanBuilder`.
 
 ## PERF-001: Validate collection-navigation implementation against previous baseline
 
@@ -45,3 +45,18 @@
 **Decision:** ADJUST
 **Reason:** The fast path recovered a meaningful part of the regression for typed method calls, but the nested-property compile and runtime cases remained close to the regressed baseline and still did not return to `403cf47` levels.
 **Notes:** This points to additional compile-time overhead outside the evaluator fast path, likely earlier in the parse/AST/resolution pipeline.
+
+## PERF-003: Eliminate duplicated typed-access resolution in `ExecutionPlanBuilder`
+
+**Date:** 2026-04-11
+
+**Scenario:** Compare the current local working tree after the legacy fast path against a follow-up optimization aimed specifically at `compileTypedNestedProperty`.
+**Hypothesis:** `ExecutionPlanBuilder` was resolving typed property and method descriptors twice per step, once to build the executable access and again to infer the next type, and collapsing that work should shave compile time for simple typed chains.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | B/op (B→A) |
+|-----------|---------------:|--------------:|----------------:|-----------:|
+| `compileTypedNestedProperty` | 34900.205 | 33983.155 | +2.63% | 16440.913 → 16464.059 |
+
+**Decision:** ACCEPT
+**Reason:** The improvement is modest but positive and the change is low-risk because it removes duplicated descriptor lookup without changing runtime semantics.
+**Notes:** Allocation remained effectively flat. The benchmark still sits above the original `403cf47` baseline, so the remaining gap is likely outside the duplicated access-resolution path.

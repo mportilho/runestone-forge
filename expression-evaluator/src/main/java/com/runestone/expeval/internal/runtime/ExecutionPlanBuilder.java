@@ -479,8 +479,16 @@ final class ExecutionPlanBuilder {
             if (currentType instanceof ObjectType objectType) {
                 TypeMetadata metadata = typeHintCatalog.find(objectType.javaClass()).orElse(null);
                 if (metadata != null) {
-                    steps.add(buildStaticAccess(access, argumentNodes, model, metadata, typeHintCatalog, safe));
-                    currentType = nextType(access, model, metadata, typeHintCatalog);
+                    TypedAccessStep typedStep = buildTypedAccessStep(
+                            access,
+                            argumentNodes,
+                            model,
+                            metadata,
+                            typeHintCatalog,
+                            safe
+                    );
+                    steps.add(typedStep.access());
+                    currentType = typedStep.nextType();
                     continue;
                 }
             }
@@ -521,8 +529,16 @@ final class ExecutionPlanBuilder {
             if (currentType instanceof ObjectType objectType) {
                 TypeMetadata metadata = typeHintCatalog.find(objectType.javaClass()).orElse(null);
                 if (metadata != null) {
-                    steps.add(buildStaticAccess(access, argumentNodes, model, metadata, typeHintCatalog, safe));
-                    currentType = nextType(access, model, metadata, typeHintCatalog);
+                    TypedAccessStep typedStep = buildTypedAccessStep(
+                            access,
+                            argumentNodes,
+                            model,
+                            metadata,
+                            typeHintCatalog,
+                            safe
+                    );
+                    steps.add(typedStep.access());
+                    currentType = typedStep.nextType();
                     continue;
                 }
             }
@@ -545,7 +561,7 @@ final class ExecutionPlanBuilder {
         return true;
     }
 
-    private ExecutablePropertyChain.ExecutableAccess buildStaticAccess(
+    private TypedAccessStep buildTypedAccessStep(
             PropertyChainNode.MemberAccess access,
             List<ExecutableNode> argumentNodes,
             SemanticModel model,
@@ -554,56 +570,72 @@ final class ExecutionPlanBuilder {
             boolean safe) {
         return switch (access) {
             case PropertyChainNode.PropertyAccess propertyAccess -> {
-                var descriptor = metadata.properties().get(propertyAccess.name());
+                PropertyDescriptor descriptor = metadata.properties().get(propertyAccess.name());
                 if (descriptor == null) {
                     throw new IllegalStateException("missing property metadata for '" + propertyAccess.name()
                                                     + "' on " + metadata.javaClass().getName());
                 }
-                yield new ExecutablePropertyChain.ExecutableFieldGet(
-                        propertyAccess.name(),
-                        descriptor.getter(),
-                        descriptor.resolvedType(),
-                        safe
+                yield new TypedAccessStep(
+                        new ExecutablePropertyChain.ExecutableFieldGet(
+                                propertyAccess.name(),
+                                descriptor.getter(),
+                                descriptor.resolvedType(),
+                                safe
+                        ),
+                        descriptor.resolvedType()
                 );
             }
             case PropertyChainNode.SafePropertyAccess safePropertyAccess -> {
-                var descriptor = metadata.properties().get(safePropertyAccess.name());
+                PropertyDescriptor descriptor = metadata.properties().get(safePropertyAccess.name());
                 if (descriptor == null) {
                     throw new IllegalStateException("missing property metadata for '" + safePropertyAccess.name()
                                                     + "' on " + metadata.javaClass().getName());
                 }
-                yield new ExecutablePropertyChain.ExecutableFieldGet(
-                        safePropertyAccess.name(),
-                        descriptor.getter(),
-                        descriptor.resolvedType(),
-                        true
+                yield new TypedAccessStep(
+                        new ExecutablePropertyChain.ExecutableFieldGet(
+                                safePropertyAccess.name(),
+                                descriptor.getter(),
+                                descriptor.resolvedType(),
+                                true
+                        ),
+                        descriptor.resolvedType()
                 );
             }
             case PropertyChainNode.MethodCallAccess methodCall -> {
                 MethodDescriptor descriptor = resolveMethodDescriptor(metadata, methodCall, model, typeHintCatalog);
-                yield new ExecutablePropertyChain.ExecutableMethodInvoke(
-                        methodCall.name(),
-                        descriptor.handle(),
-                        argumentNodes,
-                        descriptor.parameterTypes(),
-                        descriptor.returnType(),
-                        safe
+                yield new TypedAccessStep(
+                        new ExecutablePropertyChain.ExecutableMethodInvoke(
+                                methodCall.name(),
+                                descriptor.handle(),
+                                argumentNodes,
+                                descriptor.parameterTypes(),
+                                descriptor.returnType(),
+                                safe
+                        ),
+                        descriptor.returnType()
                 );
             }
             case PropertyChainNode.SafeMethodCallAccess safeMethodCall -> {
-                PropertyChainNode.MethodCallAccess asMethodCall =
-                        new PropertyChainNode.MethodCallAccess(safeMethodCall.name(), safeMethodCall.arguments());
-                MethodDescriptor descriptor = resolveMethodDescriptor(metadata, asMethodCall, model, typeHintCatalog);
-                yield new ExecutablePropertyChain.ExecutableMethodInvoke(
+                MethodDescriptor descriptor = resolveMethodDescriptor(
+                        metadata,
                         safeMethodCall.name(),
-                        descriptor.handle(),
-                        argumentNodes,
-                        descriptor.parameterTypes(),
-                        descriptor.returnType(),
-                        true
+                        safeMethodCall.arguments(),
+                        model,
+                        typeHintCatalog
+                );
+                yield new TypedAccessStep(
+                        new ExecutablePropertyChain.ExecutableMethodInvoke(
+                                safeMethodCall.name(),
+                                descriptor.handle(),
+                                argumentNodes,
+                                descriptor.parameterTypes(),
+                                descriptor.returnType(),
+                                true
+                        ),
+                        descriptor.returnType()
                 );
             }
-            default -> throw new IllegalStateException("Unexpected access type in buildStaticAccess: " + access);
+            default -> throw new IllegalStateException("Unexpected access type in buildTypedAccessStep: " + access);
         };
     }
 
@@ -624,59 +656,42 @@ final class ExecutionPlanBuilder {
         };
     }
 
-    private ResolvedType nextType(
-            PropertyChainNode.MemberAccess access,
-            SemanticModel model,
-            TypeMetadata metadata,
-            TypeHintCatalog typeHintCatalog) {
-        return switch (access) {
-            case PropertyChainNode.PropertyAccess propertyAccess -> {
-                var descriptor = metadata.properties().get(propertyAccess.name());
-                if (descriptor == null) {
-                    throw new IllegalStateException("missing property metadata for '" + propertyAccess.name()
-                                                    + "' on " + metadata.javaClass().getName());
-                }
-                yield descriptor.resolvedType();
-            }
-            case PropertyChainNode.SafePropertyAccess safePropertyAccess -> {
-                var descriptor = metadata.properties().get(safePropertyAccess.name());
-                if (descriptor == null) {
-                    throw new IllegalStateException("missing property metadata for '" + safePropertyAccess.name()
-                                                    + "' on " + metadata.javaClass().getName());
-                }
-                yield descriptor.resolvedType();
-            }
-            case PropertyChainNode.MethodCallAccess methodCall ->
-                    resolveMethodDescriptor(metadata, methodCall, model, typeHintCatalog).returnType();
-            case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
-                    resolveMethodDescriptor(metadata,
-                            new PropertyChainNode.MethodCallAccess(safeMethodCall.name(), safeMethodCall.arguments()),
-                            model, typeHintCatalog).returnType();
-            default -> throw new IllegalStateException("Unexpected access type in nextType: " + access);
-        };
-    }
-
     private MethodDescriptor resolveMethodDescriptor(
             TypeMetadata metadata,
             PropertyChainNode.MethodCallAccess methodCall,
             SemanticModel model,
             TypeHintCatalog typeHintCatalog) {
-        List<MethodDescriptor> candidates = metadata.methods().get(methodCall.name());
+        return resolveMethodDescriptor(
+                metadata,
+                methodCall.name(),
+                methodCall.arguments(),
+                model,
+                typeHintCatalog
+        );
+    }
+
+    private MethodDescriptor resolveMethodDescriptor(
+            TypeMetadata metadata,
+            String methodName,
+            List<ExpressionNode> arguments,
+            SemanticModel model,
+            TypeHintCatalog typeHintCatalog) {
+        List<MethodDescriptor> candidates = metadata.methods().get(methodName);
         if (candidates == null || candidates.isEmpty()) {
-            throw new IllegalStateException("missing method metadata for '" + methodCall.name()
+            throw new IllegalStateException("missing method metadata for '" + methodName
                                             + "' on " + metadata.javaClass().getName());
         }
 
         List<MethodDescriptor> arityMatches = candidates.stream()
-                .filter(candidate -> candidate.arity() == methodCall.arguments().size())
+                .filter(candidate -> candidate.arity() == arguments.size())
                 .toList();
         if (arityMatches.isEmpty()) {
-            throw new IllegalStateException("missing method overload for '" + methodCall.name()
-                                            + "' with arity " + methodCall.arguments().size()
+            throw new IllegalStateException("missing method overload for '" + methodName
+                                            + "' with arity " + arguments.size()
                                             + " on " + metadata.javaClass().getName());
         }
 
-        List<ResolvedType> argumentTypes = methodCall.arguments().stream()
+        List<ResolvedType> argumentTypes = arguments.stream()
                 .map(argument -> model.findResolvedType(argument.nodeId()).orElse(UnknownType.INSTANCE))
                 .toList();
 
@@ -686,16 +701,22 @@ final class ExecutionPlanBuilder {
                 continue;
             }
             if (match != null) {
-                throw new IllegalStateException("ambiguous method metadata for '" + methodCall.name()
+                throw new IllegalStateException("ambiguous method metadata for '" + methodName
                                                 + "' on " + metadata.javaClass().getName());
             }
             match = candidate;
         }
         if (match == null) {
-            throw new IllegalStateException("missing compatible method overload for '" + methodCall.name()
+            throw new IllegalStateException("missing compatible method overload for '" + methodName
                                             + "' on " + metadata.javaClass().getName());
         }
         return match;
+    }
+
+    private record TypedAccessStep(
+            ExecutablePropertyChain.ExecutableAccess access,
+            ResolvedType nextType
+    ) {
     }
 
     private boolean matchesMethodArguments(
