@@ -77,3 +77,27 @@
 **Decision:** ACCEPT
 **Reason:** The fast path removes the exception-heavy temporal parsing path for a literal that is always a string in this benchmark, and the measured compile-time gain is well above the acceptance threshold.
 **Notes:** The allocation drop is material as well, which is consistent with eliminating repeated `DateTimeParseException` construction on the hot path.
+
+## PERF-005: Baseline for collection-navigation evaluation performance
+
+**Date:** 2026-04-12
+
+**Scenario:** Establish baseline performance characteristics for the new collection-navigation feature across six evaluation patterns: index access, map projections, custom functions, list/map filtering, and deep scans.
+**Hypothesis:** Collection-navigation paths should exhibit predictable performance scaling with operation complexity, with filter predicates having similar cost regardless of collection type.
+
+| Benchmark | ns/op | B/op | Relative to Index | Notes |
+|-----------|------:|-----:|------------------:|-------|
+| `indexAccess` | 112.7 | 136.0 | 1.0× | Simple array index (baseline) |
+| `mapValuesCount` | 207.3 | 224.0 | 1.8× | Map value projection |
+| `customFunctionCount` | 426.7 | 296.0 | 3.8× | Custom function on collection |
+| `listFilterCount` | 667.3 | 328.0 | 5.9× | List filter with predicate |
+| `mapFilterCount` | 643.2 | 328.0 | 5.7× | Map filter with predicate |
+| `deepScanCount` | 4488.3 | 1168.1 | 39.8× | Deep recursive traversal |
+
+**Decision:** ACCEPT
+**Reason:** Baseline is established and shows expected scaling. List and map filter performance parity confirms consistent implementation. Allocations scale linearly with operation complexity, indicating no pathological allocator behavior.
+**Notes:** 
+- Filter predicates cost ~5.8× baseline regardless of collection type (list/map parity).
+- Deep scan cost scales appropriately for recursive traversal through nested structures.
+- All expressions are pre-compiled; benchmark measures evaluation only, not compilation.
+- Expression bug fixed during benchmarking: `MAP_FILTER_EXPRESSION` had incorrect property path (`@.value.price` → `@.price`).
