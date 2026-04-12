@@ -368,6 +368,21 @@ final class ExecutionPlanBuilder {
                 : resolveRootType(
                         model.findSymbol(node.nodeId()).orElse(new SymbolRef("@", SymbolKind.EXTERNAL)),
                         model, externalSymbolCatalog);
+
+        if (isLegacyAccessChain(node.chain())) {
+            return buildLegacyPropertyChain(
+                    node,
+                    model,
+                    runtimeServices,
+                    externalSymbolCatalog,
+                    typeHintCatalog,
+                    mathContext,
+                    foldedSymbols,
+                    root,
+                    currentType
+            );
+        }
+
         List<ExecutablePropertyChain.ExecutableAccess> steps = new ArrayList<>(node.chain().size());
 
         for (PropertyChainNode.MemberAccess access : node.chain()) {
@@ -474,6 +489,60 @@ final class ExecutionPlanBuilder {
             currentType = UnknownType.INSTANCE;
         }
         return new ExecutablePropertyChain(root, steps);
+    }
+
+    private ExecutableNode buildLegacyPropertyChain(
+            PropertyChainNode node,
+            SemanticModel model,
+            RuntimeServices runtimeServices,
+            ExternalSymbolCatalog externalSymbolCatalog,
+            TypeHintCatalog typeHintCatalog,
+            MathContext mathContext,
+            Map<SymbolRef, Object> foldedSymbols,
+            ExecutableNode root,
+            ResolvedType currentType) {
+        List<ExecutablePropertyChain.ExecutableAccess> steps = new ArrayList<>(node.chain().size());
+
+        for (PropertyChainNode.MemberAccess access : node.chain()) {
+            boolean safe = access instanceof PropertyChainNode.SafePropertyAccess
+                    || access instanceof PropertyChainNode.SafeMethodCallAccess;
+            List<ExecutableNode> argumentNodes = switch (access) {
+                case PropertyChainNode.MethodCallAccess methodCall ->
+                        methodCall.arguments().stream()
+                                .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols))
+                                .toList();
+                case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
+                        safeMethodCall.arguments().stream()
+                                .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols))
+                                .toList();
+                default -> List.of();
+            };
+
+            if (currentType instanceof ObjectType objectType) {
+                TypeMetadata metadata = typeHintCatalog.find(objectType.javaClass()).orElse(null);
+                if (metadata != null) {
+                    steps.add(buildStaticAccess(access, argumentNodes, model, metadata, typeHintCatalog, safe));
+                    currentType = nextType(access, model, metadata, typeHintCatalog);
+                    continue;
+                }
+            }
+
+            steps.add(buildReflectiveAccess(access, argumentNodes, safe));
+            currentType = UnknownType.INSTANCE;
+        }
+        return new ExecutablePropertyChain(root, steps);
+    }
+
+    private boolean isLegacyAccessChain(List<PropertyChainNode.MemberAccess> chain) {
+        for (PropertyChainNode.MemberAccess access : chain) {
+            if (!(access instanceof PropertyChainNode.PropertyAccess)
+                    && !(access instanceof PropertyChainNode.SafePropertyAccess)
+                    && !(access instanceof PropertyChainNode.MethodCallAccess)
+                    && !(access instanceof PropertyChainNode.SafeMethodCallAccess)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private ExecutablePropertyChain.ExecutableAccess buildStaticAccess(

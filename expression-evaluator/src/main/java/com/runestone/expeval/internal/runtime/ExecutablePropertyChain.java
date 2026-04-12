@@ -19,12 +19,28 @@ import java.util.Objects;
  */
 record ExecutablePropertyChain(
         ExecutableNode root,
-        List<ExecutableAccess> chain
+        List<ExecutableAccess> chain,
+        boolean legacyOnly
 ) implements ExecutableNode {
 
     ExecutablePropertyChain {
         Objects.requireNonNull(root, "root must not be null");
         chain = List.copyOf(Objects.requireNonNull(chain, "chain must not be null"));
+        legacyOnly = chain.stream().allMatch(ExecutablePropertyChain::isLegacyAccess);
+    }
+
+    ExecutablePropertyChain(ExecutableNode root, List<ExecutableAccess> chain) {
+        this(root, chain, false);
+    }
+
+    private static boolean isLegacyAccess(ExecutableAccess access) {
+        return switch (access) {
+            case ExecutableFieldGet ignored -> true;
+            case ExecutableMethodInvoke ignored -> true;
+            case ReflectivePropertyAccess ignored -> true;
+            case ReflectiveMethodInvoke ignored -> true;
+            default -> false;
+        };
     }
 
     sealed interface ExecutableAccess permits

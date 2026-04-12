@@ -231,10 +231,88 @@ public final class SemanticResolver {
                             "'@' may only be used inside a filter predicate [?(...)]", node.sourceSpan());
                     return UnknownType.INSTANCE;
                 }
+                if (isLegacyAccessChain(node.chain())) {
+                    return resolveLegacyPropertyChain(filterElementType, node.chain(), node);
+                }
                 return resolveChainFrom(filterElementType, node.chain(), node, true);
             }
             ResolvedType current = resolveRootType(node);
+            if (isLegacyAccessChain(node.chain())) {
+                return resolveLegacyPropertyChain(current, node.chain(), node);
+            }
             return resolveChainFrom(current, node.chain(), node, false);
+        }
+
+        private ResolvedType resolveLegacyPropertyChain(
+                ResolvedType start,
+                List<PropertyChainNode.MemberAccess> chain,
+                PropertyChainNode node) {
+            ResolvedType current = start;
+
+            for (PropertyChainNode.MemberAccess access : chain) {
+                boolean isSafe = access instanceof PropertyChainNode.SafePropertyAccess
+                        || access instanceof PropertyChainNode.SafeMethodCallAccess;
+                List<ResolvedType> argumentTypes = switch (access) {
+                    case PropertyChainNode.MethodCallAccess methodCall ->
+                            methodCall.arguments().stream().map(this::resolveExpression).toList();
+                    case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
+                            safeMethodCall.arguments().stream().map(this::resolveExpression).toList();
+                    default -> List.of();
+                };
+
+                if (current == UnknownType.INSTANCE || current == NullType.INSTANCE) {
+                    if (isSafe) {
+                        current = NullType.INSTANCE;
+                    }
+                    continue;
+                }
+                if (!(current instanceof ObjectType objectType)) {
+                    if (isSafe) {
+                        current = NullType.INSTANCE;
+                        continue;
+                    }
+                    error("INVALID_MEMBER_ACCESS",
+                            "type " + current + " does not support member access", node.sourceSpan());
+                    return UnknownType.INSTANCE;
+                }
+                TypeMetadata metadata = context.typeHintCatalog()
+                        .find(objectType.javaClass()).orElse(null);
+                if (metadata == null) {
+                    current = UnknownType.INSTANCE;
+                    continue;
+                }
+                current = switch (access) {
+                    case PropertyChainNode.PropertyAccess propertyAccess ->
+                            resolveProperty(metadata, propertyAccess, node.sourceSpan());
+                    case PropertyChainNode.SafePropertyAccess safePropertyAccess ->
+                            resolveProperty(metadata,
+                                    new PropertyChainNode.PropertyAccess(safePropertyAccess.name()),
+                                    node.sourceSpan());
+                    case PropertyChainNode.MethodCallAccess methodCall ->
+                            resolveMethod(metadata, methodCall, argumentTypes, node.sourceSpan());
+                    case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
+                            resolveMethod(metadata,
+                                    new PropertyChainNode.MethodCallAccess(
+                                            safeMethodCall.name(), safeMethodCall.arguments()),
+                                    argumentTypes,
+                                    node.sourceSpan());
+                    default -> throw new IllegalStateException("legacy property chain contains unsupported access: " + access);
+                };
+            }
+
+            return current;
+        }
+
+        private boolean isLegacyAccessChain(List<PropertyChainNode.MemberAccess> chain) {
+            for (PropertyChainNode.MemberAccess access : chain) {
+                if (!(access instanceof PropertyChainNode.PropertyAccess)
+                        && !(access instanceof PropertyChainNode.SafePropertyAccess)
+                        && !(access instanceof PropertyChainNode.MethodCallAccess)
+                        && !(access instanceof PropertyChainNode.SafeMethodCallAccess)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private ResolvedType resolveChainFrom(

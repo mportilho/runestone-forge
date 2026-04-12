@@ -367,6 +367,10 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     }
 
     private Object evaluatePropertyChain(ExecutablePropertyChain node, ExecutionScope scope) {
+        if (node.legacyOnly()) {
+            return evaluateLegacyPropertyChain(node, scope);
+        }
+
         Object current = evaluateExpr(node.root(), scope);
         for (ExecutablePropertyChain.ExecutableAccess access : node.chain()) {
             if (current == null) {
@@ -418,6 +422,38 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                         applyMapProjection(current, mp.kind());
                 case ExecutablePropertyChain.ExecutableCollectionFunction cf ->
                         applyCollectionFunction(current, cf, scope);
+            };
+        }
+        return current;
+    }
+
+    private Object evaluateLegacyPropertyChain(ExecutablePropertyChain node, ExecutionScope scope) {
+        Object current = evaluateExpr(node.root(), scope);
+        for (ExecutablePropertyChain.ExecutableAccess access : node.chain()) {
+            if (current == null) {
+                if (isSafeAccess(access)) {
+                    return null;
+                }
+                throw new ExpressionEvaluationException(
+                        compiledExpression.source(), "NULL_IN_CHAIN",
+                        "null value encountered navigating '" + rootName(node.root()) + "'", null);
+            }
+            current = switch (access) {
+                case ExecutablePropertyChain.ExecutableFieldGet fieldGet ->
+                        invokeGetter(node, current, fieldGet);
+                case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke ->
+                        invokeMethod(node, scope, current, methodInvoke);
+                case ExecutablePropertyChain.ReflectivePropertyAccess propertyAccess ->
+                        resolvePropertyReflective(compiledExpression.source(), current, propertyAccess.name());
+                case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke -> {
+                    Object[] args = new Object[reflectiveMethodInvoke.arguments().size()];
+                    for (int index = 0; index < reflectiveMethodInvoke.arguments().size(); index++) {
+                        args[index] = evaluateExpr(reflectiveMethodInvoke.arguments().get(index), scope);
+                    }
+                    yield invokeMethodReflective(
+                            compiledExpression.source(), current, reflectiveMethodInvoke.name(), args);
+                }
+                default -> throw new IllegalStateException("legacy property chain contains unsupported access: " + access);
             };
         }
         return current;

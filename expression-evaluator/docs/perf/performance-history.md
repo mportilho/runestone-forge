@@ -1,0 +1,47 @@
+# Performance History
+
+## Known Hot-Paths & Discarded Hypotheses
+
+- None recorded yet.
+
+## PERF-001: Validate collection-navigation implementation against previous baseline
+
+**Date:** 2026-04-11
+
+**Scenario:** Compare `60d784b` (`collection navigation implemented`) against `403cf47` (`collection navigation upgrade plan 7`) for object-navigation compile and runtime costs.
+**Hypothesis:** The collection-navigation implementation would preserve existing object-navigation performance while adding the new semantics.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | B/op (B→A) |
+|-----------|---------------:|--------------:|----------------:|-----------:|
+| `buildTypedEnvironment` | 36636.066 | 35967.455 | +1.83% | 35747.179 → 35428.517 |
+| `compileReflectiveMethodWithArgument` | 18238.153 | 18166.900 | +0.39% | 13838.008 → 13649.836 |
+| `compileTypedMethodWithArgument` | 22687.308 | 28987.485 | -27.77% | 15458.860 → 15614.682 |
+| `compileTypedNestedProperty` | 28518.515 | 32145.612 | -12.72% | 16271.577 → 16288.025 |
+| `reflectiveMethodWithArgument` | 196.271 | 198.586 | -1.18% | 128.003 → 128.003 |
+| `reflectiveNestedProperty` | 205.852 | 213.709 | -3.82% | 64.003 → 64.003 |
+| `typedMethodNoArg` | 87.380 | 95.029 | -8.75% | 104.001 → 104.001 |
+| `typedMethodWithArgument` | 123.934 | 135.018 | -8.94% | 104.002 → 104.002 |
+| `typedNestedProperty` | 118.770 | 125.942 | -6.04% | 64.002 → 64.002 |
+
+**Decision:** DISCARD
+**Reason:** The average result regressed by 7.44%, with the largest losses concentrated in typed compile-time navigation and smaller but consistent losses in typed runtime navigation.
+**Notes:** Allocation stayed effectively flat across the comparison, which points to CPU-path overhead rather than new object churn.
+
+## PERF-002: Restore fast path for legacy property and method chains
+
+**Date:** 2026-04-11
+
+**Scenario:** Compare the regressed local working tree on top of `60d784b` against a fast-path experiment that bypasses generic collection-navigation handling for simple property and method chains.
+**Hypothesis:** Legacy chains such as `obj.prop` and `obj.method(arg)` should avoid the generic navigation pipeline and recover most of the lost performance without affecting collection-navigation behavior.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | B/op (B→A) |
+|-----------|---------------:|--------------:|----------------:|-----------:|
+| `compileTypedMethodWithArgument` | 28987.485 | 23438.730 | +19.14% | 15614.682 → 15581.584 |
+| `compileTypedNestedProperty` | 32145.612 | 31611.806 | +1.66% | 16288.025 → 16457.935 |
+| `typedMethodNoArg` | 95.029 | 94.693 | +0.35% | 104.001 → 104.001 |
+| `typedMethodWithArgument` | 135.018 | 127.669 | +5.44% | 104.002 → 104.002 |
+| `typedNestedProperty` | 125.942 | 125.642 | +0.24% | 64.002 → 64.002 |
+
+**Decision:** ADJUST
+**Reason:** The fast path recovered a meaningful part of the regression for typed method calls, but the nested-property compile and runtime cases remained close to the regressed baseline and still did not return to `403cf47` levels.
+**Notes:** This points to additional compile-time overhead outside the evaluator fast path, likely earlier in the parse/AST/resolution pipeline.
