@@ -4,6 +4,7 @@
 
 - `compileTypedNestedProperty`: removing `Optional` wrappers from hot lookup sites and caching legacy-chain classification did not produce a win worth keeping; the measurable compile-path waste was duplicated typed-access resolution inside `ExecutionPlanBuilder`.
 - `compileTypedNestedProperty`: quoted string literals now short-circuit before temporal parsing in `SemanticResolver`, removing the exception-driven path that was dominating the remaining compile-time cost.
+- `compileTypedNestedProperty`: adding syntax guards before `SemanticResolver`'s temporal parse checks was discarded; repeated JMH runs showed a slower compile path than the string-only fast path, so the idea was reverted.
 
 ## PERF-001: Validate collection-navigation implementation against previous baseline
 
