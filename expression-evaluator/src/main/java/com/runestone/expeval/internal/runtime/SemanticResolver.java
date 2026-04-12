@@ -162,6 +162,9 @@ public final class SemanticResolver {
 
         private ResolvedType inferLiteralType(LiteralNode node) {
             String value = node.value();
+            if (isQuotedStringLiteral(value)) {
+                return ScalarType.STRING;
+            }
             if ("null".equals(value)) {
                 return NullType.INSTANCE;
             }
@@ -176,9 +179,6 @@ public final class SemanticResolver {
             }
             if ("currDateTime".equals(value) || canParseDateTime(value)) {
                 return ScalarType.DATETIME;
-            }
-            if (value.startsWith("\"") && value.endsWith("\"")) {
-                return ScalarType.STRING;
             }
             try {
                 new BigDecimal(value);
@@ -930,6 +930,10 @@ public final class SemanticResolver {
 
         private void error(String code, String message, SourceSpan sourceSpan) {
             issues.add(new SemanticIssue(code, SemanticIssueSeverity.ERROR, message, sourceSpan));
+        }
+
+        private boolean isQuotedStringLiteral(String value) {
+            return value.length() >= 2 && value.charAt(0) == '"' && value.charAt(value.length() - 1) == '"';
         }
 
         private boolean canParseDate(String value) {

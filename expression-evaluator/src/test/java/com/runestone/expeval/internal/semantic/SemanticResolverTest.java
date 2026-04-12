@@ -13,6 +13,7 @@ import com.runestone.expeval.internal.runtime.ExpressionCompiler;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.runtime.SemanticModel;
 import com.runestone.expeval.internal.runtime.SymbolRef;
+import com.runestone.expeval.perf.ObjectNavigationBenchmarkSupport;
 import com.runestone.expeval.types.ScalarType;
 import org.junit.jupiter.api.Test;
 
@@ -85,6 +86,21 @@ class SemanticResolverTest {
         assertThat(semanticModel.functionBindings()).containsKey(functionCallNode.nodeId());
         assertThat(semanticModel.functionBindings().get(functionCallNode.nodeId()).descriptor().name()).isEqualTo("bonus");
         assertThat(semanticModel.functionBindings().get(functionCallNode.nodeId()).functionRef().arity()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldClassifyQuotedStringLiteralsBeforeTemporalParsing() {
+        ExpressionEnvironment environment = ObjectNavigationBenchmarkSupport.typedEnvironment();
+
+        CompiledExpression compiled = compiler.compile(
+            "usuario.endereco.bairro.codigo = \"BAT-100\"",
+            ExpressionResultType.LOGICAL,
+            environment
+        );
+
+        BinaryOperationNode comparison = (BinaryOperationNode) compiled.semanticModel().ast().resultExpression();
+        assertThat(compiled.semanticModel().findResolvedType(comparison.right().nodeId()))
+            .contains(ScalarType.STRING);
     }
 
     private static <T extends ExpressionNode> T find(ExpressionFileNode file, Class<T> type, Predicate<T> predicate) {

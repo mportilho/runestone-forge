@@ -3,6 +3,7 @@
 ## Known Hot-Paths & Discarded Hypotheses
 
 - `compileTypedNestedProperty`: removing `Optional` wrappers from hot lookup sites and caching legacy-chain classification did not produce a win worth keeping; the measurable compile-path waste was duplicated typed-access resolution inside `ExecutionPlanBuilder`.
+- `compileTypedNestedProperty`: quoted string literals now short-circuit before temporal parsing in `SemanticResolver`, removing the exception-driven path that was dominating the remaining compile-time cost.
 
 ## PERF-001: Validate collection-navigation implementation against previous baseline
 
@@ -60,3 +61,18 @@
 **Decision:** ACCEPT
 **Reason:** The improvement is modest but positive and the change is low-risk because it removes duplicated descriptor lookup without changing runtime semantics.
 **Notes:** Allocation remained effectively flat. The benchmark still sits above the original `403cf47` baseline, so the remaining gap is likely outside the duplicated access-resolution path.
+
+## PERF-004: Short-circuit quoted string literals before temporal parsing
+
+**Date:** 2026-04-12
+
+**Scenario:** Compare `compileTypedNestedProperty` on the current branch before and after moving quoted string literals ahead of the temporal parse checks in `SemanticResolver`.
+**Hypothesis:** String literals like `"BAT-100"` should not pay for `LocalDate` / `LocalTime` / `LocalDateTime` parse attempts, so recognizing them syntactically first should reduce compile time and allocation in the typed nested-property compile path.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | B/op (B→A) |
+|-----------|---------------:|--------------:|----------------:|-----------:|
+| `compileTypedNestedProperty` | 23394.905 | 13667.451 | +41.55% | 16400.862 → 11356.168 |
+
+**Decision:** ACCEPT
+**Reason:** The fast path removes the exception-heavy temporal parsing path for a literal that is always a string in this benchmark, and the measured compile-time gain is well above the acceptance threshold.
+**Notes:** The allocation drop is material as well, which is consistent with eliminating repeated `DateTimeParseException` construction on the hot path.
