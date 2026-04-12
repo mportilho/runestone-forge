@@ -372,7 +372,16 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         }
 
         Object current = evaluateExpr(node.root(), scope);
-        for (ExecutablePropertyChain.ExecutableAccess access : node.chain()) {
+        List<ExecutablePropertyChain.ExecutableAccess> chain = node.chain();
+        int chainStart = 0;
+        if (isMapKeySentinel(node.root(), chain)) {
+            FilterContext mapCtx = FILTER_CTX.get().peek();
+            String sentinel = ((ExecutablePropertyChain.ReflectivePropertyAccess) chain.getFirst()).name();
+            current = "key".equals(sentinel) ? mapCtx.mapKey() : mapCtx.mapValue();
+            chainStart = 1;
+        }
+        for (int i = chainStart; i < chain.size(); i++) {
+            ExecutablePropertyChain.ExecutableAccess access = chain.get(i);
             if (current == null) {
                 if (isSafeAccess(access)) {
                     return null;
@@ -429,7 +438,15 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
 
     private Object evaluateLegacyPropertyChain(ExecutablePropertyChain node, ExecutionScope scope) {
         Object current = evaluateExpr(node.root(), scope);
-        for (ExecutablePropertyChain.ExecutableAccess access : node.chain()) {
+        List<ExecutablePropertyChain.ExecutableAccess> chain = node.chain();
+        int chainStart = 0;
+        if (isMapKeySentinel(node.root(), chain)) {
+            FilterContext mapCtx = FILTER_CTX.get().peek();
+            String sentinel = ((ExecutablePropertyChain.ReflectivePropertyAccess) chain.getFirst()).name();
+            current = "key".equals(sentinel) ? mapCtx.mapKey() : mapCtx.mapValue();
+            chainStart = 1;
+        }
+        for (ExecutablePropertyChain.ExecutableAccess access : chain.subList(chainStart, chain.size())) {
             if (current == null) {
                 if (isSafeAccess(access)) {
                     return null;
@@ -457,6 +474,34 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             };
         }
         return current;
+    }
+
+    /**
+     * Returns {@code true} when the root of a property chain is the {@code @} sentinel, the chain
+     * is non-empty, the first step is a {@link ExecutablePropertyChain.ReflectivePropertyAccess}
+     * named {@code "key"} or {@code "value"}, and evaluation is currently inside a map-entry filter
+     * ({@link FilterContext#isMapContext()} is {@code true}).
+     *
+     * <p>When {@code true}, the caller must redirect {@code current} to
+     * {@link FilterContext#mapKey()} or {@link FilterContext#mapValue()} and start iterating the
+     * chain from index 1, skipping the consumed sentinel step.
+     *
+     * <p>When {@code false} the chain is iterated from index 0, so that {@code @.key} resolves
+     * normally via reflective property access when the collection element happens to have a field
+     * named {@code key} (list-element context, not a map-entry context).
+     */
+    private static boolean isMapKeySentinel(
+            ExecutableNode root,
+            List<ExecutablePropertyChain.ExecutableAccess> chain) {
+        if (root instanceof ExecutableIdentifier id
+                && CURRENT_ELEMENT_REF.equals(id.ref().name())
+                && !chain.isEmpty()
+                && chain.getFirst() instanceof ExecutablePropertyChain.ReflectivePropertyAccess rpa
+                && ("key".equals(rpa.name()) || "value".equals(rpa.name()))) {
+            FilterContext mapCtx = FILTER_CTX.get().peek();
+            return mapCtx != null && mapCtx.isMapContext();
+        }
+        return false;
     }
 
     private static String rootName(ExecutableNode root) {
@@ -528,17 +573,17 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
 
     /** {@code [?(<predicate>)]} — element-wise filter on a list or map. */
     @SuppressWarnings("unchecked")
-    private List<Object> applyFilter(Object current, ExecutableNode predicate, ExecutionScope scope) {
+    private Object applyFilter(Object current, ExecutableNode predicate, ExecutionScope scope) {
         Deque<FilterContext> stack = FILTER_CTX.get();
         if (current instanceof Map<?, ?> map) {
-            // Map filter: retain entries where predicate is truthy; result is a list of values
-            List<Object> result = new ArrayList<>();
+            // Map filter: retain matching entries; result is a filtered Map preserving key-value pairs.
+            Map<Object, Object> result = new LinkedHashMap<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 FilterContext ctx = FilterContext.ofMapEntry(entry.getKey(), entry.getValue());
                 stack.push(ctx);
                 try {
                     if (asBoolean(evaluateExpr(predicate, scope))) {
-                        result.add(entry.getValue());
+                        result.put(entry.getKey(), entry.getValue());
                     }
                 } finally {
                     stack.pop();
@@ -617,6 +662,9 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
 
     /** {@code ..sum()}, {@code ..avg()}, etc. — numeric aggregations over a list. */
     private Object applyAggregation(Object current, VectorAggregationKind kind) {
+        if (current instanceof Map<?, ?> m && kind == VectorAggregationKind.COUNT) {
+            return BigDecimal.valueOf(m.size());
+        }
         List<?> list = requireList(current, "aggregation");
         if (kind == VectorAggregationKind.COUNT) {
             return BigDecimal.valueOf(list.size());
@@ -653,14 +701,19 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     /** {@code ..keys()} or {@code ..values()} — map projection. */
     @SuppressWarnings("unchecked")
     private static List<Object> applyMapProjection(Object current, MapProjectionKind kind) {
-        if (!(current instanceof Map<?, ?> map)) {
-            throw new IllegalStateException("map projection requires a Map but got: "
-                    + current.getClass().getName());
+        if (current instanceof Map<?, ?> map) {
+            Map<String, Object> typed = (Map<String, Object>) map;
+            return kind == MapProjectionKind.KEYS
+                    ? new ArrayList<>(typed.keySet())
+                    : new ArrayList<>(typed.values());
         }
-        Map<String, Object> typed = (Map<String, Object>) map;
-        return kind == MapProjectionKind.KEYS
-                ? new ArrayList<>(typed.keySet())
-                : new ArrayList<>(typed.values());
+        // A map-entry filter (e.g. map[?(@.key.x > v)]) already returns a List of values.
+        // Applying ..values() on that result is a no-op: the list IS the values collection.
+        if (kind == MapProjectionKind.VALUES && current instanceof List<?> list) {
+            return (List<Object>) list;
+        }
+        throw new IllegalStateException("map projection requires a Map but got: "
+                + current.getClass().getName());
     }
 
     /**

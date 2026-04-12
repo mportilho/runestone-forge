@@ -1042,7 +1042,7 @@ class CollectionNavigationTest {
     // -------------------------------------------------------------------------
 
     @Nested
-    @DisplayName("Filter on map entries using @.key syntax (FUTURE FEATURE)")
+    @DisplayName("Filter on map entries using @.key syntax")
     class MapKeyFilterSyntax {
 
         record UserId(long id, String domain) {}
@@ -1051,8 +1051,6 @@ class CollectionNavigationTest {
         @Test
         @DisplayName("filter map entries by key.id property using @.key syntax")
         void shouldFilterMapByKeyIdDirectly() {
-            // FEATURE: items[?(@.key.id > threshold)]
-            // Currently not supported - @.key should allow access to map keys within filters
             UserId key1 = new UserId(1, "acme");
             UserId key2 = new UserId(2, "acme");
             UserId key3 = new UserId(3, "beta");
@@ -1080,8 +1078,6 @@ class CollectionNavigationTest {
         @Test
         @DisplayName("filter map entries by key.domain and extract values using @.key syntax")
         void shouldFilterMapByKeyDomainAndGetValues() {
-            // FEATURE: items[?(@.key.domain = targetDomain)]..values()..count()
-            // Currently not supported - @.key should access key properties
             UserId acme1 = new UserId(1, "acme");
             UserId acme2 = new UserId(2, "acme");
             UserId corp1 = new UserId(3, "corp");
@@ -1109,8 +1105,6 @@ class CollectionNavigationTest {
         @Test
         @DisplayName("aggregate values from filtered map entries using @.key syntax")
         void shouldAggregateValuesFromFilteredKeys() {
-            // FEATURE: items[?(@.key.id < limit)]..values()..balance..sum()
-            // Currently not supported - this would enable cleaner filtering on map keys
             UserId key1 = new UserId(1, "org");
             UserId key2 = new UserId(2, "org");
             UserId key3 = new UserId(3, "org");
@@ -1138,8 +1132,6 @@ class CollectionNavigationTest {
         @Test
         @DisplayName("filter map entries with AND condition on key properties using @.key")
         void shouldFilterMapWithKeyAndCondition() {
-            // FEATURE: items[?(@.key.id >= min and @.key.domain = org)]..count()
-            // Currently not supported - should support boolean conditions on @.key properties
             UserId id1Acme = new UserId(1, "acme");
             UserId id2Acme = new UserId(2, "acme");
             UserId id3Beta = new UserId(3, "beta");
@@ -1171,8 +1163,6 @@ class CollectionNavigationTest {
         @Test
         @DisplayName("filter map entries with OR condition on key properties using @.key")
         void shouldFilterMapWithKeyOrCondition() {
-            // FEATURE: items[?(@.key.id > max or @.key.domain = domain)]..count()
-            // Currently not supported - should support OR conditions on @.key properties
             UserId id1Org1 = new UserId(1, "org1");
             UserId id5Org2 = new UserId(5, "org2");
             UserId id10Org1 = new UserId(10, "org1");
@@ -1198,14 +1188,12 @@ class CollectionNavigationTest {
                             "targetOrg", "org1"
                     ));
 
-            assertThat(result).isEqualByComparingTo("3");  // id1Org1, id10Org1, id5Org2 (id > 8)
+            assertThat(result).isEqualByComparingTo("2");  // id1Org1 (domain=org1) and id10Org1 (id=10 > 8)
         }
 
         @Test
         @DisplayName("filter returns zero when no map entries match key condition")
         void shouldReturnZeroForNoKeyMatches() {
-            // FEATURE: map[?(@.key.id > threshold)]..count()
-            // Currently not supported - edge case: no matches
             UserId key1 = new UserId(1, "test");
             UserId key2 = new UserId(2, "test");
 
@@ -1231,8 +1219,6 @@ class CollectionNavigationTest {
         @Test
         @DisplayName("filter matches all map entries when condition is true for all keys")
         void shouldReturnAllForAllKeyMatches() {
-            // FEATURE: map[?(@.key.domain = env)]..count()
-            // Currently not supported - edge case: all entries match
             UserId key1 = new UserId(10, "prod");
             UserId key2 = new UserId(20, "prod");
             UserId key3 = new UserId(30, "prod");
@@ -1255,6 +1241,103 @@ class CollectionNavigationTest {
                     ));
 
             assertThat(result).isEqualByComparingTo("3");
+        }
+
+        @Test
+        @DisplayName("filter map entries by key AND value properties simultaneously")
+        void shouldFilterMapByKeyAndValuePropertiesTogether() {
+            // Map<UserId, Account> — filter by key.domain AND value.balance threshold.
+            // Only entries where key.domain="acme" AND value.balance > minBalance are retained.
+            UserId acme1 = new UserId(1, "acme");
+            UserId acme2 = new UserId(2, "acme");
+            UserId acme3 = new UserId(3, "acme");
+            UserId corp1 = new UserId(4, "corp");
+
+            var portfolio = Map.of(
+                    acme1, new Account("checking",   new BigDecimal("500")),   // acme, balance too low
+                    acme2, new Account("savings",    new BigDecimal("1500")),  // acme, qualifies
+                    acme3, new Account("investment", new BigDecimal("3000")),  // acme, qualifies
+                    corp1, new Account("business",   new BigDecimal("5000"))   // wrong domain
+            );
+
+            BigDecimal count = MathExpression.compile(
+                    "portfolio[?(@.key.domain = targetDomain and @.value.balance > minBalance)]..count()",
+                    ExpressionEnvironment.builder()
+                            .registerExternalSymbol("portfolio", portfolio, true)
+                            .registerExternalSymbol("targetDomain", "acme", true)
+                            .registerExternalSymbol("minBalance", 1000, true)
+                            .build())
+                    .compute(Map.of(
+                            "portfolio", portfolio,
+                            "targetDomain", "acme",
+                            "minBalance", 1000
+                    ));
+
+            assertThat(count).isEqualByComparingTo("2");  // acme2 (1500) and acme3 (3000)
+
+            BigDecimal totalBalance = MathExpression.compile(
+                    "portfolio[?(@.key.domain = targetDomain and @.value.balance > minBalance)]..values()..balance..sum()",
+                    ExpressionEnvironment.builder()
+                            .registerExternalSymbol("portfolio", portfolio, true)
+                            .registerExternalSymbol("targetDomain", "acme", true)
+                            .registerExternalSymbol("minBalance", 1000, true)
+                            .build())
+                    .compute(Map.of(
+                            "portfolio", portfolio,
+                            "targetDomain", "acme",
+                            "minBalance", 1000
+                    ));
+
+            assertThat(totalBalance).isEqualByComparingTo("4500");  // 1500 + 3000
+        }
+    }
+
+    @Nested
+    @DisplayName("@.key disambiguation: list element with a 'key' property vs. map-entry key")
+    class MapKeyFilterAmbiguity {
+
+        record UserId(long id, String domain) {}
+
+        record Owner(UserId key, String name) {}
+
+        @Test
+        @DisplayName("@.key on a list element resolves the 'key' field, not a map-entry key")
+        void shouldFilterListByElementKeyProperty() {
+            var owners = List.of(
+                    new Owner(new UserId(1, "acme"), "Alice"),
+                    new Owner(new UserId(2, "acme"), "Bob"),
+                    new Owner(new UserId(3, "beta"), "Carol")
+            );
+
+            BigDecimal result = MathExpression.compile(
+                    "owners[?(@.key.id > threshold)]..count()",
+                    ExpressionEnvironment.builder()
+                            .registerExternalSymbol("owners", owners, true)
+                            .registerExternalSymbol("threshold", 1, true)
+                            .build())
+                    .compute(Map.of("owners", owners, "threshold", 1));
+
+            assertThat(result).isEqualByComparingTo("2");  // Bob (id=2) and Carol (id=3)
+        }
+
+        @Test
+        @DisplayName("@.key.domain on a list element resolves the 'key' field domain property")
+        void shouldFilterListByElementKeyDomainProperty() {
+            var owners = List.of(
+                    new Owner(new UserId(1, "acme"), "Alice"),
+                    new Owner(new UserId(2, "acme"), "Bob"),
+                    new Owner(new UserId(3, "beta"), "Carol")
+            );
+
+            BigDecimal result = MathExpression.compile(
+                    "owners[?(@.key.domain = domain)]..count()",
+                    ExpressionEnvironment.builder()
+                            .registerExternalSymbol("owners", owners, true)
+                            .registerExternalSymbol("domain", "acme", true)
+                            .build())
+                    .compute(Map.of("owners", owners, "domain", "acme"));
+
+            assertThat(result).isEqualByComparingTo("2");  // Alice and Bob
         }
     }
 }
