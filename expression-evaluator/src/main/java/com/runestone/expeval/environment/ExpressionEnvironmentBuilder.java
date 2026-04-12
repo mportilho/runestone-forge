@@ -5,7 +5,7 @@ import com.runestone.converters.DataConversionService;
 import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.expeval.catalog.*;
 import com.runestone.expeval.catalog.functions.*;
-import com.runestone.expeval.internal.runtime.TypeIntrospectionSupport;
+import com.runestone.expeval.internal.navigation.TypeIntrospectionSupport;
 import com.runestone.expeval.types.ObjectType;
 import com.runestone.expeval.types.ResolvedType;
 import com.runestone.expeval.types.ResolvedTypes;

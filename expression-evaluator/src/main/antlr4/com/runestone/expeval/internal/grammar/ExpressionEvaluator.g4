@@ -76,10 +76,16 @@ LBRACKET           : '[' ;
 RBRACKET           : ']' ;
 COMMA              : ',' ;
 SEMI               : ';' ;
+// DOUBLE_PERIOD must precede PERIOD so that '..' is never lexed as two separate PERIOD tokens
+DOUBLE_PERIOD      : '..' ;
 PERIOD             : '.' ;
 NULLCOALESCE       : '??' ;
 SAFE_NAV           : '?.' ;
+// QUESTION must follow NULLCOALESCE and SAFE_NAV so those longer patterns take priority
+QUESTION           : '?' ;
+AT                 : '@' ;
 IN      : 'in' ;
+NIN     : 'nin' ;
 NOT_KW  : 'not' ;
 BETWEEN : 'between' ;
 
@@ -89,9 +95,14 @@ STRING     : '"' ( '\\' [btnfr"'\\] | ~[\r\n\\"] )* '"';
 NUMBER     : Decimal | OctalDigits | HexDigits ;
 POSITIVE   : PositiveNumber ;
 DATE       : DateFragment ;
+// TIME matches HH:MM or HH:MM:SS. When a TIME token appears inside a subscript ([...])
+// it is treated as a slice (start=hours, end=minutes) via the sliceTimeSubscript rule.
 TIME       : HourFragment Colon MinuteSecondFragment (Colon MinuteSecondFragment)? ;
 TIME_OFFSET: TimeOffsetFragment ;
 DATETIME   : DateFragment ('T' | '-') HourFragment Colon MinuteSecondFragment (Colon MinuteSecondFragment)? ;
+// COLON_OP is declared after TIME and DATETIME; a bare ':' only reaches this rule when it is not
+// part of a longer TIME/DATETIME token (e.g. inside a slice subscript such as [0:2]).
+COLON_OP   : ':' ;
 
 // Type-hint tokens
 BOOLEAN_TYPE  : '<bool>' ;
@@ -254,14 +265,65 @@ referenceTarget
     ;
 
 memberChain
-    : PERIOD IDENTIFIER                                                  # propertyAccess
-    | SAFE_NAV IDENTIFIER                                                # safePropertyAccess
+    // Deep-scan function call: ..funcName(args) — must precede deepScanProperty so that
+    // '..ident(' is not partially consumed as deepScanProperty + leftover '('
+    : DOUBLE_PERIOD IDENTIFIER LPAREN
+          (allEntityTypes (COMMA allEntityTypes)*)?
+      RPAREN                                                             # collectionFunctionAccess
+    | DOUBLE_PERIOD MULT                                                 # deepScanWildcard
+    | DOUBLE_PERIOD IDENTIFIER                                           # deepScanProperty
+    | PERIOD MULT                                                        # childWildcardAccess
+    // methodCallAccess before propertyAccess: 'ident(' must not be parsed as property + extra '('
     | PERIOD IDENTIFIER LPAREN
           (allEntityTypes (COMMA allEntityTypes)*)?
       RPAREN                                                             # methodCallAccess
     | SAFE_NAV IDENTIFIER LPAREN
           (allEntityTypes (COMMA allEntityTypes)*)?
       RPAREN                                                             # safeMethodCallAccess
+    | PERIOD IDENTIFIER                                                  # propertyAccess
+    | SAFE_NAV IDENTIFIER                                                # safePropertyAccess
+    | subscript                                                          # subscriptAccess
+    ;
+
+subscript
+    : LBRACKET MULT RBRACKET                                             # wildcardSubscript
+    | LBRACKET STRING RBRACKET                                           # stringKeySubscript
+    // sliceWithStartSubscript: [start:end?] — e.g. [1:3], [2:]
+    | LBRACKET signedInteger COLON_OP signedInteger? RBRACKET            # sliceWithStartSubscript
+    // sliceToEndSubscript: [:end] — e.g. [:2]
+    | LBRACKET COLON_OP signedInteger RBRACKET                           # sliceToEndSubscript
+    // sliceTimeSubscript: [HH:MM] — time-looking slice e.g. [10:20]; treated as [10:20] slice
+    | LBRACKET TIME RBRACKET                                             # sliceTimeSubscript
+    | LBRACKET signedInteger RBRACKET                                    # indexSubscript
+    | LBRACKET QUESTION LPAREN filterPredicate RPAREN RBRACKET           # filterSubscript
+    ;
+
+signedInteger : MINUS? NUMBER ;
+
+filterPredicate : filterAtom ((AND | OR) filterAtom)* ;
+
+filterAtom
+    : LPAREN filterPredicate RPAREN                                      # parenFilterAtom
+    | filterRelation                                                     # relationFilterAtom
+    ;
+
+filterRelation
+    : filterValue comparisonOperator filterValue                         # comparisonFilterRelation
+    | filterValue REGEX_MATCH STRING                                     # regexMatchFilterRelation
+    | filterValue REGEX_NOT_MATCH STRING                                 # regexNotMatchFilterRelation
+    | filterValue IN  filterValue                                        # inFilterRelation
+    | filterValue NIN filterValue                                        # ninFilterRelation
+    | filterValue                                                        # truthyFilterRelation
+    ;
+
+// filterValue restricts external references to plain dot-notation (no subscripts, wildcards, safe-nav)
+// so that complex expressions cannot appear as filter operands.
+filterValue
+    : AT memberChain*                                                    # currentElementFilterValue
+    | IDENTIFIER (PERIOD IDENTIFIER)*                                    # externalRefFilterValue
+    | numericEntity                                                      # numericFilterValue
+    | stringConcatExpression                                             # stringFilterValue
+    | NULL                                                               # nullFilterValue
     ;
 
 comparisonOperator

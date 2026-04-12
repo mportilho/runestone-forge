@@ -8,6 +8,11 @@ import com.runestone.expeval.catalog.FunctionDescriptor;
 import com.runestone.expeval.internal.ast.BinaryOperator;
 import com.runestone.expeval.internal.ast.SourceSpan;
 
+import com.runestone.expeval.internal.navigation.FilterContext;
+import com.runestone.expeval.internal.navigation.MapProjectionKind;
+import com.runestone.expeval.internal.navigation.TypeIntrospectionSupport;
+import com.runestone.expeval.internal.navigation.VectorAggregationKind;
+
 import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -32,6 +37,17 @@ import java.util.*;
  * </ul>
  */
 abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
+
+    /** Sentinel name used for {@code @} (current element) in filter predicates. */
+    private static final String CURRENT_ELEMENT_REF = "@";
+
+    /**
+     * Per-thread stack of filter contexts to support nested filter predicates such as
+     * {@code list[?(@.items[?(@.active)])]}. Thread-local because compiled expression
+     * objects are shared and may be invoked concurrently.
+     */
+    private static final ThreadLocal<Deque<FilterContext>> FILTER_CTX =
+            ThreadLocal.withInitial(ArrayDeque::new);
 
     private final CompiledExpression compiledExpression;
     private final RuntimeServices runtimeServices;
@@ -133,6 +149,15 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                 yield value;
             }
             case ExecutableIdentifier id -> {
+                if (CURRENT_ELEMENT_REF.equals(id.ref().name())) {
+                    FilterContext ctx = FILTER_CTX.get().peek();
+                    if (ctx == null) {
+                        throw new ExpressionEvaluationException(compiledExpression.source(),
+                                "INVALID_CURRENT_ELEMENT",
+                                "'@' used outside of a filter predicate context", null);
+                    }
+                    yield ctx.isMapContext() ? ctx.mapValue() : ctx.element();
+                }
                 Object value = scope.find(id.ref());
                 if (value == ExecutionScope.UNBOUND) {
                     throw unboundVariableException(id);
@@ -353,9 +378,12 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                         "null value encountered navigating '" + rootName(node.root()) + "'", null);
             }
             current = switch (access) {
-                case ExecutablePropertyChain.ExecutableFieldGet fieldGet -> invokeGetter(node, current, fieldGet);
+                // ---- typed -------------------------------------------------------
+                case ExecutablePropertyChain.ExecutableFieldGet fieldGet ->
+                        invokeGetter(node, current, fieldGet);
                 case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke ->
                         invokeMethod(node, scope, current, methodInvoke);
+                // ---- reflective --------------------------------------------------
                 case ExecutablePropertyChain.ReflectivePropertyAccess propertyAccess ->
                         resolvePropertyReflective(compiledExpression.source(), current, propertyAccess.name());
                 case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke -> {
@@ -363,8 +391,33 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                     for (int index = 0; index < reflectiveMethodInvoke.arguments().size(); index++) {
                         args[index] = evaluateExpr(reflectiveMethodInvoke.arguments().get(index), scope);
                     }
-                    yield invokeMethodReflective(compiledExpression.source(), current, reflectiveMethodInvoke.name(), args);
+                    yield invokeMethodReflective(compiledExpression.source(), current,
+                            reflectiveMethodInvoke.name(), args);
                 }
+                // ---- collection navigation ---------------------------------------
+                case ExecutablePropertyChain.ExecutableIndexAccess ia ->
+                        applyIndex(current, (int) asBigDecimalStrict(evaluateExpr(ia.index(), scope)).longValue());
+                case ExecutablePropertyChain.ExecutableMapKeyAccess mka ->
+                        applyMapKey(current, mka.key());
+                case ExecutablePropertyChain.ExecutableSliceAccess sa -> {
+                    Integer start = sa.start() == null ? null
+                            : (int) asBigDecimalStrict(evaluateExpr(sa.start(), scope)).longValue();
+                    Integer end = sa.end() == null ? null
+                            : (int) asBigDecimalStrict(evaluateExpr(sa.end(), scope)).longValue();
+                    yield applySlice(current, start, end);
+                }
+                case ExecutablePropertyChain.ExecutableWildcard ignored ->
+                        applyWildcard(current);
+                case ExecutablePropertyChain.ExecutableFilterPredicate fp ->
+                        applyFilter(current, fp.predicate(), scope);
+                case ExecutablePropertyChain.ExecutableDeepScan ds ->
+                        applyDeepScan(current, ds.propertyName(), scope);
+                case ExecutablePropertyChain.ExecutableVectorAggregation va ->
+                        applyAggregation(current, va.kind());
+                case ExecutablePropertyChain.ExecutableMapProjection mp ->
+                        applyMapProjection(current, mp.kind());
+                case ExecutablePropertyChain.ExecutableCollectionFunction cf ->
+                        applyCollectionFunction(current, cf, scope);
             };
         }
         return current;
@@ -383,7 +436,235 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke -> methodInvoke.safe();
             case ExecutablePropertyChain.ReflectivePropertyAccess propertyAccess -> propertyAccess.safe();
             case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke -> reflectiveMethodInvoke.safe();
+            // Collection navigation steps — never null-safe (they propagate nulls differently)
+            default -> false;
         };
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection / map navigation helpers
+    // -------------------------------------------------------------------------
+
+    /** {@code [n]} — single index access; supports negative indices. */
+    @SuppressWarnings("unchecked")
+    private Object applyIndex(Object collection, int index) {
+        List<Object> list = requireList(collection, "index");
+        int effective = index < 0 ? list.size() + index : index;
+        if (effective < 0 || effective >= list.size()) {
+            throw new ExpressionEvaluationException(compiledExpression.source(), "INDEX_OUT_OF_BOUNDS",
+                    "index " + index + " is out of bounds for collection of size " + list.size(), null);
+        }
+        return list.get(effective);
+    }
+
+    /** {@code ["key"]} — key lookup in a {@link Map}. */
+    @SuppressWarnings("unchecked")
+    private static Object applyMapKey(Object map, String key) {
+        if (!(map instanceof Map<?, ?> m)) {
+            throw new IllegalStateException("map-key access requires a Map but got: "
+                    + map.getClass().getName());
+        }
+        return ((Map<String, Object>) m).get(key);
+    }
+
+    /** {@code [start:end]} — Python-style slice. */
+    @SuppressWarnings("unchecked")
+    private List<Object> applySlice(Object collection, Integer start, Integer end) {
+        List<Object> list = requireList(collection, "slice");
+        int size = list.size();
+        int from = start == null ? 0 : (start < 0 ? Math.max(0, size + start) : Math.min(start, size));
+        int to   = end   == null ? size : (end < 0 ? Math.max(0, size + end)   : Math.min(end,   size));
+        if (from >= to) return List.of();
+        return List.copyOf(list.subList(from, to));
+    }
+
+    /** {@code [*]} or {@code .*} — all elements or all map values. */
+    @SuppressWarnings("unchecked")
+    private static List<Object> applyWildcard(Object current) {
+        if (current instanceof List<?> list) {
+            return (List<Object>) list;
+        }
+        if (current instanceof Map<?, ?> map) {
+            return new ArrayList<>((Collection<Object>) map.values());
+        }
+        return List.of(current);
+    }
+
+    /** {@code [?(<predicate>)]} — element-wise filter on a list or map. */
+    @SuppressWarnings("unchecked")
+    private List<Object> applyFilter(Object current, ExecutableNode predicate, ExecutionScope scope) {
+        Deque<FilterContext> stack = FILTER_CTX.get();
+        if (current instanceof Map<?, ?> map) {
+            // Map filter: retain entries where predicate is truthy; result is a list of values
+            List<Object> result = new ArrayList<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                FilterContext ctx = FilterContext.ofMapEntry(entry.getKey(), entry.getValue());
+                stack.push(ctx);
+                try {
+                    if (asBoolean(evaluateExpr(predicate, scope))) {
+                        result.add(entry.getValue());
+                    }
+                } finally {
+                    stack.pop();
+                }
+            }
+            return result;
+        }
+        List<Object> list = requireList(current, "filter");
+        List<Object> result = new ArrayList<>();
+        for (Object element : list) {
+            FilterContext ctx = FilterContext.ofElement(element);
+            stack.push(ctx);
+            try {
+                if (asBoolean(evaluateExpr(predicate, scope))) {
+                    result.add(element);
+                }
+            } finally {
+                stack.pop();
+            }
+        }
+        return result;
+    }
+
+    /**
+     * {@code ..name} or {@code ..*} — BFS recursive deep scan.
+     * Collects the named property (or all values for wildcard) from every reachable node.
+     */
+    private List<Object> applyDeepScan(Object root, String propertyName, ExecutionScope scope) {
+        List<Object> results = new ArrayList<>();
+        // identity-based deduplication to break cycles
+        Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        Deque<Object> queue = new ArrayDeque<>();
+        queue.add(root);
+        while (!queue.isEmpty()) {
+            Object node = queue.poll();
+            if (node == null || !visited.add(node)) continue;
+            if (propertyName == null) {
+                // Wildcard deep scan — collect all reachable leaf values
+                if (node instanceof List<?> list) {
+                    queue.addAll(list);
+                } else if (node instanceof Map<?, ?> map) {
+                    for (Object v : map.values()) {
+                        results.add(v);
+                        if (v instanceof List<?> || v instanceof Map<?, ?>) queue.add(v);
+                    }
+                } else {
+                    results.add(node);
+                }
+            } else {
+                // Named deep scan — collect that property wherever found
+                if (node instanceof List<?> list) {
+                    queue.addAll(list);
+                } else if (node instanceof Map<?, ?> map) {
+                    @SuppressWarnings("unchecked")
+                    Object val = ((Map<String, Object>) map).get(propertyName);
+                    if (val != null) results.add(val);
+                    for (Object v : map.values()) {
+                        if (v instanceof List<?> || v instanceof Map<?, ?>) queue.add(v);
+                    }
+                } else {
+                    // Reflective property access on plain objects
+                    MethodHandle handle = TypeIntrospectionSupport.cachedProperty(node.getClass(), propertyName);
+                    if (handle != null) {
+                        try {
+                            Object val = handle.invoke(node);
+                            if (val != null) results.add(val);
+                        } catch (Throwable ignored) {
+                            // best-effort deep scan — skip inaccessible properties
+                        }
+                    }
+                }
+            }
+        }
+        return results;
+    }
+
+    /** {@code ..sum()}, {@code ..avg()}, etc. — numeric aggregations over a list. */
+    private Object applyAggregation(Object current, VectorAggregationKind kind) {
+        List<?> list = requireList(current, "aggregation");
+        if (kind == VectorAggregationKind.COUNT) {
+            return BigDecimal.valueOf(list.size());
+        }
+        if (list.isEmpty()) return null;
+        BigDecimal acc = asBigDecimal(list.getFirst());
+        switch (kind) {
+            case SUM -> {
+                for (int i = 1; i < list.size(); i++) acc = acc.add(asBigDecimal(list.get(i)));
+                return acc;
+            }
+            case AVG -> {
+                for (int i = 1; i < list.size(); i++) acc = acc.add(asBigDecimal(list.get(i)));
+                return acc.divide(BigDecimal.valueOf(list.size()), mathContext);
+            }
+            case MIN -> {
+                for (int i = 1; i < list.size(); i++) {
+                    BigDecimal v = asBigDecimal(list.get(i));
+                    if (v.compareTo(acc) < 0) acc = v;
+                }
+                return acc;
+            }
+            case MAX -> {
+                for (int i = 1; i < list.size(); i++) {
+                    BigDecimal v = asBigDecimal(list.get(i));
+                    if (v.compareTo(acc) > 0) acc = v;
+                }
+                return acc;
+            }
+            default -> throw new IllegalStateException("Unhandled aggregation kind: " + kind);
+        }
+    }
+
+    /** {@code ..keys()} or {@code ..values()} — map projection. */
+    @SuppressWarnings("unchecked")
+    private static List<Object> applyMapProjection(Object current, MapProjectionKind kind) {
+        if (!(current instanceof Map<?, ?> map)) {
+            throw new IllegalStateException("map projection requires a Map but got: "
+                    + current.getClass().getName());
+        }
+        Map<String, Object> typed = (Map<String, Object>) map;
+        return kind == MapProjectionKind.KEYS
+                ? new ArrayList<>(typed.keySet())
+                : new ArrayList<>(typed.values());
+    }
+
+    /**
+     * {@code ..funcName(args)} — invoke a catalog function with the current
+     * collection/map as the implicit first argument.
+     */
+    private Object applyCollectionFunction(Object current, ExecutablePropertyChain.ExecutableCollectionFunction cf,
+                                           ExecutionScope scope) {
+        ResolvedFunctionBinding binding = cf.binding();
+        if (binding == null || binding.descriptor() == null) {
+            throw new ExpressionEvaluationException(compiledExpression.source(), "UNRESOLVED_COLLECTION_FUNCTION",
+                    "collection function could not be resolved", null);
+        }
+        var descriptor = binding.descriptor();
+        List<ExecutableNode> extraArgNodes = cf.arguments();
+        int totalArity = 1 + extraArgNodes.size();
+        List<Class<?>> paramTypes = descriptor.parameterTypes();
+
+        Object[] args = new Object[totalArity];
+        args[0] = runtimeServices.coerce(current, paramTypes.getFirst());
+        for (int i = 0; i < extraArgNodes.size(); i++) {
+            Object evaluated = evaluateExpr(extraArgNodes.get(i), scope);
+            args[i + 1] = runtimeServices.coerce(evaluated, paramTypes.get(i + 1));
+        }
+        Object result = descriptor.invoke(args);
+        return runtimeServices.coerceToResolvedType(result, binding.returnType());
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> requireList(Object value, String operation) {
+        if (value instanceof List<?> list) return (List<Object>) list;
+        throw new ExpressionEvaluationException(compiledExpression.source(), "TYPE_MISMATCH",
+                operation + " requires a List but got: "
+                + (value == null ? "null" : value.getClass().getName()), null);
+    }
+
+    /** Strict number coercion for index/slice operations — rejects non-numeric values early. */
+    private BigDecimal asBigDecimalStrict(Object value) {
+        if (value instanceof BigDecimal bd) return bd;
+        return runtimeServices.asNumber(value);
     }
 
     private Object invokeGetter(
@@ -505,9 +786,14 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private static Object resolvePropertyReflective(String source, Object target, String name) {
+        // For Map targets, a dot-notation property access degrades to a key lookup
+        if (target instanceof Map<?, ?> map) {
+            return ((Map<String, Object>) map).get(name);
+        }
         Class<?> cls = target.getClass();
-        MethodHandle handle = ReflectiveAccessCache.property(cls, name);
+        MethodHandle handle = TypeIntrospectionSupport.cachedProperty(cls, name);
         if (handle == null) {
             throw new ExpressionEvaluationException(source, "UNKNOWN_PROPERTY",
                     "property '" + name + "' not found on " + cls.getSimpleName(), null);
@@ -527,7 +813,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
 
     private static Object invokeMethodReflective(String source, Object target, String name, Object[] args) {
         Class<?> cls = target.getClass();
-        MethodHandle handle = ReflectiveAccessCache.method(cls, name, args.length);
+        MethodHandle handle = TypeIntrospectionSupport.cachedMethod(cls, name, args.length);
         if (handle == null) {
             throw new ExpressionEvaluationException(source, "UNKNOWN_METHOD",
                     "method '" + name + "' with " + args.length + " argument(s) not found on " + cls.getSimpleName(), null);

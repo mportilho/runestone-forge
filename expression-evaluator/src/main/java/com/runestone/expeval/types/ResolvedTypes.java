@@ -64,6 +64,17 @@ public final class ResolvedTypes {
         if (right == UnknownType.INSTANCE) {
             return left;
         }
+        if (left instanceof CollectionType leftCol && right instanceof CollectionType rightCol) {
+            return new CollectionType(merge(leftCol.elementType(), rightCol.elementType()));
+        }
+        if (left instanceof MapType leftMap && right instanceof MapType rightMap) {
+            return new MapType(merge(leftMap.keyType(), rightMap.keyType()), merge(leftMap.valueType(), rightMap.valueType()));
+        }
+        // CollectionType + VectorType → VectorType (non-parametrized wins to avoid losing type info)
+        if (left instanceof CollectionType && right == VectorType.INSTANCE
+                || left == VectorType.INSTANCE && right instanceof CollectionType) {
+            return VectorType.INSTANCE;
+        }
         return UnknownType.INSTANCE;
     }
 }

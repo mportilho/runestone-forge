@@ -3,6 +3,8 @@ package com.runestone.expeval.internal.ast.mapping;
 import com.runestone.expeval.internal.grammar.ExpressionEvaluatorBaseVisitor;
 import com.runestone.expeval.internal.grammar.ExpressionEvaluatorParser;
 import com.runestone.expeval.internal.ast.*;
+import com.runestone.expeval.internal.navigation.MapProjectionKind;
+import com.runestone.expeval.internal.navigation.VectorAggregationKind;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.TerminalNode;
@@ -488,30 +490,7 @@ public final class SemanticAstBuilder {
                         rootIdentifier
                 );
             }
-            List<PropertyChainNode.MemberAccess> chain = new ArrayList<>();
-            for (ExpressionEvaluatorParser.MemberChainContext member : memberChains) {
-                PropertyChainNode.MemberAccess access = switch (member) {
-                    case ExpressionEvaluatorParser.PropertyAccessContext p ->
-                            new PropertyChainNode.PropertyAccess(p.IDENTIFIER().getText());
-                    case ExpressionEvaluatorParser.SafePropertyAccessContext sp ->
-                            new PropertyChainNode.SafePropertyAccess(sp.IDENTIFIER().getText());
-                    case ExpressionEvaluatorParser.MethodCallAccessContext m -> {
-                        List<ExpressionNode> args = m.allEntityTypes().stream()
-                                .map(this::visitAllEntityType)
-                                .toList();
-                        yield new PropertyChainNode.MethodCallAccess(m.IDENTIFIER().getText(), args);
-                    }
-                    case ExpressionEvaluatorParser.SafeMethodCallAccessContext sm -> {
-                        List<ExpressionNode> args = sm.allEntityTypes().stream()
-                                .map(this::visitAllEntityType)
-                                .toList();
-                        yield new PropertyChainNode.SafeMethodCallAccess(sm.IDENTIFIER().getText(), args);
-                    }
-                    default -> throw new IllegalStateException(
-                            "unsupported memberChain context: " + member.getClass().getSimpleName());
-                };
-                chain.add(access);
-            }
+            List<PropertyChainNode.MemberAccess> chain = buildMemberChain(memberChains);
             return new PropertyChainNode(
                     nodeFactory.nextId("propertyChain"),
                     nodeFactory.sourceSpan(ctx),
@@ -519,6 +498,288 @@ public final class SemanticAstBuilder {
                     chain
             );
         }
+
+        // -------------------------------------------------------------------------
+        // New memberChain visitor helpers
+        // -------------------------------------------------------------------------
+
+        private List<PropertyChainNode.MemberAccess> buildMemberChain(
+                List<ExpressionEvaluatorParser.MemberChainContext> memberChains) {
+            List<PropertyChainNode.MemberAccess> chain = new ArrayList<>(memberChains.size());
+            for (ExpressionEvaluatorParser.MemberChainContext member : memberChains) {
+                chain.add(buildMemberAccess(member));
+            }
+            return chain;
+        }
+
+        private PropertyChainNode.MemberAccess buildMemberAccess(ExpressionEvaluatorParser.MemberChainContext member) {
+            return switch (member) {
+                case ExpressionEvaluatorParser.PropertyAccessContext p ->
+                        new PropertyChainNode.PropertyAccess(p.IDENTIFIER().getText());
+                case ExpressionEvaluatorParser.SafePropertyAccessContext sp ->
+                        new PropertyChainNode.SafePropertyAccess(sp.IDENTIFIER().getText());
+                case ExpressionEvaluatorParser.MethodCallAccessContext m -> {
+                    List<ExpressionNode> args = m.allEntityTypes().stream()
+                            .map(this::visitAllEntityType)
+                            .toList();
+                    yield new PropertyChainNode.MethodCallAccess(m.IDENTIFIER().getText(), args);
+                }
+                case ExpressionEvaluatorParser.SafeMethodCallAccessContext sm -> {
+                    List<ExpressionNode> args = sm.allEntityTypes().stream()
+                            .map(this::visitAllEntityType)
+                            .toList();
+                    yield new PropertyChainNode.SafeMethodCallAccess(sm.IDENTIFIER().getText(), args);
+                }
+                case ExpressionEvaluatorParser.DeepScanPropertyContext dsp ->
+                        new PropertyChainNode.DeepScanStep(dsp.IDENTIFIER().getText());
+                case ExpressionEvaluatorParser.DeepScanWildcardContext ignored ->
+                        new PropertyChainNode.DeepScanStep(null);
+                case ExpressionEvaluatorParser.ChildWildcardAccessContext ignored ->
+                        new PropertyChainNode.WildcardStep();
+                case ExpressionEvaluatorParser.CollectionFunctionAccessContext cfa ->
+                        buildCollectionFunctionStep(cfa);
+                case ExpressionEvaluatorParser.SubscriptAccessContext sa ->
+                        buildSubscriptStep(sa.subscript());
+                default -> throw new IllegalStateException(
+                        "unsupported memberChain context: " + member.getClass().getSimpleName());
+            };
+        }
+
+        private PropertyChainNode.MemberAccess buildCollectionFunctionStep(
+                ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx) {
+            String name = ctx.IDENTIFIER().getText();
+            // Built-in map projections
+            if (isBuiltInMapProjection(name)) {
+                return new PropertyChainNode.MapProjectionStep(resolveMapProjectionKind(name));
+            }
+            // Built-in vector aggregations
+            if (isBuiltInVectorAggregation(name)) {
+                return new PropertyChainNode.VectorAggregationStep(resolveAggregationKind(name));
+            }
+            // Custom function from FunctionCatalog
+            List<ExpressionNode> args = ctx.allEntityTypes().stream()
+                    .map(this::visitAllEntityType)
+                    .toList();
+            return new PropertyChainNode.CollectionFunctionStep(name, args);
+        }
+
+        private static boolean isBuiltInMapProjection(String name) {
+            return switch (name.toLowerCase()) {
+                case "keys", "values" -> true;
+                default -> false;
+            };
+        }
+
+        private static MapProjectionKind resolveMapProjectionKind(String name) {
+            return switch (name.toLowerCase()) {
+                case "keys" -> MapProjectionKind.KEYS;
+                case "values" -> MapProjectionKind.VALUES;
+                default -> throw new IllegalArgumentException("unsupported built-in map projection: " + name);
+            };
+        }
+
+        private static boolean isBuiltInVectorAggregation(String name) {
+            return switch (name.toLowerCase()) {
+                case "sum", "avg", "average", "min", "max", "count", "length", "size" -> true;
+                default -> false;
+            };
+        }
+
+        private static VectorAggregationKind resolveAggregationKind(String name) {
+            return switch (name.toLowerCase()) {
+                case "sum" -> VectorAggregationKind.SUM;
+                case "avg", "average" -> VectorAggregationKind.AVG;
+                case "min" -> VectorAggregationKind.MIN;
+                case "max" -> VectorAggregationKind.MAX;
+                case "count", "length", "size" -> VectorAggregationKind.COUNT;
+                default -> throw new IllegalArgumentException("unsupported built-in aggregation: " + name);
+            };
+        }
+
+        private PropertyChainNode.MemberAccess buildSubscriptStep(
+                ExpressionEvaluatorParser.SubscriptContext subscript) {
+            return switch (subscript) {
+                case ExpressionEvaluatorParser.WildcardSubscriptContext ignored ->
+                        new PropertyChainNode.WildcardStep();
+                case ExpressionEvaluatorParser.StringKeySubscriptContext skc ->
+                        new PropertyChainNode.MapKeyStep(unquote(skc.STRING().getText()));
+                case ExpressionEvaluatorParser.IndexSubscriptContext ic ->
+                        new PropertyChainNode.CollectionIndexStep(buildSignedIntNode(ic.signedInteger()));
+                case ExpressionEvaluatorParser.SliceWithStartSubscriptContext swsc -> {
+                    ExpressionNode start = buildSignedIntNode(swsc.signedInteger(0));
+                    ExpressionNode end = swsc.signedInteger().size() > 1
+                            ? buildSignedIntNode(swsc.signedInteger(1))
+                            : null;
+                    yield new PropertyChainNode.CollectionSliceStep(start, end);
+                }
+                case ExpressionEvaluatorParser.SliceToEndSubscriptContext stec ->
+                        new PropertyChainNode.CollectionSliceStep(null, buildSignedIntNode(stec.signedInteger()));
+                case ExpressionEvaluatorParser.SliceTimeSubscriptContext stsc -> {
+                    // TIME token like "10:20" or "10:20:30" inside [...] is treated as a slice [start:end]
+                    String timeText = stsc.TIME().getText();
+                    String[] parts = timeText.split(":");
+                    LiteralNode start = new LiteralNode(nodeFactory.nextId("literal"),
+                            nodeFactory.sourceSpan(stsc), parts[0]);
+                    LiteralNode end   = new LiteralNode(nodeFactory.nextId("literal"),
+                            nodeFactory.sourceSpan(stsc), parts[1]);
+                    yield new PropertyChainNode.CollectionSliceStep(start, end);
+                }
+                case ExpressionEvaluatorParser.FilterSubscriptContext fsc ->
+                        new PropertyChainNode.FilterPredicateStep(buildFilterPredicate(fsc.filterPredicate()));
+                default -> throw new IllegalStateException(
+                        "unsupported subscript context: " + subscript.getClass().getSimpleName());
+            };
+        }
+
+        private LiteralNode buildSignedIntNode(ExpressionEvaluatorParser.SignedIntegerContext ctx) {
+            String value = (ctx.MINUS() != null ? "-" : "") + ctx.NUMBER().getText();
+            return new LiteralNode(nodeFactory.nextId("literal"), nodeFactory.sourceSpan(ctx), value);
+        }
+
+        // -------------------------------------------------------------------------
+        // Filter predicate building
+        // -------------------------------------------------------------------------
+
+        private ExpressionNode buildFilterPredicate(ExpressionEvaluatorParser.FilterPredicateContext ctx) {
+            // filterPredicate : filterAtom ((AND | OR) filterAtom)*
+            ExpressionNode current = buildFilterAtom(ctx.filterAtom(0));
+            for (int i = 1; i < ctx.filterAtom().size(); i++) {
+                Token op = (Token) ctx.getChild(2 * i - 1).getPayload();
+                BinaryOperator operator = op.getType() == ExpressionEvaluatorParser.AND
+                        ? BinaryOperator.AND : BinaryOperator.OR;
+                ExpressionNode right = buildFilterAtom(ctx.filterAtom(i));
+                current = new BinaryOperationNode(
+                        nodeFactory.nextId("binary"),
+                        nodeFactory.sourceSpan(current.sourceSpan(), right.sourceSpan()),
+                        operator,
+                        current,
+                        right
+                );
+            }
+            return current;
+        }
+
+        private ExpressionNode buildFilterAtom(ExpressionEvaluatorParser.FilterAtomContext ctx) {
+            return switch (ctx) {
+                case ExpressionEvaluatorParser.ParenFilterAtomContext paren ->
+                        buildFilterPredicate(paren.filterPredicate());
+                case ExpressionEvaluatorParser.RelationFilterAtomContext relation ->
+                        buildFilterRelation(relation.filterRelation());
+                default -> throw new IllegalStateException(
+                        "unsupported filterAtom: " + ctx.getClass().getSimpleName());
+            };
+        }
+
+        private ExpressionNode buildFilterRelation(ExpressionEvaluatorParser.FilterRelationContext ctx) {
+            return switch (ctx) {
+                case ExpressionEvaluatorParser.ComparisonFilterRelationContext cmp -> {
+                    ExpressionNode left = buildFilterValue(cmp.filterValue(0));
+                    ExpressionNode right = buildFilterValue(cmp.filterValue(1));
+                    BinaryOperator op = comparisonOperator(cmp.comparisonOperator());
+                    yield new BinaryOperationNode(
+                            nodeFactory.nextId("binary"),
+                            nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
+                            op, left, right);
+                }
+                case ExpressionEvaluatorParser.RegexMatchFilterRelationContext rxm -> {
+                    ExpressionNode left = buildFilterValue(rxm.filterValue());
+                    LiteralNode pattern = new LiteralNode(
+                            nodeFactory.nextId("literal"),
+                            nodeFactory.sourceSpan(rxm.STRING().getSymbol()),
+                            rxm.STRING().getText());
+                    yield new BinaryOperationNode(
+                            nodeFactory.nextId("binary"),
+                            nodeFactory.sourceSpan(left.sourceSpan(), pattern.sourceSpan()),
+                            BinaryOperator.REGEX_MATCH, left, pattern);
+                }
+                case ExpressionEvaluatorParser.RegexNotMatchFilterRelationContext rxnm -> {
+                    ExpressionNode left = buildFilterValue(rxnm.filterValue());
+                    LiteralNode pattern = new LiteralNode(
+                            nodeFactory.nextId("literal"),
+                            nodeFactory.sourceSpan(rxnm.STRING().getSymbol()),
+                            rxnm.STRING().getText());
+                    yield new BinaryOperationNode(
+                            nodeFactory.nextId("binary"),
+                            nodeFactory.sourceSpan(left.sourceSpan(), pattern.sourceSpan()),
+                            BinaryOperator.REGEX_NOT_MATCH, left, pattern);
+                }
+                case ExpressionEvaluatorParser.InFilterRelationContext inf -> {
+                    ExpressionNode left = buildFilterValue(inf.filterValue(0));
+                    ExpressionNode right = buildFilterValue(inf.filterValue(1));
+                    yield new BinaryOperationNode(
+                            nodeFactory.nextId("binary"),
+                            nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
+                            BinaryOperator.IN, left, right);
+                }
+                case ExpressionEvaluatorParser.NinFilterRelationContext ninf -> {
+                    ExpressionNode left = buildFilterValue(ninf.filterValue(0));
+                    ExpressionNode right = buildFilterValue(ninf.filterValue(1));
+                    yield new BinaryOperationNode(
+                            nodeFactory.nextId("binary"),
+                            nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
+                            BinaryOperator.NOT_IN, left, right);
+                }
+                case ExpressionEvaluatorParser.TruthyFilterRelationContext truthy ->
+                        buildFilterValue(truthy.filterValue());
+                default -> throw new IllegalStateException(
+                        "unsupported filterRelation: " + ctx.getClass().getSimpleName());
+            };
+        }
+
+        private ExpressionNode buildFilterValue(ExpressionEvaluatorParser.FilterValueContext ctx) {
+            return switch (ctx) {
+                case ExpressionEvaluatorParser.CurrentElementFilterValueContext cur -> {
+                    List<ExpressionEvaluatorParser.MemberChainContext> memberChains = cur.memberChain();
+                    if (memberChains.isEmpty()) {
+                        yield new IdentifierNode(nodeFactory.nextId("identifier"), nodeFactory.sourceSpan(ctx), "@");
+                    }
+                    List<PropertyChainNode.MemberAccess> chain = buildMemberChain(memberChains);
+                    yield new PropertyChainNode(
+                            nodeFactory.nextId("propertyChain"),
+                            nodeFactory.sourceSpan(ctx),
+                            "@",
+                            chain);
+                }
+                case ExpressionEvaluatorParser.ExternalRefFilterValueContext ext -> {
+                    List<TerminalNode> identifiers = ext.IDENTIFIER();
+                    String root = identifiers.get(0).getText();
+                    if (identifiers.size() == 1) {
+                        yield new IdentifierNode(
+                                nodeFactory.nextId("identifier"),
+                                nodeFactory.sourceSpan(ctx),
+                                root);
+                    }
+                    List<PropertyChainNode.MemberAccess> chain = new ArrayList<>(identifiers.size() - 1);
+                    for (int i = 1; i < identifiers.size(); i++) {
+                        chain.add(new PropertyChainNode.PropertyAccess(identifiers.get(i).getText()));
+                    }
+                    yield new PropertyChainNode(
+                            nodeFactory.nextId("propertyChain"),
+                            nodeFactory.sourceSpan(ctx),
+                            root,
+                            chain);
+                }
+                case ExpressionEvaluatorParser.NumericFilterValueContext num ->
+                        visit(num.numericEntity());
+                case ExpressionEvaluatorParser.StringFilterValueContext str ->
+                        visit(str.stringConcatExpression());
+                case ExpressionEvaluatorParser.NullFilterValueContext nullCtx ->
+                        literal(nullCtx, "null");
+                default -> throw new IllegalStateException(
+                        "unsupported filterValue: " + ctx.getClass().getSimpleName());
+            };
+        }
+
+        private static String unquote(String s) {
+            if (s.length() >= 2 && s.charAt(0) == '"' && s.charAt(s.length() - 1) == '"') {
+                return s.substring(1, s.length() - 1);
+            }
+            return s;
+        }
+
+        // -------------------------------------------------------------------------
+        // Existing constants
+        // -------------------------------------------------------------------------
 
         @Override
         public ExpressionNode visitLogicalConstantOperation(ExpressionEvaluatorParser.LogicalConstantOperationContext ctx) {

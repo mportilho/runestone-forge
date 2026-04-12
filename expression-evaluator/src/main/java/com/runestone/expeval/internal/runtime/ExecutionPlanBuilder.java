@@ -4,6 +4,7 @@ import com.runestone.expeval.catalog.*;
 import com.runestone.expeval.internal.ast.*;
 import com.runestone.expeval.internal.ast.BinaryOperator;
 import com.runestone.expeval.internal.ast.TernaryOperationNode;
+import com.runestone.expeval.internal.navigation.NavigationMode;
 import com.runestone.expeval.types.*;
 
 import java.math.BigDecimal;
@@ -346,23 +347,108 @@ final class ExecutionPlanBuilder {
             TypeHintCatalog typeHintCatalog,
             MathContext mathContext,
             Map<SymbolRef, Object> foldedSymbols) {
-        SymbolRef rootRef = model.findSymbol(node.nodeId())
-                .orElseThrow(() -> new IllegalStateException(
-                        "missing symbol for property chain '" + node.rootIdentifier() + "'"));
 
+        // '@' root has no external symbol binding; create a special sentinel identifier.
         ExecutableNode root;
-        if (foldedSymbols.containsKey(rootRef)) {
-            root = new ExecutableLiteral(foldedSymbols.get(rootRef));
+        if ("@".equals(node.rootIdentifier())) {
+            root = new ExecutableIdentifier(new SymbolRef("@", SymbolKind.EXTERNAL), node.sourceSpan());
         } else {
-            root = new ExecutableIdentifier(rootRef, node.sourceSpan());
+            SymbolRef rootRef = model.findSymbol(node.nodeId())
+                    .orElseThrow(() -> new IllegalStateException(
+                            "missing symbol for property chain '" + node.rootIdentifier() + "'"));
+            if (foldedSymbols.containsKey(rootRef)) {
+                root = new ExecutableLiteral(foldedSymbols.get(rootRef));
+            } else {
+                root = new ExecutableIdentifier(rootRef, node.sourceSpan());
+            }
         }
 
-        ResolvedType currentType = resolveRootType(rootRef, model, externalSymbolCatalog);
+        ResolvedType currentType = "@".equals(node.rootIdentifier())
+                ? UnknownType.INSTANCE
+                : resolveRootType(
+                        model.findSymbol(node.nodeId()).orElse(new SymbolRef("@", SymbolKind.EXTERNAL)),
+                        model, externalSymbolCatalog);
         List<ExecutablePropertyChain.ExecutableAccess> steps = new ArrayList<>(node.chain().size());
 
         for (PropertyChainNode.MemberAccess access : node.chain()) {
             boolean safe = access instanceof PropertyChainNode.SafePropertyAccess
                     || access instanceof PropertyChainNode.SafeMethodCallAccess;
+
+            // ----- New navigation step types (take priority over typed/reflective paths) -----
+            switch (access) {
+                case PropertyChainNode.CollectionIndexStep cis -> {
+                    ExecutableNode idx = buildNode(cis.index(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                    steps.add(new ExecutablePropertyChain.ExecutableIndexAccess(idx));
+                    currentType = UnknownType.INSTANCE;
+                    continue;
+                }
+                case PropertyChainNode.MapKeyStep mks -> {
+                    steps.add(new ExecutablePropertyChain.ExecutableMapKeyAccess(mks.key()));
+                    currentType = UnknownType.INSTANCE;
+                    continue;
+                }
+                case PropertyChainNode.CollectionSliceStep css -> {
+                    ExecutableNode start = css.start() != null
+                            ? buildNode(css.start(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols)
+                            : null;
+                    ExecutableNode end = css.end() != null
+                            ? buildNode(css.end(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols)
+                            : null;
+                    steps.add(new ExecutablePropertyChain.ExecutableSliceAccess(start, end));
+                    continue;
+                }
+                case PropertyChainNode.WildcardStep ignored -> {
+                    steps.add(new ExecutablePropertyChain.ExecutableWildcard());
+                    continue;
+                }
+                case PropertyChainNode.FilterPredicateStep fps -> {
+                    ExecutableNode predicate = buildNode(fps.predicate(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                    steps.add(new ExecutablePropertyChain.ExecutableFilterPredicate(predicate));
+                    continue;
+                }
+                case PropertyChainNode.DeepScanStep dss -> {
+                    steps.add(new ExecutablePropertyChain.ExecutableDeepScan(dss.propertyName()));
+                    currentType = UnknownType.INSTANCE;
+                    continue;
+                }
+                case PropertyChainNode.CollectionFunctionStep cfs -> {
+                    List<ExecutableNode> args = cfs.arguments().stream()
+                            .map(a -> buildNode(a, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols))
+                            .toList();
+                    ResolvedFunctionBinding binding = model.findFunctionBinding(node.nodeId()).orElse(null);
+                    NavigationMode resultMode = NavigationMode.SCALAR;
+                    ResolvedType returnType = UnknownType.INSTANCE;
+                    if (binding != null) {
+                        returnType = binding.returnType();
+                        if (returnType instanceof com.runestone.expeval.types.CollectionType
+                                || returnType == VectorType.INSTANCE) {
+                            resultMode = NavigationMode.COLLECTION;
+                        } else if (returnType instanceof com.runestone.expeval.types.MapType) {
+                            resultMode = NavigationMode.MAP;
+                        }
+                        steps.add(new ExecutablePropertyChain.ExecutableCollectionFunction(binding, args, resultMode));
+                    } else {
+                        // Fallback: build reflective call — unknown return mode
+                        steps.add(new ExecutablePropertyChain.ExecutableCollectionFunction(
+                                new ResolvedFunctionBinding(null, null, UnknownType.INSTANCE), args, resultMode));
+                    }
+                    currentType = returnType;
+                    continue;
+                }
+                case PropertyChainNode.MapProjectionStep mps -> {
+                    steps.add(new ExecutablePropertyChain.ExecutableMapProjection(mps.kind()));
+                    currentType = UnknownType.INSTANCE;
+                    continue;
+                }
+                case PropertyChainNode.VectorAggregationStep vas -> {
+                    steps.add(new ExecutablePropertyChain.ExecutableVectorAggregation(vas.kind()));
+                    currentType = UnknownType.INSTANCE;
+                    continue;
+                }
+                default -> { /* fall through to typed/reflective path below */ }
+            }
+
+            // ----- Existing typed / reflective access -----
             List<ExecutableNode> argumentNodes = switch (access) {
                 case PropertyChainNode.MethodCallAccess methodCall ->
                         methodCall.arguments().stream()
@@ -448,6 +534,7 @@ final class ExecutionPlanBuilder {
                         true
                 );
             }
+            default -> throw new IllegalStateException("Unexpected access type in buildStaticAccess: " + access);
         };
     }
 
@@ -464,6 +551,7 @@ final class ExecutionPlanBuilder {
                     new ExecutablePropertyChain.ReflectiveMethodInvoke(methodCall.name(), argumentNodes, safe);
             case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
                     new ExecutablePropertyChain.ReflectiveMethodInvoke(safeMethodCall.name(), argumentNodes, true);
+            default -> throw new IllegalStateException("Unexpected access type in buildReflectiveAccess: " + access);
         };
     }
 
@@ -495,6 +583,7 @@ final class ExecutionPlanBuilder {
                     resolveMethodDescriptor(metadata,
                             new PropertyChainNode.MethodCallAccess(safeMethodCall.name(), safeMethodCall.arguments()),
                             model, typeHintCatalog).returnType();
+            default -> throw new IllegalStateException("Unexpected access type in nextType: " + access);
         };
     }
 
@@ -622,6 +711,10 @@ final class ExecutionPlanBuilder {
     }
 
     private ExecutableNode buildIdentifier(IdentifierNode id, SemanticModel model, Map<SymbolRef, Object> foldedSymbols) {
+        // '@' is the filter-predicate current-element sentinel — no model symbol, always dynamic
+        if ("@".equals(id.name())) {
+            return new ExecutableIdentifier(new SymbolRef("@", SymbolKind.EXTERNAL), id.sourceSpan());
+        }
         SymbolRef ref = model.findSymbol(id.nodeId())
                 .orElseThrow(() -> new IllegalStateException(
                         "missing symbol for identifier '" + id.name() + "'"));

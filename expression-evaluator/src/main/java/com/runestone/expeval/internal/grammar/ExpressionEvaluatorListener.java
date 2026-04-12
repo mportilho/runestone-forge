@@ -728,29 +728,53 @@ public interface ExpressionEvaluatorListener extends ParseTreeListener {
 	 */
 	void exitIdentifierReferenceTarget(ExpressionEvaluatorParser.IdentifierReferenceTargetContext ctx);
 	/**
-	 * Enter a parse tree produced by the {@code propertyAccess}
+	 * Enter a parse tree produced by the {@code collectionFunctionAccess}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
 	 * @param ctx the parse tree
 	 */
-	void enterPropertyAccess(ExpressionEvaluatorParser.PropertyAccessContext ctx);
+	void enterCollectionFunctionAccess(ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx);
 	/**
-	 * Exit a parse tree produced by the {@code propertyAccess}
+	 * Exit a parse tree produced by the {@code collectionFunctionAccess}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
 	 * @param ctx the parse tree
 	 */
-	void exitPropertyAccess(ExpressionEvaluatorParser.PropertyAccessContext ctx);
+	void exitCollectionFunctionAccess(ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx);
 	/**
-	 * Enter a parse tree produced by the {@code safePropertyAccess}
+	 * Enter a parse tree produced by the {@code deepScanWildcard}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
 	 * @param ctx the parse tree
 	 */
-	void enterSafePropertyAccess(ExpressionEvaluatorParser.SafePropertyAccessContext ctx);
+	void enterDeepScanWildcard(ExpressionEvaluatorParser.DeepScanWildcardContext ctx);
 	/**
-	 * Exit a parse tree produced by the {@code safePropertyAccess}
+	 * Exit a parse tree produced by the {@code deepScanWildcard}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
 	 * @param ctx the parse tree
 	 */
-	void exitSafePropertyAccess(ExpressionEvaluatorParser.SafePropertyAccessContext ctx);
+	void exitDeepScanWildcard(ExpressionEvaluatorParser.DeepScanWildcardContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code deepScanProperty}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void enterDeepScanProperty(ExpressionEvaluatorParser.DeepScanPropertyContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code deepScanProperty}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void exitDeepScanProperty(ExpressionEvaluatorParser.DeepScanPropertyContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code childWildcardAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void enterChildWildcardAccess(ExpressionEvaluatorParser.ChildWildcardAccessContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code childWildcardAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void exitChildWildcardAccess(ExpressionEvaluatorParser.ChildWildcardAccessContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code methodCallAccess}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
@@ -775,6 +799,302 @@ public interface ExpressionEvaluatorListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitSafeMethodCallAccess(ExpressionEvaluatorParser.SafeMethodCallAccessContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code propertyAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void enterPropertyAccess(ExpressionEvaluatorParser.PropertyAccessContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code propertyAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void exitPropertyAccess(ExpressionEvaluatorParser.PropertyAccessContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code safePropertyAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void enterSafePropertyAccess(ExpressionEvaluatorParser.SafePropertyAccessContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code safePropertyAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void exitSafePropertyAccess(ExpressionEvaluatorParser.SafePropertyAccessContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code subscriptAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void enterSubscriptAccess(ExpressionEvaluatorParser.SubscriptAccessContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code subscriptAccess}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
+	 * @param ctx the parse tree
+	 */
+	void exitSubscriptAccess(ExpressionEvaluatorParser.SubscriptAccessContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code wildcardSubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void enterWildcardSubscript(ExpressionEvaluatorParser.WildcardSubscriptContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code wildcardSubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void exitWildcardSubscript(ExpressionEvaluatorParser.WildcardSubscriptContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code stringKeySubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void enterStringKeySubscript(ExpressionEvaluatorParser.StringKeySubscriptContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code stringKeySubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void exitStringKeySubscript(ExpressionEvaluatorParser.StringKeySubscriptContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code sliceWithStartSubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void enterSliceWithStartSubscript(ExpressionEvaluatorParser.SliceWithStartSubscriptContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code sliceWithStartSubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void exitSliceWithStartSubscript(ExpressionEvaluatorParser.SliceWithStartSubscriptContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code sliceToEndSubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void enterSliceToEndSubscript(ExpressionEvaluatorParser.SliceToEndSubscriptContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code sliceToEndSubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void exitSliceToEndSubscript(ExpressionEvaluatorParser.SliceToEndSubscriptContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code sliceTimeSubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void enterSliceTimeSubscript(ExpressionEvaluatorParser.SliceTimeSubscriptContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code sliceTimeSubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void exitSliceTimeSubscript(ExpressionEvaluatorParser.SliceTimeSubscriptContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code indexSubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void enterIndexSubscript(ExpressionEvaluatorParser.IndexSubscriptContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code indexSubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void exitIndexSubscript(ExpressionEvaluatorParser.IndexSubscriptContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code filterSubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void enterFilterSubscript(ExpressionEvaluatorParser.FilterSubscriptContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code filterSubscript}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#subscript}.
+	 * @param ctx the parse tree
+	 */
+	void exitFilterSubscript(ExpressionEvaluatorParser.FilterSubscriptContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link ExpressionEvaluatorParser#signedInteger}.
+	 * @param ctx the parse tree
+	 */
+	void enterSignedInteger(ExpressionEvaluatorParser.SignedIntegerContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link ExpressionEvaluatorParser#signedInteger}.
+	 * @param ctx the parse tree
+	 */
+	void exitSignedInteger(ExpressionEvaluatorParser.SignedIntegerContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link ExpressionEvaluatorParser#filterPredicate}.
+	 * @param ctx the parse tree
+	 */
+	void enterFilterPredicate(ExpressionEvaluatorParser.FilterPredicateContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link ExpressionEvaluatorParser#filterPredicate}.
+	 * @param ctx the parse tree
+	 */
+	void exitFilterPredicate(ExpressionEvaluatorParser.FilterPredicateContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code parenFilterAtom}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterAtom}.
+	 * @param ctx the parse tree
+	 */
+	void enterParenFilterAtom(ExpressionEvaluatorParser.ParenFilterAtomContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code parenFilterAtom}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterAtom}.
+	 * @param ctx the parse tree
+	 */
+	void exitParenFilterAtom(ExpressionEvaluatorParser.ParenFilterAtomContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code relationFilterAtom}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterAtom}.
+	 * @param ctx the parse tree
+	 */
+	void enterRelationFilterAtom(ExpressionEvaluatorParser.RelationFilterAtomContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code relationFilterAtom}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterAtom}.
+	 * @param ctx the parse tree
+	 */
+	void exitRelationFilterAtom(ExpressionEvaluatorParser.RelationFilterAtomContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code comparisonFilterRelation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterRelation}.
+	 * @param ctx the parse tree
+	 */
+	void enterComparisonFilterRelation(ExpressionEvaluatorParser.ComparisonFilterRelationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code comparisonFilterRelation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterRelation}.
+	 * @param ctx the parse tree
+	 */
+	void exitComparisonFilterRelation(ExpressionEvaluatorParser.ComparisonFilterRelationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code regexMatchFilterRelation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterRelation}.
+	 * @param ctx the parse tree
+	 */
+	void enterRegexMatchFilterRelation(ExpressionEvaluatorParser.RegexMatchFilterRelationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code regexMatchFilterRelation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterRelation}.
+	 * @param ctx the parse tree
+	 */
+	void exitRegexMatchFilterRelation(ExpressionEvaluatorParser.RegexMatchFilterRelationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code regexNotMatchFilterRelation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterRelation}.
+	 * @param ctx the parse tree
+	 */
+	void enterRegexNotMatchFilterRelation(ExpressionEvaluatorParser.RegexNotMatchFilterRelationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code regexNotMatchFilterRelation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterRelation}.
+	 * @param ctx the parse tree
+	 */
+	void exitRegexNotMatchFilterRelation(ExpressionEvaluatorParser.RegexNotMatchFilterRelationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code inFilterRelation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterRelation}.
+	 * @param ctx the parse tree
+	 */
+	void enterInFilterRelation(ExpressionEvaluatorParser.InFilterRelationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code inFilterRelation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterRelation}.
+	 * @param ctx the parse tree
+	 */
+	void exitInFilterRelation(ExpressionEvaluatorParser.InFilterRelationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code ninFilterRelation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterRelation}.
+	 * @param ctx the parse tree
+	 */
+	void enterNinFilterRelation(ExpressionEvaluatorParser.NinFilterRelationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code ninFilterRelation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterRelation}.
+	 * @param ctx the parse tree
+	 */
+	void exitNinFilterRelation(ExpressionEvaluatorParser.NinFilterRelationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code truthyFilterRelation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterRelation}.
+	 * @param ctx the parse tree
+	 */
+	void enterTruthyFilterRelation(ExpressionEvaluatorParser.TruthyFilterRelationContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code truthyFilterRelation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterRelation}.
+	 * @param ctx the parse tree
+	 */
+	void exitTruthyFilterRelation(ExpressionEvaluatorParser.TruthyFilterRelationContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code currentElementFilterValue}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterValue}.
+	 * @param ctx the parse tree
+	 */
+	void enterCurrentElementFilterValue(ExpressionEvaluatorParser.CurrentElementFilterValueContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code currentElementFilterValue}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterValue}.
+	 * @param ctx the parse tree
+	 */
+	void exitCurrentElementFilterValue(ExpressionEvaluatorParser.CurrentElementFilterValueContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code externalRefFilterValue}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterValue}.
+	 * @param ctx the parse tree
+	 */
+	void enterExternalRefFilterValue(ExpressionEvaluatorParser.ExternalRefFilterValueContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code externalRefFilterValue}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterValue}.
+	 * @param ctx the parse tree
+	 */
+	void exitExternalRefFilterValue(ExpressionEvaluatorParser.ExternalRefFilterValueContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code numericFilterValue}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterValue}.
+	 * @param ctx the parse tree
+	 */
+	void enterNumericFilterValue(ExpressionEvaluatorParser.NumericFilterValueContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code numericFilterValue}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterValue}.
+	 * @param ctx the parse tree
+	 */
+	void exitNumericFilterValue(ExpressionEvaluatorParser.NumericFilterValueContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code stringFilterValue}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterValue}.
+	 * @param ctx the parse tree
+	 */
+	void enterStringFilterValue(ExpressionEvaluatorParser.StringFilterValueContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code stringFilterValue}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterValue}.
+	 * @param ctx the parse tree
+	 */
+	void exitStringFilterValue(ExpressionEvaluatorParser.StringFilterValueContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code nullFilterValue}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterValue}.
+	 * @param ctx the parse tree
+	 */
+	void enterNullFilterValue(ExpressionEvaluatorParser.NullFilterValueContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code nullFilterValue}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#filterValue}.
+	 * @param ctx the parse tree
+	 */
+	void exitNullFilterValue(ExpressionEvaluatorParser.NullFilterValueContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code greaterThanOperator}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#comparisonOperator}.

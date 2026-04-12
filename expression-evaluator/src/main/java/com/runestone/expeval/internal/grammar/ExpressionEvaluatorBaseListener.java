@@ -737,25 +737,49 @@ public class ExpressionEvaluatorBaseListener implements ExpressionEvaluatorListe
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void enterPropertyAccess(ExpressionEvaluatorParser.PropertyAccessContext ctx) { }
+	@Override public void enterCollectionFunctionAccess(ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void exitPropertyAccess(ExpressionEvaluatorParser.PropertyAccessContext ctx) { }
+	@Override public void exitCollectionFunctionAccess(ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void enterSafePropertyAccess(ExpressionEvaluatorParser.SafePropertyAccessContext ctx) { }
+	@Override public void enterDeepScanWildcard(ExpressionEvaluatorParser.DeepScanWildcardContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void exitSafePropertyAccess(ExpressionEvaluatorParser.SafePropertyAccessContext ctx) { }
+	@Override public void exitDeepScanWildcard(ExpressionEvaluatorParser.DeepScanWildcardContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterDeepScanProperty(ExpressionEvaluatorParser.DeepScanPropertyContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitDeepScanProperty(ExpressionEvaluatorParser.DeepScanPropertyContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterChildWildcardAccess(ExpressionEvaluatorParser.ChildWildcardAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitChildWildcardAccess(ExpressionEvaluatorParser.ChildWildcardAccessContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -780,6 +804,306 @@ public class ExpressionEvaluatorBaseListener implements ExpressionEvaluatorListe
 	 * <p>The default implementation does nothing.</p>
 	 */
 	@Override public void exitSafeMethodCallAccess(ExpressionEvaluatorParser.SafeMethodCallAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterPropertyAccess(ExpressionEvaluatorParser.PropertyAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitPropertyAccess(ExpressionEvaluatorParser.PropertyAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterSafePropertyAccess(ExpressionEvaluatorParser.SafePropertyAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitSafePropertyAccess(ExpressionEvaluatorParser.SafePropertyAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterSubscriptAccess(ExpressionEvaluatorParser.SubscriptAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitSubscriptAccess(ExpressionEvaluatorParser.SubscriptAccessContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterWildcardSubscript(ExpressionEvaluatorParser.WildcardSubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitWildcardSubscript(ExpressionEvaluatorParser.WildcardSubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterStringKeySubscript(ExpressionEvaluatorParser.StringKeySubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitStringKeySubscript(ExpressionEvaluatorParser.StringKeySubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterSliceWithStartSubscript(ExpressionEvaluatorParser.SliceWithStartSubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitSliceWithStartSubscript(ExpressionEvaluatorParser.SliceWithStartSubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterSliceToEndSubscript(ExpressionEvaluatorParser.SliceToEndSubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitSliceToEndSubscript(ExpressionEvaluatorParser.SliceToEndSubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterSliceTimeSubscript(ExpressionEvaluatorParser.SliceTimeSubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitSliceTimeSubscript(ExpressionEvaluatorParser.SliceTimeSubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterIndexSubscript(ExpressionEvaluatorParser.IndexSubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitIndexSubscript(ExpressionEvaluatorParser.IndexSubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterFilterSubscript(ExpressionEvaluatorParser.FilterSubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitFilterSubscript(ExpressionEvaluatorParser.FilterSubscriptContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterSignedInteger(ExpressionEvaluatorParser.SignedIntegerContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitSignedInteger(ExpressionEvaluatorParser.SignedIntegerContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterFilterPredicate(ExpressionEvaluatorParser.FilterPredicateContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitFilterPredicate(ExpressionEvaluatorParser.FilterPredicateContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterParenFilterAtom(ExpressionEvaluatorParser.ParenFilterAtomContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitParenFilterAtom(ExpressionEvaluatorParser.ParenFilterAtomContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterRelationFilterAtom(ExpressionEvaluatorParser.RelationFilterAtomContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitRelationFilterAtom(ExpressionEvaluatorParser.RelationFilterAtomContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterComparisonFilterRelation(ExpressionEvaluatorParser.ComparisonFilterRelationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitComparisonFilterRelation(ExpressionEvaluatorParser.ComparisonFilterRelationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterRegexMatchFilterRelation(ExpressionEvaluatorParser.RegexMatchFilterRelationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitRegexMatchFilterRelation(ExpressionEvaluatorParser.RegexMatchFilterRelationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterRegexNotMatchFilterRelation(ExpressionEvaluatorParser.RegexNotMatchFilterRelationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitRegexNotMatchFilterRelation(ExpressionEvaluatorParser.RegexNotMatchFilterRelationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterInFilterRelation(ExpressionEvaluatorParser.InFilterRelationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitInFilterRelation(ExpressionEvaluatorParser.InFilterRelationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterNinFilterRelation(ExpressionEvaluatorParser.NinFilterRelationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitNinFilterRelation(ExpressionEvaluatorParser.NinFilterRelationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterTruthyFilterRelation(ExpressionEvaluatorParser.TruthyFilterRelationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitTruthyFilterRelation(ExpressionEvaluatorParser.TruthyFilterRelationContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterCurrentElementFilterValue(ExpressionEvaluatorParser.CurrentElementFilterValueContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitCurrentElementFilterValue(ExpressionEvaluatorParser.CurrentElementFilterValueContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterExternalRefFilterValue(ExpressionEvaluatorParser.ExternalRefFilterValueContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitExternalRefFilterValue(ExpressionEvaluatorParser.ExternalRefFilterValueContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterNumericFilterValue(ExpressionEvaluatorParser.NumericFilterValueContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitNumericFilterValue(ExpressionEvaluatorParser.NumericFilterValueContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterStringFilterValue(ExpressionEvaluatorParser.StringFilterValueContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitStringFilterValue(ExpressionEvaluatorParser.StringFilterValueContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterNullFilterValue(ExpressionEvaluatorParser.NullFilterValueContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitNullFilterValue(ExpressionEvaluatorParser.NullFilterValueContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *

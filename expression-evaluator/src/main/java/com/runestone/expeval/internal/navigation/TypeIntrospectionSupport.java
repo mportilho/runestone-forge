@@ -1,4 +1,4 @@
-package com.runestone.expeval.internal.runtime;
+package com.runestone.expeval.internal.navigation;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -19,12 +19,41 @@ import java.util.Map;
  * {@link #propertyNameFromGetter}, {@link #decapitalize}) are also used by
  * {@code ExpressionEnvironmentBuilder} for the typed-hint discovery path.
  *
- * <p>Although {@code public}, this class belongs to the {@code internal.runtime} package and is
+ * <p>The convenience methods {@link #cachedProperty} and {@link #cachedMethod} delegate to
+ * {@link ReflectiveAccessCache}, which keeps the cache package-private to this package while
+ * still allowing callers from other internal packages to perform cache lookups without a direct
+ * dependency on {@link ReflectiveAccessCache}.
+ *
+ * <p>Although {@code public}, this class belongs to the {@code internal.navigation} package and is
  * not part of the library's public API. No compatibility guarantees are provided.
  */
 public final class TypeIntrospectionSupport {
 
     private TypeIntrospectionSupport() {}
+
+    // -------------------------------------------------------------------------
+    // Cache-access façade — keeps ReflectiveAccessCache package-private
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns the cached {@link MethodHandle} for {@code propertyName} on {@code type},
+     * or {@code null} if no accessible property with that name exists.
+     */
+    public static MethodHandle cachedProperty(Class<?> type, String propertyName) {
+        return ReflectiveAccessCache.property(type, propertyName);
+    }
+
+    /**
+     * Returns the cached {@link MethodHandle} for {@code methodName} with {@code arity}
+     * parameters on {@code type}, or {@code null} if no such method exists.
+     */
+    public static MethodHandle cachedMethod(Class<?> type, String methodName, int arity) {
+        return ReflectiveAccessCache.method(type, methodName, arity);
+    }
+
+    // -------------------------------------------------------------------------
+    // Discovery — invoked by ReflectiveAccessCache on first access per type
+    // -------------------------------------------------------------------------
 
     /**
      * Discovers all accessible property handles for {@code type}.

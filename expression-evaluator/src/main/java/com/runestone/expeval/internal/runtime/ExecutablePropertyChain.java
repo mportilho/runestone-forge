@@ -1,14 +1,18 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.navigation.MapProjectionKind;
+import com.runestone.expeval.internal.navigation.NavigationMode;
+import com.runestone.expeval.internal.navigation.VectorAggregationKind;
 import com.runestone.expeval.types.ResolvedType;
+import org.jspecify.annotations.Nullable;
 
 import java.lang.invoke.MethodHandle;
 import java.util.List;
 import java.util.Objects;
 
 /**
- * Executable representation of a dot-chain navigation expression such as
- * {@code usuario.nome} or {@code pedido.calcularTotal(taxa)}.
+ * Executable representation of a navigation expression such as
+ * {@code store.book[*].author} or {@code store..price..sum()}.
  *
  * <p>When type hints are available the chain carries precomputed {@link MethodHandle}s.
  * For dynamic chains without hints, runtime reflection remains as a fallback.
@@ -27,8 +31,21 @@ record ExecutablePropertyChain(
             ExecutableFieldGet,
             ExecutableMethodInvoke,
             ReflectivePropertyAccess,
-            ReflectiveMethodInvoke {
+            ReflectiveMethodInvoke,
+            ExecutableIndexAccess,
+            ExecutableMapKeyAccess,
+            ExecutableSliceAccess,
+            ExecutableWildcard,
+            ExecutableFilterPredicate,
+            ExecutableDeepScan,
+            ExecutableCollectionFunction,
+            ExecutableMapProjection,
+            ExecutableVectorAggregation {
     }
+
+    // -------------------------------------------------------------------------
+    // Existing typed accesses (dot-notation, method calls)
+    // -------------------------------------------------------------------------
 
     record ExecutableFieldGet(
             String name,
@@ -75,6 +92,73 @@ record ExecutablePropertyChain(
         ReflectiveMethodInvoke {
             Objects.requireNonNull(name, "name must not be null");
             arguments = List.copyOf(Objects.requireNonNull(arguments, "arguments must not be null"));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // New collection / map navigation steps
+    // -------------------------------------------------------------------------
+
+    /** {@code [n]} or {@code [-n]} — single index access. */
+    record ExecutableIndexAccess(ExecutableNode index) implements ExecutableAccess {
+        ExecutableIndexAccess {
+            Objects.requireNonNull(index, "index must not be null");
+        }
+    }
+
+    /** {@code ["key"]} — literal key lookup in a {@code Map<String, ?>}. */
+    record ExecutableMapKeyAccess(String key) implements ExecutableAccess {
+        ExecutableMapKeyAccess {
+            Objects.requireNonNull(key, "key must not be null");
+        }
+    }
+
+    /** {@code [start:end]}, {@code [:end]}, {@code [start:]} — slice. */
+    record ExecutableSliceAccess(
+            @Nullable ExecutableNode start,
+            @Nullable ExecutableNode end
+    ) implements ExecutableAccess {}
+
+    /** {@code [*]} or {@code .*} — wildcard, returns all elements/values. */
+    record ExecutableWildcard() implements ExecutableAccess {}
+
+    /** {@code [?(<predicate>)]} — filter; evaluated element-by-element. */
+    record ExecutableFilterPredicate(ExecutableNode predicate) implements ExecutableAccess {
+        ExecutableFilterPredicate {
+            Objects.requireNonNull(predicate, "predicate must not be null");
+        }
+    }
+
+    /** {@code ..name} or {@code ..*} — recursive deep scan. */
+    record ExecutableDeepScan(@Nullable String propertyName) implements ExecutableAccess {}
+
+    /**
+     * {@code ..funcName(args)} — invoke a {@link com.runestone.expeval.catalog.FunctionCatalog}
+     * function with the current collection/map as the implicit first argument.
+     */
+    record ExecutableCollectionFunction(
+            ResolvedFunctionBinding binding,
+            List<ExecutableNode> arguments,
+            NavigationMode resultMode
+    ) implements ExecutableAccess {
+        ExecutableCollectionFunction {
+            Objects.requireNonNull(binding, "binding must not be null");
+            arguments = List.copyOf(Objects.requireNonNull(arguments, "arguments must not be null"));
+            Objects.requireNonNull(resultMode, "resultMode must not be null");
+        }
+    }
+
+    /** {@code ..keys()} or {@code ..values()}. */
+    record ExecutableMapProjection(MapProjectionKind kind) implements ExecutableAccess {
+        ExecutableMapProjection {
+            Objects.requireNonNull(kind, "kind must not be null");
+        }
+    }
+
+    /** {@code ..sum()}, {@code ..count()}, etc. */
+    record ExecutableVectorAggregation(VectorAggregationKind kind) implements ExecutableAccess {
+        ExecutableVectorAggregation {
+            Objects.requireNonNull(kind, "kind must not be null");
         }
     }
 }
