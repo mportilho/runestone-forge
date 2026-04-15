@@ -50,6 +50,14 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     private static final ThreadLocal<FilterContextStack> FILTER_CTX =
             ThreadLocal.withInitial(FilterContextStack::new);
 
+    /**
+     * Per-thread reusable context for deep scans, eliminating allocations of {@code ArrayList},
+     * {@code IdentityHashMap}, and {@code ArrayDeque} per invocation. Structures are cleared
+     * before each use but never deallocated.
+     */
+    private static final ThreadLocal<DeepScanContext> DEEP_SCAN_CTX =
+            ThreadLocal.withInitial(DeepScanContext::new);
+
     private final CompiledExpression compiledExpression;
     private final RuntimeServices runtimeServices;
     private final MathContext mathContext;
@@ -612,12 +620,20 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     /**
      * {@code ..name} or {@code ..*} — BFS recursive deep scan.
      * Collects the named property (or all values for wildcard) from every reachable node.
+     * O2: Reuses thread-local structures (ArrayList, IdentityHashMap, ArrayDeque) to eliminate
+     * per-invocation allocations.
      */
     private List<Object> applyDeepScan(Object root, String propertyName, ExecutionScope scope) {
-        List<Object> results = new ArrayList<>();
-        // identity-based deduplication to break cycles
-        Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
-        Deque<Object> queue = new ArrayDeque<>();
+        DeepScanContext ctx = DEEP_SCAN_CTX.get();
+        List<Object> results = ctx.results;
+        Set<Object> visited = ctx.visited;
+        Deque<Object> queue = ctx.queue;
+
+        // Clear structures before use, maintaining capacity
+        results.clear();
+        visited.clear();
+        queue.clear();
+
         queue.add(root);
         while (!queue.isEmpty()) {
             Object node = queue.poll();
@@ -1041,6 +1057,21 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         String message = "variable '" + id.ref().name() + "' has no value; call setValue(\""
                          + id.ref().name() + "\", ...) before compute()";
         return new ExpressionEvaluationException(compiledExpression.source(), "UNBOUND_VARIABLE", message, position);
+    }
+
+    // -------------------------------------------------------------------------
+    // Deep scan context pool (O2)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Per-thread context for BFS-based deep scans, holding pre-allocated structures
+     * that are cleared before each use. Eliminates allocations of {@code ArrayList},
+     * {@code IdentityHashMap}, and {@code ArrayDeque}.
+     */
+    private static final class DeepScanContext {
+        final List<Object> results = new ArrayList<>(16);  // Pre-sized to avoid grow()
+        final Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        final Deque<Object> queue = new ArrayDeque<>();
     }
 
     // -------------------------------------------------------------------------

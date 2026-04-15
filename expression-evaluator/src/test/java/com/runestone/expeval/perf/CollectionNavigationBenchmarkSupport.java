@@ -21,6 +21,7 @@ public final class CollectionNavigationBenchmarkSupport {
     public static final String MAP_FILTER_EXPRESSION = "bookByIsbn[?(@.price < threshold)]..count()";
     public static final String MAP_VALUES_EXPRESSION = "bookByIsbn..values()..count()";
     public static final String CUSTOM_FUNCTION_EXPRESSION = "prices..countAbove(threshold)";
+    public static final String DEEP_SCAN_EXPRESSION = "store..price..count()";
 
     private static final Frame[] FRAMES = buildFrames();
     private static final ExpressionEnvironment ENVIRONMENT = buildEnvironment(FRAMES[0]);
@@ -35,6 +36,8 @@ public final class CollectionNavigationBenchmarkSupport {
             MathExpression.compile(MAP_VALUES_EXPRESSION, ENVIRONMENT);
     private static final MathExpression CUSTOM_FUNCTION_EXPRESSION_COMPILED =
             MathExpression.compile(CUSTOM_FUNCTION_EXPRESSION, ENVIRONMENT);
+    private static final MathExpression DEEP_SCAN_EXPRESSION_COMPILED =
+            MathExpression.compile(DEEP_SCAN_EXPRESSION, ENVIRONMENT);
 
     private CollectionNavigationBenchmarkSupport() {
     }
@@ -59,12 +62,17 @@ public final class CollectionNavigationBenchmarkSupport {
         return CUSTOM_FUNCTION_EXPRESSION_COMPILED.compute(FRAMES[index & FRAME_MASK].customFunctionValues());
     }
 
+    public static BigDecimal evaluateDeepScanCount(int index) {
+        return DEEP_SCAN_EXPRESSION_COMPILED.compute(FRAMES[index & FRAME_MASK].deepScanValues());
+    }
+
     private static ExpressionEnvironment buildEnvironment(Frame frame) {
         return ExpressionEnvironment.builder()
                 .registerStaticProvider(TestCollectionFunctions.class)
                 .registerExternalSymbol("prices", frame.indexValues().get("prices"), true)
                 .registerExternalSymbol("books", frame.listFilterValues().get("books"), true)
                 .registerExternalSymbol("bookByIsbn", frame.mapFilterValues().get("bookByIsbn"), true)
+                .registerExternalSymbol("store", frame.deepScanValues().get("store"), true)
                 .registerExternalSymbol("threshold", frame.listFilterValues().get("threshold"), true)
                 .build();
     }
@@ -75,18 +83,21 @@ public final class CollectionNavigationBenchmarkSupport {
             List<BigDecimal> prices = buildPrices(index);
             List<Map<String, Object>> books = buildBooks(index);
             Map<String, Object> bookByIsbn = buildBookByIsbn(index);
+            Map<String, Object> store = buildStore(books, bookByIsbn);
 
             Map<String, Object> indexValues = Map.of("prices", prices);
             Map<String, Object> listFilterValues = Map.of("books", books, "threshold", THRESHOLD);
             Map<String, Object> mapFilterValues = Map.of("bookByIsbn", bookByIsbn, "threshold", THRESHOLD);
             Map<String, Object> mapProjectionValues = Map.of("bookByIsbn", bookByIsbn);
             Map<String, Object> customFunctionValues = Map.of("prices", prices, "threshold", THRESHOLD);
+            Map<String, Object> deepScanValues = Map.of("store", store);
             frames[index] = new Frame(
                     indexValues,
                     listFilterValues,
                     mapFilterValues,
                     mapProjectionValues,
-                    customFunctionValues);
+                    customFunctionValues,
+                    deepScanValues);
         }
         return frames;
     }
@@ -115,6 +126,16 @@ public final class CollectionNavigationBenchmarkSupport {
         bookByIsbn.put("0-553-21311-7", book(frameIndex, 2, "Moby Dick", "Herman Melville", "fiction", "0-553-21311-7"));
         bookByIsbn.put("0-395-19395-9", book(frameIndex, 3, "The Lord of the Rings", "J. R. R. Tolkien", "fiction", "0-395-19395-9"));
         return Map.copyOf(bookByIsbn);
+    }
+
+    private static Map<String, Object> buildStore(
+            List<Map<String, Object>> books,
+            Map<String, Object> bookByIsbn) {
+        Map<String, Object> store = new LinkedHashMap<>();
+        store.put("books", books);
+        store.put("bookByIsbn", bookByIsbn);
+        store.put("self", store);
+        return store;
     }
 
     private static Map<String, Object> book(
@@ -150,6 +171,7 @@ public final class CollectionNavigationBenchmarkSupport {
             Map<String, Object> listFilterValues,
             Map<String, Object> mapFilterValues,
             Map<String, Object> mapProjectionValues,
-            Map<String, Object> customFunctionValues) {
+            Map<String, Object> customFunctionValues,
+            Map<String, Object> deepScanValues) {
     }
 }
