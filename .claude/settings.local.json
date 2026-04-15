@@ -123,17 +123,7 @@
       "Skill(test-quality)",
       "Bash($SKILL_SCRIPTS/run-jmh.sh:*)",
       "Bash(cat)",
-      "Read(//tmp/**)",
-      "Bash(jcmd 9735:*)",
-      "Bash(jcmd 9877:*)",
-      "Bash(jcmd 10039 VM.version)",
-      "Bash(jcmd 10039 JFR.dump name=cnav filename=/tmp/cnav_final.jfr)",
-      "Bash(jcmd 10072:*)",
-      "Bash(jcmd)",
-      "Bash(jfr summary:*)",
-      "Bash(jfr print:*)",
-      "Bash(awk '/stackTrace/,/^\\\\}/')",
-      "Skill(performance-benchmark)"
+      "Read(//tmp/**)"
     ]
   }
 }

@@ -49,10 +49,6 @@ import java.util.stream.Collectors;
  * <p>All static factory methods and all instance {@code compute*} methods are thread-safe.
  * Compiled instances hold no mutable state: variable values are supplied per call via a
  * {@code Map<String, Object>} and each call builds its own {@link ExecutionScope}.
- * Re-entrant evaluation of the same instance on the same thread — for example when a
- * catalog function calls back into the same compiled expression — is also supported: the
- * inner call detects the active evaluation via a per-instance {@code ThreadLocal} flag and
- * allocates a fresh override buffer instead of reusing the shared slot.
  */
 public final class ExpressionRuntimeSupport {
 
@@ -126,27 +122,6 @@ public final class ExpressionRuntimeSupport {
     private final int internalSymbolCount;
     private final int externalSymbolCount;
     private final int maxAuditEvents;
-    /**
-     * Per-thread slot that caches the override buffer and a pre-wired read-only scope.
-     *
-     * <p>On the hot read-only, non-audited path the same {@code Object[]} and the same
-     * {@link ExecutionScope} are reused across calls on the same thread, eliminating the
-     * per-call allocation of those two objects.  The buffer is reset to {@link ExecutionScope#UNBOUND}
-     * before every use, so stale values from a prior call are never visible.
-     */
-    private final ThreadLocal<OverrideSlot> tlSlot = new ThreadLocal<>();
-    /**
-     * Guards the ThreadLocal slot against re-entrant use on the same thread.
-     *
-     * <p>Set to {@code true} immediately before the evaluator runs and reset to {@code false}
-     * in the {@code finally} block.  When a user-provided catalog function triggers a second
-     * evaluation of the <em>same</em> {@code ExpressionRuntimeSupport} instance on the same
-     * thread, {@link #buildOverrides} detects the active flag and allocates a fresh override
-     * buffer instead of reusing the slot, preventing the inner call from overwriting the outer
-     * call's bindings.  {@link #createExecutionScope} similarly creates a fresh
-     * {@link ExecutionScope} rather than returning the cached one.
-     */
-    private final ThreadLocal<Boolean> tlInUse = ThreadLocal.withInitial(() -> false);
 
     private ExpressionRuntimeSupport(CompiledExpression compiledExpression,
                                      Object[] defaultValues,
@@ -300,17 +275,12 @@ public final class ExpressionRuntimeSupport {
 
     /**
      * Builds the per-call overrides array, leaving immutable defaults shared across evaluations.
-     *
-     * <p>On the normal (non-reentrant) path the thread-local override buffer is reused to avoid
-     * per-call allocation.  When {@link #tlInUse} is already {@code true} — meaning a catalog
-     * function triggered a re-entrant call on the same thread — a fresh array is allocated so
-     * the inner call never overwrites the outer call's bindings.
      */
     private Object[] buildOverrides(Map<String, Object> userValues) {
         if (userValues == null || userValues.isEmpty()) {
             return null;
         }
-        Object[] result = tlInUse.get() ? new Object[externalSymbolCount] : getOrInitSlot().overrides;
+        Object[] result = new Object[externalSymbolCount];
         Arrays.fill(result, ExecutionScope.UNBOUND);
         for (Map.Entry<String, Object> entry : userValues.entrySet()) {
             String name = entry.getKey();
@@ -350,49 +320,10 @@ public final class ExpressionRuntimeSupport {
             }
             return ExecutionScope.from(overrides, defaultValues, internalSymbolCount);
         }
-        // Re-entrant path: the ThreadLocal slot is owned by the outer call; return a fresh scope
-        // backed by the fresh buffer that buildOverrides already allocated above.
-        if (tlInUse.get()) {
-            return defaultValues.length == 0
-                    ? ExecutionScope.readOnly(overrides)
-                    : ExecutionScope.readOnly(overrides, defaultValues);
+        if (defaultValues.length == 0) {
+            return ExecutionScope.readOnly(overrides);
         }
-        // Hot read-only non-audited path: reuse the pre-built scope that already points to the
-        // thread-local override buffer filled by buildOverrides above.
-        ExecutionScope scope = getOrInitSlot().scope;
-        scope.clearDynamicCache();
-        return scope;
-    }
-
-    /**
-     * Returns the per-thread {@link OverrideSlot}, initializing it on first access.
-     *
-     * <p>The slot holds a reusable override buffer of length {@link #externalSymbolCount} and a
-     * read-only {@link ExecutionScope} whose {@code layer1} permanently points to that buffer.
-     * Refilling the buffer with {@link Arrays#fill} plus per-entry writes is all that is needed to
-     * "reset" the scope for the next evaluation call.
-     */
-    private OverrideSlot getOrInitSlot() {
-        OverrideSlot slot = tlSlot.get();
-        if (slot == null) {
-            Object[] buf = new Object[externalSymbolCount];
-            ExecutionScope scope = defaultValues.length == 0
-                    ? ExecutionScope.readOnly(buf)
-                    : ExecutionScope.readOnly(buf, defaultValues);
-            slot = new OverrideSlot(buf, scope);
-            tlSlot.set(slot);
-        }
-        return slot;
-    }
-
-    private static final class OverrideSlot {
-        final Object[] overrides;
-        final ExecutionScope scope;
-
-        OverrideSlot(Object[] overrides, ExecutionScope scope) {
-            this.overrides = overrides;
-            this.scope = scope;
-        }
+        return ExecutionScope.readOnly(overrides, defaultValues);
     }
 
     private ExecutionScope createAuditedExecutionScope(Map<String, Object> userValues, AuditCollector collector) {
@@ -420,75 +351,33 @@ public final class ExpressionRuntimeSupport {
     // -------------------------------------------------------------------------
 
     public BigDecimal computeMath(Map<String, Object> values) {
-        ExecutionScope scope = createExecutionScope(values);
-        boolean wasActive = tlInUse.get();
-        if (!wasActive) tlInUse.set(true);
-        try {
-            return mathEvaluator.evaluate(scope);
-        } finally {
-            if (!wasActive) tlInUse.set(false);
-        }
+        return mathEvaluator.evaluate(createExecutionScope(values));
     }
 
     public boolean computeLogical(Map<String, Object> values) {
-        ExecutionScope scope = createExecutionScope(values);
-        boolean wasActive = tlInUse.get();
-        if (!wasActive) tlInUse.set(true);
-        try {
-            return logicalEvaluator.evaluate(scope);
-        } finally {
-            if (!wasActive) tlInUse.set(false);
-        }
+        return logicalEvaluator.evaluate(createExecutionScope(values));
     }
 
     public AuditResult<BigDecimal> computeMathWithAudit(Map<String, Object> values) {
         AuditCollector collector = new AuditCollector(maxAuditEvents);
-        ExecutionScope scope = createAuditedExecutionScope(values, collector);
-        boolean wasActive = tlInUse.get();
-        if (!wasActive) tlInUse.set(true);
-        try {
-            BigDecimal result = mathEvaluator.evaluate(scope);
-            return new AuditResult<>(result, collector.buildTrace());
-        } finally {
-            if (!wasActive) tlInUse.set(false);
-        }
+        BigDecimal result = mathEvaluator.evaluate(createAuditedExecutionScope(values, collector));
+        return new AuditResult<>(result, collector.buildTrace());
     }
 
     public AuditResult<Boolean> computeLogicalWithAudit(Map<String, Object> values) {
         AuditCollector collector = new AuditCollector(maxAuditEvents);
-        ExecutionScope scope = createAuditedExecutionScope(values, collector);
-        boolean wasActive = tlInUse.get();
-        if (!wasActive) tlInUse.set(true);
-        try {
-            boolean result = logicalEvaluator.evaluate(scope);
-            return new AuditResult<>(result, collector.buildTrace());
-        } finally {
-            if (!wasActive) tlInUse.set(false);
-        }
+        boolean result = logicalEvaluator.evaluate(createAuditedExecutionScope(values, collector));
+        return new AuditResult<>(result, collector.buildTrace());
     }
 
     public Map<String, Object> computeAssignments(Map<String, Object> values) {
-        ExecutionScope scope = createExecutionScope(values);
-        boolean wasActive = tlInUse.get();
-        if (!wasActive) tlInUse.set(true);
-        try {
-            return mathEvaluator.evaluateAssignments(scope);
-        } finally {
-            if (!wasActive) tlInUse.set(false);
-        }
+        return mathEvaluator.evaluateAssignments(createExecutionScope(values));
     }
 
     public AuditResult<Map<String, Object>> computeAssignmentsWithAudit(Map<String, Object> values) {
         AuditCollector collector = new AuditCollector(maxAuditEvents);
-        ExecutionScope scope = createAuditedExecutionScope(values, collector);
-        boolean wasActive = tlInUse.get();
-        if (!wasActive) tlInUse.set(true);
-        try {
-            Map<String, Object> result = mathEvaluator.evaluateAssignments(scope);
-            return new AuditResult<>(result, collector.buildTrace());
-        } finally {
-            if (!wasActive) tlInUse.set(false);
-        }
+        Map<String, Object> result = mathEvaluator.evaluateAssignments(createAuditedExecutionScope(values, collector));
+        return new AuditResult<>(result, collector.buildTrace());
     }
 
     public CompiledExpression getCompiledExpression() {

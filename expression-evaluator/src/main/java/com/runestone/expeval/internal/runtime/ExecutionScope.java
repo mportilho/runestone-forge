@@ -214,15 +214,4 @@ final class ExecutionScope {
             case CURR_DATETIME -> LocalDateTime.now();
         });
     }
-
-    /**
-     * Clears the dynamic-instant cache so that a reused scope returns fresh
-     * {@code TODAY} / {@code CURR_TIME} / {@code CURR_DATETIME} values on the next evaluation.
-     *
-     * <p>Called by {@link ExpressionRuntimeSupport} before returning a thread-local cached
-     * scope. No-op when the cache was never populated.
-     */
-    void clearDynamicCache() {
-        dynamicCache = null;
-    }
 }
