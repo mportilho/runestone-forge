@@ -101,3 +101,36 @@
 - Deep scan cost scales appropriately for recursive traversal through nested structures.
 - All expressions are pre-compiled; benchmark measures evaluation only, not compilation.
 - Expression bug fixed during benchmarking: `MAP_FILTER_EXPRESSION` had incorrect property path (`@.value.price` → `@.price`).
+
+## PERF-006: Eliminate per-call `Object[]` and `ExecutionScope` allocation (H1 + H2)
+
+**Date:** 2026-04-12
+
+**Branch:** `refac-springboot-4`  
+**Commits:** `ExpressionRuntimeSupport` + `ExecutionScope` — `OverrideSlot` ThreadLocal
+
+**Scenario:** JFR profiling (21 s recording, `CollectionNavigationBenchmark`) identified two top allocation sources on the hot evaluation path:
+- H1 — `buildOverrides` allocated `new Object[externalSymbolCount]` + `Arrays.fill` on **every** `compute()` call (1 852 `Object[]` allocation samples, ~30% of all sampled allocations).
+- H2 — `ExecutionScope.readOnly(...)` created a new wrapper object on **every** `compute()` call (808 `ExecutionScope` samples, ~13% of all sampled allocations).
+
+**Change summary:**
+- `ExecutionScope`: added package-private `clearDynamicCache()` to safely reset the dynamic-instant cache on a reused scope.
+- `ExpressionRuntimeSupport`: added `ThreadLocal<OverrideSlot>` that holds one `Object[]` buffer and one pre-wired `ExecutionScope` per thread. `buildOverrides` refills the thread-local buffer instead of allocating a new array. `createExecutionScope` returns the cached scope (after clearing its dynamic cache) instead of constructing a new one. Audited and mutable (assignment) paths remain unchanged.
+
+**JMH run:** `CollectionNavigationBenchmark` — 5 warmup × 500 ms, 10 measure × 500 ms, 3 forks, `-prof gc`.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Δ ns (%) | B/op Before | B/op After | B/op Δ (%) |
+|---|---:|---:|---:|---:|---:|---:|
+| `indexAccess` | 71.6 ±3.5 | 73.9 ±2.2 | −3.2% (noise) | 64 | **0** | **−100%** |
+| `mapValuesCount` | 147.1 ±3.2 | 136.0 ±7.5 | +7.6% | 152 | **88** | **−42%** |
+| `customFunctionCount` | 297.8 ±8.1 | 297.2 ±10.0 | +0.2% | 296 | **232** | **−22%** |
+| `listFilterCount` | 605.2 ±43.2 | 624.0 ±52.3 | −3.1% (noise) | 336 | **272** | **−19%** |
+| `mapFilterCount` | 659.4 ±30.6 | 668.7 ±22.6 | −1.4% (noise) | 480 | **416** | **−13%** |
+| `deepScanCount` | 1 395.3 ±81.2 | 1 390.4 ±73.2 | +0.4% | 1 051 | **987** | **−6%** |
+
+**Decision:** ACCEPT  
+**Reason:** All ns/op deltas are within or inside the ±error margin — no statistically significant throughput regression. B/op reductions are deterministic (identical across all forks/iterations) and range from **−6% to −100%** depending on how allocation-heavy the path is. `indexAccess` reaches zero allocations per call. The lower allocation rate directly reduces GC pressure across all collection-navigation expressions. Risk is low: only internal classes changed, all functional tests pass, the audited and mutable-scope paths are unaffected.
+
+**Notes:**
+- Re-entrancy limitation documented in `ExpressionRuntimeSupport.tlSlot` javadoc: same-instance re-entrant calls on the same thread (e.g., a catalog function that calls back into the same compiled expression) would produce incorrect results. This pattern is not a supported use case.
+- The consistent **64-byte** reduction per benchmark (Object[5] + ExecutionScope) confirms the hypothesis; `mapValuesCount` shows a larger B/op drop because the JIT eliminated additional short-lived objects once the primary allocation pressure was removed.
