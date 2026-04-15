@@ -2,19 +2,25 @@
 
 ## Context
 
-The `expression-evaluator` module currently supports vector literals (`[1, 2, 3]`) and functions that
-accept arrays (`max([1,2,3])`), but has no way to pass a **transformation or predicate inline**
-with a call. The user wants to write expressions like:
+The `expression-evaluator` module already supports collection navigation with filtering (`[?(@ > 1)]`),
+aggregations (`..sum()`, `..avg()`), and deep-scan operations. This plan extends those mechanisms
+to add `..filter(pred)`, `..sum(transform)`, and `..prod(transform)` as **first-class collection
+navigation steps**, reusing the existing `FilterContext` / `@` infrastructure instead of
+introducing a separate lambda/closure system.
+
+### New syntax
 
 ```
-filter([1, 2, 3], (x) => x > 1)
-sum([1, 2, 3], (x) => x * 2^x)
-prod([1, 2, 3], (x) => x * 2^x)
+[1, 2, 3]..filter(@ > 1)           // keeps elements where predicate is true  → [2, 3]
+[1, 2, 3]..sum(@ * 2^@)             // Σ f(element)                            → 34
+[1, 2, 3]..prod(@ * 2^@)            // Π f(element)
+[1, 2, 3]..prod()                   // product of all elements                 → 6
+prices..filter(@ > 10)..sum()       // composable with existing steps
+books..filter(@.price < 10)..count()// element is a Record/Map — access fields via @.field
 ```
 
-None of this is possible today: the grammar has no arrow/lambda syntax, the type system has no
-`LambdaType`, and there are no higher-order built-ins. Everything must be built from scratch while
-fitting into the existing compilation pipeline.
+The `@` token is the **current-element placeholder** — the same concept used today inside
+`[?(<pred>)]` filter predicates. Its runtime value comes from `FilterContext.element()`.
 
 ---
 
@@ -27,14 +33,12 @@ Source → [ANTLR] → AST (ExpressionNode tree)
        → [AbstractObjectEvaluator] → Object result
 ```
 
-Key constraints:
-- `ExpressionNode` and `ExecutableNode` are **sealed interfaces** — every new node type must be
-  added to the `permits` clause.
-- `ResolvedType` is a **sealed interface** — `LambdaType` must be added to `permits`.
-- `SymbolKind` has `EXTERNAL` and `INTERNAL` — lambda params need a new `LAMBDA` kind so they
-  don't collide in the scope map.
-- `ExecutionScope` is package-private in `internal.runtime`, so the child-scope factory method
-  can be added there without breaking encapsulation.
+Key existing infrastructure this plan builds on:
+- `PropertyChainNode.MemberAccess` — sealed interface with 13 step types; new types added here.
+- `ExecutablePropertyChain.ExecutableAccess` — mirrors `MemberAccess`; new executables added here.
+- `VectorAggregationKind` — `SUM`, `AVG`, `MIN`, `MAX`, `COUNT`; `PROD` added here.
+- `FilterContext` — thread-local element binding used by `[?(pred)]`; reused for transform steps.
+- `AbstractObjectEvaluator.FilterContextStack` — pooled `FilterContext` instances; reused as-is.
 
 ---
 
@@ -42,230 +46,210 @@ Key constraints:
 
 **File:** `expression-evaluator/src/main/antlr4/com/runestone/expeval/internal/grammar/ExpressionEvaluator.g4`
 
-### 1.1 New lexer token
-Add after the `NEQ` token (line 62), before the date/time tokens:
+### 1.1 Extend `referenceTarget` to allow `@`
+
+The `@` token (`AT`) already exists as a lexer rule. It is currently only valid inside the
+`filterValue` production (`filterValue : AT memberChain* # currentElementFilterValue`). Adding it
+to `referenceTarget` makes it valid in any expression context — numeric, logical, string — because
+all entity types eventually bottom out at `referenceTarget`.
 
 ```antlr
-ARROW : '=>' ;
-```
-
-`=>` doesn't conflict with existing tokens (`>=` is `GE`, `=` is `EQ`, `>` is `GT`).
-
-### 1.2 New parser rule
-
-```antlr
-lambdaExpression
-    : LPAREN IDENTIFIER (COMMA IDENTIFIER)* RPAREN ARROW allEntityTypes  # multiParamLambdaOperation
-    | IDENTIFIER ARROW allEntityTypes                                      # singleParamLambdaOperation
+referenceTarget
+    : function                                                           # functionReferenceTarget
+    | IDENTIFIER memberChain*                                            # identifierReferenceTarget
+    | AT memberChain*                                                    # atReferenceTarget          // ← NEW
     ;
 ```
 
-- Multi-param: `(x, y) => x + y`
-- Single-param (no parens): `x => x + 1`
+This single addition enables:
+- `@ * 2` — `@` as a numeric primary (via `numericEntity` → `numericReferenceOperation`)
+- `@ > 1` — `@` on the left side of a math comparison
+- `@.price < 10` — property navigation on the current element
+- `@.name = "Alice"` — string equality on an element field
 
-### 1.3 Add to `allEntityTypes` (FIRST alternative — highest priority)
+No new tokens are needed; `AT` is already declared.
 
-```antlr
-allEntityTypes
-    : lambdaExpression                                                     # lambdaEntityType   ← NEW
-    | mathExpression                                                       # mathEntityType
-    | logicalExpression                                                    # logicalEntityType
-    ...
-```
-
-Putting `lambdaExpression` first lets ANTLR's LL(*) prediction pick it up before ambiguous
-`(x)` parenthesized-expression paths. The `ARROW` token makes it unambiguous at lookahead ≤ 4.
-
-### 1.4 Regenerate the parser
+### 1.2 Regenerate the parser
 
 Follow the ANTLR regeneration steps in `CLAUDE.md`. Copy only the generated `.java` files into:
 `expression-evaluator/src/main/java/com/runestone/expeval/internal/grammar/`
 
 ---
 
-## Phase 2 — Type system
+## Phase 2 — `VectorAggregationKind`
 
-### 2.1 New `LambdaType`
-**New file:** `src/main/java/com/runestone/expeval/types/LambdaType.java`
+**File:** `src/main/java/com/runestone/expeval/internal/navigation/VectorAggregationKind.java`
+
+Add `PROD`:
 
 ```java
-package com.runestone.expeval.types;
-
-public enum LambdaType implements ResolvedType {
-    INSTANCE
+public enum VectorAggregationKind {
+    SUM,
+    AVG,
+    MIN,
+    MAX,
+    COUNT,
+    PROD    // ← new: product of elements (or transformed elements)
 }
 ```
-
-Singleton enum — same pattern as `VectorType` and `UnknownType`.
-
-### 2.2 Update `ResolvedType` sealed interface
-**File:** `src/main/java/com/runestone/expeval/types/ResolvedType.java`
-
-Add `LambdaType` to the `permits` clause:
-```java
-public sealed interface ResolvedType permits ScalarType, UnknownType, VectorType, ObjectType, NullType, LambdaType {
-}
-```
-
-### 2.3 New `LambdaValue` runtime interface
-**New file:** `src/main/java/com/runestone/expeval/internal/runtime/LambdaValue.java`
-
-```java
-package com.runestone.expeval.internal.runtime;
-
-@FunctionalInterface
-interface LambdaValue {
-    Object apply(Object... args);
-}
-```
-
-Package-private — it is an internal runtime concept, not part of the public API.
-
-### 2.4 Register `LambdaValue` in `ResolvedTypes.fromJavaType()`
-**File:** `src/main/java/com/runestone/expeval/types/ResolvedTypes.java`
-
-In `fromJavaType(Class<?>)`, add a case before the fallthrough:
-```java
-if (javaType == LambdaValue.class) return LambdaType.INSTANCE;
-```
-
-This lets `FunctionDescriptor` resolve the parameter type of `VectorFunctions.filter` etc.
-correctly during catalog registration.
 
 ---
 
 ## Phase 3 — AST layer
 
-### 3.1 New `LambdaNode`
-**New file:** `src/main/java/com/runestone/expeval/internal/ast/LambdaNode.java`
+### 3.1 Extend `VectorAggregationStep` with optional transform
+
+**File:** `src/main/java/com/runestone/expeval/internal/ast/PropertyChainNode.java`
+
+Replace the existing `VectorAggregationStep` record:
 
 ```java
-package com.runestone.expeval.internal.ast;
+/**
+ * {@code ..sum()}, {@code ..sum(@ * 2)}, {@code ..prod()}, {@code ..prod(@ * 2)}, etc.
+ * When {@code transform} is non-null it is evaluated per element (with {@code @} bound to that
+ * element via {@code FilterContext}) and the result is aggregated.
+ */
+public record VectorAggregationStep(
+        VectorAggregationKind kind,
+        @Nullable ExpressionNode transform
+) implements MemberAccess {
+    public VectorAggregationStep {
+        Objects.requireNonNull(kind, "kind must not be null");
+    }
 
-import java.util.List;
-import java.util.Objects;
-
-public record LambdaNode(
-        NodeId nodeId,
-        SourceSpan sourceSpan,
-        List<String> parameters,
-        ExpressionNode body
-) implements ExpressionNode {
-    public LambdaNode {
-        AstValidation.requireNodeId(nodeId);
-        AstValidation.requireSourceSpan(sourceSpan);
-        parameters = AstValidation.copyList(
-                Objects.requireNonNull(parameters, "parameters must not be null"), "parameters");
-        Objects.requireNonNull(body, "body must not be null");
-        if (parameters.isEmpty()) throw new IllegalArgumentException("lambda must have at least one parameter");
+    /** Convenience constructor for no-transform aggregation (e.g. {@code ..sum()}). */
+    public VectorAggregationStep(VectorAggregationKind kind) {
+        this(kind, null);
     }
 }
 ```
 
-### 3.2 Add `LambdaNode` to `ExpressionNode` sealed interface
-**File:** `src/main/java/com/runestone/expeval/internal/ast/ExpressionNode.java`
+### 3.2 New `FilterFunctionStep`
+
+Add to `PropertyChainNode.MemberAccess` sealed interface (and its `permits` clause):
 
 ```java
-public sealed interface ExpressionNode extends Node permits
-    BinaryOperationNode, ConditionalNode, FunctionCallNode, IdentifierNode,
-    LiteralNode, LambdaNode, PostfixOperationNode, PropertyChainNode,     // ← add LambdaNode
-    UnaryOperationNode, VectorLiteralNode {
+/**
+ * {@code ..filter(pred)} — function-call syntax for element-wise filtering.
+ * The predicate expression may use {@code @} to refer to the current element.
+ * Semantically equivalent to {@code [?(pred)]} but written as a chained function call.
+ */
+public record FilterFunctionStep(ExpressionNode predicate) implements MemberAccess {
+    public FilterFunctionStep {
+        Objects.requireNonNull(predicate, "predicate must not be null");
+    }
 }
 ```
 
-### 3.3 Add visitor in `SemanticAstBuilder`
+Update the `permits` clause of `MemberAccess`:
+
+```java
+public sealed interface MemberAccess permits
+        PropertyAccess, SafePropertyAccess, MethodCallAccess, SafeMethodCallAccess,
+        CollectionIndexStep, MapKeyStep, CollectionSliceStep, WildcardStep,
+        FilterPredicateStep, FilterFunctionStep,                              // ← add FilterFunctionStep
+        DeepScanStep, CollectionFunctionStep, MapProjectionStep,
+        VectorAggregationStep {}
+```
+
+### 3.3 Update `SemanticAstBuilder` visitor for `collectionFunctionAccess`
+
 **File:** `src/main/java/com/runestone/expeval/internal/ast/mapping/SemanticAstBuilder.java`
 
+The grammar rule `collectionFunctionAccess` matches `..IDENTIFIER(args?)`. Its visitor currently
+recognizes "sum", "avg", "min", "max", "count", "keys", "values" by name. Extend the switch:
+
 ```java
 @Override
-public ExpressionNode visitMultiParamLambdaOperation(
-        ExpressionEvaluatorParser.MultiParamLambdaOperationContext ctx) {
-    List<String> params = ctx.IDENTIFIER().stream()
-            .map(ParseTree::getText)
-            .toList();
-    ExpressionNode body = visitAllEntityType(ctx.allEntityTypes());
-    return new LambdaNode(nodeFactory.nextId("lambda"), nodeFactory.sourceSpan(ctx), params, body);
-}
+public MemberAccess visitCollectionFunctionAccess(
+        ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx) {
+    String name = ctx.IDENTIFIER().getText();
+    List<ExpressionEvaluatorParser.AllEntityTypesContext> args = ctx.allEntityTypes();
 
-@Override
-public ExpressionNode visitSingleParamLambdaOperation(
-        ExpressionEvaluatorParser.SingleParamLambdaOperationContext ctx) {
-    List<String> params = List.of(ctx.IDENTIFIER().getText());
-    ExpressionNode body = visitAllEntityType(ctx.allEntityTypes());
-    return new LambdaNode(nodeFactory.nextId("lambda"), nodeFactory.sourceSpan(ctx), params, body);
+    return switch (name) {
+        case "sum"   -> new VectorAggregationStep(VectorAggregationKind.SUM,
+                            args.isEmpty() ? null : visitAllEntityType(args.get(0)));
+        case "avg"   -> new VectorAggregationStep(VectorAggregationKind.AVG, null);
+        case "min"   -> new VectorAggregationStep(VectorAggregationKind.MIN, null);
+        case "max"   -> new VectorAggregationStep(VectorAggregationKind.MAX, null);
+        case "count" -> new VectorAggregationStep(VectorAggregationKind.COUNT, null);
+        case "prod"  -> new VectorAggregationStep(VectorAggregationKind.PROD,      // ← new
+                            args.isEmpty() ? null : visitAllEntityType(args.get(0)));
+        case "filter" -> {                                                           // ← new
+            if (args.isEmpty()) throw new IllegalArgumentException("..filter() requires a predicate argument");
+            yield new FilterFunctionStep(visitAllEntityType(args.get(0)));
+        }
+        case "keys"   -> new MapProjectionStep(MapProjectionKind.KEYS);
+        case "values" -> new MapProjectionStep(MapProjectionKind.VALUES);
+        default -> buildCollectionFunctionStep(name, args);  // existing catalog-function path
+    };
 }
 ```
+
+### 3.4 Update visitor for `atReferenceTarget`
+
+Add a visitor for the new grammar alternative:
+
+```java
+@Override
+public ExpressionNode visitAtReferenceTarget(
+        ExpressionEvaluatorParser.AtReferenceTargetContext ctx) {
+    // Build a PropertyChainNode whose rootIdentifier is "@".
+    // SemanticResolver and AbstractObjectEvaluator already handle "@" as the FilterContext element.
+    String rootId = "@";
+    List<MemberAccess> chain = ctx.memberChain().stream()
+            .map(this::visitMemberChain)
+            .toList();
+    return new PropertyChainNode(nodeFactory.nextId("at"), nodeFactory.sourceSpan(ctx), rootId, chain);
+}
+```
+
+Note: if the chain is empty this reduces to a plain `IdentifierNode("@")` — adjust to match the
+existing convention used for `currentElementFilterValue` in the filter predicate visitor.
 
 ---
 
 ## Phase 4 — Semantic resolution
 
-### 4.1 New `SymbolKind.LAMBDA`
-**File:** `src/main/java/com/runestone/expeval/internal/runtime/SymbolKind.java`
+### 4.1 Resolve `@` identifier
+
+**File:** `src/main/java/com/runestone/expeval/internal/runtime/SemanticResolver.java`
+
+In `resolveIdentifier` (or wherever identifier nodes are typed), add a check before the external/internal symbol lookup:
 
 ```java
-enum SymbolKind {
-    EXTERNAL,
-    INTERNAL,
-    LAMBDA    // ← new: for lambda-bound parameters
+if ("@".equals(node.name())) {
+    // The current-element placeholder — type is unknown at compile time; resolved via
+    // FilterContext at runtime. This is the same behaviour as inside [?(...)] predicates.
+    resolvedTypes.put(node.nodeId(), UnknownType.INSTANCE);
+    return UnknownType.INSTANCE;
 }
 ```
 
-### 4.2 Extend `ResolutionSession` inside `SemanticResolver`
+If `PropertyChainNode` is used instead of `IdentifierNode` for `@`, apply the same logic when
+`rootIdentifier.equals("@")`.
 
-Add a `Deque<Map<String, SymbolRef>> lambdaScopes` field to `ResolutionSession`.
+### 4.2 Resolve `FilterFunctionStep`
 
-In `resolveExpression`, add a case for `LambdaNode`:
+In the `SemanticResolver` walk of `PropertyChainNode.chain`, add a case:
 
 ```java
-case LambdaNode lambda -> resolveLambda(lambda);
+case FilterFunctionStep(ExpressionNode predicate) -> {
+    resolveExpression(predicate);   // resolve @-references inside the predicate
+    // result mode stays COLLECTION — filter outputs a list
+}
 ```
 
-New method:
+### 4.3 Resolve `VectorAggregationStep` with transform
+
+Extend the existing aggregation case to also resolve the optional transform:
+
 ```java
-private ResolvedType resolveLambda(LambdaNode node) {
-    // Build SymbolRef for each parameter and push a new lambda scope
-    Map<String, SymbolRef> paramRefs = new LinkedHashMap<>();
-    for (String param : node.parameters()) {
-        SymbolRef ref = new SymbolRef(param, SymbolKind.LAMBDA);
-        paramRefs.put(param, ref);
-        resolvedTypes.put(/* nodeId for the param reference */ ..., UnknownType.INSTANCE);
+case VectorAggregationStep(VectorAggregationKind kind, ExpressionNode transform) -> {
+    if (transform != null) {
+        resolveExpression(transform);  // resolve @-references inside the transform
     }
-    lambdaScopes.push(paramRefs);
-
-    // Store SymbolRef map in SemanticModel for later use by ExecutionPlanBuilder
-    lambdaParametersByNodeId.put(node.nodeId(), paramRefs);
-
-    // Resolve the body with lambda params in scope
-    ResolvedType bodyType = resolveExpression(node.body());
-    lambdaScopes.pop();
-
-    resolvedTypes.put(node.nodeId(), LambdaType.INSTANCE);
-    return LambdaType.INSTANCE;
-}
-```
-
-In `resolveIdentifier`, check `lambdaScopes` before `externalSymbolsByName` / `internalSymbolsByName`:
-```java
-for (Map<String, SymbolRef> scope : lambdaScopes) {
-    if (scope.containsKey(node.name())) {
-        SymbolRef ref = scope.get(node.name());
-        symbolByNodeId.put(node.nodeId(), ref);
-        return UnknownType.INSTANCE;   // runtime type is unknown at compile time
-    }
-}
-// ... existing external/internal resolution
-```
-
-### 4.3 Extend `SemanticModel`
-**File:** `src/main/java/com/runestone/expeval/internal/runtime/SemanticModel.java`
-
-Add:
-```java
-Map<NodeId, Map<String, SymbolRef>> lambdaParametersByNodeId;
-
-public Optional<Map<String, SymbolRef>> findLambdaParameters(NodeId nodeId) {
-    return Optional.ofNullable(lambdaParametersByNodeId.get(nodeId));
+    // result mode: SUM/AVG/MIN/MAX/PROD → SCALAR; COUNT → SCALAR
 }
 ```
 
@@ -273,192 +257,174 @@ public Optional<Map<String, SymbolRef>> findLambdaParameters(NodeId nodeId) {
 
 ## Phase 5 — Execution layer
 
-### 5.1 New `ExecutableLambda`
-**New file:** `src/main/java/com/runestone/expeval/internal/runtime/ExecutableLambda.java`
+### 5.1 Extend `ExecutableVectorAggregation`
+
+**File:** `src/main/java/com/runestone/expeval/internal/runtime/ExecutablePropertyChain.java`
+
+Replace the existing `ExecutableVectorAggregation` record:
 
 ```java
-package com.runestone.expeval.internal.runtime;
+/** {@code ..sum()}, {@code ..sum(@ * 2)}, {@code ..prod()}, {@code ..prod(@)}, etc. */
+record ExecutableVectorAggregation(
+        VectorAggregationKind kind,
+        @Nullable ExecutableNode transform
+) implements ExecutableAccess {
+    ExecutableVectorAggregation {
+        Objects.requireNonNull(kind, "kind must not be null");
+    }
 
-import java.util.List;
-import java.util.Objects;
-
-record ExecutableLambda(
-        List<SymbolRef> parameterRefs,
-        ExecutableNode body
-) implements ExecutableNode {
-    ExecutableLambda {
-        parameterRefs = List.copyOf(Objects.requireNonNull(parameterRefs, "parameterRefs must not be null"));
-        Objects.requireNonNull(body, "body must not be null");
+    ExecutableVectorAggregation(VectorAggregationKind kind) {
+        this(kind, null);
     }
 }
 ```
 
-### 5.2 Add `ExecutableLambda` to `ExecutableNode` sealed interface
-**File:** `src/main/java/com/runestone/expeval/internal/runtime/ExecutableNode.java`
+### 5.2 New `ExecutableFilterFunction`
 
-Add `ExecutableLambda` to the `permits` clause.
-
-### 5.3 Add child-scope factory to `ExecutionScope`
-**File:** `src/main/java/com/runestone/expeval/internal/runtime/ExecutionScope.java`
+Add to `ExecutablePropertyChain.ExecutableAccess` sealed interface:
 
 ```java
-/**
- * Creates a read-only child scope that overlays lambda-parameter bindings
- * on top of the parent scope's resolved values.
- */
-ExecutionScope withLambdaLayer(Map<SymbolRef, Object> lambdaBindings) {
-    // The lambda bindings are the primary layer; parent's values becomes secondary.
-    // Audit is inherited from parent.
-    return new ExecutionScope(lambdaBindings, values, secondaryValues, false, audit);
+/** {@code ..filter(pred)} — element-wise filter using FilterContext for {@code @}. */
+record ExecutableFilterFunction(ExecutableNode predicate) implements ExecutableAccess {
+    ExecutableFilterFunction {
+        Objects.requireNonNull(predicate, "predicate must not be null");
+    }
 }
 ```
 
-Note: `tertiaryValues` only handles two levels; if a parent already has three layers, consider
-composing differently. In practice, nested lambdas should be handled by chaining
-`withLambdaLayer` calls.
+Update the `permits` clause accordingly.
 
-### 5.4 Build `ExecutableLambda` in `ExecutionPlanBuilder`
+### 5.3 Build executable nodes in `ExecutionPlanBuilder`
+
 **File:** `src/main/java/com/runestone/expeval/internal/runtime/ExecutionPlanBuilder.java`
 
-In the main `buildNode` switch, add:
+In the member-access building switch:
 
 ```java
-case LambdaNode lambda -> {
-    Map<String, SymbolRef> paramRefs = model.findLambdaParameters(lambda.nodeId())
-            .orElseThrow(() -> new IllegalStateException("missing lambda parameters for node " + lambda.nodeId()));
-    List<SymbolRef> refs = List.copyOf(paramRefs.values());
-    ExecutableNode body = buildNode(lambda.body(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog);
-    yield new ExecutableLambda(refs, body);
-}
+case FilterFunctionStep(ExpressionNode predicate) ->
+    new ExecutableFilterFunction(buildNode(predicate, ...));
+
+case VectorAggregationStep(VectorAggregationKind kind, ExpressionNode transform) ->
+    new ExecutableVectorAggregation(kind,
+        transform == null ? null : buildNode(transform, ...));
 ```
 
-Also update `isConstantNode` and `countNodeEvents` to handle `ExecutableLambda` (lambdas are never
-constant-folded; their event cost equals the body's cost).
+### 5.4 Evaluate in `AbstractObjectEvaluator`
 
-### 5.5 Evaluate `ExecutableLambda` in `AbstractObjectEvaluator`
 **File:** `src/main/java/com/runestone/expeval/internal/runtime/AbstractObjectEvaluator.java`
 
-In the main `evaluateExpr` switch:
+In the `evaluatePropertyChain` step dispatch, extend the switch:
 
 ```java
-case ExecutableLambda lambda -> buildLambdaValue(lambda, scope);
+case ExecutableFilterFunction ef    -> applyFilterFunction(current, ef.predicate(), scope);
+case ExecutableVectorAggregation va -> applyAggregation(current, va.kind(), va.transform(), scope);
 ```
 
-New private method:
+#### `applyFilterFunction`
+
+Mirrors the existing `applyFilter` for `[?(pred)]`. The `FilterContextStack` from the existing
+implementation is reused as-is:
 
 ```java
-private LambdaValue buildLambdaValue(ExecutableLambda node, ExecutionScope capturedScope) {
-    List<SymbolRef> paramRefs = node.parameterRefs();
-    ExecutableNode body = node.body();
-    return args -> {
-        Map<SymbolRef, Object> bindings = new HashMap<>(paramRefs.size() * 2);
-        for (int i = 0; i < paramRefs.size(); i++) {
-            bindings.put(paramRefs.get(i), args[i]);
-        }
-        ExecutionScope lambdaScope = capturedScope.withLambdaLayer(bindings);
-        return evaluateExpr(body, lambdaScope);
+private Object applyFilterFunction(Object current, ExecutableNode predicate, ExecutionScope scope) {
+    // Delegate to the same implementation used for ExecutableFilterPredicate.
+    // Extract to a shared helper if not already done.
+    return applyFilterPredicate(current, predicate, scope);
+}
+```
+
+If `applyFilter` (for `[?(pred)]`) is not yet a shared method, extract it and call it from both
+`ExecutableFilterPredicate` and `ExecutableFilterFunction` cases.
+
+#### Extend `applyAggregation` for optional transform and `PROD`
+
+```java
+private Object applyAggregation(
+        Object current,
+        VectorAggregationKind kind,
+        @Nullable ExecutableNode transform,
+        ExecutionScope scope) {
+
+    // Resolve numeric stream: apply transform per element if present
+    List<BigDecimal> values = toNumericStream(current, transform, scope);
+
+    return switch (kind) {
+        case SUM   -> values.stream().reduce(BigDecimal.ZERO, (a, b) -> a.add(b, mathContext));
+        case AVG   -> { BigDecimal s = values.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+                        yield s.divide(BigDecimal.valueOf(values.size()), mathContext); }
+        case MIN   -> values.stream().min(Comparator.naturalOrder()).orElse(null);
+        case MAX   -> values.stream().max(Comparator.naturalOrder()).orElse(null);
+        case COUNT -> BigDecimal.valueOf(collectionSize(current));
+        case PROD  -> values.stream().reduce(BigDecimal.ONE, (a, b) -> a.multiply(b, mathContext));
     };
 }
-```
 
----
-
-## Phase 6 — Vector built-in functions
-
-### 6.1 New `VectorFunctions` class
-**New file:** `src/main/java/com/runestone/expeval/catalog/functions/VectorFunctions.java`
-
-```java
-package com.runestone.expeval.catalog.functions;
-
-import com.runestone.expeval.internal.runtime.LambdaValue;
-import java.math.BigDecimal;
-import java.math.MathContext;
-import java.util.ArrayList;
-import java.util.List;
-
-public class VectorFunctions {
-
-    // filter([1, 2, 3], (x) => x > 1)  →  [2, 3]
-    public static List<Object> filter(List<Object> vector, LambdaValue predicate) {
-        List<Object> result = new ArrayList<>();
-        for (Object element : vector) {
-            Object test = predicate.apply(element);
-            if (Boolean.TRUE.equals(test)) {
-                result.add(element);
-            }
+private List<BigDecimal> toNumericStream(Object current, @Nullable ExecutableNode transform, ExecutionScope scope) {
+    List<?> list = requireList(current);
+    if (transform == null) {
+        return list.stream().map(this::toBigDecimal).toList();
+    }
+    // Reuse FilterContextStack for per-element @-binding
+    FilterContext ctx = filterContextStack.push();
+    try {
+        List<BigDecimal> result = new ArrayList<>(list.size());
+        for (Object element : list) {
+            ctx.bindElement(element);
+            Object val = evaluateExpr(transform, scope);
+            result.add(toBigDecimal(val));
         }
         return result;
-    }
-
-    // sum([1, 2, 3], (x) => x * 2)  →  Σ f(x)
-    public static BigDecimal sum(MathContext mc, List<Object> vector, LambdaValue transform) {
-        BigDecimal acc = BigDecimal.ZERO;
-        for (Object element : vector) {
-            Object val = transform.apply(element);
-            acc = acc.add(toBigDecimal(val), mc);
-        }
-        return acc;
-    }
-
-    // prod([1, 2, 3], (x) => x * 2)  →  Π f(x)
-    public static BigDecimal prod(MathContext mc, List<Object> vector, LambdaValue transform) {
-        BigDecimal acc = BigDecimal.ONE;
-        for (Object element : vector) {
-            Object val = transform.apply(element);
-            acc = acc.multiply(toBigDecimal(val), mc);
-        }
-        return acc;
-    }
-
-    private static BigDecimal toBigDecimal(Object value) {
-        return switch (value) {
-            case BigDecimal bd -> bd;
-            case Number n     -> BigDecimal.valueOf(n.doubleValue());
-            default -> throw new IllegalArgumentException("lambda returned non-numeric value: " + value);
-        };
+    } finally {
+        filterContextStack.pop();
     }
 }
 ```
 
-`MathContext` as the first parameter of `sum`/`prod` is automatically injected by
-`ExpressionEnvironmentBuilder` (existing behaviour in `toDescriptor`). It is not visible at the
-call site.
-
-**Important note on foldability:** `VectorFunctions` must be registered as **non-foldable**
-(`foldable = false`) because the lambda closure captures runtime scope and cannot be evaluated
-at compile time.
-
-### 6.2 Register in `ExpressionEnvironmentBuilder`
-**File:** `src/main/java/com/runestone/expeval/environment/ExpressionEnvironmentBuilder.java`
-
-```java
-public ExpressionEnvironmentBuilder addVectorFunctions() {
-    return registerStaticProvider(VectorFunctions.class, false);
-}
-```
-
-Add to `addAllFunctions()`:
-```java
-.addVectorFunctions()
-```
+Note: `AVG`, `MIN`, `MAX` do not accept a transform in this plan (they already exist without one).
+If a transform is passed to these, throw `IllegalArgumentException` at plan-build time.
 
 ---
 
-## Phase 7 — Tests
+## Phase 6 — Tests
 
 **New test file:** `src/test/java/com/runestone/expeval/api/VectorHigherOrderFunctionsTest.java`
 
 Cover:
-- `filter([1, 2, 3], x => x > 1)` → `[2, 3]`
-- `filter([1, 2, 3], (x) => x > 1)` → `[2, 3]`  (multi-param syntax with 1 param)
-- `sum([1, 2, 3], x => x * 2)` → `12`
-- `prod([1, 2, 3], x => x)` → `6`
-- `sum([1, 2, 3], x => x^2)` → `14`
-- Variable in lambda body (`sum([a, b, c], x => x + offset)`) where `offset` is external
-- Nested: `filter(filter([1,2,3,4], x => x > 1), y => y < 4)` → `[2, 3]`
-- Empty vector: `filter([], x => x > 0)` → `[]`
-- Type error in lambda predicate returning non-boolean (should produce a semantic/runtime error)
+
+```java
+// filter
+"[1, 2, 3]..filter(@ > 1)"                    // → [2, 3]
+"[1, 2, 3]..filter(@ != 2)"                   // → [1, 3]
+"books..filter(@.price < 10)"                  // element is a Record/Map; books is external
+
+// sum with transform
+"[1, 2, 3]..sum(@ * 2)"                        // → 12
+"[1, 2, 3]..sum(@ ^ 2)"                        // → 14
+"[1, 2, 3]..sum(@ * 2^@)"                      // → 34
+
+// prod without transform (product of elements)
+"[1, 2, 3]..prod()"                            // → 6
+"[2, 3, 4]..prod()"                            // → 24
+
+// prod with transform
+"[1, 2, 3]..prod(@ * 2)"                       // → 2 * 4 * 6 = 48
+
+// composition with existing collection navigation
+"[1, 2, 3, 4]..filter(@ > 1)..filter(@ < 4)"  // → [2, 3]
+"[1, 2, 3, 4]..filter(@ > 1)..sum()"          // → 9
+"prices..filter(@ > 10)..sum()"                // external variable
+
+// sum without transform (existing — must still work)
+"[1, 2, 3]..sum()"                             // → 6
+
+// external variable in transform expression
+"[1, 2, 3]..sum(@ + offset)"                  // offset is external symbol
+
+// edge cases
+"[]..filter(@ > 0)"                            // → []
+"[]..prod()"                                   // → 1 (identity)
+"[5]..sum(@ * 2)"                              // → 10
+```
 
 ---
 
@@ -466,25 +432,39 @@ Cover:
 
 | File | Change |
 |------|--------|
-| `grammar/ExpressionEvaluator.g4` | Add `ARROW` token, `lambdaExpression` rule, integrate into `allEntityTypes` |
+| `grammar/ExpressionEvaluator.g4` | Add `AT memberChain*` to `referenceTarget` |
 | `grammar/` (generated) | Regenerate with ANTLR |
-| `types/ResolvedType.java` | Add `LambdaType` to `permits` |
-| `types/LambdaType.java` | **New** — singleton enum |
-| `types/ResolvedTypes.java` | Map `LambdaValue.class` → `LambdaType.INSTANCE` |
-| `internal/runtime/LambdaValue.java` | **New** — package-private functional interface |
-| `internal/ast/ExpressionNode.java` | Add `LambdaNode` to `permits` |
-| `internal/ast/LambdaNode.java` | **New** — record with `List<String> parameters` + `ExpressionNode body` |
-| `internal/ast/mapping/SemanticAstBuilder.java` | Add two visitor methods for lambda rules |
-| `internal/runtime/SymbolKind.java` | Add `LAMBDA` enum constant |
-| `internal/runtime/SemanticResolver.java` | Lambda scope stack in `ResolutionSession`; resolve lambda identifier refs |
-| `internal/runtime/SemanticModel.java` | Add `lambdaParametersByNodeId` map + accessor |
-| `internal/runtime/ExecutableNode.java` | Add `ExecutableLambda` to `permits` |
-| `internal/runtime/ExecutableLambda.java` | **New** — record with `List<SymbolRef>` + `ExecutableNode body` |
-| `internal/runtime/ExecutionScope.java` | Add `withLambdaLayer(Map<SymbolRef, Object>)` factory |
-| `internal/runtime/ExecutionPlanBuilder.java` | Handle `LambdaNode` case; update `isConstantNode` / `countNodeEvents` |
-| `internal/runtime/AbstractObjectEvaluator.java` | Handle `ExecutableLambda` → produce `LambdaValue` closure |
-| `catalog/functions/VectorFunctions.java` | **New** — `filter`, `sum`, `prod` |
-| `environment/ExpressionEnvironmentBuilder.java` | Add `addVectorFunctions()`, include in `addAllFunctions()` |
+| `internal/navigation/VectorAggregationKind.java` | Add `PROD` |
+| `internal/ast/PropertyChainNode.java` | Add `FilterFunctionStep`; add `@Nullable ExpressionNode transform` to `VectorAggregationStep` |
+| `internal/ast/mapping/SemanticAstBuilder.java` | Extend `visitCollectionFunctionAccess` for `filter`/`prod`/`sum(expr)`; add `visitAtReferenceTarget` |
+| `internal/runtime/SemanticResolver.java` | Resolve `"@"` identifier as `UnknownType`; resolve transform in `VectorAggregationStep`; resolve predicate in `FilterFunctionStep` |
+| `internal/runtime/ExecutablePropertyChain.java` | Add `ExecutableFilterFunction`; add optional `transform` to `ExecutableVectorAggregation` |
+| `internal/runtime/ExecutionPlanBuilder.java` | Handle `FilterFunctionStep` and updated `VectorAggregationStep` |
+| `internal/runtime/AbstractObjectEvaluator.java` | Add `applyFilterFunction`; extend `applyAggregation` for transform and `PROD`; extract shared filter helper |
+
+**No new files** beyond the test class. No lambda types, no new catalog functions, no new type-system
+entries.
+
+---
+
+## What this plan does NOT introduce
+
+The original design proposed a full lambda/closure system (`(x) => x * 2` syntax). That approach is
+replaced entirely:
+
+| Original | Replaced by |
+|----------|-------------|
+| `ARROW` lexer token (`=>`) | Not needed |
+| `lambdaExpression` grammar rule | Not needed |
+| `LambdaType` / `LambdaValue` | Not needed |
+| `LambdaNode` / `ExecutableLambda` | Not needed |
+| `SymbolKind.LAMBDA` | Not needed |
+| Lambda scope stack in `SemanticResolver` | Not needed |
+| `ExecutionScope.withLambdaLayer` | Not needed |
+| `VectorFunctions` catalog class | Not needed |
+
+Instead, the `@` element placeholder and `FilterContext` pooling — both already implemented for
+`[?(pred)]` — are reused for the new steps.
 
 ---
 
@@ -503,6 +483,11 @@ mvn clean install
 ```
 
 Manually verify edge cases:
-- `sum([1,2,3], x => x * 2^x)` = 1·2 + 2·4 + 3·8 = 2 + 8 + 24 = **34**
-- `prod([1,2,3], x => x)` = 1·2·3 = **6**
-- `filter([1,2,3], x => x > 1)` = **[2, 3]**
+
+| Expression | Expected |
+|---|---|
+| `[1, 2, 3]..sum(@ * 2^@)` | 1·2 + 2·4 + 3·8 = **34** |
+| `[1, 2, 3]..prod()` | 1·2·3 = **6** |
+| `[1, 2, 3]..filter(@ > 1)` | **[2, 3]** |
+| `[1, 2, 3, 4]..filter(@ > 1)..filter(@ < 4)..sum()` | 2+3 = **5** |
+| `[]..prod()` | **1** (multiplicative identity) |
