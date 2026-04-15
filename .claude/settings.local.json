@@ -123,7 +123,8 @@
       "Skill(test-quality)",
       "Bash($SKILL_SCRIPTS/run-jmh.sh:*)",
       "Bash(cat)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Skill(performance-benchmark)"
     ]
   }
 }

@@ -55,11 +55,6 @@ public class CollectionNavigationBenchmark {
         return CollectionNavigationBenchmarkSupport.evaluateCustomFunctionCount(state.index++);
     }
 
-    @Benchmark
-    public BigDecimal deepScanCount(BenchmarkState state) {
-        return CollectionNavigationBenchmarkSupport.evaluateDeepScanCount(state.index++);
-    }
-
     @State(Scope.Thread)
     public static class BenchmarkState {
 

@@ -5,6 +5,7 @@ import com.runestone.expeval.internal.ast.*;
 import com.runestone.expeval.internal.ast.BinaryOperator;
 import com.runestone.expeval.internal.ast.TernaryOperationNode;
 import com.runestone.expeval.internal.navigation.NavigationMode;
+import com.runestone.expeval.internal.navigation.VectorAggregationKind;
 import com.runestone.expeval.types.*;
 
 import java.math.BigDecimal;
@@ -456,6 +457,13 @@ final class ExecutionPlanBuilder {
                     continue;
                 }
                 case PropertyChainNode.VectorAggregationStep vas -> {
+                    // O5: fold ..values()..count() / ..keys()..count() — the runtime already handles
+                    // Map+COUNT via map.size(), so materialising the list first is unnecessary.
+                    if (vas.kind() == VectorAggregationKind.COUNT
+                            && !steps.isEmpty()
+                            && steps.getLast() instanceof ExecutablePropertyChain.ExecutableMapProjection) {
+                        steps.removeLast();
+                    }
                     steps.add(new ExecutablePropertyChain.ExecutableVectorAggregation(vas.kind()));
                     currentType = UnknownType.INSTANCE;
                     continue;

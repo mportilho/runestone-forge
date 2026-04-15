@@ -5,32 +5,52 @@ import org.jspecify.annotations.Nullable;
 /**
  * Encapsulates the current element being tested inside a {@code [?(...)] } filter predicate.
  *
- * <p>A stack of {@code FilterContext} objects (one per active filter level) is maintained by
- * {@code AbstractObjectEvaluator} to support nested filters such as
- * {@code [?(@.authors[?(@.name =~ ".*")])]}. The stack is pushed before each element is tested
- * and popped in a {@code finally} block to guarantee cleanup even on exception.
+ * <p>A pool of {@code FilterContext} instances (one per active nesting level) is maintained by
+ * {@code AbstractObjectEvaluator.FilterContextStack} to support nested filters such as
+ * {@code [?(@.authors[?(@.name =~ ".*")])]}. Each instance is mutated in-place rather than
+ * replaced, eliminating per-element allocation on hot filter paths.
  *
- * <p>Two factory methods cover the two filter modes:
+ * <p>Two bind methods cover the two filter modes:
  * <ul>
- *   <li>{@link #ofElement} — for collection filters; only {@code element} is set.</li>
- *   <li>{@link #ofMapEntry} — for map filters; {@code mapKey} and {@code mapValue} are set,
+ *   <li>{@link #bindElement} — for collection filters; only {@code element} is set.</li>
+ *   <li>{@link #bindMapEntry} — for map filters; {@code mapKey} and {@code mapValue} are set,
  *       {@code element} is {@code null}.</li>
  * </ul>
  */
-public record FilterContext(
-        @Nullable Object element,
-        @Nullable Object mapKey,
-        @Nullable Object mapValue
-) {
+public final class FilterContext {
+    private @Nullable Object element;
+    private @Nullable Object mapKey;
+    private @Nullable Object mapValue;
 
-    /** Creates a context for a collection filter; {@code mapKey} and {@code mapValue} are {@code null}. */
-    public static FilterContext ofElement(Object element) {
-        return new FilterContext(element, null, null);
+    public FilterContext() {}
+
+    /** Binds this context to a collection element; clears map-entry fields. */
+    public void bindElement(Object element) {
+        this.element = element;
+        this.mapKey = null;
+        this.mapValue = null;
     }
 
-    /** Creates a context for a map filter; {@code element} is {@code null}. */
-    public static FilterContext ofMapEntry(Object key, Object value) {
-        return new FilterContext(null, key, value);
+    /** Binds this context to a map entry; clears the element field. */
+    public void bindMapEntry(Object key, Object value) {
+        this.element = null;
+        this.mapKey = key;
+        this.mapValue = value;
+    }
+
+    /** The collection element, or {@code null} when this is a map-entry context. */
+    public @Nullable Object element() {
+        return element;
+    }
+
+    /** The map key, or {@code null} when this is a collection-element context. */
+    public @Nullable Object mapKey() {
+        return mapKey;
+    }
+
+    /** The map value, or {@code null} when this is a collection-element context. */
+    public @Nullable Object mapValue() {
+        return mapValue;
     }
 
     /** Returns {@code true} when this context represents a map-entry filter (not a collection-element filter). */

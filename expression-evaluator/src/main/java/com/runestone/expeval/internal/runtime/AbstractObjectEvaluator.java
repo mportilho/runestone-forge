@@ -42,12 +42,13 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     private static final String CURRENT_ELEMENT_REF = "@";
 
     /**
-     * Per-thread stack of filter contexts to support nested filter predicates such as
-     * {@code list[?(@.items[?(@.active)])]}. Thread-local because compiled expression
-     * objects are shared and may be invoked concurrently.
+     * Per-thread pool of reusable {@link FilterContext} frames to support nested filter predicates
+     * such as {@code list[?(@.items[?(@.active)])]}. Frames are mutated in-place rather than
+     * replaced per element, eliminating per-element allocation on hot filter paths.
+     * Thread-local because compiled expression objects are shared and may be invoked concurrently.
      */
-    private static final ThreadLocal<Deque<FilterContext>> FILTER_CTX =
-            ThreadLocal.withInitial(ArrayDeque::new);
+    private static final ThreadLocal<FilterContextStack> FILTER_CTX =
+            ThreadLocal.withInitial(FilterContextStack::new);
 
     private final CompiledExpression compiledExpression;
     private final RuntimeServices runtimeServices;
@@ -574,16 +575,18 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     /** {@code [?(<predicate>)]} — element-wise filter on a list or map. */
     @SuppressWarnings("unchecked")
     private Object applyFilter(Object current, ExecutableNode predicate, ExecutionScope scope) {
-        Deque<FilterContext> stack = FILTER_CTX.get();
+        FilterContextStack stack = FILTER_CTX.get();
         if (current instanceof Map<?, ?> map) {
             // Map filter: retain matching entries; result is a filtered Map preserving key-value pairs.
-            Map<Object, Object> result = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                FilterContext ctx = FilterContext.ofMapEntry(entry.getKey(), entry.getValue());
-                stack.push(ctx);
+            // O3: iterate keySet()+get() to avoid MapNIterator and KeyValueHolder allocations.
+            // O6: pre-size the result map to avoid rehash when all entries pass.
+            Map<Object, Object> result = new LinkedHashMap<>(map.size() * 2);
+            for (Object key : map.keySet()) {
+                Object value = map.get(key);
+                stack.pushMapEntry(key, value);  // O4: reuses a pooled frame, no allocation
                 try {
                     if (asBoolean(evaluateExpr(predicate, scope))) {
-                        result.put(entry.getKey(), entry.getValue());
+                        result.put(key, value);
                     }
                 } finally {
                     stack.pop();
@@ -592,10 +595,9 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             return result;
         }
         List<Object> list = requireList(current, "filter");
-        List<Object> result = new ArrayList<>();
+        List<Object> result = new ArrayList<>(list.size());  // O6: pre-size to avoid grow()
         for (Object element : list) {
-            FilterContext ctx = FilterContext.ofElement(element);
-            stack.push(ctx);
+            stack.pushElement(element);  // O4: reuses a pooled frame, no allocation
             try {
                 if (asBoolean(evaluateExpr(predicate, scope))) {
                     result.add(element);
@@ -1039,5 +1041,60 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         String message = "variable '" + id.ref().name() + "' has no value; call setValue(\""
                          + id.ref().name() + "\", ...) before compute()";
         return new ExpressionEvaluationException(compiledExpression.source(), "UNBOUND_VARIABLE", message, position);
+    }
+
+    // -------------------------------------------------------------------------
+    // FilterContext pool (O4)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Per-thread pool of reusable {@link FilterContext} frames.
+     *
+     * <p>Frames are stored in a growing array indexed by nesting depth.
+     * Only one frame is active per nesting level at a time, so the array never
+     * grows beyond the maximum filter-predicate nesting depth encountered in practice.
+     */
+    private static final class FilterContextStack {
+        private FilterContext[] frames;
+        private int depth;
+
+        FilterContextStack() {
+            frames = new FilterContext[4];
+            for (int i = 0; i < frames.length; i++) {
+                frames[i] = new FilterContext();
+            }
+        }
+
+        /** Pushes a frame bound to a collection {@code element}. */
+        void pushElement(Object element) {
+            ensureCapacity();
+            frames[depth++].bindElement(element);
+        }
+
+        /** Pushes a frame bound to a map entry ({@code key}, {@code value}). */
+        void pushMapEntry(Object key, Object value) {
+            ensureCapacity();
+            frames[depth++].bindMapEntry(key, value);
+        }
+
+        /** Pops the innermost frame. */
+        void pop() {
+            depth--;
+        }
+
+        /** Returns the innermost active frame, or {@code null} when the stack is empty. */
+        FilterContext peek() {
+            return depth > 0 ? frames[depth - 1] : null;
+        }
+
+        private void ensureCapacity() {
+            if (depth == frames.length) {
+                int newLen = frames.length * 2;
+                frames = Arrays.copyOf(frames, newLen);
+                for (int i = depth; i < newLen; i++) {
+                    frames[i] = new FilterContext();
+                }
+            }
+        }
     }
 }
