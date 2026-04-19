@@ -4,21 +4,22 @@
 
 The `expression-evaluator` module already supports collection navigation with filtering (`[?(@ > 1)]`),
 aggregations (`..sum()`, `..avg()`), and deep-scan operations. This plan extends those mechanisms
-to add `..sum(transform)` and `..prod(transform)` as **first-class collection navigation steps**,
-reusing the existing `FilterContext` / `@` infrastructure instead of introducing a separate
-lambda/closure system.
+to add `..sum(@ -> transform)` and `..prod(@ -> transform)` as **first-class collection navigation steps**,
+reusing the existing `FilterContext` / `@` infrastructure while introducing an explicit lambda marker
+so the syntax does not look like an ordinary method call whose argument merely happens to be an expression.
 
 ### New syntax
 
-```
-[1, 2, 3]..sum(@ * 2^@)             // Σ f(element)                            → 34
-[1, 2, 3]..prod(@ * 2^@)            // Π f(element)
-[1, 2, 3]..sum()                    // sum of all elements                     → 5
+```text
+[1, 2, 3]..sum(@ -> @ * 2^@)        // Σ f(element)                            → 34
+[1, 2, 3]..prod(@ -> @ * 2^@)       // Π f(element)
+[1, 2, 3]..sum()                    // sum of all elements                     → 6
 [1, 2, 3]..prod()                   // product of all elements                 → 6
 ```
 
-The `@` token is the **current-element placeholder** — the same concept used today inside
-`[?(<pred>)]` filter predicates. Its runtime value comes from `FilterContext.element()`.
+The `@` token remains the **current-element placeholder** — the same concept used today inside
+`[?(<pred>)]` filter predicates. The new `->` marker makes the higher-order intent explicit:
+`sum(@ -> expr)` reads as "sum the result of evaluating `expr` for each element bound to `@`".
 
 ---
 
@@ -44,7 +45,12 @@ Key existing infrastructure this plan builds on:
 
 **File:** `expression-evaluator/src/main/antlr4/com/runestone/expeval/internal/grammar/ExpressionEvaluator.g4`
 
-### 1.1 Extend `referenceTarget` to allow `@`
+### 1.1 Add an explicit lambda marker and extend `referenceTarget` to allow `@`
+
+This syntax needs two parser-level changes:
+
+1. a named `ARROW` token (`->`) so transforms are explicitly marked as higher-order expressions
+2. `AT memberChain*` in `referenceTarget` so `@` can appear inside the transform body
 
 The `@` token (`AT`) already exists as a lexer rule. It is currently only valid inside the
 `filterValue` production (`filterValue : AT memberChain* # currentElementFilterValue`). Adding it
@@ -52,18 +58,45 @@ to `referenceTarget` makes it valid in any expression context — numeric, logic
 all entity types eventually bottom out at `referenceTarget`.
 
 ```antlr
+ARROW              : '->' ;
+
 referenceTarget
     : function                                                           # functionReferenceTarget
     | IDENTIFIER memberChain*                                            # identifierReferenceTarget
-    | AT memberChain*                                                    # atReferenceTarget          // ← NEW
+    | AT memberChain*                                                    # atReferenceTarget
+    ;
+
+memberChain
+    : DOUBLE_PERIOD IDENTIFIER LPAREN collectionFunctionArguments? RPAREN # collectionFunctionAccess
+    | PERIOD MULT                                                         # childWildcardAccess
+    | PERIOD IDENTIFIER LPAREN
+          (allEntityTypes (COMMA allEntityTypes)*)?
+      RPAREN                                                              # methodCallAccess
+    | SAFE_NAV IDENTIFIER LPAREN
+          (allEntityTypes (COMMA allEntityTypes)*)?
+      RPAREN                                                              # safeMethodCallAccess
+    | PERIOD IDENTIFIER                                                   # propertyAccess
+    | SAFE_NAV IDENTIFIER                                                 # safePropertyAccess
+    | subscript                                                           # subscriptAccess
+    ;
+
+collectionFunctionArguments
+    : lambdaTransform                                                    # lambdaCollectionFunctionArguments
+    | allEntityTypes (COMMA allEntityTypes)*                             # positionalCollectionFunctionArguments
+    ;
+
+lambdaTransform
+    : AT ARROW allEntityTypes                                            # atLambdaTransform
     ;
 ```
 
-This single addition enables:
+This enables:
 - `@ * 2` — `@` as a numeric primary (via `numericEntity` → `numericReferenceOperation`)
 - `@ > 1` — `@` on the left side of a math comparison
+- `@ -> @ * 2^@` — explicit per-element transform for `sum`/`prod`
 
-No new tokens are needed; `AT` is already declared.
+`ARROW` should be a named lexer token, not a parser literal, to keep the grammar consistent with
+the rest of the file.
 
 ### 1.2 Regenerate the parser
 
@@ -101,7 +134,7 @@ Replace the existing `VectorAggregationStep` record:
 
 ```java
 /**
- * {@code ..sum()}, {@code ..sum(@ * 2)}, {@code ..prod()}, {@code ..prod(@ * 2)}, etc.
+ * {@code ..sum()}, {@code ..sum(@ -> @ * 2)}, {@code ..prod()}, {@code ..prod(@ -> @ * 2)}, etc.
  * When {@code transform} is non-null it is evaluated per element (with {@code @} bound to that
  * element via {@code FilterContext}) and the result is aggregated.
  */
@@ -124,31 +157,48 @@ public record VectorAggregationStep(
 
 **File:** `src/main/java/com/runestone/expeval/internal/ast/mapping/SemanticAstBuilder.java`
 
-The grammar rule `collectionFunctionAccess` matches `..IDENTIFIER(args?)`. Its visitor currently
-recognizes "sum", "avg", "min", "max", "count", "keys", "values" by name. Extend the switch:
+The grammar rule `collectionFunctionAccess` still matches `..IDENTIFIER(args?)`, but now the argument
+payload can be either ordinary positional arguments or a single `lambdaTransform`. Its visitor should:
+
+- keep ordinary `CollectionFunctionStep` handling unchanged for regular collection functions
+- recognize `sum` and `prod` as vector aggregations
+- accept an optional `@ -> ...` transform only for `sum` and `prod`
+- reject lambda-style arguments for non-higher-order built-ins such as `avg`, `min`, `max`, and `count`
+
+One straightforward shape is:
 
 ```java
 @Override
 public MemberAccess visitCollectionFunctionAccess(
         ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx) {
     String name = ctx.IDENTIFIER().getText();
-    List<ExpressionEvaluatorParser.AllEntityTypesContext> args = ctx.allEntityTypes();
+    var argBlock = ctx.collectionFunctionArguments();
+    ExpressionNode transform = extractLambdaTransform(argBlock);
+    List<ExpressionNode> args = extractPositionalArguments(argBlock);
 
     return switch (name) {
-        case "sum"   -> new VectorAggregationStep(VectorAggregationKind.SUM,
-                            args.isEmpty() ? null : visitAllEntityType(args.get(0)));
-        case "avg"   -> new VectorAggregationStep(VectorAggregationKind.AVG, null);
-        case "min"   -> new VectorAggregationStep(VectorAggregationKind.MIN, null);
-        case "max"   -> new VectorAggregationStep(VectorAggregationKind.MAX, null);
-        case "count" -> new VectorAggregationStep(VectorAggregationKind.COUNT, null);
-        case "prod"  -> new VectorAggregationStep(VectorAggregationKind.PROD,      // ← new
-                            args.isEmpty() ? null : visitAllEntityType(args.get(0)));
-        case "keys"   -> new MapProjectionStep(MapProjectionKind.KEYS);
-        case "values" -> new MapProjectionStep(MapProjectionKind.VALUES);
-        default -> buildCollectionFunctionStep(name, args);  // existing catalog-function path
+        case "sum"   -> validateAggregationArguments(name, transform, args,
+                            new VectorAggregationStep(VectorAggregationKind.SUM, transform));
+        case "prod"  -> validateAggregationArguments(name, transform, args,
+                            new VectorAggregationStep(VectorAggregationKind.PROD, transform));
+        case "avg"   -> validateNoLambda(name, transform, new VectorAggregationStep(VectorAggregationKind.AVG));
+        case "min"   -> validateNoLambda(name, transform, new VectorAggregationStep(VectorAggregationKind.MIN));
+        case "max"   -> validateNoLambda(name, transform, new VectorAggregationStep(VectorAggregationKind.MAX));
+        case "count" -> validateNoLambda(name, transform, new VectorAggregationStep(VectorAggregationKind.COUNT));
+        case "keys"   -> validateNoLambda(name, transform, new MapProjectionStep(MapProjectionKind.KEYS));
+        case "values" -> validateNoLambda(name, transform, new MapProjectionStep(MapProjectionKind.VALUES));
+        default -> {
+            validateNoLambda(name, transform, null);
+            yield new CollectionFunctionStep(name, args);
+        }
     };
 }
 ```
+
+`extractLambdaTransform(...)` should return `null` when the argument block is absent or positional,
+and otherwise visit the `allEntityTypes` child from `AT ARROW allEntityTypes`.
+`validateAggregationArguments(...)` should reject positional arguments for `sum` and `prod`, so
+`..sum(1 + 2)` does not remain valid under a more ambiguous spelling.
 
 ### 3.3 Update visitor for `atReferenceTarget`
 
@@ -217,7 +267,7 @@ case VectorAggregationStep(VectorAggregationKind kind, ExpressionNode transform)
 Replace the existing `ExecutableVectorAggregation` record:
 
 ```java
-/** {@code ..sum()}, {@code ..sum(@ * 2)}, {@code ..prod()}, {@code ..prod(@)}, etc. */
+/** {@code ..sum()}, {@code ..sum(@ -> @ * 2)}, {@code ..prod()}, {@code ..prod(@ -> @)}, etc. */
 record ExecutableVectorAggregation(
         VectorAggregationKind kind,
         @Nullable ExecutableNode transform
@@ -311,26 +361,32 @@ Cover:
 
 ```java
 // sum with transform
-"[1, 2, 3]..sum(@ * 2)"                        // → 12
-"[1, 2, 3]..sum(@ ^ 2)"                        // → 14
-"[1, 2, 3]..sum(@ * 2^@)"                      // → 34
+"[1, 2, 3]..sum(@ -> @ * 2)"                  // → 12
+"[1, 2, 3]..sum(@ -> @ ^ 2)"                  // → 14
+"[1, 2, 3]..sum(@ -> @ * 2^@)"                // → 34
 
 // prod without transform (product of elements)
 "[1, 2, 3]..prod()"                            // → 6
 "[2, 3, 4]..prod()"                            // → 24
 
 // prod with transform
-"[1, 2, 3]..prod(@ * 2)"                       // → 2 * 4 * 6 = 48
+"[1, 2, 3]..prod(@ -> @ * 2)"                 // → 2 * 4 * 6 = 48
 
 // sum without transform (existing — must still work)
 "[1, 2, 3]..sum()"                             // → 6
 
 // external variable in transform expression
-"[1, 2, 3]..sum(@ + offset)"                  // offset is external symbol
+"[1, 2, 3]..sum(@ -> @ + offset)"             // offset is external symbol
 
 // edge cases
 "[]..prod()"                                   // → 1 (identity)
-"[5]..sum(@ * 2)"                              // → 10
+"[5]..sum(@ -> @ * 2)"                        // → 10
+
+// invalid usages
+"[1, 2, 3]..sum(@ * 2)"                       // reject: transform requires explicit @ -> marker
+"[1, 2, 3]..sum(1 + 2)"                       // reject: positional args are not valid for sum/prod
+"[1, 2, 3]..avg(@ -> @ * 2)"                  // reject: avg does not accept a lambda in this plan
+"[1, 2, 3]..custom(@ -> @ * 2)"               // reject: custom collection functions keep positional args only
 ```
 
 ---
@@ -339,11 +395,11 @@ Cover:
 
 | File | Change |
 |------|--------|
-| `grammar/ExpressionEvaluator.g4` | Add `AT memberChain*` to `referenceTarget` |
+| `grammar/ExpressionEvaluator.g4` | Add `ARROW`, `collectionFunctionArguments`, `lambdaTransform`, and `AT memberChain*` in `referenceTarget` |
 | `grammar/` (generated) | Regenerate with ANTLR |
 | `internal/navigation/VectorAggregationKind.java` | Add `PROD` |
 | `internal/ast/PropertyChainNode.java` | Add `@Nullable ExpressionNode transform` to `VectorAggregationStep` |
-| `internal/ast/mapping/SemanticAstBuilder.java` | Extend `visitCollectionFunctionAccess` for `prod`/`sum(expr)`; add `visitAtReferenceTarget` |
+| `internal/ast/mapping/SemanticAstBuilder.java` | Extend `visitCollectionFunctionAccess` for `prod`/`sum(@ -> expr)`; add `visitAtReferenceTarget` |
 | `internal/runtime/SemanticResolver.java` | Resolve `"@"` identifier as `UnknownType`; resolve transform in `VectorAggregationStep` |
 | `internal/runtime/ExecutablePropertyChain.java` | Add optional `transform` to `ExecutableVectorAggregation` |
 | `internal/runtime/ExecutionPlanBuilder.java` | Handle updated `VectorAggregationStep` |
@@ -356,13 +412,13 @@ entries.
 
 ## What this plan does NOT introduce
 
-The original design proposed a full lambda/closure system (`(x) => x * 2` syntax). That approach is
-replaced entirely:
+This plan introduces only a **narrow lambda marker** for `sum` and `prod`: `@ -> expr`.
+It does **not** introduce a general-purpose lambda/closure system such as `(x) => x * 2`.
 
 | Original | Replaced by |
 |----------|-------------|
-| `ARROW` lexer token (`=>`) | Not needed |
-| `lambdaExpression` grammar rule | Not needed |
+| `ARROW` lexer token (`=>`) | `ARROW` lexer token (`->`) used only for `@ -> expr` |
+| `lambdaExpression` grammar rule | Narrow `lambdaTransform : AT ARROW allEntityTypes` |
 | `LambdaType` / `LambdaValue` | Not needed |
 | `LambdaNode` / `ExecutableLambda` | Not needed |
 | `SymbolKind.LAMBDA` | Not needed |
@@ -370,8 +426,9 @@ replaced entirely:
 | `ExecutionScope.withLambdaLayer` | Not needed |
 | `VectorFunctions` catalog class | Not needed |
 
-Instead, the `@` element placeholder and `FilterContext` pooling — both already implemented for
-`[?(pred)]` — are reused for the new steps.
+The `@` element placeholder and `FilterContext` pooling — both already implemented for `[?(pred)]`
+— are reused for the new steps. The only new syntax marker is `->`, and only inside
+`..sum(@ -> ...)` / `..prod(@ -> ...)`.
 
 ---
 
@@ -393,6 +450,6 @@ Manually verify edge cases:
 
 | Expression | Expected |
 |---|---|
-| `[1, 2, 3]..sum(@ * 2^@)` | 1·2 + 2·4 + 3·8 = **34** |
+| `[1, 2, 3]..sum(@ -> @ * 2^@)` | 1·2 + 2·4 + 3·8 = **34** |
 | `[1, 2, 3]..prod()` | 1·2·3 = **6** |
 | `[]..prod()` | **1** (multiplicative identity) |
