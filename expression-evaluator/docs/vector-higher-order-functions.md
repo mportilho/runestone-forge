@@ -98,7 +98,16 @@ This enables:
 `ARROW` should be a named lexer token, not a parser literal, to keep the grammar consistent with
 the rest of the file.
 
-### 1.2 Regenerate the parser
+### 1.2 SLL/LL prediction note
+
+Both alternatives of `collectionFunctionArguments` can start with the `AT` token:
+`lambdaTransform` starts with `AT ARROW`, while the positional alternative can start with `AT` via
+`allEntityTypes → ... → atReferenceTarget`. ANTLR ALL(*) resolves this with a 2-token lookahead
+(`AT` then `ARROW` vs anything else), but SLL prediction may not look far enough and will fall back
+to LL. This is acceptable — the existing parser already uses SLL-with-LL-fallback (`PredictionStrategy`)
+— but verify no parse errors appear on valid expressions.
+
+### 1.3 Regenerate the parser
 
 Follow the ANTLR regeneration steps in `CLAUDE.md`. Copy only the generated `.java` files into:
 `expression-evaluator/src/main/java/com/runestone/expeval/internal/grammar/`
@@ -200,61 +209,94 @@ and otherwise visit the `allEntityTypes` child from `AT ARROW allEntityTypes`.
 `validateAggregationArguments(...)` should reject positional arguments for `sum` and `prod`, so
 `..sum(1 + 2)` does not remain valid under a more ambiguous spelling.
 
+> **`ds()` compatibility**: `buildCollectionFunctionStep` currently accesses deep-scan arguments via
+> `ctx.allEntityTypes()` (lines 549, 561). When the grammar changes `collectionFunctionAccess` to use
+> `collectionFunctionArguments?`, these calls break. The `ds` case must be updated to extract the
+> property name from `ctx.collectionFunctionArguments().positional...` (the `positionalCollectionFunctionArguments`
+> alternative), since `ds("propName")` always uses positional args. Concretely:
+>
+> ```java
+> if ("ds".equals(name)) {
+>     List<ExpressionNode> dsArgs = extractPositionalArguments(argBlock);
+>     String propName = dsArgs.isEmpty() ? null : ((LiteralNode) dsArgs.get(0)).value().toString();
+>     return new PropertyChainNode.DeepScanStep(propName);
+> }
+> ```
+
 ### 3.3 Update visitor for `atReferenceTarget`
 
-Add a visitor for the new grammar alternative:
+Add a visitor for the new grammar alternative. Follow the exact same convention as `buildFilterValue`
+(line 732-742 of `SemanticAstBuilder`): emit `IdentifierNode("@")` when the chain is empty, and
+`PropertyChainNode("@", chain)` otherwise. This keeps a single AST shape for `@` across both filter
+predicates and transform bodies, avoiding two divergent paths in the resolver and evaluator.
 
 ```java
 @Override
 public ExpressionNode visitAtReferenceTarget(
         ExpressionEvaluatorParser.AtReferenceTargetContext ctx) {
-    // Build a PropertyChainNode whose rootIdentifier is "@".
-    // SemanticResolver and AbstractObjectEvaluator already handle "@" as the FilterContext element.
-    String rootId = "@";
-    List<MemberAccess> chain = ctx.memberChain().stream()
+    List<ExpressionEvaluatorParser.MemberChainContext> memberChains = ctx.memberChain();
+    if (memberChains.isEmpty()) {
+        // Bare '@' — same IdentifierNode convention as currentElementFilterValue.
+        return new IdentifierNode(nodeFactory.nextId("identifier"), nodeFactory.sourceSpan(ctx), "@");
+    }
+    List<PropertyChainNode.MemberAccess> chain = memberChains.stream()
             .map(this::visitMemberChain)
             .toList();
-    return new PropertyChainNode(nodeFactory.nextId("at"), nodeFactory.sourceSpan(ctx), rootId, chain);
+    return new PropertyChainNode(nodeFactory.nextId("at"), nodeFactory.sourceSpan(ctx), "@", chain);
 }
 ```
-
-Note: if the chain is empty this reduces to a plain `IdentifierNode("@")` — adjust to match the
-existing convention used for `currentElementFilterValue` in the filter predicate visitor.
 
 ---
 
 ## Phase 4 — Semantic resolution
 
-### 4.1 Resolve `@` identifier
+### 4.1 ~~Resolve `@` identifier~~ — **não é necessário**
 
-**File:** `src/main/java/com/runestone/expeval/internal/runtime/SemanticResolver.java`
+A Fase 4.1 original propunha relaxar a checagem de `@` em `resolveIdentifier` e `resolvePropertyChain`
+para aceitar `UnknownType` mesmo fora de um filtro. **Isso seria excessivamente permissivo** — deixaria
+`@` escapar para contextos completamente inválidos (topo de expressão, argumentos de função, etc.).
 
-In `resolveIdentifier` (or wherever identifier nodes are typed), add a check before the external/internal symbol lookup:
-
-```java
-if ("@".equals(node.name())) {
-    // The current-element placeholder — type is unknown at compile time; resolved via
-    // FilterContext at runtime. This is the same behaviour as inside [?(...)] predicates.
-    resolvedTypes.put(node.nodeId(), UnknownType.INSTANCE);
-    return UnknownType.INSTANCE;
-}
-```
-
-If `PropertyChainNode` is used instead of `IdentifierNode` for `@`, apply the same logic when
-`rootIdentifier.equals("@")`.
+O mecanismo existente já é suficiente: `resolveIdentifier` e `resolvePropertyChain` rejeitam `@` quando
+`filterElementType == null`. A Fase 4.2 a seguir corrige o root cause definindo `filterElementType`
+durante a resolução do transform. **Nenhuma alteração em `resolveIdentifier` ou `resolvePropertyChain`
+é necessária.**
 
 ### 4.2 Resolve `VectorAggregationStep` with transform
 
-Extend the existing aggregation case to also resolve the optional transform:
+**File:** `src/main/java/com/runestone/expeval/internal/runtime/SemanticResolver.java`
+
+Extend the existing aggregation case to also resolve the optional transform, reusing the existing
+`resolveFilterPredicate` helper — it saves and restores `filterElementType`, which is exactly what makes
+`@` valid inside the transform body without relaxing the global check:
 
 ```java
 case VectorAggregationStep(VectorAggregationKind kind, ExpressionNode transform) -> {
     if (transform != null) {
-        resolveExpression(transform);  // resolve @-references inside the transform
+        // Sets filterElementType = UnknownType for the duration of transform resolution,
+        // which is what makes '@' valid inside the body (same mechanism as [?(...)] filters).
+        resolveFilterPredicate(transform, UnknownType.INSTANCE, node);
     }
-    // result mode: SUM/AVG/MIN/MAX/PROD → SCALAR; COUNT → SCALAR
+    // result type: SUM/AVG/MIN/MAX/PROD/COUNT → SCALAR (ScalarType.NUMBER)
 }
 ```
+
+`resolveFilterPredicate` (lines 598-607) already handles save/restore:
+
+```java
+private void resolveFilterPredicate(ExpressionNode predicate, ResolvedType elementType,
+                                    @Nullable PropertyChainNode node) {
+    ResolvedType savedElementType = filterElementType;
+    filterElementType = elementType;
+    try {
+        resolveExpression(predicate);
+    } finally {
+        filterElementType = savedElementType;
+    }
+}
+```
+
+No new helper needed — calling `resolveFilterPredicate(transform, UnknownType.INSTANCE, node)` is
+sufficient and correct.
 
 ---
 
@@ -306,6 +348,9 @@ case ExecutableVectorAggregation va -> applyAggregation(current, va.kind(), va.t
 
 #### Extend `applyAggregation` for optional transform and `PROD`
 
+The existing `applyAggregation(current, kind)` is replaced by a version that also accepts the optional
+transform and scope. Keep the imperative loop style of the existing implementation for consistency.
+
 ```java
 private Object applyAggregation(
         Object current,
@@ -313,38 +358,78 @@ private Object applyAggregation(
         @Nullable ExecutableNode transform,
         ExecutionScope scope) {
 
-    // Resolve numeric stream: apply transform per element if present
-    List<BigDecimal> values = toNumericStream(current, transform, scope);
-
-    return switch (kind) {
-        case SUM   -> values.stream().reduce(BigDecimal.ZERO, (a, b) -> a.add(b, mathContext));
-        case AVG   -> { BigDecimal s = values.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-                        yield s.divide(BigDecimal.valueOf(values.size()), mathContext); }
-        case MIN   -> values.stream().min(Comparator.naturalOrder()).orElse(null);
-        case MAX   -> values.stream().max(Comparator.naturalOrder()).orElse(null);
-        case COUNT -> BigDecimal.valueOf(collectionSize(current));
-        case PROD  -> values.stream().reduce(BigDecimal.ONE, (a, b) -> a.multiply(b, mathContext));
-    };
-}
-
-private List<BigDecimal> toNumericStream(Object current, @Nullable ExecutableNode transform, ExecutionScope scope) {
-    List<?> list = requireList(current);
-    if (transform == null) {
-        return list.stream().map(this::toBigDecimal).toList();
+    if (current instanceof Map<?, ?> m && kind == VectorAggregationKind.COUNT) {
+        return BigDecimal.valueOf(m.size());
     }
-    // Reuse FilterContextStack for per-element @-binding
-    FilterContext ctx = filterContextStack.push();
-    try {
-        List<BigDecimal> result = new ArrayList<>(list.size());
-        for (Object element : list) {
-            ctx.bindElement(element);
-            Object val = evaluateExpr(transform, scope);
-            result.add(toBigDecimal(val));
+    List<?> list = requireList(current, "aggregation");
+    if (kind == VectorAggregationKind.COUNT) {
+        return BigDecimal.valueOf(list.size());
+    }
+    // PROD with empty list → multiplicative identity
+    if (list.isEmpty()) {
+        return kind == VectorAggregationKind.PROD ? BigDecimal.ONE : null;
+    }
+
+    List<BigDecimal> values = toNumericList(list, transform, scope);
+    BigDecimal acc = values.getFirst();
+    switch (kind) {
+        case SUM -> {
+            for (int i = 1; i < values.size(); i++) acc = acc.add(values.get(i), mathContext);
+            return acc;
         }
-        return result;
-    } finally {
-        filterContextStack.pop();
+        case AVG -> {
+            for (int i = 1; i < values.size(); i++) acc = acc.add(values.get(i), mathContext);
+            return acc.divide(BigDecimal.valueOf(values.size()), mathContext);
+        }
+        case MIN -> {
+            for (int i = 1; i < values.size(); i++) {
+                BigDecimal v = values.get(i);
+                if (v.compareTo(acc) < 0) acc = v;
+            }
+            return acc;
+        }
+        case MAX -> {
+            for (int i = 1; i < values.size(); i++) {
+                BigDecimal v = values.get(i);
+                if (v.compareTo(acc) > 0) acc = v;
+            }
+            return acc;
+        }
+        case PROD -> {
+            for (int i = 1; i < values.size(); i++) acc = acc.multiply(values.get(i), mathContext);
+            return acc;
+        }
+        default -> throw new IllegalStateException("Unhandled aggregation kind: " + kind);
     }
+}
+```
+
+`toNumericList` applies the transform per element, binding `@` via the existing `FilterContextStack`.
+
+> **API note:** `FilterContextStack` does not have a `push()` returning a context object.
+> The correct pattern — matching `applyFilter` — is `pushElement(element)` / `pop()` per element:
+
+```java
+private List<BigDecimal> toNumericList(List<?> list, @Nullable ExecutableNode transform,
+                                       ExecutionScope scope) {
+    if (transform == null) {
+        List<BigDecimal> result = new ArrayList<>(list.size());
+        for (Object element : list) result.add(asBigDecimal(element));
+        return result;
+    }
+    // Reuse FilterContextStack for per-element @-binding (same mechanism as [?(...)] filters).
+    // pushElement + pop per iteration (not push-once + rebind) to support nested transforms.
+    FilterContextStack stack = FILTER_CTX.get();
+    List<BigDecimal> result = new ArrayList<>(list.size());
+    for (Object element : list) {
+        stack.pushElement(element);
+        try {
+            result.add(asBigDecimal(evaluateExpr(transform, scope)));
+        } finally {
+            stack.pop();
+        }
+    }
+    return result;
 }
 ```
 
@@ -400,7 +485,7 @@ Cover:
 | `internal/navigation/VectorAggregationKind.java` | Add `PROD` |
 | `internal/ast/PropertyChainNode.java` | Add `@Nullable ExpressionNode transform` to `VectorAggregationStep` |
 | `internal/ast/mapping/SemanticAstBuilder.java` | Extend `visitCollectionFunctionAccess` for `prod`/`sum(@ -> expr)`; add `visitAtReferenceTarget` |
-| `internal/runtime/SemanticResolver.java` | Resolve `"@"` identifier as `UnknownType`; resolve transform in `VectorAggregationStep` |
+| `internal/runtime/SemanticResolver.java` | Resolve transform in `VectorAggregationStep` via `resolveFilterPredicate` (no changes to `resolveIdentifier`) |
 | `internal/runtime/ExecutablePropertyChain.java` | Add optional `transform` to `ExecutableVectorAggregation` |
 | `internal/runtime/ExecutionPlanBuilder.java` | Handle updated `VectorAggregationStep` |
 | `internal/runtime/AbstractObjectEvaluator.java` | Extend `applyAggregation` for transform and `PROD` |
