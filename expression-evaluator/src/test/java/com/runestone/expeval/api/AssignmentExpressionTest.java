@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
@@ -131,6 +132,23 @@ class AssignmentExpressionTest {
                     "desconto = if true then 10 else 0 endif;").compute();
 
             assertThat((BigDecimal) result.get("desconto")).isEqualByComparingTo("10");
+        }
+
+        @Test
+        @DisplayName("?? alimenta || em blocos de atribuição encadeados")
+        void nullCoalescingFeedsStringConcatenation() {
+            HashMap<String, Object> vars = new HashMap<>();
+            vars.put("a", null);
+            vars.put("b", "foo");
+            vars.put("d", "bar");
+
+            Map<String, Object> result = AssignmentExpression.compile("""
+                    c = a ?? b;
+                    q = c || d;
+                    """).compute(vars);
+
+            assertThat(result).containsEntry("c", "foo");
+            assertThat(result).containsEntry("q", "foobar");
         }
     }
 
