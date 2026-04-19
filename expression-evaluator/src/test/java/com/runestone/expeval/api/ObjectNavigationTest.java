@@ -261,7 +261,7 @@ class ObjectNavigationTest {
 
         assertThat(validation.valid()).isFalse();
         assertThat(validation.issues()).extracting(CompilationIssue::code)
-                .contains("RESULT_TYPE_MISMATCH");
+                .contains(IssueCode.RESULT_TYPE_MISMATCH);
     }
 
     @Test
@@ -277,7 +277,7 @@ class ObjectNavigationTest {
 
         assertThat(validation.valid()).isFalse();
         assertThat(validation.issues()).extracting(CompilationIssue::code)
-                .contains("UNKNOWN_PROPERTY");
+                .contains(IssueCode.UNKNOWN_PROPERTY);
     }
 
     @Test
@@ -293,7 +293,7 @@ class ObjectNavigationTest {
 
         assertThat(validation.valid()).isFalse();
         assertThat(validation.issues()).extracting(CompilationIssue::code)
-                .contains("UNKNOWN_METHOD");
+                .contains(IssueCode.UNKNOWN_METHOD);
     }
 
     // -------------------------------------------------------------------------

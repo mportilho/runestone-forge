@@ -219,14 +219,14 @@ public final class ExpressionRuntimeSupport {
         } catch (ParsingException e) {
             List<CompilationIssue> issues = e.errors().stream()
                     .map(err -> new CompilationIssue(
-                            "SYNTAX_ERROR",
+                            IssueCode.SYNTAX_ERROR,
                             err.message(),
                             new CompilationPosition(err.line(), err.charPositionInLine(), err.charPositionInLine() + 1)
                     ))
                     .toList();
             return ValidationResult.failed(
                     source,
-                    issues.isEmpty() ? List.of(new CompilationIssue("SYNTAX_ERROR", "syntax error")) : issues
+                    issues.isEmpty() ? List.of(new CompilationIssue(IssueCode.SYNTAX_ERROR, "syntax error")) : issues
             );
         }
     }

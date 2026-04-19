@@ -169,7 +169,7 @@ class ExpressionErrorMessageTest {
                 .satisfies(ex -> {
                     assertThat(ex.issues()).hasSize(1);
                     CompilationIssue issue = ex.issues().getFirst();
-                    assertThat(issue.code()).isEqualTo("UNKNOWN_FUNCTION");
+                    assertThat(issue.code()).isEqualTo(IssueCode.UNKNOWN_FUNCTION);
                     assertThat(issue.position()).isNotNull();
                     assertThat(issue.position().line()).isEqualTo(1);
                     assertThat(issue.position().column()).isEqualTo(0);

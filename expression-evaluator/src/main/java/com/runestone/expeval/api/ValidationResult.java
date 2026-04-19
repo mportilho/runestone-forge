@@ -50,7 +50,7 @@ public record ValidationResult(
         return "validation failed for expression '" + source + "': " + detail;
     }
 
-    private String formatWithPointer(CompilationPosition pos, String code, String message) {
+    private String formatWithPointer(CompilationPosition pos, IssueCode code, String message) {
         String[] lines = source.split("\n", -1);
         int lineIdx = pos.line() - 1;
         String sourceLine = (lineIdx >= 0 && lineIdx < lines.length) ? lines[lineIdx] : source;

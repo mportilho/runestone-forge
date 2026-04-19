@@ -39,7 +39,7 @@ class ExpressionValidationTest {
         @Test
         @DisplayName("failed() is not valid and carries the provided issues")
         void failedIsNotValidWithIssues() {
-            var issue = new CompilationIssue("SOME_CODE", "some message");
+            var issue = new CompilationIssue(IssueCode.UNKNOWN_FUNCTION, "some message");
             var result = ValidationResult.failed("bad expr", List.of(issue));
 
             assertThat(result.valid()).isFalse();
@@ -191,7 +191,7 @@ class ExpressionValidationTest {
 
             assertThat(result.issues())
                 .isNotEmpty()
-                .allSatisfy(issue -> assertThat(issue.code()).isEqualTo("SYNTAX_ERROR"));
+                .allSatisfy(issue -> assertThat(issue.code()).isEqualTo(IssueCode.SYNTAX_ERROR));
         }
 
         @Test
@@ -209,7 +209,7 @@ class ExpressionValidationTest {
 
             assertThat(result.issues())
                 .isNotEmpty()
-                .anySatisfy(issue -> assertThat(issue.code()).isEqualTo("UNKNOWN_FUNCTION"));
+                .anySatisfy(issue -> assertThat(issue.code()).isEqualTo(IssueCode.UNKNOWN_FUNCTION));
         }
 
         @Test
@@ -345,7 +345,7 @@ class ExpressionValidationTest {
 
             assertThat(result.valid()).isFalse();
             assertThat(result.issues())
-                .anySatisfy(issue -> assertThat(issue.code()).isEqualTo("INCOMPATIBLE_COMPARISON"));
+                .anySatisfy(issue -> assertThat(issue.code()).isEqualTo(IssueCode.INCOMPATIBLE_COMPARISON));
         }
 
         @Test

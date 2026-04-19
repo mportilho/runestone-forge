@@ -37,7 +37,7 @@ public final class ExpressionCompilationException extends RuntimeException {
         return "compilation failed for expression '" + source + "': " + detail;
     }
 
-    private static String formatWithPointer(String source, CompilationPosition pos, String code, String message) {
+    private static String formatWithPointer(String source, CompilationPosition pos, IssueCode code, String message) {
         String[] lines = source.split("\n", -1);
         int lineIdx = pos.line() - 1;
         String sourceLine = (lineIdx >= 0 && lineIdx < lines.length) ? lines[lineIdx] : source;

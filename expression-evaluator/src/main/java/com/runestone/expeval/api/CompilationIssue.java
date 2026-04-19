@@ -1,18 +1,18 @@
 package com.runestone.expeval.api;
 
-public record CompilationIssue(String code, String message, CompilationPosition position) {
+import java.util.Objects;
+
+public record CompilationIssue(IssueCode code, String message, CompilationPosition position) {
 
     public CompilationIssue {
-        if (code == null || code.isBlank()) {
-            throw new IllegalArgumentException("code must not be blank");
-        }
+        Objects.requireNonNull(code, "code must not be null");
         if (message == null || message.isBlank()) {
             throw new IllegalArgumentException("message must not be blank");
         }
         // position may be null — no source location available
     }
 
-    public CompilationIssue(String code, String message) {
+    public CompilationIssue(IssueCode code, String message) {
         this(code, message, null);
     }
 }

@@ -2,6 +2,7 @@ package com.runestone.expeval.internal.compiler;
 
 import com.runestone.expeval.api.CompilationIssue;
 import com.runestone.expeval.api.ExpressionCompilationException;
+import com.runestone.expeval.api.IssueCode;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
@@ -28,7 +29,7 @@ class ExpressionCompilerTest {
             .extracting(exception -> ((ExpressionCompilationException) exception).issues())
             .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(CompilationIssue.class))
             .extracting(CompilationIssue::code)
-            .contains("UNKNOWN_FUNCTION");
+            .contains(IssueCode.UNKNOWN_FUNCTION);
     }
 
     @Test
@@ -42,7 +43,7 @@ class ExpressionCompilerTest {
             .extracting(exception -> ((ExpressionCompilationException) exception).issues())
             .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(CompilationIssue.class))
             .extracting(CompilationIssue::code)
-            .contains("INVALID_FUNCTION_ARITY");
+            .contains(IssueCode.INVALID_FUNCTION_ARITY);
     }
 
     @Test
@@ -56,7 +57,7 @@ class ExpressionCompilerTest {
             .extracting(exception -> ((ExpressionCompilationException) exception).issues())
             .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(CompilationIssue.class))
             .extracting(CompilationIssue::code)
-            .contains("AMBIGUOUS_FUNCTION");
+            .contains(IssueCode.AMBIGUOUS_FUNCTION);
     }
 
     @Test

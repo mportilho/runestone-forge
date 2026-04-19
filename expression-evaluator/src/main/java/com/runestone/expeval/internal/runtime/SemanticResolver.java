@@ -1,5 +1,6 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.api.IssueCode;
 import com.runestone.expeval.internal.ast.AssignmentNode;
 import com.runestone.expeval.internal.ast.BinaryOperationNode;
 import com.runestone.expeval.internal.ast.ConditionalNode;
@@ -65,13 +66,13 @@ public final class SemanticResolver {
                     && context.resultType() == ExpressionResultType.MATH
                     && resultType != UnknownType.INSTANCE
                     && resultType != ScalarType.NUMBER) {
-                session.error("RESULT_TYPE_MISMATCH", "math expressions must resolve to NUMBER", file.resultExpression().sourceSpan());
+                session.error(IssueCode.RESULT_TYPE_MISMATCH, "math expressions must resolve to NUMBER", file.resultExpression().sourceSpan());
             }
             if (!tolerateUnknownPropertyChain
                     && context.resultType() == ExpressionResultType.LOGICAL
                     && resultType != UnknownType.INSTANCE
                     && resultType != ScalarType.BOOLEAN) {
-                session.error("RESULT_TYPE_MISMATCH", "logical expressions must resolve to BOOLEAN", file.resultExpression().sourceSpan());
+                session.error(IssueCode.RESULT_TYPE_MISMATCH, "logical expressions must resolve to BOOLEAN", file.resultExpression().sourceSpan());
             }
             session.resolvedTypes.put(file.nodeId(), resultType);
         } else {
@@ -192,7 +193,7 @@ public final class SemanticResolver {
             // '@' sentinel — current element in an active filter predicate
             if (CURRENT_ELEMENT.equals(node.name())) {
                 if (filterElementType == null) {
-                    error("INVALID_CURRENT_ELEMENT",
+                    error(IssueCode.INVALID_CURRENT_ELEMENT,
                             "'@' may only be used inside a filter predicate [?(...)]", node.sourceSpan());
                     return UnknownType.INSTANCE;
                 }
@@ -227,7 +228,7 @@ public final class SemanticResolver {
             // Handle '@' root — refers to current element inside a filter predicate
             if (CURRENT_ELEMENT.equals(node.rootIdentifier())) {
                 if (filterElementType == null) {
-                    error("INVALID_CURRENT_ELEMENT",
+                    error(IssueCode.INVALID_CURRENT_ELEMENT,
                             "'@' may only be used inside a filter predicate [?(...)]", node.sourceSpan());
                     return UnknownType.INSTANCE;
                 }
@@ -271,7 +272,7 @@ public final class SemanticResolver {
                         current = NullType.INSTANCE;
                         continue;
                     }
-                    error("INVALID_MEMBER_ACCESS",
+                    error(IssueCode.INVALID_MEMBER_ACCESS,
                             "type " + current + " does not support member access", node.sourceSpan());
                     return UnknownType.INSTANCE;
                 }
@@ -383,12 +384,12 @@ public final class SemanticResolver {
                 }
 
                 if (access instanceof PropertyChainNode.VectorAggregationStep) {
-                    error("TYPE_MISMATCH", "aggregation step requires a collection type", node.sourceSpan());
+                    error(IssueCode.TYPE_MISMATCH, "aggregation step requires a collection type", node.sourceSpan());
                     return UnknownType.INSTANCE;
                 }
 
                 if (access instanceof PropertyChainNode.MapProjectionStep) {
-                    error("TYPE_MISMATCH", "map projection step requires a MapType", node.sourceSpan());
+                    error(IssueCode.TYPE_MISMATCH, "map projection step requires a MapType", node.sourceSpan());
                     return UnknownType.INSTANCE;
                 }
 
@@ -410,7 +411,7 @@ public final class SemanticResolver {
                         current = NullType.INSTANCE;
                         continue;
                     }
-                    error("INVALID_MEMBER_ACCESS", "index access requires a collection type", node.sourceSpan());
+                    error(IssueCode.INVALID_MEMBER_ACCESS, "index access requires a collection type", node.sourceSpan());
                     return UnknownType.INSTANCE;
                 }
 
@@ -419,7 +420,7 @@ public final class SemanticResolver {
                         current = NullType.INSTANCE;
                         continue;
                     }
-                    error("INVALID_MEMBER_ACCESS", "key access requires a MapType", node.sourceSpan());
+                    error(IssueCode.INVALID_MEMBER_ACCESS, "key access requires a MapType", node.sourceSpan());
                     return UnknownType.INSTANCE;
                 }
 
@@ -589,7 +590,7 @@ public final class SemanticResolver {
                 case PropertyChainNode.CollectionFunctionStep cfs ->
                         resolveCollectionFunction(cfs, mapType, node);
                 case PropertyChainNode.PropertyAccess pa -> {
-                    error("INVALID_MAP_PROPERTY_ACCESS",
+                    error(IssueCode.INVALID_MAP_PROPERTY_ACCESS,
                             "map does not support dot-notation property access '" + pa.name()
                                     + "'; use [\"key\"], [*], or a filter", node.sourceSpan());
                     yield UnknownType.INSTANCE;
@@ -627,7 +628,7 @@ public final class SemanticResolver {
                     .map(this::resolveExpression).toList();
             Collection<FunctionDescriptor> candidates = context.functionCatalog().findCandidates(step.name());
             if (candidates.isEmpty()) {
-                error("UNKNOWN_COLLECTION_FUNCTION",
+                error(IssueCode.UNKNOWN_COLLECTION_FUNCTION,
                         "no function '" + step.name() + "' found in catalog for collection/map call",
                         node.sourceSpan());
                 return UnknownType.INSTANCE;
@@ -648,14 +649,14 @@ public final class SemanticResolver {
                 List<ResolvedType> explicitArgTypes = d.parameterResolvedTypes().subList(1, d.parameterResolvedTypes().size());
                 if (!matchesArgList(explicitArgTypes, argTypes)) continue;
                 if (match != null) {
-                    error("AMBIGUOUS_FUNCTION",
+                    error(IssueCode.AMBIGUOUS_FUNCTION,
                             "ambiguous collection function call '" + step.name() + "'", node.sourceSpan());
                     return UnknownType.INSTANCE;
                 }
                 match = d;
             }
             if (match == null) {
-                error("INCOMPATIBLE_COLLECTION_FUNCTION_ARGUMENTS",
+                error(IssueCode.INCOMPATIBLE_COLLECTION_FUNCTION_ARGUMENTS,
                         "no compatible overload for collection function '" + step.name() + "'",
                         node.sourceSpan());
                 return UnknownType.INSTANCE;
@@ -703,7 +704,7 @@ public final class SemanticResolver {
                 SourceSpan sourceSpan) {
             PropertyDescriptor descriptor = metadata.properties().get(access.name());
             if (descriptor == null) {
-                error("UNKNOWN_PROPERTY",
+                error(IssueCode.UNKNOWN_PROPERTY,
                         "property '" + access.name() + "' not found on " + metadata.javaClass().getSimpleName(),
                         sourceSpan);
                 return UnknownType.INSTANCE;
@@ -718,7 +719,7 @@ public final class SemanticResolver {
                 SourceSpan sourceSpan) {
             List<MethodDescriptor> candidates = metadata.methods().get(access.name());
             if (candidates == null || candidates.isEmpty()) {
-                error("UNKNOWN_METHOD",
+                error(IssueCode.UNKNOWN_METHOD,
                         "method '" + access.name() + "' not found on " + metadata.javaClass().getSimpleName(),
                         sourceSpan);
                 return UnknownType.INSTANCE;
@@ -729,7 +730,7 @@ public final class SemanticResolver {
                     .filter(candidate -> candidate.arity() == expectedArity)
                     .toList();
             if (arityMatches.isEmpty()) {
-                error("INVALID_METHOD_ARITY",
+                error(IssueCode.INVALID_METHOD_ARITY,
                         "invalid arity for method '" + access.name() + "' on " + metadata.javaClass().getSimpleName(),
                         sourceSpan);
                 return UnknownType.INSTANCE;
@@ -741,7 +742,7 @@ public final class SemanticResolver {
                     continue;
                 }
                 if (exactMatch != null) {
-                    error("AMBIGUOUS_METHOD",
+                    error(IssueCode.AMBIGUOUS_METHOD,
                             "ambiguous method call '" + access.name() + "' on " + metadata.javaClass().getSimpleName(),
                             sourceSpan);
                     return UnknownType.INSTANCE;
@@ -749,7 +750,7 @@ public final class SemanticResolver {
                 exactMatch = candidate;
             }
             if (exactMatch == null) {
-                error("INCOMPATIBLE_METHOD_ARGUMENTS",
+                error(IssueCode.INCOMPATIBLE_METHOD_ARGUMENTS,
                         "incompatible arguments for method '" + access.name() + "' on " + metadata.javaClass().getSimpleName(),
                         sourceSpan);
                 return UnknownType.INSTANCE;
@@ -782,7 +783,7 @@ public final class SemanticResolver {
                 .toList();
             Collection<FunctionDescriptor> candidates = context.functionCatalog().findCandidates(node.functionName());
             if (candidates.isEmpty()) {
-                error("UNKNOWN_FUNCTION", "unknown function '" + node.functionName() + "'", node.sourceSpan());
+                error(IssueCode.UNKNOWN_FUNCTION, "unknown function '" + node.functionName() + "'", node.sourceSpan());
                 return UnknownType.INSTANCE;
             }
             int expectedArity = node.arguments().size();
@@ -793,17 +794,17 @@ public final class SemanticResolver {
                 arityFound = true;
                 if (!matchesArguments(d, argumentTypes)) continue;
                 if (exactMatch != null) {
-                    error("AMBIGUOUS_FUNCTION", "ambiguous function call '" + node.functionName() + "'", node.sourceSpan());
+                    error(IssueCode.AMBIGUOUS_FUNCTION, "ambiguous function call '" + node.functionName() + "'", node.sourceSpan());
                     return UnknownType.INSTANCE;
                 }
                 exactMatch = d;
             }
             if (!arityFound) {
-                error("INVALID_FUNCTION_ARITY", "invalid arity for function '" + node.functionName() + "'", node.sourceSpan());
+                error(IssueCode.INVALID_FUNCTION_ARITY, "invalid arity for function '" + node.functionName() + "'", node.sourceSpan());
                 return UnknownType.INSTANCE;
             }
             if (exactMatch == null) {
-                error("INCOMPATIBLE_FUNCTION_ARGUMENTS", "incompatible arguments for function '" + node.functionName() + "'", node.sourceSpan());
+                error(IssueCode.INCOMPATIBLE_FUNCTION_ARGUMENTS, "incompatible arguments for function '" + node.functionName() + "'", node.sourceSpan());
                 return UnknownType.INSTANCE;
             }
             ResolvedFunctionBinding binding = new ResolvedFunctionBinding(exactMatch.functionRef(), exactMatch, exactMatch.returnType());
@@ -855,7 +856,7 @@ public final class SemanticResolver {
                 }
                 case GREATER_THAN, GREATER_THAN_OR_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL, EQUAL, NOT_EQUAL -> {
                     if (!compatibleComparison(leftType, rightType)) {
-                        error("INCOMPATIBLE_COMPARISON", "comparison uses incompatible operand types", node.sourceSpan());
+                        error(IssueCode.INCOMPATIBLE_COMPARISON, "comparison uses incompatible operand types", node.sourceSpan());
                     }
                     yield ScalarType.BOOLEAN;
                 }
@@ -873,7 +874,7 @@ public final class SemanticResolver {
                     if (rightType != UnknownType.INSTANCE
                             && rightType != VectorType.INSTANCE
                             && !(rightType instanceof CollectionType)) {
-                        error("INCOMPATIBLE_IN_OPERANDS",
+                        error(IssueCode.INCOMPATIBLE_IN_OPERANDS,
                               "membership operator expects a collection/vector right operand but found " + rightType,
                               node.right().sourceSpan());
                     }
@@ -887,7 +888,7 @@ public final class SemanticResolver {
             ResolvedType lowerType = resolveExpression(node.second());
             ResolvedType upperType = resolveExpression(node.third());
             if (!compatibleComparison(valueType, lowerType) || !compatibleComparison(valueType, upperType)) {
-                error("INCOMPATIBLE_COMPARISON", "between operator uses incompatible operand types", node.sourceSpan());
+                error(IssueCode.INCOMPATIBLE_COMPARISON, "between operator uses incompatible operand types", node.sourceSpan());
             }
             return ScalarType.BOOLEAN;
         }
@@ -914,7 +915,7 @@ public final class SemanticResolver {
             SourceSpan sourceSpan
         ) {
             if (actualType != UnknownType.INSTANCE && actualType != NullType.INSTANCE && actualType != expectedType) {
-                error("TYPE_MISMATCH", operation + " expects " + expectedType + " but found " + actualType, sourceSpan);
+                error(IssueCode.TYPE_MISMATCH, operation + " expects " + expectedType + " but found " + actualType, sourceSpan);
                 return UnknownType.INSTANCE;
             }
             return expectedType;
@@ -934,7 +935,7 @@ public final class SemanticResolver {
             internalSymbolsByName.computeIfAbsent(name, ignored -> new SymbolRef(name, SymbolKind.INTERNAL));
         }
 
-        private void error(String code, String message, SourceSpan sourceSpan) {
+        private void error(IssueCode code, String message, SourceSpan sourceSpan) {
             issues.add(new SemanticIssue(code, SemanticIssueSeverity.ERROR, message, sourceSpan));
         }
 

@@ -1,20 +1,19 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.api.IssueCode;
 import com.runestone.expeval.internal.ast.SourceSpan;
 
 import java.util.Objects;
 
 public record SemanticIssue(
-    String code,
+    IssueCode code,
     SemanticIssueSeverity severity,
     String message,
     SourceSpan sourceSpan
 ) {
 
     public SemanticIssue {
-        if (code == null || code.isBlank()) {
-            throw new IllegalArgumentException("code must not be blank");
-        }
+        Objects.requireNonNull(code, "code must not be null");
         Objects.requireNonNull(severity, "severity must not be null");
         if (message == null || message.isBlank()) {
             throw new IllegalArgumentException("message must not be blank");
