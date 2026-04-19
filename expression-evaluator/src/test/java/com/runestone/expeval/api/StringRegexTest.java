@@ -291,10 +291,9 @@ class StringRegexTest {
         }
 
         @Test
-        @DisplayName("sujeito nulo em runtime lança IllegalStateException")
+        @DisplayName("sujeito nulo em runtime lança ExpressionEvaluationException")
         void nullSubjectAtRuntimeThrows() {
-            // asString(null) lança IllegalStateException — comportamento consistente
-            // com todos os outros operadores do sistema que rejeitam null.
+            // asString(null) lança ExpressionEvaluationException com código NULL_VALUE.
             // Map.of() não aceita valores null; usamos HashMap para injetar null explicitamente.
             var env = new ExpressionEnvironmentBuilder()
                     .registerExternalSymbol("s", "", true)
@@ -303,7 +302,8 @@ class StringRegexTest {
             Map<String, Object> inputs = new HashMap<>();
             inputs.put("s", null);
             assertThatThrownBy(() -> expr.compute(inputs))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(ExpressionEvaluationException.class)
+                    .hasMessageContaining("NULL_VALUE");
         }
     }
 }

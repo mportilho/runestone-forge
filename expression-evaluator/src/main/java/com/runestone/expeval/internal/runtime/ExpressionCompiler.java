@@ -3,13 +3,18 @@ package com.runestone.expeval.internal.runtime;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.runestone.expeval.api.CacheConfig;
+import com.runestone.expeval.api.CompilationIssue;
+import com.runestone.expeval.api.CompilationPosition;
+import com.runestone.expeval.api.SemanticResolutionException;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentId;
 import com.runestone.expeval.internal.ast.ExpressionFileNode;
+import com.runestone.expeval.internal.ast.SourceSpan;
 import com.runestone.expeval.internal.ast.mapping.SemanticAstBuilder;
 import com.runestone.expeval.internal.grammar.ExpressionEvaluatorParserFacade;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -137,7 +142,14 @@ public final class ExpressionCompiler {
         ResolutionContext resolutionContext = new ResolutionContext(resultType, environment.functionCatalog(), environment.externalSymbolCatalog(), environment.typeHintCatalog());
         SemanticModel semanticModel = semanticResolver.resolve(ast, resolutionContext);
         if (semanticModel.hasErrors()) {
-            throw new SemanticResolutionException(source, semanticModel.issues());
+            List<CompilationIssue> issues = semanticModel.issues().stream()
+                    .map(issue -> {
+                        SourceSpan span = issue.sourceSpan();
+                        CompilationPosition position = new CompilationPosition(span.startLine(), span.startColumn(), span.endColumn());
+                        return new CompilationIssue(issue.code(), issue.message(), position);
+                    })
+                    .toList();
+            throw new SemanticResolutionException(source, issues);
         }
         ExecutionPlan executionPlan = planBuilder.build(
                 semanticModel,

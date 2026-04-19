@@ -52,7 +52,7 @@ public class MathFunctions {
     public static BigDecimal mean(MathContext mc, BigDecimal[] p) {
         int n = p.length;
         if (n == 0) {
-            throw new ArithmeticException("Empty array");
+            throw new ArithmeticException("mean of empty array is undefined");
         }
         BigDecimal size = valueOf(n);
         if (n == 1) {
@@ -81,7 +81,7 @@ public class MathFunctions {
     public static BigDecimal geometricMean(MathContext mc, BigDecimal[] p) {
         int n = p.length;
         if (n == 0) {
-            throw new ArithmeticException("Empty array");
+            throw new ArithmeticException("geometric mean of empty array is undefined");
         }
         BigDecimal size = valueOf(n);
         BigDecimal x = ONE;
@@ -117,7 +117,7 @@ public class MathFunctions {
     public static BigDecimal variance(MathContext mc, BigDecimal[] p, int type) {
         int n = p.length;
         if (n == 0) {
-            throw new ArithmeticException("Empty array");
+            throw new ArithmeticException("variance of empty array is undefined");
         }
         BigDecimal size = valueOf(n);
         BigDecimal nMinusType = valueOf(n - type);
@@ -183,7 +183,7 @@ public class MathFunctions {
     public static BigDecimal meanDev(MathContext mc, BigDecimal[] p) {
         int n = p.length;
         if (n == 0) {
-            throw new ArithmeticException("Empty array");
+            throw new ArithmeticException("mean deviation of empty array is undefined");
         }
         BigDecimal size = valueOf(n);
 

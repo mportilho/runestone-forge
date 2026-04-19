@@ -1,9 +1,9 @@
 package com.runestone.expeval.internal.runtime;
 
 import com.runestone.expeval.api.*;
+import com.runestone.expeval.api.SemanticResolutionException;
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.internal.ast.SourceSpan;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.grammar.ParsingException;
 
@@ -251,14 +251,7 @@ public final class ExpressionRuntimeSupport {
             CompiledExpression compiled = compiler.compile(source, resultType, environment);
             return from(compiled, environment);
         } catch (SemanticResolutionException e) {
-            List<CompilationIssue> issues = e.issues().stream()
-                    .map(issue -> {
-                        SourceSpan span = issue.sourceSpan();
-                        CompilationPosition position = new CompilationPosition(span.startLine(), span.startColumn(), span.endColumn());
-                        return new CompilationIssue(issue.code(), issue.message(), position);
-                    })
-                    .toList();
-            throw new ExpressionCompilationException(source, issues, e);
+            throw new ExpressionCompilationException(source, e.issues(), e);
         }
     }
 

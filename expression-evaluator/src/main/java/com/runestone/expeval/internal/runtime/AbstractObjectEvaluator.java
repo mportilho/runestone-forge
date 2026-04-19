@@ -549,10 +549,11 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
 
     /** {@code ["key"]} — key lookup in a {@link Map}. */
     @SuppressWarnings("unchecked")
-    private static Object applyMapKey(Object map, String key) {
+    private Object applyMapKey(Object map, String key) {
         if (!(map instanceof Map<?, ?> m)) {
-            throw new IllegalStateException("map-key access requires a Map but got: "
-                    + map.getClass().getName());
+            throw new ExpressionEvaluationException(compiledExpression.source(), "MAP_KEY_TYPE_MISMATCH",
+                    "map-key access requires a Map but got: "
+                    + (map == null ? "null" : map.getClass().getSimpleName()), null);
         }
         return ((Map<String, Object>) m).get(key);
     }
@@ -718,7 +719,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
 
     /** {@code ..keys()} or {@code ..values()} — map projection. */
     @SuppressWarnings("unchecked")
-    private static List<Object> applyMapProjection(Object current, MapProjectionKind kind) {
+    private List<Object> applyMapProjection(Object current, MapProjectionKind kind) {
         if (current instanceof Map<?, ?> map) {
             Map<String, Object> typed = (Map<String, Object>) map;
             return kind == MapProjectionKind.KEYS
@@ -730,8 +731,9 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         if (kind == MapProjectionKind.VALUES && current instanceof List<?> list) {
             return (List<Object>) list;
         }
-        throw new IllegalStateException("map projection requires a Map but got: "
-                + current.getClass().getName());
+        throw new ExpressionEvaluationException(compiledExpression.source(), "MAP_PROJECTION_TYPE_MISMATCH",
+                "map projection requires a Map but got: "
+                + (current == null ? "null" : current.getClass().getSimpleName()), null);
     }
 
     /**
@@ -975,7 +977,10 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         if (left instanceof Boolean || right instanceof Boolean) {
             return Boolean.compare(asBoolean(left), asBoolean(right));
         }
-        throw new IllegalStateException("unsupported comparison between values");
+        throw new ExpressionEvaluationException(compiledExpression.source(), "INCOMPATIBLE_COMPARISON",
+                "cannot compare values of incompatible types: "
+                + (left == null ? "null" : left.getClass().getSimpleName())
+                + " and " + (right == null ? "null" : right.getClass().getSimpleName()), null);
     }
 
     private List<?> asList(Object value) {
@@ -1007,32 +1012,62 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
 
     private BigDecimal asBigDecimal(Object value) {
         if (value instanceof BigDecimal bd) return bd;
-        return runtimeServices.asNumber(value);
+        try {
+            return runtimeServices.asNumber(value);
+        } catch (IllegalStateException e) {
+            throw new ExpressionEvaluationException(compiledExpression.source(), "NULL_VALUE",
+                    "cannot use null value as a number", null);
+        }
     }
 
     private boolean asBoolean(Object value) {
         if (value instanceof Boolean b) return b;
-        return runtimeServices.asBoolean(value);
+        try {
+            return runtimeServices.asBoolean(value);
+        } catch (IllegalStateException e) {
+            throw new ExpressionEvaluationException(compiledExpression.source(), "NULL_VALUE",
+                    "cannot use null value as a boolean", null);
+        }
     }
 
     private String asString(Object value) {
         if (value instanceof String s) return s;
-        return runtimeServices.asString(value);
+        try {
+            return runtimeServices.asString(value);
+        } catch (IllegalStateException e) {
+            throw new ExpressionEvaluationException(compiledExpression.source(), "NULL_VALUE",
+                    "cannot use null value as a string", null);
+        }
     }
 
     private LocalDate asLocalDate(Object value) {
         if (value instanceof LocalDate d) return d;
-        return runtimeServices.asDate(value);
+        try {
+            return runtimeServices.asDate(value);
+        } catch (IllegalStateException e) {
+            throw new ExpressionEvaluationException(compiledExpression.source(), "NULL_VALUE",
+                    "cannot use null value as a date", null);
+        }
     }
 
     private LocalTime asLocalTime(Object value) {
         if (value instanceof LocalTime t) return t;
-        return runtimeServices.asTime(value);
+        try {
+            return runtimeServices.asTime(value);
+        } catch (IllegalStateException e) {
+            throw new ExpressionEvaluationException(compiledExpression.source(), "NULL_VALUE",
+                    "cannot use null value as a time", null);
+        }
     }
 
     private LocalDateTime asLocalDateTime(Object value) {
         if (value instanceof LocalDateTime dt) return dt;
-        return runtimeServices.asDateTime(value);
+        try {
+            return runtimeServices.asDateTime(value);
+        } catch (IllegalStateException e) {
+            throw new ExpressionEvaluationException(compiledExpression.source(), "NULL_VALUE",
+                    "cannot use null value as a datetime", null);
+        }
     }
 
     // -------------------------------------------------------------------------
