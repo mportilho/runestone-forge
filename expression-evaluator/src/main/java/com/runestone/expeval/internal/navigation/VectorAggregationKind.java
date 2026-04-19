@@ -6,5 +6,6 @@ public enum VectorAggregationKind {
     AVG,
     MIN,
     MAX,
-    COUNT
+    COUNT,
+    PROD
 }

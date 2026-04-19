@@ -507,7 +507,10 @@ public final class SemanticResolver {
                     resolveFilterPredicate(fps.predicate(), collectionType.elementType(), node);
                     yield collectionType;
                 }
-                case PropertyChainNode.VectorAggregationStep vas -> ScalarType.NUMBER;
+                case PropertyChainNode.VectorAggregationStep(var kind, var transform) -> {
+                    if (transform != null) resolveFilterPredicate(transform, UnknownType.INSTANCE, node);
+                    yield ScalarType.NUMBER;
+                }
                 case PropertyChainNode.CollectionFunctionStep cfs ->
                         resolveCollectionFunction(cfs, collectionType, node);
                 case PropertyChainNode.PropertyAccess pa -> {
@@ -555,7 +558,10 @@ public final class SemanticResolver {
                     resolveFilterPredicate(fps.predicate(), UnknownType.INSTANCE, node);
                     return VectorType.INSTANCE;
                 }
-                case PropertyChainNode.VectorAggregationStep ignored -> { return ScalarType.NUMBER; }
+                case PropertyChainNode.VectorAggregationStep(var kind, var transform) -> {
+                    if (transform != null) resolveFilterPredicate(transform, UnknownType.INSTANCE, node);
+                    return ScalarType.NUMBER;
+                }
                 case PropertyChainNode.CollectionFunctionStep cfs ->
                         { return resolveCollectionFunction(cfs, VectorType.INSTANCE, node); }
                 default -> {

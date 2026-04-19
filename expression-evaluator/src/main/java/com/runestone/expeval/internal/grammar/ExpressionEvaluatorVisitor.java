@@ -431,6 +431,34 @@ public interface ExpressionEvaluatorVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitIdentifierReferenceTarget(ExpressionEvaluatorParser.IdentifierReferenceTargetContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code atReferenceTarget}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#referenceTarget}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitAtReferenceTarget(ExpressionEvaluatorParser.AtReferenceTargetContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code lambdaCollectionFunctionArguments}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#collectionFunctionArguments}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitLambdaCollectionFunctionArguments(ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code positionalCollectionFunctionArguments}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#collectionFunctionArguments}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPositionalCollectionFunctionArguments(ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code atLambdaTransform}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#lambdaTransform}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitAtLambdaTransform(ExpressionEvaluatorParser.AtLambdaTransformContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code collectionFunctionAccess}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
 	 * @param ctx the parse tree

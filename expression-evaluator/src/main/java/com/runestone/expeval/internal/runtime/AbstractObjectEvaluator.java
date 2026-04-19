@@ -12,6 +12,7 @@ import com.runestone.expeval.internal.navigation.FilterContext;
 import com.runestone.expeval.internal.navigation.MapProjectionKind;
 import com.runestone.expeval.internal.navigation.TypeIntrospectionSupport;
 import com.runestone.expeval.internal.navigation.VectorAggregationKind;
+import org.jspecify.annotations.Nullable;
 
 import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
@@ -435,7 +436,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                 case ExecutablePropertyChain.ExecutableDeepScan ds ->
                         applyDeepScan(current, ds.propertyName(), scope);
                 case ExecutablePropertyChain.ExecutableVectorAggregation va ->
-                        applyAggregation(current, va.kind());
+                        applyAggregation(current, va.kind(), va.transform(), scope);
                 case ExecutablePropertyChain.ExecutableMapProjection mp ->
                         applyMapProjection(current, mp.kind());
                 case ExecutablePropertyChain.ExecutableCollectionFunction cf ->
@@ -679,8 +680,9 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         return results;
     }
 
-    /** {@code ..sum()}, {@code ..avg()}, etc. — numeric aggregations over a list. */
-    private Object applyAggregation(Object current, VectorAggregationKind kind) {
+    /** {@code ..sum()}, {@code ..avg()}, {@code ..prod()}, etc. — numeric aggregations over a list. */
+    private Object applyAggregation(Object current, VectorAggregationKind kind,
+                                    @Nullable ExecutableNode transform, ExecutionScope scope) {
         if (current instanceof Map<?, ?> m && kind == VectorAggregationKind.COUNT) {
             return BigDecimal.valueOf(m.size());
         }
@@ -688,33 +690,63 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         if (kind == VectorAggregationKind.COUNT) {
             return BigDecimal.valueOf(list.size());
         }
-        if (list.isEmpty()) return null;
-        BigDecimal acc = asBigDecimal(list.getFirst());
+        if (list.isEmpty()) {
+            return switch (kind) {
+                case SUM -> BigDecimal.ZERO;
+                case PROD -> BigDecimal.ONE;
+                default -> null;
+            };
+        }
+        List<BigDecimal> values = toNumericList(list, transform, scope);
+        BigDecimal acc = values.getFirst();
         switch (kind) {
             case SUM -> {
-                for (int i = 1; i < list.size(); i++) acc = acc.add(asBigDecimal(list.get(i)));
+                for (int i = 1; i < values.size(); i++) acc = acc.add(values.get(i), mathContext);
                 return acc;
             }
             case AVG -> {
-                for (int i = 1; i < list.size(); i++) acc = acc.add(asBigDecimal(list.get(i)));
-                return acc.divide(BigDecimal.valueOf(list.size()), mathContext);
+                for (int i = 1; i < values.size(); i++) acc = acc.add(values.get(i), mathContext);
+                return acc.divide(BigDecimal.valueOf(values.size()), mathContext);
             }
             case MIN -> {
-                for (int i = 1; i < list.size(); i++) {
-                    BigDecimal v = asBigDecimal(list.get(i));
+                for (int i = 1; i < values.size(); i++) {
+                    BigDecimal v = values.get(i);
                     if (v.compareTo(acc) < 0) acc = v;
                 }
                 return acc;
             }
             case MAX -> {
-                for (int i = 1; i < list.size(); i++) {
-                    BigDecimal v = asBigDecimal(list.get(i));
+                for (int i = 1; i < values.size(); i++) {
+                    BigDecimal v = values.get(i);
                     if (v.compareTo(acc) > 0) acc = v;
                 }
                 return acc;
             }
+            case PROD -> {
+                for (int i = 1; i < values.size(); i++) acc = acc.multiply(values.get(i), mathContext);
+                return acc;
+            }
             default -> throw new IllegalStateException("Unhandled aggregation kind: " + kind);
         }
+    }
+
+    private List<BigDecimal> toNumericList(List<?> list, @Nullable ExecutableNode transform, ExecutionScope scope) {
+        if (transform == null) {
+            List<BigDecimal> result = new ArrayList<>(list.size());
+            for (Object element : list) result.add(asBigDecimal(element));
+            return result;
+        }
+        FilterContextStack stack = FILTER_CTX.get();
+        List<BigDecimal> result = new ArrayList<>(list.size());
+        for (Object element : list) {
+            stack.pushElement(element);
+            try {
+                result.add(asBigDecimal(evaluateExpr(transform, scope)));
+            } finally {
+                stack.pop();
+            }
+        }
+        return result;
     }
 
     /** {@code ..keys()} or {@code ..values()} — map projection. */

@@ -116,10 +116,17 @@ public record PropertyChainNode(
         }
     }
 
-    /** {@code ..sum()}, {@code ..avg()}, {@code ..min()}, {@code ..max()}, {@code ..count()} etc. */
-    public record VectorAggregationStep(VectorAggregationKind kind) implements MemberAccess {
+    /** {@code ..sum()}, {@code ..sum(@ -> expr)}, {@code ..prod()}, {@code ..prod(@ -> expr)}, etc. */
+    public record VectorAggregationStep(
+            VectorAggregationKind kind,
+            @Nullable ExpressionNode transform
+    ) implements MemberAccess {
         public VectorAggregationStep {
             Objects.requireNonNull(kind, "kind must not be null");
+        }
+
+        public VectorAggregationStep(VectorAggregationKind kind) {
+            this(kind, null);
         }
     }
 }

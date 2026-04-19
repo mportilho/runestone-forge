@@ -737,6 +737,54 @@ public class ExpressionEvaluatorBaseListener implements ExpressionEvaluatorListe
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterAtReferenceTarget(ExpressionEvaluatorParser.AtReferenceTargetContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitAtReferenceTarget(ExpressionEvaluatorParser.AtReferenceTargetContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterLambdaCollectionFunctionArguments(ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitLambdaCollectionFunctionArguments(ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterPositionalCollectionFunctionArguments(ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitPositionalCollectionFunctionArguments(ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void enterAtLambdaTransform(ExpressionEvaluatorParser.AtLambdaTransformContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitAtLambdaTransform(ExpressionEvaluatorParser.AtLambdaTransformContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterCollectionFunctionAccess(ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx) { }
 	/**
 	 * {@inheritDoc}

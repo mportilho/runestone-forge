@@ -171,10 +171,17 @@ record ExecutablePropertyChain(
         }
     }
 
-    /** {@code ..sum()}, {@code ..count()}, etc. */
-    record ExecutableVectorAggregation(VectorAggregationKind kind) implements ExecutableAccess {
+    /** {@code ..sum()}, {@code ..sum(@ -> expr)}, {@code ..prod()}, {@code ..prod(@ -> expr)}, etc. */
+    record ExecutableVectorAggregation(
+            VectorAggregationKind kind,
+            @Nullable ExecutableNode transform
+    ) implements ExecutableAccess {
         ExecutableVectorAggregation {
             Objects.requireNonNull(kind, "kind must not be null");
+        }
+
+        ExecutableVectorAggregation(VectorAggregationKind kind) {
+            this(kind, null);
         }
     }
 }

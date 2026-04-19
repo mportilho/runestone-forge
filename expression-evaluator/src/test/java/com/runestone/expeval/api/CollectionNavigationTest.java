@@ -650,13 +650,11 @@ class CollectionNavigationTest {
         }
 
         @Test
-        @DisplayName("..sum() on a filter-to-empty result throws because no numeric result is produced")
-        void shouldThrowWhenSummingFilteredEmptyList() {
-            assertThatThrownBy(() ->
-                    MathExpression.compile("prices[?(@ > 1000)]..sum()", env("prices", PRICES))
-                            .compute(Map.of("prices", PRICES)))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("numeric result");
+        @DisplayName("..sum() on a filter-to-empty result returns 0 (additive identity)")
+        void shouldReturnZeroWhenSummingFilteredEmptyList() {
+            BigDecimal result = MathExpression.compile("prices[?(@ > 1000)]..sum()", env("prices", PRICES))
+                    .compute(Map.of("prices", PRICES));
+            assertThat(result).isEqualByComparingTo("0");
         }
 
         @Test

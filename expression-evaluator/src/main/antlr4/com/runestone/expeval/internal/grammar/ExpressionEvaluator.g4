@@ -84,6 +84,7 @@ SAFE_NAV           : '?.' ;
 // QUESTION must follow NULLCOALESCE and SAFE_NAV so those longer patterns take priority
 QUESTION           : '?' ;
 AT                 : '@' ;
+ARROW              : '->' ;
 IN      : 'in' ;
 NIN     : 'nin' ;
 NOT_KW  : 'not' ;
@@ -262,12 +263,20 @@ function
 referenceTarget
     : function                                                           # functionReferenceTarget
     | IDENTIFIER memberChain*                                            # identifierReferenceTarget
+    | AT memberChain*                                                    # atReferenceTarget
+    ;
+
+collectionFunctionArguments
+    : lambdaTransform                                                    # lambdaCollectionFunctionArguments
+    | allEntityTypes (COMMA allEntityTypes)*                             # positionalCollectionFunctionArguments
+    ;
+
+lambdaTransform
+    : AT ARROW allEntityTypes                                            # atLambdaTransform
     ;
 
 memberChain
-    : DOUBLE_PERIOD IDENTIFIER LPAREN
-          (allEntityTypes (COMMA allEntityTypes)*)?
-      RPAREN                                                             # collectionFunctionAccess
+    : DOUBLE_PERIOD IDENTIFIER LPAREN collectionFunctionArguments? RPAREN # collectionFunctionAccess
     | PERIOD MULT                                                        # childWildcardAccess
     // methodCallAccess before propertyAccess: 'ident(' must not be parsed as property + extra '('
     | PERIOD IDENTIFIER LPAREN

@@ -464,7 +464,9 @@ final class ExecutionPlanBuilder {
                             && steps.getLast() instanceof ExecutablePropertyChain.ExecutableMapProjection) {
                         steps.removeLast();
                     }
-                    steps.add(new ExecutablePropertyChain.ExecutableVectorAggregation(vas.kind()));
+                    ExecutableNode execTransform = vas.transform() == null ? null
+                            : buildNode(vas.transform(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                    steps.add(new ExecutablePropertyChain.ExecutableVectorAggregation(vas.kind(), execTransform));
                     currentType = UnknownType.INSTANCE;
                     continue;
                 }

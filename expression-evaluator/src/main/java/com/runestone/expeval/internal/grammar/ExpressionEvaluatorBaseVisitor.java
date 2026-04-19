@@ -438,6 +438,34 @@ public class ExpressionEvaluatorBaseVisitor<T> extends AbstractParseTreeVisitor<
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
+	@Override public T visitAtReferenceTarget(ExpressionEvaluatorParser.AtReferenceTargetContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
+	@Override public T visitLambdaCollectionFunctionArguments(ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
+	@Override public T visitPositionalCollectionFunctionArguments(ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
+	@Override public T visitAtLambdaTransform(ExpressionEvaluatorParser.AtLambdaTransformContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
 	@Override public T visitCollectionFunctionAccess(ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}

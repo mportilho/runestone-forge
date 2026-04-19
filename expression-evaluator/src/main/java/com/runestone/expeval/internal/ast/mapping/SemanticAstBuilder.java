@@ -499,6 +499,16 @@ public final class SemanticAstBuilder {
             );
         }
 
+        @Override
+        public ExpressionNode visitAtReferenceTarget(ExpressionEvaluatorParser.AtReferenceTargetContext ctx) {
+            List<ExpressionEvaluatorParser.MemberChainContext> memberChains = ctx.memberChain();
+            if (memberChains.isEmpty()) {
+                return new IdentifierNode(nodeFactory.nextId("identifier"), nodeFactory.sourceSpan(ctx), "@");
+            }
+            List<PropertyChainNode.MemberAccess> chain = buildMemberChain(memberChains);
+            return new PropertyChainNode(nodeFactory.nextId("at"), nodeFactory.sourceSpan(ctx), "@", chain);
+        }
+
         // -------------------------------------------------------------------------
         // New memberChain visitor helpers
         // -------------------------------------------------------------------------
@@ -544,24 +554,71 @@ public final class SemanticAstBuilder {
         private PropertyChainNode.MemberAccess buildCollectionFunctionStep(
                 ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx) {
             String name = ctx.IDENTIFIER().getText();
+            var argBlock = ctx.collectionFunctionArguments();
+            ExpressionNode transform = extractLambdaTransform(argBlock);
+            List<ExpressionNode> positionalArgs = extractPositionalArguments(argBlock);
+
             // Deep scan: ..ds(property) → named, ..ds() → wildcard
             if ("ds".equals(name)) {
-                String propName = ctx.allEntityTypes().isEmpty() ? null : ctx.allEntityTypes(0).getText();
+                validateNoLambda(name, transform);
+                String propName = null;
+                if (argBlock instanceof ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext positional
+                        && !positional.allEntityTypes().isEmpty()) {
+                    propName = positional.allEntityTypes(0).getText();
+                }
                 return new PropertyChainNode.DeepScanStep(propName);
             }
             // Built-in map projections
             if (isBuiltInMapProjection(name)) {
+                validateNoLambda(name, transform);
                 return new PropertyChainNode.MapProjectionStep(resolveMapProjectionKind(name));
             }
-            // Built-in vector aggregations
-            if (isBuiltInVectorAggregation(name)) {
-                return new PropertyChainNode.VectorAggregationStep(resolveAggregationKind(name));
+            // Built-in vector aggregations with optional lambda transform
+            VectorAggregationKind kind = resolveAggregationKind(name);
+            if (kind != null) {
+                return switch (kind) {
+                    case SUM, PROD -> {
+                        if (!positionalArgs.isEmpty()) {
+                            throw new IllegalArgumentException(
+                                    "..%s() does not accept positional arguments; use ..%s(@ -> expr) for a transform".formatted(name, name));
+                        }
+                        yield new PropertyChainNode.VectorAggregationStep(kind, transform);
+                    }
+                    default -> {
+                        validateNoLambda(name, transform);
+                        yield new PropertyChainNode.VectorAggregationStep(kind);
+                    }
+                };
             }
             // Custom function from FunctionCatalog
-            List<ExpressionNode> args = ctx.allEntityTypes().stream()
-                    .map(this::visitAllEntityType)
-                    .toList();
-            return new PropertyChainNode.CollectionFunctionStep(name, args);
+            validateNoLambda(name, transform);
+            return new PropertyChainNode.CollectionFunctionStep(name, positionalArgs);
+        }
+
+        private ExpressionNode extractLambdaTransform(
+                ExpressionEvaluatorParser.CollectionFunctionArgumentsContext argBlock) {
+            if (argBlock instanceof ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext lambdaCtx) {
+                return visitAllEntityType(
+                        ((ExpressionEvaluatorParser.AtLambdaTransformContext) lambdaCtx.lambdaTransform()).allEntityTypes());
+            }
+            return null;
+        }
+
+        private List<ExpressionNode> extractPositionalArguments(
+                ExpressionEvaluatorParser.CollectionFunctionArgumentsContext argBlock) {
+            if (argBlock instanceof ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext positionalCtx) {
+                return positionalCtx.allEntityTypes().stream()
+                        .map(this::visitAllEntityType)
+                        .toList();
+            }
+            return List.of();
+        }
+
+        private static void validateNoLambda(String name, ExpressionNode transform) {
+            if (transform != null) {
+                throw new IllegalArgumentException(
+                        "..%s() does not accept a lambda transform (@ -> expr)".formatted(name));
+            }
         }
 
         private static boolean isBuiltInMapProjection(String name) {
@@ -579,21 +636,15 @@ public final class SemanticAstBuilder {
             };
         }
 
-        private static boolean isBuiltInVectorAggregation(String name) {
-            return switch (name.toLowerCase()) {
-                case "sum", "avg", "average", "min", "max", "count", "length", "size" -> true;
-                default -> false;
-            };
-        }
-
         private static VectorAggregationKind resolveAggregationKind(String name) {
             return switch (name.toLowerCase()) {
                 case "sum" -> VectorAggregationKind.SUM;
+                case "prod" -> VectorAggregationKind.PROD;
                 case "avg", "average" -> VectorAggregationKind.AVG;
                 case "min" -> VectorAggregationKind.MIN;
                 case "max" -> VectorAggregationKind.MAX;
                 case "count", "length", "size" -> VectorAggregationKind.COUNT;
-                default -> throw new IllegalArgumentException("unsupported built-in aggregation: " + name);
+                default -> null;
             };
         }
 

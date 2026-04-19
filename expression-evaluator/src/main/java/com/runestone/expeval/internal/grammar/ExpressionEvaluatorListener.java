@@ -728,6 +728,54 @@ public interface ExpressionEvaluatorListener extends ParseTreeListener {
 	 */
 	void exitIdentifierReferenceTarget(ExpressionEvaluatorParser.IdentifierReferenceTargetContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code atReferenceTarget}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#referenceTarget}.
+	 * @param ctx the parse tree
+	 */
+	void enterAtReferenceTarget(ExpressionEvaluatorParser.AtReferenceTargetContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code atReferenceTarget}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#referenceTarget}.
+	 * @param ctx the parse tree
+	 */
+	void exitAtReferenceTarget(ExpressionEvaluatorParser.AtReferenceTargetContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code lambdaCollectionFunctionArguments}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#collectionFunctionArguments}.
+	 * @param ctx the parse tree
+	 */
+	void enterLambdaCollectionFunctionArguments(ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code lambdaCollectionFunctionArguments}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#collectionFunctionArguments}.
+	 * @param ctx the parse tree
+	 */
+	void exitLambdaCollectionFunctionArguments(ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code positionalCollectionFunctionArguments}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#collectionFunctionArguments}.
+	 * @param ctx the parse tree
+	 */
+	void enterPositionalCollectionFunctionArguments(ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code positionalCollectionFunctionArguments}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#collectionFunctionArguments}.
+	 * @param ctx the parse tree
+	 */
+	void exitPositionalCollectionFunctionArguments(ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code atLambdaTransform}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#lambdaTransform}.
+	 * @param ctx the parse tree
+	 */
+	void enterAtLambdaTransform(ExpressionEvaluatorParser.AtLambdaTransformContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code atLambdaTransform}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#lambdaTransform}.
+	 * @param ctx the parse tree
+	 */
+	void exitAtLambdaTransform(ExpressionEvaluatorParser.AtLambdaTransformContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code collectionFunctionAccess}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
 	 * @param ctx the parse tree
