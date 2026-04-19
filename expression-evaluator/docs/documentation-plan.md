@@ -373,7 +373,7 @@ result.trace().evaluationTime();         // → Duration
 - Javadoc de `AuditResult`, `ExpressionAuditTrace`, `AuditEvent`
 
 **Lacunas identificadas:**
-- [ ] Confirmar se `computeWithAudit` tem overhead significativo vs. `compute` (relevante para hot paths) → benchmark JMH existe em `AuditOverheadBenchmark`; executar e documentar percentual.
+- [x] **Overhead do modo auditoria:** benchmark JMH em `AuditOverheadBenchmark` executado. Overhead medido de **+22% a +36.6%** em relação a `compute()` sem auditoria.
 - [x] **Comportamento de constant folding na trilha de auditoria:**
   - Símbolos externos com `overridable=false` são dobrados em `ExecutableLiteral` → **emitem 0 eventos `VariableRead`** na trilha. Confirmado em `AuditTrailExpressionTest.foldedExternalEmitsVariableReadEvent`.
   - Funções dobradas em compilação (quando todos os argumentos são constantes) permanecem como `ExecutableFunctionCall.folded()` e **ainda emitem `FunctionCall`** na trilha de auditoria mesmo que já foram calculadas em tempo de compilação. Confirmado em `AuditTrailExpressionTest.foldedFunctionCallStillEmitsFunctionCallEvent`.
