@@ -1,4 +1,4 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.evaluation;
 
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
 import com.runestone.expeval.perf.ExpressionBenchmarkSupport;

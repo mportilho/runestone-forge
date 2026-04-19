@@ -1,4 +1,4 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.evaluation;
 
 import com.runestone.expeval.internal.runtime.BooleanValueBenchmarkSupport;
 import org.openjdk.jmh.annotations.Benchmark;

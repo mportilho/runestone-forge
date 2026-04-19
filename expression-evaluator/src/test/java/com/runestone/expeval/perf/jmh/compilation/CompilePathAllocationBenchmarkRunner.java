@@ -1,5 +1,6 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.compilation;
 
+import org.openjdk.jmh.profile.GCProfiler;
 import org.openjdk.jmh.results.RunResult;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
@@ -10,20 +11,21 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.concurrent.TimeUnit;
 
-public final class ObjectEvaluatorBenchmarkRunner {
+public final class CompilePathAllocationBenchmarkRunner {
 
-    private ObjectEvaluatorBenchmarkRunner() {
+    private CompilePathAllocationBenchmarkRunner() {
     }
 
     public static void main(String[] args) throws Exception {
         Options opts = new OptionsBuilder()
-            .include(ObjectEvaluatorBenchmark.class.getSimpleName())
-            .forks(1)
+            .include(CompilePathAllocationBenchmark.class.getSimpleName())
+            .forks(0)
             .warmupIterations(3)
             .warmupTime(TimeValue.milliseconds(300))
             .measurementIterations(5)
             .measurementTime(TimeValue.milliseconds(500))
             .timeUnit(TimeUnit.NANOSECONDS)
+            .addProfiler(GCProfiler.class)
             .build();
 
         Collection<RunResult> results = new Runner(opts).run();
@@ -33,18 +35,25 @@ public final class ObjectEvaluatorBenchmarkRunner {
     private static void printTable(Collection<RunResult> results) {
         System.out.println();
         System.out.println("=".repeat(80));
-        System.out.printf("%-50s  %10s  %8s%n", "Benchmark", "ns/op", "±error");
+        System.out.printf("%-42s  %10s  %10s%n", "Benchmark", "ns/op", "B/op");
         System.out.println("-".repeat(80));
 
         results.stream()
+            .filter(r -> !r.getPrimaryResult().getLabel().contains("gc"))
             .sorted(Comparator.comparing(r -> r.getPrimaryResult().getLabel()))
-            .forEach(r -> System.out.printf(
-                "%-50s  %10.1f  %8.1f%n",
-                r.getPrimaryResult().getLabel(),
-                r.getPrimaryResult().getScore(),
-                r.getPrimaryResult().getScoreError()
-            ));
+            .forEach(r -> {
+                double bop = r.getSecondaryResults().entrySet().stream()
+                    .filter(e -> e.getKey().contains("gc.alloc.rate.norm"))
+                    .mapToDouble(e -> e.getValue().getScore())
+                    .findFirst()
+                    .orElse(Double.NaN);
+                System.out.printf("%-42s  %10.1f  %10.1f%n",
+                    r.getPrimaryResult().getLabel(),
+                    r.getPrimaryResult().getScore(),
+                    bop);
+            });
 
         System.out.println("=".repeat(80));
+        System.out.println();
     }
 }

@@ -1,4 +1,4 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.compilation;
 
 import com.runestone.expeval.internal.runtime.CompilePathAllocationBenchmarkSupport;
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;

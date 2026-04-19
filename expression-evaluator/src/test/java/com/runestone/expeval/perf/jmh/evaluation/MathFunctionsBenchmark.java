@@ -1,4 +1,4 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.evaluation;
 
 import com.runestone.expeval.catalog.functions.MathFunctions;
 import org.openjdk.jmh.annotations.*;

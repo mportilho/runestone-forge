@@ -1,4 +1,4 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.audit;
 
 import com.runestone.expeval.api.AuditResult;
 import com.runestone.expeval.api.MathExpression;

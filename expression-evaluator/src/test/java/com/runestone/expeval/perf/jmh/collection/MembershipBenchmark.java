@@ -1,4 +1,4 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.collection;
 
 import com.runestone.expeval.perf.MembershipBenchmarkSupport;
 import org.openjdk.jmh.annotations.Benchmark;

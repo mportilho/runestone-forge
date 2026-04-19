@@ -1,4 +1,4 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.compilation;
 
 import com.runestone.expeval.internal.grammar.ExpressionEvaluatorLexer;
 import com.runestone.expeval.internal.grammar.ExpressionEvaluatorParser;

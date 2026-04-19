@@ -1,4 +1,4 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.bindings;
 
 import com.runestone.expeval.api.AssignmentExpression;
 import org.openjdk.jmh.annotations.Benchmark;

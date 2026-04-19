@@ -1,4 +1,4 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.bindings;
 
 import com.runestone.expeval.api.MathExpression;
 import com.runestone.expeval.perf.BindingsBenchmarkSupport;

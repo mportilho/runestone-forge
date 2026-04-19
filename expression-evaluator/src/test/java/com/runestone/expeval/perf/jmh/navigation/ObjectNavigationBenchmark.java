@@ -1,4 +1,4 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.navigation;
 
 import com.runestone.expeval.api.LogicalExpression;
 import com.runestone.expeval.api.MathExpression;

@@ -1,4 +1,4 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.string;
 
 import com.runestone.expeval.catalog.functions.StringFunctions;
 import org.openjdk.jmh.annotations.Benchmark;

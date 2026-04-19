@@ -1,4 +1,4 @@
-package com.runestone.expeval.perf.jmh;
+package com.runestone.expeval.perf.jmh.collection;
 
 import org.openjdk.jmh.profile.GCProfiler;
 import org.openjdk.jmh.results.Result;
@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
  * <pre>
  *   mvn test-compile -pl expression-evaluator &amp;&amp; \
  *   mvn exec:java -pl expression-evaluator \
- *     -Dexec.mainClass=com.runestone.expeval.perf.jmh.DestructuringAssignmentBenchmarkRunner \
+ *     -Dexec.mainClass=com.runestone.expeval.perf.jmh.collection.DestructuringAssignmentBenchmarkRunner \
  *     -Dexec.classpathScope=test
  * </pre>
  */
