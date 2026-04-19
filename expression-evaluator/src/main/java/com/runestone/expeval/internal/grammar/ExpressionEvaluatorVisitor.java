@@ -828,12 +828,12 @@ public interface ExpressionEvaluatorVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitGenericFunctionDecisionExpression(ExpressionEvaluatorParser.GenericFunctionDecisionExpressionContext ctx);
 	/**
-	 * Visit a parse tree produced by the {@code castExpressionOperation}
+	 * Visit a parse tree produced by the {@code typeHintExpressionOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#genericEntity}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
-	T visitCastExpressionOperation(ExpressionEvaluatorParser.CastExpressionOperationContext ctx);
+	T visitTypeHintExpressionOperation(ExpressionEvaluatorParser.TypeHintExpressionOperationContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code referenceTargetOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#genericEntity}.
@@ -842,12 +842,12 @@ public interface ExpressionEvaluatorVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitReferenceTargetOperation(ExpressionEvaluatorParser.ReferenceTargetOperationContext ctx);
 	/**
-	 * Visit a parse tree produced by the {@code typeCastOperation}
-	 * labeled alternative in {@link ExpressionEvaluatorParser#castExpression}.
+	 * Visit a parse tree produced by the {@code typeHintOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#typeHintExpression}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
-	T visitTypeCastOperation(ExpressionEvaluatorParser.TypeCastOperationContext ctx);
+	T visitTypeHintOperation(ExpressionEvaluatorParser.TypeHintOperationContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code booleanTypeHint}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#typeHint}.

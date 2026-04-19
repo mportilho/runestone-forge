@@ -405,7 +405,7 @@ class StringConcatenationTest {
     class TypeError {
 
         @Test
-        @DisplayName("número sem cast em operando de || resulta em erro de parsing")
+        @DisplayName("número sem type hint em operando de || resulta em erro de parsing")
         void numericOperandShouldFailParsing() {
             // A gramática restringe || a contexto de stringEntity; número literal não é aceito
             assertThatThrownBy(() -> AssignmentExpression.compile("x = 1 || \"b\";"))

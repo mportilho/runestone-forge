@@ -45,7 +45,7 @@ class ExpressionEvaluatorGrammarCoverageTest {
             Arguments.of("multiplication division and modulo", "10 * 3 / 2 mod 4"),
             Arguments.of("numeric if then elsif else decision", "if true then 1 elsif false then 2 else 3 endif"),
             Arguments.of("numeric functional decision", "if(true, 1, false, 2, 3)"),
-            Arguments.of("assignments with every explicit cast type", "boolCast = <bool>(flag); numCast = <number>(amount); textCast = <text>(label); dateCast = <date>(createdOn); timeCast = <time>(createdAt); dateTimeCast = <datetime>(timestamp); vectorCast = <vector>(items); 1"),
+            Arguments.of("assignments with every explicit type hint", "boolCast = <bool>(flag); numCast = <number>(amount); textCast = <text>(label); dateCast = <date>(createdOn); timeCast = <time>(createdAt); dateTimeCast = <datetime>(timestamp); vectorCast = <vector>(items); 1"),
             Arguments.of("generic assignment using identifier reference", "target = foo; 1"),
             Arguments.of("generic assignment using function reference", "target = resolve(); 1"),
             Arguments.of("generic assignment with if then elsif else", "target = if true then foo elsif false then bar else baz endif; 1"),

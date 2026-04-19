@@ -586,9 +586,9 @@ Examples:
 - `<date>pedido.data`
 - `<vector>items ?? [1, 2, 3]`
 
-### Cast expressions
+### Type-hint expressions
 
-The grammar also supports explicit casts:
+The grammar also supports explicit type-hint expressions:
 
 ```text
 <number>(value)

@@ -134,13 +134,13 @@ class SemanticAstBuilderTest {
     void shouldNormalizeIdentifierReferencesThatOnlyDifferByParserDisambiguationHints() {
         ExpressionNode genericIdentifier = assignmentValueOf("target = foo; 1");
         ExpressionNode typedReference = assignmentValueOf("target = <number>foo; 1");
-        ExpressionNode typedCast = assignmentValueOf("target = <number>(foo); 1");
+        ExpressionNode typedHintExpression = assignmentValueOf("target = <number>(foo); 1");
 
         assertThat(genericIdentifier).isInstanceOfSatisfying(IdentifierNode.class, identifier ->
             assertThat(identifier.name()).isEqualTo("foo")
         );
         assertIdentifierReference(typedReference, "foo");
-        assertIdentifierReference(typedCast, "foo");
+        assertIdentifierReference(typedHintExpression, "foo");
     }
 
     @Test
@@ -420,7 +420,7 @@ class SemanticAstBuilderTest {
             Arguments.of("exponentiation with unary operand", "2 ^ -3"),
             Arguments.of("root operator chain", "64 root 4 root 2"),
             Arguments.of("multiplication division and modulo", "10 * 3 / 2 mod 4"),
-            Arguments.of("assignments with explicit cast types except vector", "boolCast = <bool>(flag); numCast = <number>(amount); textCast = <text>(label); dateCast = <date>(createdOn); timeCast = <time>(createdAt); dateTimeCast = <datetime>(timestamp); 1"),
+            Arguments.of("assignments with explicit type hints except vector", "boolCast = <bool>(flag); numCast = <number>(amount); textCast = <text>(label); dateCast = <date>(createdOn); timeCast = <time>(createdAt); dateTimeCast = <datetime>(timestamp); 1"),
             Arguments.of("generic assignment using identifier reference", "target = foo; 1"),
             Arguments.of("generic assignment using function reference", "target = resolve(); 1"),
             Arguments.of("scalar assignment with math expression", "answer = 1 + 2 * 3; 1"),
@@ -483,7 +483,7 @@ class SemanticAstBuilderTest {
 
     private static Stream<Arguments> phaseFourMathInputs() {
         return Stream.of(
-            Arguments.of("assignments with every explicit cast type", "boolCast = <bool>(flag); numCast = <number>(amount); textCast = <text>(label); dateCast = <date>(createdOn); timeCast = <time>(createdAt); dateTimeCast = <datetime>(timestamp); vectorCast = <vector>(items); 1"),
+            Arguments.of("assignments with every explicit type hint", "boolCast = <bool>(flag); numCast = <number>(amount); textCast = <text>(label); dateCast = <date>(createdOn); timeCast = <time>(createdAt); dateTimeCast = <datetime>(timestamp); vectorCast = <vector>(items); 1"),
             Arguments.of("typed vector reference assignment", "items = <vector>payload; 1"),
             Arguments.of("vector literal with all entity families", "items = [1, true, 2024-12-31, 12:30, 2024-12-31T12:30, \"x\", [2]]; 1"),
             Arguments.of("vector decision assignment", "items = if true then [1] elsif false then [2] else [3] endif; 1"),

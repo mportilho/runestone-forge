@@ -167,7 +167,7 @@ comparisonOperator
 allEntityTypes
 assignmentValue
 genericEntity
-castExpression
+typeHintExpression
 typeHint
 logicalEntity
 numericEntity

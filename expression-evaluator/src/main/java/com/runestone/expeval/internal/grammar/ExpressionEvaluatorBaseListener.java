@@ -1421,13 +1421,13 @@ public class ExpressionEvaluatorBaseListener implements ExpressionEvaluatorListe
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void enterCastExpressionOperation(ExpressionEvaluatorParser.CastExpressionOperationContext ctx) { }
+	@Override public void enterTypeHintExpressionOperation(ExpressionEvaluatorParser.TypeHintExpressionOperationContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void exitCastExpressionOperation(ExpressionEvaluatorParser.CastExpressionOperationContext ctx) { }
+	@Override public void exitTypeHintExpressionOperation(ExpressionEvaluatorParser.TypeHintExpressionOperationContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -1445,13 +1445,13 @@ public class ExpressionEvaluatorBaseListener implements ExpressionEvaluatorListe
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void enterTypeCastOperation(ExpressionEvaluatorParser.TypeCastOperationContext ctx) { }
+	@Override public void enterTypeHintOperation(ExpressionEvaluatorParser.TypeHintOperationContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void exitTypeCastOperation(ExpressionEvaluatorParser.TypeCastOperationContext ctx) { }
+	@Override public void exitTypeHintOperation(ExpressionEvaluatorParser.TypeHintOperationContext ctx) { }
 	/**
 	 * {@inheritDoc}
 	 *

@@ -1076,12 +1076,12 @@ public final class SemanticAstBuilder {
         }
 
         @Override
-        public ExpressionNode visitCastExpressionOperation(ExpressionEvaluatorParser.CastExpressionOperationContext ctx) {
-            return visit(ctx.castExpression());
+        public ExpressionNode visitTypeHintExpressionOperation(ExpressionEvaluatorParser.TypeHintExpressionOperationContext ctx) {
+            return visit(ctx.typeHintExpression());
         }
 
         @Override
-        public ExpressionNode visitTypeCastOperation(ExpressionEvaluatorParser.TypeCastOperationContext ctx) {
+        public ExpressionNode visitTypeHintOperation(ExpressionEvaluatorParser.TypeHintOperationContext ctx) {
             return visit(ctx.genericEntity());
         }
 

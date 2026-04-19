@@ -33,16 +33,16 @@ class ExpressionEvaluatorGrammarTest {
 
     @Test
     void explicitCastShouldStayDistinctFromTypeHint() {
-        String castTree = parseMathTree("a = <number>(foo); 1");
+        String typeHintTree = parseMathTree("a = <number>(foo); 1");
         String hintTree = parseMathTree("<number>foo + 1");
 
-        assertThat(castTree)
-            .contains("(castExpression (typeHint <number>) ( (genericEntity (referenceTarget foo)) ))")
+        assertThat(typeHintTree)
+            .contains("(typeHintExpression (typeHint <number>) ( (genericEntity (referenceTarget foo)) ))")
             .doesNotContain("(numericEntity <number> (referenceTarget foo))");
 
         assertThat(hintTree)
             .contains("(numericEntity <number> (referenceTarget foo))")
-            .doesNotContain("(castExpression");
+            .doesNotContain("(typeHintExpression");
     }
 
     @Test

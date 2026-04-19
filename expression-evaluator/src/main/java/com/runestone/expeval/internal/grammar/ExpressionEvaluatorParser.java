@@ -41,7 +41,7 @@ public class ExpressionEvaluatorParser extends Parser {
 		RULE_subscript = 24, RULE_signedInteger = 25, RULE_filterPredicate = 26, 
 		RULE_filterAtom = 27, RULE_filterRelation = 28, RULE_filterValue = 29, 
 		RULE_comparisonOperator = 30, RULE_allEntityTypes = 31, RULE_assignmentValue = 32, 
-		RULE_genericEntity = 33, RULE_castExpression = 34, RULE_typeHint = 35, 
+		RULE_genericEntity = 33, RULE_typeHintExpression = 34, RULE_typeHint = 35, 
 		RULE_logicalEntity = 36, RULE_numericEntity = 37, RULE_stringConcatExpression = 38, 
 		RULE_stringEntity = 39, RULE_dateEntity = 40, RULE_timeEntity = 41, RULE_dateTimeEntity = 42, 
 		RULE_vectorEntity = 43, RULE_vectorOfVariables = 44;
@@ -55,9 +55,9 @@ public class ExpressionEvaluatorParser extends Parser {
 			"function", "referenceTarget", "collectionFunctionArguments", "lambdaTransform", 
 			"memberChain", "subscript", "signedInteger", "filterPredicate", "filterAtom", 
 			"filterRelation", "filterValue", "comparisonOperator", "allEntityTypes", 
-			"assignmentValue", "genericEntity", "castExpression", "typeHint", "logicalEntity", 
-			"numericEntity", "stringConcatExpression", "stringEntity", "dateEntity", 
-			"timeEntity", "dateTimeEntity", "vectorEntity", "vectorOfVariables"
+			"assignmentValue", "genericEntity", "typeHintExpression", "typeHint", 
+			"logicalEntity", "numericEntity", "stringConcatExpression", "stringEntity", 
+			"dateEntity", "timeEntity", "dateTimeEntity", "vectorEntity", "vectorOfVariables"
 		};
 	}
 	public static final String[] ruleNames = makeRuleNames();
@@ -5542,26 +5542,6 @@ public class ExpressionEvaluatorParser extends Parser {
 		}
 	}
 	@SuppressWarnings("CheckReturnValue")
-	public static class CastExpressionOperationContext extends GenericEntityContext {
-		public CastExpressionContext castExpression() {
-			return getRuleContext(CastExpressionContext.class,0);
-		}
-		public CastExpressionOperationContext(GenericEntityContext ctx) { copyFrom(ctx); }
-		@Override
-		public void enterRule(ParseTreeListener listener) {
-			if ( listener instanceof ExpressionEvaluatorListener ) ((ExpressionEvaluatorListener)listener).enterCastExpressionOperation(this);
-		}
-		@Override
-		public void exitRule(ParseTreeListener listener) {
-			if ( listener instanceof ExpressionEvaluatorListener ) ((ExpressionEvaluatorListener)listener).exitCastExpressionOperation(this);
-		}
-		@Override
-		public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
-			if ( visitor instanceof ExpressionEvaluatorVisitor ) return ((ExpressionEvaluatorVisitor<? extends T>)visitor).visitCastExpressionOperation(this);
-			else return visitor.visitChildren(this);
-		}
-	}
-	@SuppressWarnings("CheckReturnValue")
 	public static class GenericFunctionDecisionExpressionContext extends GenericEntityContext {
 		public TerminalNode IF() { return getToken(ExpressionEvaluatorParser.IF, 0); }
 		public TerminalNode LPAREN() { return getToken(ExpressionEvaluatorParser.LPAREN, 0); }
@@ -5598,6 +5578,26 @@ public class ExpressionEvaluatorParser extends Parser {
 		@Override
 		public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
 			if ( visitor instanceof ExpressionEvaluatorVisitor ) return ((ExpressionEvaluatorVisitor<? extends T>)visitor).visitGenericFunctionDecisionExpression(this);
+			else return visitor.visitChildren(this);
+		}
+	}
+	@SuppressWarnings("CheckReturnValue")
+	public static class TypeHintExpressionOperationContext extends GenericEntityContext {
+		public TypeHintExpressionContext typeHintExpression() {
+			return getRuleContext(TypeHintExpressionContext.class,0);
+		}
+		public TypeHintExpressionOperationContext(GenericEntityContext ctx) { copyFrom(ctx); }
+		@Override
+		public void enterRule(ParseTreeListener listener) {
+			if ( listener instanceof ExpressionEvaluatorListener ) ((ExpressionEvaluatorListener)listener).enterTypeHintExpressionOperation(this);
+		}
+		@Override
+		public void exitRule(ParseTreeListener listener) {
+			if ( listener instanceof ExpressionEvaluatorListener ) ((ExpressionEvaluatorListener)listener).exitTypeHintExpressionOperation(this);
+		}
+		@Override
+		public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
+			if ( visitor instanceof ExpressionEvaluatorVisitor ) return ((ExpressionEvaluatorVisitor<? extends T>)visitor).visitTypeHintExpressionOperation(this);
 			else return visitor.visitChildren(this);
 		}
 	}
@@ -5788,11 +5788,11 @@ public class ExpressionEvaluatorParser extends Parser {
 				}
 				break;
 			case 3:
-				_localctx = new CastExpressionOperationContext(_localctx);
+				_localctx = new TypeHintExpressionOperationContext(_localctx);
 				enterOuterAlt(_localctx, 3);
 				{
 				setState(639);
-				castExpression();
+				typeHintExpression();
 				}
 				break;
 			case 4:
@@ -5817,19 +5817,19 @@ public class ExpressionEvaluatorParser extends Parser {
 	}
 
 	@SuppressWarnings("CheckReturnValue")
-	public static class CastExpressionContext extends ParserRuleContext {
-		public CastExpressionContext(ParserRuleContext parent, int invokingState) {
+	public static class TypeHintExpressionContext extends ParserRuleContext {
+		public TypeHintExpressionContext(ParserRuleContext parent, int invokingState) {
 			super(parent, invokingState);
 		}
-		@Override public int getRuleIndex() { return RULE_castExpression; }
+		@Override public int getRuleIndex() { return RULE_typeHintExpression; }
 	 
-		public CastExpressionContext() { }
-		public void copyFrom(CastExpressionContext ctx) {
+		public TypeHintExpressionContext() { }
+		public void copyFrom(TypeHintExpressionContext ctx) {
 			super.copyFrom(ctx);
 		}
 	}
 	@SuppressWarnings("CheckReturnValue")
-	public static class TypeCastOperationContext extends CastExpressionContext {
+	public static class TypeHintOperationContext extends TypeHintExpressionContext {
 		public TypeHintContext typeHint() {
 			return getRuleContext(TypeHintContext.class,0);
 		}
@@ -5838,27 +5838,27 @@ public class ExpressionEvaluatorParser extends Parser {
 			return getRuleContext(GenericEntityContext.class,0);
 		}
 		public TerminalNode RPAREN() { return getToken(ExpressionEvaluatorParser.RPAREN, 0); }
-		public TypeCastOperationContext(CastExpressionContext ctx) { copyFrom(ctx); }
+		public TypeHintOperationContext(TypeHintExpressionContext ctx) { copyFrom(ctx); }
 		@Override
 		public void enterRule(ParseTreeListener listener) {
-			if ( listener instanceof ExpressionEvaluatorListener ) ((ExpressionEvaluatorListener)listener).enterTypeCastOperation(this);
+			if ( listener instanceof ExpressionEvaluatorListener ) ((ExpressionEvaluatorListener)listener).enterTypeHintOperation(this);
 		}
 		@Override
 		public void exitRule(ParseTreeListener listener) {
-			if ( listener instanceof ExpressionEvaluatorListener ) ((ExpressionEvaluatorListener)listener).exitTypeCastOperation(this);
+			if ( listener instanceof ExpressionEvaluatorListener ) ((ExpressionEvaluatorListener)listener).exitTypeHintOperation(this);
 		}
 		@Override
 		public <T> T accept(ParseTreeVisitor<? extends T> visitor) {
-			if ( visitor instanceof ExpressionEvaluatorVisitor ) return ((ExpressionEvaluatorVisitor<? extends T>)visitor).visitTypeCastOperation(this);
+			if ( visitor instanceof ExpressionEvaluatorVisitor ) return ((ExpressionEvaluatorVisitor<? extends T>)visitor).visitTypeHintOperation(this);
 			else return visitor.visitChildren(this);
 		}
 	}
 
-	public final CastExpressionContext castExpression() throws RecognitionException {
-		CastExpressionContext _localctx = new CastExpressionContext(_ctx, getState());
-		enterRule(_localctx, 68, RULE_castExpression);
+	public final TypeHintExpressionContext typeHintExpression() throws RecognitionException {
+		TypeHintExpressionContext _localctx = new TypeHintExpressionContext(_ctx, getState());
+		enterRule(_localctx, 68, RULE_typeHintExpression);
 		try {
-			_localctx = new TypeCastOperationContext(_localctx);
+			_localctx = new TypeHintOperationContext(_localctx);
 			enterOuterAlt(_localctx, 1);
 			{
 			setState(643);

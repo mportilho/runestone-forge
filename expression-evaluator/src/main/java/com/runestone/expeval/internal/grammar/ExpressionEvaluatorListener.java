@@ -1408,17 +1408,17 @@ public interface ExpressionEvaluatorListener extends ParseTreeListener {
 	 */
 	void exitGenericFunctionDecisionExpression(ExpressionEvaluatorParser.GenericFunctionDecisionExpressionContext ctx);
 	/**
-	 * Enter a parse tree produced by the {@code castExpressionOperation}
+	 * Enter a parse tree produced by the {@code typeHintExpressionOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#genericEntity}.
 	 * @param ctx the parse tree
 	 */
-	void enterCastExpressionOperation(ExpressionEvaluatorParser.CastExpressionOperationContext ctx);
+	void enterTypeHintExpressionOperation(ExpressionEvaluatorParser.TypeHintExpressionOperationContext ctx);
 	/**
-	 * Exit a parse tree produced by the {@code castExpressionOperation}
+	 * Exit a parse tree produced by the {@code typeHintExpressionOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#genericEntity}.
 	 * @param ctx the parse tree
 	 */
-	void exitCastExpressionOperation(ExpressionEvaluatorParser.CastExpressionOperationContext ctx);
+	void exitTypeHintExpressionOperation(ExpressionEvaluatorParser.TypeHintExpressionOperationContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code referenceTargetOperation}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#genericEntity}.
@@ -1432,17 +1432,17 @@ public interface ExpressionEvaluatorListener extends ParseTreeListener {
 	 */
 	void exitReferenceTargetOperation(ExpressionEvaluatorParser.ReferenceTargetOperationContext ctx);
 	/**
-	 * Enter a parse tree produced by the {@code typeCastOperation}
-	 * labeled alternative in {@link ExpressionEvaluatorParser#castExpression}.
+	 * Enter a parse tree produced by the {@code typeHintOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#typeHintExpression}.
 	 * @param ctx the parse tree
 	 */
-	void enterTypeCastOperation(ExpressionEvaluatorParser.TypeCastOperationContext ctx);
+	void enterTypeHintOperation(ExpressionEvaluatorParser.TypeHintOperationContext ctx);
 	/**
-	 * Exit a parse tree produced by the {@code typeCastOperation}
-	 * labeled alternative in {@link ExpressionEvaluatorParser#castExpression}.
+	 * Exit a parse tree produced by the {@code typeHintOperation}
+	 * labeled alternative in {@link ExpressionEvaluatorParser#typeHintExpression}.
 	 * @param ctx the parse tree
 	 */
-	void exitTypeCastOperation(ExpressionEvaluatorParser.TypeCastOperationContext ctx);
+	void exitTypeHintOperation(ExpressionEvaluatorParser.TypeHintOperationContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code booleanTypeHint}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#typeHint}.

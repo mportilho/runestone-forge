@@ -837,7 +837,7 @@ public class ExpressionEvaluatorBaseVisitor<T> extends AbstractParseTreeVisitor<
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
-	@Override public T visitCastExpressionOperation(ExpressionEvaluatorParser.CastExpressionOperationContext ctx) { return visitChildren(ctx); }
+	@Override public T visitTypeHintExpressionOperation(ExpressionEvaluatorParser.TypeHintExpressionOperationContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -851,7 +851,7 @@ public class ExpressionEvaluatorBaseVisitor<T> extends AbstractParseTreeVisitor<
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
-	@Override public T visitTypeCastOperation(ExpressionEvaluatorParser.TypeCastOperationContext ctx) { return visitChildren(ctx); }
+	@Override public T visitTypeHintOperation(ExpressionEvaluatorParser.TypeHintOperationContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
 	 *
