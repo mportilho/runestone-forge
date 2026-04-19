@@ -71,8 +71,8 @@ BigDecimal result = expr.compute(Map.of("a", 10, "b", 5)); // → 20
 - Testes em `src/test/java/com/runestone/expeval/api/`
 
 **Lacunas identificadas:**
-- [ ] Confirmar artifact id e group id para o bloco de dependência Maven
-- [ ] Verificar se há versão publicada no Maven Central ou repositório interno
+- [x] `groupId = io.github.runestone-forge`, `artifactId = expression-evaluator`, versão atual `1.1.0.1-SNAPSHOT`. Dependências transitivas obrigatórias: `caffeine 3.2.0`, `antlr4-runtime 4.13.1`, `big-math 2.3.2`.
+- [ ] Verificar se há versão publicada no Maven Central ou repositório interno.
 
 ---
 
@@ -142,9 +142,9 @@ BigDecimal result = expr.compute(Map.of("a", 10, "b", 5)); // → 20
 - Testes: `CacheConfigTest`, `ExpressionCompilerInjectionTest`
 
 **Lacunas identificadas:**
-- [ ] Documentar o comportamento exato do `ExpressionEnvironmentId` quando dois builders têm configurações idênticas (são mesmo id?)
-- [ ] Confirmar se `ExpressionCompiler` é um singleton global ou pode ter múltiplas instâncias
-- [ ] Especificar regras exatas de descoberta de métodos em provedores customizados (quais assinaturas são aceitas?)
+- [x] Comportamento do `ExpressionEnvironmentId` quando dois builders têm configurações idênticas → **mesmo ID** (SHA-256 determinístico sobre partes ordenadas da config). Provedores de instância usam `identityHashCode` → instâncias distintas sempre geram IDs diferentes.
+- [x] `ExpressionCompiler` é **singleton JVM-wide** (via `ExpressionRuntimeSupport`) por padrão. Pode-se injetar instância própria via métodos `compile(source, env, compiler)` para controle de ciclo de vida.
+- [x] Regras de descoberta de métodos em provedores → ver seção 6 (Alta Prioridade).
 
 ---
 
@@ -206,10 +206,10 @@ Esta seção é a mais crítica para o público de regras de negócio.
 - Testes de feature: `BetweenExpressionTest`, `MembershipExpressionTest`, `StringRegexTest`, etc.
 
 **Lacunas identificadas:**
-- [ ] Esclarecer precedência exata de `??` em relação a outros operadores binários
-- [ ] Documentar comportamento de `%` como percentual vs. operador modulo (são distintos?)
-- [ ] Detalhar regras de parsing de data/hora: quais formatos exatos são aceitos pelo lexer?
-- [ ] Confirmar se vetores vazios `[]` são mesmo proibidos e qual a mensagem de erro exibida
+- [x] Precedência do `??`: **mais baixa que aritmética**. `a ?? b + 1` = `(a ?? b) + 1`. O RHS de `??` é um `*Entity` (literal, referência, ou `if`), não um `*Expression` completo. Para usar aritmética como fallback, use `a ?? if(cond, b+1, b+1)`.
+- [x] `%` e módulo são **distintos**: `%` é operador postfix de **percentagem** (`50% = 0.5`); o módulo usa a keyword `mod` (infix: `10 mod 3 = 1`).
+- [x] Formatos de data/hora: `DATE = YYYY-MM-DD`; `TIME = HH:MM` ou `HH:MM:SS`; `DATETIME = YYYY-MM-DDTHH:MM` ou `YYYY-MM-DD HH:MM:SS±HH:MM`. Offset de fuso horário é opcional em DATETIME.
+- [x] Vetores vazios `[]` são **proibidos** pela gramática (`vectorOfEntitiesOperation` exige ao menos um elemento: `LBRACKET allEntityTypes (COMMA allEntityTypes)* RBRACKET`).
 
 ---
 
@@ -233,8 +233,12 @@ Esta seção é a mais crítica para o público de regras de negócio.
 - Testes: `MathFunctionsExpressionTest`, `StringFunctionsExpressionTest`, `DateTimeFunctionsExpressionTest`, etc.
 
 **Lacunas identificadas:**
-- [ ] Confirmar lista completa de métodos expostos por cada provedor (quais métodos públicos são ignorados pelo scanner de provedores?)
-- [ ] Documentar quais funções têm sobrecargas (multiple arity) e quais parâmetros são opcionais
+- [x] `ComparableFunctions`: apenas `max(T[])` e `min(T[])`. **Não expõe `abs` nem `sign`** — o plano original estava incorreto. Valor absoluto usa o operador `|expr|`.
+- [x] `MathFunctions`: `mean`, `geometricMean`, `harmonicMean`, `variance(p, type)`, `stdDev(p, type)`, `meanDev`, `rule3d`, `rule3i`, `distribute`, `spread`. Todas aceitam `MathContext` como primeiro parâmetro (auto-injetado).
+- [x] `LogarithmFunctions`: `ln`, `lb` (log base 2), `log(base, value)`, `lnFast` (double), `lbFast` (double), `logFast(base, value)` (double).
+- [x] `TrigonometryFunctions`: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`. Registra automaticamente constantes `pi`/`π`, `e`, `tau`/`τ`.
+- [x] `StringFunctions`: `concat`, `toUpper`, `toLower`, `trim`, `trimLeft`, `trimRight`, `substring(v, begin)`, `substring(v, begin, end)`, `substringBefore`, `substringAfter`, `substringBeforeLast`, `substringAfterLast`, `padLeft(v, size)`, `padLeft(v, size, padding)`, `padRight(v, size)`, `padRight(v, size, padding)`, `repeat`, `replace`, `replaceFirst`, `replaceAll`, `indexOf`, `lastIndexOf`, `startsWith`, `endsWith`, `contains`, `isEmpty`, `isBlank`, `length`, `split`, `join`.
+- [ ] Confirmar assinaturas exatas de `DateTimeFunctions` e `ExcelFinancialFunctions`.
 
 ---
 
@@ -283,10 +287,10 @@ Esta seção merece documento próprio dada a riqueza de operadores.
 - `runtime-internals.md` seção "Type Hints & Object Navigation"
 
 **Lacunas identificadas:**
-- [ ] Confirmar se slice `[start:end]` é exclusivo ou inclusivo no `end`
-- [ ] Documentar comportamento de deep-scan quando um nó intermediário é nulo
-- [ ] Detalhar funções de agregação disponíveis: `sum()`, `prod()`? Quais outros?
-- [ ] Verificar comportamento de `[*]` em listas aninhadas
+- [x] Slice `[start:end]` é **exclusivo no `end`** (Python-style). `[0:2]` → índices 0, 1.
+- [x] Deep-scan quando nó intermediário é nulo → retorna coleção vazia (sem exceção). Confirmado em `CollectionNavigationTest.DeepScanEdgeCases.shouldReturnEmptyWhenPropertyNotFound`.
+- [x] Funções de agregação: `sum()`, `avg()`, `min()`, `max()`, `count()`. Não existe `prod()`. Projeções de mapa: `keys()`, `values()`.
+- [x] `[*]` em listas retorna todos os elementos (identidade para listas). Em mapas retorna todos os valores. Confirmado em `CollectionNavigationTest.WildcardAccess`.
 
 ---
 
@@ -322,8 +326,8 @@ result.trace().evaluationTime();         // → Duration
 - Javadoc de `AuditResult`, `ExpressionAuditTrace`, `AuditEvent`
 
 **Lacunas identificadas:**
-- [ ] Confirmar se `computeWithAudit` tem overhead significativo vs. `compute` (relevante para hot paths)
-- [ ] Documentar se eventos de constant folding (funções dobradas em compilação) aparecem na trilha
+- [ ] Confirmar se `computeWithAudit` tem overhead significativo vs. `compute` (relevante para hot paths) → benchmark JMH existe em `AuditOverheadBenchmark`; executar e documentar percentual.
+- [ ] Documentar se eventos de constant folding (funções dobradas em compilação) aparecem na trilha → analisar `AuditTrailExpressionTest` para casos com `foldable=true`.
 
 ---
 
@@ -427,6 +431,7 @@ result.trace().evaluationTime();         // → Duration
 
 **Lacunas identificadas:**
 - [ ] Identificar outras limitações não documentadas explorando os testes com `@Disabled` ou comentários `TODO`/`FIXME` no código
+- [x] **`<date>currDate` é inválido** — `currDate`/`currTime`/`currDateTime` são literais de data/hora diretamente, não referências. O prefixo de tipo `<date>` só é válido antes de `referenceTarget` (variáveis e funções).
 
 ---
 
@@ -491,29 +496,61 @@ result.trace().evaluationTime();         // → Duration
 
 ## 6. Lacunas Consolidadas e Pontos de Validação
 
-Antes da escrita final da documentação, os seguintes pontos precisam de validação:
+> **Atualizado em 2026-04-19** — Lacunas preenchidas via análise de código + testes em `DocumentationGapVerificationTest`.
 
 ### Alta Prioridade
 
-- [ ] **Artifact coordinates:** confirmar `groupId`, `artifactId` e versão publicada para o bloco de dependência Maven
-- [ ] **Códigos de erro:** não há enum centralizado de códigos — confirmar lista exaustiva com os mantenedores ou via análise de código
-- [ ] **Métodos descobertos em provedores customizados:** quais assinaturas de método são aceitas pelo scanner? Há suporte a tipos primitivos? A parâmetros `null`?
-- [ ] **Cache global vs. por instância:** confirmar se múltiplos `ExpressionEnvironment` com configurações diferentes compartilham o mesmo cache e como o `ExpressionEnvironmentId` isola entradas
+- [x] **Artifact coordinates:** `groupId = io.github.runestone-forge`, `artifactId = expression-evaluator`, versão atual `1.1.0.1-SNAPSHOT` (ver `pom.xml` do módulo e parent POM).
+
+- [x] **Códigos de erro:** existe enum `com.runestone.expeval.api.IssueCode` com a lista completa. Códigos de compilação (semânticos): `SYNTAX_ERROR`, `RESULT_TYPE_MISMATCH`, `TYPE_MISMATCH`, `INVALID_CURRENT_ELEMENT`, `INVALID_MEMBER_ACCESS`, `INVALID_MAP_PROPERTY_ACCESS`, `INVALID_METHOD_ARITY`, `INVALID_FUNCTION_ARITY`, `UNKNOWN_PROPERTY`, `UNKNOWN_METHOD`, `UNKNOWN_FUNCTION`, `UNKNOWN_COLLECTION_FUNCTION`, `AMBIGUOUS_METHOD`, `AMBIGUOUS_FUNCTION`, `INCOMPATIBLE_COMPARISON`, `INCOMPATIBLE_IN_OPERANDS`, `INCOMPATIBLE_METHOD_ARGUMENTS`, `INCOMPATIBLE_FUNCTION_ARGUMENTS`, `INCOMPATIBLE_COLLECTION_FUNCTION_ARGUMENTS`. Erros de runtime são strings inline em `ExpressionEvaluationException` (ex: `INDEX_OUT_OF_BOUNDS`, `NULL_IN_CHAIN`).
+
+- [x] **Métodos descobertos em provedores customizados:** via `Class.getMethods()` (inclui métodos públicos herdados). Regras:
+  - Provedores estáticos: apenas métodos `public static` (excluindo métodos de `Object`, `synthetic`, `bridge`).
+  - Provedores de instância: apenas métodos públicos não-estáticos (mesmas exclusões).
+  - Se o **primeiro parâmetro** for `MathContext`, ele é **injetado automaticamente** pelo ambiente (não faz parte da aridade exposta na expressão). Trig/log usam `transcendentalMathContext`; demais usam `mathContext`.
+  - Parâmetros e retorno devem ser tipos reconhecidos por `ResolvedTypes.fromJavaType` (`BigDecimal`, `String`, `Boolean`, `LocalDate`, `LocalTime`, `LocalDateTime`, arrays e `List<?>` desses tipos, `Integer`, `Double`, `BigDecimal[]`, etc.).
+  - Primitivos (`int`, `double`, `boolean`) **não são suportados** como parâmetros — use os wrappers.
+  - Sobrecargas por aridade são registradas como entradas separadas.
+
+- [x] **Cache global vs. por instância:** `ExpressionRuntimeSupport` mantém um singleton JVM-wide `ExpressionCompiler`. Dois `ExpressionEnvironment` com **configurações estáticas idênticas** (mesmos provedores, símbolos externos, `MathContext`) compartilham cache via o mesmo `ExpressionEnvironmentId` (SHA-256 sobre partes ordenadas). Provedores de instância usam `System.identityHashCode` — objetos distintos sempre produzem IDs diferentes mesmo que sejam da mesma classe. Para usar um compiler próprio, passe `ExpressionCompiler` explícito nos métodos `compile(source, env, compiler)`.
 
 ### Média Prioridade
 
-- [ ] **Overhead do modo auditoria:** documentar se `computeWithAudit` tem custo mensurável em relação a `compute`
-- [ ] **Comportamento de `currDate`/`currTime`/`currDateTime`:** são avaliados uma vez por expressão ou uma vez por chamada de `compute()`?
-- [ ] **Precisão de slice:** `list[0:2]` retorna `[0, 1]` ou `[0, 1, 2]`?
-- [ ] **Função de raiz `root`:** qual sintaxe exata? `root(n, x)` ou `n root x`?
-- [ ] **Funções de agregação em deep-scan:** quais funções além de `sum()` estão disponíveis?
+- [ ] **Overhead do modo auditoria:** existe benchmark JMH em `AuditOverheadBenchmark`. Medir e documentar overhead percentual. Hipótese: overhead é mensurável mas pequeno para expressões simples; cresce com o número de funções chamadas.
+
+- [x] **Comportamento de `currDate`/`currTime`/`currDateTime`:** avaliados **uma vez por chamada de `compute()`**, com cache dentro do `ExecutionScope` via `EnumMap<DynamicInstant, Object> dynamicCache`. Múltiplas referências ao mesmo literal dentro de uma expressão retornam o mesmo instante. Entre chamadas diferentes de `compute()`, cada chamada recria o `ExecutionScope` e portanto re-avalia o instante.
+
+- [x] **Precisão de slice:** `list[start:end]` é **exclusivo no `end`** (Python-style). `prices[0:2]` retorna índices 0 e 1. Confirmado em `CollectionNavigationTest.SliceAccess`.
+
+- [x] **Função de raiz `root`:** sintaxe infix: `a root b` (b-ésima raiz de a). `√` é sinônimo Unicode de `root`. Também existe `sqrt(x)` como forma funcional para raiz quadrada. **Não existe** forma `root(n, x)` como chamada de função. Exemplos: `8 root 3 = 2`; `sqrt(9) = 3`; `16 √ 2 = 4`.
+
+- [x] **Funções de agregação em deep-scan:** `sum()`, `avg()`, `min()`, `max()`, `count()`. Projeções de mapa: `keys()`, `values()`. Todas confirmadas em `CollectionNavigationTest.VectorAggregations` e `CollectionNavigationTest.MapProjections`.
 
 ### Baixa Prioridade
 
-- [ ] **Suporte a variadics em provedores customizados:** confirmar se é possível e como declarar
-- [ ] **Comportamento de `||` com tipos não-string:** concatenação faz conversão automática?
-- [ ] **Expressões com comentários:** a gramática suporta comentários inline?
-- [ ] **Limite de profundidade de navegação:** há limite máximo de encadeamento de propriedades?
+- [ ] **Suporte a variadics em provedores customizados:** a descoberta usa `Class.getMethods()` e converte parâmetros via `ResolvedTypes.fromJavaType`. Arrays (`BigDecimal[]`, `String[]`) são suportados — esse é o mecanismo de variadic (o motor converte lista de argumentos para array). Confirmar com teste se variadics explícitos Java (`BigDecimal...`) são aceitos.
+
+- [x] **Comportamento de `||` com tipos não-string:** `||` **não aceita** números ou booleanos sem cast explícito. A gramática restringe `||` ao contexto de `stringConcatExpression`, que aceita apenas `stringEntity` (literais string, referências com `<text>`, decisões `if` com resultado string). Tentar `1 || "b"` lança `ParsingException`. Confirmado em `StringConcatenationTest.TypeError`.
+
+- [x] **Expressões com comentários:** a gramática suporta **`//` (linha)** e **`/* */` (bloco)**, ambos tratados como `skip` pelo lexer. Comentários podem aparecer em qualquer posição — inclusive dentro de blocos de atribuição. Confirmado em `DocumentationGapVerificationTest.CommentSupport`.
+
+- [x] **Limite de profundidade de navegação:** não há limite configurável ou hardcoded no código. O único limite prático é a detecção de referências circulares durante navegação (lança `ExpressionEvaluationException`).
+
+### Achados adicionais (não estavam no plano original)
+
+- [x] **`ComparableFunctions` não expõe `abs` nem `sign`:** a classe tem apenas `max(T[])` e `min(T[])`. O valor absoluto é expresso com o operador `|expr|` (MODULUS). Não há função `sign()` embutida.
+
+- [x] **`%` é operador de PERCENTAGEM (postfix), não de módulo.** `50%` = `0.5`. O módulo é feito com a keyword `mod` (infix). Exemplo: `10 mod 3 = 1`.
+
+- [x] **Precedência do `??`:** o operador de null-coalescing está embutido nas regras de referência da gramática (`numericReferenceOperation`, `stringReferenceOperation`, etc.), e o RHS do `??` é um `*Entity` (não um `*Expression` completo). Portanto `a ?? b + 1` é interpretado como `(a ?? b) + 1`. Para usar uma expressão aritmética como fallback, envolva em decisão condicional: `a ?? if(cond, expr, expr)`, ou reestruture a expressão.
+
+- [x] **`NOT` lógico:** aceita tanto `~` (til) quanto `¬` (Unicode ¬ U+00AC) quanto `!` como operadores de negação lógica.
+
+- [x] **Literais de tempo como slice:** `prices[10:20]` é ambíguo com o token TIME (`HH:MM`). O lexer trata como `sliceTimeSubscript` e o processa como slice `start=10, end=20`. Confirmado em `CollectionNavigationTest.SliceAccess.shouldHandleTimeLookingSliceAsStartEnd`.
+
+- [x] **`ExpressionEnvironmentId` para configurações idênticas:** dois `ExpressionEnvironment` construídos com as mesmas chamadas de configuração produzem o mesmo ID (SHA-256 determinístico sobre partes ordenadas). Confirmado em `DocumentationGapVerificationTest.EnvironmentIdHashing`.
+
+- [x] **`currDate` não aceita prefixo `<date>`:** `<date>currDate` é inválido na gramática — `currDate` já é literalmente um `dateEntity`, não uma `referenceTarget`. Usar `d = currDate;` diretamente em atribuições. Confirmado em `DocumentationGapVerificationTest.DynamicLiteralPerCall`.
 
 ---
 
