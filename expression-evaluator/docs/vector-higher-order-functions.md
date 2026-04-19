@@ -1,22 +1,20 @@
-# Plan: Vector Higher-Order Functions (filter, sum, prod) for expression-evaluator
+# Plan: Vector Higher-Order Functions (sum, prod) for expression-evaluator
 
 ## Context
 
 The `expression-evaluator` module already supports collection navigation with filtering (`[?(@ > 1)]`),
 aggregations (`..sum()`, `..avg()`), and deep-scan operations. This plan extends those mechanisms
-to add `..filter(pred)`, `..sum(transform)`, and `..prod(transform)` as **first-class collection
-navigation steps**, reusing the existing `FilterContext` / `@` infrastructure instead of
-introducing a separate lambda/closure system.
+to add `..sum(transform)` and `..prod(transform)` as **first-class collection navigation steps**,
+reusing the existing `FilterContext` / `@` infrastructure instead of introducing a separate
+lambda/closure system.
 
 ### New syntax
 
 ```
-[1, 2, 3]..filter(@ > 1)           // keeps elements where predicate is true  → [2, 3]
 [1, 2, 3]..sum(@ * 2^@)             // Σ f(element)                            → 34
 [1, 2, 3]..prod(@ * 2^@)            // Π f(element)
+[1, 2, 3]..sum()                    // sum of all elements                     → 5
 [1, 2, 3]..prod()                   // product of all elements                 → 6
-prices..filter(@ > 10)..sum()       // composable with existing steps
-books..filter(@.price < 10)..count()// element is a Record/Map — access fields via @.field
 ```
 
 The `@` token is the **current-element placeholder** — the same concept used today inside
@@ -124,35 +122,7 @@ public record VectorAggregationStep(
 }
 ```
 
-### 3.2 New `FilterFunctionStep`
-
-Add to `PropertyChainNode.MemberAccess` sealed interface (and its `permits` clause):
-
-```java
-/**
- * {@code ..filter(pred)} — function-call syntax for element-wise filtering.
- * The predicate expression may use {@code @} to refer to the current element.
- * Semantically equivalent to {@code [?(pred)]} but written as a chained function call.
- */
-public record FilterFunctionStep(ExpressionNode predicate) implements MemberAccess {
-    public FilterFunctionStep {
-        Objects.requireNonNull(predicate, "predicate must not be null");
-    }
-}
-```
-
-Update the `permits` clause of `MemberAccess`:
-
-```java
-public sealed interface MemberAccess permits
-        PropertyAccess, SafePropertyAccess, MethodCallAccess, SafeMethodCallAccess,
-        CollectionIndexStep, MapKeyStep, CollectionSliceStep, WildcardStep,
-        FilterPredicateStep, FilterFunctionStep,                              // ← add FilterFunctionStep
-        DeepScanStep, CollectionFunctionStep, MapProjectionStep,
-        VectorAggregationStep {}
-```
-
-### 3.3 Update `SemanticAstBuilder` visitor for `collectionFunctionAccess`
+### 3.2 Update `SemanticAstBuilder` visitor for `collectionFunctionAccess`
 
 **File:** `src/main/java/com/runestone/expeval/internal/ast/mapping/SemanticAstBuilder.java`
 
@@ -175,10 +145,6 @@ public MemberAccess visitCollectionFunctionAccess(
         case "count" -> new VectorAggregationStep(VectorAggregationKind.COUNT, null);
         case "prod"  -> new VectorAggregationStep(VectorAggregationKind.PROD,      // ← new
                             args.isEmpty() ? null : visitAllEntityType(args.get(0)));
-        case "filter" -> {                                                           // ← new
-            if (args.isEmpty()) throw new IllegalArgumentException("..filter() requires a predicate argument");
-            yield new FilterFunctionStep(visitAllEntityType(args.get(0)));
-        }
         case "keys"   -> new MapProjectionStep(MapProjectionKind.KEYS);
         case "values" -> new MapProjectionStep(MapProjectionKind.VALUES);
         default -> buildCollectionFunctionStep(name, args);  // existing catalog-function path
@@ -186,7 +152,7 @@ public MemberAccess visitCollectionFunctionAccess(
 }
 ```
 
-### 3.4 Update visitor for `atReferenceTarget`
+### 3.3 Update visitor for `atReferenceTarget`
 
 Add a visitor for the new grammar alternative:
 
@@ -229,18 +195,7 @@ if ("@".equals(node.name())) {
 If `PropertyChainNode` is used instead of `IdentifierNode` for `@`, apply the same logic when
 `rootIdentifier.equals("@")`.
 
-### 4.2 Resolve `FilterFunctionStep`
-
-In the `SemanticResolver` walk of `PropertyChainNode.chain`, add a case:
-
-```java
-case FilterFunctionStep(ExpressionNode predicate) -> {
-    resolveExpression(predicate);   // resolve @-references inside the predicate
-    // result mode stays COLLECTION — filter outputs a list
-}
-```
-
-### 4.3 Resolve `VectorAggregationStep` with transform
+### 4.2 Resolve `VectorAggregationStep` with transform
 
 Extend the existing aggregation case to also resolve the optional transform:
 
@@ -279,62 +234,27 @@ record ExecutableVectorAggregation(
 }
 ```
 
-### 5.2 New `ExecutableFilterFunction`
-
-Add to `ExecutablePropertyChain.ExecutableAccess` sealed interface:
-
-```java
-/** {@code ..filter(pred)} — element-wise filter using FilterContext for {@code @}. */
-record ExecutableFilterFunction(ExecutableNode predicate) implements ExecutableAccess {
-    ExecutableFilterFunction {
-        Objects.requireNonNull(predicate, "predicate must not be null");
-    }
-}
-```
-
-Update the `permits` clause accordingly.
-
-### 5.3 Build executable nodes in `ExecutionPlanBuilder`
+### 5.2 Build executable nodes in `ExecutionPlanBuilder`
 
 **File:** `src/main/java/com/runestone/expeval/internal/runtime/ExecutionPlanBuilder.java`
 
 In the member-access building switch:
 
 ```java
-case FilterFunctionStep(ExpressionNode predicate) ->
-    new ExecutableFilterFunction(buildNode(predicate, ...));
-
 case VectorAggregationStep(VectorAggregationKind kind, ExpressionNode transform) ->
     new ExecutableVectorAggregation(kind,
         transform == null ? null : buildNode(transform, ...));
 ```
 
-### 5.4 Evaluate in `AbstractObjectEvaluator`
+### 5.3 Evaluate in `AbstractObjectEvaluator`
 
 **File:** `src/main/java/com/runestone/expeval/internal/runtime/AbstractObjectEvaluator.java`
 
 In the `evaluatePropertyChain` step dispatch, extend the switch:
 
 ```java
-case ExecutableFilterFunction ef    -> applyFilterFunction(current, ef.predicate(), scope);
 case ExecutableVectorAggregation va -> applyAggregation(current, va.kind(), va.transform(), scope);
 ```
-
-#### `applyFilterFunction`
-
-Mirrors the existing `applyFilter` for `[?(pred)]`. The `FilterContextStack` from the existing
-implementation is reused as-is:
-
-```java
-private Object applyFilterFunction(Object current, ExecutableNode predicate, ExecutionScope scope) {
-    // Delegate to the same implementation used for ExecutableFilterPredicate.
-    // Extract to a shared helper if not already done.
-    return applyFilterPredicate(current, predicate, scope);
-}
-```
-
-If `applyFilter` (for `[?(pred)]`) is not yet a shared method, extract it and call it from both
-`ExecutableFilterPredicate` and `ExecutableFilterFunction` cases.
 
 #### Extend `applyAggregation` for optional transform and `PROD`
 
@@ -392,11 +312,6 @@ If a transform is passed to these, throw `IllegalArgumentException` at plan-buil
 Cover:
 
 ```java
-// filter
-"[1, 2, 3]..filter(@ > 1)"                    // → [2, 3]
-"[1, 2, 3]..filter(@ != 2)"                   // → [1, 3]
-"books..filter(@.price < 10)"                  // element is a Record/Map; books is external
-
 // sum with transform
 "[1, 2, 3]..sum(@ * 2)"                        // → 12
 "[1, 2, 3]..sum(@ ^ 2)"                        // → 14
@@ -409,11 +324,6 @@ Cover:
 // prod with transform
 "[1, 2, 3]..prod(@ * 2)"                       // → 2 * 4 * 6 = 48
 
-// composition with existing collection navigation
-"[1, 2, 3, 4]..filter(@ > 1)..filter(@ < 4)"  // → [2, 3]
-"[1, 2, 3, 4]..filter(@ > 1)..sum()"          // → 9
-"prices..filter(@ > 10)..sum()"                // external variable
-
 // sum without transform (existing — must still work)
 "[1, 2, 3]..sum()"                             // → 6
 
@@ -421,7 +331,6 @@ Cover:
 "[1, 2, 3]..sum(@ + offset)"                  // offset is external symbol
 
 // edge cases
-"[]..filter(@ > 0)"                            // → []
 "[]..prod()"                                   // → 1 (identity)
 "[5]..sum(@ * 2)"                              // → 10
 ```
@@ -435,12 +344,12 @@ Cover:
 | `grammar/ExpressionEvaluator.g4` | Add `AT memberChain*` to `referenceTarget` |
 | `grammar/` (generated) | Regenerate with ANTLR |
 | `internal/navigation/VectorAggregationKind.java` | Add `PROD` |
-| `internal/ast/PropertyChainNode.java` | Add `FilterFunctionStep`; add `@Nullable ExpressionNode transform` to `VectorAggregationStep` |
-| `internal/ast/mapping/SemanticAstBuilder.java` | Extend `visitCollectionFunctionAccess` for `filter`/`prod`/`sum(expr)`; add `visitAtReferenceTarget` |
-| `internal/runtime/SemanticResolver.java` | Resolve `"@"` identifier as `UnknownType`; resolve transform in `VectorAggregationStep`; resolve predicate in `FilterFunctionStep` |
-| `internal/runtime/ExecutablePropertyChain.java` | Add `ExecutableFilterFunction`; add optional `transform` to `ExecutableVectorAggregation` |
-| `internal/runtime/ExecutionPlanBuilder.java` | Handle `FilterFunctionStep` and updated `VectorAggregationStep` |
-| `internal/runtime/AbstractObjectEvaluator.java` | Add `applyFilterFunction`; extend `applyAggregation` for transform and `PROD`; extract shared filter helper |
+| `internal/ast/PropertyChainNode.java` | Add `@Nullable ExpressionNode transform` to `VectorAggregationStep` |
+| `internal/ast/mapping/SemanticAstBuilder.java` | Extend `visitCollectionFunctionAccess` for `prod`/`sum(expr)`; add `visitAtReferenceTarget` |
+| `internal/runtime/SemanticResolver.java` | Resolve `"@"` identifier as `UnknownType`; resolve transform in `VectorAggregationStep` |
+| `internal/runtime/ExecutablePropertyChain.java` | Add optional `transform` to `ExecutableVectorAggregation` |
+| `internal/runtime/ExecutionPlanBuilder.java` | Handle updated `VectorAggregationStep` |
+| `internal/runtime/AbstractObjectEvaluator.java` | Extend `applyAggregation` for transform and `PROD` |
 
 **No new files** beyond the test class. No lambda types, no new catalog functions, no new type-system
 entries.
@@ -488,6 +397,4 @@ Manually verify edge cases:
 |---|---|
 | `[1, 2, 3]..sum(@ * 2^@)` | 1·2 + 2·4 + 3·8 = **34** |
 | `[1, 2, 3]..prod()` | 1·2·3 = **6** |
-| `[1, 2, 3]..filter(@ > 1)` | **[2, 3]** |
-| `[1, 2, 3, 4]..filter(@ > 1)..filter(@ < 4)..sum()` | 2+3 = **5** |
 | `[]..prod()` | **1** (multiplicative identity) |
