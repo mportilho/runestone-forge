@@ -238,7 +238,54 @@ Esta seção é a mais crítica para o público de regras de negócio.
 - [x] `LogarithmFunctions`: `ln`, `lb` (log base 2), `log(base, value)`, `lnFast` (double), `lbFast` (double), `logFast(base, value)` (double).
 - [x] `TrigonometryFunctions`: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`. Registra automaticamente constantes `pi`/`π`, `e`, `tau`/`τ`.
 - [x] `StringFunctions`: `concat`, `toUpper`, `toLower`, `trim`, `trimLeft`, `trimRight`, `substring(v, begin)`, `substring(v, begin, end)`, `substringBefore`, `substringAfter`, `substringBeforeLast`, `substringAfterLast`, `padLeft(v, size)`, `padLeft(v, size, padding)`, `padRight(v, size)`, `padRight(v, size, padding)`, `repeat`, `replace`, `replaceFirst`, `replaceAll`, `indexOf`, `lastIndexOf`, `startsWith`, `endsWith`, `contains`, `isEmpty`, `isBlank`, `length`, `split`, `join`.
-- [ ] Confirmar assinaturas exatas de `DateTimeFunctions` e `ExcelFinancialFunctions`.
+- [x] **`DateTimeFunctions`** (todos `public static`; nenhum recebe `MathContext`):
+  - `secondsBetween(Temporal, Temporal)` → `Long`
+  - `minutesBetween(Temporal, Temporal)` → `Long`
+  - `hoursBetween(Temporal, Temporal)` → `Long`
+  - `daysBetween(Temporal, Temporal)` → `Long`
+  - `monthsBetween(Temporal, Temporal)` → `Long`
+  - `yearsBetween(Temporal, Temporal)` → `Long`
+  - `setDay(Temporal, long)` → `Temporal`
+  - `setMonth(Temporal, long)` → `Temporal`
+  - `setYear(Temporal, long)` → `Temporal`
+  - `setHours(Temporal, long)` → `Temporal`
+  - `setMinutes(Temporal, long)` → `Temporal`
+  - `setSeconds(Temporal, long)` → `Temporal`
+  - `setMidnight(Temporal)` → `Temporal`
+  - `setMidday(Temporal)` → `Temporal`
+  - `addDay(Temporal, long)` → `Temporal`
+  - `addMonth(Temporal, long)` → `Temporal`
+  - `addYear(Temporal, long)` → `Temporal`
+  - `addHours(Temporal, long)` → `Temporal`
+  - `addMinutes(Temporal, long)` → `Temporal`
+  - `addSeconds(Temporal, long)` → `Temporal`
+  - `subDay(Temporal, long)` → `Temporal`
+  - `subMonth(Temporal, long)` → `Temporal`
+  - `subYear(Temporal, long)` → `Temporal`
+  - `subHours(Temporal, long)` → `Temporal`
+  - `subMinutes(Temporal, long)` → `Temporal`
+  - `subSeconds(Temporal, long)` → `Temporal`
+  - `Temporal` aceita `LocalDate`, `LocalTime` ou `LocalDateTime`; retorno mantém o mesmo tipo concreto.
+  - **Não há** funções de parsing, formatação, `year()`, `month()`, `day()`, `hour()`, `minute()`, `second()` — o plano original estava incorreto.
+
+- [x] **`ExcelFinancialFunctions`** (todos `public static`; todos recebem `MathContext` como primeiro parâmetro — auto-injetado, não conta na aridade exposta). **Não há** IRR nem RATE — o plano original estava incorreto. Funções expostas (aridade sem `MathContext`):
+  - `fv(r, n, y, p, t: boolean)` — FV com `n` e sinalizador `t` como `BigDecimal`
+  - `fv(r, nper: int, pmt, pv, type: int)` — FV com `nper`/`type` como `int`
+  - `fv(r, nper: int, c, pv)` — FV com `type=0` implícito
+  - `pv(r, n, y, f, t: boolean)` — PV com `BigDecimal`
+  - `npv(r, cfs: BigDecimal[])` — NPV com vetor de fluxos de caixa
+  - `pmt(r, n, p, f, t: boolean)` — PMT com `BigDecimal`
+  - `pmt(r, nper: int, pv, fv, type: int)` — PMT com `int`
+  - `pmt(r, nper: int, pv, fv)` — PMT com `fv`, `type=0`
+  - `pmt(r, nper: int, pv)` — PMT com `fv=0`, `type=0`
+  - `nper(r, y, p, f, t: boolean)` — número de períodos
+  - `ipmt(r, per: int, nper: int, pv, fv, type: int)` — juros do período
+  - `ipmt(r, per: int, nper: int, pv, fv)` — `type=0`
+  - `ipmt(r, per: int, nper: int, pv)` — `fv=0`, `type=0`
+  - `ppmt(r, per: int, nper: int, pv, fv, type: int)` — amortização do período
+  - `ppmt(r, per: int, nper: int, pv, fv)` — `type=0`
+  - `ppmt(r, per: int, nper: int, pv)` — `fv=0`, `type=0`
+  - Parâmetros `boolean` e `int` são suportados pelo motor (ver §6 Alta Prioridade sobre tipos primitivos).
 
 ---
 
