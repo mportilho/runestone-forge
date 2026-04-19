@@ -21,7 +21,7 @@ public final class CollectionNavigationBenchmarkSupport {
     public static final String MAP_FILTER_EXPRESSION = "bookByIsbn[?(@.price < threshold)]..count()";
     public static final String MAP_VALUES_EXPRESSION = "bookByIsbn..values()..count()";
     public static final String CUSTOM_FUNCTION_EXPRESSION = "prices..countAbove(threshold)";
-    public static final String DEEP_SCAN_EXPRESSION = "store..price..count()";
+    public static final String DEEP_SCAN_EXPRESSION = "store..ds(price)..count()";
 
     private static final Frame[] FRAMES = buildFrames();
     private static final ExpressionEnvironment ENVIRONMENT = buildEnvironment(FRAMES[0]);

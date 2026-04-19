@@ -438,20 +438,6 @@ public interface ExpressionEvaluatorVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitCollectionFunctionAccess(ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx);
 	/**
-	 * Visit a parse tree produced by the {@code deepScanWildcard}
-	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitDeepScanWildcard(ExpressionEvaluatorParser.DeepScanWildcardContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code deepScanProperty}
-	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitDeepScanProperty(ExpressionEvaluatorParser.DeepScanPropertyContext ctx);
-	/**
 	 * Visit a parse tree produced by the {@code childWildcardAccess}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
 	 * @param ctx the parse tree

@@ -268,32 +268,32 @@ class CollectionNavigationTest {
     // -------------------------------------------------------------------------
 
     @Nested
-    @DisplayName("Deep scan ..property")
+    @DisplayName("Deep scan ..ds(property)")
     class DeepScan {
 
         @Test
-        @DisplayName("..property collects all occurrences of the named key in nested maps")
+        @DisplayName("..ds(property) collects all occurrences of the named key in nested maps")
         void shouldDeepScanPriceFromStore() {
             // store.books[*].price → 5.99 + 12.99 + 8.99 = 27.97
-            BigDecimal result = MathExpression.compile("store..price..sum()", env("store", STORE))
+            BigDecimal result = MathExpression.compile("store..ds(price)..sum()", env("store", STORE))
                     .compute(Map.of("store", STORE));
             assertThat(result).isEqualByComparingTo("27.97");
         }
 
         @Test
-        @DisplayName("..property on a flat list of records")
+        @DisplayName("..ds(property) on a flat list of records")
         void shouldDeepScanPriceFromRecords() {
             // All book prices: 5.99 + 12.99 + 8.99 + 19.99 = 47.96
-            BigDecimal result = MathExpression.compile("books..price..sum()", env("books", BOOKS))
+            BigDecimal result = MathExpression.compile("books..ds(price)..sum()", env("books", BOOKS))
                     .compute(Map.of("books", BOOKS));
             assertThat(result).isEqualByComparingTo("47.96");
         }
 
         @Test
-        @DisplayName("..* wildcard deep scan returns all reachable values")
+        @DisplayName("..ds() wildcard deep scan returns all reachable values")
         void shouldDeepScanWildcard() {
             var nested = Map.of("a", new BigDecimal("1"), "b", new BigDecimal("2"));
-            BigDecimal result = MathExpression.compile("m..*..count()", env("m", nested))
+            BigDecimal result = MathExpression.compile("m..ds()..count()", env("m", nested))
                     .compute(Map.of("m", nested));
             assertThat(result).isEqualByComparingTo("2");
         }
@@ -484,10 +484,10 @@ class CollectionNavigationTest {
         @Test
         @DisplayName("deep scan followed by filter")
         void shouldDeepScanThenFilter() {
-            // store..price collects [5.99, 12.99, 8.99]
+            // store..ds(price) collects [5.99, 12.99, 8.99]
             // filter > 9 → [12.99] → count = 1
             BigDecimal result = MathExpression.compile(
-                    "store..price[?(@ > 9)]..count()", env("store", STORE))
+                    "store..ds(price)[?(@ > 9)]..count()", env("store", STORE))
                     .compute(Map.of("store", STORE));
             assertThat(result).isEqualByComparingTo("1");
         }
@@ -679,17 +679,17 @@ class CollectionNavigationTest {
     class DeepScanEdgeCases {
 
         @Test
-        @DisplayName("..property that matches nothing returns an empty collection → count = 0")
+        @DisplayName("..ds(property) that matches nothing returns an empty collection → count = 0")
         void shouldReturnEmptyWhenPropertyNotFound() {
             // STORE contains no "nonExistent" key at any depth
             BigDecimal result = MathExpression.compile(
-                    "store..nonExistent..count()", env("store", STORE))
+                    "store..ds(nonExistent)..count()", env("store", STORE))
                     .compute(Map.of("store", STORE));
             assertThat(result).isEqualByComparingTo("0");
         }
 
         @Test
-        @DisplayName("..property scans beyond two levels of nesting")
+        @DisplayName("..ds(property) scans beyond two levels of nesting")
         void shouldCollectPropertyFromDeeplyNestedMaps() {
             // Three-level nesting: root → a → child → {price: 10 and price: 20}
             var nested = Map.of(
@@ -700,7 +700,7 @@ class CollectionNavigationTest {
                     "b", Map.of("price", new BigDecimal("30"))
             );
             // Deep scan collects all 'price' values: 10, 20, 30 → sum = 60
-            BigDecimal result = MathExpression.compile("data..price..sum()", env("data", nested))
+            BigDecimal result = MathExpression.compile("data..ds(price)..sum()", env("data", nested))
                     .compute(Map.of("data", nested));
             assertThat(result).isEqualByComparingTo("60");
         }
@@ -1116,7 +1116,7 @@ class CollectionNavigationTest {
             );
 
             BigDecimal result = MathExpression.compile(
-                    "balances[?(@.key.id < limit)]..values()..balance..sum()",
+                    "balances[?(@.key.id < limit)]..values()..ds(balance)..sum()",
                     ExpressionEnvironment.builder()
                             .registerExternalSymbol("balances", balances, true)
                             .registerExternalSymbol("limit", 3, true)
@@ -1276,7 +1276,7 @@ class CollectionNavigationTest {
             assertThat(count).isEqualByComparingTo("2");  // acme2 (1500) and acme3 (3000)
 
             BigDecimal totalBalance = MathExpression.compile(
-                    "portfolio[?(@.key.domain = targetDomain and @.value.balance > minBalance)]..values()..balance..sum()",
+                    "portfolio[?(@.key.domain = targetDomain and @.value.balance > minBalance)]..values()..ds(balance)..sum()",
                     ExpressionEnvironment.builder()
                             .registerExternalSymbol("portfolio", portfolio, true)
                             .registerExternalSymbol("targetDomain", "acme", true)

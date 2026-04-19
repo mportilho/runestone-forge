@@ -265,13 +265,9 @@ referenceTarget
     ;
 
 memberChain
-    // Deep-scan function call: ..funcName(args) — must precede deepScanProperty so that
-    // '..ident(' is not partially consumed as deepScanProperty + leftover '('
     : DOUBLE_PERIOD IDENTIFIER LPAREN
           (allEntityTypes (COMMA allEntityTypes)*)?
       RPAREN                                                             # collectionFunctionAccess
-    | DOUBLE_PERIOD MULT                                                 # deepScanWildcard
-    | DOUBLE_PERIOD IDENTIFIER                                           # deepScanProperty
     | PERIOD MULT                                                        # childWildcardAccess
     // methodCallAccess before propertyAccess: 'ident(' must not be parsed as property + extra '('
     | PERIOD IDENTIFIER LPAREN

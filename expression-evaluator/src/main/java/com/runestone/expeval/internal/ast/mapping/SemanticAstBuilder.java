@@ -530,10 +530,6 @@ public final class SemanticAstBuilder {
                             .toList();
                     yield new PropertyChainNode.SafeMethodCallAccess(sm.IDENTIFIER().getText(), args);
                 }
-                case ExpressionEvaluatorParser.DeepScanPropertyContext dsp ->
-                        new PropertyChainNode.DeepScanStep(dsp.IDENTIFIER().getText());
-                case ExpressionEvaluatorParser.DeepScanWildcardContext ignored ->
-                        new PropertyChainNode.DeepScanStep(null);
                 case ExpressionEvaluatorParser.ChildWildcardAccessContext ignored ->
                         new PropertyChainNode.WildcardStep();
                 case ExpressionEvaluatorParser.CollectionFunctionAccessContext cfa ->
@@ -548,6 +544,11 @@ public final class SemanticAstBuilder {
         private PropertyChainNode.MemberAccess buildCollectionFunctionStep(
                 ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx) {
             String name = ctx.IDENTIFIER().getText();
+            // Deep scan: ..ds(property) → named, ..ds() → wildcard
+            if ("ds".equals(name)) {
+                String propName = ctx.allEntityTypes().isEmpty() ? null : ctx.allEntityTypes(0).getText();
+                return new PropertyChainNode.DeepScanStep(propName);
+            }
             // Built-in map projections
             if (isBuiltInMapProjection(name)) {
                 return new PropertyChainNode.MapProjectionStep(resolveMapProjectionKind(name));

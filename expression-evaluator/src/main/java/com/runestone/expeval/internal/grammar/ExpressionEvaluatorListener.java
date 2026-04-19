@@ -740,30 +740,6 @@ public interface ExpressionEvaluatorListener extends ParseTreeListener {
 	 */
 	void exitCollectionFunctionAccess(ExpressionEvaluatorParser.CollectionFunctionAccessContext ctx);
 	/**
-	 * Enter a parse tree produced by the {@code deepScanWildcard}
-	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
-	 * @param ctx the parse tree
-	 */
-	void enterDeepScanWildcard(ExpressionEvaluatorParser.DeepScanWildcardContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code deepScanWildcard}
-	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
-	 * @param ctx the parse tree
-	 */
-	void exitDeepScanWildcard(ExpressionEvaluatorParser.DeepScanWildcardContext ctx);
-	/**
-	 * Enter a parse tree produced by the {@code deepScanProperty}
-	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
-	 * @param ctx the parse tree
-	 */
-	void enterDeepScanProperty(ExpressionEvaluatorParser.DeepScanPropertyContext ctx);
-	/**
-	 * Exit a parse tree produced by the {@code deepScanProperty}
-	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
-	 * @param ctx the parse tree
-	 */
-	void exitDeepScanProperty(ExpressionEvaluatorParser.DeepScanPropertyContext ctx);
-	/**
 	 * Enter a parse tree produced by the {@code childWildcardAccess}
 	 * labeled alternative in {@link ExpressionEvaluatorParser#memberChain}.
 	 * @param ctx the parse tree

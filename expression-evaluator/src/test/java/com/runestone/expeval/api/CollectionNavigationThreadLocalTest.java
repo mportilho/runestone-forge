@@ -83,8 +83,8 @@ class CollectionNavigationThreadLocalTest {
             // Threads in group A should always get sum=30 (3 books × 10), group B sum=60 (3 books × 20).
             var storeA = storeOf(3, new BigDecimal("10"));
             var storeB = storeOf(3, new BigDecimal("20"));
-            MathExpression exprA = MathExpression.compile("store..price..sum()", env("store", storeA));
-            MathExpression exprB = MathExpression.compile("store..price..sum()", env("store", storeB));
+            MathExpression exprA = MathExpression.compile("store..ds(price)..sum()", env("store", storeA));
+            MathExpression exprB = MathExpression.compile("store..ds(price)..sum()", env("store", storeB));
 
             int threads = 8;
             int iterations = 60;
@@ -115,7 +115,7 @@ class CollectionNavigationThreadLocalTest {
             // Single thread evaluates the same deep scan expression 100 times.
             // If ctx.results is not cleared, it would accumulate and the count would grow.
             var store = storeOf(3, new BigDecimal("5"));
-            MathExpression expr = MathExpression.compile("store..price..count()", env("store", store));
+            MathExpression expr = MathExpression.compile("store..ds(price)..count()", env("store", store));
 
             for (int i = 0; i < 100; i++) {
                 BigDecimal result = expr.compute(Map.of("store", store));
@@ -130,7 +130,7 @@ class CollectionNavigationThreadLocalTest {
         void shouldTerminateOnCyclicStructureUnderConcurrency() throws Exception {
             // store.self = store creates a cycle. IdentityHashMap.visited must prevent infinite loop.
             var store = cyclicStoreOf(2, new BigDecimal("7"));
-            MathExpression expr = MathExpression.compile("store..price..count()", env("store", store));
+            MathExpression expr = MathExpression.compile("store..ds(price)..count()", env("store", store));
 
             int threads = 6;
             int iterations = 40;
@@ -156,7 +156,7 @@ class CollectionNavigationThreadLocalTest {
             // Cyclic structure: if visited is not cleared, first scan would still work but
             // second scan might skip elements already in the identity set from a prior call.
             var store = cyclicStoreOf(4, new BigDecimal("3"));
-            MathExpression expr = MathExpression.compile("store..price..sum()", env("store", store));
+            MathExpression expr = MathExpression.compile("store..ds(price)..sum()", env("store", store));
 
             for (int i = 0; i < 50; i++) {
                 BigDecimal result = expr.compute(Map.of("store", store));
@@ -170,7 +170,7 @@ class CollectionNavigationThreadLocalTest {
         @DisplayName("deep scan on different thread pool threads all produce correct results")
         void shouldProduceCorrectResultsOnHighConcurrencyDeepScan() throws Exception {
             var store = storeOf(5, new BigDecimal("4"));
-            MathExpression expr = MathExpression.compile("store..price..sum()", env("store", store));
+            MathExpression expr = MathExpression.compile("store..ds(price)..sum()", env("store", store));
 
             int threads = 20;
             int iterations = 100;
@@ -353,7 +353,7 @@ class CollectionNavigationThreadLocalTest {
                     Map.of("title", "Gamma", "price", new BigDecimal("8"))
             );
             MathExpression deepScanExpr = MathExpression.compile(
-                    "store..price..count()", env("store", store));
+                    "store..ds(price)..count()", env("store", store));
             MathExpression filterExpr = MathExpression.compile(
                     "books[?(@[\"price\"] < 10)]..count()", env("books", books));
 
@@ -381,7 +381,7 @@ class CollectionNavigationThreadLocalTest {
                     Map.of("title", "Gamma", "price", new BigDecimal("8"))
             );
             MathExpression deepScanExpr = MathExpression.compile(
-                    "store..price..sum()", env("store", store));
+                    "store..ds(price)..sum()", env("store", store));
             MathExpression filterExpr = MathExpression.compile(
                     "books[?(@[\"price\"] < 10)]..count()", env("books", books));
 
@@ -420,7 +420,7 @@ class CollectionNavigationThreadLocalTest {
         @DisplayName("virtual threads have independent DeepScanContext (O2) and produce correct results")
         void shouldIsolateDeepScanContextPerVirtualThread() throws Exception {
             var store = storeOf(3, new BigDecimal("7"));
-            MathExpression expr = MathExpression.compile("store..price..sum()", env("store", store));
+            MathExpression expr = MathExpression.compile("store..ds(price)..sum()", env("store", store));
 
             int taskCount = 200;
             List<Future<BigDecimal>> futures = new ArrayList<>(taskCount);
@@ -466,7 +466,7 @@ class CollectionNavigationThreadLocalTest {
         @DisplayName("cyclic deep scan terminates correctly on virtual threads")
         void shouldTerminateOnCyclicStructureOnVirtualThreads() throws Exception {
             var store = cyclicStoreOf(3, new BigDecimal("4"));
-            MathExpression expr = MathExpression.compile("store..price..count()", env("store", store));
+            MathExpression expr = MathExpression.compile("store..ds(price)..count()", env("store", store));
 
             int taskCount = 100;
             List<Future<BigDecimal>> futures = new ArrayList<>(taskCount);
@@ -495,7 +495,7 @@ class CollectionNavigationThreadLocalTest {
         @DisplayName("deep scan under high concurrency (20 threads × 100 iterations) is always correct")
         void shouldBeStableUnderHighConcurrencyDeepScan() throws Exception {
             var store = storeOf(5, new BigDecimal("3"));
-            MathExpression expr = MathExpression.compile("store..price..count()", env("store", store));
+            MathExpression expr = MathExpression.compile("store..ds(price)..count()", env("store", store));
 
             int threads = 20;
             int iterations = 100;
@@ -533,7 +533,7 @@ class CollectionNavigationThreadLocalTest {
                     Map.of("price", new BigDecimal("2"))
             );
             MathExpression deepExpr = MathExpression.compile(
-                    "store..price..count()", env("store", store));
+                    "store..ds(price)..count()", env("store", store));
             MathExpression filterExpr = MathExpression.compile(
                     "books[?(@[\"price\"] < 8)]..count()", env("books", books));
 

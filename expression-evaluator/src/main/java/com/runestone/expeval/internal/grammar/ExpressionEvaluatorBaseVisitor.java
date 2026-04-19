@@ -445,20 +445,6 @@ public class ExpressionEvaluatorBaseVisitor<T> extends AbstractParseTreeVisitor<
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
-	@Override public T visitDeepScanWildcard(ExpressionEvaluatorParser.DeepScanWildcardContext ctx) { return visitChildren(ctx); }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation returns the result of calling
-	 * {@link #visitChildren} on {@code ctx}.</p>
-	 */
-	@Override public T visitDeepScanProperty(ExpressionEvaluatorParser.DeepScanPropertyContext ctx) { return visitChildren(ctx); }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation returns the result of calling
-	 * {@link #visitChildren} on {@code ctx}.</p>
-	 */
 	@Override public T visitChildWildcardAccess(ExpressionEvaluatorParser.ChildWildcardAccessContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}

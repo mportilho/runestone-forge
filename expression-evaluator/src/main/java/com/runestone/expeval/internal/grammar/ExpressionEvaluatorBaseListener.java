@@ -749,30 +749,6 @@ public class ExpressionEvaluatorBaseListener implements ExpressionEvaluatorListe
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
-	@Override public void enterDeepScanWildcard(ExpressionEvaluatorParser.DeepScanWildcardContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitDeepScanWildcard(ExpressionEvaluatorParser.DeepScanWildcardContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void enterDeepScanProperty(ExpressionEvaluatorParser.DeepScanPropertyContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
-	@Override public void exitDeepScanProperty(ExpressionEvaluatorParser.DeepScanPropertyContext ctx) { }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation does nothing.</p>
-	 */
 	@Override public void enterChildWildcardAccess(ExpressionEvaluatorParser.ChildWildcardAccessContext ctx) { }
 	/**
 	 * {@inheritDoc}
