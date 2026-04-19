@@ -365,12 +365,12 @@ assignmentValue
 genericEntity
     : IF logicalExpression THEN genericEntity (ELSEIF logicalExpression THEN genericEntity)* ELSE genericEntity ENDIF # genericDecisionExpression
     | IF LPAREN logicalExpression (COMMA | SEMI) genericEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) genericEntity)* (COMMA | SEMI) genericEntity RPAREN # genericFunctionDecisionExpression
-    | castExpression                                                                                                                       # castExpressionOperation
+    | typeHintExpression                                                                                                                   # typeHintExpressionOperation
     | referenceTarget                                                                                                                      # referenceTargetOperation
     ;
 
-castExpression
-    : typeHint LPAREN genericEntity RPAREN                              # typeCastOperation
+typeHintExpression
+    : typeHint LPAREN genericEntity RPAREN                              # typeHintOperation
     ;
 
 typeHint
