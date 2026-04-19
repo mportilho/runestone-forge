@@ -62,8 +62,6 @@ referenceTarget
 This single addition enables:
 - `@ * 2` — `@` as a numeric primary (via `numericEntity` → `numericReferenceOperation`)
 - `@ > 1` — `@` on the left side of a math comparison
-- `@.price < 10` — property navigation on the current element
-- `@.name = "Alice"` — string equality on an element field
 
 No new tokens are needed; `AT` is already declared.
 
