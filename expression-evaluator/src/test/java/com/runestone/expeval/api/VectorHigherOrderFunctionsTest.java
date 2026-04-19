@@ -27,6 +27,13 @@ class VectorHigherOrderFunctionsTest {
             new BigDecimal("4")
     );
 
+    private record Order(BigDecimal price, BigDecimal qty) {}
+
+    private static final List<Order> ORDERS = List.of(
+            new Order(new BigDecimal("5"), new BigDecimal("2")),
+            new Order(new BigDecimal("3"), new BigDecimal("4"))
+    );
+
     private static ExpressionEnvironment env(String name, Object value) {
         return ExpressionEnvironment.builder()
                 .registerExternalSymbol(name, value, true)
@@ -123,6 +130,14 @@ class VectorHigherOrderFunctionsTest {
             BigDecimal result = MathExpression.compile("nums..sum(@ -> @ + offset)", e)
                     .compute(Map.of("nums", NUMS_1_2_3, "offset", new BigDecimal("10")));
             assertThat(result).isEqualByComparingTo("36");
+        }
+
+        @Test
+        @DisplayName("orders..sum(@ -> @.price * @.qty) = 22 for [Order(5,2), Order(3,4)]")
+        void sumOrderTotals() {
+            BigDecimal result = MathExpression.compile("orders..sum(@ -> @.price * @.qty)", env("orders", ORDERS))
+                    .compute(Map.of("orders", ORDERS));
+            assertThat(result).isEqualByComparingTo("22");
         }
     }
 

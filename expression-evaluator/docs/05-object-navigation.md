@@ -66,7 +66,9 @@ books..ds(price)     // collect "price" from every element → [10.0, 20.0, ...]
 books..ds()          // wildcard — collect all leaf values
 ```
 
-## Aggregation Functions
+## Built-in Collection Functions
+
+### Aggregation Functions
 
 | Syntax | Description |
 |---|---|
@@ -100,6 +102,18 @@ items..prod(@ -> @.price)            // product of all prices
 |---|---|
 | `map..keys()` | All keys of a map |
 | `map..values()` | All values of a map |
+
+You can also filter a map before projecting keys or values. The filter keeps the result as a map, but only with the entries that match the predicate.
+
+This is especially useful when the keys are complex objects. The predicate can inspect key properties through `@.key`, and the filtered result still behaves like a map:
+
+```text
+accounts[?(@.key.domain = "acme")]          // filtered map with only acme keys
+accounts[?(@.key.id > 1)]                   // filtered map by key id
+portfolio[?(@.key.domain = "acme" and @.value.balance > 1000)]    // filtered map by key and value
+```
+
+In each case, the `[?(...)]` filter returns a reduced map first. `..values()` then projects the remaining values, and `..count()` or `..sum()` works on that projected collection.
 
 ## Circular References
 
