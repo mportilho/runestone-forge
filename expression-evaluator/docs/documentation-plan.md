@@ -509,7 +509,7 @@ result.trace().evaluationTime();         // → Duration
   - Provedores de instância: apenas métodos públicos não-estáticos (mesmas exclusões).
   - Se o **primeiro parâmetro** for `MathContext`, ele é **injetado automaticamente** pelo ambiente (não faz parte da aridade exposta na expressão). Trig/log usam `transcendentalMathContext`; demais usam `mathContext`.
   - Parâmetros e retorno devem ser tipos reconhecidos por `ResolvedTypes.fromJavaType` (`BigDecimal`, `String`, `Boolean`, `LocalDate`, `LocalTime`, `LocalDateTime`, arrays e `List<?>` desses tipos, `Integer`, `Double`, `BigDecimal[]`, etc.).
-  - Primitivos (`int`, `double`, `boolean`) **não são suportados** como parâmetros — use os wrappers.
+  - Primitivos (`int`, `double`, `boolean`) **são suportados** como parâmetros e como tipo de retorno. `ResolvedTypes.fromJavaType` os reconhece explicitamente: `boolean` → `ScalarType.BOOLEAN`; demais primitivos numéricos → `ScalarType.NUMBER`. Os próprios providers embutidos usam primitivos (`lnFast(double)`, `substring(String, int)`, `variance(..., int)`, etc.).
   - Sobrecargas por aridade são registradas como entradas separadas.
 
 - [x] **Cache global vs. por instância:** `ExpressionRuntimeSupport` mantém um singleton JVM-wide `ExpressionCompiler`. Dois `ExpressionEnvironment` com **configurações estáticas idênticas** (mesmos provedores, símbolos externos, `MathContext`) compartilham cache via o mesmo `ExpressionEnvironmentId` (SHA-256 sobre partes ordenadas). Provedores de instância usam `System.identityHashCode` — objetos distintos sempre produzem IDs diferentes mesmo que sejam da mesma classe. Para usar um compiler próprio, passe `ExpressionCompiler` explícito nos métodos `compile(source, env, compiler)`.
