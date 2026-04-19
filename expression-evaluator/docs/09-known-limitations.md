@@ -64,7 +64,7 @@ items..ds(price)[?(@ > 10)] // after projecting a property
 
 ## `currDate`, `currTime`, `currDateTime` Are Literals
 
-These keywords are date/time literals, not variable references. The `<type>` cast prefix applies to variable references and function calls — not to these literals.
+These keywords are date/time literals, not variable references. The `<type>` type-hint marker applies to variable references and function calls, not to these literals.
 
 ```
 // Invalid
@@ -77,7 +77,7 @@ if(currDate > startDate; ...)   // use directly in expressions
 
 ## `||` Is String-Only
 
-The concatenation operator `||` only accepts string operands. Numbers and booleans must be cast explicitly:
+The concatenation operator `||` only accepts string operands. Numbers and booleans must be placed in the string type-hint context explicitly:
 
 ```
 // Fails at parse time

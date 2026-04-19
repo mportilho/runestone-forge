@@ -188,9 +188,10 @@ Esta seção é a mais crítica para o público de regras de negócio.
 - Forma funcional: `if(cond; thenVal; elseVal)` ou `if(cond, thenVal, elseVal)`
 - Forma de bloco: `if cond then val elsif cond then val else val endif`
 
-**f) Type casting**
+**f) Type hints**
 - `<number>(expr)`, `<text>(expr)`, `<bool>(expr)`, `<date>(expr)`, `<time>(expr)`, `<datetime>(expr)`, `<vector>(expr)`
 - Com referências: `<bool>flag`, `<vector>items`
+Isso serve para marcar a expressão em um contexto tipado no parser/validador, não para introduzir uma operação separada de cast.
 
 **g) Atribuições**
 - Simples: `x = 10;`
@@ -585,7 +586,7 @@ result.trace().evaluationTime();         // → Duration
 
 - [x] **Parâmetros array em provedores customizados:** arrays explícitos (`BigDecimal[]`, `String[]`) funcionam corretamente — o motor converte a lista de argumentos `[...]` para o array correspondente. Variadics Java (`BigDecimal...`) **NÃO funcionam**: `getParameterTypes()` retorna `BigDecimal[]` para ambas as formas, mas o `MethodHandle` gerado por `unreflect()` para um método variadic é um "varargs-collector" com semântica de invocação diferente — resulta em `ClassCastException` em runtime. Conclusão: **sempre usar `BigDecimal[]` (nunca `BigDecimal...`) em métodos de provedores**. Confirmado em `DocumentationGapVerificationTest.ArrayParamProvider`.
 
-- [x] **Comportamento de `||` com tipos não-string:** `||` **não aceita** números ou booleanos sem cast explícito. A gramática restringe `||` ao contexto de `stringConcatExpression`, que aceita apenas `stringEntity` (literais string, referências com `<text>`, decisões `if` com resultado string). Tentar `1 || "b"` lança `ParsingException`. Confirmado em `StringConcatenationTest.TypeError`.
+- [x] **Comportamento de `||` com tipos não-string:** `||` **não aceita** números ou booleanos sem type hint explícito. A gramática restringe `||` ao contexto de `stringConcatExpression`, que aceita apenas `stringEntity` (literais string, referências com `<text>`, decisões `if` com resultado string). Tentar `1 || "b"` lança `ParsingException`. Confirmado em `StringConcatenationTest.TypeError`.
 
 - [x] **Expressões com comentários:** a gramática suporta **`//` (linha)** e **`/* */` (bloco)**, ambos tratados como `skip` pelo lexer. Comentários podem aparecer em qualquer posição — inclusive dentro de blocos de atribuição. Confirmado em `DocumentationGapVerificationTest.CommentSupport`.
 

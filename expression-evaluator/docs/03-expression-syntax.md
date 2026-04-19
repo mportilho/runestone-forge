@@ -18,7 +18,7 @@
 > Empty vectors `[]` are rejected by the parser. Vectors require at least one element.
 
 > [!NOTE]
-> `currDate`, `currTime`, and `currDateTime` are literals, not variables. `<date>currDate` is invalid syntax — the `<date>` cast prefix only applies to variable references and function calls. Use `d = currDate;` directly.
+> `currDate`, `currTime`, and `currDateTime` are literals, not variables. `<date>currDate` is invalid syntax — the `<date>` type-hint prefix only applies to variable references and function calls. Use `d = currDate;` directly.
 
 ## Arithmetic Operators
 
@@ -111,26 +111,28 @@ else "F"
 endif
 ```
 
-## Type Casting
+## Type Hints
 
-Cast between types explicitly when the compiler cannot infer the target:
+Use an explicit type hint when the compiler cannot infer the target.
 
-| Cast | Description |
+This is not a separate cast operation. It is a syntax marker that tells the parser and compiler which typed branch to build and which validations to apply.
+
+| Type hint | Description |
 |---|---|
-| `<number>(expr)` | Convert to `BigDecimal` |
-| `<text>(expr)` | Convert to `String` |
-| `<bool>(expr)` | Convert to `Boolean` |
-| `<date>(expr)` | Convert to `LocalDate` |
-| `<time>(expr)` | Convert to `LocalTime` |
-| `<datetime>(expr)` | Convert to `LocalDateTime` |
-| `<vector>(expr)` | Convert to list |
+| `<number>(expr)` | Parse and validate `expr` in numeric context |
+| `<text>(expr)` | Parse and validate `expr` in text context |
+| `<bool>(expr)` | Parse and validate `expr` in boolean context |
+| `<date>(expr)` | Parse and validate `expr` in date context |
+| `<time>(expr)` | Parse and validate `expr` in time context |
+| `<datetime>(expr)` | Parse and validate `expr` in datetime context |
+| `<vector>(expr)` | Parse and validate `expr` in vector context |
 
-Cast works with variables and function results:
+Type hints work with variables and function results:
 
 ```
-<text>(totalAmount)      // variable to string
-<bool>isActive           // variable (short form without parentheses)
-<number>(someString)     // string to number
+<text>(totalAmount)      // totalAmount in text context
+<bool>isActive           // variable reference in boolean context
+<number>(someString)     // someString in numeric context
 ```
 
 ## Assignment Expressions
