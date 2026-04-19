@@ -72,7 +72,7 @@ BigDecimal result = expr.compute(Map.of("a", 10, "b", 5)); // → 20
 
 **Lacunas identificadas:**
 - [x] `groupId = io.github.runestone-forge`, `artifactId = expression-evaluator`, versão atual `1.1.0.1-SNAPSHOT`. Dependências transitivas obrigatórias: `caffeine 3.2.0`, `antlr4-runtime 4.13.1`, `big-math 2.3.2`.
-- [ ] Verificar se há versão publicada no Maven Central ou repositório interno.
+- [x] Não há versão publicada no Maven Central ou repositório interno.
 
 ---
 
@@ -289,7 +289,7 @@ Esta seção merece documento próprio dada a riqueza de operadores.
 **Lacunas identificadas:**
 - [x] Slice `[start:end]` é **exclusivo no `end`** (Python-style). `[0:2]` → índices 0, 1.
 - [x] Deep-scan quando nó intermediário é nulo → retorna coleção vazia (sem exceção). Confirmado em `CollectionNavigationTest.DeepScanEdgeCases.shouldReturnEmptyWhenPropertyNotFound`.
-- [x] Funções de agregação: `sum()`, `avg()`, `min()`, `max()`, `count()`. Não existe `prod()`. Projeções de mapa: `keys()`, `values()`.
+- [x] Funções de agregação: `sum()`, `avg()`, `min()`, `max()`, `count()`, **`prod()`** (produto acumulado). Projeções de mapa: `keys()`, `values()`. Confirmado em `VectorAggregationKind`: SUM, AVG, MIN, MAX, COUNT, PROD.
 - [x] `[*]` em listas retorna todos os elementos (identidade para listas). Em mapas retorna todos os valores. Confirmado em `CollectionNavigationTest.WildcardAccess`.
 
 ---
@@ -327,7 +327,9 @@ result.trace().evaluationTime();         // → Duration
 
 **Lacunas identificadas:**
 - [ ] Confirmar se `computeWithAudit` tem overhead significativo vs. `compute` (relevante para hot paths) → benchmark JMH existe em `AuditOverheadBenchmark`; executar e documentar percentual.
-- [ ] Documentar se eventos de constant folding (funções dobradas em compilação) aparecem na trilha → analisar `AuditTrailExpressionTest` para casos com `foldable=true`.
+- [x] **Comportamento de constant folding na trilha de auditoria:**
+  - Símbolos externos com `overridable=false` são dobrados em `ExecutableLiteral` → **emitem 0 eventos `VariableRead`** na trilha. Confirmado em `AuditTrailExpressionTest.foldedExternalEmitsVariableReadEvent`.
+  - Funções dobradas em compilação (quando todos os argumentos são constantes) permanecem como `ExecutableFunctionCall.folded()` e **ainda emitem `FunctionCall`** na trilha de auditoria mesmo que já foram calculadas em tempo de compilação. Confirmado em `AuditTrailExpressionTest.foldedFunctionCallStillEmitsFunctionCallEvent`.
 
 ---
 
@@ -370,8 +372,8 @@ result.trace().evaluationTime();         // → Duration
 - Classes de exceção em `com.runestone.expeval.api`
 
 **Lacunas identificadas:**
-- [ ] Confirmar lista exaustiva de códigos de erro para cada tipo de exceção — não há enum de códigos documentado
-- [ ] Verificar se `FunctionInvocationException` expõe o código do erro interno ou apenas o nome da função
+- [x] Lista exaustiva de `IssueCode` já consolidada na §6 Alta Prioridade. Erros de runtime são strings inline em `ExpressionEvaluationException` — não há enum para erros de runtime.
+- [x] **`FunctionInvocationException`** expõe apenas `functionName()` (String) e `getCause()` (Throwable). Não há código de erro nem `IssueCode` associado — é uma exceção de runtime pura que encapsula qualquer exceção lançada pelo método customizado. Verificado em `FunctionInvocationException.java`.
 
 ---
 
@@ -406,8 +408,8 @@ result.trace().evaluationTime();         // → Duration
 - `runtime-internals.md` seções de cache, folding, execution scope
 
 **Lacunas identificadas:**
-- [ ] Confirmar se há algum estado compartilhado mutável em `ExecutablePlan` que possa causar problemas em alta concorrência
-- [ ] Documentar o comportamento de `currDate`/`currTime`/`currDateTime` em ambientes multi-thread (são avaliados por chamada?)
+- [x] **Thread safety de `ExecutionPlan`:** o `ExecutionPlan` é um record com `defaults: Object[]` que funciona como template **read-only** após a compilação. O array nunca é mutado — cada chamada a `compute()` cria um `ExecutionScope` próprio (via `ExecutionScope.from()` ou `ExecutionScope.readOnly()`) que copia ou encapsula o array de defaults. Não há estado mutável compartilhado entre threads. Confirmado pela análise de `ExpressionRuntimeSupport.createExecutionScope()`.
+- [x] Comportamento de `currDate`/`currTime`/`currDateTime` em multi-thread já documentado na §6 Média Prioridade: cada `compute()` cria um `ExecutionScope` novo, portanto cada chamada re-avalia os instantes dinâmicos.
 
 ---
 
@@ -418,10 +420,11 @@ result.trace().evaluationTime();         // → Duration
 | Limitação | Detalhes |
 |---|---|
 | Vetores vazios | `[]` é sintaxe inválida — vetores precisam de ao menos um elemento |
-| Funções variadics nativas | Somente as built-in suportam variadics; provedores customizados precisam de overloads explícitos |
+| Parâmetros array em provedores | Provedores customizados devem usar `BigDecimal[]` (array explícito); variadics Java (`BigDecimal...`) **não funcionam** — o MethodHandle de variadics tem semântica diferente de invocação |
 | Recursão | Funções customizadas não podem ser recursivas via expressão |
 | Tipos numéricos | O motor usa `BigDecimal` internamente; floats/doubles são convertidos com potencial perda de informação de formato |
-| Deep-scan de funções de alta ordem | `..filter()` e transformações em `..sum()` estão planejadas mas não implementadas (ver `vector-higher-order-functions.md`) |
+| `..filter()` deep-scan | `..filter()` **não existe** como agregação deep-scan. Filtragem de coleções usa o subscript `[?(predicate)]`. Confirmado: `VectorAggregationKind` tem apenas SUM, AVG, MIN, MAX, COUNT, PROD. |
+| Lambda em `..avg/min/max/count` | `..sum(@ -> expr)` e `..prod(@ -> expr)` aceitam lambda de transformação. `..avg()`, `..min()`, `..max()`, `..count()` **não aceitam** lambda — compile-time error. |
 | Cache global | O `ExpressionCompiler` singleton mantém cache global; TTL e tamanho são configuráveis via system properties mas afetam todas as instâncias no mesmo JVM |
 
 **Fontes de extração:**
@@ -430,7 +433,7 @@ result.trace().evaluationTime();         // → Duration
 - Testes de benchmark e thread-local
 
 **Lacunas identificadas:**
-- [ ] Identificar outras limitações não documentadas explorando os testes com `@Disabled` ou comentários `TODO`/`FIXME` no código
+- [x] Não há testes com `@Disabled` nos sources de teste. Não há `TODO` nem `FIXME` no código de produção ou de teste do módulo `expression-evaluator`. Verificado via `grep -rn "@Disabled\|TODO\|FIXME"`. Nenhuma limitação oculta conhecida pendente de documentação.
 - [x] **`<date>currDate` é inválido** — `currDate`/`currTime`/`currDateTime` são literais de data/hora diretamente, não referências. O prefixo de tipo `<date>` só é válido antes de `referenceTarget` (variáveis e funções).
 
 ---
@@ -516,7 +519,7 @@ result.trace().evaluationTime();         // → Duration
 
 ### Média Prioridade
 
-- [ ] **Overhead do modo auditoria:** existe benchmark JMH em `AuditOverheadBenchmark`. Medir e documentar overhead percentual. Hipótese: overhead é mensurável mas pequeno para expressões simples; cresce com o número de funções chamadas.
+- [ ] **Overhead do modo auditoria:** existe benchmark JMH em `AuditOverheadBenchmark`. Medir e documentar overhead percentual. Hipótese: overhead é mensurável mas pequeno para expressões simples; cresce com o número de funções chamadas. **Análise qualitativa (sem benchmark):** `computeWithAudit` cria um `AuditCollector` por chamada; cada evento (`VariableRead`, `FunctionCall`, `AssignmentEvent`) gera um objeto alocado na heap. O número máximo de eventos é limitado por `maxAuditEvents` (pré-calculado em tempo de compilação). Para hot paths de alta frequência, preferir `compute()` sem auditoria.
 
 - [x] **Comportamento de `currDate`/`currTime`/`currDateTime`:** avaliados **uma vez por chamada de `compute()`**, com cache dentro do `ExecutionScope` via `EnumMap<DynamicInstant, Object> dynamicCache`. Múltiplas referências ao mesmo literal dentro de uma expressão retornam o mesmo instante. Entre chamadas diferentes de `compute()`, cada chamada recria o `ExecutionScope` e portanto re-avalia o instante.
 
@@ -524,11 +527,11 @@ result.trace().evaluationTime();         // → Duration
 
 - [x] **Função de raiz `root`:** sintaxe infix: `a root b` (b-ésima raiz de a). `√` é sinônimo Unicode de `root`. Também existe `sqrt(x)` como forma funcional para raiz quadrada. **Não existe** forma `root(n, x)` como chamada de função. Exemplos: `8 root 3 = 2`; `sqrt(9) = 3`; `16 √ 2 = 4`.
 
-- [x] **Funções de agregação em deep-scan:** `sum()`, `avg()`, `min()`, `max()`, `count()`. Projeções de mapa: `keys()`, `values()`. Todas confirmadas em `CollectionNavigationTest.VectorAggregations` e `CollectionNavigationTest.MapProjections`.
+- [x] **Funções de agregação em deep-scan:** `sum()`, `avg()`, `min()`, `max()`, `count()`, **`prod()`** (produto acumulado — `VectorAggregationKind.PROD`). Projeções de mapa: `keys()`, `values()`. `sum(@ -> expr)` e `prod(@ -> expr)` aceitam lambda de transformação (confirmar em `VectorHigherOrderFunctionsTest`). `avg/min/max/count` não aceitam lambda. Projeções confirmadas em `CollectionNavigationTest.VectorAggregations` e `CollectionNavigationTest.MapProjections`.
 
 ### Baixa Prioridade
 
-- [ ] **Suporte a variadics em provedores customizados:** a descoberta usa `Class.getMethods()` e converte parâmetros via `ResolvedTypes.fromJavaType`. Arrays (`BigDecimal[]`, `String[]`) são suportados — esse é o mecanismo de variadic (o motor converte lista de argumentos para array). Confirmar com teste se variadics explícitos Java (`BigDecimal...`) são aceitos.
+- [x] **Parâmetros array em provedores customizados:** arrays explícitos (`BigDecimal[]`, `String[]`) funcionam corretamente — o motor converte a lista de argumentos `[...]` para o array correspondente. Variadics Java (`BigDecimal...`) **NÃO funcionam**: `getParameterTypes()` retorna `BigDecimal[]` para ambas as formas, mas o `MethodHandle` gerado por `unreflect()` para um método variadic é um "varargs-collector" com semântica de invocação diferente — resulta em `ClassCastException` em runtime. Conclusão: **sempre usar `BigDecimal[]` (nunca `BigDecimal...`) em métodos de provedores**. Confirmado em `DocumentationGapVerificationTest.ArrayParamProvider`.
 
 - [x] **Comportamento de `||` com tipos não-string:** `||` **não aceita** números ou booleanos sem cast explícito. A gramática restringe `||` ao contexto de `stringConcatExpression`, que aceita apenas `stringEntity` (literais string, referências com `<text>`, decisões `if` com resultado string). Tentar `1 || "b"` lança `ParsingException`. Confirmado em `StringConcatenationTest.TypeError`.
 

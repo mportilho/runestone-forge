@@ -314,6 +314,28 @@ class AuditTrailExpressionTest {
 
             assertThat(result.trace().functionCalls()).isEmpty();
         }
+
+        @Test
+        @DisplayName("foldable function with all-constant args is folded at compile time but still emits a FunctionCall event at evaluation time")
+        void foldedFunctionCallStillEmitsFunctionCallEvent() {
+            // CONST_BASE is overridable=false → becomes ExecutableLiteral at compile time.
+            // mean([CONST_BASE, 4]) has all-constant args and mean is foldable → ExecutableFunctionCall.folded().
+            // AbstractObjectEvaluator must still emit the FunctionCall event on the folded path.
+            ExpressionEnvironment env = ExpressionEnvironment.builder()
+                    .addMathFunctions()
+                    .registerExternalSymbol("CONST_BASE", new BigDecimal("2"), false)
+                    .build();
+
+            AuditResult<BigDecimal> result = MathExpression.compile("mean([CONST_BASE, 4])", env)
+                    .computeWithAudit();
+
+            assertThat(result.trace().functionCalls())
+                    .singleElement()
+                    .satisfies(call -> {
+                        assertThat(call.functionName()).isEqualTo("mean");
+                        assertThat((BigDecimal) call.result()).isEqualByComparingTo("3");
+                    });
+        }
     }
 
     // -----------------------------------------------------------------------

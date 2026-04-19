@@ -126,7 +126,8 @@
       "Read(//tmp/**)",
       "Skill(performance-benchmark)",
       "Bash(/home/marcelo/.claude/skills/performance-benchmark/scripts/run-jmh.sh /home/marcelo/dev/git/runestone-forge/expression-evaluator CollectionNavigationBenchmark /tmp/performance-benchmark/o2-after.json)",
-      "Bash(awk '{print $9, $5}')"
+      "Bash(awk '{print $9, $5}')",
+      "Bash(javap -p /home/marcelo/dev/git/runestone-forge/expression-evaluator/target/classes/com/runestone/expeval/environment/ExpressionEnvironmentBuilder.class)"
     ]
   }
 }

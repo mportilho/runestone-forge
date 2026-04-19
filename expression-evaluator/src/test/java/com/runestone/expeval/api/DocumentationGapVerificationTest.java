@@ -8,9 +8,11 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies behaviors that were open questions in documentation-plan.md.
@@ -334,6 +336,45 @@ class DocumentationGapVerificationTest {
 
             BigDecimal result = MathExpression.compile("doubleIt(7)", env).compute();
             assertThat(result).isEqualByComparingTo("14");
+        }
+    }
+
+    @Nested
+    @DisplayName("Array-parameter provider methods are registered as arity-1")
+    class ArrayParamProvider {
+
+        public static class ArrayMathProvider {
+            public static BigDecimal sumAll(BigDecimal[] args) {
+                BigDecimal total = BigDecimal.ZERO;
+                for (BigDecimal v : args) total = total.add(v);
+                return total;
+            }
+        }
+
+        @Test
+        @DisplayName("BigDecimal[] param is registered as arity=1, accepting an array literal [1, 2, 3]")
+        void arrayParamMethodRegisteredAsArityOneAcceptsArrayLiteral() {
+            ExpressionEnvironment env = ExpressionEnvironment.builder()
+                    .registerStaticProvider(ArrayMathProvider.class)
+                    .build();
+            // sumAll takes BigDecimal[] (arity=1) → must be called with [1, 2, 3] array syntax
+            BigDecimal result = MathExpression.compile("sumAll([1, 2, 3])", env).compute();
+            assertThat(result).isEqualByComparingTo("6");
+        }
+    }
+
+    @Nested
+    @DisplayName("Deep-scan aggregation limitations")
+    class DeepScanAggregationLimitations {
+
+        @Test
+        @DisplayName("nums..filter() is not a valid deep-scan aggregation — compilation fails")
+        void filterDeepScanDoesNotExist() {
+            ExpressionEnvironment env = ExpressionEnvironment.builder()
+                    .registerExternalSymbol("nums", List.of(BigDecimal.ONE, new BigDecimal("2")), true)
+                    .build();
+            assertThatThrownBy(() -> MathExpression.compile("nums..filter()", env))
+                    .isInstanceOf(Exception.class);
         }
     }
 }
