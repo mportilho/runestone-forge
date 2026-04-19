@@ -32,16 +32,16 @@ A documentação final deve ser dividida nos seguintes documentos, em ordem de l
 
 ```
 docs/
-├── getting-started.md          # Quickstart: compilar e avaliar em 5 minutos
-├── environment-configuration.md # ExpressionEnvironmentBuilder completo
-├── expression-syntax.md         # Referência da linguagem (gramática → usuário)
-├── built-in-functions.md        # Catálogo de funções disponíveis
-├── object-navigation.md         # Navegação em objetos e coleções
-├── validation-and-audit.md      # API de validação e trilha de auditoria
-├── error-reference.md           # Códigos de erro e tratamento de falhas
-├── advanced-topics.md           # Cache, folding, type hints, MathContext
-├── known-limitations.md         # Limitações e comportamentos de borda
-└── faq.md                       # Perguntas frequentes
+├── 01-getting-started.md           # Quickstart: compilar e avaliar em 5 minutos
+├── 02-environment-configuration.md # ExpressionEnvironmentBuilder completo
+├── 03-expression-syntax.md         # Referência da linguagem (gramática → usuário)
+├── 04-built-in-functions.md        # Catálogo de funções disponíveis
+├── 05-object-navigation.md         # Navegação em objetos e coleções
+├── 06-validation-and-audit.md      # API de validação e trilha de auditoria
+├── 07-error-reference.md           # Códigos de erro e tratamento de falhas
+├── 08-advanced-topics.md           # Cache, folding, type hints, MathContext
+├── 09-known-limitations.md         # Limitações e comportamentos de borda
+└── 10-faq.md                       # Perguntas frequentes
 ```
 
 ---
