@@ -566,7 +566,12 @@ result.trace().evaluationTime();         // → Duration
 
 ### Média Prioridade
 
-- [ ] **Overhead do modo auditoria:** existe benchmark JMH em `AuditOverheadBenchmark`. Medir e documentar overhead percentual. Hipótese: overhead é mensurável mas pequeno para expressões simples; cresce com o número de funções chamadas. **Análise qualitativa (sem benchmark):** `computeWithAudit` cria um `AuditCollector` por chamada; cada evento (`VariableRead`, `FunctionCall`, `AssignmentEvent`) gera um objeto alocado na heap. O número máximo de eventos é limitado por `maxAuditEvents` (pré-calculado em tempo de compilação). Para hot paths de alta frequência, preferir `compute()` sem auditoria.
+- [x] **Overhead do modo auditoria:** benchmark JMH em `AuditOverheadBenchmark` executado. Overhead medido de **+22% a +36.6%** em relação a `compute()` sem auditoria. Detalhes:
+  - **Variable Churn (12 variáveis, sem atribuição/funções)**: +36.6% overhead — cenário de leitura intensiva, máxima quantidade de eventos `VariableRead`
+  - **Assigned Variable (1 atribuição + leituras)**: +30.4% overhead — força mutable-scope (HashMap copy) e gera `AssignmentEvent`
+  - **User Function (4 chamadas)**: +22.0% overhead — menor impacto; eventos `FunctionCall` mais esparsos
+  
+  **Interpretação:** Overhead é consistente e mensurável mas previsível. Cresce com número de operações rastreáveis (variáveis > atribuições > funções). Para hot paths (>100k evals/s), considerar `compute()` sem auditoria; para debugging e validação, overhead aceitável.
 
 - [x] **Comportamento de `currDate`/`currTime`/`currDateTime`:** avaliados **uma vez por chamada de `compute()`**, com cache dentro do `ExecutionScope` via `EnumMap<DynamicInstant, Object> dynamicCache`. Múltiplas referências ao mesmo literal dentro de uma expressão retornam o mesmo instante. Entre chamadas diferentes de `compute()`, cada chamada recria o `ExecutionScope` e portanto re-avalia o instante.
 

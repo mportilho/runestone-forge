@@ -167,8 +167,8 @@ public final class ExpressionEnvironmentBuilder {
                 ));
         ExternalSymbolCatalog externalSymbolCatalog = new ExternalSymbolCatalog(symbolsByName);
 
-        List<Class<?>> staticProviderClasses = staticProviders.stream().map(StaticProviderEntry::providerClass).toList();
-        List<Object> instanceObjects = instanceProviders.stream().map(InstanceProviderEntry::instance).toList();
+        List<Class<?>> staticProviderClasses = new ArrayList<>(staticProviders.stream().map(StaticProviderEntry::providerClass).toList());
+        List<Object> instanceObjects = new ArrayList<>(instanceProviders.stream().map(InstanceProviderEntry::instance).toList());
         return new ExpressionEnvironment(new ExpressionEnvironmentId(deriveEnvironmentId(staticProviderClasses, instanceObjects, externalSymbols, typeHints, mathContext, transcendentalMathContext)),
                 functionCatalog, externalSymbolCatalog, typeHintCatalog, effectiveConversionService, mathContext, transcendentalMathContext);
     }
