@@ -845,10 +845,10 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitLogicalReferenceOperation(ExpressionEvaluatorParser.LogicalReferenceOperationContext ctx) {
             ExpressionNode left = visit(ctx.referenceTarget());
-            if (ctx.logicalEntity() == null) {
+            if (ctx.logicalExpression() == null) {
                 return left;
             }
-            ExpressionNode right = visit(ctx.logicalEntity());
+            ExpressionNode right = visit(ctx.logicalExpression());
             return new BinaryOperationNode(
                     nodeFactory.nextId("binary"),
                     nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),
@@ -871,10 +871,10 @@ public final class SemanticAstBuilder {
         @Override
         public ExpressionNode visitNumericReferenceOperation(ExpressionEvaluatorParser.NumericReferenceOperationContext ctx) {
             ExpressionNode left = visit(ctx.referenceTarget());
-            if (ctx.numericEntity() == null) {
+            if (ctx.mathExpression() == null) {
                 return left;
             }
-            ExpressionNode right = visit(ctx.numericEntity());
+            ExpressionNode right = visit(ctx.mathExpression());
             return new BinaryOperationNode(
                     nodeFactory.nextId("binary"),
                     nodeFactory.sourceSpan(left.sourceSpan(), right.sourceSpan()),

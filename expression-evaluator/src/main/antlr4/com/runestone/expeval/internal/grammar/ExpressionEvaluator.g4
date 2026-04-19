@@ -387,14 +387,14 @@ logicalEntity
     : (TRUE | FALSE)                                                                                           # logicalConstantOperation
     | IF logicalExpression THEN logicalExpression (ELSEIF logicalExpression THEN logicalExpression)* ELSE logicalExpression ENDIF # logicalDecisionOperation
     | IF LPAREN logicalExpression (COMMA | SEMI) logicalExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) logicalExpression)* (COMMA | SEMI) logicalExpression RPAREN # logicalFunctionDecisionOperation
-    | BOOLEAN_TYPE? referenceTarget (NULLCOALESCE logicalEntity)?                                                        # logicalReferenceOperation
+    | BOOLEAN_TYPE? referenceTarget (NULLCOALESCE logicalExpression)?                                                        # logicalReferenceOperation
     ;
 
 numericEntity
     : IF logicalExpression THEN mathExpression (ELSEIF logicalExpression THEN mathExpression)* ELSE mathExpression ENDIF # mathDecisionOperation
     | IF LPAREN logicalExpression (COMMA | SEMI) mathExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) mathExpression)* (COMMA | SEMI) mathExpression RPAREN # mathFunctionDecisionOperation
     | NUMBER                                                                                                             # numericConstantOperation
-    | NUMBER_TYPE? referenceTarget (NULLCOALESCE numericEntity)?                                                         # numericReferenceOperation
+    | NUMBER_TYPE? referenceTarget (NULLCOALESCE mathExpression)?                                                         # numericReferenceOperation
     ;
 
 stringConcatExpression

@@ -206,7 +206,7 @@ Esta seção é a mais crítica para o público de regras de negócio.
 - Testes de feature: `BetweenExpressionTest`, `MembershipExpressionTest`, `StringRegexTest`, etc.
 
 **Lacunas identificadas:**
-- [x] Precedência do `??`: **mais baixa que aritmética**. `a ?? b + 1` = `(a ?? b) + 1`. O RHS de `??` é um `*Entity` (literal, referência, ou `if`), não um `*Expression` completo. Para usar aritmética como fallback, use `a ?? if(cond, b+1, b+1)`.
+- [x] **Fallback do `??` aceita expressão completa (numérico e lógico):** `a ?? b + 1` = `a ?? (b+1)` — toda a expressão aritmética é consumida como fallback. Idem para lógico: `flag ?? (x > 0)`. Date/time/datetime/vector ainda usam a forma restrita (`*Entity`). Não é necessário envolver em `if()` para usar aritmética ou lógica como fallback.
 - [x] `%` e módulo são **distintos**: `%` é operador postfix de **percentagem** (`50% = 0.5`); o módulo usa a keyword `mod` (infix: `10 mod 3 = 1`).
 - [x] Formatos de data/hora: `DATE = YYYY-MM-DD`; `TIME = HH:MM` ou `HH:MM:SS`; `DATETIME = YYYY-MM-DDTHH:MM` ou `YYYY-MM-DD HH:MM:SS±HH:MM`. Offset de fuso horário é opcional em DATETIME.
 - [x] Vetores vazios `[]` são **proibidos** pela gramática (`vectorOfEntitiesOperation` exige ao menos um elemento: `LBRACKET allEntityTypes (COMMA allEntityTypes)* RBRACKET`).
@@ -542,7 +542,7 @@ result.trace().evaluationTime();         // → Duration
 
 - [x] **`%` é operador de PERCENTAGEM (postfix), não de módulo.** `50%` = `0.5`. O módulo é feito com a keyword `mod` (infix). Exemplo: `10 mod 3 = 1`.
 
-- [x] **Precedência do `??`:** o operador de null-coalescing está embutido nas regras de referência da gramática (`numericReferenceOperation`, `stringReferenceOperation`, etc.), e o RHS do `??` é um `*Entity` (não um `*Expression` completo). Portanto `a ?? b + 1` é interpretado como `(a ?? b) + 1`. Para usar uma expressão aritmética como fallback, envolva em decisão condicional: `a ?? if(cond, expr, expr)`, ou reestruture a expressão.
+- [x] **Fallback do `??` por tipo:** `numericReferenceOperation` usa `mathExpression` e `logicalReferenceOperation` usa `logicalExpression` como fallback — qualquer expressão composta é válida. `stringReferenceOperation` já usava `stringConcatExpression`. Date/time/datetime/vector ainda aceitam apenas `*Entity` (literal, referência, `if`). Portanto `a ?? b + 1` = `a ?? (b+1)` e `flag ?? (x > 0)` é sintaxe válida sem necessidade de `if()`.
 
 - [x] **`NOT` lógico:** aceita tanto `~` (til) quanto `¬` (Unicode ¬ U+00AC) quanto `!` como operadores de negação lógica.
 

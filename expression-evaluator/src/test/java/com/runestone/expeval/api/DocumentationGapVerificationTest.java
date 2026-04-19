@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,9 +21,8 @@ class DocumentationGapVerificationTest {
 
     // -------------------------------------------------------------------------
     // Section 4.4: ?? (null coalescing) operator precedence
-    // Finding: ?? binds LOWER than arithmetic. `a ?? b + 1` = `(a ?? b) + 1`.
-    // To use an arithmetic expression as fallback, wrap it in if(): `a ?? if(true, b+1, b+1)`
-    // or restructure the expression.
+    // Finding: ?? accepts a full mathExpression as fallback. `a ?? b + 1` = `a ?? (b+1)`.
+    // Arithmetic inside the fallback is fully supported without extra wrapping.
     // -------------------------------------------------------------------------
 
     @Nested
@@ -30,25 +30,29 @@ class DocumentationGapVerificationTest {
     class NullCoalescingPrecedence {
 
         @Test
-        @DisplayName("a ?? b + 1 parses as (a ?? b) + 1, not a ?? (b+1)")
-        void nullCoalescingBindsLowerThanArithmetic() {
-            // When `a` is not null (= 10), result is (10 ?? b) + 1 = 10 + 1 = 11
+        @DisplayName("a ?? b + 1 parses as a ?? (b+1), not (a ?? b) + 1")
+        void nullCoalescingFallbackAcceptsFullArithmetic() {
+            // When `a` is not null (= 10), fallback is not triggered → result is 10
             ExpressionEnvironment env = ExpressionEnvironment.builder()
                     .registerExternalSymbol("a", BigDecimal.TEN, true)
                     .registerExternalSymbol("b", BigDecimal.ONE, true)
                     .build();
 
-            BigDecimal result = MathExpression.compile("<number>a ?? b + 1", env)
+            BigDecimal resultNonNull = MathExpression.compile("<number>a ?? b + 1", env)
                     .compute(Map.of("a", BigDecimal.TEN, "b", BigDecimal.ONE));
+            // a is non-null → fallback not triggered, no +1 outside → result is 10
+            assertThat(resultNonNull).isEqualByComparingTo("10");
 
-            // If ??>arithmetic: result would be 10 + 1 = 11 (a=10, so ?? not triggered, then +1)
-            // If arithmetic>??: result would be 10 (a=10, not null, ?? not triggered, no +1 outside)
-            // Observed: (a ?? b) + 1 with a=10 → 10 + 1 = 11
-            assertThat(result).isEqualByComparingTo("11");
+            // When `a` is null, fallback b + 1 = 1 + 1 = 2 is returned
+            HashMap<String, Object> nullMap = new HashMap<>();
+            nullMap.put("a", null);
+            nullMap.put("b", BigDecimal.ONE);
+            BigDecimal resultNull = MathExpression.compile("<number>a ?? b + 1", env).compute(nullMap);
+            assertThat(resultNull).isEqualByComparingTo("2");
         }
 
         @Test
-        @DisplayName("fallback value of ?? is evaluated as a single numericEntity (reference or literal)")
+        @DisplayName("fallback value of ?? accepts a reference or literal")
         void nullCoalescingFallbackIsReference() {
             // `a` is overridable but we supply null-equivalent via HashMap
             ExpressionEnvironment env = ExpressionEnvironment.builder()
@@ -65,7 +69,7 @@ class DocumentationGapVerificationTest {
         @Test
         @DisplayName("?? fallback of type if() can include arithmetic inside branches")
         void nullCoalescingFallbackCanBeIfExpression() {
-            // `a ?? if(true, b + 1, 0)` — the IF expression is a valid numericEntity
+            // `a ?? if(true, b + 1, 0)` — IF expression is also a valid fallback
             ExpressionEnvironment env = ExpressionEnvironment.builder()
                     .registerExternalSymbol("a", BigDecimal.ONE, true)
                     .registerExternalSymbol("b", BigDecimal.ONE, true)
