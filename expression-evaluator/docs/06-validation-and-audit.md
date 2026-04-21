@@ -57,7 +57,7 @@ Three types of events are recorded in execution order:
 **`VariableRead`** — emitted each time a variable is read from bindings:
 - `name()` — variable name
 - `value()` — value at the time of read
-- `systemVariable()` — true for `currDate`, `currTime`, `currDateTime`
+- `systemProvided()` — true for `currDate`, `currTime`, `currDateTime`
 
 **`FunctionCall`** — emitted for each function invocation:
 - `functionName()` — name of the function
@@ -70,11 +70,13 @@ Three types of events are recorded in execution order:
 
 ### Constant Folding and the Audit Trail
 
-Two behaviors that may be surprising:
+Three behaviors to keep in mind:
 
-1. **Folded external symbols emit no `VariableRead` events.** When an external symbol is registered with `overridable=false`, the compiler folds it into the execution plan as a literal. There is no variable lookup at evaluation time, so no event is emitted.
+1. **Folded symbols produce pre-stored `VariableRead` events.** When an external symbol is registered with `overridable=false`, or when an internal variable is assigned a compile-time constant, the compiler folds it into the execution plan as a literal. The `VariableRead` events for those symbols are captured once at compile time and seeded into every `computeWithAudit()` call automatically — no variable lookup happens at evaluation time, but the reads are still observable.
 
-2. **Folded function calls still emit `FunctionCall` events.** When a function with all-constant arguments is folded during compilation, the result is pre-computed. But the audit trail still records the call as if it ran at evaluation time, for observability.
+2. **Pre-stored events appear before runtime reads.** Because folded events are prepended to the audit collector before evaluation starts, they appear at the beginning of the trace regardless of where the symbol appears in the expression.
+
+3. **Folded function calls still emit `FunctionCall` events.** When a function with all-constant arguments is folded during compilation, the result is pre-computed. But the audit trail still records the call as if it ran at evaluation time, for observability.
 
 ### Audit Overhead
 

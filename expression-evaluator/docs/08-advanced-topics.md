@@ -21,7 +21,7 @@ ExpressionEnvironment env = ExpressionEnvironment.builder()
 MathExpression tax = MathExpression.compile("amount * TAX_RATE * 2 * pi", env);
 ```
 
-Folded external symbols produce no `VariableRead` events in the audit trail. Folded function calls still appear in the audit trail — see [Validation and Audit](06-validation-and-audit.md#constant-folding-and-the-audit-trail).
+Folded external symbols and folded internal variables still produce `VariableRead` events in the audit trail — captured once at compile time and pre-stored, so they appear at the start of every `computeWithAudit()` trace. Folded function calls appear in the audit trail as well. See [Validation and Audit](06-validation-and-audit.md#constant-folding-and-the-audit-trail) for details.
 
 Only mark a custom function as foldable if it is pure: no side effects, no dependency on external state, same inputs always produce the same output.
 
