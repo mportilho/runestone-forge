@@ -56,7 +56,8 @@ record ExecutablePropertyChain(
             ExecutableDeepScan,
             ExecutableCollectionFunction,
             ExecutableMapProjection,
-            ExecutableVectorAggregation {
+            ExecutableVectorAggregation,
+            ExecutableVectorMap {
     }
 
     // -------------------------------------------------------------------------
@@ -168,6 +169,13 @@ record ExecutablePropertyChain(
     record ExecutableMapProjection(MapProjectionKind kind) implements ExecutableAccess {
         ExecutableMapProjection {
             Objects.requireNonNull(kind, "kind must not be null");
+        }
+    }
+
+    /** {@code ..map(@ -> expr)} — element-wise transform; produces a new list of the same size. */
+    record ExecutableVectorMap(ExecutableNode transform) implements ExecutableAccess {
+        ExecutableVectorMap {
+            Objects.requireNonNull(transform, "transform must not be null");
         }
     }
 

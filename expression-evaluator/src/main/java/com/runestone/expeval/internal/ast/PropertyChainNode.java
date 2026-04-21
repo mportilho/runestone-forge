@@ -25,7 +25,7 @@ public record PropertyChainNode(
             PropertyAccess, SafePropertyAccess, MethodCallAccess, SafeMethodCallAccess,
             CollectionIndexStep, MapKeyStep, CollectionSliceStep, WildcardStep,
             FilterPredicateStep, DeepScanStep, CollectionFunctionStep, MapProjectionStep,
-            VectorAggregationStep {}
+            VectorAggregationStep, VectorMapStep {}
 
     // -------------------------------------------------------------------------
     // Existing accesses (dot-notation, safe-nav, method calls)
@@ -113,6 +113,13 @@ public record PropertyChainNode(
     public record MapProjectionStep(MapProjectionKind kind) implements MemberAccess {
         public MapProjectionStep {
             Objects.requireNonNull(kind, "kind must not be null");
+        }
+    }
+
+    /** {@code ..map(@ -> expr)} — element-wise transform; produces a new list of the same size. */
+    public record VectorMapStep(ExpressionNode transform) implements MemberAccess {
+        public VectorMapStep {
+            Objects.requireNonNull(transform, "transform must not be null");
         }
     }
 

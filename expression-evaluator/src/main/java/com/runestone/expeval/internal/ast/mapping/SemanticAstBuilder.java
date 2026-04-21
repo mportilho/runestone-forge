@@ -590,6 +590,16 @@ public final class SemanticAstBuilder {
                     }
                 };
             }
+            // Built-in map transform
+            if ("map".equals(name)) {
+                if (transform == null) {
+                    throw new IllegalArgumentException("..map() requires a lambda transform (@ -> expr)");
+                }
+                if (!positionalArgs.isEmpty()) {
+                    throw new IllegalArgumentException("..map() does not accept positional arguments; use ..map(@ -> expr)");
+                }
+                return new PropertyChainNode.VectorMapStep(transform);
+            }
             // Custom function from FunctionCatalog
             validateNoLambda(name, transform);
             return new PropertyChainNode.CollectionFunctionStep(name, positionalArgs);

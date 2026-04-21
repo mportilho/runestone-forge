@@ -485,6 +485,8 @@ public final class SemanticResolver {
                 }
                 case PropertyChainNode.FilterPredicateStep fps ->
                         resolveFilterPredicate(fps.predicate(), UnknownType.INSTANCE, null);
+                case PropertyChainNode.VectorMapStep vms ->
+                        resolveFilterPredicate(vms.transform(), UnknownType.INSTANCE, null);
                 default -> { /* nothing */ }
             }
         }
@@ -511,6 +513,10 @@ public final class SemanticResolver {
                 case PropertyChainNode.VectorAggregationStep(var kind, var transform) -> {
                     if (transform != null) resolveFilterPredicate(transform, UnknownType.INSTANCE, node);
                     yield ScalarType.NUMBER;
+                }
+                case PropertyChainNode.VectorMapStep vms -> {
+                    resolveFilterPredicate(vms.transform(), collectionType.elementType(), node);
+                    yield new CollectionType(UnknownType.INSTANCE);
                 }
                 case PropertyChainNode.CollectionFunctionStep cfs ->
                         resolveCollectionFunction(cfs, collectionType, node);
@@ -563,6 +569,10 @@ public final class SemanticResolver {
                     if (transform != null) resolveFilterPredicate(transform, UnknownType.INSTANCE, node);
                     return ScalarType.NUMBER;
                 }
+                case PropertyChainNode.VectorMapStep vms -> {
+                    resolveFilterPredicate(vms.transform(), UnknownType.INSTANCE, node);
+                    return VectorType.INSTANCE;
+                }
                 case PropertyChainNode.CollectionFunctionStep cfs ->
                         { return resolveCollectionFunction(cfs, VectorType.INSTANCE, node); }
                 default -> {
@@ -587,6 +597,10 @@ public final class SemanticResolver {
                     case KEYS -> new CollectionType(mapType.keyType());
                     case VALUES -> new CollectionType(mapType.valueType());
                 };
+                case PropertyChainNode.VectorMapStep vms -> {
+                    resolveFilterPredicate(vms.transform(), UnknownType.INSTANCE, node);
+                    yield new CollectionType(UnknownType.INSTANCE);
+                }
                 case PropertyChainNode.CollectionFunctionStep cfs ->
                         resolveCollectionFunction(cfs, mapType, node);
                 case PropertyChainNode.PropertyAccess pa -> {

@@ -448,6 +448,8 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                         applyDeepScan(current, ds.propertyName(), scope);
                 case ExecutablePropertyChain.ExecutableVectorAggregation va ->
                         applyAggregation(current, va.kind(), va.transform(), scope);
+                case ExecutablePropertyChain.ExecutableVectorMap vm ->
+                        applyMapTransform(current, vm.transform(), scope);
                 case ExecutablePropertyChain.ExecutableMapProjection mp ->
                         applyMapProjection(current, mp.kind());
                 case ExecutablePropertyChain.ExecutableCollectionFunction cf ->
@@ -456,7 +458,8 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             if (access instanceof ExecutablePropertyChain.ExecutableWildcard
                     || access instanceof ExecutablePropertyChain.ExecutableSliceAccess
                     || access instanceof ExecutablePropertyChain.ExecutableFilterPredicate
-                    || access instanceof ExecutablePropertyChain.ExecutableDeepScan) {
+                    || access instanceof ExecutablePropertyChain.ExecutableDeepScan
+                    || access instanceof ExecutablePropertyChain.ExecutableVectorMap) {
                 inCollection = true;
             } else if (access instanceof ExecutablePropertyChain.ExecutableIndexAccess
                     || access instanceof ExecutablePropertyChain.ExecutableVectorAggregation) {
@@ -748,6 +751,35 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             }
             default -> throw new IllegalStateException("Unhandled aggregation kind: " + kind);
         }
+    }
+
+    /** {@code ..map(@ -> expr)} — transforms each element (or map entry) into a new list. */
+    @SuppressWarnings("unchecked")
+    private List<Object> applyMapTransform(Object current, ExecutableNode transform, ExecutionScope scope) {
+        FilterContextStack stack = FILTER_CTX.get();
+        if (current instanceof Map<?, ?> map) {
+            List<Object> result = new ArrayList<>(map.size());
+            for (Map.Entry<?, ?> entry : ((Map<Object, Object>) map).entrySet()) {
+                stack.pushMapEntry(entry.getKey(), entry.getValue());
+                try {
+                    result.add(evaluateExpr(transform, scope));
+                } finally {
+                    stack.pop();
+                }
+            }
+            return result;
+        }
+        List<?> list = requireList(current, "map");
+        List<Object> result = new ArrayList<>(list.size());
+        for (Object element : list) {
+            stack.pushElement(element);
+            try {
+                result.add(evaluateExpr(transform, scope));
+            } finally {
+                stack.pop();
+            }
+        }
+        return result;
     }
 
     private List<BigDecimal> toNumericList(List<?> list, @Nullable ExecutableNode transform, ExecutionScope scope) {

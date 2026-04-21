@@ -456,6 +456,13 @@ final class ExecutionPlanBuilder {
                     currentType = UnknownType.INSTANCE;
                     continue;
                 }
+                case PropertyChainNode.VectorMapStep vms -> {
+                    ExecutableNode execTransform = buildNode(vms.transform(), model, runtimeServices,
+                            externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                    steps.add(new ExecutablePropertyChain.ExecutableVectorMap(execTransform));
+                    currentType = VectorType.INSTANCE;
+                    continue;
+                }
                 case PropertyChainNode.VectorAggregationStep vas -> {
                     // O5: fold ..values()..count() / ..keys()..count() — the runtime already handles
                     // Map+COUNT via map.size(), so materialising the list first is unnecessary.
