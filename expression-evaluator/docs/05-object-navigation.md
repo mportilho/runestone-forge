@@ -54,7 +54,7 @@ books[0:2].price         // list of prices for books at index 0 and 1
 books[?(@.author = "Alice")].price   // list of prices for Alice's books
 ```
 
-This makes aggregation more concise than using `..ds()`:
+This is the right approach when you want exactly the top-level `price` property of each element. Note that `..ds(price)` is **not** equivalent here — it performs a recursive deep scan and would also collect `price` from any nested objects within each element.
 
 ```
 books[*].price..sum()                        // sum of all prices

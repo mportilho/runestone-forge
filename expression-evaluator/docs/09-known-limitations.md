@@ -43,13 +43,14 @@ items..max(@ -> @.value)          // compile error
 items..count(@ -> @.expr)         // compile error
 ```
 
-Use `..ds(prop)` to project first, navigate with wildcard projection (`items[*].price`), or use `..map()` to transform before aggregating:
+Use wildcard projection or `..map()` to project the property from each top-level element first, then aggregate:
 
 ```
 items[*].price..avg()              // wildcard projection, then average
 items..map(@ -> @.price)..avg()    // map transform, then average
-items..ds(price)..avg()            // deep scan projection, then average
 ```
+
+`..ds(price)` is not equivalent here: it traverses the entire object graph recursively and collects every `price` property found at any depth. If elements contain nested objects that also have a `price` field, those values are included too, which changes the result.
 
 ## `currDate`, `currTime`, `currDateTime` Are Literals
 
