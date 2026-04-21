@@ -538,6 +538,16 @@ class CollectionNavigationTest {
                     .compute(Map.of("prices", PRICES));
             assertThat(result).isEqualByComparingTo("15");
         }
+
+        @Test
+        @DisplayName("wildcard access on list then property access then aggregation")
+        void shouldWildcardThenPropertyThenAggregate() {
+            // books..ds(price) collects all 'price' properties → [5.99, 12.99, 8.99, 19.99] → sum = 47.96
+            BigDecimal result = MathExpression.compile(
+                    "books[*].price..sum()", env("books", BOOKS))
+                    .compute(Map.of("books", BOOKS));
+            assertThat(result).isEqualByComparingTo("47.96");
+        }
     }
 
     // -------------------------------------------------------------------------

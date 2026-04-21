@@ -46,7 +46,7 @@ items..count(@ -> @.expr)         // compile error
 Use `..ds(prop)` to project first or navigate to the property (`items.price`), then aggregate:
 
 ```
-items.price..avg()   // average of all prices
+items[*].price..avg()   // average of all prices
 ```
 
 ## No `..filter()` Deep-Scan
