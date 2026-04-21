@@ -548,6 +548,34 @@ class CollectionNavigationTest {
                     .compute(Map.of("books", BOOKS));
             assertThat(result).isEqualByComparingTo("47.96");
         }
+
+        @Test
+        @DisplayName("wildcard then property projection returns correct result for non-numeric property")
+        void shouldWildcardThenChainedPropertyProjection() {
+            // books[*].author → projects 'author' over all books → 4 non-null values
+            BigDecimal result = MathExpression.compile("books[*].author..count()", env("books", BOOKS))
+                    .compute(Map.of("books", BOOKS));
+            assertThat(result).isEqualByComparingTo("4");
+        }
+
+        @Test
+        @DisplayName("slice then property projection then aggregation")
+        void shouldSliceThenPropertyProjection() {
+            // books[0:2].price → prices of first two books: 5.99 + 12.99 = 18.98
+            BigDecimal result = MathExpression.compile("books[0:2].price..sum()", env("books", BOOKS))
+                    .compute(Map.of("books", BOOKS));
+            assertThat(result).isEqualByComparingTo("18.98");
+        }
+
+        @Test
+        @DisplayName("filter then property projection then aggregation")
+        void shouldFilterThenPropertyProjection() {
+            // books[?(@.author = "Alice")].price → Alice books: 5.99 + 8.99 = 14.98
+            BigDecimal result = MathExpression.compile(
+                    "books[?(@.author = \"Alice\")].price..sum()", env("books", BOOKS))
+                    .compute(Map.of("books", BOOKS));
+            assertThat(result).isEqualByComparingTo("14.98");
+        }
     }
 
     // -------------------------------------------------------------------------

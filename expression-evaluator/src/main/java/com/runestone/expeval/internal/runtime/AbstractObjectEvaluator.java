@@ -390,6 +390,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             current = "key".equals(sentinel) ? mapCtx.mapKey() : mapCtx.mapValue();
             chainStart = 1;
         }
+        boolean inCollection = false;
         for (int i = chainStart; i < chain.size(); i++) {
             ExecutablePropertyChain.ExecutableAccess access = chain.get(i);
             if (current == null) {
@@ -399,6 +400,16 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                 throw new ExpressionEvaluationException(
                         compiledExpression.source(), "NULL_IN_CHAIN",
                         "null value encountered navigating '" + rootName(node.root()) + "'", null);
+            }
+            if (inCollection && current instanceof List<?> list) {
+                if (access instanceof ExecutablePropertyChain.ReflectivePropertyAccess pa) {
+                    current = projectPropertyOverList(compiledExpression.source(), list, pa.name());
+                    continue;
+                }
+                if (access instanceof ExecutablePropertyChain.ExecutableFieldGet fieldGet) {
+                    current = projectFieldGetOverList(list, node, fieldGet);
+                    continue;
+                }
             }
             current = switch (access) {
                 // ---- typed -------------------------------------------------------
@@ -442,6 +453,15 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                 case ExecutablePropertyChain.ExecutableCollectionFunction cf ->
                         applyCollectionFunction(current, cf, scope);
             };
+            if (access instanceof ExecutablePropertyChain.ExecutableWildcard
+                    || access instanceof ExecutablePropertyChain.ExecutableSliceAccess
+                    || access instanceof ExecutablePropertyChain.ExecutableFilterPredicate
+                    || access instanceof ExecutablePropertyChain.ExecutableDeepScan) {
+                inCollection = true;
+            } else if (access instanceof ExecutablePropertyChain.ExecutableIndexAccess
+                    || access instanceof ExecutablePropertyChain.ExecutableVectorAggregation) {
+                inCollection = false;
+            }
         }
         return current;
     }
@@ -950,6 +970,27 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             exception.initCause(throwable);
             throw exception;
         }
+    }
+
+    private List<Object> projectPropertyOverList(String source, List<?> list, String propertyName) {
+        List<Object> result = new ArrayList<>(list.size());
+        for (Object element : list) {
+            if (element != null) {
+                result.add(resolvePropertyReflective(source, element, propertyName));
+            }
+        }
+        return result;
+    }
+
+    private List<Object> projectFieldGetOverList(List<?> list, ExecutablePropertyChain node,
+            ExecutablePropertyChain.ExecutableFieldGet fieldGet) {
+        List<Object> result = new ArrayList<>(list.size());
+        for (Object element : list) {
+            if (element != null) {
+                result.add(invokeGetter(node, element, fieldGet));
+            }
+        }
+        return result;
     }
 
     private static Object invokeMethodReflective(String source, Object target, String name, Object[] args) {
