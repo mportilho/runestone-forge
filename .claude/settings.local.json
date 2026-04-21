@@ -132,7 +132,8 @@
       "Bash(sed -i 's|package com.runestone.expeval.perf.jmh;|package com.runestone.expeval.perf.jmh.evaluation;|' expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/evaluation/__TRACKED_VAR__.java)",
       "Bash(sed -i 's|package com.runestone.expeval.perf.jmh;|package com.runestone.expeval.perf.jmh.bindings;|' expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/bindings/__TRACKED_VAR__.java)",
       "Bash(sed -i 's|package com.runestone.expeval.perf.jmh;|package com.runestone.expeval.perf.jmh.navigation;|' expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/navigation/__TRACKED_VAR__.java)",
-      "Bash(sed -i 's|package com.runestone.expeval.perf.jmh;|package com.runestone.expeval.perf.jmh.collection;|' expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/collection/__TRACKED_VAR__.java)"
+      "Bash(sed -i 's|package com.runestone.expeval.perf.jmh;|package com.runestone.expeval.perf.jmh.collection;|' expression-evaluator/src/test/java/com/runestone/expeval/perf/jmh/collection/__TRACKED_VAR__.java)",
+      "Bash(/home/marcelo/.claude/skills/performance-benchmark/scripts/run-jmh.sh *)"
     ]
   }
 }

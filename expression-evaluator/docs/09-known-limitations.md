@@ -43,10 +43,12 @@ items..max(@ -> @.value)          // compile error
 items..count(@ -> @.expr)         // compile error
 ```
 
-Use `..ds(prop)` to project first or navigate to the property (`items[*].price`), then aggregate:
+Use `..ds(prop)` to project first, navigate with wildcard projection (`items[*].price`), or use `..map()` to transform before aggregating:
 
 ```
-items[*].price..avg()   // average of all prices
+items[*].price..avg()              // wildcard projection, then average
+items..map(@ -> @.price)..avg()    // map transform, then average
+items..ds(price)..avg()            // deep scan projection, then average
 ```
 
 ## `currDate`, `currTime`, `currDateTime` Are Literals

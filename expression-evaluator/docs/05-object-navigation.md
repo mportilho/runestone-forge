@@ -44,6 +44,24 @@ ExpressionEnvironment env = ExpressionEnvironment.builder()
 > [!NOTE]
 > `prices[10:20]` looks like a time literal (`HH:MM`), but the parser treats it as a slice with start=10, end=20 when it appears inside `[...]`.
 
+### Property Projection After Collection Steps
+
+After a wildcard `[*]`, a slice `[start:end]`, or a filter `[?(...)]`, you can access a property directly. The property access is automatically projected over every element of the resulting collection, producing a new list.
+
+```
+books[*].price           // list of prices for all books
+books[0:2].price         // list of prices for books at index 0 and 1
+books[?(@.author = "Alice")].price   // list of prices for Alice's books
+```
+
+This makes aggregation more concise than using `..ds()`:
+
+```
+books[*].price..sum()                        // sum of all prices
+books[?(@.author = "Alice")].price..avg()    // average price of Alice's books
+books[0:2].price..sum()                      // sum of first two book prices
+```
+
 ## Predicates with `@`
 
 `@` represents the current element in filter predicates. It supports comparisons, range checks, membership, and regex:
@@ -94,7 +112,35 @@ items..prod(@ -> @.price)            // product of all prices
 ```
 
 > [!WARNING]
-> Only `sum` and `prod` accept lambda transformations. Using `@ -> expr` with `avg`, `min`, `max`, or `count` is a compile-time error.
+> Only `sum` and `prod` accept inline lambda transformations. Using `@ -> expr` with `avg`, `min`, `max`, or `count` is a compile-time error. To transform first and then use those aggregations, use `..map()` followed by the aggregation.
+
+### Element-wise Transform — `..map(@ -> expr)`
+
+`..map(@ -> expr)` transforms each element of a list or map into a new list. Unlike the inline lambdas in `sum` and `prod`, `..map()` always returns a **collection**, making it composable with any subsequent aggregation.
+
+The lambda is required — `..map()` without `@ -> expr` is a compile-time error.
+
+```
+nums..map(@ -> @ * 2)..sum()               // double each element, then sum
+nums..map(@ -> @ ^ 2)..sum()              // square each element, then sum
+nums..map(@ -> @ * 2)..avg()              // double each, then average
+orders..map(@ -> @.price * @.qty)..sum()  // compute line totals and sum
+```
+
+Maps are also supported — `@` is bound to each entry, with `@.key` and `@.value` providing access:
+
+```
+inventory..map(@ -> @.value * 2)..sum()   // double each map value, then sum
+inventory..map(@ -> @.value)..count()     // count entries via value projection
+```
+
+`..map()` can be chained:
+
+```
+nums..map(@ -> @ * 2)..map(@ -> @ + 1)..sum()   // [1,2,3] → [2,4,6] → [3,5,7] → 15
+```
+
+`..map()` does **not** accept positional arguments — only the `@ -> expr` lambda form is valid.
 
 ### Map Projections
 
