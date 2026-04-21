@@ -34,19 +34,19 @@ public static BigDecimal total(BigDecimal[] values) { ... }
 Only `sum` and `prod` accept a lambda for element transformation in deep scan:
 
 ```
-items..sum(@ -> price * qty)    // OK
-items..prod(@ -> multiplier)    // OK
+items..sum(@ -> @.price * @.qty)  // OK
+items..prod(@ -> @.multiplier)    // OK
 
-items..avg(@ -> price)          // compile error
-items..min(@ -> value)          // compile error
-items..max(@ -> value)          // compile error
-items..count(@ -> expr)         // compile error
+items..avg(@ -> @.price)          // compile error
+items..min(@ -> @.value)          // compile error
+items..max(@ -> @.value)          // compile error
+items..count(@ -> @.expr)         // compile error
 ```
 
-Use `..ds(prop)` to project first, then aggregate:
+Use `..ds(prop)` to project first or navigate to the property (`items.price`), then aggregate:
 
 ```
-items..ds(price)..avg()   // average of all prices
+items.price..avg()   // average of all prices
 ```
 
 ## No `..filter()` Deep-Scan

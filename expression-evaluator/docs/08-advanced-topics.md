@@ -89,7 +89,7 @@ AssignmentExpression calc = AssignmentExpression.compile("""
     base = price * qty;
     tax = base * taxRate;
     discount = if(qty > 10; base * 0.05; 0);
-    total = base + tax - discount
+    total = base + tax - discount;
     """, env);
 
 Map<String, Object> results = calc.compute(bindings);
@@ -100,7 +100,7 @@ Destructuring assigns a vector to multiple variables in one step:
 
 ```
 [subtotal, tax, shipping] = invoice..ds(amount);
-total = subtotal + tax + shipping
+total = subtotal + tax + shipping;
 ```
 
 Variables defined earlier in the block are visible to later statements. The returned map contains all assigned variables, including intermediates. If you only need `total`, ignore the rest — the map is always complete.
