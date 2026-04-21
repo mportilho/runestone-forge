@@ -24,8 +24,11 @@ final class AuditCollector {
     private final long startNanos = System.nanoTime();
     private final List<AuditEvent> events;
 
-    AuditCollector(int initialCapacity) {
+    AuditCollector(int initialCapacity, List<AuditEvent> seedEvents) {
         this.events = new ArrayList<>(initialCapacity);
+        if (!seedEvents.isEmpty()) {
+            this.events.addAll(seedEvents);
+        }
     }
 
     void record(AuditEvent event) {

@@ -122,6 +122,7 @@ public final class ExpressionRuntimeSupport {
     private final int internalSymbolCount;
     private final int externalSymbolCount;
     private final int maxAuditEvents;
+    private final List<AuditEvent> foldedVariableReads;
 
     private ExpressionRuntimeSupport(CompiledExpression compiledExpression,
                                      Object[] defaultValues,
@@ -141,6 +142,7 @@ public final class ExpressionRuntimeSupport {
         this.internalSymbolCount = compiledExpression.semanticModel().internalSymbolsByName().size();
         this.externalSymbolCount = compiledExpression.executionPlan().externalSymbolsCount();
         this.maxAuditEvents = compiledExpression.executionPlan().maxAuditEvents();
+        this.foldedVariableReads = compiledExpression.executionPlan().foldedVariableReads();
     }
 
     // -------------------------------------------------------------------------
@@ -352,13 +354,13 @@ public final class ExpressionRuntimeSupport {
     }
 
     public AuditResult<BigDecimal> computeMathWithAudit(Map<String, Object> values) {
-        AuditCollector collector = new AuditCollector(maxAuditEvents);
+        AuditCollector collector = new AuditCollector(maxAuditEvents, foldedVariableReads);
         BigDecimal result = mathEvaluator.evaluate(createAuditedExecutionScope(values, collector));
         return new AuditResult<>(result, collector.buildTrace());
     }
 
     public AuditResult<Boolean> computeLogicalWithAudit(Map<String, Object> values) {
-        AuditCollector collector = new AuditCollector(maxAuditEvents);
+        AuditCollector collector = new AuditCollector(maxAuditEvents, foldedVariableReads);
         boolean result = logicalEvaluator.evaluate(createAuditedExecutionScope(values, collector));
         return new AuditResult<>(result, collector.buildTrace());
     }
@@ -368,7 +370,7 @@ public final class ExpressionRuntimeSupport {
     }
 
     public AuditResult<Map<String, Object>> computeAssignmentsWithAudit(Map<String, Object> values) {
-        AuditCollector collector = new AuditCollector(maxAuditEvents);
+        AuditCollector collector = new AuditCollector(maxAuditEvents, foldedVariableReads);
         Map<String, Object> result = mathEvaluator.evaluateAssignments(createAuditedExecutionScope(values, collector));
         return new AuditResult<>(result, collector.buildTrace());
     }

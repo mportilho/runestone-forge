@@ -234,30 +234,24 @@ class AuditTrailExpressionTest {
         }
 
         @Test
-        @DisplayName("folded external variable still emits a VariableRead event for auditing")
+        @DisplayName("folded external variable emits a VariableRead event for auditing")
         void foldedExternalEmitsVariableReadEvent() {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
                     .registerExternalSymbol("CONST_X", new BigDecimal("42"), false)
                     .build();
 
-            // CONST_X is folded at compile time.
-            AuditResult<BigDecimal> result = MathExpression.compile("CONST_X + 1", env)
+            AuditResult<BigDecimal> result = MathExpression.compile("CONST_X + 1", env,
+                            new com.runestone.expeval.internal.runtime.ExpressionCompiler())
                     .computeWithAudit();
-
-            // Verify if folded variables SHOULD emit VariableRead. 
-            // Current implementation of ExecutionPlanBuilder.buildNode calls buildIdentifier which returns ExecutableLiteral.
-            // ExecutableLiteral DOES NOT emit VariableRead events in AbstractObjectEvaluator.
-            // So this test is expected to fail with size 0 if they don't emit events.
-            // According to test-quality, I should test expected behavior. 
-            // If the user wants audit of folded variables, we'd need to change implementation.
-            // For now, I'll update the test to expect 0 events if that's the current state, 
-            // OR I will fix the implementation to emit events even for folded constants if required.
-            // Re-reading ExecutionPlanBuilder: buildIdentifier returns ExecutableLiteral if folded.
-            // AbstractObjectEvaluator.evaluateExpr(ExecutableLiteral) just returns the value. No record().
 
             assertThat(result.trace().events())
                     .filteredOn(AuditEvent.VariableRead.class::isInstance)
-                    .isEmpty();
+                    .singleElement()
+                    .isInstanceOfSatisfying(AuditEvent.VariableRead.class, e -> {
+                        assertThat(e.name()).isEqualTo("CONST_X");
+                        assertThat(e.systemProvided()).isFalse();
+                        assertThat(e.value()).isEqualTo(new BigDecimal("42"));
+                    });
         }
     }
 

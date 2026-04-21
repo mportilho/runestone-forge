@@ -1,5 +1,6 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.catalog.*;
 import com.runestone.expeval.internal.ast.*;
 import com.runestone.expeval.internal.ast.BinaryOperator;
@@ -30,29 +31,30 @@ final class ExecutionPlanBuilder {
         ExpressionFileNode ast = model.ast();
         // Process assignments sequentially so each one can propagate its constant value
         // to later assignments and to the result expression.
-        Map<SymbolRef, Object> foldedSymbols = new HashMap<>();
+        FoldContext foldContext = new FoldContext();
 
         model.externalSymbolsByName().forEach((name, symbolRef) -> {
             ExternalSymbolDescriptor descriptor = externalSymbolCatalog.findOrNull(name);
             if (descriptor != null && !descriptor.overridable()) {
-                foldedSymbols.put(symbolRef, runtimeServices.coerceToResolvedType(descriptor.defaultValue(), descriptor.declaredType()));
+                foldContext.symbols.put(symbolRef, runtimeServices.coerceToResolvedType(descriptor.defaultValue(), descriptor.declaredType()));
             }
         });
 
         List<ExecutableAssignment> assignments = new ArrayList<>();
         for (AssignmentNode assignment : ast.assignments()) {
-            assignments.add(buildAssignment(assignment, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols));
+            assignments.add(buildAssignment(assignment, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext));
         }
         ExecutableNode resultNode = ast.resultExpression() != null
-                ? buildNode(ast.resultExpression(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols)
+                ? buildNode(ast.resultExpression(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext)
                 : null;
-        int maxAuditEvents = countMaxAuditEvents(assignments, resultNode);
+        List<AuditEvent> foldedVariableReads = List.copyOf(foldContext.variableReads);
+        int maxAuditEvents = countMaxAuditEvents(assignments, resultNode) + foldedVariableReads.size();
 
         int externalSymbolsCount = model.externalSymbolsByName().size();
         Object[] defaults = seedDefaults(model, externalSymbolCatalog, runtimeServices, externalSymbolsCount);
         Map<String, ExternalBindingPlan> externalBindingPlans = seedExternalBindingPlans(model, externalSymbolCatalog);
 
-        return new ExecutionPlan(assignments, resultNode, defaults, externalBindingPlans, externalSymbolsCount, maxAuditEvents);
+        return new ExecutionPlan(assignments, resultNode, defaults, externalBindingPlans, externalSymbolsCount, maxAuditEvents, foldedVariableReads);
     }
 
     /**
@@ -197,15 +199,15 @@ final class ExecutionPlanBuilder {
             ExternalSymbolCatalog externalSymbolCatalog,
             TypeHintCatalog typeHintCatalog,
             MathContext mathContext,
-            Map<SymbolRef, Object> foldedSymbols) {
+            FoldContext foldContext) {
         return switch (assignment) {
             case SimpleAssignmentNode s -> {
                 SymbolRef target = model.internalSymbolsByName().get(s.targetName());
-                ExecutableNode value = buildNode(s.value(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                ExecutableNode value = buildNode(s.value(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                 if (isConstantNode(value)) {
-                    foldedSymbols.put(target, constantValue(value));
+                    foldContext.symbols.put(target, constantValue(value));
                 } else {
-                    foldedSymbols.remove(target);
+                    foldContext.symbols.remove(target);
                 }
                 yield new ExecutableSimpleAssignment(target, value);
             }
@@ -215,7 +217,7 @@ final class ExecutionPlanBuilder {
                         .toList();
                 yield new ExecutableDestructuringAssignment(
                         targets,
-                        buildNode(d.value(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols)
+                        buildNode(d.value(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext)
                 );
             }
         };
@@ -228,16 +230,16 @@ final class ExecutionPlanBuilder {
             ExternalSymbolCatalog externalSymbolCatalog,
             TypeHintCatalog typeHintCatalog,
             MathContext mathContext,
-            Map<SymbolRef, Object> foldedSymbols) {
+            FoldContext foldContext) {
         return switch (node) {
             case LiteralNode lit -> buildLiteral(lit, model);
-            case IdentifierNode id -> buildIdentifier(id, model, foldedSymbols);
+            case IdentifierNode id -> buildIdentifier(id, model, foldContext);
             case PropertyChainNode chain -> buildPropertyChain(
-                    chain, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                    chain, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
             case FunctionCallNode f ->
-                    buildFunctionCall(f, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                    buildFunctionCall(f, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
             case BinaryOperationNode b when b.operator() == BinaryOperator.NULL_COALESCE -> {
-                ExecutableNode left = buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                ExecutableNode left = buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                 if (isConstantNode(left)) {
                     Object leftVal = constantValue(left);
                     if (leftVal != null) {
@@ -246,19 +248,19 @@ final class ExecutionPlanBuilder {
                 }
                 yield new ExecutableNullCoalesce(
                         left,
-                        buildNode(b.right(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols)
+                        buildNode(b.right(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext)
                 );
             }
             case BinaryOperationNode b when b.operator() == BinaryOperator.REGEX_MATCH
                                          || b.operator() == BinaryOperator.REGEX_NOT_MATCH -> {
                 boolean negate = b.operator() == BinaryOperator.REGEX_NOT_MATCH;
-                ExecutableNode subjectNode = buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                ExecutableNode subjectNode = buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                 LiteralNode patternLit = (LiteralNode) b.right();
                 yield new ExecutableRegexOp(subjectNode, Pattern.compile(unquote(patternLit.value())), negate);
             }
             case BinaryOperationNode b -> {
-                ExecutableNode left = buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
-                ExecutableNode right = buildNode(b.right(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                ExecutableNode left = buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
+                ExecutableNode right = buildNode(b.right(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                 if (isConstantNode(left) && isConstantNode(right)) {
                     Object leftVal = constantValue(left);
                     Object rightVal = constantValue(right);
@@ -268,9 +270,9 @@ final class ExecutionPlanBuilder {
                 yield new ExecutableBinaryOp(b.operator(), left, right);
             }
             case TernaryOperationNode t -> {
-                ExecutableNode first = buildNode(t.first(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
-                ExecutableNode second = buildNode(t.second(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
-                ExecutableNode third = buildNode(t.third(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                ExecutableNode first = buildNode(t.first(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
+                ExecutableNode second = buildNode(t.second(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
+                ExecutableNode third = buildNode(t.third(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                 if (isConstantNode(first) && isConstantNode(second) && isConstantNode(third)) {
                     Object result = OperatorEvaluator.evaluateTernary(t.operator(), constantValue(first), constantValue(second), constantValue(third), runtimeServices);
                     yield new ExecutableLiteral(result);
@@ -278,7 +280,7 @@ final class ExecutionPlanBuilder {
                 yield new ExecutableTernaryOp(t.operator(), first, second, third);
             }
             case UnaryOperationNode u -> {
-                ExecutableNode operand = buildNode(u.operand(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                ExecutableNode operand = buildNode(u.operand(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                 if (isConstantNode(operand)) {
                     Object result = OperatorEvaluator.evaluateUnary(u.operator(), constantValue(operand), runtimeServices, mathContext);
                     yield new ExecutableLiteral(result);
@@ -286,7 +288,7 @@ final class ExecutionPlanBuilder {
                 yield new ExecutableUnaryOp(u.operator(), operand);
             }
             case PostfixOperationNode p -> {
-                ExecutableNode operand = buildNode(p.operand(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                ExecutableNode operand = buildNode(p.operand(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                 if (isConstantNode(operand)) {
                     Object result = OperatorEvaluator.evaluatePostfix(p.operator(), constantValue(operand), runtimeServices, mathContext);
                     yield new ExecutableLiteral(result);
@@ -299,22 +301,22 @@ final class ExecutionPlanBuilder {
                 ExecutableNode elseExpr = null;
 
                 for (int i = 0; i < c.conditions().size(); i++) {
-                    ExecutableNode condNode = buildNode(c.conditions().get(i), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                    ExecutableNode condNode = buildNode(c.conditions().get(i), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                     if (isConstantNode(condNode)) {
                         Object val = constantValue(condNode);
                         if (Boolean.TRUE.equals(val)) {
-                            elseExpr = buildNode(c.results().get(i), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                            elseExpr = buildNode(c.results().get(i), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                             break;
                         }
                         // If constant false, just skip this branch
                     } else {
                         conditions.add(condNode);
-                        results.add(buildNode(c.results().get(i), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols));
+                        results.add(buildNode(c.results().get(i), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext));
                     }
                 }
 
                 if (elseExpr == null) {
-                    elseExpr = buildNode(c.elseExpression(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                    elseExpr = buildNode(c.elseExpression(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                 }
 
                 if (conditions.isEmpty()) {
@@ -329,7 +331,7 @@ final class ExecutionPlanBuilder {
             }
             case VectorLiteralNode v -> {
                 List<ExecutableNode> elements = v.elements().stream()
-                        .map(e -> buildNode(e, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols))
+                        .map(e -> buildNode(e, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext))
                         .toList();
                 if (elements.stream().allMatch(this::isConstantNode)) {
                     List<Object> foldedValues = elements.stream().map(this::constantValue).toList();
@@ -347,7 +349,7 @@ final class ExecutionPlanBuilder {
             ExternalSymbolCatalog externalSymbolCatalog,
             TypeHintCatalog typeHintCatalog,
             MathContext mathContext,
-            Map<SymbolRef, Object> foldedSymbols) {
+            FoldContext foldContext) {
 
         // '@' root has no external symbol binding; create a special sentinel identifier.
         ExecutableNode root;
@@ -357,8 +359,10 @@ final class ExecutionPlanBuilder {
             SymbolRef rootRef = model.findSymbol(node.nodeId())
                     .orElseThrow(() -> new IllegalStateException(
                             "missing symbol for property chain '" + node.rootIdentifier() + "'"));
-            if (foldedSymbols.containsKey(rootRef)) {
-                root = new ExecutableLiteral(foldedSymbols.get(rootRef));
+            if (foldContext.symbols.containsKey(rootRef)) {
+                Object value = foldContext.symbols.get(rootRef);
+                foldContext.variableReads.add(new AuditEvent.VariableRead(rootRef.name(), false, value));
+                root = new ExecutableLiteral(value);
             } else {
                 root = new ExecutableIdentifier(rootRef, node.sourceSpan());
             }
@@ -378,7 +382,7 @@ final class ExecutionPlanBuilder {
                     externalSymbolCatalog,
                     typeHintCatalog,
                     mathContext,
-                    foldedSymbols,
+                    foldContext,
                     root,
                     currentType
             );
@@ -393,7 +397,7 @@ final class ExecutionPlanBuilder {
             // ----- New navigation step types (take priority over typed/reflective paths) -----
             switch (access) {
                 case PropertyChainNode.CollectionIndexStep cis -> {
-                    ExecutableNode idx = buildNode(cis.index(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                    ExecutableNode idx = buildNode(cis.index(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                     steps.add(new ExecutablePropertyChain.ExecutableIndexAccess(idx));
                     currentType = UnknownType.INSTANCE;
                     continue;
@@ -405,10 +409,10 @@ final class ExecutionPlanBuilder {
                 }
                 case PropertyChainNode.CollectionSliceStep css -> {
                     ExecutableNode start = css.start() != null
-                            ? buildNode(css.start(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols)
+                            ? buildNode(css.start(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext)
                             : null;
                     ExecutableNode end = css.end() != null
-                            ? buildNode(css.end(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols)
+                            ? buildNode(css.end(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext)
                             : null;
                     steps.add(new ExecutablePropertyChain.ExecutableSliceAccess(start, end));
                     continue;
@@ -418,7 +422,7 @@ final class ExecutionPlanBuilder {
                     continue;
                 }
                 case PropertyChainNode.FilterPredicateStep fps -> {
-                    ExecutableNode predicate = buildNode(fps.predicate(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                    ExecutableNode predicate = buildNode(fps.predicate(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                     steps.add(new ExecutablePropertyChain.ExecutableFilterPredicate(predicate));
                     continue;
                 }
@@ -429,7 +433,7 @@ final class ExecutionPlanBuilder {
                 }
                 case PropertyChainNode.CollectionFunctionStep cfs -> {
                     List<ExecutableNode> args = cfs.arguments().stream()
-                            .map(a -> buildNode(a, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols))
+                            .map(a -> buildNode(a, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext))
                             .toList();
                     ResolvedFunctionBinding binding = model.findFunctionBinding(node.nodeId()).orElse(null);
                     NavigationMode resultMode = NavigationMode.SCALAR;
@@ -458,7 +462,7 @@ final class ExecutionPlanBuilder {
                 }
                 case PropertyChainNode.VectorMapStep vms -> {
                     ExecutableNode execTransform = buildNode(vms.transform(), model, runtimeServices,
-                            externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                            externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                     steps.add(new ExecutablePropertyChain.ExecutableVectorMap(execTransform));
                     currentType = VectorType.INSTANCE;
                     continue;
@@ -472,7 +476,7 @@ final class ExecutionPlanBuilder {
                         steps.removeLast();
                     }
                     ExecutableNode execTransform = vas.transform() == null ? null
-                            : buildNode(vas.transform(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols);
+                            : buildNode(vas.transform(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                     steps.add(new ExecutablePropertyChain.ExecutableVectorAggregation(vas.kind(), execTransform));
                     currentType = UnknownType.INSTANCE;
                     continue;
@@ -484,11 +488,11 @@ final class ExecutionPlanBuilder {
             List<ExecutableNode> argumentNodes = switch (access) {
                 case PropertyChainNode.MethodCallAccess methodCall ->
                         methodCall.arguments().stream()
-                                .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols))
+                                .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext))
                                 .toList();
                 case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
                         safeMethodCall.arguments().stream()
-                                .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols))
+                                .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext))
                                 .toList();
                 default -> List.of();
             };
@@ -523,7 +527,7 @@ final class ExecutionPlanBuilder {
             ExternalSymbolCatalog externalSymbolCatalog,
             TypeHintCatalog typeHintCatalog,
             MathContext mathContext,
-            Map<SymbolRef, Object> foldedSymbols,
+            FoldContext foldContext,
             ExecutableNode root,
             ResolvedType currentType) {
         List<ExecutablePropertyChain.ExecutableAccess> steps = new ArrayList<>(node.chain().size());
@@ -534,11 +538,11 @@ final class ExecutionPlanBuilder {
             List<ExecutableNode> argumentNodes = switch (access) {
                 case PropertyChainNode.MethodCallAccess methodCall ->
                         methodCall.arguments().stream()
-                                .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols))
+                                .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext))
                                 .toList();
                 case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
                         safeMethodCall.arguments().stream()
-                                .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols))
+                                .map(argument -> buildNode(argument, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext))
                                 .toList();
                 default -> List.of();
             };
@@ -817,7 +821,7 @@ final class ExecutionPlanBuilder {
         throw new IllegalStateException("unsupported literal type: " + resolvedType);
     }
 
-    private ExecutableNode buildIdentifier(IdentifierNode id, SemanticModel model, Map<SymbolRef, Object> foldedSymbols) {
+    private ExecutableNode buildIdentifier(IdentifierNode id, SemanticModel model, FoldContext foldContext) {
         // '@' is the filter-predicate current-element sentinel — no model symbol, always dynamic
         if ("@".equals(id.name())) {
             return new ExecutableIdentifier(new SymbolRef("@", SymbolKind.EXTERNAL), id.sourceSpan());
@@ -825,8 +829,10 @@ final class ExecutionPlanBuilder {
         SymbolRef ref = model.findSymbol(id.nodeId())
                 .orElseThrow(() -> new IllegalStateException(
                         "missing symbol for identifier '" + id.name() + "'"));
-        if (foldedSymbols.containsKey(ref)) {
-            return new ExecutableLiteral(foldedSymbols.get(ref));
+        if (foldContext.symbols.containsKey(ref)) {
+            Object value = foldContext.symbols.get(ref);
+            foldContext.variableReads.add(new AuditEvent.VariableRead(ref.name(), false, value));
+            return new ExecutableLiteral(value);
         }
         return new ExecutableIdentifier(ref, id.sourceSpan());
     }
@@ -838,12 +844,12 @@ final class ExecutionPlanBuilder {
             ExternalSymbolCatalog externalSymbolCatalog,
             TypeHintCatalog typeHintCatalog,
             MathContext mathContext,
-            Map<SymbolRef, Object> foldedSymbols) {
+            FoldContext foldContext) {
         ResolvedFunctionBinding binding = model.findFunctionBinding(f.nodeId())
                 .orElseThrow(() -> new IllegalStateException(
                         "missing function binding for '" + f.functionName() + "'"));
         List<ExecutableNode> arguments = f.arguments().stream()
-                .map(arg -> buildNode(arg, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldedSymbols))
+                .map(arg -> buildNode(arg, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext))
                 .toList();
 
         FunctionDescriptor descriptor = binding.descriptor();
@@ -890,5 +896,10 @@ final class ExecutionPlanBuilder {
                     .replace("\\\\", "\\");
         }
         return value;
+    }
+
+    private static final class FoldContext {
+        final Map<SymbolRef, Object> symbols = new HashMap<>();
+        final List<AuditEvent> variableReads = new ArrayList<>();
     }
 }
