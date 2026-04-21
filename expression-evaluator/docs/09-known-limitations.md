@@ -43,23 +43,10 @@ items..max(@ -> @.value)          // compile error
 items..count(@ -> @.expr)         // compile error
 ```
 
-Use `..ds(prop)` to project first or navigate to the property (`items.price`), then aggregate:
+Use `..ds(prop)` to project first or navigate to the property (`items[*].price`), then aggregate:
 
 ```
 items[*].price..avg()   // average of all prices
-```
-
-## No `..filter()` Deep-Scan
-
-There is no `..filter()` aggregation. Use the subscript predicate instead:
-
-```
-// Does NOT exist
-items..filter(@ -> price > 10)
-
-// Correct approach
-items[?(@ > 10)]          // on a flat collection
-items..ds(price)[?(@ > 10)] // after projecting a property
 ```
 
 ## `currDate`, `currTime`, `currDateTime` Are Literals
