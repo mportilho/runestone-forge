@@ -1,3 +1,54 @@
+## PERF-001: NodeEvaluator callback — no regression + CollectionNavigation baseline
+
+**Date:** 2026-04-21
+
+**Scenario:** Confirm that extracting collection-navigation logic into `CollectionNavigationOps` /
+`PropertyChainOps` and threading calls through the `NodeEvaluator` functional interface does not
+regress hot paths. The interface is monomorphic at each call site (`this::evaluateExpr` captured in
+`AbstractObjectEvaluator`), so JIT can speculate-inline it.
+
+**Hypothesis:** NodeEvaluator indirection adds zero measurable overhead; JIT inlines the single
+target. VectorMapTransform benchmarks should match or beat PERF-000. CollectionNavigation
+benchmarks are recorded as a new baseline (no prior numbers).
+
+**Machine:** OpenJDK 25.0.2 / Linux x86-64, -Xms1g -Xmx1g  
+**JMH config:** 3 forks × 5 warmup + 10 measurement iterations × 500 ms each; `AverageTime / ns`
+
+### VectorMapTransform — vs PERF-000
+
+| Benchmark | PERF-000 (ns/op) | This run (ns/op) | Delta | B/op |
+|---|---:|---:|---:|---:|
+| collection.VectorMapTransformBenchmark.wildcardProjectionSum | 501.48 | 435.74 | **−13.1%** | 872.0 |
+| collection.VectorMapTransformBenchmark.mapExtractPropertySum | 732.43 | 676.90 | −7.6% | 968.0 |
+| collection.VectorMapTransformBenchmark.mapEntryValuesSum | 733.13 | 606.22 | **−17.3%** | 696.0 |
+| collection.VectorMapTransformBenchmark.mapChainedSum | 979.91 | 893.13 | −8.9% | 1080.0 |
+| collection.VectorMapTransformBenchmark.mapComputedFieldSum | 1076.35 | 974.40 | −9.5% | 1224.0 |
+| collection.VectorMapTransformBenchmark.mapComputedFieldAvg | 1933.02 | 1747.99 | −9.6% | 2381.7 |
+
+All paths improved. No regression.
+
+### CollectionNavigation — new baseline (applyFilter, applyAggregation paths)
+
+| Benchmark | Score (ns/op) | B/op |
+|---|---:|---:|
+| collection.CollectionNavigationBenchmark.indexAccess | 70.85 | 64.0 |
+| collection.CollectionNavigationBenchmark.mapValuesCount | 74.36 | 64.0 |
+| collection.CollectionNavigationBenchmark.customFunctionCount | 297.31 | 296.0 |
+| collection.CollectionNavigationBenchmark.listFilterCount | 595.36 | 216.0 |
+| collection.CollectionNavigationBenchmark.mapFilterCount | 736.64 | 352.0 |
+| collection.CollectionNavigationBenchmark.deepScanCount | 1402.36 | 528.0 |
+
+**Decision:** ACCEPT — all VectorMapTransform paths improved ≥ 7.6 %; CollectionNavigation
+recorded as first-run baseline.
+
+**Notes:**
+- `mapEntryValuesSum` allocation dropped from 864 B/op to 696 B/op alongside the 17 % speedup —
+  consistent with a leaner code path post-refactor.
+- `NodeEvaluator` lambda (`this::evaluateExpr`) is monomorphic per evaluator instance; C2 inlines
+  it after the warmup period, as confirmed by the absence of regression.
+
+---
+
 ## PERF-000: Baseline
 
 **Date:** 2026-04-21
