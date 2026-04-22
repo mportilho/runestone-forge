@@ -8,11 +8,12 @@ import com.runestone.expeval.internal.ast.BinaryOperator;
 import com.runestone.expeval.internal.ast.SourceSpan;
 
 import java.math.MathContext;
+import java.time.LocalDate;
 import java.util.*;
 
 /**
  * Expression evaluator that carries all sub-expression results as {@code Object} values
- * ({@link BigDecimal}, {@link Boolean}, {@link LocalDate}, etc.) with no intermediate boxing.
+ * ({@link java.math.BigDecimal}, {@link Boolean}, {@link LocalDate}, etc.) with no intermediate boxing.
  *
  * <h2>Scope contract</h2>
  * <ul>
