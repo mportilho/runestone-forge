@@ -1,5 +1,6 @@
 package com.runestone.expeval.environment;
 
+import com.runestone.converters.DataConversionService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,25 @@ class ExpressionEnvironmentIdDerivationTest {
     static final class FixtureProvider {
         public BigDecimal noop(BigDecimal x) {
             return x;
+        }
+    }
+
+    static final class StaticFixtureProvider {
+        public static BigDecimal noop(BigDecimal x) {
+            return x;
+        }
+    }
+
+    static final class FixtureConversionService implements DataConversionService {
+
+        @Override
+        public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
+            return false;
+        }
+
+        @Override
+        public <S, T> T convert(S source, Class<T> targetType) {
+            throw new UnsupportedOperationException("test fixture");
         }
     }
 
@@ -80,9 +100,9 @@ class ExpressionEnvironmentIdDerivationTest {
         }
 
         @Test
-        @DisplayName("Different defaultValue for same symbol shares ID — defaultValue is excluded from the hash")
-        void differentDefaultValueForSameSymbolSharesId() {
-            // defaultValue affects runtime evaluation, not compilation — intentionally excluded from the cache key
+        @DisplayName("Different defaultValue for same symbol produces different ID")
+        void differentDefaultValueForSameSymbolProducesDifferentId() {
+            // Non-overridable symbols may be folded at compile time, so defaultValue must be part of the cache identity.
             ExpressionEnvironmentId id1 = ExpressionEnvironment.builder()
                     .registerExternalSymbol("rate", BigDecimal.ZERO, true)
                     .build().environmentId();
@@ -90,7 +110,7 @@ class ExpressionEnvironmentIdDerivationTest {
                     .registerExternalSymbol("rate", BigDecimal.TEN, true)
                     .build().environmentId();
 
-            assertThat(id1).isEqualTo(id2);
+            assertThat(id1).isNotEqualTo(id2);
         }
     }
 
@@ -189,6 +209,40 @@ class ExpressionEnvironmentIdDerivationTest {
                     .registerInstanceProvider(new FixtureProvider()).build().environmentId();
             ExpressionEnvironmentId id2 = ExpressionEnvironment.builder()
                     .registerInstanceProvider(new FixtureProvider()).build().environmentId();
+
+            assertThat(id1).isNotEqualTo(id2);
+        }
+
+        @Test
+        @DisplayName("Different conversion service instances produce different IDs")
+        void differentConversionServiceInstancesDifferentIds() {
+            ExpressionEnvironmentId id1 = ExpressionEnvironment.builder()
+                    .conversionService(new FixtureConversionService()).build().environmentId();
+            ExpressionEnvironmentId id2 = ExpressionEnvironment.builder()
+                    .conversionService(new FixtureConversionService()).build().environmentId();
+
+            assertThat(id1).isNotEqualTo(id2);
+        }
+
+        @Test
+        @DisplayName("Different static provider foldable flag produces different IDs")
+        void differentStaticProviderFoldableFlagDifferentIds() {
+            ExpressionEnvironmentId id1 = ExpressionEnvironment.builder()
+                    .registerStaticProvider(StaticFixtureProvider.class, true).build().environmentId();
+            ExpressionEnvironmentId id2 = ExpressionEnvironment.builder()
+                    .registerStaticProvider(StaticFixtureProvider.class, false).build().environmentId();
+
+            assertThat(id1).isNotEqualTo(id2);
+        }
+
+        @Test
+        @DisplayName("Different instance provider foldable flag produces different IDs")
+        void differentInstanceProviderFoldableFlagDifferentIds() {
+            FixtureProvider provider = new FixtureProvider();
+            ExpressionEnvironmentId id1 = ExpressionEnvironment.builder()
+                    .registerInstanceProvider(provider, true).build().environmentId();
+            ExpressionEnvironmentId id2 = ExpressionEnvironment.builder()
+                    .registerInstanceProvider(provider, false).build().environmentId();
 
             assertThat(id1).isNotEqualTo(id2);
         }

@@ -12,6 +12,7 @@ import com.runestone.expeval.types.ResolvedTypes;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -167,23 +168,33 @@ public final class ExpressionEnvironmentBuilder {
                 ));
         ExternalSymbolCatalog externalSymbolCatalog = new ExternalSymbolCatalog(symbolsByName);
 
-        List<Class<?>> staticProviderClasses = new ArrayList<>(staticProviders.stream().map(StaticProviderEntry::providerClass).toList());
-        List<Object> instanceObjects = new ArrayList<>(instanceProviders.stream().map(InstanceProviderEntry::instance).toList());
-        return new ExpressionEnvironment(new ExpressionEnvironmentId(deriveEnvironmentId(staticProviderClasses, instanceObjects, externalSymbols, typeHints, mathContext, transcendentalMathContext)),
+        return new ExpressionEnvironment(new ExpressionEnvironmentId(deriveEnvironmentId(
+                effectiveConversionService,
+                staticProviders,
+                instanceProviders,
+                externalSymbols,
+                typeHints,
+                mathContext,
+                transcendentalMathContext
+        )),
                 functionCatalog, externalSymbolCatalog, typeHintCatalog, effectiveConversionService, mathContext, transcendentalMathContext);
     }
 
     private static String deriveEnvironmentId(
-            List<Class<?>> staticProviderClasses,
-            List<Object> instanceProviders,
+            DataConversionService conversionService,
+            List<StaticProviderEntry> staticProviders,
+            List<InstanceProviderEntry> instanceProviders,
             Map<String, ExternalSymbolRegistration> externalSymbols,
             List<Class<?>> typeHints,
             MathContext mathContext,
             MathContext transcendentalMathContext) {
         List<String> parts = new ArrayList<>();
-        staticProviderClasses.forEach(c -> parts.add("s:" + c.getName()));
-        instanceProviders.forEach(o -> parts.add("i:" + o.getClass().getName() + "@" + System.identityHashCode(o)));
-        externalSymbols.forEach((name, reg) -> parts.add("x:" + name + ":" + reg.declaredType() + ":" + reg.overridable()));
+        parts.add("cs:" + conversionService.getClass().getName() + "@" + System.identityHashCode(conversionService));
+        staticProviders.forEach(entry -> parts.add("s:" + entry.providerClass().getName() + ":" + entry.foldable()));
+        instanceProviders.forEach(entry -> parts.add("i:" + entry.instance().getClass().getName() + "@" +
+                System.identityHashCode(entry.instance()) + ":" + entry.foldable()));
+        externalSymbols.forEach((name, reg) -> parts.add("x:" + name + ":" + reg.declaredType() + ":" +
+                reg.overridable() + ":" + defaultValueFingerprint(reg.defaultValue(), new IdentityHashMap<>())));
         typeHints.forEach(c -> parts.add("th:" + c.getName()));
         parts.add("mc:" + mathContext.getPrecision() + ":" + mathContext.getRoundingMode());
         parts.add("tmc:" + transcendentalMathContext.getPrecision() + ":" + transcendentalMathContext.getRoundingMode());
@@ -195,6 +206,56 @@ public final class ExpressionEnvironmentBuilder {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 not available", e);
         }
+    }
+
+    private static String defaultValueFingerprint(Object value, IdentityHashMap<Object, Boolean> visited) {
+        if (value == null) {
+            return "null";
+        }
+        if (value instanceof CharSequence || value instanceof Number || value instanceof Boolean || value instanceof Character) {
+            return value.getClass().getName() + ":" + value;
+        }
+        if (value instanceof Enum<?> enumValue) {
+            return enumValue.getDeclaringClass().getName() + ":" + enumValue.name();
+        }
+        if (visited.put(value, Boolean.TRUE) != null) {
+            return value.getClass().getName() + ":<cycle>";
+        }
+        Class<?> valueType = value.getClass();
+        if (valueType.isArray()) {
+            int length = Array.getLength(value);
+            List<String> elements = new ArrayList<>(length);
+            for (int index = 0; index < length; index++) {
+                elements.add(defaultValueFingerprint(Array.get(value, index), visited));
+            }
+            return valueType.getName() + ":" + elements;
+        }
+        if (value instanceof Collection<?> collection) {
+            return valueType.getName() + ":" + collection.stream()
+                    .map(element -> defaultValueFingerprint(element, visited))
+                    .toList();
+        }
+        if (value instanceof Map<?, ?> map) {
+            List<String> entries = map.entrySet().stream()
+                    .map(entry -> defaultValueFingerprint(entry.getKey(), visited) + "=" +
+                            defaultValueFingerprint(entry.getValue(), visited))
+                    .sorted()
+                    .toList();
+            return valueType.getName() + ":" + entries;
+        }
+        if (valueType.isRecord()) {
+            try {
+                List<String> components = new ArrayList<>();
+                for (RecordComponent component : valueType.getRecordComponents()) {
+                    components.add(component.getName() + "=" +
+                            defaultValueFingerprint(component.getAccessor().invoke(value), visited));
+                }
+                return valueType.getName() + ":" + components;
+            } catch (ReflectiveOperationException exception) {
+                return valueType.getName() + "@" + System.identityHashCode(value);
+            }
+        }
+        return valueType.getName() + "@" + System.identityHashCode(value);
     }
 
     private Collection<FunctionDescriptor> discoverFunctions(Class<?> providerClass, Object providerInstance, boolean staticOnly, boolean foldable) {
