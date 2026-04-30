@@ -31,6 +31,7 @@ import jakarta.persistence.criteria.*;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.Arrays;
+import java.util.Collection;
 
 public class SpecificationIsIn<T> implements Specification<T> {
 
@@ -48,11 +49,17 @@ public class SpecificationIsIn<T> implements Specification<T> {
         Expression expressionTemp = JpaPredicateUtils.computeAttributePath(filterData, root);
         Object rawValues = filterData.values()[0];
         Object[] arrayValues = rawValues instanceof Object[] arr ? arr : new Object[]{rawValues};
-        boolean ignoreCase = expressionTemp.getJavaType().equals(String.class) && filterData.hasModifier(ModIgnoreCase.class);
 
+        if (Collection.class.isAssignableFrom(expressionTemp.getJavaType())) {
+            expressionTemp = JpaPredicateUtils.computeAttributeJoinPath(filterData, root);
+            query.distinct(true);
+        }
+
+        boolean ignoreCase = expressionTemp.getJavaType().equals(String.class) && filterData.hasModifier(ModIgnoreCase.class);
         Expression expression = ignoreCase ? criteriaBuilder.upper(expressionTemp) : expressionTemp;
+        final Class<?> targetType = expressionTemp.getJavaType();
         Object[] arr = Arrays.stream(arrayValues).map(v -> {
-            Object valueTemp = dataConversionService.convert(v, expression.getJavaType());
+            Object valueTemp = dataConversionService.convert(v, targetType);
             return ignoreCase && valueTemp != null ? valueTemp.toString().toUpperCase() : valueTemp;
         }).toArray();
         return expression.in(arr);

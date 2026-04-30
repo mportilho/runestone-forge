@@ -28,7 +28,6 @@ import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeLeft;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeRight;
 import jakarta.persistence.criteria.*;
-import jakarta.persistence.metamodel.Attribute;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
 import java.util.Arrays;
@@ -78,6 +77,24 @@ class JpaPredicateUtils {
             from = getOrCreateJoin(from, associationSegment, joinType);
         }
         return from.get(parsedPath.attributeSegment());
+    }
+
+    /**
+     * Like {@link #computeAttributePath} but joins the final segment too.
+     * Use this for plural attributes ({@code @ElementCollection}, collections) so that
+     * the returned {@link Expression} reflects the element type rather than the collection type.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> Expression<T> computeAttributeJoinPath(FilterData filterData, Root<?> root) {
+        String path = Objects.requireNonNull(filterData.path(), "Path cannot be null").trim();
+        String key = root.getJavaType().getCanonicalName() + "." + path;
+        ParsedPath parsedPath = PARSED_PATH_CACHE.computeIfAbsent(key, k -> JpaPredicateUtils.parsePath(path));
+        JoinType joinType = getJoinType(filterData);
+        From<?, ?> from = root;
+        for (String associationSegment : parsedPath.associationSegments()) {
+            from = getOrCreateJoin(from, associationSegment, joinType);
+        }
+        return (Expression<T>) getOrCreateJoin(from, parsedPath.attributeSegment(), joinType);
     }
 
     /**
