@@ -1,4 +1,0 @@
-interface:
-  display_name: "Java Perf Quality Gate"
-  short_description: "Conduz otimização Java com quality gates baseados em JMH before/after"
-  default_prompt: "Aplique um fluxo completo de qualidade de performance com JMH obrigatório, benchmarks em src/test/java e histórico append-only em <module>/docs/perf/performance-history.md."
