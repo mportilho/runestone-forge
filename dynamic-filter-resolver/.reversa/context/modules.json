@@ -1,0 +1,542 @@
+{
+  "generated_at": "2026-05-16T17:33:52Z",
+  "modules": [
+    {
+      "name": "core",
+      "path": "src/main/java/com/runestone/dynafilter/core",
+      "purpose": "Define o modelo intermediário de filtros dinâmicos: anotações, extração de metadados, geração de árvore lógica de statements, operações abstratas e decorators independentes da implementação concreta.",
+      "primary_files": [
+        "src/main/java/com/runestone/dynafilter/core/generator/annotation/AnnotationStatementGenerator.java",
+        "src/main/java/com/runestone/dynafilter/core/generator/annotation/TypeAnnotationUtils.java",
+        "src/main/java/com/runestone/dynafilter/core/generator/DefaultStatementGenerator.java",
+        "src/main/java/com/runestone/dynafilter/core/generator/StatementWrapper.java",
+        "src/main/java/com/runestone/dynafilter/core/model/FilterData.java",
+        "src/main/java/com/runestone/dynafilter/core/model/FilterRequestData.java",
+        "src/main/java/com/runestone/dynafilter/core/operation/AbstractFilterOperationService.java",
+        "src/main/java/com/runestone/dynafilter/core/resolver/DynamicFilterResolver.java"
+      ],
+      "functions": [
+        {
+          "name": "AnnotationStatementGenerator.generateStatements",
+          "file": "src/main/java/com/runestone/dynafilter/core/generator/annotation/AnnotationStatementGenerator.java",
+          "params": ["AnnotationStatementInput filterInputs", "Map<String, Object> filterParameters"],
+          "returns": "StatementWrapper",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "DefaultStatementGenerator.createFilterData",
+          "file": "src/main/java/com/runestone/dynafilter/core/generator/DefaultStatementGenerator.java",
+          "params": ["String path", "String[] parameters", "Class<?> targetType", "Class<? super DefinedFilterOperation> operation", "Object negateParameter", "Object[] values", "List<Class<? extends FilterModifier>> modifiers", "String description"],
+          "returns": "FilterData",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "DefaultStatementGenerator.computeValues",
+          "file": "src/main/java/com/runestone/dynafilter/core/generator/DefaultStatementGenerator.java",
+          "params": ["String[] parameters", "Object[] defaultValues", "Object[] constantValues", "Map<String, Object> parametersMap"],
+          "returns": "Object[]",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "TypeAnnotationUtils.findAnnotationData",
+          "file": "src/main/java/com/runestone/dynafilter/core/generator/annotation/TypeAnnotationUtils.java",
+          "params": ["AnnotationStatementInput annotationStatementInput"],
+          "returns": "List<FilterAnnotationData>",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "TypeAnnotationUtils.findFilterField",
+          "file": "src/main/java/com/runestone/dynafilter/core/generator/annotation/TypeAnnotationUtils.java",
+          "params": ["Class<?> clazz", "String fieldName"],
+          "returns": "Field",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "AbstractFilterOperationService.createFilter",
+          "file": "src/main/java/com/runestone/dynafilter/core/operation/AbstractFilterOperationService.java",
+          "params": ["FilterData filterData"],
+          "returns": "T",
+          "confidence": "confirmed"
+        }
+      ],
+      "entities": [
+        {
+          "name": "FilterData",
+          "fields": [
+            {"name": "path", "type": "String", "required": false},
+            {"name": "parameters", "type": "String[]", "required": true},
+            {"name": "targetType", "type": "Class<?>", "required": false},
+            {"name": "operation", "type": "Class<? super DefinedFilterOperation>", "required": false},
+            {"name": "negate", "type": "boolean", "required": true},
+            {"name": "values", "type": "Object[]", "required": true},
+            {"name": "modifiers", "type": "List<Class<? extends FilterModifier>>", "required": false},
+            {"name": "description", "type": "String", "required": false}
+          ],
+          "confidence": "confirmed"
+        },
+        {
+          "name": "FilterRequestData",
+          "fields": [
+            {"name": "path", "type": "String", "required": true},
+            {"name": "parameters", "type": "String[]", "required": true},
+            {"name": "targetType", "type": "Class<?>", "required": true},
+            {"name": "operation", "type": "Class<? super DefinedFilterOperation>", "required": true},
+            {"name": "negate", "type": "String", "required": false},
+            {"name": "defaultValues", "type": "Object[]", "required": false},
+            {"name": "constantValues", "type": "Object[]", "required": false},
+            {"name": "format", "type": "String", "required": false},
+            {"name": "required", "type": "boolean", "required": true},
+            {"name": "modifiers", "type": "List<Class<? extends FilterModifier>>", "required": false},
+            {"name": "description", "type": "String", "required": false}
+          ],
+          "confidence": "confirmed"
+        },
+        {
+          "name": "StatementWrapper",
+          "fields": [
+            {"name": "statement", "type": "AbstractStatement", "required": true},
+            {"name": "decoratedFilters", "type": "Map<String, FilterData>", "required": false},
+            {"name": "allFilters", "type": "List<FilterRequestData>", "required": false}
+          ],
+          "confidence": "confirmed"
+        }
+      ],
+      "business_rules": [
+        {
+          "description": "Valores constantes têm prioridade sobre defaults e parâmetros enviados pelo usuário.",
+          "location": "src/main/java/com/runestone/dynafilter/core/generator/DefaultStatementGenerator.java:151",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Operação dinâmica usa o primeiro valor como código de comparação; prefixo N/n nega a operação.",
+          "location": "src/main/java/com/runestone/dynafilter/core/generator/DefaultStatementGenerator.java:91",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Operação BT exige exatamente dois valores e renomeia parâmetros para From/To.",
+          "location": "src/main/java/com/runestone/dynafilter/core/generator/DefaultStatementGenerator.java:116",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Filtro obrigatório ausente interrompe a geração com IllegalArgumentException.",
+          "location": "src/main/java/com/runestone/dynafilter/core/generator/annotation/AnnotationStatementGenerator.java:146",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Metadados de anotações são cacheados com limite padrão de 4096 entradas e override por system property.",
+          "location": "src/main/java/com/runestone/dynafilter/core/generator/annotation/TypeAnnotationUtils.java:44",
+          "confidence": "confirmed"
+        }
+      ],
+      "dependencies": [
+        "runestone-toolkit assertions",
+        "Caffeine cache",
+        "Spring Data JPA Specification type reference",
+        "Apache Commons Lang StringUtils"
+      ],
+      "algorithms": [
+        "Transformação de anotações em árvore lógica de statements",
+        "Resolução de valores com precedência constantValues > request parameters > defaultValues",
+        "Decodificação de operação dinâmica por código curto e prefixo de negação",
+        "Extração recursiva de meta-anotações e interfaces não-java",
+        "Resolução reflexiva de campos por dot notation"
+      ],
+      "complexity": "medium"
+    },
+    {
+      "name": "modules.jpa",
+      "path": "src/main/java/com/runestone/dynafilter/modules/jpa",
+      "purpose": "Adapta a árvore de statements do core para Spring Data JPA Specification, integra filtros dinâmicos ao Spring MVC e expõe repositories JPA que aceitam ConditionalStatement.",
+      "primary_files": [
+        "src/main/java/com/runestone/dynafilter/modules/jpa/operation/SpecificationFilterOperationService.java",
+        "src/main/java/com/runestone/dynafilter/modules/jpa/operation/specification/JpaPredicateUtils.java",
+        "src/main/java/com/runestone/dynafilter/modules/jpa/resolver/SpecificationDynamicFilterResolver.java",
+        "src/main/java/com/runestone/dynafilter/modules/jpa/resolver/SpecificationStatementAnalyser.java",
+        "src/main/java/com/runestone/dynafilter/modules/jpa/resolver/FetchingFilterDecorator.java",
+        "src/main/java/com/runestone/dynafilter/modules/jpa/repository/DynamicFilterJpaRepository.java",
+        "src/main/java/com/runestone/dynafilter/modules/jpa/repository/DynamicFilterJpaRepositoryImpl.java",
+        "src/main/java/com/runestone/dynafilter/modules/jpa/spring/SpecificationDynamicFilterArgumentResolver.java",
+        "src/main/java/com/runestone/dynafilter/modules/jpa/spring/SpringFilterDecoratorFactory.java",
+        "src/main/java/com/runestone/dynafilter/modules/jpa/spring/DynamicFilterServletAutoConfiguration.java"
+      ],
+      "functions": [
+        {
+          "name": "SpecificationDynamicFilterResolver.createFilter",
+          "file": "src/main/java/com/runestone/dynafilter/modules/jpa/resolver/SpecificationDynamicFilterResolver.java",
+          "params": ["StatementWrapper statementWrapper", "FilterDecorator<Specification<?>> decorator"],
+          "returns": "R extends Specification<?>",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "SpecificationStatementAnalyser.analyseCompoundStatement",
+          "file": "src/main/java/com/runestone/dynafilter/modules/jpa/resolver/SpecificationStatementAnalyser.java",
+          "params": ["CompoundStatement compoundStatement"],
+          "returns": "Specification<?> ",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "JpaPredicateUtils.computeAttributePath",
+          "file": "src/main/java/com/runestone/dynafilter/modules/jpa/operation/specification/JpaPredicateUtils.java",
+          "params": ["FilterData filterData", "Root<?> root"],
+          "returns": "Path<T>",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "JpaPredicateUtils.computeAttributeJoinPath",
+          "file": "src/main/java/com/runestone/dynafilter/modules/jpa/operation/specification/JpaPredicateUtils.java",
+          "params": ["FilterData filterData", "Root<?> root"],
+          "returns": "Expression<T>",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "FetchingFilterDecorator.decorate",
+          "file": "src/main/java/com/runestone/dynafilter/modules/jpa/resolver/FetchingFilterDecorator.java",
+          "params": ["Specification<?> filter", "StatementWrapper statementWrapper"],
+          "returns": "Specification<?> ",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "SpecificationDynamicFilterArgumentResolver.resolveArgument",
+          "file": "src/main/java/com/runestone/dynafilter/modules/jpa/spring/SpecificationDynamicFilterArgumentResolver.java",
+          "params": ["MethodParameter parameter", "ModelAndViewContainer mavContainer", "NativeWebRequest webRequest", "WebDataBinderFactory binderFactory"],
+          "returns": "Object",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "SpringFilterDecoratorFactory.createFilterDecorators",
+          "file": "src/main/java/com/runestone/dynafilter/modules/jpa/spring/SpringFilterDecoratorFactory.java",
+          "params": ["AnnotationStatementInput input"],
+          "returns": "FilterDecorator<Specification<?>>",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "DynamicFilterJpaRepositoryImpl.updateSortFilterPath",
+          "file": "src/main/java/com/runestone/dynafilter/modules/jpa/repository/DynamicFilterJpaRepositoryImpl.java",
+          "params": ["Sort sort", "List<FilterRequestData> filters"],
+          "returns": "Sort",
+          "confidence": "confirmed"
+        }
+      ],
+      "entities": [
+        {
+          "name": "DynamicFilterJpaRepositoryImpl",
+          "fields": [
+            {"name": "em", "type": "EntityManager", "required": true},
+            {"name": "dynamicFilterResolver", "type": "DynamicFilterResolver<Specification<T>>", "required": false}
+          ],
+          "confidence": "confirmed"
+        },
+        {
+          "name": "SpecificationDynamicFilterArgumentResolver",
+          "fields": [
+            {"name": "statementGenerator", "type": "AnnotationStatementGenerator", "required": true},
+            {"name": "dynamicFilterResolver", "type": "DynamicFilterResolver<Specification<?>>", "required": true},
+            {"name": "filterDecoratorFactory", "type": "FilterDecoratorFactory<Specification<?>>", "required": true}
+          ],
+          "confidence": "confirmed"
+        },
+        {
+          "name": "SpringFilterDecoratorFactory",
+          "fields": [
+            {"name": "applicationContext", "type": "GenericApplicationContext", "required": true},
+            {"name": "decoratorCache", "type": "ConcurrentMap<AnnotationStatementInput, Optional<FilterDecorator<Specification<?>>>>", "required": true},
+            {"name": "decoratorsByClass", "type": "ConcurrentMap<Class<? extends FilterDecorator<?>>, List<FilterDecorator<Specification<?>>>>", "required": true}
+          ],
+          "confidence": "confirmed"
+        },
+        {
+          "name": "FetchingFilterDecorator",
+          "fields": [
+            {"name": "fetches", "type": "Collection<Fetching>", "required": true},
+            {"name": "resolvedFetchPaths", "type": "List<ResolvedFetchPath>", "required": true}
+          ],
+          "confidence": "confirmed"
+        },
+        {
+          "name": "JpaPredicateUtils.ParsedPath",
+          "fields": [
+            {"name": "associationSegments", "type": "String[]", "required": true},
+            {"name": "attributeSegment", "type": "String", "required": true}
+          ],
+          "confidence": "confirmed"
+        }
+      ],
+      "business_rules": [
+        {
+          "description": "NoOpStatement é traduzido para Specification.unrestricted().",
+          "location": "src/main/java/com/runestone/dynafilter/modules/jpa/resolver/SpecificationStatementAnalyser.java:59",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Join type de filtros é INNER por padrão, LEFT com ModJoinTypeLeft e RIGHT com ModJoinTypeRight.",
+          "location": "src/main/java/com/runestone/dynafilter/modules/jpa/operation/specification/JpaPredicateUtils.java:106",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "SpecificationIsIn faz join no segmento final e marca distinct quando o path resolve Collection.",
+          "location": "src/main/java/com/runestone/dynafilter/modules/jpa/operation/specification/SpecificationIsIn.java:53",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "FetchingFilterDecorator não cria fetches em count query e cria distinct em query normal.",
+          "location": "src/main/java/com/runestone/dynafilter/modules/jpa/resolver/FetchingFilterDecorator.java:63",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Path variables são mescladas ao mapa de filtros depois dos query parameters, podendo sobrescrever chaves iguais.",
+          "location": "src/main/java/com/runestone/dynafilter/modules/jpa/spring/SpecificationDynamicFilterArgumentResolver.java:102",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Sort por parâmetro de filtro é traduzido para o path real usando o primeiro parâmetro de cada filtro.",
+          "location": "src/main/java/com/runestone/dynafilter/modules/jpa/repository/DynamicFilterJpaRepositoryImpl.java:165",
+          "confidence": "confirmed"
+        }
+      ],
+      "dependencies": [
+        "core statements and annotations",
+        "runestone-toolkit DataConversionService",
+        "Spring Data JPA Specification and SimpleJpaRepository",
+        "Spring MVC HandlerMethodArgumentResolver",
+        "Jakarta Persistence Criteria API",
+        "Caffeine cache"
+      ],
+      "algorithms": [
+        "Conversão visitor de árvore lógica para Specification JPA",
+        "Criação e reuso de joins por path dot-notation com cache de parse",
+        "Conversão de valores para tipo real do Criteria path",
+        "Fetch join declarativo por annotation com deduplicação e skip em count query",
+        "Tradução de Sort por parâmetro HTTP para path JPA real",
+        "Resolução de decorators Spring com cache e registro dinâmico de beans"
+      ],
+      "complexity": "high"
+    },
+    {
+      "name": "modules.openapi",
+      "path": "src/main/java/com/runestone/dynafilter/modules/openapi",
+      "purpose": "Integra filtros dinâmicos ao SpringDoc OpenAPI, substituindo parâmetros técnicos por parâmetros documentados individualmente e propagando constraints Bean Validation para schemas.",
+      "primary_files": [
+        "src/main/java/com/runestone/dynafilter/modules/openapi/DynaFilterOperationCustomizer.java",
+        "src/main/java/com/runestone/dynafilter/modules/openapi/SchemaValidationUtils.java"
+      ],
+      "functions": [
+        {
+          "name": "DynaFilterOperationCustomizer.customize",
+          "file": "src/main/java/com/runestone/dynafilter/modules/openapi/DynaFilterOperationCustomizer.java",
+          "params": ["Operation operation", "HandlerMethod handlerMethod"],
+          "returns": "Operation",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "DynaFilterOperationCustomizer.customizeParameter",
+          "file": "src/main/java/com/runestone/dynafilter/modules/openapi/DynaFilterOperationCustomizer.java",
+          "params": ["Operation operation", "MethodParameter methodParameter", "FilterRequestData filter"],
+          "returns": "void",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "DynaFilterOperationCustomizer.createCommonSchema",
+          "file": "src/main/java/com/runestone/dynafilter/modules/openapi/DynaFilterOperationCustomizer.java",
+          "params": ["FilterRequestData filter", "Field field", "MethodParameter methodParameter", "Parameter parameter"],
+          "returns": "void",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "SchemaValidationUtils.applyValidations",
+          "file": "src/main/java/com/runestone/dynafilter/modules/openapi/SchemaValidationUtils.java",
+          "params": ["Schema<?> schema", "AnnotatedElement annotatedElement"],
+          "returns": "void",
+          "confidence": "confirmed"
+        }
+      ],
+      "entities": [
+        {
+          "name": "DynaFilterOperationCustomizer",
+          "fields": [
+            {"name": "parameterNameDiscoverer", "type": "ParameterNameDiscoverer", "required": false}
+          ],
+          "confidence": "confirmed"
+        },
+        {
+          "name": "SchemaValidationUtils",
+          "fields": [],
+          "confidence": "confirmed"
+        }
+      ],
+      "business_rules": [
+        {
+          "description": "Filtros com constantValues não geram parâmetros OpenAPI.",
+          "location": "src/main/java/com/runestone/dynafilter/modules/openapi/DynaFilterOperationCustomizer.java:92",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Operação Dynamic em OpenAPI exige um único parâmetro e é documentada como array string com minItems 2.",
+          "location": "src/main/java/com/runestone/dynafilter/modules/openapi/DynaFilterOperationCustomizer.java:96",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Operação IsIn é documentada como array e preserva schema existente como item quando disponível.",
+          "location": "src/main/java/com/runestone/dynafilter/modules/openapi/DynaFilterOperationCustomizer.java:114",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Parâmetro OpenAPI existente em path permanece path e é marcado required.",
+          "location": "src/main/java/com/runestone/dynafilter/modules/openapi/DynaFilterOperationCustomizer.java:129",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Constraints Bean Validation são aplicadas conforme tipo do schema: número, string ou array.",
+          "location": "src/main/java/com/runestone/dynafilter/modules/openapi/SchemaValidationUtils.java:44",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Possível lacuna: condição inicial verifica Disjunction duas vezes e não DisjunctionFrom.",
+          "location": "src/main/java/com/runestone/dynafilter/modules/openapi/DynaFilterOperationCustomizer.java:63",
+          "confidence": "inferred"
+        }
+      ],
+      "dependencies": [
+        "core annotation metadata",
+        "SpringDoc OperationCustomizer",
+        "Swagger OpenAPI model schemas",
+        "Jackson JsonView",
+        "Jakarta Bean Validation",
+        "Spring AnnotationUtils"
+      ],
+      "algorithms": [
+        "Expansão de filtro dinâmico em parâmetros OpenAPI individuais",
+        "Inferência de schema a partir do field alvo e JsonView",
+        "Modelagem especial para Dynamic, IsIn e IsNull",
+        "Propagação de constraints Bean Validation para Schema OpenAPI"
+      ],
+      "complexity": "medium"
+    },
+    {
+      "name": "test-support.performance",
+      "path": "src/test/java/com/runestone/dynafilter/performance",
+      "purpose": "Concentra benchmarks JMH e fixtures de medição para hotspots do dynamic-filter-resolver, incluindo geração de statements, resolução JPA, caches, Criteria API, fetch decorators, proxies e tradução de sort.",
+      "primary_files": [
+        "src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverBenchmarkRunner.java",
+        "src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverBenchmark.java",
+        "src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverPerf02Benchmark.java",
+        "src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverPerf06ProxyBenchmark.java",
+        "src/test/java/com/runestone/dynafilter/modules/jpa/repository/DynamicFilterRepositorySortPerfBenchmark.java"
+      ],
+      "functions": [
+        {
+          "name": "DynamicFilterResolverBenchmarkRunner.main",
+          "file": "src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverBenchmarkRunner.java",
+          "params": ["String[] args"],
+          "returns": "void",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "DynamicFilterResolverBenchmark.statementGenerator_searchPeopleAndGames",
+          "file": "src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverBenchmark.java",
+          "params": ["StatementState state", "Blackhole blackhole"],
+          "returns": "void",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "DynamicFilterResolverPerf02Benchmark.perf02_specification_toPredicate_manyFilters",
+          "file": "src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverPerf02Benchmark.java",
+          "params": ["JpaPredicateState state", "Blackhole blackhole"],
+          "returns": "void",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "DynamicFilterResolverPerf06ProxyBenchmark.perf06_proxyInvocation_legacyReflective_toPredicate",
+          "file": "src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverPerf06ProxyBenchmark.java",
+          "params": ["ProxyInvocationState state", "Blackhole blackhole"],
+          "returns": "void",
+          "confidence": "confirmed"
+        },
+        {
+          "name": "DynamicFilterRepositorySortPerfBenchmark.perf05_sortTranslation_optimized_manyOrdersManyFilters",
+          "file": "src/test/java/com/runestone/dynafilter/modules/jpa/repository/DynamicFilterRepositorySortPerfBenchmark.java",
+          "params": ["HeavyMappingsState state", "Blackhole blackhole"],
+          "returns": "void",
+          "confidence": "confirmed"
+        }
+      ],
+      "entities": [
+        {
+          "name": "DynamicFilterResolverBenchmark.StatementState",
+          "fields": [
+            {"name": "generator", "type": "AnnotationStatementGenerator", "required": true},
+            {"name": "resolver", "type": "SpecificationDynamicFilterResolver", "required": true},
+            {"name": "input", "type": "AnnotationStatementInput", "required": true},
+            {"name": "parameters", "type": "Map<String, Object>", "required": true},
+            {"name": "precomputedStatement", "type": "StatementWrapper", "required": true}
+          ],
+          "confidence": "confirmed"
+        },
+        {
+          "name": "DynamicFilterResolverPerf02Benchmark.JpaPredicateState",
+          "fields": [
+            {"name": "applicationContext", "type": "ConfigurableApplicationContext", "required": true},
+            {"name": "entityManager", "type": "EntityManager", "required": true},
+            {"name": "heavySpecification", "type": "Specification<Person>", "required": true},
+            {"name": "repeatedNestedPathSpecification", "type": "Specification<Person>", "required": true},
+            {"name": "deepFetchingSpecification", "type": "Specification<Person>", "required": true},
+            {"name": "overlappingFetchingSpecification", "type": "Specification<Person>", "required": true}
+          ],
+          "confidence": "confirmed"
+        },
+        {
+          "name": "DynamicFilterRepositorySortPerfBenchmark.HeavyMappingsState",
+          "fields": [
+            {"name": "sort", "type": "Sort", "required": true},
+            {"name": "filters", "type": "List<FilterRequestData>", "required": true}
+          ],
+          "confidence": "confirmed"
+        }
+      ],
+      "business_rules": [
+        {
+          "description": "Runner manual grava resultado JMH em dynamic-filter-resolver/target/jmh-result.json.",
+          "location": "src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverBenchmarkRunner.java:17",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Perf02 usa H2 em memória, ddl-auto=create-drop e contexto Spring sem web para benchmarks Criteria reais.",
+          "location": "src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverPerf02Benchmark.java:127",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "CacheGrowthState preenche cache com 20.000 annotations sintéticas e limpa caches no teardown.",
+          "location": "src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverPerf02Benchmark.java:235",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "BoundedCacheHitState preenche cache acima do limite com 50.000 entradas sintéticas.",
+          "location": "src/test/java/com/runestone/dynafilter/performance/DynamicFilterResolverPerf02Benchmark.java:259",
+          "confidence": "confirmed"
+        },
+        {
+          "description": "Sort benchmark compara updateSortFilterPath otimizado com implementação legada que procura filtros por order.",
+          "location": "src/test/java/com/runestone/dynafilter/modules/jpa/repository/DynamicFilterRepositorySortPerfBenchmark.java:31",
+          "confidence": "confirmed"
+        }
+      ],
+      "dependencies": [
+        "JMH",
+        "Mockito",
+        "Spring Boot test application context",
+        "H2 in-memory database",
+        "Spring Data JPA Specification",
+        "dynamic-filter-resolver core and modules.jpa"
+      ],
+      "algorithms": [
+        "Benchmark de geração de statements por annotations",
+        "Benchmark de conversão de statements em Specification",
+        "Benchmark de Criteria API com muitos filtros e paths repetidos",
+        "Benchmark de cache de annotation metadata sob crescimento e eviction",
+        "Benchmark de fetch decorator com paths profundos e sobrepostos",
+        "Benchmark de tradução de Sort por mapa de parâmetros",
+        "Benchmark de invocação de proxy Specification"
+      ],
+      "complexity": "medium"
+    }
+  ]
+}

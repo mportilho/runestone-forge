@@ -1,0 +1,336 @@
+{
+  "version": "1.2.39",
+  "project": "dynamic-filter-resolver",
+  "user_name": "Marcelo",
+  "chat_language": "pt-br",
+  "doc_language": "Português",
+  "answer_mode": "chat",
+  "doc_level": "completo",
+  "output_folder": "_reversa_sdd",
+  "forward_folder": "_reversa_forward",
+  "phase": "revisao",
+  "completed": [
+    "reconhecimento",
+    "escavacao",
+    "interpretacao",
+    "geracao",
+    "revisao"
+  ],
+  "pending": [],
+  "checkpoints": {
+    "scout": {
+      "completed_at": "2026-05-16T16:40:42Z",
+      "files": [
+        "_reversa_sdd/inventory.md",
+        "_reversa_sdd/dependencies.md",
+        ".reversa/context/surface.json"
+      ],
+      "summary": {
+        "primary_language": "Java",
+        "framework_main": "Spring Data JPA / Spring MVC / SpringDoc OpenAPI",
+        "modules_identified": [
+          "core",
+          "modules.jpa",
+          "modules.openapi",
+          "test-support.performance"
+        ]
+      }
+    },
+    "archaeologist": {
+      "updated_at": "2026-05-16T17:33:52Z",
+      "modules_analyzed": [
+        "core",
+        "modules.jpa",
+        "modules.openapi",
+        "test-support.performance"
+      ],
+      "modules_pending": [],
+      "files": [
+        "_reversa_sdd/code-analysis.md",
+        "_reversa_sdd/data-dictionary.md",
+        "_reversa_sdd/flowcharts/core.md",
+        "_reversa_sdd/flowcharts/modules.jpa.md",
+        "_reversa_sdd/flowcharts/modules.openapi.md",
+        "_reversa_sdd/flowcharts/test-support.performance.md",
+        "_reversa_sdd/core/legacy-mapping.md",
+        "_reversa_sdd/modules.jpa/legacy-mapping.md",
+        "_reversa_sdd/modules.openapi/legacy-mapping.md",
+        "_reversa_sdd/test-support.performance/legacy-mapping.md",
+        ".reversa/context/modules.json"
+      ],
+      "summary": {
+        "module": "test-support.performance",
+        "primary_algorithms": [
+          "JMH benchmark orchestration",
+          "Criteria API benchmark setup",
+          "annotation metadata cache pressure",
+          "sort translation performance comparison"
+        ],
+        "entities": 3,
+        "java_lsp_used": false,
+        "java_lsp_note": "Preferido pelo usuário para próximas inspeções, mas sem endpoint LSP exposto nesta sessão."
+      }
+    },
+    "detective": {
+      "completed_at": "2026-05-16T17:42:38Z",
+      "files": [
+        "_reversa_sdd/domain.md",
+        "_reversa_sdd/state-machines.md",
+        "_reversa_sdd/permissions.md",
+        "_reversa_sdd/adrs/001-statement-tree-as-intermediate-model.md",
+        "_reversa_sdd/adrs/002-filter-contracts-can-live-outside-controller-parameters.md",
+        "_reversa_sdd/adrs/003-default-join-type-is-inner.md",
+        "_reversa_sdd/adrs/004-openapi-exposes-only-user-supplied-filters.md",
+        "_reversa_sdd/adrs/005-performance-decisions-require-jmh-evidence.md",
+        "_reversa_sdd/adrs/006-validate-filter-metadata-at-startup.md"
+      ],
+      "summary": {
+        "domain_type": "domínio técnico de biblioteca",
+        "rules_identified": 44,
+        "adrs_generated": 6,
+        "state_machines": 5,
+        "rbac_detected": false,
+        "red_gaps": [
+          "sem domínio de negócio final neste módulo",
+          "sem RBAC/ACL/autenticação no código de produção",
+          "sem schema produtivo ou entidades de produção",
+          "sem logs de runtime para análise operacional"
+        ]
+      }
+    },
+    "architect": {
+      "completed_at": "2026-05-16T18:19:27Z",
+      "files": [
+        "_reversa_sdd/architecture.md",
+        "_reversa_sdd/c4-context.md",
+        "_reversa_sdd/c4-containers.md",
+        "_reversa_sdd/c4-components.md",
+        "_reversa_sdd/erd-complete.md",
+        "_reversa_sdd/traceability/spec-impact-matrix.md"
+      ],
+      "summary": {
+        "containers": [
+          "core",
+          "modules.jpa",
+          "modules.openapi",
+          "test-support.performance"
+        ],
+        "components_identified": 18,
+        "external_integrations": [
+          "Spring Data JPA",
+          "Spring MVC",
+          "SpringDoc OpenAPI",
+          "Jakarta Persistence Criteria API",
+          "Jakarta Bean Validation",
+          "runestone-toolkit",
+          "Caffeine",
+          "H2",
+          "JMH"
+        ],
+        "technical_debts": [
+          "possível lacuna de @DisjunctionFrom no OpenAPI customizer",
+          "injeção tardia do resolver em DynamicFilterJpaRepositoryImpl",
+          "proxy Specification customizado com default methods não garantidos",
+          "findFilterField sem validação para generics/wildcards/raw collections"
+        ]
+      }
+    },
+    "writer": {
+      "completed_at": "2026-05-16T18:35:54Z",
+      "files": [
+        "_reversa_sdd/core/requirements.md",
+        "_reversa_sdd/core/design.md",
+        "_reversa_sdd/core/tasks.md",
+        "_reversa_sdd/core/flows.md",
+        "_reversa_sdd/core/decisions.md",
+        "_reversa_sdd/core/questions.md",
+        "_reversa_sdd/core/tests.md",
+        "_reversa_sdd/modules.jpa/requirements.md",
+        "_reversa_sdd/modules.jpa/design.md",
+        "_reversa_sdd/modules.jpa/tasks.md",
+        "_reversa_sdd/modules.jpa/contracts.md",
+        "_reversa_sdd/modules.jpa/flows.md",
+        "_reversa_sdd/modules.jpa/decisions.md",
+        "_reversa_sdd/modules.jpa/questions.md",
+        "_reversa_sdd/modules.jpa/tests.md",
+        "_reversa_sdd/modules.openapi/requirements.md",
+        "_reversa_sdd/modules.openapi/design.md",
+        "_reversa_sdd/modules.openapi/tasks.md",
+        "_reversa_sdd/modules.openapi/contracts.md",
+        "_reversa_sdd/modules.openapi/flows.md",
+        "_reversa_sdd/modules.openapi/decisions.md",
+        "_reversa_sdd/modules.openapi/questions.md",
+        "_reversa_sdd/modules.openapi/tests.md",
+        "_reversa_sdd/test-support.performance/requirements.md",
+        "_reversa_sdd/test-support.performance/design.md",
+        "_reversa_sdd/test-support.performance/tasks.md",
+        "_reversa_sdd/test-support.performance/decisions.md",
+        "_reversa_sdd/test-support.performance/tests.md",
+        "_reversa_sdd/user-stories/desenvolvedor-de-api.md",
+        "_reversa_sdd/traceability/code-spec-matrix.md"
+      ],
+      "summary": {
+        "units_generated": 4,
+        "files_generated": 30,
+        "global_files": 2,
+        "coverage_estimate": "produção 100%, testes/performance 90%"
+      }
+    },
+    "reviewer": {
+      "completed_at": "2026-05-16T18:51:01Z",
+      "files": [
+        "_reversa_sdd/questions.md",
+        "_reversa_sdd/gaps.md",
+        "_reversa_sdd/confidence-report.md"
+      ],
+      "summary": {
+        "specs_revised": 56,
+        "cross_review_performed": false,
+        "cross_review_engine": null,
+        "reclassifications": 7,
+        "questions_generated": 7,
+        "questions_answered": 7,
+        "confidence_percent": 89.0
+      }
+    }
+  },
+  "redator_progress": {
+    "started_at": "2026-05-16T18:22:37Z",
+    "updated_at": "2026-05-16T18:35:54Z",
+    "total_files": 30,
+    "completed_files": [
+      "_reversa_sdd/core/requirements.md",
+      "_reversa_sdd/core/design.md",
+      "_reversa_sdd/core/tasks.md",
+      "_reversa_sdd/core/flows.md",
+      "_reversa_sdd/core/decisions.md",
+      "_reversa_sdd/core/questions.md",
+      "_reversa_sdd/core/tests.md",
+      "_reversa_sdd/modules.jpa/requirements.md",
+      "_reversa_sdd/modules.jpa/design.md",
+      "_reversa_sdd/modules.jpa/tasks.md",
+      "_reversa_sdd/modules.jpa/contracts.md",
+      "_reversa_sdd/modules.jpa/flows.md",
+      "_reversa_sdd/modules.jpa/decisions.md",
+      "_reversa_sdd/modules.jpa/questions.md",
+      "_reversa_sdd/modules.jpa/tests.md",
+      "_reversa_sdd/modules.openapi/requirements.md",
+      "_reversa_sdd/modules.openapi/design.md",
+      "_reversa_sdd/modules.openapi/tasks.md",
+      "_reversa_sdd/modules.openapi/contracts.md",
+      "_reversa_sdd/modules.openapi/flows.md",
+      "_reversa_sdd/modules.openapi/decisions.md",
+      "_reversa_sdd/modules.openapi/questions.md",
+      "_reversa_sdd/modules.openapi/tests.md",
+      "_reversa_sdd/test-support.performance/requirements.md",
+      "_reversa_sdd/test-support.performance/design.md",
+      "_reversa_sdd/test-support.performance/tasks.md",
+      "_reversa_sdd/test-support.performance/decisions.md",
+      "_reversa_sdd/test-support.performance/tests.md",
+      "_reversa_sdd/user-stories/desenvolvedor-de-api.md",
+      "_reversa_sdd/traceability/code-spec-matrix.md"
+    ],
+    "current_index": 30,
+    "next_file": null,
+    "units_completed": [
+      "core",
+      "modules.jpa",
+      "modules.openapi",
+      "test-support.performance"
+    ]
+  },
+  "engines": [
+    "codex",
+    "gemini-cli",
+    "opencode"
+  ],
+  "agents": [
+    "reversa",
+    "reversa-scout",
+    "reversa-archaeologist",
+    "reversa-detective",
+    "reversa-architect",
+    "reversa-writer",
+    "reversa-reviewer",
+    "reversa-visor",
+    "reversa-data-master",
+    "reversa-design-system",
+    "reversa-agents-help",
+    "reversa-reconstructor",
+    "reversa-migrate",
+    "reversa-paradigm-advisor",
+    "reversa-curator",
+    "reversa-strategist",
+    "reversa-designer",
+    "reversa-screen-translator",
+    "reversa-inspector",
+    "reversa-forward",
+    "reversa-requirements",
+    "reversa-clarify",
+    "reversa-plan",
+    "reversa-to-do",
+    "reversa-audit",
+    "reversa-quality",
+    "reversa-coding",
+    "reversa-principles",
+    "reversa-resume",
+    "reversa-pricing-profile",
+    "reversa-pricing-size",
+    "reversa-pricing-estimate"
+  ],
+  "created_files": [
+    ".agents/skills/reversa",
+    ".agents/skills/reversa-scout",
+    ".agents/skills/reversa-archaeologist",
+    ".agents/skills/reversa-detective",
+    ".agents/skills/reversa-architect",
+    ".agents/skills/reversa-writer",
+    ".agents/skills/reversa-reviewer",
+    ".agents/skills/reversa-visor",
+    ".agents/skills/reversa-data-master",
+    ".agents/skills/reversa-design-system",
+    ".agents/skills/reversa-agents-help",
+    ".agents/skills/reversa-reconstructor",
+    ".agents/skills/reversa-migrate",
+    ".agents/skills/reversa-paradigm-advisor",
+    ".agents/skills/reversa-curator",
+    ".agents/skills/reversa-strategist",
+    ".agents/skills/reversa-designer",
+    ".agents/skills/reversa-screen-translator",
+    ".agents/skills/reversa-inspector",
+    ".agents/skills/reversa-forward",
+    ".agents/skills/reversa-requirements",
+    ".agents/skills/reversa-clarify",
+    ".agents/skills/reversa-plan",
+    ".agents/skills/reversa-to-do",
+    ".agents/skills/reversa-audit",
+    ".agents/skills/reversa-quality",
+    ".agents/skills/reversa-coding",
+    ".agents/skills/reversa-principles",
+    ".agents/skills/reversa-resume",
+    ".agents/skills/reversa-pricing-profile",
+    ".agents/skills/reversa-pricing-size",
+    ".agents/skills/reversa-pricing-estimate",
+    "AGENTS.md",
+    "GEMINI.md",
+    ".reversa/templates/actions-template.md",
+    ".reversa/templates/principles-template.md",
+    ".reversa/templates/quality-template.md",
+    ".reversa/templates/requirements-template.md",
+    ".reversa/templates/roadmap-template.md",
+    ".reversa/scripts/sh/bind-to-extraction.sh",
+    ".reversa/scripts/sh/prepare-roadmap.sh",
+    ".reversa/scripts/sh/verify-prerequisites.sh",
+    ".reversa/scripts/ps/bind-to-extraction.ps1",
+    ".reversa/scripts/ps/prepare-roadmap.ps1",
+    ".reversa/scripts/ps/verify-prerequisites.ps1",
+    ".reversa/hooks.yml",
+    ".reversa/setup.json",
+    ".reversa/state.json",
+    ".reversa/config.toml",
+    ".reversa/config.user.toml",
+    ".reversa/plan.md",
+    ".reversa/version",
+    ".reversa/_config/manifest.yaml"
+  ]
+}

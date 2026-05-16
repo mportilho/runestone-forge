@@ -1,0 +1,161 @@
+{
+  "generated_at": "2026-05-16T16:40:42Z",
+  "project_root": "/home/marcelo/dev/git/runestone-forge/dynamic-filter-resolver",
+  "languages": [
+    {
+      "name": "Java",
+      "extensions": [
+        ".java"
+      ],
+      "file_count": 203
+    },
+    {
+      "name": "Markdown",
+      "extensions": [
+        ".md"
+      ],
+      "file_count": 3
+    },
+    {
+      "name": "XML",
+      "extensions": [
+        ".xml"
+      ],
+      "file_count": 1
+    }
+  ],
+  "primary_language": "Java",
+  "frameworks": [
+    {
+      "name": "Maven",
+      "version": "parent-managed",
+      "source": "pom.xml"
+    },
+    {
+      "name": "Java",
+      "version": "21",
+      "source": "../pom.xml"
+    },
+    {
+      "name": "Spring Boot dependency management",
+      "version": "4.0.2",
+      "source": "pom.xml"
+    },
+    {
+      "name": "Spring Data JPA",
+      "version": "managed-by-spring-boot-4.0.2",
+      "source": "pom.xml"
+    },
+    {
+      "name": "Spring MVC",
+      "version": "managed-by-spring-boot-4.0.2",
+      "source": "pom.xml"
+    },
+    {
+      "name": "SpringDoc OpenAPI",
+      "version": "3.0.1",
+      "source": "pom.xml"
+    },
+    {
+      "name": "JMH",
+      "version": "1.37",
+      "source": "pom.xml"
+    }
+  ],
+  "package_manager": "Maven",
+  "entry_points": [
+    {
+      "path": "src/main/java/com/runestone/dynafilter/modules/jpa/spring/EnableDynamicFilterServletConfiguration.java",
+      "type": "spring_enable_annotation"
+    },
+    {
+      "path": "src/main/java/com/runestone/dynafilter/modules/jpa/spring/DynamicFilterServletAutoConfiguration.java",
+      "type": "spring_configuration"
+    },
+    {
+      "path": "src/main/java/com/runestone/dynafilter/modules/jpa/spring/SpecificationDynamicFilterArgumentResolver.java",
+      "type": "spring_mvc_argument_resolver"
+    },
+    {
+      "path": "src/main/java/com/runestone/dynafilter/modules/jpa/repository/DynamicFilterJpaRepository.java",
+      "type": "spring_data_repository_api"
+    },
+    {
+      "path": "src/main/java/com/runestone/dynafilter/modules/openapi/DynaFilterOperationCustomizer.java",
+      "type": "springdoc_operation_customizer"
+    }
+  ],
+  "config_files": [
+    "pom.xml",
+    "../pom.xml",
+    ".classpath",
+    ".project",
+    ".settings/org.eclipse.jdt.apt.core.prefs",
+    ".settings/org.eclipse.jdt.core.prefs",
+    ".settings/org.eclipse.core.resources.prefs",
+    ".settings/org.eclipse.m2e.core.prefs"
+  ],
+  "ci_cd": [],
+  "docker": {},
+  "database_hints": [
+    {
+      "path": "pom.xml",
+      "type": "spring_data_jpa_dependency"
+    },
+    {
+      "path": "pom.xml",
+      "type": "h2_test_dependency"
+    },
+    {
+      "path": "src/test/java/com/runestone/dynafilter/modules/jpa/tools/app/database/jpamodels/",
+      "type": "jpa_test_entities"
+    }
+  ],
+  "test_framework": "JUnit Jupiter, AssertJ, Mockito, Spring Boot Test, Spring Data JPA Test, JMH",
+  "test_file_count": 43,
+  "modules": [
+    "core",
+    "modules.jpa",
+    "modules.openapi",
+    "test-support.performance"
+  ],
+  "external_integrations": [
+    "Spring Data JPA",
+    "Spring MVC",
+    "SpringDoc OpenAPI",
+    "Jakarta Servlet",
+    "H2 test database"
+  ],
+  "total_files": 207,
+  "source_files": {
+    "main_java": 91,
+    "test_java": 112,
+    "main_modules": {
+      "core": 59,
+      "modules.jpa": 30,
+      "modules.openapi": 2
+    }
+  },
+  "organization_suggestion": {
+    "granularity": "module",
+    "rationale": "A estrutura de producao tem limites claros por modulo tecnico: core, modules/jpa e modules/openapi.",
+    "signals": [
+      {
+        "type": "top_level_domain_folders",
+        "evidence": [
+          "src/main/java/com/runestone/dynafilter/core/",
+          "src/main/java/com/runestone/dynafilter/modules/jpa/",
+          "src/main/java/com/runestone/dynafilter/modules/openapi/"
+        ]
+      },
+      {
+        "type": "spring_mvc_extension_point",
+        "evidence": [
+          "src/main/java/com/runestone/dynafilter/modules/jpa/spring/SpecificationDynamicFilterArgumentResolver.java",
+          "src/main/java/com/runestone/dynafilter/modules/jpa/spring/DynamicFilterServletAutoConfiguration.java"
+        ]
+      }
+    ],
+    "features": []
+  }
+}
