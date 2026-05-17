@@ -12,6 +12,7 @@ import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -86,6 +87,18 @@ class ExpressionCompilerTest {
 
         CompiledExpression first = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, env1);
         CompiledExpression second = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, env2);
+
+        assertThat(second).isSameAs(first);
+    }
+
+    @Test
+    void shouldCacheCompiledExpressionWithFoldedPropertyChain() {
+        ExpressionEnvironment environment = new ExpressionEnvironmentBuilder()
+            .registerExternalSymbol("prices", List.of(BigDecimal.ONE, BigDecimal.TEN), false)
+            .build();
+
+        CompiledExpression first = compiler.compile("prices[1]", ExpressionResultType.MATH, environment);
+        CompiledExpression second = compiler.compile("prices[1]", ExpressionResultType.MATH, environment);
 
         assertThat(second).isSameAs(first);
     }

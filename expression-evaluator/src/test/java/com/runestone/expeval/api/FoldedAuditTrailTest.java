@@ -209,6 +209,22 @@ class FoldedAuditTrailTest {
                     .extracting(AuditEvent.VariableRead::name)
                     .contains("CONST_POINT");
         }
+
+        @Test
+        @DisplayName("fully folded collection chain still emits VariableRead for the root")
+        void fullyFoldedCollectionChainProducesVariableRead() {
+            ExpressionEnvironment env = ExpressionEnvironment.builder()
+                    .registerExternalSymbol("PRICES", List.of(new BigDecimal("5"), new BigDecimal("15")), false)
+                    .build();
+
+            AuditResult<BigDecimal> result = MathExpression.compile("PRICES[1]", env)
+                    .computeWithAudit();
+
+            assertThat(result.value()).isEqualByComparingTo("15");
+            assertThat(variableReads(result))
+                    .extracting(AuditEvent.VariableRead::name)
+                    .contains("PRICES");
+        }
     }
 
     // -----------------------------------------------------------------------

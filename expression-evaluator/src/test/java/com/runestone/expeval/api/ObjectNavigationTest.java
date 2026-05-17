@@ -2,6 +2,8 @@ package com.runestone.expeval.api;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
+import com.runestone.expeval.api.support.FoldingNavigationFixtures.CountingBox;
+import com.runestone.expeval.api.support.FoldingNavigationFixtures.TypedBox;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -208,6 +210,36 @@ class ObjectNavigationTest {
                 .compute(Map.of("usuario", usuario));
 
         assertThat(result).isEqualByComparingTo("99");
+    }
+
+    @Test
+    @DisplayName("typed method on non-overridable root is folded and not invoked during compute")
+    void shouldFoldTypedMethodOnNonOverridableRoot() {
+        var box = new TypedBox(new BigDecimal("7"));
+        ExpressionEnvironment env = ExpressionEnvironment.builder()
+                .registerTypeHint(TypedBox.class)
+                .registerExternalSymbol("BOX", box, false)
+                .build();
+
+        MathExpression expression = MathExpression.compile("BOX.multiply(3)", env);
+
+        assertThat(expression.compute()).isEqualByComparingTo("21");
+    }
+
+    @Test
+    @DisplayName("reflective method without type hint remains a runtime method call")
+    void shouldKeepReflectiveMethodRuntimeWithoutTypeHint() {
+        CountingBox box = new CountingBox();
+        ExpressionEnvironment env = ExpressionEnvironment.builder()
+                .registerExternalSymbol("BOX", box, false)
+                .build();
+
+        MathExpression expression = MathExpression.compile("BOX.amount()", env);
+        box.resetCalls();
+        expression.compute();
+        expression.compute();
+
+        assertThat(box.calls()).isEqualTo(2);
     }
 
     // -------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
+import com.runestone.expeval.api.support.FoldingNavigationFixtures;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -431,6 +432,47 @@ class ConstantFoldingPlanTest {
             ExecutableNode result = compiled.executionPlan().resultExpression();
 
             assertThat(result).isNotInstanceOf(ExecutableLiteral.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("Property-chain prefix folding")
+    class PropertyChainPrefixFolding {
+
+        @Test
+        @DisplayName("complete constant chain folds to a literal result")
+        void completeConstantChainFoldsToLiteral() {
+            ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                    .registerExternalSymbol("PRICES", FoldingNavigationFixtures.prices(), false)
+                    .build();
+
+            CompiledExpression compiled = compiler.compile(
+                    "PRICES[1:3]..sum()",
+                    ExpressionResultType.MATH,
+                    environment);
+
+            assertThat(compiled.executionPlan().resultExpression()).isInstanceOf(ExecutableLiteral.class);
+            ExecutableLiteral literal = (ExecutableLiteral) compiled.executionPlan().resultExpression();
+            assertThat(literal.precomputed()).isEqualTo(new BigDecimal("40"));
+        }
+
+        @Test
+        @DisplayName("constant prefix with runtime predicate is rebuilt as literal root plus runtime suffix")
+        void constantPrefixWithRuntimeSuffixKeepsPropertyChain() {
+            ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                    .registerExternalSymbol("BOOKS", FoldingNavigationFixtures.books(), false)
+                    .registerExternalSymbol("author", "Alice", true)
+                    .build();
+
+            CompiledExpression compiled = compiler.compile(
+                    "BOOKS[?(@.author = author)]..count()",
+                    ExpressionResultType.MATH,
+                    environment);
+
+            assertThat(compiled.executionPlan().resultExpression()).isInstanceOf(ExecutablePropertyChain.class);
+            ExecutablePropertyChain chain = (ExecutablePropertyChain) compiled.executionPlan().resultExpression();
+            assertThat(chain.root()).isInstanceOf(ExecutableLiteral.class);
+            assertThat(chain.chain()).hasSize(2);
         }
     }
 

@@ -438,6 +438,17 @@ The builder folds:
 - foldable function calls when every argument is constant
 - vector literals when every element is constant
 - conditionals with constant conditions
+- property-chain prefixes whose root is constant and whose navigation steps are deterministic
+
+### Property-chain prefix folding
+
+When a property chain starts from a constant root, including a non-overridable external symbol that has already been replaced by an `ExecutableLiteral`, `ExecutionPlanBuilder` now evaluates the largest safe prefix at plan-build time.
+
+Foldable steps include typed property access, reflective property access, typed methods with constant arguments, index, map-key lookup, slice, wildcard, map projection, vector aggregation, collection functions whose descriptor is foldable, filters, and `..map(@ -> expr)` transforms when their predicate/transform only depends on constants and the current filter context (`@`, `@.key`, `@.value`).
+
+The builder stops at the first semantic barrier and rebuilds the remaining suffix as an `ExecutablePropertyChain` rooted at the folded prefix literal. Barriers include overridable or unknown identifiers, dynamic instants, `deep scan`, reflective method calls without type hints, non-foldable collection functions, and predicates/transforms that capture runtime values.
+
+Compile-time navigation reuses the same runtime operations used by `PropertyChainOps` and `CollectionNavigationOps`. If evaluating a candidate prefix would turn a runtime navigation failure into a compilation failure, the builder leaves that step in the runtime suffix instead.
 
 ### Assignment propagation
 
@@ -502,6 +513,7 @@ Notes:
 - ordinary identifiers are marked as `systemProvided = false`
 - destructuring assignments emit one `AssignmentEvent` per target
 - folded function calls still emit `FunctionCall`
+- fully or partially folded property chains keep the pre-stored `VariableRead` events for folded roots; audit equivalence is semantic, not a guarantee of identical internal navigation event counts
 
 ### Convenience views
 
