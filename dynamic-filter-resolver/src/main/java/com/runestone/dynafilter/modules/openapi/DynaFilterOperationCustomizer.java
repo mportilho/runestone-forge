@@ -61,7 +61,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
     public Operation customize(Operation operation, HandlerMethod handlerMethod) {
         for (MethodParameter methodParameter : handlerMethod.getMethodParameters()) {
             if (!methodParameter.hasParameterAnnotation(Conjunction.class) && !methodParameter.hasParameterAnnotation(ConjunctionFrom.class)
-                && !methodParameter.hasParameterAnnotation(Disjunction.class) && !methodParameter.hasParameterAnnotation(Disjunction.class)) {
+                && !methodParameter.hasParameterAnnotation(Disjunction.class) && !methodParameter.hasParameterAnnotation(DisjunctionFrom.class)) {
                 continue;
             }
 
