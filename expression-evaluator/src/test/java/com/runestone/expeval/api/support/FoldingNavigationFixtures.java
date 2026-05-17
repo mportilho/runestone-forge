@@ -2,10 +2,12 @@ package com.runestone.expeval.api.support;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public final class FoldingNavigationFixtures {
 
@@ -33,8 +35,8 @@ public final class FoldingNavigationFixtures {
         return new Catalog(books());
     }
 
-    public static Map<AccountKey, Account> accounts() {
-        Map<AccountKey, Account> accounts = new LinkedHashMap<>();
+    public static TrackedMap<AccountKey, Account> accounts() {
+        TrackedMap<AccountKey, Account> accounts = new TrackedMap<>();
         accounts.put(new AccountKey(1, "ops"), new Account(bd("10")));
         accounts.put(new AccountKey(2, "dev"), new Account(bd("20")));
         accounts.put(new AccountKey(3, "ops"), new Account(bd("30")));
@@ -82,6 +84,49 @@ public final class FoldingNavigationFixtures {
         }
     }
 
+    public static final class TrackedMap<K, V> extends LinkedHashMap<K, V> {
+
+        private int accessCount;
+
+        public int accessCount() {
+            return accessCount;
+        }
+
+        public void resetAccessCount() {
+            accessCount = 0;
+        }
+
+        @Override
+        public V get(Object key) {
+            accessCount++;
+            return super.get(key);
+        }
+
+        @Override
+        public Set<Map.Entry<K, V>> entrySet() {
+            accessCount++;
+            return super.entrySet();
+        }
+
+        @Override
+        public Collection<V> values() {
+            accessCount++;
+            return super.values();
+        }
+
+        @Override
+        public Set<K> keySet() {
+            accessCount++;
+            return super.keySet();
+        }
+
+        @Override
+        public int size() {
+            accessCount++;
+            return super.size();
+        }
+    }
+
     public record Book(String title, String author, BigDecimal price) {
     }
 
@@ -101,6 +146,29 @@ public final class FoldingNavigationFixtures {
         public BigDecimal amount() {
             calls++;
             return bd("7");
+        }
+
+        public int calls() {
+            return calls;
+        }
+
+        public void resetCalls() {
+            calls = 0;
+        }
+    }
+
+    public static final class CountingTypedBox {
+
+        private final BigDecimal amount;
+        private int calls;
+
+        public CountingTypedBox(BigDecimal amount) {
+            this.amount = amount;
+        }
+
+        public BigDecimal multiply(BigDecimal factor) {
+            calls++;
+            return amount.multiply(factor);
         }
 
         public int calls() {

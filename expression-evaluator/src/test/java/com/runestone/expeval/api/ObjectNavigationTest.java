@@ -3,7 +3,8 @@ package com.runestone.expeval.api;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval.api.support.FoldingNavigationFixtures.CountingBox;
-import com.runestone.expeval.api.support.FoldingNavigationFixtures.TypedBox;
+import com.runestone.expeval.api.support.FoldingNavigationFixtures.CountingTypedBox;
+import com.runestone.expeval.internal.runtime.ExpressionCompiler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -215,15 +216,20 @@ class ObjectNavigationTest {
     @Test
     @DisplayName("typed method on non-overridable root is folded and not invoked during compute")
     void shouldFoldTypedMethodOnNonOverridableRoot() {
-        var box = new TypedBox(new BigDecimal("7"));
+        var box = new CountingTypedBox(new BigDecimal("7"));
         ExpressionEnvironment env = ExpressionEnvironment.builder()
-                .registerTypeHint(TypedBox.class)
+                .registerTypeHint(CountingTypedBox.class)
                 .registerExternalSymbol("BOX", box, false)
                 .build();
 
-        MathExpression expression = MathExpression.compile("BOX.multiply(3)", env);
+        MathExpression expression = MathExpression.compile("BOX.multiply(3)", env, new ExpressionCompiler());
+
+        assertThat(box.calls()).isEqualTo(1);
+        box.resetCalls();
 
         assertThat(expression.compute()).isEqualByComparingTo("21");
+        assertThat(expression.compute()).isEqualByComparingTo("21");
+        assertThat(box.calls()).isZero();
     }
 
     @Test
