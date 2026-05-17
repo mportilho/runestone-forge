@@ -70,13 +70,15 @@ Three types of events are recorded in execution order:
 
 ### Constant Folding and the Audit Trail
 
-Three behaviors to keep in mind:
+Four behaviors to keep in mind:
 
 1. **Folded symbols produce pre-stored `VariableRead` events.** When an external symbol is registered with `overridable=false`, or when an internal variable is assigned a compile-time constant, the compiler folds it into the execution plan as a literal. The `VariableRead` events for those symbols are captured once at compile time and seeded into every `computeWithAudit()` call automatically — no variable lookup happens at evaluation time, but the reads are still observable.
 
 2. **Pre-stored events appear before runtime reads.** Because folded events are prepended to the audit collector before evaluation starts, they appear at the beginning of the trace regardless of where the symbol appears in the expression.
 
 3. **Folded function calls still emit `FunctionCall` events.** When a function with all-constant arguments is folded during compilation, the result is pre-computed. But the audit trail still records the call as if it ran at evaluation time, for observability.
+
+4. **Folded property chains preserve the root read.** When object or collection navigation is folded from a non-overridable external symbol, the navigation itself is not repeated during evaluation. The audit trail still contains the pre-stored `VariableRead` for the folded root symbol, such as `ORDER` or `PRICES`.
 
 ### Audit Overhead
 

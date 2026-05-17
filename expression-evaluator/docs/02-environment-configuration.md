@@ -66,7 +66,7 @@ ExpressionEnvironment env = ExpressionEnvironment.builder()
     .build();
 ```
 
-- `overridable=false`: treated as a constant. The compiler folds it into the execution plan — no lookup at runtime, zero overhead. If you can override it in `compute()`, the override is silently ignored. When using `computeWithAudit()`, a pre-stored `VariableRead` event is emitted for the folded value.
+- `overridable=false`: treated as a constant. The compiler folds it into the execution plan — no lookup at runtime, zero overhead. Supplying this symbol in `compute(Map)` is invalid and raises an error because the compiled plan already captured the registered value. When using `computeWithAudit()`, a pre-stored `VariableRead` event is emitted for the folded value.
 - `overridable=true`: the default value is used if `compute()` does not supply it. If `compute()` supplies it, the binding wins.
 
 The type of the symbol is inferred from the default value. Pass a `BigDecimal` for a numeric symbol, a `String` for text, a `Boolean` for logical, and so on.

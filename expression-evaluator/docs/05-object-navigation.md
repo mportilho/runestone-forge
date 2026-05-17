@@ -190,6 +190,20 @@ env = ExpressionEnvironment.builder()
 MathExpression expr = MathExpression.compile("customer.nme", env); // compile error
 ```
 
+Type hints also affect optimization. When navigation starts from an external symbol registered with `overridable=false`, the root is a compile-time constant. The compiler can then fold deterministic navigation steps into the execution plan:
+
+```java
+ExpressionEnvironment env = ExpressionEnvironment.builder()
+    .registerTypeHint(Order.class)
+    .registerExternalSymbol("ORDER", order, false)
+    .build();
+
+MathExpression expr = MathExpression.compile("ORDER.total()", env);
+// ORDER.total() is called during compilation, not during compute().
+```
+
+Foldable navigation includes typed property access, typed method calls whose arguments are constant, index access, slices, wildcards, filters, map projections, and collection aggregations such as `..sum()` and `..count()`. Reflective method calls without type hints are a runtime boundary and are not folded.
+
 ## Practical Example
 
 ```java
