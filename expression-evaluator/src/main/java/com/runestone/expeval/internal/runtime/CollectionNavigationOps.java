@@ -6,7 +6,6 @@ import com.runestone.expeval.internal.navigation.MapProjectionKind;
 import com.runestone.expeval.internal.navigation.VectorAggregationKind;
 import org.jspecify.annotations.Nullable;
 
-import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.*;
 
@@ -105,51 +104,8 @@ final class CollectionNavigationOps {
     static Object applyAggregation(Object current, VectorAggregationKind kind,
             @Nullable ExecutableNode transform, ExecutionScope scope,
             String source, RuntimeServices runtimeServices, MathContext mathContext, NodeEvaluator eval) {
-        if (current instanceof Map<?, ?> m && kind == VectorAggregationKind.COUNT) {
-            return BigDecimal.valueOf(m.size());
-        }
-        List<?> list = requireList(current, "aggregation", source);
-        if (kind == VectorAggregationKind.COUNT) {
-            return BigDecimal.valueOf(list.size());
-        }
-        if (list.isEmpty()) {
-            return switch (kind) {
-                case SUM -> BigDecimal.ZERO;
-                case PROD -> BigDecimal.ONE;
-                default -> null;
-            };
-        }
-        List<BigDecimal> values = toNumericList(list, transform, scope, source, runtimeServices, eval);
-        BigDecimal acc = values.getFirst();
-        switch (kind) {
-            case SUM -> {
-                for (int i = 1; i < values.size(); i++) acc = acc.add(values.get(i), mathContext);
-                return acc;
-            }
-            case AVG -> {
-                for (int i = 1; i < values.size(); i++) acc = acc.add(values.get(i), mathContext);
-                return acc.divide(BigDecimal.valueOf(values.size()), mathContext);
-            }
-            case MIN -> {
-                for (int i = 1; i < values.size(); i++) {
-                    BigDecimal v = values.get(i);
-                    if (v.compareTo(acc) < 0) acc = v;
-                }
-                return acc;
-            }
-            case MAX -> {
-                for (int i = 1; i < values.size(); i++) {
-                    BigDecimal v = values.get(i);
-                    if (v.compareTo(acc) > 0) acc = v;
-                }
-                return acc;
-            }
-            case PROD -> {
-                for (int i = 1; i < values.size(); i++) acc = acc.multiply(values.get(i), mathContext);
-                return acc;
-            }
-            default -> throw new IllegalStateException("Unhandled aggregation kind: " + kind);
-        }
+        return VectorAggregationEvaluator.evaluate(
+                current, kind, transform, scope, source, runtimeServices, mathContext, eval);
     }
 
     /** {@code ..map(@ -> expr)} — transforms each element (or map entry) into a new list. */
@@ -233,36 +189,6 @@ final class CollectionNavigationOps {
         throw new ExpressionEvaluationException(source, "TYPE_MISMATCH",
                 operation + " requires a List but got: "
                 + (value == null ? "null" : value.getClass().getName()), null);
-    }
-
-    private static List<BigDecimal> toNumericList(List<?> list, @Nullable ExecutableNode transform,
-            ExecutionScope scope, String source, RuntimeServices runtimeServices, NodeEvaluator eval) {
-        if (transform == null) {
-            List<BigDecimal> result = new ArrayList<>(list.size());
-            for (Object element : list) result.add(asBigDecimal(element, source, runtimeServices));
-            return result;
-        }
-        FilterContextStack stack = FilterContextStack.INSTANCE.get();
-        List<BigDecimal> result = new ArrayList<>(list.size());
-        for (Object element : list) {
-            stack.pushElement(element);
-            try {
-                result.add(asBigDecimal(eval.evaluate(transform, scope), source, runtimeServices));
-            } finally {
-                stack.pop();
-            }
-        }
-        return result;
-    }
-
-    private static BigDecimal asBigDecimal(Object value, String source, RuntimeServices runtimeServices) {
-        if (value instanceof BigDecimal bd) return bd;
-        try {
-            return runtimeServices.asNumber(value);
-        } catch (IllegalStateException e) {
-            throw new ExpressionEvaluationException(source, "NULL_VALUE",
-                    "cannot use null value as a number", null);
-        }
     }
 
     private static boolean asBoolean(Object value, String source, RuntimeServices runtimeServices) {

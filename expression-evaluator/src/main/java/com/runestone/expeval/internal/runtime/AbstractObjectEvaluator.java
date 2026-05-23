@@ -1,11 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
-import com.runestone.expeval.api.AuditEvent;
-import com.runestone.expeval.api.CompilationPosition;
 import com.runestone.expeval.api.ExpressionEvaluationException;
-import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.ast.BinaryOperator;
-import com.runestone.expeval.internal.ast.SourceSpan;
 
 import java.math.MathContext;
 import java.time.LocalDate;
@@ -34,6 +30,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     private final String source;
     private final NodeEvaluator nodeEvaluator;
     private final AssignmentEvaluator assignmentEvaluator;
+    private final SymbolValueEvaluator symbolValueEvaluator;
     private final FunctionCallEvaluator functionCallEvaluator;
 
     protected AbstractObjectEvaluator(CompiledExpression compiledExpression,
@@ -45,6 +42,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         this.source = compiledExpression.source();
         this.nodeEvaluator = this::evaluateExpr;
         this.assignmentEvaluator = new AssignmentEvaluator(nodeEvaluator);
+        this.symbolValueEvaluator = new SymbolValueEvaluator(source);
         this.functionCallEvaluator = new FunctionCallEvaluator(runtimeServices, nodeEvaluator);
     }
 
@@ -75,34 +73,8 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     private Object evaluateExpr(ExecutableNode node, ExecutionScope scope) {
         return switch (node) {
             case ExecutableLiteral lit -> lit.precomputed();
-            case ExecutableDynamicLiteral dyn -> {
-                Object value = scope.resolveDynamic(dyn.kind());
-                AuditCollector audit = scope.audit();
-                if (audit != null) {
-                    audit.record(new AuditEvent.VariableRead(dyn.kind().canonicalName(), true, value));
-                }
-                yield value;
-            }
-            case ExecutableIdentifier id -> {
-                if (LanguageSymbols.CURRENT_ELEMENT.equals(id.ref().name())) {
-                    var ctx = FilterContextStack.INSTANCE.get().peek();
-                    if (ctx == null) {
-                        throw new ExpressionEvaluationException(source,
-                                "INVALID_CURRENT_ELEMENT",
-                                "'@' used outside of a filter predicate context", null);
-                    }
-                    yield ctx.isMapContext() ? ctx.mapValue() : ctx.element();
-                }
-                Object value = scope.find(id.ref());
-                if (value == ExecutionScope.UNBOUND) {
-                    throw unboundVariableException(id);
-                }
-                AuditCollector audit = scope.audit();
-                if (audit != null) {
-                    audit.record(new AuditEvent.VariableRead(id.ref().name(), false, value));
-                }
-                yield value;
-            }
+            case ExecutableDynamicLiteral dyn -> symbolValueEvaluator.evaluateDynamicLiteral(dyn, scope);
+            case ExecutableIdentifier id -> symbolValueEvaluator.evaluateIdentifier(id, scope);
             case ExecutablePropertyChain chain ->
                     PropertyChainOps.evaluatePropertyChain(chain, scope, source, runtimeServices, mathContext, nodeEvaluator);
             case ExecutableFunctionCall f -> functionCallEvaluator.evaluate(f, scope);
@@ -215,15 +187,4 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Error helpers
-    // -------------------------------------------------------------------------
-
-    private ExpressionEvaluationException unboundVariableException(ExecutableIdentifier id) {
-        SourceSpan span = id.sourceSpan();
-        CompilationPosition position = new CompilationPosition(span.startLine(), span.startColumn(), span.endColumn());
-        String message = "variable '" + id.ref().name() + "' has no value; call setValue(\""
-                         + id.ref().name() + "\", ...) before compute()";
-        return new ExpressionEvaluationException(source, "UNBOUND_VARIABLE", message, position);
-    }
 }
