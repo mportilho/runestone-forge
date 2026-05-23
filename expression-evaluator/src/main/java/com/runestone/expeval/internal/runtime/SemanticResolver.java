@@ -230,13 +230,13 @@ public final class SemanticResolver {
                             "'@' may only be used inside a filter predicate [?(...)]", node.sourceSpan());
                     return UnknownType.INSTANCE;
                 }
-                if (isLegacyAccessChain(node.chain())) {
+                if (NavigationStepClassifier.isLegacyAccessChain(node.chain())) {
                     return resolveLegacyPropertyChain(filterElementType, node.chain(), node);
                 }
                 return resolveChainFrom(filterElementType, node.chain(), node, true);
             }
             ResolvedType current = resolveRootType(node);
-            if (isLegacyAccessChain(node.chain())) {
+            if (NavigationStepClassifier.isLegacyAccessChain(node.chain())) {
                 return resolveLegacyPropertyChain(current, node.chain(), node);
             }
             return resolveChainFrom(current, node.chain(), node, false);
@@ -300,18 +300,6 @@ public final class SemanticResolver {
             }
 
             return current;
-        }
-
-        private boolean isLegacyAccessChain(List<PropertyChainNode.MemberAccess> chain) {
-            for (PropertyChainNode.MemberAccess access : chain) {
-                if (!(access instanceof PropertyChainNode.PropertyAccess)
-                        && !(access instanceof PropertyChainNode.SafePropertyAccess)
-                        && !(access instanceof PropertyChainNode.MethodCallAccess)
-                        && !(access instanceof PropertyChainNode.SafeMethodCallAccess)) {
-                    return false;
-                }
-            }
-            return true;
         }
 
         private ResolvedType resolveChainFrom(
