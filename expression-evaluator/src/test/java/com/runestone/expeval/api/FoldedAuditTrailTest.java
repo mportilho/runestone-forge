@@ -2,7 +2,7 @@ package com.runestone.expeval.api;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
+import com.runestone.expeval.compiler.ExpressionCompiler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

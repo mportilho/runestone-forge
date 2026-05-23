@@ -3,7 +3,7 @@ package com.runestone.expeval.environment;
 import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.api.AuditResult;
 import com.runestone.expeval.api.MathExpression;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
+import com.runestone.expeval.compiler.ExpressionCompiler;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

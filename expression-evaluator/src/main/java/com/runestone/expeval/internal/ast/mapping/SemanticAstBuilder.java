@@ -1,5 +1,6 @@
 package com.runestone.expeval.internal.ast.mapping;
 
+import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.grammar.ExpressionEvaluatorBaseVisitor;
 import com.runestone.expeval.internal.grammar.ExpressionEvaluatorParser;
 import com.runestone.expeval.internal.ast.*;
@@ -503,10 +504,10 @@ public final class SemanticAstBuilder {
         public ExpressionNode visitAtReferenceTarget(ExpressionEvaluatorParser.AtReferenceTargetContext ctx) {
             List<ExpressionEvaluatorParser.MemberChainContext> memberChains = ctx.memberChain();
             if (memberChains.isEmpty()) {
-                return new IdentifierNode(nodeFactory.nextId("identifier"), nodeFactory.sourceSpan(ctx), "@");
+                return new IdentifierNode(nodeFactory.nextId("identifier"), nodeFactory.sourceSpan(ctx), LanguageSymbols.CURRENT_ELEMENT);
             }
             List<PropertyChainNode.MemberAccess> chain = buildMemberChain(memberChains);
-            return new PropertyChainNode(nodeFactory.nextId("at"), nodeFactory.sourceSpan(ctx), "@", chain);
+            return new PropertyChainNode(nodeFactory.nextId("at"), nodeFactory.sourceSpan(ctx), LanguageSymbols.CURRENT_ELEMENT, chain);
         }
 
         // -------------------------------------------------------------------------
@@ -793,13 +794,13 @@ public final class SemanticAstBuilder {
                 case ExpressionEvaluatorParser.CurrentElementFilterValueContext cur -> {
                     List<ExpressionEvaluatorParser.MemberChainContext> memberChains = cur.memberChain();
                     if (memberChains.isEmpty()) {
-                        yield new IdentifierNode(nodeFactory.nextId("identifier"), nodeFactory.sourceSpan(ctx), "@");
+                        yield new IdentifierNode(nodeFactory.nextId("identifier"), nodeFactory.sourceSpan(ctx), LanguageSymbols.CURRENT_ELEMENT);
                     }
                     List<PropertyChainNode.MemberAccess> chain = buildMemberChain(memberChains);
                     yield new PropertyChainNode(
                             nodeFactory.nextId("propertyChain"),
                             nodeFactory.sourceSpan(ctx),
-                            "@",
+                            LanguageSymbols.CURRENT_ELEMENT,
                             chain);
                 }
                 case ExpressionEvaluatorParser.ExternalRefFilterValueContext ext -> {

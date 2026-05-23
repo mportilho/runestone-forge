@@ -9,7 +9,7 @@ import com.runestone.expeval.internal.ast.ExpressionNode;
 import com.runestone.expeval.internal.ast.FunctionCallNode;
 import com.runestone.expeval.internal.ast.IdentifierNode;
 import com.runestone.expeval.internal.runtime.CompiledExpression;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
+import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.runtime.SemanticModel;
 import com.runestone.expeval.internal.runtime.SymbolRef;

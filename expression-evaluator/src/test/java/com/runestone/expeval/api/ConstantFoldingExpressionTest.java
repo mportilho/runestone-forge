@@ -1,7 +1,7 @@
 package com.runestone.expeval.api;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
+import com.runestone.expeval.compiler.ExpressionCompiler;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

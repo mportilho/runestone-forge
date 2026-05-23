@@ -241,7 +241,7 @@ class AuditTrailExpressionTest {
                     .build();
 
             AuditResult<BigDecimal> result = MathExpression.compile("CONST_X + 1", env,
-                            new com.runestone.expeval.internal.runtime.ExpressionCompiler())
+                            new com.runestone.expeval.compiler.ExpressionCompiler())
                     .computeWithAudit();
 
             assertThat(result.trace().events())

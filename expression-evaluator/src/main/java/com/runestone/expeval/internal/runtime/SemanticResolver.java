@@ -26,6 +26,7 @@ import com.runestone.expeval.catalog.TypeMetadata;
 import com.runestone.expeval.types.CollectionType;
 import com.runestone.expeval.types.MapType;
 import com.runestone.expeval.types.ObjectType;
+import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.types.ResolvedType;
 import com.runestone.expeval.types.ResolvedTypes;
@@ -191,7 +192,7 @@ public final class SemanticResolver {
 
         private ResolvedType resolveIdentifier(IdentifierNode node) {
             // '@' sentinel — current element in an active filter predicate
-            if (CURRENT_ELEMENT.equals(node.name())) {
+            if (LanguageSymbols.CURRENT_ELEMENT.equals(node.name())) {
                 if (filterElementType == null) {
                     error(IssueCode.INVALID_CURRENT_ELEMENT,
                             "'@' may only be used inside a filter predicate [?(...)]", node.sourceSpan());
@@ -215,9 +216,6 @@ public final class SemanticResolver {
                 .orElse(UnknownType.INSTANCE);
         }
 
-        /** Current-element sentinel used in filter predicates ({@code @}). */
-        private static final String CURRENT_ELEMENT = "@";
-
         /**
          * Type of the {@code @} element in the innermost active filter predicate.
          * {@code null} when no filter is active.
@@ -226,7 +224,7 @@ public final class SemanticResolver {
 
         private ResolvedType resolvePropertyChain(PropertyChainNode node) {
             // Handle '@' root — refers to current element inside a filter predicate
-            if (CURRENT_ELEMENT.equals(node.rootIdentifier())) {
+            if (LanguageSymbols.CURRENT_ELEMENT.equals(node.rootIdentifier())) {
                 if (filterElementType == null) {
                     error(IssueCode.INVALID_CURRENT_ELEMENT,
                             "'@' may only be used inside a filter predicate [?(...)]", node.sourceSpan());
@@ -694,7 +692,7 @@ public final class SemanticResolver {
         }
 
         private ResolvedType resolveRootType(PropertyChainNode node) {
-            if (CURRENT_ELEMENT.equals(node.rootIdentifier())) {
+            if (LanguageSymbols.CURRENT_ELEMENT.equals(node.rootIdentifier())) {
                 // '@' as root is only valid in filter predicates — handled by resolvePropertyChain
                 return filterElementType != null ? filterElementType : UnknownType.INSTANCE;
             }

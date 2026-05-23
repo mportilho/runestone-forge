@@ -38,7 +38,7 @@ import java.util.Objects;
  * {@code @Bean}. Use {@link #invalidateCache()} to clear all cached entries without discarding
  * the instance.
  */
-public final class ExpressionCompiler {
+public final class DefaultExpressionCompiler {
 
     private final ExpressionEvaluatorParserFacade parserFacade;
     private final SemanticAstBuilder astBuilder;
@@ -58,7 +58,7 @@ public final class ExpressionCompiler {
      *
      * @see CacheConfig#defaults()
      */
-    public ExpressionCompiler() {
+    public DefaultExpressionCompiler() {
         this(new ExpressionEvaluatorParserFacade(), new SemanticAstBuilder(), new SemanticResolver(), new ExecutionPlanBuilder(), CacheConfig.defaults());
     }
 
@@ -78,12 +78,12 @@ public final class ExpressionCompiler {
      *
      * @param cacheConfig cache settings; must not be {@code null}
      */
-    public ExpressionCompiler(CacheConfig cacheConfig) {
+    public DefaultExpressionCompiler(CacheConfig cacheConfig) {
         this(new ExpressionEvaluatorParserFacade(), new SemanticAstBuilder(), new SemanticResolver(), new ExecutionPlanBuilder(), cacheConfig);
     }
 
-    ExpressionCompiler(ExpressionEvaluatorParserFacade parserFacade, SemanticAstBuilder astBuilder,
-                       SemanticResolver semanticResolver, ExecutionPlanBuilder planBuilder, CacheConfig cacheConfig) {
+    DefaultExpressionCompiler(ExpressionEvaluatorParserFacade parserFacade, SemanticAstBuilder astBuilder,
+                              SemanticResolver semanticResolver, ExecutionPlanBuilder planBuilder, CacheConfig cacheConfig) {
         this.parserFacade = Objects.requireNonNull(parserFacade, "parserFacade must not be null");
         this.astBuilder = Objects.requireNonNull(astBuilder, "astBuilder must not be null");
         this.semanticResolver = Objects.requireNonNull(semanticResolver, "semanticResolver must not be null");

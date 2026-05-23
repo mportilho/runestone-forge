@@ -2,7 +2,7 @@ package com.runestone.expeval.api;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
+import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
 
 import java.math.BigDecimal;

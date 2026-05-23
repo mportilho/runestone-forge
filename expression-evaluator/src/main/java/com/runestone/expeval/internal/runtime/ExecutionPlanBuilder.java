@@ -4,6 +4,7 @@ import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.api.ExpressionEvaluationException;
 import com.runestone.expeval.api.FunctionInvocationException;
 import com.runestone.expeval.catalog.*;
+import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.ast.*;
 import com.runestone.expeval.internal.ast.BinaryOperator;
 import com.runestone.expeval.internal.ast.TernaryOperationNode;
@@ -18,7 +19,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +28,7 @@ final class ExecutionPlanBuilder {
 
     ExecutionPlan build(SemanticModel model, RuntimeServices runtimeServices, ExternalSymbolCatalog externalSymbolCatalog, TypeHintCatalog typeHintCatalog, MathContext mathContext) {
         // 1. Assign indices to symbols
-        assignIndices(model);
+        SymbolIndexAllocator.assignIndices(model);
 
         ExpressionFileNode ast = model.ast();
         // Process assignments sequentially so each one can propagate its constant value
@@ -57,37 +57,6 @@ final class ExecutionPlanBuilder {
         Map<String, ExternalBindingPlan> externalBindingPlans = seedExternalBindingPlans(model, externalSymbolCatalog);
 
         return new ExecutionPlan(assignments, resultNode, defaults, externalBindingPlans, externalSymbolsCount, maxAuditEvents, foldedVariableReads);
-    }
-
-    /**
-     * Assigns stable, zero-based integer indices to all internal and external symbols in
-     * {@code model}. Symbols within each group are processed in alphabetical order to ensure
-     * that indices are deterministic across JVM runs and independent of Map iteration order.
-     *
-     * <p>This method must be called <strong>exactly once</strong> per {@link SemanticModel},
-     * before any array-backed structures (defaults, binding plans) are built from that model.
-     * The resulting indices are embedded into the {@link SymbolRef} objects and must agree with
-     * the array sizes and positions produced by {@code seedDefaults()} and
-     * {@code seedExternalBindingPlans()}. Do NOT change the ordering without updating those methods.
-     */
-    private void assignIndices(SemanticModel model) {
-        int internalIdx = 0;
-        List<String> sortedInternalNames = new ArrayList<>(model.internalSymbolsByName().keySet());
-        // Alphabetical order guarantees a stable name→position mapping across separate compilations
-        // of the same expression, regardless of the underlying Map's iteration order.
-        Collections.sort(sortedInternalNames);
-        for (String name : sortedInternalNames) {
-            model.internalSymbolsByName().get(name).setIndex(internalIdx++);
-        }
-
-        int externalIdx = 0;
-        List<String> sortedExternalNames = new ArrayList<>(model.externalSymbolsByName().keySet());
-        // Same rationale: stable ordering ensures seedDefaults() and seedExternalBindingPlans()
-        // write to the correct array positions for every symbol.
-        Collections.sort(sortedExternalNames);
-        for (String name : sortedExternalNames) {
-            model.externalSymbolsByName().get(name).setIndex(externalIdx++);
-        }
     }
 
     private static Object[] seedDefaults(SemanticModel semanticModel, ExternalSymbolCatalog catalog, RuntimeServices runtimeServices, int externalSymbolsCount) {
@@ -355,8 +324,8 @@ final class ExecutionPlanBuilder {
 
         // '@' root has no external symbol binding; create a special sentinel identifier.
         ExecutableNode root;
-        if ("@".equals(node.rootIdentifier())) {
-            root = new ExecutableIdentifier(new SymbolRef("@", SymbolKind.EXTERNAL), node.sourceSpan());
+        if (LanguageSymbols.CURRENT_ELEMENT.equals(node.rootIdentifier())) {
+            root = new ExecutableIdentifier(new SymbolRef(LanguageSymbols.CURRENT_ELEMENT, SymbolKind.EXTERNAL), node.sourceSpan());
         } else {
             SymbolRef rootRef = model.findSymbol(node.nodeId())
                     .orElseThrow(() -> new IllegalStateException(
@@ -370,10 +339,10 @@ final class ExecutionPlanBuilder {
             }
         }
 
-        ResolvedType currentType = "@".equals(node.rootIdentifier())
+        ResolvedType currentType = LanguageSymbols.CURRENT_ELEMENT.equals(node.rootIdentifier())
                 ? UnknownType.INSTANCE
                 : resolveRootType(
-                        model.findSymbol(node.nodeId()).orElse(new SymbolRef("@", SymbolKind.EXTERNAL)),
+                        model.findSymbol(node.nodeId()).orElse(new SymbolRef(LanguageSymbols.CURRENT_ELEMENT, SymbolKind.EXTERNAL)),
                         model, externalSymbolCatalog);
 
         if (isLegacyAccessChain(node.chain())) {
@@ -649,7 +618,7 @@ final class ExecutionPlanBuilder {
             case ExecutableLiteral ignored -> true;
             case ExecutableDynamicLiteral ignored -> false;
             case ExecutableIdentifier identifier ->
-                    allowFilterContext && "@".equals(identifier.ref().name());
+                    allowFilterContext && LanguageSymbols.CURRENT_ELEMENT.equals(identifier.ref().name());
             case ExecutablePropertyChain chain ->
                     isFoldablePropertyChainNode(chain, allowFilterContext);
             case ExecutableFunctionCall functionCall ->
@@ -955,8 +924,8 @@ final class ExecutionPlanBuilder {
 
     private ExecutableNode buildIdentifier(IdentifierNode id, SemanticModel model, FoldContext foldContext) {
         // '@' is the filter-predicate current-element sentinel — no model symbol, always dynamic
-        if ("@".equals(id.name())) {
-            return new ExecutableIdentifier(new SymbolRef("@", SymbolKind.EXTERNAL), id.sourceSpan());
+        if (LanguageSymbols.CURRENT_ELEMENT.equals(id.name())) {
+            return new ExecutableIdentifier(new SymbolRef(LanguageSymbols.CURRENT_ELEMENT, SymbolKind.EXTERNAL), id.sourceSpan());
         }
         SymbolRef ref = model.findSymbol(id.nodeId())
                 .orElseThrow(() -> new IllegalStateException(
@@ -1072,7 +1041,7 @@ final class ExecutionPlanBuilder {
         }
 
         private Object evaluateIdentifier(ExecutableIdentifier identifier) {
-            if (!"@".equals(identifier.ref().name())) {
+            if (!LanguageSymbols.CURRENT_ELEMENT.equals(identifier.ref().name())) {
                 throw new IllegalStateException("identifier is not constant-foldable: " + identifier.ref().name());
             }
             var context = FilterContextStack.INSTANCE.get().peek();

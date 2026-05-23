@@ -4,6 +4,7 @@ import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.api.CompilationPosition;
 import com.runestone.expeval.api.ExpressionEvaluationException;
 import com.runestone.expeval.catalog.FunctionDescriptor;
+import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.ast.BinaryOperator;
 import com.runestone.expeval.internal.ast.SourceSpan;
 
@@ -27,9 +28,6 @@ import java.util.*;
  * </ul>
  */
 abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
-
-    /** Sentinel name used for {@code @} (current element) in filter predicates. */
-    private static final String CURRENT_ELEMENT_REF = "@";
 
     private final CompiledExpression compiledExpression;
     private final RuntimeServices runtimeServices;
@@ -135,7 +133,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
                 yield value;
             }
             case ExecutableIdentifier id -> {
-                if (CURRENT_ELEMENT_REF.equals(id.ref().name())) {
+                if (LanguageSymbols.CURRENT_ELEMENT.equals(id.ref().name())) {
                     var ctx = FilterContextStack.INSTANCE.get().peek();
                     if (ctx == null) {
                         throw new ExpressionEvaluationException(source,

@@ -3,7 +3,7 @@ package com.runestone.expeval.perf.jmh.navigation;
 import com.runestone.expeval.api.LogicalExpression;
 import com.runestone.expeval.api.MathExpression;
 import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
+import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.perf.ObjectNavigationBenchmarkSupport;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
