@@ -3,7 +3,6 @@ package com.runestone.expeval.internal.runtime;
 import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.api.CompilationPosition;
 import com.runestone.expeval.api.ExpressionEvaluationException;
-import com.runestone.expeval.catalog.FunctionDescriptor;
 import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.ast.BinaryOperator;
 import com.runestone.expeval.internal.ast.SourceSpan;
@@ -34,6 +33,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     private final MathContext mathContext;
     private final String source;
     private final NodeEvaluator nodeEvaluator;
+    private final FunctionCallEvaluator functionCallEvaluator;
 
     protected AbstractObjectEvaluator(CompiledExpression compiledExpression,
                                       RuntimeServices runtimeServices,
@@ -43,6 +43,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         this.mathContext = Objects.requireNonNull(mathContext, "mathContext must not be null");
         this.source = compiledExpression.source();
         this.nodeEvaluator = this::evaluateExpr;
+        this.functionCallEvaluator = new FunctionCallEvaluator(runtimeServices, nodeEvaluator);
     }
 
     @Override
@@ -154,7 +155,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             }
             case ExecutablePropertyChain chain ->
                     PropertyChainOps.evaluatePropertyChain(chain, scope, source, runtimeServices, mathContext, nodeEvaluator);
-            case ExecutableFunctionCall f -> evaluateFunctionCall(f, scope);
+            case ExecutableFunctionCall f -> functionCallEvaluator.evaluate(f, scope);
             case ExecutableConditional c -> evaluateConditional(c, scope);
             case ExecutableSimpleConditional sc -> evaluateSimpleConditional(sc, scope);
             case ExecutableUnaryOp u -> evaluateUnary(u, scope);
@@ -173,117 +174,6 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     // -------------------------------------------------------------------------
     // Node-specific evaluators
     // -------------------------------------------------------------------------
-
-    private Object evaluateFunctionCall(ExecutableFunctionCall node, ExecutionScope scope) {
-        if (node.isFolded()) {
-            Object result = runtimeServices.coerceToResolvedType(node.foldedResult(), node.binding().returnType());
-            AuditCollector audit = scope.audit();
-            if (audit != null) {
-                audit.record(new AuditEvent.FunctionCall(
-                        node.binding().descriptor().name(),
-                        node.foldedArgs(),
-                        result
-                ));
-            }
-            return result;
-        }
-
-        FunctionDescriptor descriptor = node.binding().descriptor();
-        int arity = descriptor.arity();
-        AuditCollector audit = scope.audit();
-
-        List<ExecutableNode> argsNodes = node.arguments();
-        List<Class<?>> paramTypes = descriptor.parameterTypes();
-        return switch (arity) {
-            case 0 -> runtimeServices.coerceToResolvedType(descriptor.invoke(), node.binding().returnType());
-            case 1 -> {
-                Object a1 = evaluateExpr(argsNodes.getFirst(), scope);
-                a1 = runtimeServices.coerce(a1, paramTypes.getFirst());
-                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1), node.binding().returnType());
-                if (audit != null) auditFunctionCall(audit, descriptor, result, a1);
-                yield result;
-            }
-            case 2 -> {
-                Object a1 = evaluateExpr(argsNodes.get(0), scope);
-                a1 = runtimeServices.coerce(a1, paramTypes.get(0));
-                Object a2 = evaluateExpr(argsNodes.get(1), scope);
-                a2 = runtimeServices.coerce(a2, paramTypes.get(1));
-                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2), node.binding().returnType());
-                if (audit != null) auditFunctionCall(audit, descriptor, result, a1, a2);
-                yield result;
-            }
-            case 3 -> {
-                Object a1 = evaluateExpr(argsNodes.get(0), scope);
-                a1 = runtimeServices.coerce(a1, paramTypes.get(0));
-                Object a2 = evaluateExpr(argsNodes.get(1), scope);
-                a2 = runtimeServices.coerce(a2, paramTypes.get(1));
-                Object a3 = evaluateExpr(argsNodes.get(2), scope);
-                a3 = runtimeServices.coerce(a3, paramTypes.get(2));
-                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3), node.binding().returnType());
-                if (audit != null) auditFunctionCall(audit, descriptor, result, a1, a2, a3);
-                yield result;
-            }
-            case 4 -> {
-                Object a1 = evaluateExpr(argsNodes.get(0), scope);
-                a1 = runtimeServices.coerce(a1, paramTypes.get(0));
-                Object a2 = evaluateExpr(argsNodes.get(1), scope);
-                a2 = runtimeServices.coerce(a2, paramTypes.get(1));
-                Object a3 = evaluateExpr(argsNodes.get(2), scope);
-                a3 = runtimeServices.coerce(a3, paramTypes.get(2));
-                Object a4 = evaluateExpr(argsNodes.get(3), scope);
-                a4 = runtimeServices.coerce(a4, paramTypes.get(3));
-                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3, a4), node.binding().returnType());
-                if (audit != null) auditFunctionCall(audit, descriptor, result, a1, a2, a3, a4);
-                yield result;
-            }
-            case 5 -> {
-                Object a1 = evaluateExpr(argsNodes.get(0), scope);
-                a1 = runtimeServices.coerce(a1, paramTypes.get(0));
-                Object a2 = evaluateExpr(argsNodes.get(1), scope);
-                a2 = runtimeServices.coerce(a2, paramTypes.get(1));
-                Object a3 = evaluateExpr(argsNodes.get(2), scope);
-                a3 = runtimeServices.coerce(a3, paramTypes.get(2));
-                Object a4 = evaluateExpr(argsNodes.get(3), scope);
-                a4 = runtimeServices.coerce(a4, paramTypes.get(3));
-                Object a5 = evaluateExpr(argsNodes.get(4), scope);
-                a5 = runtimeServices.coerce(a5, paramTypes.get(4));
-                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3, a4, a5), node.binding().returnType());
-                if (audit != null) auditFunctionCall(audit, descriptor, result, a1, a2, a3, a4, a5);
-                yield result;
-            }
-            case 6 -> {
-                Object a1 = evaluateExpr(argsNodes.get(0), scope);
-                a1 = runtimeServices.coerce(a1, paramTypes.get(0));
-                Object a2 = evaluateExpr(argsNodes.get(1), scope);
-                a2 = runtimeServices.coerce(a2, paramTypes.get(1));
-                Object a3 = evaluateExpr(argsNodes.get(2), scope);
-                a3 = runtimeServices.coerce(a3, paramTypes.get(2));
-                Object a4 = evaluateExpr(argsNodes.get(3), scope);
-                a4 = runtimeServices.coerce(a4, paramTypes.get(3));
-                Object a5 = evaluateExpr(argsNodes.get(4), scope);
-                a5 = runtimeServices.coerce(a5, paramTypes.get(4));
-                Object a6 = evaluateExpr(argsNodes.get(5), scope);
-                a6 = runtimeServices.coerce(a6, paramTypes.get(5));
-                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3, a4, a5, a6), node.binding().returnType());
-                if (audit != null) auditFunctionCall(audit, descriptor, result, a1, a2, a3, a4, a5, a6);
-                yield result;
-            }
-            default -> {
-                Object[] args = new Object[arity];
-                for (int i = 0; i < arity; i++) {
-                    Object evaluated = evaluateExpr(argsNodes.get(i), scope);
-                    args[i] = runtimeServices.coerce(evaluated, paramTypes.get(i));
-                }
-                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(args), node.binding().returnType());
-                if (audit != null) auditFunctionCall(audit, descriptor, result, args);
-                yield result;
-            }
-        };
-    }
-
-    private void auditFunctionCall(AuditCollector audit, FunctionDescriptor descriptor, Object result, Object... args) {
-        audit.record(new AuditEvent.FunctionCall(descriptor.name(), args, result));
-    }
 
     private Object evaluateConditional(ExecutableConditional node, ExecutionScope scope) {
         List<ExecutableNode> conditions = node.conditions();
