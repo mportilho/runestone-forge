@@ -27,11 +27,21 @@ package com.runestone.converters.impl.strings;
 import com.runestone.converters.DataConverter;
 
 import java.util.Locale;
+import java.util.Objects;
 
 public class StringToLocaleConverter implements DataConverter<String, Locale> {
 
     @Override
     public Locale convert(String data) {
-        return Locale.forLanguageTag(data.replace('_', '-'));
+        Objects.requireNonNull(data);
+        String languageTag = data.trim().replace('_', '-');
+        if (languageTag.isEmpty()) {
+            throw new IllegalArgumentException("Locale language tag must not be blank");
+        }
+        Locale locale = Locale.forLanguageTag(languageTag);
+        if (locale.toLanguageTag().equals("und")) {
+            throw new IllegalArgumentException("Invalid locale language tag: " + data);
+        }
+        return locale;
     }
 }

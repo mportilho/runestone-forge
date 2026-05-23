@@ -34,6 +34,7 @@ public class TemporalToZonedDateTimeConverter implements DataConverter<Temporal,
     @Override
     public ZonedDateTime convert(Temporal data) {
         return switch (data) {
+            case ZonedDateTime src -> src;
             case LocalDateTime src -> ZonedDateTime.of(src, ZoneId.systemDefault());
             case LocalDate src -> ZonedDateTime.of(src, LocalTime.MIDNIGHT, ZoneId.systemDefault());
             case OffsetDateTime src -> src.atZoneSameInstant(ZoneId.systemDefault());

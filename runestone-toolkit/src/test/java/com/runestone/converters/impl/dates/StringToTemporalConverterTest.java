@@ -17,6 +17,10 @@ public class StringToTemporalConverterTest {
         Temporal result = converter.convert("12:30:45");
         Assertions.assertThat(result).isInstanceOf(LocalTime.class);
         Assertions.assertThat(result).isEqualTo(LocalTime.of(12, 30, 45));
+
+        Temporal shortTime = converter.convert("12:30");
+        Assertions.assertThat(shortTime).isInstanceOf(LocalTime.class);
+        Assertions.assertThat(shortTime).isEqualTo(LocalTime.of(12, 30));
     }
 
     @Test
@@ -31,6 +35,21 @@ public class StringToTemporalConverterTest {
         Temporal result = converter.convert("2023-01-01 12:30:45");
         Assertions.assertThat(result).isInstanceOf(LocalDateTime.class);
         Assertions.assertThat(result).isEqualTo(LocalDateTime.of(2023, 1, 1, 12, 30, 45));
+
+        Temporal fractionalSeconds = converter.convert("2023-01-01T12:30:45.123456789");
+        Assertions.assertThat(fractionalSeconds).isInstanceOf(LocalDateTime.class);
+        Assertions.assertThat(fractionalSeconds).isEqualTo(LocalDateTime.of(2023, 1, 1, 12, 30, 45, 123456789));
+
+        Temporal offsetDateTime = converter.convert("2023-01-01T12:30:45Z");
+        Assertions.assertThat(offsetDateTime).isInstanceOf(LocalDateTime.class);
+        Assertions.assertThat(offsetDateTime).isEqualTo(LocalDateTime.of(2023, 1, 1, 12, 30, 45));
+    }
+
+    @Test
+    public void testLeapDayBoundaries() {
+        Assertions.assertThat(converter.convert("2020-02-29")).isEqualTo(LocalDate.of(2020, 2, 29));
+        Assertions.assertThatThrownBy(() -> converter.convert("2019-02-29"))
+                .isInstanceOf(RuntimeException.class);
     }
 
     @Test

@@ -31,6 +31,13 @@ public class TemporalToZonedDateTimeConverterTest {
     }
 
     @Test
+    public void testConvertFromZonedDateTimeReturnsSameValue() {
+        ZonedDateTime zonedDateTime = ZonedDateTime.now(ZoneId.of("Europe/Paris"));
+
+        Assertions.assertThat(converter.convert(zonedDateTime)).isSameAs(zonedDateTime);
+    }
+
+    @Test
     public void testNull() {
         Assertions.assertThatThrownBy(() -> converter.convert(null))
                 .isInstanceOf(NullPointerException.class);

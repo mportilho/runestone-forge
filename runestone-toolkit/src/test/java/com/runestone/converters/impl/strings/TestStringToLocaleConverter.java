@@ -13,9 +13,11 @@ public class TestStringToLocaleConverter {
         Assertions.assertThat(converter.convert("pt-BR")).isEqualTo(Locale.forLanguageTag("pt-BR"));
         Assertions.assertThat(converter.convert("en-US")).isEqualTo(Locale.forLanguageTag("en-US"));
         Assertions.assertThat(converter.convert("fr")).isEqualTo(Locale.forLanguageTag("fr"));
-        
+        Assertions.assertThat(converter.convert("zh-Hant-TW")).isEqualTo(Locale.forLanguageTag("zh-Hant-TW"));
+
         // Handling legacy format with underscore
         Assertions.assertThat(converter.convert("pt_BR")).isEqualTo(Locale.forLanguageTag("pt-BR"));
+        Assertions.assertThat(converter.convert("zh_Hant_TW")).isEqualTo(Locale.forLanguageTag("zh-Hant-TW"));
     }
 
     @Test
@@ -26,8 +28,16 @@ public class TestStringToLocaleConverter {
     }
     
     @Test
-    public void testConvertEmpty() {
+    public void testConvertEmptyBlankAndInvalid() {
         StringToLocaleConverter converter = new StringToLocaleConverter();
-        Assertions.assertThat(converter.convert("")).isEqualTo(Locale.ROOT);
+        Assertions.assertThatThrownBy(() -> converter.convert(""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Locale language tag must not be blank");
+        Assertions.assertThatThrownBy(() -> converter.convert("   "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Locale language tag must not be blank");
+        Assertions.assertThatThrownBy(() -> converter.convert("not a locale"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid locale language tag: not a locale");
     }
 }

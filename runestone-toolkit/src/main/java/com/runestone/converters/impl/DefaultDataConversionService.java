@@ -28,6 +28,8 @@ import com.runestone.converters.DataConversionService;
 import com.runestone.converters.DataConverter;
 import com.runestone.converters.NoDataConverterFoundException;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -64,7 +66,7 @@ public class DefaultDataConversionService implements DataConversionService {
         if (CollectionArrayConversionSupport.canConvert(sourceType, targetType)) {
             return true;
         }
-        if (targetType.isAssignableFrom(sourceType) || targetType.isPrimitive()) {
+        if (targetType.isAssignableFrom(sourceType) || canConvertPrimitive(sourceType, targetType)) {
             return true;
         }
         if (targetType.isEnum() && (String.class.isAssignableFrom(sourceType) || Number.class.isAssignableFrom(sourceType))) {
@@ -170,6 +172,10 @@ public class DefaultDataConversionService implements DataConversionService {
             if (targetType.equals(boolean.class)) {
                 return (T) bool;
             }
+        } else if (source instanceof Character character) {
+            if (targetType.equals(char.class)) {
+                return (T) character;
+            }
         }
         return null;
     }
@@ -181,10 +187,67 @@ public class DefaultDataConversionService implements DataConversionService {
             if (source instanceof String value) {
                 return metadata.getByName(value);
             } else if (source instanceof Number value) {
-                return metadata.getByOrdinal(value.intValue());
+                Integer ordinal = toEnumOrdinal(value);
+                return ordinal == null ? null : metadata.getByOrdinal(ordinal);
             }
         }
         return null;
+    }
+
+    private static boolean canConvertPrimitive(Class<?> sourceType, Class<?> targetType) {
+        if (!targetType.isPrimitive()) {
+            return false;
+        }
+        if (targetType == boolean.class) {
+            return sourceType == boolean.class || Boolean.class.isAssignableFrom(sourceType);
+        }
+        if (targetType == char.class) {
+            return sourceType == char.class || Character.class.isAssignableFrom(sourceType);
+        }
+        return Number.class.isAssignableFrom(sourceType)
+                || sourceType == byte.class
+                || sourceType == short.class
+                || sourceType == int.class
+                || sourceType == long.class
+                || sourceType == float.class
+                || sourceType == double.class;
+    }
+
+    private static Integer toEnumOrdinal(Number value) {
+        return switch (value) {
+            case Byte b -> b.intValue();
+            case Short s -> s.intValue();
+            case Integer i -> i;
+            case Long l -> integerOrdinal(l);
+            case BigInteger bi -> integerOrdinal(bi);
+            case BigDecimal bd -> integerOrdinal(bd);
+            case Float f when Float.isFinite(f) && Math.rint(f) == f -> integerOrdinal(f.longValue());
+            case Double d when Double.isFinite(d) && Math.rint(d) == d -> integerOrdinal(d.longValue());
+            default -> null;
+        };
+    }
+
+    private static Integer integerOrdinal(long value) {
+        if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
+            return null;
+        }
+        return (int) value;
+    }
+
+    private static Integer integerOrdinal(BigInteger value) {
+        if (value.compareTo(BigInteger.valueOf(Integer.MIN_VALUE)) < 0
+                || value.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) > 0) {
+            return null;
+        }
+        return value.intValue();
+    }
+
+    private static Integer integerOrdinal(BigDecimal value) {
+        try {
+            return integerOrdinal(value.toBigIntegerExact());
+        } catch (ArithmeticException e) {
+            return null;
+        }
     }
 
     private static final class EnumMetadata<T> {

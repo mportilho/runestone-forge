@@ -33,7 +33,7 @@ public class StringToBooleanConverter implements DataConverter<String, Boolean> 
     @Override
     public Boolean convert(String data) {
         Objects.requireNonNull(data);
-        return switch (data.toLowerCase()) {
+        return switch (data.trim().toLowerCase()) {
             case "true", "on", "yes", "1" -> Boolean.TRUE;
             default -> Boolean.FALSE;
         };

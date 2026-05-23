@@ -50,10 +50,13 @@ public class TestNumberToBigDecimalConverter {
 
     @Test
     public void testConcurrentNumbersConversions() {
+        LongAccumulator longAccumulator = new LongAccumulator(Long::sum, 1);
+
         assertThat(converter.convert(new AtomicInteger(1))).isEqualTo(BigDecimal.valueOf(1));
         assertThat(converter.convert(new AtomicLong(1))).isEqualTo(BigDecimal.valueOf(1));
         assertThat(converter.convert(new DoubleAccumulator(Double::sum, 1))).isEqualByComparingTo(BigDecimal.valueOf(1));
         assertThat(converter.convert(new DoubleAdder())).isEqualByComparingTo(BigDecimal.valueOf(0));
+        assertThat(converter.convert(longAccumulator)).isEqualTo(BigDecimal.valueOf(1));
         assertThat(converter.convert(new LongAdder())).isEqualTo(BigDecimal.valueOf(0));
     }
 
@@ -131,6 +134,38 @@ public class TestNumberToBigDecimalConverter {
                 .isInstanceOf(NumberFormatException.class);
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert(Double.POSITIVE_INFINITY))
                 .isInstanceOf(NumberFormatException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert(Double.NEGATIVE_INFINITY))
+                .isInstanceOf(NumberFormatException.class);
+    }
+
+    @Test
+    public void testUnsupportedNumberSubclass() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert(new UnsupportedNumber()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Cannot convert " + UnsupportedNumber.class.getName() + " to BigDecimal");
+    }
+
+    private static final class UnsupportedNumber extends Number {
+
+        @Override
+        public int intValue() {
+            return 1;
+        }
+
+        @Override
+        public long longValue() {
+            return 1L;
+        }
+
+        @Override
+        public float floatValue() {
+            return 1.0f;
+        }
+
+        @Override
+        public double doubleValue() {
+            return 1.0d;
+        }
     }
 
 }
