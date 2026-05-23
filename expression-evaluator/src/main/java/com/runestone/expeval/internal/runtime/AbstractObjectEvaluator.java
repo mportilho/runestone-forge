@@ -1,8 +1,5 @@
 package com.runestone.expeval.internal.runtime;
 
-import com.runestone.expeval.api.ExpressionEvaluationException;
-import com.runestone.expeval.internal.ast.BinaryOperator;
-
 import java.math.MathContext;
 import java.time.LocalDate;
 import java.util.*;
@@ -32,6 +29,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     private final AssignmentEvaluator assignmentEvaluator;
     private final SymbolValueEvaluator symbolValueEvaluator;
     private final FunctionCallEvaluator functionCallEvaluator;
+    private final StructuredExpressionEvaluator structuredExpressionEvaluator;
 
     protected AbstractObjectEvaluator(CompiledExpression compiledExpression,
                                       RuntimeServices runtimeServices,
@@ -44,6 +42,8 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         this.assignmentEvaluator = new AssignmentEvaluator(nodeEvaluator);
         this.symbolValueEvaluator = new SymbolValueEvaluator(source);
         this.functionCallEvaluator = new FunctionCallEvaluator(runtimeServices, nodeEvaluator);
+        this.structuredExpressionEvaluator = new StructuredExpressionEvaluator(
+                source, runtimeServices, mathContext, nodeEvaluator);
     }
 
     @Override
@@ -78,113 +78,16 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
             case ExecutablePropertyChain chain ->
                     PropertyChainOps.evaluatePropertyChain(chain, scope, source, runtimeServices, mathContext, nodeEvaluator);
             case ExecutableFunctionCall f -> functionCallEvaluator.evaluate(f, scope);
-            case ExecutableConditional c -> evaluateConditional(c, scope);
-            case ExecutableSimpleConditional sc -> evaluateSimpleConditional(sc, scope);
-            case ExecutableUnaryOp u -> evaluateUnary(u, scope);
-            case ExecutableBinaryOp b -> evaluateBinary(b, scope);
-            case ExecutableTernaryOp t -> evaluateTernary(t, scope);
-            case ExecutablePostfixOp p -> evaluatePostfix(p, scope);
-            case ExecutableVectorLiteral v -> evaluateVector(v, scope);
-            case ExecutableNullCoalesce nc -> {
-                Object leftVal = evaluateExpr(nc.left(), scope);
-                yield leftVal != null ? leftVal : evaluateExpr(nc.right(), scope);
-            }
-            case ExecutableRegexOp r -> evaluateRegex(r, scope);
+            case ExecutableConditional c -> structuredExpressionEvaluator.evaluateConditional(c, scope);
+            case ExecutableSimpleConditional sc -> structuredExpressionEvaluator.evaluateSimpleConditional(sc, scope);
+            case ExecutableUnaryOp u -> structuredExpressionEvaluator.evaluateUnary(u, scope);
+            case ExecutableBinaryOp b -> structuredExpressionEvaluator.evaluateBinary(b, scope);
+            case ExecutableTernaryOp t -> structuredExpressionEvaluator.evaluateTernary(t, scope);
+            case ExecutablePostfixOp p -> structuredExpressionEvaluator.evaluatePostfix(p, scope);
+            case ExecutableVectorLiteral v -> structuredExpressionEvaluator.evaluateVector(v, scope);
+            case ExecutableNullCoalesce nc -> structuredExpressionEvaluator.evaluateNullCoalesce(nc, scope);
+            case ExecutableRegexOp r -> structuredExpressionEvaluator.evaluateRegex(r, scope);
         };
-    }
-
-    // -------------------------------------------------------------------------
-    // Node-specific evaluators
-    // -------------------------------------------------------------------------
-
-    private Object evaluateConditional(ExecutableConditional node, ExecutionScope scope) {
-        List<ExecutableNode> conditions = node.conditions();
-        for (int index = 0; index < conditions.size(); index++) {
-            if (asBoolean(evaluateExpr(conditions.get(index), scope))) {
-                return evaluateExpr(node.results().get(index), scope);
-            }
-        }
-        return evaluateExpr(node.elseExpression(), scope);
-    }
-
-    private Object evaluateSimpleConditional(ExecutableSimpleConditional node, ExecutionScope scope) {
-        if (asBoolean(evaluateExpr(node.condition(), scope))) {
-            return evaluateExpr(node.thenExpression(), scope);
-        }
-        return evaluateExpr(node.elseExpression(), scope);
-    }
-
-    private Object evaluateUnary(ExecutableUnaryOp node, ExecutionScope scope) {
-        Object operand = evaluateExpr(node.operand(), scope);
-        return OperatorEvaluator.evaluateUnary(node.operator(), operand, runtimeServices, mathContext);
-    }
-
-    private Object evaluateBinary(ExecutableBinaryOp node, ExecutionScope scope) {
-        Object left = evaluateExpr(node.left(), scope);
-        BinaryOperator operator = node.operator();
-        // Short-circuit evaluation for logical operators
-        if (operator == BinaryOperator.AND || operator == BinaryOperator.NAND) {
-            boolean leftBool = asBoolean(left);
-            if (!leftBool) return operator == BinaryOperator.NAND;
-        } else if (operator == BinaryOperator.OR || operator == BinaryOperator.NOR) {
-            boolean leftBool = asBoolean(left);
-            if (leftBool) return operator == BinaryOperator.OR;
-        }
-        Object right = evaluateExpr(node.right(), scope);
-        return OperatorEvaluator.evaluateBinary(operator, left, right, runtimeServices, mathContext);
-    }
-
-    private Object evaluateTernary(ExecutableTernaryOp node, ExecutionScope scope) {
-        Object value = evaluateExpr(node.first(), scope);
-        Object lower = evaluateExpr(node.second(), scope);
-        Object upper = evaluateExpr(node.third(), scope);
-        return OperatorEvaluator.evaluateTernary(node.operator(), value, lower, upper, runtimeServices);
-    }
-
-    private Object evaluateRegex(ExecutableRegexOp node, ExecutionScope scope) {
-        String subject = asString(evaluateExpr(node.subject(), scope));
-        boolean matches = node.pattern().matcher(subject).find();
-        return node.negate() != matches;
-    }
-
-    private Object evaluatePostfix(ExecutablePostfixOp node, ExecutionScope scope) {
-        Object operand = evaluateExpr(node.operand(), scope);
-        return OperatorEvaluator.evaluatePostfix(node.operator(), operand, runtimeServices, mathContext);
-    }
-
-    private List<Object> evaluateVector(ExecutableVectorLiteral node, ExecutionScope scope) {
-        if (node.isFolded()) {
-            return node.foldedValue();
-        }
-        List<Object> elements = new ArrayList<>(node.elements().size());
-        for (ExecutableNode element : node.elements()) {
-            elements.add(evaluateExpr(element, scope));
-        }
-        return elements;
-    }
-
-    // -------------------------------------------------------------------------
-    // Type helpers — fast-path instanceof casts, fallback via RuntimeServices
-    // -------------------------------------------------------------------------
-
-    private boolean asBoolean(Object value) {
-        if (value instanceof Boolean b) return b;
-        try {
-            return runtimeServices.asBoolean(value);
-        } catch (IllegalStateException e) {
-            throw new ExpressionEvaluationException(source, "NULL_VALUE",
-                    "cannot use null value as a boolean", null);
-        }
-    }
-
-    private String asString(Object value) {
-        if (value instanceof String s) return s;
-        try {
-            return runtimeServices.asString(value);
-        } catch (IllegalStateException e) {
-            throw new ExpressionEvaluationException(source, "NULL_VALUE",
-                    "cannot use null value as a string", null);
-        }
     }
 
 }
