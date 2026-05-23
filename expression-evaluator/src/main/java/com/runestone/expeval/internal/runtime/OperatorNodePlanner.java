@@ -1,5 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.*;
+
 import com.runestone.expeval.internal.ast.BinaryOperationNode;
 import com.runestone.expeval.internal.ast.BinaryOperator;
 import com.runestone.expeval.internal.ast.ExpressionNode;

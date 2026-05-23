@@ -1,6 +1,9 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.*;
+
 import com.runestone.expeval.catalog.FunctionDescriptor;
+import com.runestone.expeval.internal.semantic.ResolvedFunctionBinding;
 
 import java.util.List;
 

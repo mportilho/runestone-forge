@@ -1,8 +1,12 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.*;
+
 import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.ast.SourceSpan;
+import com.runestone.expeval.internal.semantic.SymbolKind;
+import com.runestone.expeval.internal.semantic.SymbolRef;
 
 final class SymbolReadPlanner {
 

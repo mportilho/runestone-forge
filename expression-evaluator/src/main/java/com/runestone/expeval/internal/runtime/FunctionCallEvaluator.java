@@ -1,7 +1,10 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.*;
+
 import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.catalog.FunctionDescriptor;
+import com.runestone.expeval.internal.audit.AuditCollector;
 
 import java.util.List;
 import java.util.Objects;

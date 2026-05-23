@@ -1,7 +1,11 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.ExternalBindingPlan;
+
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval.catalog.ExternalSymbolDescriptor;
+import com.runestone.expeval.internal.semantic.SemanticModel;
+import com.runestone.expeval.internal.semantic.SymbolRef;
 
 import java.util.Arrays;
 import java.util.HashMap;

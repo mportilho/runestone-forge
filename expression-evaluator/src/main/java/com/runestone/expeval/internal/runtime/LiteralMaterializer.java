@@ -1,6 +1,9 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.*;
+
 import com.runestone.expeval.internal.ast.LiteralNode;
+import com.runestone.expeval.internal.semantic.SemanticModel;
 import com.runestone.expeval.types.NullType;
 import com.runestone.expeval.types.ResolvedType;
 import com.runestone.expeval.types.ScalarType;

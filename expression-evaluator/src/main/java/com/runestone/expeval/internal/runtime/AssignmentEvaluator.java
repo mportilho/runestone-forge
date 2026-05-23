@@ -1,6 +1,10 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.*;
+
 import com.runestone.expeval.api.AuditEvent;
+import com.runestone.expeval.internal.audit.AuditCollector;
+import com.runestone.expeval.internal.semantic.SymbolRef;
 
 import java.util.LinkedHashMap;
 import java.util.List;

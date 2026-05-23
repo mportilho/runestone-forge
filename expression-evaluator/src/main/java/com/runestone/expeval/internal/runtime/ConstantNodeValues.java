@@ -1,5 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.*;
+
 final class ConstantNodeValues {
 
     private ConstantNodeValues() {

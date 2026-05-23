@@ -1,8 +1,11 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.*;
+
 import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.api.CompilationPosition;
 import com.runestone.expeval.api.ExpressionEvaluationException;
+import com.runestone.expeval.internal.audit.AuditCollector;
 import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.ast.SourceSpan;
 

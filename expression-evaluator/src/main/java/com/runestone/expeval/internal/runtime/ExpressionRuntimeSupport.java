@@ -1,12 +1,16 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.ExternalBindingPlan;
+
 import com.runestone.expeval.api.*;
 import com.runestone.expeval.api.SemanticResolutionException;
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval.compiler.ExpressionCompilerAccess;
 import com.runestone.expeval.environment.ExpressionEnvironment;
+import com.runestone.expeval.internal.audit.AuditCollector;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.grammar.ParsingException;
+import com.runestone.expeval.internal.semantic.SemanticModel;
 
 import java.math.BigDecimal;
 import java.math.MathContext;

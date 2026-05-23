@@ -1,5 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.*;
+
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval.catalog.TypeHintCatalog;
 import com.runestone.expeval.catalog.TypeMetadata;
@@ -7,6 +9,9 @@ import com.runestone.expeval.internal.ast.ExpressionNode;
 import com.runestone.expeval.internal.ast.PropertyChainNode;
 import com.runestone.expeval.internal.navigation.NavigationMode;
 import com.runestone.expeval.internal.navigation.VectorAggregationKind;
+import com.runestone.expeval.internal.semantic.NavigationStepClassifier;
+import com.runestone.expeval.internal.semantic.ResolvedFunctionBinding;
+import com.runestone.expeval.internal.semantic.SemanticModel;
 import com.runestone.expeval.types.CollectionType;
 import com.runestone.expeval.types.MapType;
 import com.runestone.expeval.types.ObjectType;

@@ -1,5 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.ExecutionPlan;
+
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.runestone.expeval.api.CacheConfig;
@@ -13,6 +15,9 @@ import com.runestone.expeval.internal.ast.SourceSpan;
 import com.runestone.expeval.internal.ast.mapping.SemanticAstBuilder;
 import com.runestone.expeval.internal.grammar.ExpressionEvaluatorParserFacade;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
+import com.runestone.expeval.internal.semantic.ResolutionContext;
+import com.runestone.expeval.internal.semantic.SemanticModel;
+import com.runestone.expeval.internal.semantic.SemanticResolver;
 
 import java.util.List;
 import java.util.Objects;

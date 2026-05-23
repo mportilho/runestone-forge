@@ -1,11 +1,17 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.ExternalBindingPlan;
+
 import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval.internal.ast.ExpressionFileNode;
 import com.runestone.expeval.internal.ast.NodeId;
 import com.runestone.expeval.internal.ast.SourceSpan;
+import com.runestone.expeval.internal.semantic.SemanticModel;
+import com.runestone.expeval.internal.semantic.SymbolKind;
+import com.runestone.expeval.internal.semantic.SymbolIndexAllocator;
+import com.runestone.expeval.internal.semantic.SymbolRef;
 import com.runestone.expeval.types.ScalarType;
 import org.junit.jupiter.api.Test;
 
@@ -20,8 +26,8 @@ class ExternalBindingPlannerTest {
 
     @Test
     void seedsDefaultsByAssignedExternalSymbolIndex() {
-        SymbolRef amount = externalSymbol("amount", 1);
-        SymbolRef enabled = externalSymbol("enabled", 0);
+        SymbolRef amount = externalSymbol("amount");
+        SymbolRef enabled = externalSymbol("enabled");
         SemanticModel model = semanticModel(Map.of(
                 "amount", amount,
                 "enabled", enabled));
@@ -31,13 +37,13 @@ class ExternalBindingPlannerTest {
 
         Object[] defaults = ExternalBindingPlanner.seedDefaults(model, catalog, runtimeServices());
 
-        assertThat(defaults).containsExactly(true, new BigDecimal("42.50"));
+        assertThat(defaults).containsExactly(new BigDecimal("42.50"), true);
     }
 
     @Test
     void leavesUnknownExternalDefaultsUnbound() {
-        SymbolRef known = externalSymbol("known", 0);
-        SymbolRef unknown = externalSymbol("unknown", 1);
+        SymbolRef known = externalSymbol("known");
+        SymbolRef unknown = externalSymbol("unknown");
         SemanticModel model = semanticModel(Map.of(
                 "known", known,
                 "unknown", unknown));
@@ -51,9 +57,9 @@ class ExternalBindingPlannerTest {
 
     @Test
     void buildsBindingPlansFromCatalogMetadata() {
-        SymbolRef fixed = externalSymbol("fixed", 0);
-        SymbolRef open = externalSymbol("open", 1);
-        SymbolRef unknown = externalSymbol("unknown", 2);
+        SymbolRef fixed = externalSymbol("fixed");
+        SymbolRef open = externalSymbol("open");
+        SymbolRef unknown = externalSymbol("unknown");
         SemanticModel model = semanticModel(Map.of(
                 "fixed", fixed,
                 "open", open,
@@ -76,8 +82,8 @@ class ExternalBindingPlannerTest {
 
     @Test
     void seedsOnlyNonOverridableConstantsForCompileTimeFolding() {
-        SymbolRef fixed = externalSymbol("fixed", 0);
-        SymbolRef overridable = externalSymbol("overridable", 1);
+        SymbolRef fixed = externalSymbol("fixed");
+        SymbolRef overridable = externalSymbol("overridable");
         SemanticModel model = semanticModel(Map.of(
                 "fixed", fixed,
                 "overridable", overridable));
@@ -94,10 +100,8 @@ class ExternalBindingPlannerTest {
         assertThat(constants.get(fixed)).isEqualTo(new BigDecimal("10"));
     }
 
-    private static SymbolRef externalSymbol(String name, int index) {
-        SymbolRef symbolRef = new SymbolRef(name, SymbolKind.EXTERNAL);
-        symbolRef.setIndex(index);
-        return symbolRef;
+    private static SymbolRef externalSymbol(String name) {
+        return new SymbolRef(name, SymbolKind.EXTERNAL);
     }
 
     private static RuntimeServices runtimeServices() {
@@ -105,7 +109,7 @@ class ExternalBindingPlannerTest {
     }
 
     private static SemanticModel semanticModel(Map<String, SymbolRef> externalSymbolsByName) {
-        return new SemanticModel(
+        SemanticModel model = new SemanticModel(
                 new ExpressionFileNode(new NodeId("file"), new SourceSpan(0, 0, 1, 0, 1, 0), List.of(), null),
                 Map.of(),
                 Map.of(),
@@ -115,5 +119,7 @@ class ExternalBindingPlannerTest {
                 Map.of(),
                 Map.of(),
                 List.of());
+        SymbolIndexAllocator.assignIndices(model);
+        return model;
     }
 }

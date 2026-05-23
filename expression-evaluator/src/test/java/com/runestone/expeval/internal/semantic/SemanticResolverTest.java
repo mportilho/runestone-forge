@@ -9,8 +9,6 @@ import com.runestone.expeval.internal.ast.ExpressionNode;
 import com.runestone.expeval.internal.ast.FunctionCallNode;
 import com.runestone.expeval.internal.ast.IdentifierNode;
 import com.runestone.expeval.internal.runtime.CompiledExpression;
-import com.runestone.expeval.internal.runtime.SemanticModel;
-import com.runestone.expeval.internal.runtime.SymbolRef;
 import com.runestone.expeval.perf.ObjectNavigationBenchmarkSupport;
 import com.runestone.expeval.testing.ExpressionCompilerInspector;
 import com.runestone.expeval.types.ScalarType;

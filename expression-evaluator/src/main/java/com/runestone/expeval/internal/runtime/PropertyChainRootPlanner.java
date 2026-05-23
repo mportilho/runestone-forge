@@ -1,8 +1,12 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.*;
+
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.ast.PropertyChainNode;
+import com.runestone.expeval.internal.semantic.SemanticModel;
+import com.runestone.expeval.internal.semantic.SymbolRef;
 import com.runestone.expeval.types.ResolvedType;
 import com.runestone.expeval.types.UnknownType;
 

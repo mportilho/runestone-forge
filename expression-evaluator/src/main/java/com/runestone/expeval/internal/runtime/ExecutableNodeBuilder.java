@@ -1,5 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.*;
+
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval.catalog.TypeHintCatalog;
 import com.runestone.expeval.internal.LanguageSymbols;
@@ -18,6 +20,9 @@ import com.runestone.expeval.internal.ast.SimpleAssignmentNode;
 import com.runestone.expeval.internal.ast.TernaryOperationNode;
 import com.runestone.expeval.internal.ast.UnaryOperationNode;
 import com.runestone.expeval.internal.ast.VectorLiteralNode;
+import com.runestone.expeval.internal.semantic.ResolvedFunctionBinding;
+import com.runestone.expeval.internal.semantic.SemanticModel;
+import com.runestone.expeval.internal.semantic.SymbolRef;
 
 import java.math.MathContext;
 import java.util.ArrayList;

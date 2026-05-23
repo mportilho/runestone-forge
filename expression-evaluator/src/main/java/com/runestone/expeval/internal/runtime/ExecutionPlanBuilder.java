@@ -1,10 +1,14 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.plan.*;
+
 import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval.catalog.TypeHintCatalog;
 import com.runestone.expeval.internal.ast.AssignmentNode;
 import com.runestone.expeval.internal.ast.ExpressionFileNode;
+import com.runestone.expeval.internal.semantic.SemanticModel;
+import com.runestone.expeval.internal.semantic.SymbolIndexAllocator;
 
 import java.math.MathContext;
 import java.util.ArrayList;
