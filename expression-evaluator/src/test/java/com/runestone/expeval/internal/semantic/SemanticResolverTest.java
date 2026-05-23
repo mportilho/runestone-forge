@@ -9,11 +9,10 @@ import com.runestone.expeval.internal.ast.ExpressionNode;
 import com.runestone.expeval.internal.ast.FunctionCallNode;
 import com.runestone.expeval.internal.ast.IdentifierNode;
 import com.runestone.expeval.internal.runtime.CompiledExpression;
-import com.runestone.expeval.compiler.ExpressionCompiler;
-import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.runtime.SemanticModel;
 import com.runestone.expeval.internal.runtime.SymbolRef;
 import com.runestone.expeval.perf.ObjectNavigationBenchmarkSupport;
+import com.runestone.expeval.testing.ExpressionCompilerInspector;
 import com.runestone.expeval.types.ScalarType;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SemanticResolverTest {
 
-    private final ExpressionCompiler compiler = new ExpressionCompiler();
+    private final ExpressionCompilerInspector inspector = new ExpressionCompilerInspector();
 
     @Test
     void shouldResolveTypesAndBuildSymbolIndexesForAssignmentsAndComparisons() {
@@ -36,9 +35,8 @@ class SemanticResolverTest {
             .registerExternalSymbol("limit", BigDecimal.ZERO, true)
             .build();
 
-        CompiledExpression compiled = compiler.compile(
+        CompiledExpression compiled = inspector.compileLogical(
             "fee = principal + principal * rate; fee > limit",
-            ExpressionResultType.LOGICAL,
             environment
         );
         SemanticModel semanticModel = compiled.semanticModel();
@@ -74,9 +72,8 @@ class SemanticResolverTest {
             .registerExternalSymbol("principal", BigDecimal.TEN, true)
             .build();
 
-        CompiledExpression compiled = compiler.compile(
+        CompiledExpression compiled = inspector.compileMath(
             "bonus(principal) + 1",
-            ExpressionResultType.MATH,
             environment
         );
         SemanticModel semanticModel = compiled.semanticModel();
@@ -92,9 +89,8 @@ class SemanticResolverTest {
     void shouldClassifyQuotedStringLiteralsBeforeTemporalParsing() {
         ExpressionEnvironment environment = ObjectNavigationBenchmarkSupport.typedEnvironment();
 
-        CompiledExpression compiled = compiler.compile(
+        CompiledExpression compiled = inspector.compileLogical(
             "usuario.endereco.bairro.codigo = \"BAT-100\"",
-            ExpressionResultType.LOGICAL,
             environment
         );
 

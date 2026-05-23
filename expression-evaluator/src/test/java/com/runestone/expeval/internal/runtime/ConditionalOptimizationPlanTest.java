@@ -1,8 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.internal.grammar.ExpressionResultType;
+import com.runestone.expeval.testing.ExpressionCompilerInspector;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +16,7 @@ class ConditionalOptimizationPlanTest {
     private static final ExpressionEnvironment ENV =
             ExpressionEnvironment.builder().addMathFunctions().build();
 
-    private final ExpressionCompiler compiler = new ExpressionCompiler();
+    private final ExpressionCompilerInspector inspector = new ExpressionCompilerInspector();
 
     @Test
     @DisplayName("if-then-else with 1 condition uses ExecutableSimpleConditional")
@@ -80,6 +79,6 @@ class ConditionalOptimizationPlanTest {
     }
 
     private CompiledExpression compile(String source) {
-        return compiler.compile(source, ExpressionResultType.MATH, ENV);
+        return inspector.compileMath(source, ENV);
     }
 }

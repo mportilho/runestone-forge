@@ -2,9 +2,8 @@ package com.runestone.expeval.perf.jmh.compilation;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
-import com.runestone.expeval.internal.grammar.ExpressionResultType;
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
+import com.runestone.expeval.testing.ExpressionCompilerInspector;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Level;
@@ -27,18 +26,16 @@ public class ExpressionEvaluatorExecutionPlanBenchmark {
 
     @Benchmark
     public Object compileMathLiteralDense(CompileState state) {
-        return new ExpressionCompiler().compile(
+        return new ExpressionCompilerInspector().compileMath(
             MATH_LITERAL_DENSE_EXPRESSION,
-            ExpressionResultType.MATH,
             state.environment
         );
     }
 
     @Benchmark
     public Object compileLogicalMixedLiteralDense(CompileState state) {
-        return new ExpressionCompiler().compile(
+        return new ExpressionCompilerInspector().compileLogical(
             LOGICAL_MIXED_LITERAL_EXPRESSION,
-            ExpressionResultType.LOGICAL,
             state.environment
         );
     }

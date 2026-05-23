@@ -1,8 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.internal.grammar.ExpressionResultType;
+import com.runestone.expeval.testing.ExpressionCompilerInspector;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -31,7 +30,7 @@ class ExecutableFunctionCallFoldingTest {
     private static final ExpressionEnvironment ENV =
             ExpressionEnvironment.builder().addMathFunctions().build();
 
-    private final ExpressionCompiler compiler = new ExpressionCompiler();
+    private final ExpressionCompilerInspector inspector = new ExpressionCompilerInspector();
 
     // -----------------------------------------------------------------------
     // Happy Path: Foldable Functions with All-Literal Arguments
@@ -226,9 +225,8 @@ class ExecutableFunctionCallFoldingTest {
                     .registerStaticProvider(UserFunctionFixture.class)
                     .build();
 
-            CompiledExpression compiled = compiler.compile(
+            CompiledExpression compiled = inspector.compileMath(
                     "tripleOf(5)",
-                    ExpressionResultType.MATH,
                     envWithUser
             );
 
@@ -380,9 +378,8 @@ class ExecutableFunctionCallFoldingTest {
                     .registerExternalSymbol("PI", new BigDecimal("3.14159265"), false)
                     .build();
 
-            CompiledExpression compiled = compiler.compile(
+            CompiledExpression compiled = inspector.compileMath(
                     "ln(PI)",
-                    ExpressionResultType.MATH,
                     envWithExternal
             );
 
@@ -456,15 +453,15 @@ class ExecutableFunctionCallFoldingTest {
     // -----------------------------------------------------------------------
 
     private CompiledExpression compile(String source) {
-        return compiler.compile(source, ExpressionResultType.MATH, ENV);
+        return inspector.compileMath(source, ENV);
     }
 
     private CompiledExpression compileLogical(String source) {
-        return compiler.compile(source, ExpressionResultType.LOGICAL, ENV);
+        return inspector.compileLogical(source, ENV);
     }
 
     private CompiledExpression compileAssignments(String source) {
-        return compiler.compile(source, ExpressionResultType.MATH, ENV);
+        return inspector.compileMath(source, ENV);
     }
 
     private static ExecutableFunctionCall extractFunctionCall(CompiledExpression compiled) {

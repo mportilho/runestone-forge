@@ -9,6 +9,7 @@ import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.runtime.CompiledExpression;
 import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
+import com.runestone.expeval.testing.ExpressionCompilerInspector;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -20,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ExpressionCompilerTest {
 
     private final ExpressionCompiler compiler = new ExpressionCompiler();
+    private final ExpressionCompilerInspector inspector = new ExpressionCompilerInspector(compiler);
 
     @Test
     void shouldRejectUnknownFunctionsDuringCompilation() {
@@ -68,8 +70,8 @@ class ExpressionCompilerTest {
             .registerExternalSymbol("principal", BigDecimal.ONE, true)
             .build();
 
-        CompiledExpression first = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, environment);
-        CompiledExpression second = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, environment);
+        CompiledExpression first = inspector.compileMath("bonus(principal) + 1", environment);
+        CompiledExpression second = inspector.compileMath("bonus(principal) + 1", environment);
 
         assertThat(second).isSameAs(first);
     }
@@ -85,8 +87,8 @@ class ExpressionCompilerTest {
             .registerExternalSymbol("principal", BigDecimal.ONE, true)
             .build();
 
-        CompiledExpression first = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, env1);
-        CompiledExpression second = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, env2);
+        CompiledExpression first = inspector.compileMath("bonus(principal) + 1", env1);
+        CompiledExpression second = inspector.compileMath("bonus(principal) + 1", env2);
 
         assertThat(second).isSameAs(first);
     }
@@ -97,8 +99,8 @@ class ExpressionCompilerTest {
             .registerExternalSymbol("prices", List.of(BigDecimal.ONE, BigDecimal.TEN), false)
             .build();
 
-        CompiledExpression first = compiler.compile("prices[1]", ExpressionResultType.MATH, environment);
-        CompiledExpression second = compiler.compile("prices[1]", ExpressionResultType.MATH, environment);
+        CompiledExpression first = inspector.compileMath("prices[1]", environment);
+        CompiledExpression second = inspector.compileMath("prices[1]", environment);
 
         assertThat(second).isSameAs(first);
     }
@@ -112,8 +114,8 @@ class ExpressionCompilerTest {
             .registerInstanceProvider(new InstanceProviderFixture(BigDecimal.TEN))
             .build();
 
-        CompiledExpression first = compiler.compile("multiply(2)", ExpressionResultType.MATH, env1);
-        CompiledExpression second = compiler.compile("multiply(2)", ExpressionResultType.MATH, env2);
+        CompiledExpression first = inspector.compileMath("multiply(2)", env1);
+        CompiledExpression second = inspector.compileMath("multiply(2)", env2);
 
         assertThat(second).isNotSameAs(first);
     }

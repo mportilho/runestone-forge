@@ -1,8 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.internal.grammar.ExpressionResultType;
+import com.runestone.expeval.testing.ExpressionCompilerInspector;
 import com.runestone.expeval.types.ObjectType;
 import com.runestone.expeval.types.ScalarType;
 import org.junit.jupiter.api.DisplayName;
@@ -15,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("Object navigation - execution plan")
 class ObjectNavigationPlanTest {
 
-    private final ExpressionCompiler compiler = new ExpressionCompiler();
+    private final ExpressionCompilerInspector inspector = new ExpressionCompilerInspector();
 
     @Test
     @DisplayName("property chain with registered type hints uses precomputed MethodHandles")
@@ -28,9 +27,8 @@ class ObjectNavigationPlanTest {
                 .registerExternalSymbol("taxa", new BigDecimal("0.05"), true)
                 .build();
 
-        CompiledExpression compiled = compiler.compile(
+        CompiledExpression compiled = inspector.compileMath(
                 "usuario.pedido.calcularTotal(taxa)",
-                ExpressionResultType.MATH,
                 environment
         );
 
@@ -62,9 +60,8 @@ class ObjectNavigationPlanTest {
                 .registerExternalSymbol("usuario", usuario, true)
                 .build();
 
-        CompiledExpression compiled = compiler.compile(
+        CompiledExpression compiled = inspector.compileMath(
                 "usuario.pontos",
-                ExpressionResultType.MATH,
                 environment
         );
 

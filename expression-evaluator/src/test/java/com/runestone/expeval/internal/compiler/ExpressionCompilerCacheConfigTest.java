@@ -2,9 +2,9 @@ package com.runestone.expeval.internal.compiler;
 
 import com.runestone.expeval.api.CacheConfig;
 import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.runtime.CompiledExpression;
 import com.runestone.expeval.compiler.ExpressionCompiler;
+import com.runestone.expeval.testing.ExpressionCompilerInspector;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -37,8 +37,9 @@ class ExpressionCompilerCacheConfigTest {
         @DisplayName("CacheConfig constructor compiles expressions correctly")
         void cacheConfigConstructorCompilesMathExpression() {
             var compiler = new ExpressionCompiler(new CacheConfig(64, null));
+            var inspector = new ExpressionCompilerInspector(compiler);
 
-            CompiledExpression result = compiler.compile("1 + 2", ExpressionResultType.MATH, ENV);
+            CompiledExpression result = inspector.compileMath("1 + 2", ENV);
 
             assertThat(result).isNotNull();
         }
@@ -47,8 +48,9 @@ class ExpressionCompilerCacheConfigTest {
         @DisplayName("CacheConfig constructor with TTL compiles expressions correctly")
         void cacheConfigConstructorWithTtlCompiles() {
             var compiler = new ExpressionCompiler(new CacheConfig(64, Duration.ofMinutes(30)));
+            var inspector = new ExpressionCompilerInspector(compiler);
 
-            CompiledExpression result = compiler.compile("3 * 4", ExpressionResultType.MATH, ENV);
+            CompiledExpression result = inspector.compileMath("3 * 4", ENV);
 
             assertThat(result).isNotNull();
         }
@@ -71,9 +73,10 @@ class ExpressionCompilerCacheConfigTest {
         @DisplayName("returns the same CompiledExpression on repeated compile calls")
         void returnsSameInstanceOnCacheHit() {
             var compiler = new ExpressionCompiler(CacheConfig.defaults());
+            var inspector = new ExpressionCompilerInspector(compiler);
 
-            CompiledExpression first = compiler.compile("10 + 5", ExpressionResultType.MATH, ENV);
-            CompiledExpression second = compiler.compile("10 + 5", ExpressionResultType.MATH, ENV);
+            CompiledExpression first = inspector.compileMath("10 + 5", ENV);
+            CompiledExpression second = inspector.compileMath("10 + 5", ENV);
 
             assertThat(second).isSameAs(first);
         }
@@ -82,9 +85,10 @@ class ExpressionCompilerCacheConfigTest {
         @DisplayName("produces distinct CompiledExpressions for different sources")
         void returnsDistinctInstancesForDifferentSources() {
             var compiler = new ExpressionCompiler(CacheConfig.defaults());
+            var inspector = new ExpressionCompilerInspector(compiler);
 
-            CompiledExpression first = compiler.compile("10 + 5", ExpressionResultType.MATH, ENV);
-            CompiledExpression second = compiler.compile("10 + 6", ExpressionResultType.MATH, ENV);
+            CompiledExpression first = inspector.compileMath("10 + 5", ENV);
+            CompiledExpression second = inspector.compileMath("10 + 6", ENV);
 
             assertThat(second).isNotSameAs(first);
         }
@@ -100,11 +104,12 @@ class ExpressionCompilerCacheConfigTest {
         @DisplayName("forces a new compilation after the cache is cleared")
         void forcesNewCompilationAfterInvalidation() {
             var compiler = new ExpressionCompiler(CacheConfig.defaults());
-            CompiledExpression before = compiler.compile("20 + 1", ExpressionResultType.MATH, ENV);
+            var inspector = new ExpressionCompilerInspector(compiler);
+            CompiledExpression before = inspector.compileMath("20 + 1", ENV);
 
             compiler.invalidateCache();
 
-            CompiledExpression after = compiler.compile("20 + 1", ExpressionResultType.MATH, ENV);
+            CompiledExpression after = inspector.compileMath("20 + 1", ENV);
             assertThat(after).isNotSameAs(before);
         }
 
@@ -112,11 +117,12 @@ class ExpressionCompilerCacheConfigTest {
         @DisplayName("warms the cache again after the first compilation post-invalidation")
         void warmsTheCacheAfterFirstPostInvalidationCompile() {
             var compiler = new ExpressionCompiler(CacheConfig.defaults());
-            compiler.compile("20 + 1", ExpressionResultType.MATH, ENV);
+            var inspector = new ExpressionCompilerInspector(compiler);
+            inspector.compileMath("20 + 1", ENV);
             compiler.invalidateCache();
 
-            CompiledExpression afterInvalidation = compiler.compile("20 + 1", ExpressionResultType.MATH, ENV);
-            CompiledExpression cachedAgain = compiler.compile("20 + 1", ExpressionResultType.MATH, ENV);
+            CompiledExpression afterInvalidation = inspector.compileMath("20 + 1", ENV);
+            CompiledExpression cachedAgain = inspector.compileMath("20 + 1", ENV);
 
             assertThat(cachedAgain).isSameAs(afterInvalidation);
         }
@@ -126,11 +132,12 @@ class ExpressionCompilerCacheConfigTest {
         void doesNotAffectOtherCompilerInstances() {
             var compilerA = new ExpressionCompiler(CacheConfig.defaults());
             var compilerB = new ExpressionCompiler(CacheConfig.defaults());
+            var inspectorB = new ExpressionCompilerInspector(compilerB);
 
-            CompiledExpression fromB = compilerB.compile("99 + 1", ExpressionResultType.MATH, ENV);
+            CompiledExpression fromB = inspectorB.compileMath("99 + 1", ENV);
             compilerA.invalidateCache();
 
-            CompiledExpression fromBAfter = compilerB.compile("99 + 1", ExpressionResultType.MATH, ENV);
+            CompiledExpression fromBAfter = inspectorB.compileMath("99 + 1", ENV);
             assertThat(fromBAfter).isSameAs(fromB);
         }
     }

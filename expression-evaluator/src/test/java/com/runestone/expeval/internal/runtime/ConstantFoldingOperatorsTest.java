@@ -1,8 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.internal.grammar.ExpressionResultType;
+import com.runestone.expeval.testing.ExpressionCompilerInspector;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +15,7 @@ class ConstantFoldingOperatorsTest {
     private static final ExpressionEnvironment ENV =
             ExpressionEnvironment.builder().addMathFunctions().build();
 
-    private final ExpressionCompiler compiler = new ExpressionCompiler();
+    private final ExpressionCompilerInspector inspector = new ExpressionCompilerInspector();
 
     @Test
     @DisplayName("Binary operator with constant operands is folded into ExecutableLiteral")
@@ -31,7 +30,7 @@ class ConstantFoldingOperatorsTest {
     @Test
     @DisplayName("Unary operator with constant operand is folded into ExecutableLiteral")
     void unaryOpFolded() {
-        CompiledExpression compiled = compiler.compile("!true or !false", ExpressionResultType.LOGICAL, ENV);
+        CompiledExpression compiled = inspector.compileLogical("!true or !false", ENV);
         ExecutableNode result = compiled.executionPlan().resultExpression();
 
         assertThat(result).isInstanceOf(ExecutableLiteral.class);
@@ -41,7 +40,7 @@ class ConstantFoldingOperatorsTest {
     @Test
     @DisplayName("Ternary operator with constant operands is folded into ExecutableLiteral")
     void ternaryOpFolded() {
-        CompiledExpression compiled = compiler.compile("5 between 1 and 10", ExpressionResultType.LOGICAL, ENV);
+        CompiledExpression compiled = inspector.compileLogical("5 between 1 and 10", ENV);
         ExecutableNode result = compiled.executionPlan().resultExpression();
 
         assertThat(result).isInstanceOf(ExecutableLiteral.class);
@@ -59,6 +58,6 @@ class ConstantFoldingOperatorsTest {
     }
 
     private CompiledExpression compile(String source) {
-        return compiler.compile(source, ExpressionResultType.MATH, ENV);
+        return inspector.compileMath(source, ENV);
     }
 }

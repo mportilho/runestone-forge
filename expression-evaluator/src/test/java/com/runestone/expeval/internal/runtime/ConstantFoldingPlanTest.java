@@ -1,9 +1,8 @@
 package com.runestone.expeval.internal.runtime;
 
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.api.support.FoldingNavigationFixtures;
-import com.runestone.expeval.internal.grammar.ExpressionResultType;
+import com.runestone.expeval.testing.ExpressionCompilerInspector;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -34,7 +33,7 @@ class ConstantFoldingPlanTest {
                     .addStringFunctions()
                     .build();
 
-    private final ExpressionCompiler compiler = new ExpressionCompiler();
+    private final ExpressionCompilerInspector inspector = new ExpressionCompilerInspector();
 
     // -----------------------------------------------------------------------
     // Foldable functions with literal arguments → isFolded() == true
@@ -285,7 +284,7 @@ class ConstantFoldingPlanTest {
                     .registerStaticProvider(PureFunctionFixture.class)
                     .build();
 
-            CompiledExpression compiled = compiler.compile("doubleOf(2)", ExpressionResultType.MATH, envWithUserFn);
+            CompiledExpression compiled = inspector.compileMath("doubleOf(2)", envWithUserFn);
 
             ExecutableFunctionCall call = resultFunctionCall(compiled);
 
@@ -447,9 +446,8 @@ class ConstantFoldingPlanTest {
                     .registerExternalSymbol("PRICES", FoldingNavigationFixtures.prices(), false)
                     .build();
 
-            CompiledExpression compiled = compiler.compile(
+            CompiledExpression compiled = inspector.compileMath(
                     "PRICES[1:3]..sum()",
-                    ExpressionResultType.MATH,
                     environment);
 
             assertThat(compiled.executionPlan().resultExpression()).isInstanceOf(ExecutableLiteral.class);
@@ -465,9 +463,8 @@ class ConstantFoldingPlanTest {
                     .registerExternalSymbol("author", "Alice", true)
                     .build();
 
-            CompiledExpression compiled = compiler.compile(
+            CompiledExpression compiled = inspector.compileMath(
                     "BOOKS[?(@.author = author)]..count()",
-                    ExpressionResultType.MATH,
                     environment);
 
             assertThat(compiled.executionPlan().resultExpression()).isInstanceOf(ExecutablePropertyChain.class);
@@ -482,15 +479,15 @@ class ConstantFoldingPlanTest {
     // -----------------------------------------------------------------------
 
     private CompiledExpression compile(String source) {
-        return compiler.compile(source, ExpressionResultType.MATH, ENV);
+        return inspector.compileMath(source, ENV);
     }
 
     private CompiledExpression compileLogical(String source) {
-        return compiler.compile(source, ExpressionResultType.LOGICAL, ENV);
+        return inspector.compileLogical(source, ENV);
     }
 
     private CompiledExpression compileAssignments(String source) {
-        return compiler.compile(source, ExpressionResultType.MATH, ENV);
+        return inspector.compileMath(source, ENV);
     }
 
     private static ExecutableFunctionCall resultFunctionCall(CompiledExpression compiled) {

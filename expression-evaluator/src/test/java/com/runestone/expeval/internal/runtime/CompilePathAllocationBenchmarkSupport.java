@@ -53,8 +53,8 @@ public final class CompilePathAllocationBenchmarkSupport {
         mathEnv = new ExpressionEnvironmentBuilder().addMathFunctions().build();
         sharedCompiler = new ExpressionCompiler();
         // Warm the cache so subsequent calls return immediately from Caffeine
-        sharedCompiler.compile(SIMPLE_MATH_EXPRESSION, ExpressionResultType.MATH, simpleEnv);
-        sharedCompiler.compile(FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv);
+        ExpressionRuntimeSupport.compile(SIMPLE_MATH_EXPRESSION, ExpressionResultType.MATH, simpleEnv, sharedCompiler);
+        ExpressionRuntimeSupport.compile(FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv, sharedCompiler);
     }
 
     /**
