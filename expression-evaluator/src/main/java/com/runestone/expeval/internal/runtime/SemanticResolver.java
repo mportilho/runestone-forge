@@ -27,7 +27,6 @@ import com.runestone.expeval.types.CollectionType;
 import com.runestone.expeval.types.MapType;
 import com.runestone.expeval.types.ObjectType;
 import com.runestone.expeval.internal.LanguageSymbols;
-import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.types.ResolvedType;
 import com.runestone.expeval.types.ResolvedTypes;
 import com.runestone.expeval.types.ScalarType;
@@ -35,12 +34,6 @@ import com.runestone.expeval.types.NullType;
 import com.runestone.expeval.types.UnknownType;
 import com.runestone.expeval.types.VectorType;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -61,20 +54,7 @@ public final class SemanticResolver {
         }
         if (file.resultExpression() != null) {
             ResolvedType resultType = session.resolveExpression(file.resultExpression());
-            boolean tolerateUnknownPropertyChain = file.resultExpression() instanceof PropertyChainNode
-                    && resultType == UnknownType.INSTANCE;
-            if (!tolerateUnknownPropertyChain
-                    && context.resultType() == ExpressionResultType.MATH
-                    && resultType != UnknownType.INSTANCE
-                    && resultType != ScalarType.NUMBER) {
-                session.error(IssueCode.RESULT_TYPE_MISMATCH, "math expressions must resolve to NUMBER", file.resultExpression().sourceSpan());
-            }
-            if (!tolerateUnknownPropertyChain
-                    && context.resultType() == ExpressionResultType.LOGICAL
-                    && resultType != UnknownType.INSTANCE
-                    && resultType != ScalarType.BOOLEAN) {
-                session.error(IssueCode.RESULT_TYPE_MISMATCH, "logical expressions must resolve to BOOLEAN", file.resultExpression().sourceSpan());
-            }
+            session.validateResultType(file.resultExpression(), resultType);
             session.resolvedTypes.put(file.nodeId(), resultType);
         } else {
             session.resolvedTypes.put(file.nodeId(), UnknownType.INSTANCE);
@@ -104,9 +84,13 @@ public final class SemanticResolver {
         private final Map<NodeId, ResolvedFunctionBinding> functionBindings = new LinkedHashMap<>();
         private final Map<SymbolRef, ResolvedType> internalTypes = new LinkedHashMap<>();
         private final List<SemanticIssue> issues = new ArrayList<>();
+        private final OperatorTypeChecker operatorTypeChecker;
+        private final ResultTypeValidator resultTypeValidator;
 
         private ResolutionSession(ResolutionContext context) {
             this.context = context;
+            this.operatorTypeChecker = new OperatorTypeChecker(this::error);
+            this.resultTypeValidator = new ResultTypeValidator(this::error);
         }
 
         private void collectInternalSymbols(List<AssignmentNode> assignments) {
@@ -147,7 +131,7 @@ public final class SemanticResolver {
                 return cached;
             }
             ResolvedType resolvedType = switch (node) {
-                case LiteralNode literalNode -> inferLiteralType(literalNode);
+                case LiteralNode literalNode -> LiteralTypeInferencer.infer(literalNode);
                 case IdentifierNode identifierNode -> resolveIdentifier(identifierNode);
                 case PropertyChainNode propertyChainNode -> resolvePropertyChain(propertyChainNode);
                 case FunctionCallNode functionCallNode -> resolveFunctionCall(functionCallNode);
@@ -160,34 +144,6 @@ public final class SemanticResolver {
             };
             resolvedTypes.put(node.nodeId(), resolvedType);
             return resolvedType;
-        }
-
-        private ResolvedType inferLiteralType(LiteralNode node) {
-            String value = node.value();
-            if (isQuotedStringLiteral(value)) {
-                return ScalarType.STRING;
-            }
-            if ("null".equals(value)) {
-                return NullType.INSTANCE;
-            }
-            if ("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)) {
-                return ScalarType.BOOLEAN;
-            }
-            if ("currDate".equals(value) || canParseDate(value)) {
-                return ScalarType.DATE;
-            }
-            if ("currTime".equals(value) || canParseTime(value)) {
-                return ScalarType.TIME;
-            }
-            if ("currDateTime".equals(value) || canParseDateTime(value)) {
-                return ScalarType.DATETIME;
-            }
-            try {
-                new BigDecimal(value);
-                return ScalarType.NUMBER;
-            } catch (NumberFormatException ignored) {
-                return UnknownType.INSTANCE;
-            }
         }
 
         private ResolvedType resolveIdentifier(IdentifierNode node) {
@@ -827,7 +783,11 @@ public final class SemanticResolver {
         }
 
         private ResolvedType resolveConditional(ConditionalNode node) {
-            node.conditions().forEach(condition -> expectType(resolveExpression(condition), ScalarType.BOOLEAN, "condition", condition.sourceSpan()));
+            node.conditions().forEach(condition -> operatorTypeChecker.expectType(
+                    resolveExpression(condition),
+                    ScalarType.BOOLEAN,
+                    "condition",
+                    condition.sourceSpan()));
             ResolvedType resultType = UnknownType.INSTANCE;
             for (ExpressionNode result : node.results()) {
                 resultType = ResolvedTypes.merge(resultType, resolveExpression(result));
@@ -836,99 +796,29 @@ public final class SemanticResolver {
         }
 
         private ResolvedType resolveUnary(UnaryOperationNode node) {
-            ResolvedType operandType = resolveExpression(node.operand());
-            return switch (node.operator()) {
-                case NEGATE -> expectType(operandType, ScalarType.NUMBER, "unary negate", node.sourceSpan());
-                case LOGICAL_NOT -> expectType(operandType, ScalarType.BOOLEAN, "logical not", node.sourceSpan());
-                case SQRT, MODULUS -> expectType(operandType, ScalarType.NUMBER, "numeric unary operator", node.sourceSpan());
-            };
+            return operatorTypeChecker.resolveUnary(node, resolveExpression(node.operand()));
         }
 
         private ResolvedType resolveBinary(BinaryOperationNode node) {
             ResolvedType leftType = resolveExpression(node.left());
             ResolvedType rightType = resolveExpression(node.right());
-            return switch (node.operator()) {
-                case ADD, SUBTRACT, MULTIPLY, DIVIDE, MODULO, POWER, ROOT ->
-                    arithmeticType(leftType, rightType, node.sourceSpan());
-                case AND, OR, XOR, XNOR, NAND, NOR -> {
-                    expectType(leftType, ScalarType.BOOLEAN, "logical operator", node.left().sourceSpan());
-                    yield expectType(rightType, ScalarType.BOOLEAN, "logical operator", node.right().sourceSpan());
-                }
-                case GREATER_THAN, GREATER_THAN_OR_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL, EQUAL, NOT_EQUAL -> {
-                    if (!compatibleComparison(leftType, rightType)) {
-                        error(IssueCode.INCOMPATIBLE_COMPARISON, "comparison uses incompatible operand types", node.sourceSpan());
-                    }
-                    yield ScalarType.BOOLEAN;
-                }
-                case NULL_COALESCE -> ResolvedTypes.merge(leftType, rightType);
-                case CONCATENATE -> {
-                    expectType(leftType, ScalarType.STRING, "string concatenation", node.left().sourceSpan());
-                    yield expectType(rightType, ScalarType.STRING, "string concatenation", node.right().sourceSpan());
-                }
-                case REGEX_MATCH, REGEX_NOT_MATCH -> {
-                    expectType(leftType, ScalarType.STRING, "regex match subject", node.left().sourceSpan());
-                    expectType(rightType, ScalarType.STRING, "regex match pattern", node.right().sourceSpan());
-                    yield ScalarType.BOOLEAN;
-                }
-                case IN, NOT_IN -> {
-                    if (rightType != UnknownType.INSTANCE
-                            && rightType != VectorType.INSTANCE
-                            && !(rightType instanceof CollectionType)) {
-                        error(IssueCode.INCOMPATIBLE_IN_OPERANDS,
-                              "membership operator expects a collection/vector right operand but found " + rightType,
-                              node.right().sourceSpan());
-                    }
-                    yield ScalarType.BOOLEAN;
-                }
-            };
+            return operatorTypeChecker.resolveBinary(node, leftType, rightType);
         }
 
         private ResolvedType resolveTernary(TernaryOperationNode node) {
             ResolvedType valueType = resolveExpression(node.first());
             ResolvedType lowerType = resolveExpression(node.second());
             ResolvedType upperType = resolveExpression(node.third());
-            if (!compatibleComparison(valueType, lowerType) || !compatibleComparison(valueType, upperType)) {
-                error(IssueCode.INCOMPATIBLE_COMPARISON, "between operator uses incompatible operand types", node.sourceSpan());
-            }
-            return ScalarType.BOOLEAN;
+            return operatorTypeChecker.resolveTernary(node, valueType, lowerType, upperType);
         }
 
         private ResolvedType resolvePostfix(PostfixOperationNode node) {
-            return expectType(resolveExpression(node.operand()), ScalarType.NUMBER, "postfix operator", node.sourceSpan());
+            return operatorTypeChecker.resolvePostfix(node, resolveExpression(node.operand()));
         }
 
         private ResolvedType resolveVector(VectorLiteralNode node) {
             node.elements().forEach(this::resolveExpression);
             return VectorType.INSTANCE;
-        }
-
-        private ResolvedType arithmeticType(ResolvedType leftType, ResolvedType rightType, SourceSpan sourceSpan) {
-            expectType(leftType, ScalarType.NUMBER, "arithmetic operator", sourceSpan);
-            expectType(rightType, ScalarType.NUMBER, "arithmetic operator", sourceSpan);
-            return ScalarType.NUMBER;
-        }
-
-        private ResolvedType expectType(
-            ResolvedType actualType,
-            ScalarType expectedType,
-            String operation,
-            SourceSpan sourceSpan
-        ) {
-            if (actualType != UnknownType.INSTANCE && actualType != NullType.INSTANCE && actualType != expectedType) {
-                error(IssueCode.TYPE_MISMATCH, operation + " expects " + expectedType + " but found " + actualType, sourceSpan);
-                return UnknownType.INSTANCE;
-            }
-            return expectedType;
-        }
-
-        private boolean compatibleComparison(ResolvedType leftType, ResolvedType rightType) {
-            if (leftType == UnknownType.INSTANCE || rightType == UnknownType.INSTANCE) {
-                return true;
-            }
-            if (leftType == NullType.INSTANCE || rightType == NullType.INSTANCE) {
-                return true;
-            }
-            return leftType.equals(rightType);
         }
 
         private void registerInternal(String name) {
@@ -939,39 +829,8 @@ public final class SemanticResolver {
             issues.add(new SemanticIssue(code, SemanticIssueSeverity.ERROR, message, sourceSpan));
         }
 
-        private boolean isQuotedStringLiteral(String value) {
-            return value.length() >= 2 && value.charAt(0) == '"' && value.charAt(value.length() - 1) == '"';
-        }
-
-        private boolean canParseDate(String value) {
-            try {
-                LocalDate.parse(value);
-                return true;
-            } catch (DateTimeParseException ignored) {
-                return false;
-            }
-        }
-
-        private boolean canParseTime(String value) {
-            try {
-                LocalTime.parse(value);
-                return true;
-            } catch (DateTimeParseException ignored) {
-                return false;
-            }
-        }
-
-        private boolean canParseDateTime(String value) {
-            try {
-                if (value.contains("+") || value.endsWith("Z")) {
-                    OffsetDateTime.parse(value);
-                } else {
-                    LocalDateTime.parse(value);
-                }
-                return true;
-            } catch (DateTimeParseException ignored) {
-                return false;
-            }
+        private void validateResultType(ExpressionNode expression, ResolvedType resultType) {
+            resultTypeValidator.validate(context.resultType(), expression, resultType);
         }
     }
 }
