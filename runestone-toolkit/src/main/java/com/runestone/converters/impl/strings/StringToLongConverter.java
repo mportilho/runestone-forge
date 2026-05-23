@@ -30,6 +30,6 @@ public class StringToLongConverter implements DataConverter<String, Long> {
 
     @Override
     public Long convert(String data) {
-        return Long.valueOf(data);
+        return SimpleStringConverter.convert(data, Long::valueOf);
     }
 }

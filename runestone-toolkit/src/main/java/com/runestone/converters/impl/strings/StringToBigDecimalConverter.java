@@ -32,6 +32,6 @@ public class StringToBigDecimalConverter implements DataConverter<String, BigDec
 
     @Override
     public BigDecimal convert(String data) {
-        return new BigDecimal(data);
+        return SimpleStringConverter.convert(data, BigDecimal::new);
     }
 }

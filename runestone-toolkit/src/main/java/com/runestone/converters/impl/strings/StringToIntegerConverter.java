@@ -30,6 +30,6 @@ public class StringToIntegerConverter implements DataConverter<String, Integer> 
 
     @Override
     public Integer convert(String data) {
-        return Integer.valueOf(data);
+        return SimpleStringConverter.convert(data, Integer::valueOf);
     }
 }

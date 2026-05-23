@@ -33,6 +33,6 @@ public class UtilDateToLocalTimeConverter implements DataConverter<Date, LocalTi
 
     @Override
     public LocalTime convert(Date data) {
-        return new java.sql.Timestamp(data.getTime()).toLocalDateTime().toLocalTime();
+        return DateTemporalConversionSupport.toLocalTime(data);
     }
 }

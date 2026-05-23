@@ -30,6 +30,6 @@ public class StringToFloatConverter implements DataConverter<String, Float> {
 
     @Override
     public Float convert(String data) {
-        return Float.valueOf(data);
+        return SimpleStringConverter.convert(data, Float::valueOf);
     }
 }

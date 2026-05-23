@@ -32,6 +32,6 @@ public class StringToPatternConverter implements DataConverter<String, Pattern> 
 
     @Override
     public Pattern convert(String data) {
-        return Pattern.compile(data);
+        return SimpleStringConverter.convert(data, Pattern::compile);
     }
 }

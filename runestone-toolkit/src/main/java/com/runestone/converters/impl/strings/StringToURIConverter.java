@@ -32,6 +32,6 @@ public class StringToURIConverter implements DataConverter<String, URI> {
 
     @Override
     public URI convert(String data) {
-        return URI.create(data);
+        return SimpleStringConverter.convert(data, URI::create);
     }
 }

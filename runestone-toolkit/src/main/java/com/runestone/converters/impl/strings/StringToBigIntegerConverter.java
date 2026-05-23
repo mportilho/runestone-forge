@@ -32,6 +32,6 @@ public class StringToBigIntegerConverter implements DataConverter<String, BigInt
 
     @Override
     public BigInteger convert(String data) {
-        return new BigInteger(data);
+        return SimpleStringConverter.convert(data, BigInteger::new);
     }
 }

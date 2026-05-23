@@ -22,17 +22,16 @@
  * SOFTWARE.
  */
 
-package com.runestone.converters.impl.dates;
+package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import java.util.function.Function;
 
-import java.time.LocalDateTime;
-import java.time.temporal.Temporal;
+final class SimpleStringConverter {
 
-public class TemporalToLocalDateTimeConverter implements DataConverter<Temporal, LocalDateTime> {
+    private SimpleStringConverter() {
+    }
 
-    @Override
-    public LocalDateTime convert(Temporal data) {
-        return DateTemporalConversionSupport.temporalToLocalDateTime(data);
+    static <T> T convert(String source, Function<String, T> parser) {
+        return parser.apply(source);
     }
 }

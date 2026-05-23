@@ -33,6 +33,6 @@ public class SqlDateToLocalDateConverter implements DataConverter<Date, LocalDat
 
     @Override
     public LocalDate convert(Date data) {
-        return data.toLocalDate();
+        return DateTemporalConversionSupport.toLocalDate(data);
     }
 }

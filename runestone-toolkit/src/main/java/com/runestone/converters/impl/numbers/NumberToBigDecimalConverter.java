@@ -27,30 +27,11 @@ package com.runestone.converters.impl.numbers;
 import com.runestone.converters.DataConverter;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.util.concurrent.atomic.*;
 
 public class NumberToBigDecimalConverter implements DataConverter<Number, BigDecimal> {
 
     @Override
     public BigDecimal convert(Number data) {
-        return switch (data) {
-            case Byte b -> BigDecimal.valueOf(b);
-            case Short s -> BigDecimal.valueOf(s);
-            case Integer i -> BigDecimal.valueOf(i);
-            case Long l -> BigDecimal.valueOf(l);
-            case Float f -> new BigDecimal(String.valueOf(f));
-            case Double d -> new BigDecimal(String.valueOf(d));
-            case AtomicInteger ai -> BigDecimal.valueOf(ai.get());
-            case AtomicLong al -> BigDecimal.valueOf(al.get());
-            case DoubleAccumulator da -> new BigDecimal(String.valueOf(da.get()));
-            case DoubleAdder da -> new BigDecimal(String.valueOf(da.sum()));
-            case LongAccumulator la -> BigDecimal.valueOf(la.get());
-            case LongAdder la -> BigDecimal.valueOf(la.sum());
-            case BigInteger bi -> new BigDecimal(bi);
-            case BigDecimal bd -> bd;
-            case null -> throw new IllegalArgumentException("Cannot convert null to BigDecimal");
-            default -> throw new IllegalArgumentException("Cannot convert " + data.getClass().getName() + " to BigDecimal");
-        };
+        return NumberConversionSupport.toBigDecimal(data);
     }
 }

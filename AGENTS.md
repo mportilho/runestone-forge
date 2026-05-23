@@ -139,3 +139,18 @@ rm -rf "${TMPDIR}"
 ```
 
 For diagnostics such as `-Xlog`, omit the `cp`/`rm` steps and inspect `${TMPDIR}` directly.
+
+## Decision-making and clarification policy
+
+When a task requires a decision, assumption, trade-off, or interpretation that is not explicitly defined in the current instructions, repository documentation, or user request, do not guess silently.
+
+Instead, pause and open a clarification round with the user before proceeding. Present:
+1. the question that must be decided;
+2. the relevant context or uncertainty;
+3. the viable options, with pros and cons when useful;
+4. your recommended option, if there is enough evidence;
+5. the impact of each option on implementation, tests, security, maintainability, or delivery.
+
+Proceed only after the user delegates or confirms the decision.
+
+Exception: if the decision is low-risk, easily reversible, and follows established project conventions, make the smallest reasonable choice, document the assumption in your final response, and continue.

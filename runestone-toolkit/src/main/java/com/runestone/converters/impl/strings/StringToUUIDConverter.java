@@ -32,6 +32,6 @@ public class StringToUUIDConverter implements DataConverter<String, UUID> {
 
     @Override
     public UUID convert(String data) {
-        return UUID.fromString(data);
+        return SimpleStringConverter.convert(data, UUID::fromString);
     }
 }

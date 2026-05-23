@@ -30,6 +30,6 @@ public class StringToDoubleConverter implements DataConverter<String, Double> {
 
     @Override
     public Double convert(String data) {
-        return Double.valueOf(data);
+        return SimpleStringConverter.convert(data, Double::valueOf);
     }
 }

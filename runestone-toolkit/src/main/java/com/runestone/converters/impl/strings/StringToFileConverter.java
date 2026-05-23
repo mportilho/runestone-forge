@@ -32,6 +32,6 @@ public class StringToFileConverter implements DataConverter<String, File> {
 
     @Override
     public File convert(String data) {
-        return new File(data);
+        return SimpleStringConverter.convert(data, File::new);
     }
 }

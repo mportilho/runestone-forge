@@ -33,6 +33,6 @@ public class StringToPathConverter implements DataConverter<String, Path> {
 
     @Override
     public Path convert(String data) {
-        return Paths.get(data);
+        return SimpleStringConverter.convert(data, Paths::get);
     }
 }

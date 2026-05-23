@@ -32,10 +32,9 @@ public class NumberToStringConverter implements DataConverter<Number, String> {
 
     @Override
     public String convert(Number data) {
-        return switch (data) {
-            case BigDecimal n -> n.toPlainString();
-            case Number n -> n.toString();
-            case null -> throw new IllegalArgumentException("Cannot convert null to String");
-        };
+        return NumberConversionSupport.convert(data, String.class, number -> switch (number) {
+            case BigDecimal bigDecimal -> bigDecimal.toPlainString();
+            default -> number.toString();
+        });
     }
 }

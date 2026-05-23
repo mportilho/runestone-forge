@@ -30,6 +30,6 @@ public class StringToByteConverter implements DataConverter<String, Byte> {
 
     @Override
     public Byte convert(String data) {
-        return Byte.valueOf(data);
+        return SimpleStringConverter.convert(data, Byte::valueOf);
     }
 }

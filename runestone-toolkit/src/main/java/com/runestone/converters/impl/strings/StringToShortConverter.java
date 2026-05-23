@@ -30,6 +30,6 @@ public class StringToShortConverter implements DataConverter<String, Short> {
 
     @Override
     public Short convert(String data) {
-        return Short.parseShort(data);
+        return SimpleStringConverter.convert(data, Short::parseShort);
     }
 }
