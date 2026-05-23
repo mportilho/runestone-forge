@@ -60,35 +60,7 @@ final class CollectionNavigationOps {
     /** {@code [?(<predicate>)]} — element-wise filter on a list or map. */
     static Object applyFilter(Object current, ExecutableNode predicate, ExecutionScope scope,
             String source, RuntimeServices runtimeServices, NodeEvaluator eval) {
-        FilterContextStack stack = FilterContextStack.INSTANCE.get();
-        if (current instanceof Map<?, ?> map) {
-            Map<Object, Object> result = new LinkedHashMap<>(map.size() * 2);
-            for (Object key : map.keySet()) {
-                Object value = map.get(key);
-                stack.pushMapEntry(key, value);
-                try {
-                    if (asBoolean(eval.evaluate(predicate, scope), source, runtimeServices)) {
-                        result.put(key, value);
-                    }
-                } finally {
-                    stack.pop();
-                }
-            }
-            return result;
-        }
-        List<Object> list = requireList(current, "filter", source);
-        List<Object> result = new ArrayList<>(list.size());
-        for (Object element : list) {
-            stack.pushElement(element);
-            try {
-                if (asBoolean(eval.evaluate(predicate, scope), source, runtimeServices)) {
-                    result.add(element);
-                }
-            } finally {
-                stack.pop();
-            }
-        }
-        return result;
+        return CollectionPredicateTransformEvaluator.filter(current, predicate, scope, source, runtimeServices, eval);
     }
 
     /**
@@ -109,33 +81,9 @@ final class CollectionNavigationOps {
     }
 
     /** {@code ..map(@ -> expr)} — transforms each element (or map entry) into a new list. */
-    @SuppressWarnings("unchecked")
     static List<Object> applyMapTransform(Object current, ExecutableNode transform,
             ExecutionScope scope, String source, NodeEvaluator eval) {
-        FilterContextStack stack = FilterContextStack.INSTANCE.get();
-        if (current instanceof Map<?, ?> map) {
-            List<Object> result = new ArrayList<>(map.size());
-            for (Map.Entry<?, ?> entry : ((Map<Object, Object>) map).entrySet()) {
-                stack.pushMapEntry(entry.getKey(), entry.getValue());
-                try {
-                    result.add(eval.evaluate(transform, scope));
-                } finally {
-                    stack.pop();
-                }
-            }
-            return result;
-        }
-        List<?> list = requireList(current, "map", source);
-        List<Object> result = new ArrayList<>(list.size());
-        for (Object element : list) {
-            stack.pushElement(element);
-            try {
-                result.add(eval.evaluate(transform, scope));
-            } finally {
-                stack.pop();
-            }
-        }
-        return result;
+        return CollectionPredicateTransformEvaluator.map(current, transform, scope, source, eval);
     }
 
     /** {@code ..keys()} or {@code ..values()} — map projection. */
@@ -189,15 +137,5 @@ final class CollectionNavigationOps {
         throw new ExpressionEvaluationException(source, "TYPE_MISMATCH",
                 operation + " requires a List but got: "
                 + (value == null ? "null" : value.getClass().getName()), null);
-    }
-
-    private static boolean asBoolean(Object value, String source, RuntimeServices runtimeServices) {
-        if (value instanceof Boolean b) return b;
-        try {
-            return runtimeServices.asBoolean(value);
-        } catch (IllegalStateException e) {
-            throw new ExpressionEvaluationException(source, "NULL_VALUE",
-                    "cannot use null value as a boolean", null);
-        }
     }
 }
