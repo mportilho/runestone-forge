@@ -38,15 +38,7 @@ public class ExpressionCompiler {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
     }
 
-    /**
-     * Compiles {@code source} into a reusable expression plan.
-     *
-     * @param source      expression source text; must not be blank
-     * @param resultType  expected result kind; must not be {@code null}
-     * @param environment execution environment; must not be {@code null}
-     * @return a compiled expression
-     */
-    public CompiledExpression compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
+    CompiledExpression compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
         return delegate.compile(source, resultType, environment);
     }
 

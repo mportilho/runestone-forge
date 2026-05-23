@@ -3,6 +3,7 @@ package com.runestone.expeval.internal.runtime;
 import com.runestone.expeval.api.*;
 import com.runestone.expeval.api.SemanticResolutionException;
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
+import com.runestone.expeval.compiler.ExpressionCompilerAccess;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.grammar.ParsingException;
@@ -254,7 +255,7 @@ public final class ExpressionRuntimeSupport {
         Objects.requireNonNull(environment, "environment must not be null");
         Objects.requireNonNull(compiler, "compiler must not be null");
         try {
-            CompiledExpression compiled = compiler.compile(source, resultType, environment);
+            CompiledExpression compiled = ExpressionCompilerAccess.compile(compiler, source, resultType, environment);
             return from(compiled, environment);
         } catch (SemanticResolutionException e) {
             throw new ExpressionCompilationException(source, e.issues(), e);

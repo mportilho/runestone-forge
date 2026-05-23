@@ -1,6 +1,7 @@
 package com.runestone.expeval.testing;
 
 import com.runestone.expeval.compiler.ExpressionCompiler;
+import com.runestone.expeval.compiler.ExpressionCompilerAccess;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.runtime.CompiledExpression;
@@ -35,6 +36,6 @@ public final class ExpressionCompilerInspector {
     }
 
     public CompiledExpression compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
-        return compiler.compile(source, resultType, environment);
+        return ExpressionCompilerAccess.compile(compiler, source, resultType, environment);
     }
 }

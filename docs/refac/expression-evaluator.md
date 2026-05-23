@@ -110,7 +110,7 @@ Large manual files at the baseline snapshot:
 
 | Severity | Issue | Evidence | Recommendation |
 |---|---|---|---|
-| Partially addressed | Compiler injection type is public, but low-level compile contract still exposes internals | `MathExpression`, `LogicalExpression`, and `AssignmentExpression` now accept `com.runestone.expeval.compiler.ExpressionCompiler`. Test white-box access now goes through `src/test/java/com/runestone/expeval/testing/ExpressionCompilerInspector`. The remaining production leak is `ExpressionCompiler.compile(...)`, which accepts `ExpressionResultType` from `internal.grammar` and returns `CompiledExpression` from `internal.runtime`. | Keep `ExpressionCompiler` as the public injection/cache handle. Next, move low-level direct compilation behind an internal/test-support access point, or introduce public result/target types if direct compiled-plan access becomes a product requirement. |
+| Partially addressed | Compiler injection type is public, but an access bridge still exposes internals | `MathExpression`, `LogicalExpression`, and `AssignmentExpression` accept `com.runestone.expeval.compiler.ExpressionCompiler`; `ExpressionCompiler.compile(...)` is no longer public. Runtime and test white-box access now go through `ExpressionCompilerAccess`, while tests centralize their usage through `src/test/java/com/runestone/expeval/testing/ExpressionCompilerInspector`. | Keep `ExpressionCompiler` as the public injection/cache handle. Treat `ExpressionCompilerAccess` as a temporary bridge until package boundaries allow a package-private/internal runtime access point, or introduce public result/target types if direct compiled-plan access becomes a product requirement. |
 | Addressed | Public environment exposed internal runtime services | `ExpressionEnvironment` imported, stored, and exposed `RuntimeServices` from `internal.runtime`. | `RuntimeServices` is now package-private and created internally from `ExpressionEnvironment`; the public environment API no longer exposes runtime implementation details. |
 | High | `internal.runtime` mixes too many phases | The package still contains compiler implementation, semantic resolution, execution plan records/builders, runtime evaluators, navigation execution, audit collection, and coercion services. | Split by pipeline phase: compiler, semantic, execution plan, execution eval, runtime services, navigation, audit. Do this as package moves now that the local responsibility splits are stable. |
 | Addressed | `SemanticResolver` had too many reasons to change | The baseline class covered assignment symbols, literal type inference, identifiers, `@`, function overloads, property/member navigation, collection functions, operators, and result type validation. | It is now a semantic-pass orchestrator delegating to cohesive collaborators such as `LiteralTypeInferencer`, `SemanticSymbolResolver`, `FunctionOverloadResolver`, `OperatorTypeChecker`, `ResultTypeValidator`, and `NavigationTypeResolver`. |
@@ -142,12 +142,12 @@ com.runestone.expeval.environment.ExpressionEnvironment
 Remaining boundary issue:
 
 ```text
-com.runestone.expeval.compiler.ExpressionCompiler.compile(...)
+com.runestone.expeval.compiler.ExpressionCompilerAccess.compile(...)
   -> com.runestone.expeval.internal.grammar.ExpressionResultType
   -> com.runestone.expeval.internal.runtime.CompiledExpression
 ```
 
-This means `ExpressionCompiler` is now an honest public injection/configuration type, but its direct `compile(...)` method is still not a clean public contract.
+This means `ExpressionCompiler` is now an honest public injection/configuration type. Its low-level `compile(...)` method is package-private, but Java package boundaries currently require a public bridge because `ExpressionRuntimeSupport` lives outside `com.runestone.expeval.compiler`.
 
 Current test strategy:
 
@@ -156,7 +156,7 @@ src/test/java/com/runestone/expeval/testing/ExpressionCompilerInspector
   -> centralizes white-box compilation for AST/SemanticModel/ExecutionPlan assertions
 ```
 
-Repository tests should use `ExpressionCompilerInspector` when they need `CompiledExpression`, `SemanticModel`, or `ExecutionPlan` internals instead of calling `ExpressionCompiler.compile(...)` directly. This keeps the current test capability while making the white-box dependency explicit.
+Repository tests should use `ExpressionCompilerInspector` when they need `CompiledExpression`, `SemanticModel`, or `ExecutionPlan` internals instead of calling the compiler bridge directly. This keeps the current test capability while making the white-box dependency explicit.
 
 Recommended options:
 
@@ -201,7 +201,7 @@ Cons:
 
 Recommended: Option A for now. The existing public facade API already covers normal usage, and no external need for direct compiled-plan access has been established.
 
-Implemented first step: `ExpressionCompilerInspector` exists in test sources, and direct calls to `ExpressionCompiler.compile(...)` from repository tests have been migrated to it. The public `compile(...)` method still exists for now; removing or narrowing it should be a separate compatibility decision.
+Implemented first steps: `ExpressionCompilerInspector` exists in test sources, direct calls to `ExpressionCompiler.compile(...)` from repository tests have been migrated to it, and `ExpressionCompiler.compile(...)` is no longer public. The remaining compromise is `ExpressionCompilerAccess`, a public bridge that should disappear when compiler/runtime package boundaries are reorganized or when a stable public compiled-handle API is introduced.
 
 ## Proposed Package Target
 
@@ -545,14 +545,15 @@ Recommended baseline coverage:
 7. Done: for `SemanticResolver`, keep it as semantic-pass orchestrator and extract responsibility clusters: symbols, literals, normal function overloads, operators, result validation, and navigation typing.
 8. Done: keep semantic navigation typing in one `NavigationTypeResolver` unless a rule becomes truly shared outside navigation.
 9. Done: add `ExpressionCompilerInspector` in test sources and migrate direct white-box test calls away from `ExpressionCompiler.compile(...)`.
-10. Next: decide the remaining public compiler contract leak: either hide/narrow low-level `compile(...)` or introduce public replacements for `ExpressionResultType` and `CompiledExpression`.
-11. Next: create new internal packages only after the responsibility split is stable and tests are green.
-12. Next: move semantic model/classes from `internal.runtime` to `internal.semantic`: `SemanticModel`, `SemanticIssue`, `SemanticIssueSeverity`, `ResolutionContext`, `ResolvedFunctionBinding`, `SymbolRef`, `SymbolKind`, `SemanticResolver`, and semantic collaborators.
-13. Next: move execution plan records/classes to `internal.execution.plan`: `ExecutionPlan`, `ExecutableNode`, `Executable*`, `ExecutionPlanBuilder`, and planning collaborators.
-14. Next: move evaluators to `internal.execution.eval`: `MathEvaluator`, `LogicalEvaluator`, `AbstractObjectEvaluator`, `OperatorEvaluator`, `ExecutionScope`, `NodeEvaluator`, and runtime evaluator collaborators.
-15. Next: move navigation execution classes to a navigation-focused package: `PropertyChainOps`, `CollectionAccessOps`, `CollectionPredicateTransformEvaluator`, `CollectionFunctionEvaluator`, `VectorAggregationEvaluator`, `PropertyAccessEvaluator`, `DeepScanEvaluator`, `FilterContextStack`, `DeepScanContext`.
-16. Ongoing: compare performance against the baseline after each extraction that touches evaluation, invocation, navigation, coercion, reflection, or folding.
-17. Permanent decision: do not split `SemanticAstBuilder`; it is intentionally excluded from this refactoring plan.
+10. Done: make `ExpressionCompiler.compile(...)` non-public and route runtime/test-support through `ExpressionCompilerAccess`.
+11. Next: remove the temporary public `ExpressionCompilerAccess` bridge by colocating the compiler access point with runtime internals, or introduce public replacements for `ExpressionResultType` and `CompiledExpression` if direct compiled-plan access becomes a product requirement.
+12. Next: create new internal packages only after the responsibility split is stable and tests are green.
+13. Next: move semantic model/classes from `internal.runtime` to `internal.semantic`: `SemanticModel`, `SemanticIssue`, `SemanticIssueSeverity`, `ResolutionContext`, `ResolvedFunctionBinding`, `SymbolRef`, `SymbolKind`, `SemanticResolver`, and semantic collaborators.
+14. Next: move execution plan records/classes to `internal.execution.plan`: `ExecutionPlan`, `ExecutableNode`, `Executable*`, `ExecutionPlanBuilder`, and planning collaborators.
+15. Next: move evaluators to `internal.execution.eval`: `MathEvaluator`, `LogicalEvaluator`, `AbstractObjectEvaluator`, `OperatorEvaluator`, `ExecutionScope`, `NodeEvaluator`, and runtime evaluator collaborators.
+16. Next: move navigation execution classes to a navigation-focused package: `PropertyChainOps`, `CollectionAccessOps`, `CollectionPredicateTransformEvaluator`, `CollectionFunctionEvaluator`, `VectorAggregationEvaluator`, `PropertyAccessEvaluator`, `DeepScanEvaluator`, `FilterContextStack`, `DeepScanContext`.
+17. Ongoing: compare performance against the baseline after each extraction that touches evaluation, invocation, navigation, coercion, reflection, or folding.
+18. Permanent decision: do not split `SemanticAstBuilder`; it is intentionally excluded from this refactoring plan.
 
 ## Suggested Tests
 
@@ -568,7 +569,7 @@ Recommended baseline coverage:
 
 ## Risk Notes
 
-- Changing `ExpressionCompiler.compile(...)` is potentially breaking because the public facade currently exposes `ExpressionResultType` and `CompiledExpression`. Decide whether to hide that method or replace those types with public equivalents before changing it.
+- `ExpressionCompilerAccess` is a temporary compromise: it keeps `ExpressionCompiler.compile(...)` non-public, but still exposes internal types from a public bridge. Remove it after compiler/runtime package boundaries are reorganized or after a stable public compiled-handle API is designed.
 - Moving many package-private classes can expose hidden dependency cycles. Do the move in small commits/steps.
 - Constant folding and runtime evaluation must remain behaviorally identical. Extracting a shared evaluator is valuable but should be backed by tests.
 - Navigation is the riskiest area because one language feature touches grammar, AST, semantic resolution, plan building, and runtime evaluation.
