@@ -63,33 +63,34 @@ final class PropertyChainOps {
                 case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke ->
                         accessEvaluator.invokeReflectiveMethod(scope, current, reflectiveMethodInvoke);
                 case ExecutablePropertyChain.ExecutableIndexAccess ia ->
-                        CollectionNavigationOps.applyIndex(current,
+                        CollectionAccessOps.applyIndex(current,
                                 (int) asBigDecimalStrict(eval.evaluate(ia.index(), scope), runtimeServices).longValue(),
                                 source);
                 case ExecutablePropertyChain.ExecutableMapKeyAccess mka ->
-                        CollectionNavigationOps.applyMapKey(current, mka.key(), source);
+                        CollectionAccessOps.applyMapKey(current, mka.key(), source);
                 case ExecutablePropertyChain.ExecutableSliceAccess sa -> {
                     Integer start = sa.start() == null ? null
                             : (int) asBigDecimalStrict(eval.evaluate(sa.start(), scope), runtimeServices).longValue();
                     Integer end = sa.end() == null ? null
                             : (int) asBigDecimalStrict(eval.evaluate(sa.end(), scope), runtimeServices).longValue();
-                    yield CollectionNavigationOps.applySlice(current, start, end, source);
+                    yield CollectionAccessOps.applySlice(current, start, end, source);
                 }
                 case ExecutablePropertyChain.ExecutableWildcard ignored ->
-                        CollectionNavigationOps.applyWildcard(current);
+                        CollectionAccessOps.applyWildcard(current);
                 case ExecutablePropertyChain.ExecutableFilterPredicate fp ->
-                        CollectionNavigationOps.applyFilter(current, fp.predicate(), scope, source, runtimeServices, eval);
+                        CollectionPredicateTransformEvaluator.filter(
+                                current, fp.predicate(), scope, source, runtimeServices, eval);
                 case ExecutablePropertyChain.ExecutableDeepScan ds ->
-                        CollectionNavigationOps.applyDeepScan(current, ds.propertyName());
+                        DeepScanEvaluator.evaluate(current, ds.propertyName());
                 case ExecutablePropertyChain.ExecutableVectorAggregation va ->
-                        CollectionNavigationOps.applyAggregation(current, va.kind(), va.transform(), scope,
+                        VectorAggregationEvaluator.evaluate(current, va.kind(), va.transform(), scope,
                                 source, runtimeServices, mathContext, eval);
                 case ExecutablePropertyChain.ExecutableVectorMap vm ->
-                        CollectionNavigationOps.applyMapTransform(current, vm.transform(), scope, source, eval);
+                        CollectionPredicateTransformEvaluator.map(current, vm.transform(), scope, source, eval);
                 case ExecutablePropertyChain.ExecutableMapProjection mp ->
-                        CollectionNavigationOps.applyMapProjection(current, mp.kind(), source);
+                        CollectionAccessOps.applyMapProjection(current, mp.kind(), source);
                 case ExecutablePropertyChain.ExecutableCollectionFunction cf ->
-                        CollectionNavigationOps.applyCollectionFunction(current, cf, scope, source, runtimeServices, eval);
+                        CollectionFunctionEvaluator.evaluate(current, cf, scope, source, runtimeServices, eval);
             };
             if (access instanceof ExecutablePropertyChain.ExecutableWildcard
                     || access instanceof ExecutablePropertyChain.ExecutableSliceAccess

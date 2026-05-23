@@ -26,7 +26,7 @@ final class VectorAggregationEvaluator {
         if (current instanceof Map<?, ?> map && kind == VectorAggregationKind.COUNT) {
             return BigDecimal.valueOf(map.size());
         }
-        List<?> list = CollectionNavigationOps.requireList(current, "aggregation", source);
+        List<?> list = CollectionAccessOps.requireList(current, "aggregation", source);
         if (kind == VectorAggregationKind.COUNT) {
             return BigDecimal.valueOf(list.size());
         }

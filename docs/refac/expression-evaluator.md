@@ -118,7 +118,7 @@ Large manual files at the baseline snapshot:
 | Accepted | `SemanticAstBuilder` stays as-is | 1423-line parse mapping class; despite its size, the current structure is considered acceptable for this project. | Do not split or refactor `SemanticAstBuilder` as part of this plan. |
 | Partially addressed | Evaluation logic is duplicated between runtime and constant folding | Runtime evaluation and constant folding both handled binary short-circuit, conditionals, vectors, regex, postfix/unary/ternary, and null coalescing. | `StructuredExpressionEvaluator` now owns shared structured/operator node evaluation for both paths. Function calls still have evaluator-specific handling because runtime audit and fold-time behavior differ. |
 | Medium | Runtime invocation by arity appears in multiple places | Invocation logic exists in `FunctionDescriptor`, `AbstractObjectEvaluator`, and `PropertyChainOps`. | Extract `RuntimeInvocationSupport` or `MethodHandleInvoker`, preserving fast paths 0-6 in one place. |
-| Medium | Main navigation code is not in `internal.navigation` | `internal.navigation` contains enums/cache/introspection, while `PropertyChainOps`, `CollectionNavigationOps`, `ExecutablePropertyChain`, `FilterContextStack`, `DeepScanContext` are in `internal.runtime`. | Move navigation execution/planning classes under navigation or execution-navigation subpackages. |
+| Partially addressed | Main navigation code is not in `internal.navigation` | `internal.navigation` contains enums/cache/introspection, while `PropertyChainOps`, `CollectionAccessOps`, `CollectionPredicateTransformEvaluator`, `CollectionFunctionEvaluator`, `VectorAggregationEvaluator`, `ExecutablePropertyChain`, `FilterContextStack`, and `DeepScanContext` are still in `internal.runtime`. | Move navigation execution/planning classes under navigation or execution-navigation subpackages after the responsibility split is stable. |
 | Medium | Sentinel `@` is represented as repeated string literal | Search found relevant occurrences in `SemanticAstBuilder`, `SemanticResolver`, `ExecutionPlanBuilder`, `AbstractObjectEvaluator`, and `PropertyChainOps`. | Introduce `LanguageSymbols.CURRENT_ELEMENT` or `SymbolKind.CURRENT_ELEMENT`. Avoid fake external `SymbolRef("@", SymbolKind.EXTERNAL)`. |
 | Medium | Type introspection policy is split | `ExpressionEnvironmentBuilder` discovers type hints via public methods/fields; `TypeIntrospectionSupport` walks declared members and hierarchy for reflective access. | Introduce a shared `TypeMetadataDiscoverer` with explicit policies for public API metadata vs runtime fallback. |
 | Medium | `FunctionDescriptor` mixes catalog metadata and invocation mechanics | It stores metadata and method handles, and provides arity-specific `invoke` overloads. | Decide whether catalog is runtime-facing. If not, split `FunctionDescriptor` metadata from `FunctionInvoker`. |
@@ -260,7 +260,10 @@ com.runestone.expeval.internal.navigation
   MapProjectionKind
   VectorAggregationKind
   PropertyChainOps
-  CollectionNavigationOps
+  CollectionAccessOps
+  CollectionPredicateTransformEvaluator
+  CollectionFunctionEvaluator
+  VectorAggregationEvaluator
   ExecutablePropertyChain, if treated as navigation-specific executable plan
   FilterContext
   FilterContextStack
@@ -446,7 +449,10 @@ Navigation currently crosses many files:
 - `ExecutionPlanBuilder`.
 - `ExecutablePropertyChain`.
 - `PropertyChainOps`.
-- `CollectionNavigationOps`.
+- `CollectionAccessOps`.
+- `CollectionPredicateTransformEvaluator`.
+- `CollectionFunctionEvaluator`.
+- `VectorAggregationEvaluator`.
 
 Some duplication is expected because AST, semantic model, and executable plan are different layers. The current problem is that rules such as legacy-only chain classification and current element handling are repeated in multiple phases.
 
@@ -465,7 +471,7 @@ Invocation concerns appear in:
 - `FunctionDescriptor`: stores method handle/invokers and exposes arity-specific invocation.
 - `AbstractObjectEvaluator`: evaluates/coerces arguments and invokes functions.
 - `PropertyChainOps`: invokes method handles for property-chain method calls.
-- `CollectionNavigationOps`: applies collection functions with array-style arguments.
+- `CollectionFunctionEvaluator`: applies collection functions with array-style arguments.
 
 Recommended helper:
 
@@ -521,7 +527,7 @@ Recommended baseline coverage:
 12. Move semantic model classes from `internal.runtime` to `internal.semantic`: `SemanticModel`, `SemanticIssue`, `SemanticIssueSeverity`, `ResolutionContext`, `ResolvedFunctionBinding`, `SymbolRef`, `SymbolKind`.
 13. Move execution plan records/classes to `internal.execution.plan`: `ExecutionPlan`, `ExecutableNode`, `Executable*`, `ExecutionPlanBuilder`.
 14. Move evaluators to `internal.execution.eval`: `MathEvaluator`, `LogicalEvaluator`, `AbstractObjectEvaluator`, `OperatorEvaluator`, `ExecutionScope`, `NodeEvaluator`.
-15. Move navigation execution classes to navigation-focused package: `PropertyChainOps`, `CollectionNavigationOps`, `FilterContextStack`, `DeepScanContext`.
+15. Move navigation execution classes to navigation-focused package: `PropertyChainOps`, `CollectionAccessOps`, `CollectionPredicateTransformEvaluator`, `CollectionFunctionEvaluator`, `VectorAggregationEvaluator`, `FilterContextStack`, `DeepScanContext`.
 16. Do not split `SemanticAstBuilder`; it is intentionally excluded from this refactoring plan.
 
 ## Suggested Tests

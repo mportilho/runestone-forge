@@ -22,7 +22,7 @@ final class CollectionPredicateTransformEvaluator {
         if (current instanceof Map<?, ?> map) {
             return filterMap(map, predicate, scope, source, runtimeServices, nodeEvaluator, stack);
         }
-        List<Object> list = CollectionNavigationOps.requireList(current, "filter", source);
+        List<Object> list = CollectionAccessOps.requireList(current, "filter", source);
         return filterList(list, predicate, scope, source, runtimeServices, nodeEvaluator, stack);
     }
 
@@ -36,7 +36,7 @@ final class CollectionPredicateTransformEvaluator {
         if (current instanceof Map<?, ?> map) {
             return mapEntries(map, transform, scope, nodeEvaluator, stack);
         }
-        List<?> list = CollectionNavigationOps.requireList(current, "map", source);
+        List<?> list = CollectionAccessOps.requireList(current, "map", source);
         return mapElements(list, transform, scope, nodeEvaluator, stack);
     }
 
