@@ -1,6 +1,5 @@
 package com.runestone.expeval.internal.runtime;
 
-import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.ast.PropertyChainNode;
@@ -19,7 +18,7 @@ final class PropertyChainRootPlanner {
             ConstantFoldContext foldContext) {
         if (LanguageSymbols.CURRENT_ELEMENT.equals(node.rootIdentifier())) {
             return new PropertyChainRootPlan(
-                    new ExecutableIdentifier(new SymbolRef(LanguageSymbols.CURRENT_ELEMENT, SymbolKind.EXTERNAL), node.sourceSpan()),
+                    SymbolReadPlanner.currentElement(node.sourceSpan()),
                     UnknownType.INSTANCE
             );
         }
@@ -36,12 +35,7 @@ final class PropertyChainRootPlanner {
             SymbolRef rootRef,
             PropertyChainNode node,
             ConstantFoldContext foldContext) {
-        if (foldContext.symbols.containsKey(rootRef)) {
-            Object value = foldContext.symbols.get(rootRef);
-            foldContext.variableReads.add(new AuditEvent.VariableRead(rootRef.name(), false, value));
-            return new ExecutableLiteral(value);
-        }
-        return new ExecutableIdentifier(rootRef, node.sourceSpan());
+        return SymbolReadPlanner.read(rootRef, node.sourceSpan(), foldContext);
     }
 
     record PropertyChainRootPlan(ExecutableNode root, ResolvedType rootType) {
