@@ -3,14 +3,10 @@ package com.runestone.expeval.internal.runtime;
 import com.runestone.expeval.api.ExpressionEvaluationException;
 import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.navigation.FilterContext;
-import com.runestone.expeval.internal.navigation.TypeIntrospectionSupport;
 
-import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.math.MathContext;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 final class PropertyChainOps {
 
@@ -19,9 +15,15 @@ final class PropertyChainOps {
     static Object evaluatePropertyChain(ExecutablePropertyChain node, ExecutionScope scope,
             String source, RuntimeServices runtimeServices, MathContext mathContext, NodeEvaluator eval) {
         if (node.legacyOnly()) {
-            return evaluateLegacyPropertyChain(node, scope, source, runtimeServices, eval);
+            return evaluateLegacyPropertyChain(
+                    node,
+                    scope,
+                    source,
+                    eval,
+                    new PropertyAccessEvaluator(source, runtimeServices, eval));
         }
 
+        PropertyAccessEvaluator accessEvaluator = new PropertyAccessEvaluator(source, runtimeServices, eval);
         Object current = eval.evaluate(node.root(), scope);
         List<ExecutablePropertyChain.ExecutableAccess> chain = node.chain();
         int chainStart = 0;
@@ -43,28 +45,23 @@ final class PropertyChainOps {
             }
             if (inCollection && current instanceof List<?> list) {
                 if (access instanceof ExecutablePropertyChain.ReflectivePropertyAccess pa) {
-                    current = projectPropertyOverList(source, list, pa.name());
+                    current = accessEvaluator.projectReflectivePropertyOverList(list, pa.name());
                     continue;
                 }
                 if (access instanceof ExecutablePropertyChain.ExecutableFieldGet fieldGet) {
-                    current = projectFieldGetOverList(list, node, fieldGet, source, runtimeServices);
+                    current = accessEvaluator.projectFieldGetOverList(list, node, fieldGet);
                     continue;
                 }
             }
             current = switch (access) {
                 case ExecutablePropertyChain.ExecutableFieldGet fieldGet ->
-                        invokeGetter(node, current, fieldGet, source, runtimeServices);
+                        accessEvaluator.evaluateFieldGet(node, current, fieldGet);
                 case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke ->
-                        invokeMethod(node, scope, current, methodInvoke, source, runtimeServices, eval);
+                        accessEvaluator.evaluateMethod(node, scope, current, methodInvoke);
                 case ExecutablePropertyChain.ReflectivePropertyAccess propertyAccess ->
-                        resolvePropertyReflective(source, current, propertyAccess.name());
-                case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke -> {
-                    Object[] args = new Object[reflectiveMethodInvoke.arguments().size()];
-                    for (int index = 0; index < reflectiveMethodInvoke.arguments().size(); index++) {
-                        args[index] = eval.evaluate(reflectiveMethodInvoke.arguments().get(index), scope);
-                    }
-                    yield invokeMethodReflective(source, current, reflectiveMethodInvoke.name(), args);
-                }
+                        accessEvaluator.resolveReflectiveProperty(current, propertyAccess.name());
+                case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke ->
+                        accessEvaluator.invokeReflectiveMethod(scope, current, reflectiveMethodInvoke);
                 case ExecutablePropertyChain.ExecutableIndexAccess ia ->
                         CollectionNavigationOps.applyIndex(current,
                                 (int) asBigDecimalStrict(eval.evaluate(ia.index(), scope), runtimeServices).longValue(),
@@ -109,7 +106,7 @@ final class PropertyChainOps {
     }
 
     private static Object evaluateLegacyPropertyChain(ExecutablePropertyChain node, ExecutionScope scope,
-            String source, RuntimeServices runtimeServices, NodeEvaluator eval) {
+            String source, NodeEvaluator eval, PropertyAccessEvaluator accessEvaluator) {
         Object current = eval.evaluate(node.root(), scope);
         List<ExecutablePropertyChain.ExecutableAccess> chain = node.chain();
         int chainStart = 0;
@@ -129,211 +126,17 @@ final class PropertyChainOps {
             }
             current = switch (access) {
                 case ExecutablePropertyChain.ExecutableFieldGet fieldGet ->
-                        invokeGetter(node, current, fieldGet, source, runtimeServices);
+                        accessEvaluator.evaluateFieldGet(node, current, fieldGet);
                 case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke ->
-                        invokeMethod(node, scope, current, methodInvoke, source, runtimeServices, eval);
+                        accessEvaluator.evaluateMethod(node, scope, current, methodInvoke);
                 case ExecutablePropertyChain.ReflectivePropertyAccess propertyAccess ->
-                        resolvePropertyReflective(source, current, propertyAccess.name());
-                case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke -> {
-                    Object[] args = new Object[reflectiveMethodInvoke.arguments().size()];
-                    for (int index = 0; index < reflectiveMethodInvoke.arguments().size(); index++) {
-                        args[index] = eval.evaluate(reflectiveMethodInvoke.arguments().get(index), scope);
-                    }
-                    yield invokeMethodReflective(source, current, reflectiveMethodInvoke.name(), args);
-                }
+                        accessEvaluator.resolveReflectiveProperty(current, propertyAccess.name());
+                case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke ->
+                        accessEvaluator.invokeReflectiveMethod(scope, current, reflectiveMethodInvoke);
                 default -> throw new IllegalStateException("legacy property chain contains unsupported access: " + access);
             };
         }
         return current;
-    }
-
-    private static Object invokeGetter(ExecutablePropertyChain node, Object current,
-            ExecutablePropertyChain.ExecutableFieldGet fieldGet, String source, RuntimeServices runtimeServices) {
-        try {
-            Object result = fieldGet.getter().invoke(current);
-            return runtimeServices.coerceToResolvedType(result, fieldGet.resolvedType());
-        } catch (Error error) {
-            throw error;
-        } catch (Throwable throwable) {
-            ExpressionEvaluationException exception = new ExpressionEvaluationException(
-                    source, "PROPERTY_ACCESS_ERROR",
-                    "error accessing '" + fieldGet.name() + "' while navigating '" + rootName(node.root())
-                    + "': " + throwable.getMessage(), null);
-            exception.initCause(throwable);
-            throw exception;
-        }
-    }
-
-    private static Object invokeMethod(ExecutablePropertyChain node, ExecutionScope scope, Object current,
-            ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke,
-            String source, RuntimeServices runtimeServices, NodeEvaluator eval) {
-        int arity = methodInvoke.arguments().size();
-        List<ExecutableNode> arguments = methodInvoke.arguments();
-        List<Class<?>> parameterTypes = methodInvoke.parameterTypes();
-        try {
-            Object result = switch (arity) {
-                case 0 -> methodInvoke.handle().invoke(current);
-                case 1 -> {
-                    Object a1 = eval.evaluate(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
-                    yield methodInvoke.handle().invoke(current, a1);
-                }
-                case 2 -> {
-                    Object a1 = eval.evaluate(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
-                    Object a2 = eval.evaluate(arguments.get(1), scope);
-                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
-                    yield methodInvoke.handle().invoke(current, a1, a2);
-                }
-                case 3 -> {
-                    Object a1 = eval.evaluate(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
-                    Object a2 = eval.evaluate(arguments.get(1), scope);
-                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
-                    Object a3 = eval.evaluate(arguments.get(2), scope);
-                    a3 = runtimeServices.coerce(a3, parameterTypes.get(2));
-                    yield methodInvoke.handle().invoke(current, a1, a2, a3);
-                }
-                case 4 -> {
-                    Object a1 = eval.evaluate(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
-                    Object a2 = eval.evaluate(arguments.get(1), scope);
-                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
-                    Object a3 = eval.evaluate(arguments.get(2), scope);
-                    a3 = runtimeServices.coerce(a3, parameterTypes.get(2));
-                    Object a4 = eval.evaluate(arguments.get(3), scope);
-                    a4 = runtimeServices.coerce(a4, parameterTypes.get(3));
-                    yield methodInvoke.handle().invoke(current, a1, a2, a3, a4);
-                }
-                case 5 -> {
-                    Object a1 = eval.evaluate(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
-                    Object a2 = eval.evaluate(arguments.get(1), scope);
-                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
-                    Object a3 = eval.evaluate(arguments.get(2), scope);
-                    a3 = runtimeServices.coerce(a3, parameterTypes.get(2));
-                    Object a4 = eval.evaluate(arguments.get(3), scope);
-                    a4 = runtimeServices.coerce(a4, parameterTypes.get(3));
-                    Object a5 = eval.evaluate(arguments.get(4), scope);
-                    a5 = runtimeServices.coerce(a5, parameterTypes.get(4));
-                    yield methodInvoke.handle().invoke(current, a1, a2, a3, a4, a5);
-                }
-                case 6 -> {
-                    Object a1 = eval.evaluate(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
-                    Object a2 = eval.evaluate(arguments.get(1), scope);
-                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
-                    Object a3 = eval.evaluate(arguments.get(2), scope);
-                    a3 = runtimeServices.coerce(a3, parameterTypes.get(2));
-                    Object a4 = eval.evaluate(arguments.get(3), scope);
-                    a4 = runtimeServices.coerce(a4, parameterTypes.get(3));
-                    Object a5 = eval.evaluate(arguments.get(4), scope);
-                    a5 = runtimeServices.coerce(a5, parameterTypes.get(4));
-                    Object a6 = eval.evaluate(arguments.get(5), scope);
-                    a6 = runtimeServices.coerce(a6, parameterTypes.get(5));
-                    yield methodInvoke.handle().invoke(current, a1, a2, a3, a4, a5, a6);
-                }
-                default -> {
-                    Object[] args = new Object[arity + 1];
-                    args[0] = current;
-                    for (int index = 0; index < arity; index++) {
-                        Object evaluated = eval.evaluate(arguments.get(index), scope);
-                        args[index + 1] = runtimeServices.coerce(evaluated, parameterTypes.get(index));
-                    }
-                    yield methodInvoke.handle().invokeWithArguments(args);
-                }
-            };
-            return runtimeServices.coerceToResolvedType(result, methodInvoke.returnType());
-        } catch (Error error) {
-            throw error;
-        } catch (Throwable throwable) {
-            ExpressionEvaluationException exception = new ExpressionEvaluationException(
-                    source, "METHOD_INVOKE_ERROR",
-                    "error invoking '" + methodInvoke.name() + "' while navigating '" + rootName(node.root())
-                    + "': " + throwable.getMessage(), null);
-            exception.initCause(throwable);
-            throw exception;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Object resolvePropertyReflective(String source, Object target, String name) {
-        // For Map targets, a dot-notation property access degrades to a key lookup
-        if (target instanceof Map<?, ?> map) {
-            return ((Map<String, Object>) map).get(name);
-        }
-        Class<?> cls = target.getClass();
-        MethodHandle handle = TypeIntrospectionSupport.cachedProperty(cls, name);
-        if (handle == null) {
-            throw new ExpressionEvaluationException(source, "UNKNOWN_PROPERTY",
-                    "property '" + name + "' not found on " + cls.getSimpleName(), null);
-        }
-        try {
-            return handle.invoke(target);
-        } catch (Error error) {
-            throw error;
-        } catch (Throwable throwable) {
-            ExpressionEvaluationException exception = new ExpressionEvaluationException(
-                    source, "PROPERTY_ACCESS_ERROR",
-                    "error accessing '" + name + "': " + throwable.getMessage(), null);
-            exception.initCause(throwable);
-            throw exception;
-        }
-    }
-
-    private static Object invokeMethodReflective(String source, Object target, String name, Object[] args) {
-        Class<?> cls = target.getClass();
-        MethodHandle handle = TypeIntrospectionSupport.cachedMethod(cls, name, args.length);
-        if (handle == null) {
-            throw new ExpressionEvaluationException(source, "UNKNOWN_METHOD",
-                    "method '" + name + "' with " + args.length + " argument(s) not found on " + cls.getSimpleName(), null);
-        }
-        try {
-            return switch (args.length) {
-                case 0 -> handle.invoke(target);
-                case 1 -> handle.invoke(target, args[0]);
-                case 2 -> handle.invoke(target, args[0], args[1]);
-                case 3 -> handle.invoke(target, args[0], args[1], args[2]);
-                case 4 -> handle.invoke(target, args[0], args[1], args[2], args[3]);
-                case 5 -> handle.invoke(target, args[0], args[1], args[2], args[3], args[4]);
-                case 6 -> handle.invoke(target, args[0], args[1], args[2], args[3], args[4], args[5]);
-                default -> {
-                    Object[] fullArgs = new Object[args.length + 1];
-                    fullArgs[0] = target;
-                    System.arraycopy(args, 0, fullArgs, 1, args.length);
-                    yield handle.invokeWithArguments(fullArgs);
-                }
-            };
-        } catch (Error error) {
-            throw error;
-        } catch (Throwable throwable) {
-            ExpressionEvaluationException exception = new ExpressionEvaluationException(
-                    source, "METHOD_INVOKE_ERROR",
-                    "error invoking '" + name + "': " + throwable.getMessage(), null);
-            exception.initCause(throwable);
-            throw exception;
-        }
-    }
-
-    private static List<Object> projectPropertyOverList(String source, List<?> list, String propertyName) {
-        List<Object> result = new ArrayList<>(list.size());
-        for (Object element : list) {
-            if (element != null) {
-                result.add(resolvePropertyReflective(source, element, propertyName));
-            }
-        }
-        return result;
-    }
-
-    private static List<Object> projectFieldGetOverList(List<?> list, ExecutablePropertyChain node,
-            ExecutablePropertyChain.ExecutableFieldGet fieldGet, String source, RuntimeServices runtimeServices) {
-        List<Object> result = new ArrayList<>(list.size());
-        for (Object element : list) {
-            if (element != null) {
-                result.add(invokeGetter(node, element, fieldGet, source, runtimeServices));
-            }
-        }
-        return result;
     }
 
     /**
