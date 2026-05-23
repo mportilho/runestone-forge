@@ -12,12 +12,7 @@ import com.runestone.expeval.internal.navigation.NavigationMode;
 import com.runestone.expeval.internal.navigation.VectorAggregationKind;
 import com.runestone.expeval.types.*;
 
-import java.math.BigDecimal;
 import java.math.MathContext;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -50,117 +45,13 @@ final class ExecutionPlanBuilder {
                 ? buildNode(ast.resultExpression(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext)
                 : null;
         List<AuditEvent> foldedVariableReads = List.copyOf(foldContext.variableReads);
-        int maxAuditEvents = countMaxAuditEvents(assignments, resultNode) + foldedVariableReads.size();
+        int maxAuditEvents = AuditEventEstimator.estimate(assignments, resultNode, foldedVariableReads.size());
 
         int externalSymbolsCount = model.externalSymbolsByName().size();
-        Object[] defaults = seedDefaults(model, externalSymbolCatalog, runtimeServices, externalSymbolsCount);
-        Map<String, ExternalBindingPlan> externalBindingPlans = seedExternalBindingPlans(model, externalSymbolCatalog);
+        Object[] defaults = ExternalBindingPlanner.seedDefaults(model, externalSymbolCatalog, runtimeServices);
+        var externalBindingPlans = ExternalBindingPlanner.seedBindingPlans(model, externalSymbolCatalog);
 
         return new ExecutionPlan(assignments, resultNode, defaults, externalBindingPlans, externalSymbolsCount, maxAuditEvents, foldedVariableReads);
-    }
-
-    private static Object[] seedDefaults(SemanticModel semanticModel, ExternalSymbolCatalog catalog, RuntimeServices runtimeServices, int externalSymbolsCount) {
-        if (externalSymbolsCount == 0) {
-            return new Object[0];
-        }
-        Object[] defaults = new Object[externalSymbolsCount];
-        java.util.Arrays.fill(defaults, ExecutionScope.UNBOUND);
-        semanticModel.externalSymbolsByName().forEach((name, symbolRef) -> {
-            catalog.find(name)
-                    .ifPresent(descriptor -> defaults[symbolRef.index()] =
-                            runtimeServices.coerceToResolvedType(descriptor.defaultValue(), descriptor.declaredType())
-                    );
-        });
-        return defaults;
-    }
-
-    private static Map<String, ExternalBindingPlan> seedExternalBindingPlans(SemanticModel semanticModel, ExternalSymbolCatalog catalog) {
-        if (semanticModel.externalSymbolsByName().isEmpty()) {
-            return Map.of();
-        }
-        Map<String, ExternalBindingPlan> bindings = new HashMap<>();
-        semanticModel.externalSymbolsByName().forEach((name, symbolRef) -> {
-            ExternalSymbolDescriptor descriptor = catalog.findOrNull(name);
-            bindings.put(name, new ExternalBindingPlan(
-                    symbolRef,
-                    descriptor != null ? descriptor.declaredType() : null,
-                    descriptor == null || descriptor.overridable()
-            ));
-        });
-        return bindings;
-    }
-
-    private int countMaxAuditEvents(List<ExecutableAssignment> assignments, ExecutableNode resultExpression) {
-        int count = 0;
-        for (ExecutableAssignment assignment : assignments) {
-            count += switch (assignment) {
-                case ExecutableSimpleAssignment s -> 1 + countNodeEvents(s.value());
-                case ExecutableDestructuringAssignment d -> d.targets().size() + countNodeEvents(d.value());
-            };
-        }
-        if (resultExpression != null) {
-            count += countNodeEvents(resultExpression);
-        }
-        return count;
-    }
-
-    private int countNodeEvents(ExecutableNode node) {
-        return switch (node) {
-            case ExecutableLiteral ignored -> 0;
-            case ExecutableDynamicLiteral ignored -> 1;
-            case ExecutableIdentifier ignored -> 1;
-            case ExecutablePropertyChain chain -> countPropertyChainEvents(chain);
-            case ExecutableFunctionCall f -> {
-                int sum = 1;
-                for (ExecutableNode arg : f.arguments()) sum += countNodeEvents(arg);
-                yield sum;
-            }
-            case ExecutableBinaryOp b -> countNodeEvents(b.left()) + countNodeEvents(b.right());
-            case ExecutableTernaryOp t -> countNodeEvents(t.first()) + countNodeEvents(t.second()) + countNodeEvents(t.third());
-            case ExecutableUnaryOp u -> countNodeEvents(u.operand());
-            case ExecutablePostfixOp p -> countNodeEvents(p.operand());
-            case ExecutableConditional c -> {
-                int condCost = 0;
-                for (ExecutableNode cond : c.conditions()) condCost += countNodeEvents(cond);
-
-                int maxBranchCost = countNodeEvents(c.elseExpression());
-                for (ExecutableNode res : c.results()) {
-                    maxBranchCost = Math.max(maxBranchCost, countNodeEvents(res));
-                }
-                yield condCost + maxBranchCost;
-            }
-            case ExecutableSimpleConditional sc -> {
-                int condCost = countNodeEvents(sc.condition());
-                int maxBranchCost = Math.max(countNodeEvents(sc.thenExpression()), countNodeEvents(sc.elseExpression()));
-                yield condCost + maxBranchCost;
-            }
-            case ExecutableVectorLiteral v -> {
-                int sum = 0;
-                for (ExecutableNode el : v.elements()) sum += countNodeEvents(el);
-                yield sum;
-            }
-            case ExecutableNullCoalesce nc ->
-                    countNodeEvents(nc.left()) + countNodeEvents(nc.right());
-            case ExecutableRegexOp r -> countNodeEvents(r.subject());
-        };
-    }
-
-    private int countPropertyChainEvents(ExecutablePropertyChain chain) {
-        int count = countNodeEvents(chain.root());
-        for (ExecutablePropertyChain.ExecutableAccess access : chain.chain()) {
-            if (access instanceof ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke) {
-                for (ExecutableNode argument : methodInvoke.arguments()) {
-                    count += countNodeEvents(argument);
-                }
-                continue;
-            }
-            if (access instanceof ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke) {
-                for (ExecutableNode argument : reflectiveMethodInvoke.arguments()) {
-                    count += countNodeEvents(argument);
-                }
-            }
-        }
-        return count;
     }
 
     private ExecutableAssignment buildAssignment(
@@ -203,7 +94,7 @@ final class ExecutionPlanBuilder {
             MathContext mathContext,
             FoldContext foldContext) {
         return switch (node) {
-            case LiteralNode lit -> buildLiteral(lit, model);
+            case LiteralNode lit -> LiteralMaterializer.build(lit, model);
             case IdentifierNode id -> buildIdentifier(id, model, foldContext);
             case PropertyChainNode chain -> buildPropertyChain(
                     chain, model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
@@ -227,7 +118,7 @@ final class ExecutionPlanBuilder {
                 boolean negate = b.operator() == BinaryOperator.REGEX_NOT_MATCH;
                 ExecutableNode subjectNode = buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
                 LiteralNode patternLit = (LiteralNode) b.right();
-                yield new ExecutableRegexOp(subjectNode, Pattern.compile(unquote(patternLit.value())), negate);
+                yield new ExecutableRegexOp(subjectNode, Pattern.compile(LiteralMaterializer.unquoteStringLiteral(patternLit.value())), negate);
             }
             case BinaryOperationNode b -> {
                 ExecutableNode left = buildNode(b.left(), model, runtimeServices, externalSymbolCatalog, typeHintCatalog, mathContext, foldContext);
@@ -892,36 +783,6 @@ final class ExecutionPlanBuilder {
                 : ResolvedTypes.fromJavaType(javaType);
     }
 
-    private ExecutableNode buildLiteral(LiteralNode lit, SemanticModel model) {
-        String text = lit.value();
-        return switch (text) {
-            case "currDate" -> new ExecutableDynamicLiteral(DynamicInstant.CURR_DATE);
-            case "currTime" -> new ExecutableDynamicLiteral(DynamicInstant.CURR_TIME);
-            case "currDateTime" -> new ExecutableDynamicLiteral(DynamicInstant.CURR_DATETIME);
-            default -> {
-                ResolvedType resolvedType = model.findResolvedType(lit.nodeId())
-                        .orElseThrow(() -> new IllegalStateException(
-                                "missing resolved type for literal '" + text + "'"));
-                yield new ExecutableLiteral(materialize(text, resolvedType));
-            }
-        };
-    }
-
-    private Object materialize(String text, ResolvedType resolvedType) {
-        if (resolvedType == NullType.INSTANCE) return null;
-        if (resolvedType == ScalarType.NUMBER) return new BigDecimal(text);
-        if (resolvedType == ScalarType.BOOLEAN) return Boolean.parseBoolean(text);
-        if (resolvedType == ScalarType.STRING) return unquote(text);
-        if (resolvedType == ScalarType.DATE) return LocalDate.parse(text);
-        if (resolvedType == ScalarType.TIME) return LocalTime.parse(text);
-        if (resolvedType == ScalarType.DATETIME) {
-            return text.contains("+") || text.endsWith("Z")
-                    ? OffsetDateTime.parse(text).toLocalDateTime()
-                    : LocalDateTime.parse(text);
-        }
-        throw new IllegalStateException("unsupported literal type: " + resolvedType);
-    }
-
     private ExecutableNode buildIdentifier(IdentifierNode id, SemanticModel model, FoldContext foldContext) {
         // '@' is the filter-predicate current-element sentinel — no model symbol, always dynamic
         if (LanguageSymbols.CURRENT_ELEMENT.equals(id.name())) {
@@ -1108,18 +969,6 @@ final class ExecutionPlanBuilder {
             }
             return runtimeServices.asBoolean(value);
         }
-    }
-
-    private String unquote(String value) {
-        if (value.length() < 2) {
-            return value;
-        }
-        if (value.startsWith("\"") && value.endsWith("\"")) {
-            return value.substring(1, value.length() - 1)
-                    .replace("\\\"", "\"")
-                    .replace("\\\\", "\\");
-        }
-        return value;
     }
 
     private static final class FoldContext {
