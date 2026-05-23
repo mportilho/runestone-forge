@@ -33,14 +33,7 @@ public final class SemanticResolutionException extends RuntimeException {
         if (pos == null) {
             return "semantic resolution failed for expression '" + source + "': " + first.code() + ": " + first.message();
         }
-        String[] lines = source.split("\n", -1);
-        int lineIdx = pos.line() - 1;
-        String sourceLine = (lineIdx >= 0 && lineIdx < lines.length) ? lines[lineIdx] : source;
-        int caretLen = Math.max(1, pos.endColumn() - pos.column());
-        caretLen = Math.min(caretLen, Math.max(1, sourceLine.length() - pos.column()));
-        String pointer = " ".repeat(Math.max(0, pos.column())) + "^".repeat(caretLen);
-        return "semantic resolution failed:\n\n  %s\n  %s\n  %s at %d:%d \u2014 %s".formatted(
-                sourceLine, pointer, first.code(), pos.line(), pos.column(), first.message()
-        );
+        return "semantic resolution failed:\n\n"
+                + SourcePointerFormatter.format(source, pos, first.code(), first.message());
     }
 }

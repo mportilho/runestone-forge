@@ -123,7 +123,7 @@ Large manual files at the baseline snapshot:
 | Medium | Type introspection policy is split | `ExpressionEnvironmentBuilder` discovers type hints via public methods/fields; `TypeIntrospectionSupport` walks declared members and hierarchy for reflective access. | Introduce a shared `TypeMetadataDiscoverer` with explicit policies for public API metadata vs runtime fallback. |
 | Medium | `FunctionDescriptor` mixes catalog metadata and invocation mechanics | It stores metadata and method handles, and provides arity-specific `invoke` overloads. | Decide whether catalog is runtime-facing. If not, split `FunctionDescriptor` metadata from `FunctionInvoker`. |
 | Low-medium | AST and executable navigation models are parallel | `PropertyChainNode` and `ExecutablePropertyChain` have corresponding step types. Some duplication is expected, but every new navigation feature touches many places. | Consider `ResolvedNavigationChain` as an intermediate semantic model between AST and executable plan. |
-| Low-medium | Source pointer formatting likely repeats across exceptions | Compilation/parsing/evaluation exceptions format source snippets and carets. | Extract `SourcePointerFormatter` or `CompilationMessageFormatter`. |
+| Addressed | Source pointer formatting repeated across exceptions | Compilation, semantic, validation, and evaluation messages formatted source snippets and carets independently. | `SourcePointerFormatter` now centralizes source-line, caret-span, issue code, position, and message formatting. |
 
 ## Public/Internal Boundary Problem
 
