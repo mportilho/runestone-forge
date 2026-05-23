@@ -409,20 +409,47 @@ RuntimeInvocationSupport
 
 Keep optimized arity paths if they are important, but put them in one helper. That avoids maintaining arity 0-6 logic in several places.
 
+## Performance Guardrails
+
+These refactorings are primarily structural. They should preserve the runtime performance profile unless a deliberate, benchmark-backed optimization is being made.
+
+- Package moves must be behavior-only refactors and should not change allocation patterns.
+- Evaluation hot paths must not introduce per-node policy dispatch, reflection discovery, generic varargs, or unnecessary `Object[]` allocation.
+- Keep arity-specific invocation fast paths for common arities 0 through 6.
+- Centralized invocation support must not replace specialized method-handle paths with generic reflection or varargs-based dispatch.
+- Reflection/type metadata discovery must remain cached by type and policy, and must not run repeatedly during evaluation.
+- Intermediate semantic/navigation models such as `ResolvedNavigationChain` may be introduced during compilation/planning only, not during evaluation.
+- Constant folding must avoid re-running the full runtime path when direct literal/operator folding is sufficient.
+- Shared evaluator/interpreter logic must not add extra checks, callbacks, policy lookups, or audit hooks to the normal evaluation loop.
+- Capture a performance baseline before structural refactors and compare after major extractions.
+
+Recommended baseline coverage:
+
+- Expression compilation with cache hit and cache miss scenarios.
+- Simple scalar math evaluation.
+- Logical short-circuit evaluation.
+- Function invocation for arities 0 through 6.
+- Property-chain navigation.
+- Collection navigation, map projection, and deep scan.
+- Constant folding during compilation.
+- Allocation profile for navigation-heavy and function-heavy expressions.
+
 ## Recommended Refactoring Order
 
-1. Add characterization tests around custom compiler injection, environment runtime access, navigation, constant folding, and function invocation before moving public/internal boundaries.
-2. Promote or wrap `ExpressionCompiler` in a public package.
-3. Hide or abstract `ExpressionEnvironment.runtimeServices()`.
-4. Create new internal packages without moving all classes at once.
-5. Move semantic model classes from `internal.runtime` to `internal.semantic`: `SemanticModel`, `SemanticIssue`, `SemanticIssueSeverity`, `ResolutionContext`, `ResolvedFunctionBinding`, `SymbolRef`, `SymbolKind`.
-6. Move execution plan records/classes to `internal.execution.plan`: `ExecutionPlan`, `ExecutableNode`, `Executable*`, `ExecutionPlanBuilder`.
-7. Move evaluators to `internal.execution.eval`: `MathEvaluator`, `LogicalEvaluator`, `AbstractObjectEvaluator`, `OperatorEvaluator`, `ExecutionScope`, `NodeEvaluator`.
-8. Move navigation execution classes to navigation-focused package: `PropertyChainOps`, `CollectionNavigationOps`, `FilterContextStack`, `DeepScanContext`.
-9. Add `LanguageSymbols.CURRENT_ELEMENT` and replace scattered `"@"` checks.
-10. Extract small collaborators from `ExecutionPlanBuilder`, starting with `SymbolIndexAllocator` and `ExternalBindingPlanner`.
-11. Extract small collaborators from `SemanticResolver`, starting with `LiteralTypeInferencer` and `OperatorTypeChecker`.
-12. Split `SemanticAstBuilder` last, because grammar/AST mapping changes tend to be broad and should happen after package boundaries are clearer.
+1. Capture a performance baseline for compilation, evaluation, invocation, navigation, constant folding, and allocation before structural changes.
+2. Add characterization tests around custom compiler injection, environment runtime access, navigation, constant folding, and function invocation before moving public/internal boundaries.
+3. Promote or wrap `ExpressionCompiler` in a public package.
+4. Hide or abstract `ExpressionEnvironment.runtimeServices()`.
+5. Create new internal packages without moving all classes at once.
+6. Move semantic model classes from `internal.runtime` to `internal.semantic`: `SemanticModel`, `SemanticIssue`, `SemanticIssueSeverity`, `ResolutionContext`, `ResolvedFunctionBinding`, `SymbolRef`, `SymbolKind`.
+7. Move execution plan records/classes to `internal.execution.plan`: `ExecutionPlan`, `ExecutableNode`, `Executable*`, `ExecutionPlanBuilder`.
+8. Move evaluators to `internal.execution.eval`: `MathEvaluator`, `LogicalEvaluator`, `AbstractObjectEvaluator`, `OperatorEvaluator`, `ExecutionScope`, `NodeEvaluator`.
+9. Move navigation execution classes to navigation-focused package: `PropertyChainOps`, `CollectionNavigationOps`, `FilterContextStack`, `DeepScanContext`.
+10. Add `LanguageSymbols.CURRENT_ELEMENT` and replace scattered `"@"` checks.
+11. Extract small collaborators from `ExecutionPlanBuilder`, starting with `SymbolIndexAllocator` and `ExternalBindingPlanner`.
+12. Compare performance against the baseline after each extraction that touches evaluation, invocation, navigation, coercion, reflection, or folding.
+13. Extract small collaborators from `SemanticResolver`, starting with `LiteralTypeInferencer` and `OperatorTypeChecker`.
+14. Split `SemanticAstBuilder` last, because grammar/AST mapping changes tend to be broad and should happen after package boundaries are clearer.
 
 ## Suggested Tests
 
@@ -433,6 +460,8 @@ Keep optimized arity paths if they are important, but put them in one helper. Th
 - Constant folding tests comparing folded and non-folded evaluation results.
 - Navigation tests for legacy property chain, current element `@`, collection filters, map projection, deep scan, vector aggregation.
 - Invocation tests covering arities 0 through 6 and varargs/array-like behavior if supported.
+- JMH benchmarks for expression compilation cache hit/miss, simple math evaluation, logical short-circuit evaluation, function invocation arities 0 through 6, property-chain navigation, collection navigation, and constant folding.
+- Allocation-focused benchmarks for runtime evaluation and navigation-heavy expressions.
 
 ## Risk Notes
 
