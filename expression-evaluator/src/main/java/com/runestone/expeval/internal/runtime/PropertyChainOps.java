@@ -80,7 +80,7 @@ final class PropertyChainOps {
                 case ExecutablePropertyChain.ExecutableFilterPredicate fp ->
                         CollectionNavigationOps.applyFilter(current, fp.predicate(), scope, source, runtimeServices, eval);
                 case ExecutablePropertyChain.ExecutableDeepScan ds ->
-                        CollectionNavigationOps.applyDeepScan(current, ds.propertyName(), source);
+                        CollectionNavigationOps.applyDeepScan(current, ds.propertyName());
                 case ExecutablePropertyChain.ExecutableVectorAggregation va ->
                         CollectionNavigationOps.applyAggregation(current, va.kind(), va.transform(), scope,
                                 source, runtimeServices, mathContext, eval);

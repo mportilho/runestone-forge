@@ -33,6 +33,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     private final MathContext mathContext;
     private final String source;
     private final NodeEvaluator nodeEvaluator;
+    private final AssignmentEvaluator assignmentEvaluator;
     private final FunctionCallEvaluator functionCallEvaluator;
 
     protected AbstractObjectEvaluator(CompiledExpression compiledExpression,
@@ -43,6 +44,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
         this.mathContext = Objects.requireNonNull(mathContext, "mathContext must not be null");
         this.source = compiledExpression.source();
         this.nodeEvaluator = this::evaluateExpr;
+        this.assignmentEvaluator = new AssignmentEvaluator(nodeEvaluator);
         this.functionCallEvaluator = new FunctionCallEvaluator(runtimeServices, nodeEvaluator);
     }
 
@@ -50,9 +52,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     public final T evaluate(ExecutionScope scope) {
         Objects.requireNonNull(scope, "scope must not be null");
         ExecutionPlan plan = compiledExpression.executionPlan();
-        for (ExecutableAssignment assignment : plan.assignments()) {
-            executeAssignment(assignment, scope);
-        }
+        assignmentEvaluator.execute(plan.assignments(), scope);
         return convertResult(evaluateExpr(plan.resultExpression(), scope));
     }
 
@@ -65,57 +65,7 @@ abstract class AbstractObjectEvaluator<T> implements Evaluator<T> {
     public final Map<String, Object> evaluateAssignments(ExecutionScope scope) {
         Objects.requireNonNull(scope, "scope must not be null");
         ExecutionPlan plan = compiledExpression.executionPlan();
-        for (ExecutableAssignment assignment : plan.assignments()) {
-            executeAssignment(assignment, scope);
-        }
-        List<ExecutableAssignment> assignments = plan.assignments();
-        Map<String, Object> result = new LinkedHashMap<>(assignments.size());
-        for (ExecutableAssignment assignment : assignments) {
-            switch (assignment) {
-                case ExecutableSimpleAssignment s -> {
-                    Object value = scope.find(s.target());
-                    result.put(s.target().name(), value == ExecutionScope.UNBOUND ? null : value);
-                }
-                case ExecutableDestructuringAssignment d -> {
-                    for (SymbolRef target : d.targets()) {
-                        Object value = scope.find(target);
-                        result.put(target.name(), value == ExecutionScope.UNBOUND ? null : value);
-                    }
-                }
-            }
-        }
-        return result;
-    }
-
-    // -------------------------------------------------------------------------
-    // Assignment execution
-    // -------------------------------------------------------------------------
-
-    private void executeAssignment(ExecutableAssignment assignment, ExecutionScope scope) {
-        switch (assignment) {
-            case ExecutableSimpleAssignment s -> {
-                Object value = evaluateExpr(s.value(), scope);
-                scope.assign(s.target(), value);
-                AuditCollector audit = scope.audit();
-                if (audit != null) {
-                    audit.record(new AuditEvent.AssignmentEvent(s.target().name(), value));
-                }
-            }
-            case ExecutableDestructuringAssignment d -> {
-                @SuppressWarnings("unchecked")
-                List<Object> elements = (List<Object>) evaluateExpr(d.value(), scope);
-                AuditCollector audit = scope.audit();
-                List<SymbolRef> targets = d.targets();
-                for (int index = 0; index < targets.size(); index++) {
-                    SymbolRef target = targets.get(index);
-                    Object element = index < elements.size() ? elements.get(index) : null;
-                    scope.assign(target, element);
-                    if (audit != null) {
-                        audit.record(new AuditEvent.AssignmentEvent(target.name(), element));
-                    }
-                }
-            }
-        }
+        return assignmentEvaluator.evaluateAssignments(plan.assignments(), scope);
     }
 
     // -------------------------------------------------------------------------

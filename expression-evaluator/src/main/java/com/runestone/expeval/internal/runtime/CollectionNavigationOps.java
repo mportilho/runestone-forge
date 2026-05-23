@@ -3,11 +3,9 @@ package com.runestone.expeval.internal.runtime;
 import com.runestone.expeval.api.ExpressionEvaluationException;
 import com.runestone.expeval.catalog.FunctionDescriptor;
 import com.runestone.expeval.internal.navigation.MapProjectionKind;
-import com.runestone.expeval.internal.navigation.TypeIntrospectionSupport;
 import com.runestone.expeval.internal.navigation.VectorAggregationKind;
 import org.jspecify.annotations.Nullable;
 
-import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.*;
@@ -99,55 +97,8 @@ final class CollectionNavigationOps {
      * Collects the named property (or all values for wildcard) from every reachable node.
      * Reuses thread-local structures to eliminate per-invocation allocations.
      */
-    static List<Object> applyDeepScan(Object root, String propertyName, String source) {
-        DeepScanContext ctx = DeepScanContext.INSTANCE.get();
-        List<Object> results = ctx.results;
-        Set<Object> visited = ctx.visited;
-        Deque<Object> queue = ctx.queue;
-
-        results.clear();
-        visited.clear();
-        queue.clear();
-
-        queue.add(root);
-        while (!queue.isEmpty()) {
-            Object node = queue.poll();
-            if (node == null || !visited.add(node)) continue;
-            if (propertyName == null) {
-                if (node instanceof List<?> list) {
-                    queue.addAll(list);
-                } else if (node instanceof Map<?, ?> map) {
-                    for (Object v : map.values()) {
-                        results.add(v);
-                        if (v instanceof List<?> || v instanceof Map<?, ?>) queue.add(v);
-                    }
-                } else {
-                    results.add(node);
-                }
-            } else {
-                if (node instanceof List<?> list) {
-                    queue.addAll(list);
-                } else if (node instanceof Map<?, ?> map) {
-                    @SuppressWarnings("unchecked")
-                    Object val = ((Map<String, Object>) map).get(propertyName);
-                    if (val != null) results.add(val);
-                    for (Object v : map.values()) {
-                        if (v instanceof List<?> || v instanceof Map<?, ?>) queue.add(v);
-                    }
-                } else {
-                    MethodHandle handle = TypeIntrospectionSupport.cachedProperty(node.getClass(), propertyName);
-                    if (handle != null) {
-                        try {
-                            Object val = handle.invoke(node);
-                            if (val != null) results.add(val);
-                        } catch (Throwable ignored) {
-                            // best-effort deep scan — skip inaccessible properties
-                        }
-                    }
-                }
-            }
-        }
-        return results;
+    static List<Object> applyDeepScan(Object root, String propertyName) {
+        return DeepScanEvaluator.evaluate(root, propertyName);
     }
 
     /** {@code ..sum()}, {@code ..avg()}, {@code ..prod()}, etc. — numeric aggregations over a list. */
