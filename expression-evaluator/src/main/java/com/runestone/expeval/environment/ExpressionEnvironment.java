@@ -4,7 +4,6 @@ import com.runestone.converters.DataConversionService;
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval.catalog.FunctionCatalog;
 import com.runestone.expeval.catalog.TypeHintCatalog;
-import com.runestone.expeval.internal.runtime.RuntimeServices;
 
 import java.math.MathContext;
 import java.util.Objects;
@@ -18,12 +17,11 @@ public final class ExpressionEnvironment {
     private final DataConversionService dataConversionService;
     private final MathContext mathContext;
     private final MathContext transcendentalMathContext;
-    private final RuntimeServices runtimeServices;
 
     ExpressionEnvironment(ExpressionEnvironmentId environmentId, FunctionCatalog functionCatalog,
-                          ExternalSymbolCatalog externalSymbolCatalog, TypeHintCatalog typeHintCatalog,
-                          DataConversionService dataConversionService, MathContext mathContext,
-                          MathContext transcendentalMathContext) {
+                           ExternalSymbolCatalog externalSymbolCatalog, TypeHintCatalog typeHintCatalog,
+                           DataConversionService dataConversionService, MathContext mathContext,
+                           MathContext transcendentalMathContext) {
         this.environmentId = Objects.requireNonNull(environmentId, "environmentId must not be null");
         this.functionCatalog = Objects.requireNonNull(functionCatalog, "functionCatalog must not be null");
         this.externalSymbolCatalog = Objects.requireNonNull(externalSymbolCatalog, "externalSymbolCatalog must not be null");
@@ -31,7 +29,6 @@ public final class ExpressionEnvironment {
         this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService must not be null");
         this.mathContext = Objects.requireNonNull(mathContext, "mathContext must not be null");
         this.transcendentalMathContext = Objects.requireNonNull(transcendentalMathContext, "transcendentalMathContext must not be null");
-        this.runtimeServices = new RuntimeServices(dataConversionService);
     }
 
     public static ExpressionEnvironmentBuilder builder() {
@@ -64,9 +61,5 @@ public final class ExpressionEnvironment {
 
     public MathContext transcendentalMathContext() {
         return transcendentalMathContext;
-    }
-
-    public RuntimeServices runtimeServices() {
-        return runtimeServices;
     }
 }

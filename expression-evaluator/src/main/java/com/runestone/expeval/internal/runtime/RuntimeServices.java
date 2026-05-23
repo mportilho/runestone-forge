@@ -1,6 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
 import com.runestone.converters.DataConversionService;
+import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.types.ResolvedType;
 import com.runestone.expeval.types.ScalarType;
 import com.runestone.expeval.types.UnknownType;
@@ -18,16 +19,21 @@ import java.util.Objects;
 /**
  * Unified runtime type-coercion facade.
  *
- * <p>One instance is created per {@link com.runestone.expeval.environment.ExpressionEnvironment}
- * and shared across all evaluations performed within that environment.
+ * <p>Created internally from an {@link ExpressionEnvironment} so the public environment API does
+ * not expose runtime implementation details.
  */
-public final class RuntimeServices {
+final class RuntimeServices {
 
     private final RuntimeCoercionService coercionService;
 
-    public RuntimeServices(DataConversionService conversionService) {
+    RuntimeServices(DataConversionService conversionService) {
         Objects.requireNonNull(conversionService, "conversionService must not be null");
         this.coercionService = new RuntimeCoercionService(conversionService);
+    }
+
+    static RuntimeServices from(ExpressionEnvironment environment) {
+        Objects.requireNonNull(environment, "environment must not be null");
+        return new RuntimeServices(environment.getDataConversionService());
     }
 
     // -------------------------------------------------------------------------

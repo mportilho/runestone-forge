@@ -263,7 +263,7 @@ public final class ExpressionRuntimeSupport {
 
     static ExpressionRuntimeSupport from(CompiledExpression compiledExpression, ExpressionEnvironment environment) {
         Objects.requireNonNull(environment, "environment must not be null");
-        RuntimeServices runtimeServices = environment.runtimeServices();
+        RuntimeServices runtimeServices = RuntimeServices.from(environment);
         SemanticModel semanticModel = compiledExpression.semanticModel();
         Object[] defaults = compiledExpression.executionPlan().defaults();
         Map<String, ExternalBindingPlan> bindings = compiledExpression.executionPlan().externalBindings();

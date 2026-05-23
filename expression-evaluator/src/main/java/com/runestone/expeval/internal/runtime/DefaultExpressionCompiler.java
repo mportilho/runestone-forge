@@ -153,7 +153,7 @@ public final class DefaultExpressionCompiler {
         }
         ExecutionPlan executionPlan = planBuilder.build(
                 semanticModel,
-                environment.runtimeServices(),
+                RuntimeServices.from(environment),
                 environment.externalSymbolCatalog(),
                 environment.typeHintCatalog(),
                 environment.mathContext()
