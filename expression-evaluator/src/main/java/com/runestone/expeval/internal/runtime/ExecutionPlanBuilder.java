@@ -30,12 +30,10 @@ final class ExecutionPlanBuilder {
         // to later assignments and to the result expression.
         FoldContext foldContext = new FoldContext();
 
-        model.externalSymbolsByName().forEach((name, symbolRef) -> {
-            ExternalSymbolDescriptor descriptor = externalSymbolCatalog.findOrNull(name);
-            if (descriptor != null && !descriptor.overridable()) {
-                foldContext.symbols.put(symbolRef, runtimeServices.coerceToResolvedType(descriptor.defaultValue(), descriptor.declaredType()));
-            }
-        });
+        foldContext.symbols.putAll(ExternalBindingPlanner.seedNonOverridableConstants(
+                model,
+                externalSymbolCatalog,
+                runtimeServices));
 
         List<ExecutableAssignment> assignments = new ArrayList<>();
         for (AssignmentNode assignment : ast.assignments()) {
@@ -236,7 +234,7 @@ final class ExecutionPlanBuilder {
                         model.findSymbol(node.nodeId()).orElse(new SymbolRef(LanguageSymbols.CURRENT_ELEMENT, SymbolKind.EXTERNAL)),
                         model, externalSymbolCatalog);
 
-        if (isLegacyAccessChain(node.chain())) {
+        if (NavigationStepClassifier.isLegacyAccessChain(node.chain())) {
             return buildLegacyPropertyChain(
                     node,
                     model,

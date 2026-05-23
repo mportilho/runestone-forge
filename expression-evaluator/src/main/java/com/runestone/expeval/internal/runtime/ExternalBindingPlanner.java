@@ -38,6 +38,29 @@ final class ExternalBindingPlanner {
         return defaults;
     }
 
+    static Map<SymbolRef, Object> seedNonOverridableConstants(SemanticModel semanticModel,
+                                                              ExternalSymbolCatalog catalog,
+                                                              RuntimeServices runtimeServices) {
+        Objects.requireNonNull(semanticModel, "semanticModel must not be null");
+        Objects.requireNonNull(catalog, "catalog must not be null");
+        Objects.requireNonNull(runtimeServices, "runtimeServices must not be null");
+
+        if (semanticModel.externalSymbolsByName().isEmpty()) {
+            return Map.of();
+        }
+
+        Map<SymbolRef, Object> constants = new HashMap<>();
+        semanticModel.externalSymbolsByName().forEach((name, symbolRef) -> {
+            ExternalSymbolDescriptor descriptor = catalog.findOrNull(name);
+            if (descriptor != null && !descriptor.overridable()) {
+                constants.put(symbolRef, runtimeServices.coerceToResolvedType(
+                        descriptor.defaultValue(),
+                        descriptor.declaredType()));
+            }
+        });
+        return constants;
+    }
+
     static Map<String, ExternalBindingPlan> seedBindingPlans(SemanticModel semanticModel,
                                                              ExternalSymbolCatalog catalog) {
         Objects.requireNonNull(semanticModel, "semanticModel must not be null");

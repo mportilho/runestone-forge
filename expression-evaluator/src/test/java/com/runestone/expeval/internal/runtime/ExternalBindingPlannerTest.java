@@ -74,6 +74,26 @@ class ExternalBindingPlannerTest {
         assertThat(plans.get("unknown").overridable()).isTrue();
     }
 
+    @Test
+    void seedsOnlyNonOverridableConstantsForCompileTimeFolding() {
+        SymbolRef fixed = externalSymbol("fixed", 0);
+        SymbolRef overridable = externalSymbol("overridable", 1);
+        SemanticModel model = semanticModel(Map.of(
+                "fixed", fixed,
+                "overridable", overridable));
+        ExternalSymbolCatalog catalog = new ExternalSymbolCatalog(Map.of(
+                "fixed", new ExternalSymbolDescriptor("fixed", ScalarType.NUMBER, "10", false),
+                "overridable", new ExternalSymbolDescriptor("overridable", ScalarType.NUMBER, "20", true)));
+
+        Map<SymbolRef, Object> constants = ExternalBindingPlanner.seedNonOverridableConstants(
+                model,
+                catalog,
+                runtimeServices());
+
+        assertThat(constants).containsOnlyKeys(fixed);
+        assertThat(constants.get(fixed)).isEqualTo(new BigDecimal("10"));
+    }
+
     private static SymbolRef externalSymbol(String name, int index) {
         SymbolRef symbolRef = new SymbolRef(name, SymbolKind.EXTERNAL);
         symbolRef.setIndex(index);
