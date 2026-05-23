@@ -18,7 +18,6 @@ import com.runestone.expeval.internal.ast.SourceSpan;
 import com.runestone.expeval.internal.ast.TernaryOperationNode;
 import com.runestone.expeval.internal.ast.UnaryOperationNode;
 import com.runestone.expeval.internal.ast.VectorLiteralNode;
-import com.runestone.expeval.catalog.ExternalSymbolDescriptor;
 import com.runestone.expeval.catalog.FunctionDescriptor;
 import com.runestone.expeval.catalog.MethodDescriptor;
 import com.runestone.expeval.catalog.PropertyDescriptor;
@@ -86,41 +85,43 @@ public final class SemanticResolver {
         private final List<SemanticIssue> issues = new ArrayList<>();
         private final OperatorTypeChecker operatorTypeChecker;
         private final ResultTypeValidator resultTypeValidator;
+        private final SemanticSymbolResolver symbolResolver;
+        private final FunctionOverloadResolver functionOverloadResolver;
 
         private ResolutionSession(ResolutionContext context) {
             this.context = context;
             this.operatorTypeChecker = new OperatorTypeChecker(this::error);
             this.resultTypeValidator = new ResultTypeValidator(this::error);
+            this.symbolResolver = new SemanticSymbolResolver(
+                    context.externalSymbolCatalog(),
+                    symbolByNodeId,
+                    identifierUsages,
+                    assignmentUsages,
+                    externalSymbolsByName,
+                    internalSymbolsByName,
+                    internalTypes,
+                    this::error);
+            this.functionOverloadResolver = new FunctionOverloadResolver(
+                    context.functionCatalog(),
+                    functionBindings,
+                    this::error);
         }
 
         private void collectInternalSymbols(List<AssignmentNode> assignments) {
-            for (AssignmentNode assignment : assignments) {
-                switch (assignment) {
-                    case SimpleAssignmentNode simpleAssignment -> registerInternal(simpleAssignment.targetName());
-                    case DestructuringAssignmentNode destructuringAssignment ->
-                        destructuringAssignment.targetNames().forEach(this::registerInternal);
-                }
-            }
+            symbolResolver.collectInternalSymbols(assignments);
         }
 
         private void resolveAssignment(AssignmentNode assignment) {
             switch (assignment) {
                 case SimpleAssignmentNode simpleAssignment -> {
-                    SymbolRef symbolRef = internalSymbolsByName.get(simpleAssignment.targetName());
                     ResolvedType valueType = resolveExpression(simpleAssignment.value());
                     resolvedTypes.put(simpleAssignment.nodeId(), valueType);
-                    symbolByNodeId.put(simpleAssignment.nodeId(), symbolRef);
-                    assignmentUsages.computeIfAbsent(symbolRef, ignored -> new ArrayList<>()).add(simpleAssignment);
-                    internalTypes.put(symbolRef, valueType);
+                    symbolResolver.resolveSimpleAssignment(simpleAssignment, valueType);
                 }
                 case DestructuringAssignmentNode destructuringAssignment -> {
                     ResolvedType valueType = resolveExpression(destructuringAssignment.value());
-                    resolvedTypes.put(destructuringAssignment.nodeId(), valueType == UnknownType.INSTANCE ? UnknownType.INSTANCE : VectorType.INSTANCE);
-                    for (String targetName : destructuringAssignment.targetNames()) {
-                        SymbolRef symbolRef = internalSymbolsByName.get(targetName);
-                        assignmentUsages.computeIfAbsent(symbolRef, ignored -> new ArrayList<>()).add(destructuringAssignment);
-                        internalTypes.putIfAbsent(symbolRef, UnknownType.INSTANCE);
-                    }
+                    resolvedTypes.put(destructuringAssignment.nodeId(),
+                            symbolResolver.resolveDestructuringAssignment(destructuringAssignment, valueType));
                 }
             }
         }
@@ -147,29 +148,7 @@ public final class SemanticResolver {
         }
 
         private ResolvedType resolveIdentifier(IdentifierNode node) {
-            // '@' sentinel — current element in an active filter predicate
-            if (LanguageSymbols.CURRENT_ELEMENT.equals(node.name())) {
-                if (filterElementType == null) {
-                    error(IssueCode.INVALID_CURRENT_ELEMENT,
-                            "'@' may only be used inside a filter predicate [?(...)]", node.sourceSpan());
-                    return UnknownType.INSTANCE;
-                }
-                return filterElementType;
-            }
-
-            SymbolRef symbolRef = internalSymbolsByName.get(node.name());
-            if (symbolRef != null) {
-                symbolByNodeId.put(node.nodeId(), symbolRef);
-                identifierUsages.computeIfAbsent(symbolRef, ignored -> new ArrayList<>()).add(node);
-                return internalTypes.getOrDefault(symbolRef, UnknownType.INSTANCE);
-            }
-
-            symbolRef = externalSymbolsByName.computeIfAbsent(node.name(), name -> new SymbolRef(name, SymbolKind.EXTERNAL));
-            symbolByNodeId.put(node.nodeId(), symbolRef);
-            identifierUsages.computeIfAbsent(symbolRef, ignored -> new ArrayList<>()).add(node);
-            return context.externalSymbolCatalog().find(node.name())
-                .map(ExternalSymbolDescriptor::declaredType)
-                .orElse(UnknownType.INSTANCE);
+            return symbolResolver.resolveIdentifier(node, filterElementType);
         }
 
         /**
@@ -603,7 +582,7 @@ public final class SemanticResolver {
                     continue;
                 }
                 List<ResolvedType> explicitArgTypes = d.parameterResolvedTypes().subList(1, d.parameterResolvedTypes().size());
-                if (!matchesArgList(explicitArgTypes, argTypes)) continue;
+                if (!SemanticTypeMatcher.matchesArguments(explicitArgTypes, argTypes)) continue;
                 if (match != null) {
                     error(IssueCode.AMBIGUOUS_FUNCTION,
                             "ambiguous collection function call '" + step.name() + "'", node.sourceSpan());
@@ -622,36 +601,8 @@ public final class SemanticResolver {
             return match.returnType();
         }
 
-        private boolean matchesArgList(List<ResolvedType> expectedTypes, List<ResolvedType> actualTypes) {
-            if (expectedTypes.size() != actualTypes.size()) return false;
-            for (int i = 0; i < expectedTypes.size(); i++) {
-                ResolvedType expected = expectedTypes.get(i);
-                ResolvedType actual = actualTypes.get(i);
-                if (actual == NullType.INSTANCE || expected == NullType.INSTANCE) continue;
-                if (actual != UnknownType.INSTANCE && expected != UnknownType.INSTANCE && !actual.equals(expected)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
         private ResolvedType resolveRootType(PropertyChainNode node) {
-            if (LanguageSymbols.CURRENT_ELEMENT.equals(node.rootIdentifier())) {
-                // '@' as root is only valid in filter predicates — handled by resolvePropertyChain
-                return filterElementType != null ? filterElementType : UnknownType.INSTANCE;
-            }
-            SymbolRef symbolRef = internalSymbolsByName.get(node.rootIdentifier());
-            if (symbolRef != null) {
-                symbolByNodeId.put(node.nodeId(), symbolRef);
-                return internalTypes.getOrDefault(symbolRef, UnknownType.INSTANCE);
-            }
-
-            symbolRef = externalSymbolsByName.computeIfAbsent(
-                    node.rootIdentifier(), name -> new SymbolRef(name, SymbolKind.EXTERNAL));
-            symbolByNodeId.put(node.nodeId(), symbolRef);
-            return context.externalSymbolCatalog().find(node.rootIdentifier())
-                    .map(ExternalSymbolDescriptor::declaredType)
-                    .orElse(UnknownType.INSTANCE);
+            return symbolResolver.resolveRootType(node, filterElementType);
         }
 
         private ResolvedType resolveProperty(
@@ -737,49 +688,7 @@ public final class SemanticResolver {
             List<ResolvedType> argumentTypes = node.arguments().stream()
                 .map(this::resolveExpression)
                 .toList();
-            Collection<FunctionDescriptor> candidates = context.functionCatalog().findCandidates(node.functionName());
-            if (candidates.isEmpty()) {
-                error(IssueCode.UNKNOWN_FUNCTION, "unknown function '" + node.functionName() + "'", node.sourceSpan());
-                return UnknownType.INSTANCE;
-            }
-            int expectedArity = node.arguments().size();
-            FunctionDescriptor exactMatch = null;
-            boolean arityFound = false;
-            for (FunctionDescriptor d : candidates) {
-                if (d.arity() != expectedArity) continue;
-                arityFound = true;
-                if (!matchesArguments(d, argumentTypes)) continue;
-                if (exactMatch != null) {
-                    error(IssueCode.AMBIGUOUS_FUNCTION, "ambiguous function call '" + node.functionName() + "'", node.sourceSpan());
-                    return UnknownType.INSTANCE;
-                }
-                exactMatch = d;
-            }
-            if (!arityFound) {
-                error(IssueCode.INVALID_FUNCTION_ARITY, "invalid arity for function '" + node.functionName() + "'", node.sourceSpan());
-                return UnknownType.INSTANCE;
-            }
-            if (exactMatch == null) {
-                error(IssueCode.INCOMPATIBLE_FUNCTION_ARGUMENTS, "incompatible arguments for function '" + node.functionName() + "'", node.sourceSpan());
-                return UnknownType.INSTANCE;
-            }
-            ResolvedFunctionBinding binding = new ResolvedFunctionBinding(exactMatch.functionRef(), exactMatch, exactMatch.returnType());
-            functionBindings.put(node.nodeId(), binding);
-            return exactMatch.returnType();
-        }
-
-        private boolean matchesArguments(FunctionDescriptor descriptor, List<ResolvedType> argumentTypes) {
-            for (int index = 0; index < argumentTypes.size(); index++) {
-                ResolvedType actualType = argumentTypes.get(index);
-                ResolvedType expectedType = descriptor.parameterResolvedTypes().get(index);
-                if (actualType == NullType.INSTANCE || expectedType == NullType.INSTANCE) {
-                    continue;
-                }
-                if (actualType != UnknownType.INSTANCE && expectedType != UnknownType.INSTANCE && !actualType.equals(expectedType)) {
-                    return false;
-                }
-            }
-            return true;
+            return functionOverloadResolver.resolve(node, argumentTypes);
         }
 
         private ResolvedType resolveConditional(ConditionalNode node) {
@@ -819,10 +728,6 @@ public final class SemanticResolver {
         private ResolvedType resolveVector(VectorLiteralNode node) {
             node.elements().forEach(this::resolveExpression);
             return VectorType.INSTANCE;
-        }
-
-        private void registerInternal(String name) {
-            internalSymbolsByName.computeIfAbsent(name, ignored -> new SymbolRef(name, SymbolKind.INTERNAL));
         }
 
         private void error(IssueCode code, String message, SourceSpan sourceSpan) {

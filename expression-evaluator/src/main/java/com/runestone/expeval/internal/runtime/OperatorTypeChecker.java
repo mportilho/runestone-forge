@@ -18,9 +18,9 @@ import java.util.Objects;
 
 final class OperatorTypeChecker {
 
-    private final ErrorReporter errorReporter;
+    private final SemanticErrorReporter errorReporter;
 
-    OperatorTypeChecker(ErrorReporter errorReporter) {
+    OperatorTypeChecker(SemanticErrorReporter errorReporter) {
         this.errorReporter = Objects.requireNonNull(errorReporter, "errorReporter");
     }
 
@@ -122,9 +122,4 @@ final class OperatorTypeChecker {
         return leftType.equals(rightType);
     }
 
-    @FunctionalInterface
-    interface ErrorReporter {
-
-        void error(IssueCode code, String message, SourceSpan sourceSpan);
-    }
 }

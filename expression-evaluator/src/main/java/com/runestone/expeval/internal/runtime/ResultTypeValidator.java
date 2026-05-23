@@ -3,7 +3,6 @@ package com.runestone.expeval.internal.runtime;
 import com.runestone.expeval.api.IssueCode;
 import com.runestone.expeval.internal.ast.ExpressionNode;
 import com.runestone.expeval.internal.ast.PropertyChainNode;
-import com.runestone.expeval.internal.ast.SourceSpan;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.types.ResolvedType;
 import com.runestone.expeval.types.ScalarType;
@@ -13,9 +12,9 @@ import java.util.Objects;
 
 final class ResultTypeValidator {
 
-    private final ErrorReporter errorReporter;
+    private final SemanticErrorReporter errorReporter;
 
-    ResultTypeValidator(ErrorReporter errorReporter) {
+    ResultTypeValidator(SemanticErrorReporter errorReporter) {
         this.errorReporter = Objects.requireNonNull(errorReporter, "errorReporter");
     }
 
@@ -39,9 +38,4 @@ final class ResultTypeValidator {
         }
     }
 
-    @FunctionalInterface
-    interface ErrorReporter {
-
-        void error(IssueCode code, String message, SourceSpan sourceSpan);
-    }
 }
