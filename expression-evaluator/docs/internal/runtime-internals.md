@@ -195,7 +195,7 @@ That rule is used heavily in conditionals and `??`.
 
 ### Metadata discovery
 
-For each registered type, the builder creates `TypeMetadata` with:
+For each registered type, the builder delegates to `TypeMetadataDiscoverer` to create public-only `TypeMetadata` with:
 
 1. record component accessors
 2. zero-arg JavaBean getters (`getXxx()` and boolean `isXxx()`)
@@ -221,6 +221,8 @@ If the current type is `ObjectType`, the resolver validates:
 - argument compatibility
 
 If the current type is `UnknownType`, the resolver tolerates the chain and keeps the result as `UnknownType`. This is why property chains can still compile without registered type hints.
+
+Runtime fallback navigation uses the same `TypeMetadataDiscoverer` class with a different policy: cached runtime handles are discovered by walking declared members through the class hierarchy. That preserves the best-effort reflective behavior without widening what registered type hints expose during static validation.
 
 ### Runtime behavior
 

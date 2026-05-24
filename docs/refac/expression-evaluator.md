@@ -103,7 +103,7 @@ Large manual files at the baseline snapshot:
 - Clarity: mostly clear after the package split.
 - Main package smell: `internal.runtime` has been reduced to runtime support/coercion.
 - Main boundary status: the former public compiler bridge has been removed; `ExpressionEngine` is now the public cache/configuration handle and compiled-plan types remain internal.
-- Main duplication hotspots: runtime invocation and type introspection policy. Constant folding/runtime structured evaluation, navigation classification, language symbol `@`, and source pointer formatting have already been centralized.
+- Main duplication hotspots: runtime invocation. Constant folding/runtime structured evaluation, navigation classification, language symbol `@`, source pointer formatting, and type metadata discovery policies have already been centralized.
 - Refactoring style risk: extracting very small helpers can move repetition instead of removing it. Prefer larger cohesive collaborators when rules share context and lifecycle.
 
 ## Detailed Findings
@@ -120,7 +120,7 @@ Large manual files at the baseline snapshot:
 | Medium | Runtime invocation by arity appears in multiple places | Invocation logic exists in `FunctionDescriptor`, function-call evaluators, and `PropertyAccessEvaluator`. | Avoid extracting this if it adds objects or argument-array allocation on hot paths. Any future extraction must preserve zero-extra-object invocation paths for arities 0-6. |
 | Addressed | Main navigation code is not in `internal.navigation` | `internal.navigation` now contains navigation enums/cache/introspection plus runtime navigation execution: `PropertyChainOps`, `CollectionAccessOps`, `CollectionPredicateTransformEvaluator`, `CollectionFunctionEvaluator`, `VectorAggregationEvaluator`, `PropertyAccessEvaluator`, `DeepScanEvaluator`, and `DeepScanContext`. `ExecutablePropertyChain` remains with the execution-plan model in `internal.execution.plan`; `FilterContextStack` remains in `internal.execution.eval`. | Keep navigation execution together unless a future split is backed by a clearer runtime boundary. |
 | Addressed | Sentinel `@` was represented as repeated string literal | Language-level current-element references now use `LanguageSymbols.CURRENT_ELEMENT`. Remaining raw `"@"` strings are environment-id/debug fingerprints, not language-symbol checks. | No further action unless new language-symbol literals are introduced. |
-| Medium | Type introspection policy is split | `ExpressionEnvironmentBuilder` discovers type hints via public methods/fields; `TypeIntrospectionSupport` walks declared members and hierarchy for reflective access. | Introduce a shared `TypeMetadataDiscoverer` with explicit policies for public API metadata vs runtime fallback. |
+| Addressed | Type introspection policy was split | `ExpressionEnvironmentBuilder` discovered type hints via public methods/fields while runtime fallback walked declared members and hierarchy for reflective access. | `TypeMetadataDiscoverer` now centralizes both policies: public-only metadata for registered type hints and declared-member handles for runtime fallback. Runtime navigation reads cached handles directly from package-private `ReflectiveAccessCache`. |
 | Accepted | `FunctionDescriptor` keeps invocation mechanics | It stores catalog metadata and implements arity-specific invocation directly. | Keep this in place for now: avoiding an extra object on the function hot path is worth the small organizational trade-off. |
 | Low-medium | AST and executable navigation models are parallel | `PropertyChainNode` and `ExecutablePropertyChain` have corresponding step types. Some duplication is expected, but every new navigation feature touches many places. | Consider `ResolvedNavigationChain` as an intermediate semantic model between AST and executable plan. |
 | Addressed | Source pointer formatting repeated across exceptions | Compilation, semantic, validation, and evaluation messages formatted source snippets and carets independently. | `SourcePointerFormatter` now centralizes source-line, caret-span, issue code, position, and message formatting. |
@@ -276,7 +276,7 @@ com.runestone.expeval.internal.navigation
   FilterContext
   DeepScanContext
   ReflectiveAccessCache
-  TypeIntrospectionSupport
+  TypeMetadataDiscoverer
 
 com.runestone.expeval.internal.runtime
   ExpressionRuntimeSupport
@@ -543,9 +543,10 @@ Recommended baseline coverage:
 17. Done: move execution planning/folding collaborators to `internal.execution.plan`: `ExecutionPlanBuilder`, `ExecutableNodeBuilder`, property-chain planners, `ExternalBindingPlanner`, `AuditEventEstimator`, `LiteralMaterializer`, `FoldabilityAnalyzer`, `ConstantNodeValues`, `ConstantNodeEvaluator`, `FunctionCallPlanner`, and `OperatorNodePlanner`.
 18. Done: move compiler implementation classes to `internal.compiler`: `DefaultExpressionCompiler` and `CompiledExpression`.
 19. Done: move navigation execution classes to `internal.navigation`: `PropertyChainOps`, `CollectionAccessOps`, `CollectionPredicateTransformEvaluator`, `CollectionFunctionEvaluator`, `VectorAggregationEvaluator`, `PropertyAccessEvaluator`, `DeepScanEvaluator`, and `DeepScanContext`.
-20. Next: consider a public compiled-handle API only if an external use case appears; do not expose internal compiled-plan types by default.
-21. Ongoing: compare performance against the baseline after each extraction that touches evaluation, invocation, navigation, coercion, reflection, or folding.
-22. Permanent decision: do not split `SemanticAstBuilder`; it is intentionally excluded from this refactoring plan.
+20. Done: centralize type metadata discovery policy in `TypeMetadataDiscoverer`; type hints use public-only metadata and runtime fallback uses declared-member handles.
+21. Next: consider a public compiled-handle API only if an external use case appears; do not expose internal compiled-plan types by default.
+22. Ongoing: compare performance against the baseline after each extraction that touches evaluation, invocation, navigation, coercion, reflection, or folding.
+23. Permanent decision: do not split `SemanticAstBuilder`; it is intentionally excluded from this refactoring plan.
 
 ## Suggested Tests
 

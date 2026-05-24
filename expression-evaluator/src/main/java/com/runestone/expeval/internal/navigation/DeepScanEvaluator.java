@@ -78,7 +78,7 @@ final class DeepScanEvaluator {
     }
 
     private static void scanObjectProperty(Object node, String propertyName, List<Object> results) {
-        MethodHandle handle = TypeIntrospectionSupport.cachedProperty(node.getClass(), propertyName);
+        MethodHandle handle = ReflectiveAccessCache.property(node.getClass(), propertyName);
         if (handle == null) {
             return;
         }

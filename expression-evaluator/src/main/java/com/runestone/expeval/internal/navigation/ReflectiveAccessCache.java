@@ -7,7 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * JVM-level cache for reflective property and method handles.
  *
- * <p>On the first access for a given class, {@link TypeIntrospectionSupport} discovers all
+ * <p>On the first access for a given class, {@link TypeMetadataDiscoverer} discovers all
  * accessible property and method handles and stores them in a {@link ConcurrentHashMap}.
  * Subsequent accesses for the same class are O(1) map lookups with no reflection overhead.
  *
@@ -29,8 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@link ReflectiveMeta}. Under contention on a cold type, discovery may run more than once;
  * the result is idempotent, so no coordination is needed.
  *
- * <p>Package-private — accessed only via {@link TypeIntrospectionSupport#cachedProperty} and
- * {@link TypeIntrospectionSupport#cachedMethod}.
+ * <p>Package-private because runtime navigation callers live in this package.
  */
 final class ReflectiveAccessCache {
 
@@ -57,8 +56,8 @@ final class ReflectiveAccessCache {
 
     private static ReflectiveMeta metaFor(Class<?> type) {
         return CACHE.computeIfAbsent(type, t -> new ReflectiveMeta(
-                TypeIntrospectionSupport.discoverPropertyHandles(t),
-                TypeIntrospectionSupport.discoverMethodHandles(t)));
+                TypeMetadataDiscoverer.discoverRuntimePropertyHandles(t),
+                TypeMetadataDiscoverer.discoverRuntimeMethodHandles(t)));
     }
 
     private record ReflectiveMeta(

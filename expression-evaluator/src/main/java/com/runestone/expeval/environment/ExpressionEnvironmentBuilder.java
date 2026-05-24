@@ -5,7 +5,7 @@ import com.runestone.converters.DataConversionService;
 import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.expeval.catalog.*;
 import com.runestone.expeval.catalog.functions.*;
-import com.runestone.expeval.internal.navigation.TypeIntrospectionSupport;
+import com.runestone.expeval.internal.navigation.TypeMetadataDiscoverer;
 import com.runestone.expeval.types.ObjectType;
 import com.runestone.expeval.types.ResolvedType;
 import com.runestone.expeval.types.ResolvedTypes;
@@ -13,7 +13,6 @@ import com.runestone.expeval.types.ResolvedTypes;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Array;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.RecordComponent;
@@ -304,95 +303,9 @@ public final class ExpressionEnvironmentBuilder {
         Set<Class<?>> registeredTypes = new LinkedHashSet<>(types);
         Map<Class<?>, TypeMetadata> metadataByType = new LinkedHashMap<>();
         for (Class<?> type : registeredTypes) {
-            metadataByType.put(type, discoverTypeMetadata(type, registeredTypes));
+            metadataByType.put(type, TypeMetadataDiscoverer.discoverPublicMetadata(type, registeredTypes));
         }
         return new TypeHintCatalog(metadataByType);
-    }
-
-    private TypeMetadata discoverTypeMetadata(Class<?> type, Set<Class<?>> registeredTypes) {
-        Map<String, PropertyDescriptor> properties = new LinkedHashMap<>();
-        Map<String, List<MethodDescriptor>> methods = new LinkedHashMap<>();
-
-        discoverRecordProperties(type, properties, registeredTypes);
-        discoverGetterProperties(type, properties, registeredTypes);
-        discoverFieldProperties(type, properties, registeredTypes);
-        discoverMethods(type, methods, registeredTypes);
-
-        return new TypeMetadata(type, properties, methods);
-    }
-
-    private static void discoverRecordProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
-        if (!type.isRecord()) {
-            return;
-        }
-        for (RecordComponent component : type.getRecordComponents()) {
-            properties.putIfAbsent(component.getName(), new PropertyDescriptor(
-                    component.getName(),
-                    TypeIntrospectionSupport.unreflect(component.getAccessor()),
-                    resolveDeclaredType(component.getType(), registeredTypes)
-            ));
-        }
-    }
-
-    private static void discoverGetterProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
-        for (Method method : type.getMethods()) {
-            if (method.getDeclaringClass() == Object.class
-                || method.isSynthetic()
-                || method.isBridge()
-                || Modifier.isStatic(method.getModifiers())) {
-                continue;
-            }
-            String propertyName = TypeIntrospectionSupport.propertyNameFromGetter(method);
-            if (propertyName == null) {
-                continue;
-            }
-            properties.putIfAbsent(propertyName, new PropertyDescriptor(
-                    propertyName,
-                    TypeIntrospectionSupport.unreflect(method),
-                    resolveDeclaredType(method.getReturnType(), registeredTypes)
-            ));
-        }
-    }
-
-    private static void discoverFieldProperties(Class<?> type, Map<String, PropertyDescriptor> properties, Set<Class<?>> registeredTypes) {
-        for (Field field : type.getFields()) {
-            if (field.isSynthetic() || Modifier.isStatic(field.getModifiers())) {
-                continue;
-            }
-            properties.putIfAbsent(field.getName(), new PropertyDescriptor(
-                    field.getName(),
-                    TypeIntrospectionSupport.unreflectGetter(field),
-                    resolveDeclaredType(field.getType(), registeredTypes)
-            ));
-        }
-    }
-
-    private static void discoverMethods(Class<?> type, Map<String, List<MethodDescriptor>> methods, Set<Class<?>> registeredTypes) {
-        Set<String> seenSignatures = new LinkedHashSet<>();
-        for (Method method : type.getMethods()) {
-            if (method.getDeclaringClass() == Object.class
-                || method.isSynthetic()
-                || method.isBridge()
-                || Modifier.isStatic(method.getModifiers())) {
-                continue;
-            }
-            String signature = method.getName() + List.of(method.getParameterTypes());
-            if (!seenSignatures.add(signature)) {
-                continue;
-            }
-            List<Class<?>> parameterTypes = List.of(method.getParameterTypes());
-            methods.computeIfAbsent(method.getName(), ignored -> new ArrayList<>())
-                    .add(new MethodDescriptor(
-                            method.getName(),
-                            TypeIntrospectionSupport.unreflect(method),
-                            parameterTypes,
-                            resolveDeclaredType(method.getReturnType(), registeredTypes)
-                    ));
-        }
-    }
-
-    private static ResolvedType resolveDeclaredType(Class<?> javaType, Set<Class<?>> registeredTypes) {
-        return registeredTypes.contains(javaType) ? new ObjectType(javaType) : ResolvedTypes.fromJavaType(javaType);
     }
 
     private ResolvedType resolveDeclaredType(Class<?> javaType, TypeHintCatalog typeHintCatalog) {

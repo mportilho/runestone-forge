@@ -128,7 +128,7 @@ final class PropertyAccessEvaluator {
             return typed.get(name);
         }
         Class<?> targetClass = target.getClass();
-        MethodHandle handle = TypeIntrospectionSupport.cachedProperty(targetClass, name);
+        MethodHandle handle = ReflectiveAccessCache.property(targetClass, name);
         if (handle == null) {
             throw new ExpressionEvaluationException(source, "UNKNOWN_PROPERTY",
                     "property '" + name + "' not found on " + targetClass.getSimpleName(), null);
@@ -191,7 +191,7 @@ final class PropertyAccessEvaluator {
 
     private Object invokeMethodReflective(Object target, String name, Object[] arguments) {
         Class<?> targetClass = target.getClass();
-        MethodHandle handle = TypeIntrospectionSupport.cachedMethod(targetClass, name, arguments.length);
+        MethodHandle handle = ReflectiveAccessCache.method(targetClass, name, arguments.length);
         if (handle == null) {
             throw new ExpressionEvaluationException(source, "UNKNOWN_METHOD",
                     "method '" + name + "' with " + arguments.length + " argument(s) not found on "
