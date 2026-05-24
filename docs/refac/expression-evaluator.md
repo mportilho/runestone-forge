@@ -79,7 +79,7 @@ When extracting collaborators, preserve object lifetime. Prefer moving existing 
 | High | `internal.runtime` mixes too many phases | 47 Java files include `ExpressionCompiler`, `SemanticResolver`, `ExecutionPlanBuilder`, `Executable*`, `MathEvaluator`, `LogicalEvaluator`, `RuntimeCoercionService`, `PropertyChainOps`, `AuditCollector`. | Split by pipeline phase: compiler, semantic, execution plan, execution eval, runtime services, navigation, audit. |
 | High | `SemanticResolver` has too many reasons to change | 991 lines covering assignment symbols, literal type inference, identifiers, `@`, function overloads, property/member navigation, collection functions, operators, result type validation. | Extract a few cohesive phase collaborators: symbol/scope resolution, callable/operator typing, and navigation typing. Keep individual operator and literal branches inside those collaborators unless they grow into independent responsibilities. |
 | High | `ExecutionPlanBuilder` mixes plan construction with folding/evaluation concerns | 1160 lines covering symbol indexing, defaults, external binding plans, audit event estimation, node building, navigation building, foldability rules, literal materialization, constant folding evaluator. | Split into broad planning responsibilities: binding/index planning, executable expression planning, navigation planning, and constant folding/literal materialization. Avoid one planner per node kind. |
-| Medium-high | `SemanticAstBuilder` is a parse mapping god class | 1423 lines; maps math/logical/assignment, literals, operators, property chains, filters, lambdas, collection functions, spans. | Split into entrypoint/orchestration plus assignment mapping, expression mapping, navigation/filter mapping, and shared literal/operator/source-span support. Do not create one mapper per grammar alternative. |
+| Medium-high | `SemanticAstBuilder` is a parse mapping god class | 1423 lines; maps math/logical/assignment, literals, operators, property chains, filters, lambdas, collection functions, spans. | Do not include `SemanticAstBuilder` in this refactoring scope. It is grammar-adjacent, broad, and risky; leave it unchanged until compiler/runtime package boundaries are stable. |
 | Medium-high | Evaluation logic is duplicated between runtime and constant folding | Runtime evaluation lives in `AbstractObjectEvaluator`; folding evaluator lives inside `ExecutionPlanBuilder`. Both handle binary short-circuit, conditionals, vectors, function calls. | Share the common evaluation mechanics where it stays cheap, or keep a dedicated constant-folding path that reuses operator/function helpers. Avoid a new policy/interpreter layer if it adds dispatch to hot evaluation. |
 | Medium | Runtime invocation by arity appears in multiple places | Invocation logic exists in `FunctionDescriptor`, `AbstractObjectEvaluator`, and `PropertyChainOps`. | Extract `RuntimeInvocationSupport` or `MethodHandleInvoker`, preserving fast paths 0-6 in one place. |
 | Medium | Main navigation code is not in `internal.navigation` | `internal.navigation` contains enums/cache/introspection, while `PropertyChainOps`, `CollectionNavigationOps`, `ExecutablePropertyChain`, `FilterContextStack`, `DeepScanContext` are in `internal.runtime`. | Move navigation execution/planning classes under navigation or execution-navigation subpackages. |
@@ -179,11 +179,7 @@ com.runestone.expeval.internal.ast
 
 com.runestone.expeval.internal.ast.mapping
   SemanticAstBuilder
-  AssignmentAstMapper
-  ExpressionAstMapper
-  NavigationAstMapper
-  LiteralAndOperatorMapper
-  AstNodeFactory
+  unchanged for this refactoring scope
 
 com.runestone.expeval.internal.compiler
   CompilationPipeline
@@ -321,7 +317,7 @@ ConstantFoldingSupport
 
 First extraction candidate: `BindingPlanBuilder`. It has a clear responsibility boundary and can absorb symbol index allocation without creating a tiny allocator class that is only meaningful inside the builder.
 
-## `SemanticAstBuilder` Responsibility Split
+## `SemanticAstBuilder` Scope Exclusion
 
 Current responsibilities include:
 
@@ -338,7 +334,9 @@ Current responsibilities include:
 - Build collection function/lambda-like structures.
 - Build source spans and node IDs.
 
-Suggested extraction:
+Do not change `SemanticAstBuilder` as part of this refactoring. Although it has multiple responsibilities, it is tightly coupled to the grammar and parse-tree shape. Changing it while also moving semantic, plan, runtime, and navigation boundaries would make regressions harder to isolate.
+
+Deferred extraction, only after the rest of the package boundaries are stable:
 
 ```text
 SemanticAstBuilder
@@ -360,7 +358,7 @@ AstNodeFactory
   - node IDs, parser context/token -> SourceSpan, and common construction helpers
 ```
 
-Keep `SemanticAstBuilder` as the public class used by the parser facade. Move internals behind package-private collaborators, but keep grammar-alternative-specific code as methods inside the relevant mapper.
+Until that later phase, keep `SemanticAstBuilder` exactly as it is. Do not rename, split, move, or opportunistically clean it while performing the current refactoring.
 
 ## Navigation Concerns
 
@@ -452,7 +450,7 @@ Recommended baseline coverage:
 11. Extract cohesive collaborators from `ExecutionPlanBuilder`, starting with `BindingPlanBuilder` and then `ExecutableExpressionBuilder`.
 12. Compare performance against the baseline after each extraction that touches evaluation, invocation, navigation, coercion, reflection, or folding.
 13. Extract cohesive collaborators from `SemanticResolver`, starting with `SymbolScopeResolver`, then `CallableTypeResolver` and `NavigationTypeResolver`.
-14. Split `SemanticAstBuilder` last, because grammar/AST mapping changes tend to be broad and should happen after package boundaries are clearer.
+14. Leave `SemanticAstBuilder` unchanged. Revisit it only in a separate refactoring after semantic, execution plan, evaluation, runtime, and navigation boundaries are stable.
 
 ## Suggested Tests
 
