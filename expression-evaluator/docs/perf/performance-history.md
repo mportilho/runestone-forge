@@ -4,6 +4,53 @@ Current benchmark packages and JMH commands are documented in [`benchmark-organi
 
 ---
 
+## PERF-003: RuntimeInvocationSupport consolidation
+
+**Date:** 2026-05-24
+
+**Scenario:** Validate the runtime invocation refactor that introduced
+`RuntimeInvocationSupport` and centralized hot-path invocation for normal function calls,
+collection functions, and property-chain method handles while preserving arity-specific fast paths
+for 0 through 6 arguments.
+
+**Hypothesis:** The refactor should not materially regress latency or allocation. Collection
+function invocation may allocate less because the new helper avoids the previous `Object[]` path for
+common arities with an implicit receiver/current collection argument.
+
+**Machine:** OpenJDK 25.0.2 / Linux x86-64, -Xms1g -Xmx1g  
+**JMH config:** 3 forks x 5 warmup + 10 measurement iterations x 500 ms each; `AverageTime / ns`; GC profiler enabled
+
+**Baseline:** Fresh detached worktree at `HEAD` before the `RuntimeInvocationSupport` change, created
+under `/tmp/opencode/runestone-forge-invocation-baseline`.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta | B/op Before | B/op After |
+|---|---:|---:|---:|---:|---:|
+| navigation.collection.CollectionNavigationBenchmark.customFunctionCount | 400.85 | 404.43 | -0.9% | 296.0 | 272.0 |
+| navigation.object.ObjectNavigationBenchmark.typedMethodWithArgument | 190.18 | 199.29 | -4.8% | 128.0 | 128.0 |
+| runtime.audit.AuditOverheadBenchmark.userFunctionNoAudit | 1329.67 | 1293.58 | +2.7% | 976.0 | 976.0 |
+| runtime.audit.AuditOverheadBenchmark.userFunctionWithAudit | 1648.50 | 1607.87 | +2.5% | 1712.0 | 1712.0 |
+
+**Decision:** ADJUST — the refactor is allocation-positive for collection functions and slightly
+faster for direct user-function evaluation, but `typedMethodWithArgument` regressed by 4.8% in this
+run. This is below the 10% hard-regression threshold but enough to keep the result as unresolved
+risk for a hot method-handle path.
+
+**Notes:**
+
+- `customFunctionCount` allocation dropped by 24 B/op (`296 -> 272`) because the common collection
+  function path no longer needs an argument array.
+- Direct function evaluation (`userFunctionNoAudit` / `userFunctionWithAudit`) improved modestly with
+  unchanged allocation.
+- `typedMethodWithArgument` likely pays for the extra helper call shape or reduced inlining in the
+  method-handle-with-receiver path; consider either restoring the local specialized switch for
+  `ExecutableMethodInvoke` or adding a targeted benchmark/profiler run before accepting the helper
+  for property-chain methods.
+- Raw JSON and comparison files were generated under `/tmp/performance-benchmark/` and then removed
+  by the comparison helper's `--cleanup` mode; numbers above are copied from the JMH and comparison
+  output of this run.
+
+---
+
 ## PERF-002: Runtime support cached on compile cache hits
 
 **Date:** 2026-05-24

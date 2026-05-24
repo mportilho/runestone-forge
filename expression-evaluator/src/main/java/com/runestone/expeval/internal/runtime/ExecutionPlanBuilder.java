@@ -1091,13 +1091,13 @@ final class ExecutionPlanBuilder {
             if (functionCall.isFolded()) {
                 return runtimeServices.coerceToResolvedType(functionCall.foldedResult(), functionCall.binding().returnType());
             }
-            FunctionDescriptor descriptor = functionCall.binding().descriptor();
-            Object[] arguments = new Object[descriptor.arity()];
-            for (int index = 0; index < arguments.length; index++) {
-                Object value = evaluate(functionCall.arguments().get(index), scope);
-                arguments[index] = runtimeServices.coerce(value, descriptor.parameterTypes().get(index));
-            }
-            return runtimeServices.coerceToResolvedType(descriptor.invoke(arguments), functionCall.binding().returnType());
+            return RuntimeInvocationSupport.invokeFunction(
+                    functionCall.binding(),
+                    functionCall.arguments(),
+                    scope,
+                    runtimeServices,
+                    this,
+                    null);
         }
 
         private Object evaluateBinary(ExecutableBinaryOp binaryOp, ExecutionScope scope) {

@@ -167,82 +167,15 @@ final class PropertyChainOps {
     private static Object invokeMethod(ExecutablePropertyChain node, ExecutionScope scope, Object current,
             ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke,
             String source, RuntimeServices runtimeServices, NodeEvaluator eval) {
-        int arity = methodInvoke.arguments().size();
-        List<ExecutableNode> arguments = methodInvoke.arguments();
-        List<Class<?>> parameterTypes = methodInvoke.parameterTypes();
         try {
-            Object result = switch (arity) {
-                case 0 -> methodInvoke.handle().invoke(current);
-                case 1 -> {
-                    Object a1 = eval.evaluate(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
-                    yield methodInvoke.handle().invoke(current, a1);
-                }
-                case 2 -> {
-                    Object a1 = eval.evaluate(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
-                    Object a2 = eval.evaluate(arguments.get(1), scope);
-                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
-                    yield methodInvoke.handle().invoke(current, a1, a2);
-                }
-                case 3 -> {
-                    Object a1 = eval.evaluate(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
-                    Object a2 = eval.evaluate(arguments.get(1), scope);
-                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
-                    Object a3 = eval.evaluate(arguments.get(2), scope);
-                    a3 = runtimeServices.coerce(a3, parameterTypes.get(2));
-                    yield methodInvoke.handle().invoke(current, a1, a2, a3);
-                }
-                case 4 -> {
-                    Object a1 = eval.evaluate(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
-                    Object a2 = eval.evaluate(arguments.get(1), scope);
-                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
-                    Object a3 = eval.evaluate(arguments.get(2), scope);
-                    a3 = runtimeServices.coerce(a3, parameterTypes.get(2));
-                    Object a4 = eval.evaluate(arguments.get(3), scope);
-                    a4 = runtimeServices.coerce(a4, parameterTypes.get(3));
-                    yield methodInvoke.handle().invoke(current, a1, a2, a3, a4);
-                }
-                case 5 -> {
-                    Object a1 = eval.evaluate(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
-                    Object a2 = eval.evaluate(arguments.get(1), scope);
-                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
-                    Object a3 = eval.evaluate(arguments.get(2), scope);
-                    a3 = runtimeServices.coerce(a3, parameterTypes.get(2));
-                    Object a4 = eval.evaluate(arguments.get(3), scope);
-                    a4 = runtimeServices.coerce(a4, parameterTypes.get(3));
-                    Object a5 = eval.evaluate(arguments.get(4), scope);
-                    a5 = runtimeServices.coerce(a5, parameterTypes.get(4));
-                    yield methodInvoke.handle().invoke(current, a1, a2, a3, a4, a5);
-                }
-                case 6 -> {
-                    Object a1 = eval.evaluate(arguments.get(0), scope);
-                    a1 = runtimeServices.coerce(a1, parameterTypes.get(0));
-                    Object a2 = eval.evaluate(arguments.get(1), scope);
-                    a2 = runtimeServices.coerce(a2, parameterTypes.get(1));
-                    Object a3 = eval.evaluate(arguments.get(2), scope);
-                    a3 = runtimeServices.coerce(a3, parameterTypes.get(2));
-                    Object a4 = eval.evaluate(arguments.get(3), scope);
-                    a4 = runtimeServices.coerce(a4, parameterTypes.get(3));
-                    Object a5 = eval.evaluate(arguments.get(4), scope);
-                    a5 = runtimeServices.coerce(a5, parameterTypes.get(4));
-                    Object a6 = eval.evaluate(arguments.get(5), scope);
-                    a6 = runtimeServices.coerce(a6, parameterTypes.get(5));
-                    yield methodInvoke.handle().invoke(current, a1, a2, a3, a4, a5, a6);
-                }
-                default -> {
-                    Object[] args = new Object[arity + 1];
-                    args[0] = current;
-                    for (int index = 0; index < arity; index++) {
-                        Object evaluated = eval.evaluate(arguments.get(index), scope);
-                        args[index + 1] = runtimeServices.coerce(evaluated, parameterTypes.get(index));
-                    }
-                    yield methodInvoke.handle().invokeWithArguments(args);
-                }
-            };
+            Object result = RuntimeInvocationSupport.invokeMethodHandleWithReceiver(
+                    methodInvoke.handle(),
+                    current,
+                    methodInvoke.arguments(),
+                    methodInvoke.parameterTypes(),
+                    scope,
+                    runtimeServices,
+                    eval);
             return runtimeServices.coerceToResolvedType(result, methodInvoke.returnType());
         } catch (Error error) {
             throw error;
@@ -289,21 +222,7 @@ final class PropertyChainOps {
                     "method '" + name + "' with " + args.length + " argument(s) not found on " + cls.getSimpleName(), null);
         }
         try {
-            return switch (args.length) {
-                case 0 -> handle.invoke(target);
-                case 1 -> handle.invoke(target, args[0]);
-                case 2 -> handle.invoke(target, args[0], args[1]);
-                case 3 -> handle.invoke(target, args[0], args[1], args[2]);
-                case 4 -> handle.invoke(target, args[0], args[1], args[2], args[3]);
-                case 5 -> handle.invoke(target, args[0], args[1], args[2], args[3], args[4]);
-                case 6 -> handle.invoke(target, args[0], args[1], args[2], args[3], args[4], args[5]);
-                default -> {
-                    Object[] fullArgs = new Object[args.length + 1];
-                    fullArgs[0] = target;
-                    System.arraycopy(args, 0, fullArgs, 1, args.length);
-                    yield handle.invokeWithArguments(fullArgs);
-                }
-            };
+            return RuntimeInvocationSupport.invokeMethodHandleWithReceiver(handle, target, args);
         } catch (Error error) {
             throw error;
         } catch (Throwable throwable) {

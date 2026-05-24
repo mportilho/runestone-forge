@@ -1,7 +1,6 @@
 package com.runestone.expeval.internal.runtime;
 
 import com.runestone.expeval.api.ExpressionEvaluationException;
-import com.runestone.expeval.catalog.FunctionDescriptor;
 import com.runestone.expeval.internal.navigation.MapProjectionKind;
 import com.runestone.expeval.internal.navigation.TypeIntrospectionSupport;
 import com.runestone.expeval.internal.navigation.VectorAggregationKind;
@@ -262,19 +261,13 @@ final class CollectionNavigationOps {
             throw new ExpressionEvaluationException(source, "UNRESOLVED_COLLECTION_FUNCTION",
                     "collection function could not be resolved", null);
         }
-        FunctionDescriptor descriptor = binding.descriptor();
-        List<ExecutableNode> extraArgNodes = cf.arguments();
-        int totalArity = 1 + extraArgNodes.size();
-        List<Class<?>> paramTypes = descriptor.parameterTypes();
-
-        Object[] args = new Object[totalArity];
-        args[0] = runtimeServices.coerce(current, paramTypes.getFirst());
-        for (int i = 0; i < extraArgNodes.size(); i++) {
-            Object evaluated = eval.evaluate(extraArgNodes.get(i), scope);
-            args[i + 1] = runtimeServices.coerce(evaluated, paramTypes.get(i + 1));
-        }
-        Object result = descriptor.invoke(args);
-        return runtimeServices.coerceToResolvedType(result, binding.returnType());
+        return RuntimeInvocationSupport.invokeCollectionFunction(
+                binding,
+                current,
+                cf.arguments(),
+                scope,
+                runtimeServices,
+                eval);
     }
 
     @SuppressWarnings("unchecked")
