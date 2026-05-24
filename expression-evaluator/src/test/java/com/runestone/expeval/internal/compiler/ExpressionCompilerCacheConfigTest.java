@@ -1,9 +1,8 @@
 package com.runestone.expeval.internal.compiler;
 
 import com.runestone.expeval.api.CacheConfig;
-import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.internal.runtime.CompiledExpression;
 import com.runestone.expeval.compiler.ExpressionCompiler;
+import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.testing.ExpressionCompilerInspector;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

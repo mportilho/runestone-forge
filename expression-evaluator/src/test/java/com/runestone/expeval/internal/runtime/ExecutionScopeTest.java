@@ -1,5 +1,6 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.eval.ExecutionScope;
 import com.runestone.expeval.internal.execution.plan.DynamicInstant;
 
 import com.runestone.expeval.internal.semantic.SymbolKind;

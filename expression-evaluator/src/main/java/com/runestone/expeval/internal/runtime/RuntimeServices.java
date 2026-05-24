@@ -22,16 +22,16 @@ import java.util.Objects;
  * <p>Created internally from an {@link ExpressionEnvironment} so the public environment API does
  * not expose runtime implementation details.
  */
-final class RuntimeServices {
+public final class RuntimeServices {
 
     private final RuntimeCoercionService coercionService;
 
-    RuntimeServices(DataConversionService conversionService) {
+    public RuntimeServices(DataConversionService conversionService) {
         Objects.requireNonNull(conversionService, "conversionService must not be null");
         this.coercionService = new RuntimeCoercionService(conversionService);
     }
 
-    static RuntimeServices from(ExpressionEnvironment environment) {
+    public static RuntimeServices from(ExpressionEnvironment environment) {
         Objects.requireNonNull(environment, "environment must not be null");
         return new RuntimeServices(environment.getDataConversionService());
     }
@@ -57,7 +57,7 @@ final class RuntimeServices {
      * Normalizes {@code value} to the Java type corresponding to {@code resolvedType}.
      * Returns {@code value} unchanged when the resolved type is unknown, null, or non-scalar.
      */
-    Object coerceToResolvedType(Object value, ResolvedType resolvedType) {
+    public Object coerceToResolvedType(Object value, ResolvedType resolvedType) {
         if (resolvedType == null || resolvedType == UnknownType.INSTANCE) return value;
         if (value == null) return null;
         if (resolvedType == VectorType.INSTANCE) {

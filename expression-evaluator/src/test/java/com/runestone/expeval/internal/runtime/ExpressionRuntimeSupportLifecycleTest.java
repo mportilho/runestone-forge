@@ -3,6 +3,7 @@ package com.runestone.expeval.internal.runtime;
 import com.runestone.expeval.api.CacheConfig;
 import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.environment.ExpressionEnvironment;
+import com.runestone.expeval.internal.compiler.CompiledExpression;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

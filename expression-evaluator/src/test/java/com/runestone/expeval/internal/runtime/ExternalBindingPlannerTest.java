@@ -1,6 +1,8 @@
 package com.runestone.expeval.internal.runtime;
 
 import com.runestone.expeval.internal.execution.plan.ExternalBindingPlan;
+import com.runestone.expeval.internal.execution.plan.ExternalBindingPlanner;
+import com.runestone.expeval.internal.execution.eval.ExecutionScope;
 
 import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;

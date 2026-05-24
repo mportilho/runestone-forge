@@ -10,7 +10,7 @@
 4. Build an execution plan.
 5. Evaluate math, logical, and assignment expressions.
 
-The conceptual pipeline is sound, but the package structure does not fully reflect it. Most classes after AST construction historically lived under `com.runestone.expeval.internal.runtime`, which became a broad package containing compiler, semantic resolver, execution plan, evaluators, coercion services, navigation operations, and audit support. The current refactor has started splitting that package by phase.
+The conceptual pipeline is sound, but the package structure does not fully reflect it. Most classes after AST construction historically lived under `com.runestone.expeval.internal.runtime`, which became a broad package containing compiler, semantic resolver, execution plan, evaluators, coercion services, navigation operations, and audit support. The current refactor is splitting that package by phase.
 
 ## Refactoring Direction
 
@@ -101,8 +101,8 @@ Large manual files at the baseline snapshot:
 
 - Organization: mixed layered compiler/runtime pipeline.
 - Clarity: drifting.
-- Main package smell: `internal.runtime` still contains too many execution/runtime concerns, though semantic resolution, audit collection, and the execution-plan model have been moved out.
-- Main boundary smell: the public compiler facade still exposes low-level internal compile types.
+- Main package smell: `internal.runtime` still contains too many execution/runtime concerns, though compiler implementation, semantic resolution, audit collection, execution-plan planning/folding, shared evaluation helpers, and navigation execution have been moved out.
+- Main boundary smell: the public compiler package still exposes low-level internal compile types through the temporary bridge.
 - Main duplication hotspots: runtime invocation and type introspection policy. Constant folding/runtime structured evaluation, navigation classification, language symbol `@`, and source pointer formatting have already been centralized.
 - Refactoring style risk: extracting very small helpers can move repetition instead of removing it. Prefer larger cohesive collaborators when rules share context and lifecycle.
 
@@ -111,14 +111,14 @@ Large manual files at the baseline snapshot:
 | Severity | Issue | Evidence | Recommendation |
 |---|---|---|---|
 | Partially addressed | Compiler injection type is public, but an access bridge still exposes internals | `MathExpression`, `LogicalExpression`, and `AssignmentExpression` accept `com.runestone.expeval.compiler.ExpressionCompiler`; `ExpressionCompiler.compile(...)` is no longer public. Runtime and test white-box access now go through `ExpressionCompilerAccess`, while tests centralize their usage through `src/test/java/com/runestone/expeval/testing/ExpressionCompilerInspector`. | Keep `ExpressionCompiler` as the public injection/cache handle. Treat `ExpressionCompilerAccess` as a temporary bridge until package boundaries allow a package-private/internal runtime access point, or introduce public result/target types if direct compiled-plan access becomes a product requirement. |
-| Addressed | Public environment exposed internal runtime services | `ExpressionEnvironment` imported, stored, and exposed `RuntimeServices` from `internal.runtime`. | `RuntimeServices` is now package-private and created internally from `ExpressionEnvironment`; the public environment API no longer exposes runtime implementation details. |
-| Partially addressed | `internal.runtime` mixes too many phases | Semantic resolution/model classes now live in `internal.semantic`, `AuditCollector` now lives in `internal.audit`, and execution-plan model records/classes now live in `internal.execution.plan`. The package still contains compiler implementation, execution-plan builders/planners/folding support, runtime evaluators, navigation execution, audit estimation, and coercion services. | Continue splitting by pipeline phase: execution planning, execution eval, runtime services, navigation, compiler. Do this as small package moves with tests after each step. |
+| Addressed | Public environment exposed internal runtime services | `ExpressionEnvironment` imported, stored, and exposed `RuntimeServices` from `internal.runtime`. | `RuntimeServices` is now created internally from `ExpressionEnvironment`; the public environment API no longer exposes runtime implementation details. It remains public only inside the `internal` namespace so split packages can share it. |
+| Partially addressed | `internal.runtime` mixes too many phases | Compiler implementation now lives in `internal.compiler`, semantic resolution/model classes now live in `internal.semantic`, `AuditCollector` now lives in `internal.audit`, execution-plan model/planning/folding classes now live in `internal.execution.plan`, shared evaluation helpers now live in `internal.execution.eval`, and navigation execution now lives in `internal.navigation`. The package still contains facade runtime support, public-facade evaluators, and coercion services. | Continue splitting by pipeline phase: remaining evaluator facades/collaborators can move to `internal.execution.eval`; coercion/runtime services should remain stable unless a clear boundary appears. Do this as small package moves with tests after each step. |
 | Addressed | `SemanticResolver` had too many reasons to change | The baseline class covered assignment symbols, literal type inference, identifiers, `@`, function overloads, property/member navigation, collection functions, operators, and result type validation. | It is now a semantic-pass orchestrator delegating to cohesive collaborators such as `LiteralTypeInferencer`, `SemanticSymbolResolver`, `FunctionOverloadResolver`, `OperatorTypeChecker`, `ResultTypeValidator`, and `NavigationTypeResolver`. |
 | Addressed | `ExecutionPlanBuilder` mixed plan construction with folding/evaluation concerns | The baseline builder covered symbol indexing, defaults, external binding plans, audit event estimation, node building, navigation building, foldability rules, literal materialization, and constant folding evaluator setup. | It is now an orchestrator delegating to planning collaborators such as `SymbolIndexAllocator`, `ExternalBindingPlanner`, `AuditEventEstimator`, `LiteralMaterializer`, `ExecutableNodeBuilder`, property-chain planners, and folding support. |
 | Accepted | `SemanticAstBuilder` stays as-is | 1423-line parse mapping class; despite its size, the current structure is considered acceptable for this project. | Do not split or refactor `SemanticAstBuilder` as part of this plan. |
 | Addressed | Structured evaluation logic was duplicated between runtime and constant folding | Runtime evaluation and constant folding both handled binary short-circuit, conditionals, vectors, regex, postfix/unary/ternary, and null coalescing. | `StructuredExpressionEvaluator` now owns shared structured/operator node evaluation for both paths. Function calls intentionally remain evaluator-specific because runtime audit and fold-time behavior differ. |
 | Medium | Runtime invocation by arity appears in multiple places | Invocation logic exists in `FunctionDescriptor`, function-call evaluators, and `PropertyAccessEvaluator`. | Avoid extracting this if it adds objects or argument-array allocation on hot paths. Any future extraction must preserve zero-extra-object invocation paths for arities 0-6. |
-| Partially addressed | Main navigation code is not in `internal.navigation` | `internal.navigation` contains enums/cache/introspection, while `PropertyChainOps`, `CollectionAccessOps`, `CollectionPredicateTransformEvaluator`, `CollectionFunctionEvaluator`, `VectorAggregationEvaluator`, `FilterContextStack`, and `DeepScanContext` are still in `internal.runtime`. `ExecutablePropertyChain` now lives with the execution-plan model in `internal.execution.plan`. | Move navigation execution/planning classes under navigation or execution-navigation subpackages after the responsibility split is stable. |
+| Addressed | Main navigation code is not in `internal.navigation` | `internal.navigation` now contains navigation enums/cache/introspection plus runtime navigation execution: `PropertyChainOps`, `CollectionAccessOps`, `CollectionPredicateTransformEvaluator`, `CollectionFunctionEvaluator`, `VectorAggregationEvaluator`, `PropertyAccessEvaluator`, `DeepScanEvaluator`, and `DeepScanContext`. `ExecutablePropertyChain` remains with the execution-plan model in `internal.execution.plan`; `FilterContextStack` remains in `internal.execution.eval`. | Keep navigation execution together unless a future split is backed by a clearer runtime boundary. |
 | Addressed | Sentinel `@` was represented as repeated string literal | Language-level current-element references now use `LanguageSymbols.CURRENT_ELEMENT`. Remaining raw `"@"` strings are environment-id/debug fingerprints, not language-symbol checks. | No further action unless new language-symbol literals are introduced. |
 | Medium | Type introspection policy is split | `ExpressionEnvironmentBuilder` discovers type hints via public methods/fields; `TypeIntrospectionSupport` walks declared members and hierarchy for reflective access. | Introduce a shared `TypeMetadataDiscoverer` with explicit policies for public API metadata vs runtime fallback. |
 | Accepted | `FunctionDescriptor` keeps invocation mechanics | It stores catalog metadata and implements arity-specific invocation directly. | Keep this in place for now: avoiding an extra object on the function hot path is worth the small organizational trade-off. |
@@ -144,7 +144,7 @@ Remaining boundary issue:
 ```text
 com.runestone.expeval.compiler.ExpressionCompilerAccess.compile(...)
   -> com.runestone.expeval.internal.grammar.ExpressionResultType
-  -> com.runestone.expeval.internal.runtime.CompiledExpression
+  -> com.runestone.expeval.internal.compiler.CompiledExpression
 ```
 
 This means `ExpressionCompiler` is now an honest public injection/configuration type. Its low-level `compile(...)` method is package-private, but Java package boundaries currently require a public bridge because `ExpressionRuntimeSupport` lives outside `com.runestone.expeval.compiler`.
@@ -201,7 +201,7 @@ Cons:
 
 Recommended: Option A for now. The existing public facade API already covers normal usage, and no external need for direct compiled-plan access has been established.
 
-Implemented first steps: `ExpressionCompilerInspector` exists in test sources, direct calls to `ExpressionCompiler.compile(...)` from repository tests have been migrated to it, and `ExpressionCompiler.compile(...)` is no longer public. The remaining compromise is `ExpressionCompilerAccess`, a public bridge that should disappear when compiler/runtime package boundaries are reorganized or when a stable public compiled-handle API is introduced.
+Implemented first steps: `ExpressionCompilerInspector` exists in test sources, direct calls to `ExpressionCompiler.compile(...)` from repository tests have been migrated to it, and `ExpressionCompiler.compile(...)` is no longer public. `DefaultExpressionCompiler` and `CompiledExpression` now live in `internal.compiler`. The remaining compromise is `ExpressionCompilerAccess`, a public bridge that should disappear only if a non-public internal access route is introduced or a stable public compiled-handle API is designed.
 
 ## Proposed Package Target
 
@@ -268,17 +268,25 @@ com.runestone.expeval.internal.execution.plan
   Executable*
   ExternalBindingPlan
   DynamicInstant
-  ExecutionPlanBuilder, later when planning/folding dependencies are separated from runtime evaluation
-  ConstantFolder
+  ExecutionPlanBuilder
+  ExecutableNodeBuilder
+  ExternalBindingPlanner
+  AuditEventEstimator
+  FoldabilityAnalyzer
+  ConstantNodeValues
+  ConstantNodeEvaluator
   LiteralMaterializer
+  FunctionCallPlanner
+  OperatorNodePlanner
+  PropertyChainPlanner and access/root planners
 
 com.runestone.expeval.internal.execution.eval
-  MathEvaluator
-  LogicalEvaluator
-  AbstractObjectEvaluator
   OperatorEvaluator
   ExecutionScope
   NodeEvaluator
+  StructuredExpressionEvaluator
+  FilterContextStack
+  MathEvaluator, LogicalEvaluator, AbstractObjectEvaluator later
 
 com.runestone.expeval.internal.navigation
   NavigationMode
@@ -289,14 +297,17 @@ com.runestone.expeval.internal.navigation
   CollectionPredicateTransformEvaluator
   CollectionFunctionEvaluator
   VectorAggregationEvaluator
-  ExecutablePropertyChain, if treated as navigation-specific executable plan
+  PropertyAccessEvaluator
+  DeepScanEvaluator
   FilterContext
-  FilterContextStack
   DeepScanContext
   ReflectiveAccessCache
   TypeIntrospectionSupport
 
 com.runestone.expeval.internal.runtime
+  ExpressionRuntimeSupport
+  MathEvaluator, LogicalEvaluator, AbstractObjectEvaluator until moved
+  AssignmentEvaluator, FunctionCallEvaluator, SymbolValueEvaluator until moved
   RuntimeServices
   RuntimeCoercionService
   RuntimeInvocationSupport, only if a future implementation preserves hot-path fast paths without extra allocation/indirection
@@ -307,7 +318,7 @@ com.runestone.expeval.internal.audit
 
 The exact package names matter less than the direction: compiler orchestration, semantic resolution, execution plan, evaluation, runtime services, navigation, and audit should not all live in one package.
 
-Compiler split note: the execution-plan model has moved to `internal.execution.plan`, but `ExecutionPlanBuilder` and its planning/folding collaborators still live in `internal.runtime` because they depend on runtime-only folding/evaluation helpers such as `OperatorEvaluator`, `ExecutionScope`, `RuntimeServices`, and constant evaluation. Move those planning collaborators before or together with `DefaultExpressionCompiler` to avoid exposing a half-moved package-private graph.
+Compiler/navigation split note: the execution-plan model and planning/folding collaborators now live in `internal.execution.plan`; shared evaluation helpers used by both runtime evaluation and constant folding live in `internal.execution.eval`; `DefaultExpressionCompiler` and `CompiledExpression` live in `internal.compiler`; navigation execution lives in `internal.navigation`. The remaining intentional coupling is that constant folding still calls `PropertyChainOps.evaluatePropertyChain(...)` for property-chain prefix folding, now through the navigation package boundary.
 
 ## `SemanticResolver` Split
 
@@ -488,7 +499,7 @@ Recommended improvements:
 - `NavigationStepClassifier` for legacy/new navigation classification is in place.
 - Keep semantic navigation typing together in `NavigationTypeResolver`; avoid extracting typed member lookup or collection-function matching into separate classes unless reused outside navigation.
 - Consider `ResolvedNavigationChain` as an intermediate semantic result.
-- Move runtime navigation operations into `internal.navigation` or `internal.execution.navigation`.
+- Runtime navigation operations now live in `internal.navigation`.
 
 ## Runtime Invocation Duplication
 
@@ -551,17 +562,18 @@ Recommended baseline coverage:
 8. Done: keep semantic navigation typing in one `NavigationTypeResolver` unless a rule becomes truly shared outside navigation.
 9. Done: add `ExpressionCompilerInspector` in test sources and migrate direct white-box test calls away from `ExpressionCompiler.compile(...)`.
 10. Done: make `ExpressionCompiler.compile(...)` non-public and route runtime/test-support through `ExpressionCompilerAccess`.
-11. Next: remove the temporary public `ExpressionCompilerAccess` bridge by colocating the compiler access point with runtime internals, or introduce public replacements for `ExpressionResultType` and `CompiledExpression` if direct compiled-plan access becomes a product requirement.
+11. Next: remove the temporary public `ExpressionCompilerAccess` bridge if a non-public internal access route becomes available, or introduce public replacements for `ExpressionResultType` and `CompiledExpression` if direct compiled-plan access becomes a product requirement.
 12. Done: create the first internal package split after the responsibility split stabilized.
 13. Done: move semantic model/classes from `internal.runtime` to `internal.semantic`: `SemanticModel`, `SemanticIssue`, `SemanticIssueSeverity`, `ResolutionContext`, `ResolvedFunctionBinding`, `SymbolRef`, `SymbolKind`, `SemanticResolver`, `NavigationStepClassifier`, `SymbolIndexAllocator`, and semantic collaborators.
 14. Done: move `AuditCollector` from `internal.runtime` to `internal.audit`.
 15. Done: move the execution-plan model to `internal.execution.plan`: `ExecutionPlan`, `ExecutableNode`, `Executable*`, `ExecutableAssignment`, `ExternalBindingPlan`, and `DynamicInstant`. The sealed executable-node family was moved together.
-16. Next: move execution planning/folding collaborators to `internal.execution.plan`: `ExecutionPlanBuilder`, `ExecutableNodeBuilder`, property-chain planners, `ExternalBindingPlanner`, `AuditEventEstimator`, `LiteralMaterializer`, `FoldabilityAnalyzer`, and constant-folding helpers. Do this only after deciding whether runtime-only helpers should move with them or remain imported from `internal.runtime`.
-17. Next: move compiler implementation classes to `internal.compiler`: `DefaultExpressionCompiler`, `CompiledExpression`, and cache/pipeline support as appropriate. Do this after or alongside the planning/folding move to avoid exposing half-moved package-private plan-builder types.
-18. Next: move evaluators to `internal.execution.eval`: `MathEvaluator`, `LogicalEvaluator`, `AbstractObjectEvaluator`, `OperatorEvaluator`, `ExecutionScope`, `NodeEvaluator`, and runtime evaluator collaborators.
-19. Next: move navigation execution classes to a navigation-focused package: `PropertyChainOps`, `CollectionAccessOps`, `CollectionPredicateTransformEvaluator`, `CollectionFunctionEvaluator`, `VectorAggregationEvaluator`, `PropertyAccessEvaluator`, `DeepScanEvaluator`, `FilterContextStack`, `DeepScanContext`.
-20. Ongoing: compare performance against the baseline after each extraction that touches evaluation, invocation, navigation, coercion, reflection, or folding.
-21. Permanent decision: do not split `SemanticAstBuilder`; it is intentionally excluded from this refactoring plan.
+16. Done: move shared evaluation helpers to `internal.execution.eval`: `ExecutionScope`, `NodeEvaluator`, `OperatorEvaluator`, `StructuredExpressionEvaluator`, and `FilterContextStack`.
+17. Done: move execution planning/folding collaborators to `internal.execution.plan`: `ExecutionPlanBuilder`, `ExecutableNodeBuilder`, property-chain planners, `ExternalBindingPlanner`, `AuditEventEstimator`, `LiteralMaterializer`, `FoldabilityAnalyzer`, `ConstantNodeValues`, `ConstantNodeEvaluator`, `FunctionCallPlanner`, and `OperatorNodePlanner`.
+18. Done: move compiler implementation classes to `internal.compiler`: `DefaultExpressionCompiler` and `CompiledExpression`.
+19. Done: move navigation execution classes to `internal.navigation`: `PropertyChainOps`, `CollectionAccessOps`, `CollectionPredicateTransformEvaluator`, `CollectionFunctionEvaluator`, `VectorAggregationEvaluator`, `PropertyAccessEvaluator`, `DeepScanEvaluator`, and `DeepScanContext`.
+20. Next: move remaining evaluator facades/collaborators to `internal.execution.eval` where appropriate: `MathEvaluator`, `LogicalEvaluator`, `AbstractObjectEvaluator`, `AssignmentEvaluator`, `FunctionCallEvaluator`, and `SymbolValueEvaluator`.
+21. Ongoing: compare performance against the baseline after each extraction that touches evaluation, invocation, navigation, coercion, reflection, or folding.
+22. Permanent decision: do not split `SemanticAstBuilder`; it is intentionally excluded from this refactoring plan.
 
 ## Suggested Tests
 
@@ -577,7 +589,7 @@ Recommended baseline coverage:
 
 ## Risk Notes
 
-- `ExpressionCompilerAccess` is a temporary compromise: it keeps `ExpressionCompiler.compile(...)` non-public, but still exposes internal types from a public bridge. Remove it after compiler/runtime package boundaries are reorganized or after a stable public compiled-handle API is designed.
+- `ExpressionCompilerAccess` is a temporary compromise: it keeps `ExpressionCompiler.compile(...)` non-public, but still exposes internal types from a public bridge. Remove it only after a non-public internal access route is available or after a stable public compiled-handle API is designed.
 - Moving many package-private classes can expose hidden dependency cycles. Do the move in small commits/steps.
 - Constant folding and runtime evaluation must remain behaviorally identical. Extracting a shared evaluator is valuable but should be backed by tests.
 - Navigation is the riskiest area because one language feature touches grammar, AST, semantic resolution, plan building, and runtime evaluation.

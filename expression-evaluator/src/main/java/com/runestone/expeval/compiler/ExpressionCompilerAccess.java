@@ -1,8 +1,8 @@
 package com.runestone.expeval.compiler;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
+import com.runestone.expeval.internal.compiler.CompiledExpression;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
-import com.runestone.expeval.internal.runtime.CompiledExpression;
 
 import java.util.Objects;
 

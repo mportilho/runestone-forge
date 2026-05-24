@@ -1,5 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.compiler.CompiledExpression;
+
 import java.math.MathContext;
 
 final class LogicalEvaluator extends AbstractObjectEvaluator<Boolean> {

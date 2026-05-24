@@ -1,5 +1,6 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.eval.*;
 import com.runestone.expeval.internal.execution.plan.*;
 
 import com.runestone.expeval.api.AuditEvent;

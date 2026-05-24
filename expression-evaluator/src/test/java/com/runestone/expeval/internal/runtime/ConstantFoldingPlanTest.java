@@ -1,5 +1,6 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.compiler.CompiledExpression;
 import com.runestone.expeval.internal.execution.plan.*;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;

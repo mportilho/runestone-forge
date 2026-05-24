@@ -2,9 +2,9 @@ package com.runestone.expeval.compiler;
 
 import com.runestone.expeval.api.CacheConfig;
 import com.runestone.expeval.environment.ExpressionEnvironment;
+import com.runestone.expeval.internal.compiler.CompiledExpression;
+import com.runestone.expeval.internal.compiler.DefaultExpressionCompiler;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
-import com.runestone.expeval.internal.runtime.CompiledExpression;
-import com.runestone.expeval.internal.runtime.DefaultExpressionCompiler;
 
 import java.util.Objects;
 
