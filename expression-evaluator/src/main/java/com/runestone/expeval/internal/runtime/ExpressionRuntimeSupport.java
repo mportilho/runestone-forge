@@ -68,12 +68,16 @@ public final class ExpressionRuntimeSupport {
 
     public static ExpressionRuntimeSupport from(CompiledExpression compiledExpression, ExpressionEnvironment environment) {
         Objects.requireNonNull(environment, "environment must not be null");
-        RuntimeServices runtimeServices = environment.runtimeServices();
+        RuntimeServices runtimeServices = new RuntimeServices(environment.getDataConversionService());
+        return from(compiledExpression, runtimeServices, environment.mathContext());
+    }
+
+    static ExpressionRuntimeSupport from(CompiledExpression compiledExpression, RuntimeServices runtimeServices, MathContext mathContext) {
         SemanticModel semanticModel = compiledExpression.semanticModel();
         Object[] defaults = compiledExpression.executionPlan().defaults();
         Map<String, ExternalBindingPlan> bindings = compiledExpression.executionPlan().externalBindings();
         return new ExpressionRuntimeSupport(compiledExpression, defaults, bindings, semanticModel.internalSymbolsByName().keySet(), runtimeServices,
-                environment.mathContext());
+                mathContext);
     }
 
 

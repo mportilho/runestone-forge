@@ -21,11 +21,11 @@ import java.util.Objects;
  * <p>One instance is created per {@link com.runestone.expeval.environment.ExpressionEnvironment}
  * and shared across all evaluations performed within that environment.
  */
-public final class RuntimeServices {
+final class RuntimeServices {
 
     private final RuntimeCoercionService coercionService;
 
-    public RuntimeServices(DataConversionService conversionService) {
+    RuntimeServices(DataConversionService conversionService) {
         Objects.requireNonNull(conversionService, "conversionService must not be null");
         this.coercionService = new RuntimeCoercionService(conversionService);
     }

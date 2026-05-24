@@ -4,7 +4,6 @@ import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.grammar.ParsingException;
-import com.runestone.expeval.internal.runtime.CompiledExpression;
 import com.runestone.expeval.internal.runtime.ExpressionCompilationCache;
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
 import com.runestone.expeval.internal.runtime.SemanticModel;
@@ -213,8 +212,7 @@ public final class ExpressionEngine {
         Objects.requireNonNull(resultType, "resultType must not be null");
         Objects.requireNonNull(environment, "environment must not be null");
         try {
-            CompiledExpression compiled = compilationCache.compile(source, resultType, environment);
-            return ExpressionRuntimeSupport.from(compiled, environment);
+            return compilationCache.compileRuntime(source, resultType, environment);
         } catch (SemanticResolutionException e) {
             throw new ExpressionCompilationException(source, e.issues(), e);
         }

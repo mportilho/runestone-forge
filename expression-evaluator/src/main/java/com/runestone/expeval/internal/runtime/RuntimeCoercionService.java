@@ -15,7 +15,7 @@ final class RuntimeCoercionService {
 
     private final DataConversionService conversionService;
 
-    public RuntimeCoercionService(DataConversionService conversionService) {
+    RuntimeCoercionService(DataConversionService conversionService) {
         this.conversionService = Objects.requireNonNull(conversionService, "conversionService must not be null");
     }
 

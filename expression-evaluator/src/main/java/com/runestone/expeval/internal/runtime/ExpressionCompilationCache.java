@@ -15,7 +15,7 @@ import java.util.Objects;
 public final class ExpressionCompilationCache {
 
     private final ExpressionCompiler compiler;
-    private final Cache<ExpressionCacheKey, CompiledExpression> cache;
+    private final Cache<ExpressionCacheKey, ExpressionRuntimeSupport> cache;
 
     public ExpressionCompilationCache(CacheConfig cacheConfig) {
         this(new ExpressionCompiler(), cacheConfig);
@@ -32,13 +32,17 @@ public final class ExpressionCompilationCache {
     }
 
     public CompiledExpression compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
+        return compileRuntime(source, resultType, environment).getCompiledExpression();
+    }
+
+    public ExpressionRuntimeSupport compileRuntime(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
         if (source == null || source.isBlank()) {
             throw new IllegalArgumentException("source must not be blank");
         }
         Objects.requireNonNull(resultType, "resultType must not be null");
         Objects.requireNonNull(environment, "environment must not be null");
         ExpressionCacheKey cacheKey = new ExpressionCacheKey(source, environment.environmentId(), resultType);
-        return cache.get(cacheKey, ignored -> compiler.compile(source, resultType, environment));
+        return cache.get(cacheKey, ignored -> compiler.compileRuntime(source, resultType, environment));
     }
 
     public void invalidateCache() {

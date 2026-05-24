@@ -4,6 +4,45 @@ Current benchmark packages and JMH commands are documented in [`benchmark-organi
 
 ---
 
+## PERF-002: Runtime support cached on compile cache hits
+
+**Date:** 2026-05-24
+
+**Scenario:** Validate the change that stops exposing `RuntimeServices` from
+`ExpressionEnvironment` and moves runtime-service ownership into the internal compilation/cache
+path. `ExpressionCompilationCache` now caches `ExpressionRuntimeSupport`, so cache hits should no
+longer allocate `RuntimeServices`, `RuntimeCoercionService`, or evaluator wrappers.
+
+**Hypothesis:** Compile cache hits should become allocation-free and materially faster. Cache misses
+should remain within noise because they still execute the full parse, semantic resolution, plan
+building, and runtime-support construction pipeline.
+
+**Machine:** OpenJDK 25.0.2 / Linux x86-64, -Xms1g -Xmx1g  
+**JMH config:** 3 forks x 5 warmup + 10 measurement iterations x 500 ms each; `AverageTime / ns`; GC profiler enabled
+
+**Baseline:** Fresh `HEAD` worktree before the runtime-cache change, created under
+`/tmp/opencode/runestone-forge-benchmark-baseline`.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta | B/op Before | B/op After |
+|---|---:|---:|---:|---:|---:|
+| startup.compilation.CompilePathAllocationBenchmark.compileSimpleCacheHit | 81.31 | 14.72 | **-81.9%** | 160.0 | ~0 |
+| startup.compilation.CompilePathAllocationBenchmark.compileFunctionCacheHit | 85.38 | 15.47 | **-81.9%** | 160.0 | ~0 |
+| startup.compilation.CompilePathAllocationBenchmark.compileFunctionCacheMiss | 98,745.25 | 96,367.22 | -2.4% | 53,503.2 | 53,459.6 |
+
+**Decision:** ACCEPT — cache-hit paths improved by about 82% and eliminated the measured 160 B/op
+allocation. Cache-miss time and allocation stayed effectively unchanged.
+
+**Notes:**
+
+- Results saved to `/tmp/performance-benchmark/expeval-startup-compilation-runtime-cache-before.json`
+  and `/tmp/performance-benchmark/expeval-startup-compilation-runtime-cache-after.json`.
+- Comparison report saved to
+  `/tmp/performance-benchmark/expeval-startup-compilation-runtime-cache-comparison.md`.
+- `compileFunctionCacheMiss` has high timing variance in both runs; allocation stayed stable and the
+  measured delta is not treated as the main optimization signal.
+
+---
+
 ## PERF-001: NodeEvaluator callback — no regression + CollectionNavigation baseline
 
 **Date:** 2026-04-21

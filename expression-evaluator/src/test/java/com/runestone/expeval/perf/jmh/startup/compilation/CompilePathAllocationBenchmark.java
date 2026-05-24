@@ -21,18 +21,17 @@ import java.util.concurrent.TimeUnit;
  * Measures allocation in the compile path for three smells:
  *
  * <ul>
- *   <li><b>compileSimpleCacheHit</b> — isolates Smell A: {@code RuntimeValueFactory} +
- *       {@code RuntimeCoercionService} created per {@code compile()} even on cache hit.</li>
- *   <li><b>compileFunctionCacheHit</b> — same smell in the context of an expression with
- *       8 function calls, where {@code MutableBindings.seedDefaults()} does more work.</li>
- *   <li><b>compileFunctionCacheMiss</b> — full pipeline; isolates Smell A + B + C together
- *       (FunctionRef per call, FunctionCatalog.findExact stream per lookup, factory objects).</li>
+ *   <li><b>compileSimpleCacheHit</b> — isolates cache-hit overhead after runtime support has
+ *       already been built.</li>
+ *   <li><b>compileFunctionCacheHit</b> — same cache-hit path in the context of an expression
+ *       with 8 function calls.</li>
+ *   <li><b>compileFunctionCacheMiss</b> — full pipeline; includes FunctionRef per call,
+ *       FunctionCatalog.findExact stream per lookup, and runtime-support construction.</li>
  * </ul>
  *
- * <p>Run with {@code -prof gc} to capture {@code B/op}. The cache-hit benchmarks should show
- * a fixed 48-B floor (the two factory objects) plus any {@code MutableBindings} overhead.
- * The difference between cache-miss and cache-hit B/op isolates the compile-only allocation
- * (including FunctionRef and stream smells).
+ * <p>Run with {@code -prof gc} to capture {@code B/op}. The difference between cache-miss and
+ * cache-hit B/op isolates compile-only allocation, including FunctionRef, stream, plan, and
+ * runtime-support construction costs.
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)

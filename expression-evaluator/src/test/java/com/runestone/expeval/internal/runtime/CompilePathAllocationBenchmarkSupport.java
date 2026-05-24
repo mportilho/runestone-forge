@@ -29,8 +29,7 @@ import java.util.Map;
  * </ol>
  *
  * <p>The cache-hit scenario ({@link #compileSimpleCacheHit()} and {@link #compileFunctionCacheHit()})
- * bypasses the ANTLR + AST + semantic-resolution work; only the {@code ExpressionRuntimeSupport.from()}
- * wrapper allocation and {@code seedDefaults()} remain.
+ * bypasses the ANTLR + AST + semantic-resolution work and returns the cached runtime support.
  *
  * <p>The cache-miss scenario ({@link #compileFunctionCacheMiss()}) exercises the full pipeline,
  * making Smells B and C visible at the cost of also including parser and AST allocation.
@@ -53,16 +52,16 @@ public final class CompilePathAllocationBenchmarkSupport {
         mathEnv = new ExpressionEnvironmentBuilder().addMathFunctions().build();
         sharedCache = new ExpressionCompilationCache(CacheConfig.defaults());
         // Warm the cache so subsequent calls return immediately from Caffeine
-        sharedCache.compile(SIMPLE_MATH_EXPRESSION, ExpressionResultType.MATH, simpleEnv);
-        sharedCache.compile(FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv);
+        sharedCache.compileRuntime(SIMPLE_MATH_EXPRESSION, ExpressionResultType.MATH, simpleEnv);
+        sharedCache.compileRuntime(FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv);
     }
 
     /**
      * Cache-hit path for a no-function expression.
-     * Measures Smell A only: RuntimeValueFactory + RuntimeCoercionService allocation per call.
+     * Measures cache-hit overhead after runtime support has already been built.
      */
     public ExpressionRuntimeSupport compileSimpleCacheHit() {
-        return ExpressionRuntimeSupport.from(sharedCache.compile(SIMPLE_MATH_EXPRESSION, ExpressionResultType.MATH, simpleEnv), simpleEnv);
+        return sharedCache.compileRuntime(SIMPLE_MATH_EXPRESSION, ExpressionResultType.MATH, simpleEnv);
     }
 
     /**
@@ -71,7 +70,7 @@ public final class CompilePathAllocationBenchmarkSupport {
      * many symbols seeded via {@code MutableBindings.seedDefaults()}.
      */
     public ExpressionRuntimeSupport compileFunctionCacheHit() {
-        return ExpressionRuntimeSupport.from(sharedCache.compile(FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv), mathEnv);
+        return sharedCache.compileRuntime(FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv);
     }
 
     /**
@@ -81,7 +80,7 @@ public final class CompilePathAllocationBenchmarkSupport {
      */
     public ExpressionRuntimeSupport compileFunctionCacheMiss() {
         ExpressionCompilationCache freshCache = new ExpressionCompilationCache(CacheConfig.defaults());
-        return ExpressionRuntimeSupport.from(freshCache.compile(FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv), mathEnv);
+        return freshCache.compileRuntime(FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv);
     }
 
     /**

@@ -55,11 +55,16 @@ final class ExpressionCompiler {
      * @throws SemanticResolutionException if the expression references unknown symbols or functions
      */
     public CompiledExpression compile(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
+        return compileRuntime(source, resultType, environment).getCompiledExpression();
+    }
+
+    public ExpressionRuntimeSupport compileRuntime(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
         if (source == null || source.isBlank()) {
             throw new IllegalArgumentException("source must not be blank");
         }
         Objects.requireNonNull(resultType, "resultType must not be null");
         Objects.requireNonNull(environment, "environment must not be null");
+        RuntimeServices runtimeServices = new RuntimeServices(environment.getDataConversionService());
         ExpressionFileNode ast = switch (resultType) {
             case MATH -> astBuilder.buildMath(parserFacade.parseMath(source).root());
             case LOGICAL -> astBuilder.buildLogical(parserFacade.parseLogical(source).root());
@@ -79,12 +84,13 @@ final class ExpressionCompiler {
         }
         ExecutionPlan executionPlan = planBuilder.build(
                 semanticModel,
-                environment.runtimeServices(),
+                runtimeServices,
                 environment.externalSymbolCatalog(),
                 environment.typeHintCatalog(),
                 environment.mathContext()
         );
-        return new CompiledExpression(source, resultType, semanticModel, executionPlan);
+        CompiledExpression compiledExpression = new CompiledExpression(source, resultType, semanticModel, executionPlan);
+        return ExpressionRuntimeSupport.from(compiledExpression, runtimeServices, environment.mathContext());
     }
 
 }
