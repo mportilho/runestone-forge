@@ -102,7 +102,7 @@ Transcendental functions (trig and logarithms) use a separate context because th
 
 ## Configuring the Cache
 
-The expression compiler is a JVM-wide singleton by default. Cache settings are read from system properties:
+The static `compile(...)` methods use a JVM-wide singleton by default. Cache settings are read from system properties:
 
 | Property | Default | Effect |
 |---|---|---|
@@ -115,11 +115,11 @@ Set them at JVM startup:
 -Dexpeval.cache.maximumSize=2048 -Dexpeval.cache.ttlSeconds=3600
 ```
 
-To use a separate compiler with its own cache — useful when different parts of the application need different cache policies — pass an `ExpressionCompiler` instance explicitly:
+To use a separate runtime with its own cache — useful when different parts of the application need different cache policies — create an `ExpressionEngine` explicitly:
 
 ```java
-ExpressionCompiler compiler = new ExpressionCompiler(CacheConfig.defaults());
-MathExpression expr = MathExpression.compile("a + b", env, compiler);
+ExpressionEngine engine = new ExpressionEngine(CacheConfig.defaults());
+MathExpression expr = engine.compileMath("a + b", env);
 ```
 
 > [!NOTE]

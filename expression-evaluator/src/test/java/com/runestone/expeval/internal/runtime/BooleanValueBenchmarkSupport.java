@@ -2,6 +2,7 @@ package com.runestone.expeval.internal.runtime;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
+import com.runestone.expeval.api.CacheConfig;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 
 import java.math.BigDecimal;
@@ -48,9 +49,9 @@ public final class BooleanValueBenchmarkSupport {
             builder.registerExternalSymbol(name, BigDecimal.ONE, true);
         }
         ExpressionEnvironment env = builder.build();
-        ExpressionCompiler compiler = new ExpressionCompiler();
-        chainRuntime = ExpressionRuntimeSupport.compile(BOOL_CHAIN_EXPRESSION, ExpressionResultType.LOGICAL, env, compiler);
-        wideRuntime  = ExpressionRuntimeSupport.compile(BOOL_WIDE_EXPRESSION,  ExpressionResultType.LOGICAL, env, compiler);
+        ExpressionCompilationCache cache = new ExpressionCompilationCache(CacheConfig.defaults());
+        chainRuntime = ExpressionRuntimeSupport.from(cache.compile(BOOL_CHAIN_EXPRESSION, ExpressionResultType.LOGICAL, env), env);
+        wideRuntime = ExpressionRuntimeSupport.from(cache.compile(BOOL_WIDE_EXPRESSION, ExpressionResultType.LOGICAL, env), env);
     }
 
     /**

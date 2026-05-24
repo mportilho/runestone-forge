@@ -15,8 +15,9 @@ class ExpressionRuntimeSupportCacheTest {
     void shouldReuseCompiledExpressionAcrossCallsForSameSourceAndEnvironment() throws Exception {
         ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
 
-        ExpressionRuntimeSupport first = ExpressionRuntimeSupport.compile("1 + 2", ExpressionResultType.MATH, environment);
-        ExpressionRuntimeSupport second = ExpressionRuntimeSupport.compile("1 + 2", ExpressionResultType.MATH, environment);
+        ExpressionCompilationCache cache = new ExpressionCompilationCache(com.runestone.expeval.api.CacheConfig.defaults());
+        ExpressionRuntimeSupport first = ExpressionRuntimeSupport.from(cache.compile("1 + 2", ExpressionResultType.MATH, environment), environment);
+        ExpressionRuntimeSupport second = ExpressionRuntimeSupport.from(cache.compile("1 + 2", ExpressionResultType.MATH, environment), environment);
 
         assertThat(first).isNotSameAs(second);
         assertThat(compiledExpressionOf(second)).isSameAs(compiledExpressionOf(first));
@@ -26,8 +27,9 @@ class ExpressionRuntimeSupportCacheTest {
     void shouldNotReuseCompiledExpressionForDifferentSources() throws Exception {
         ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
 
-        ExpressionRuntimeSupport first = ExpressionRuntimeSupport.compile("1 + 2", ExpressionResultType.MATH, environment);
-        ExpressionRuntimeSupport second = ExpressionRuntimeSupport.compile("3 + 4", ExpressionResultType.MATH, environment);
+        ExpressionCompilationCache cache = new ExpressionCompilationCache(com.runestone.expeval.api.CacheConfig.defaults());
+        ExpressionRuntimeSupport first = ExpressionRuntimeSupport.from(cache.compile("1 + 2", ExpressionResultType.MATH, environment), environment);
+        ExpressionRuntimeSupport second = ExpressionRuntimeSupport.from(cache.compile("3 + 4", ExpressionResultType.MATH, environment), environment);
 
         assertThat(compiledExpressionOf(second)).isNotSameAs(compiledExpressionOf(first));
     }
@@ -37,8 +39,9 @@ class ExpressionRuntimeSupportCacheTest {
         ExpressionEnvironment env1 = ExpressionEnvironment.builder().build();
         ExpressionEnvironment env2 = ExpressionEnvironment.builder().withMathContext(MathContext.DECIMAL64).build();
 
-        ExpressionRuntimeSupport first = ExpressionRuntimeSupport.compile("1 + 2", ExpressionResultType.MATH, env1);
-        ExpressionRuntimeSupport second = ExpressionRuntimeSupport.compile("1 + 2", ExpressionResultType.MATH, env2);
+        ExpressionCompilationCache cache = new ExpressionCompilationCache(com.runestone.expeval.api.CacheConfig.defaults());
+        ExpressionRuntimeSupport first = ExpressionRuntimeSupport.from(cache.compile("1 + 2", ExpressionResultType.MATH, env1), env1);
+        ExpressionRuntimeSupport second = ExpressionRuntimeSupport.from(cache.compile("1 + 2", ExpressionResultType.MATH, env2), env2);
 
         assertThat(compiledExpressionOf(second)).isNotSameAs(compiledExpressionOf(first));
     }

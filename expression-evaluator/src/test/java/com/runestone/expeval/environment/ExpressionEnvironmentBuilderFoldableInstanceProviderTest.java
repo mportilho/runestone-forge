@@ -2,8 +2,8 @@ package com.runestone.expeval.environment;
 
 import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.api.AuditResult;
+import com.runestone.expeval.api.ExpressionEngine;
 import com.runestone.expeval.api.MathExpression;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.within;
  * Tests for {@link ExpressionEnvironmentBuilder#registerInstanceProvider(Object, boolean)}
  * with {@code foldable=true}.
  *
- * <p>Each test that needs to verify fold-time invocation uses a fresh {@link ExpressionCompiler}
+ * <p>Each test that needs to verify fold-time invocation uses a fresh {@link ExpressionEngine}
  * to guarantee a cache miss and ensure the function is actually invoked during compilation.
  *
  * <p>Skipped categories:
@@ -103,7 +103,7 @@ class ExpressionEnvironmentBuilderFoldableInstanceProviderTest {
                     .registerInstanceProvider(fixture)   // no foldable flag
                     .build();
 
-            MathExpression.compile("counted(5)", env, new ExpressionCompiler());
+            MathExpression.compile("counted(5)", env, new ExpressionEngine());
 
             assertThat(fixture.callCount.get())
                     .as("non-foldable instance provider must not be called at build time")
@@ -169,12 +169,12 @@ class ExpressionEnvironmentBuilderFoldableInstanceProviderTest {
     class InvocationCount {
 
         private CountedInstanceFixture fixture;
-        private ExpressionCompiler freshCompiler;
+        private ExpressionEngine freshEngine;
 
         @BeforeEach
         void setUp() {
             fixture = new CountedInstanceFixture();
-            freshCompiler = new ExpressionCompiler();
+            freshEngine = new ExpressionEngine();
         }
 
         @Test
@@ -184,7 +184,7 @@ class ExpressionEnvironmentBuilderFoldableInstanceProviderTest {
                     .registerInstanceProvider(fixture, true)
                     .build();
 
-            MathExpression expr = MathExpression.compile("counted(9)", env, freshCompiler);
+            MathExpression expr = MathExpression.compile("counted(9)", env, freshEngine);
             assertThat(fixture.callCount.get())
                     .as("must be invoked exactly once at fold time")
                     .isEqualTo(1);
@@ -204,7 +204,7 @@ class ExpressionEnvironmentBuilderFoldableInstanceProviderTest {
                     .registerInstanceProvider(fixture, false)
                     .build();
 
-            MathExpression expr = MathExpression.compile("counted(9)", env, freshCompiler);
+            MathExpression expr = MathExpression.compile("counted(9)", env, freshEngine);
             assertThat(fixture.callCount.get())
                     .as("must not be invoked at build time")
                     .isEqualTo(0);
@@ -224,7 +224,7 @@ class ExpressionEnvironmentBuilderFoldableInstanceProviderTest {
                     .registerInstanceProvider(fixture, true)
                     .build();
 
-            MathExpression expr = MathExpression.compile("counted(x)", env, freshCompiler);
+            MathExpression expr = MathExpression.compile("counted(x)", env, freshEngine);
             assertThat(fixture.callCount.get())
                     .as("must not be invoked at build time when arg is a variable")
                     .isEqualTo(0);
@@ -292,10 +292,10 @@ class ExpressionEnvironmentBuilderFoldableInstanceProviderTest {
                     .registerInstanceProvider(new DoubleFixture(), true)
                     .registerInstanceProvider(new MultiplierFixture(new BigDecimal("3")), false)
                     .build();
-            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+            ExpressionEngine freshEngine = new ExpressionEngine();
 
-            BigDecimal twiceResult = MathExpression.compile("twice(5)", env, freshCompiler).compute();
-            BigDecimal multiplyResult = MathExpression.compile("multiply(5)", env, freshCompiler).compute();
+            BigDecimal twiceResult = MathExpression.compile("twice(5)", env, freshEngine).compute();
+            BigDecimal multiplyResult = MathExpression.compile("multiply(5)", env, freshEngine).compute();
 
             assertThat(twiceResult).isCloseTo(new BigDecimal("10"), EPSILON);
             assertThat(multiplyResult).isCloseTo(new BigDecimal("15"), EPSILON);

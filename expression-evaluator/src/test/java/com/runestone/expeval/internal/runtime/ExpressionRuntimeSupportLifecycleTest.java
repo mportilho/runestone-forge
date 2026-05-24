@@ -1,19 +1,22 @@
 package com.runestone.expeval.internal.runtime;
 
 import com.runestone.expeval.api.CacheConfig;
+import com.runestone.expeval.api.ExpressionEngine;
+import com.runestone.expeval.api.MathExpression;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests the singleton lifecycle of {@link ExpressionRuntimeSupport}:
- * {@code configure}, {@code reconfigure}, {@code invalidateCache}, and the explicit-compiler
- * overloads introduced in Option C.
+ * {@code configure}, {@code reconfigure}, and {@code invalidateCache}.
  *
  * <p>Every test that mutates the singleton calls {@link ExpressionRuntimeSupport#reconfigure}
  * in {@code @AfterEach} to restore a known baseline for the rest of the suite.
@@ -25,7 +28,7 @@ class ExpressionRuntimeSupportLifecycleTest {
 
     @AfterEach
     void resetSingletonToDefaults() {
-        ExpressionRuntimeSupport.reconfigure(CacheConfig.defaults());
+        ExpressionEngine.reconfigureDefault(CacheConfig.defaults());
     }
 
     // --- configure() ---
@@ -38,21 +41,21 @@ class ExpressionRuntimeSupportLifecycleTest {
         @DisplayName("is a no-op when the singleton is already initialized")
         void isNoOpWhenAlreadyInitialized() {
             // Warm the singleton and capture a cached compiled expression.
-            ExpressionRuntimeSupport first = ExpressionRuntimeSupport.compileMath("50 + 1", ENV);
+            MathExpression first = MathExpression.compile("50 + 1", ENV);
 
             // configure() must be ignored because the singleton exists.
-            ExpressionRuntimeSupport.configure(new CacheConfig(256, null));
+            ExpressionEngine.configureDefault(new CacheConfig(256, null));
 
             // A second compile of the same expression should be a cache hit —
-            // proving the compiler (and its cache) was not replaced.
-            ExpressionRuntimeSupport second = ExpressionRuntimeSupport.compileMath("50 + 1", ENV);
-            assertThat(second.getCompiledExpression()).isSameAs(first.getCompiledExpression());
+            // proving the runtime (and its cache) was not replaced.
+            MathExpression second = MathExpression.compile("50 + 1", ENV);
+            assertThat(compiledExpressionOf(second)).isSameAs(compiledExpressionOf(first));
         }
 
         @Test
         @DisplayName("rejects null CacheConfig")
         void rejectsNullCacheConfig() {
-            assertThatThrownBy(() -> ExpressionRuntimeSupport.configure(null))
+            assertThatThrownBy(() -> ExpressionEngine.configureDefault(null))
                     .isInstanceOf(NullPointerException.class);
         }
     }
@@ -64,27 +67,27 @@ class ExpressionRuntimeSupportLifecycleTest {
     class Reconfigure {
 
         @Test
-        @DisplayName("replaces the compiler even after initialization, clearing the cache")
-        void replacesCompilerAndClearsCache() {
+        @DisplayName("replaces the runtime even after initialization, clearing the cache")
+        void replacesRuntimeAndClearsCache() {
             CompiledExpression before =
-                    ExpressionRuntimeSupport.compileMath("40 + 2", ENV).getCompiledExpression();
+                    compiledExpressionOf(MathExpression.compile("40 + 2", ENV));
 
-            ExpressionRuntimeSupport.reconfigure(CacheConfig.defaults());
+            ExpressionEngine.reconfigureDefault(CacheConfig.defaults());
 
             CompiledExpression after =
-                    ExpressionRuntimeSupport.compileMath("40 + 2", ENV).getCompiledExpression();
+                    compiledExpressionOf(MathExpression.compile("40 + 2", ENV));
             assertThat(after).isNotSameAs(before);
         }
 
         @Test
         @DisplayName("warms the cache again after reconfiguration")
         void warmsTheCacheAfterReconfiguration() {
-            ExpressionRuntimeSupport.reconfigure(CacheConfig.defaults());
+            ExpressionEngine.reconfigureDefault(CacheConfig.defaults());
 
             CompiledExpression first =
-                    ExpressionRuntimeSupport.compileMath("40 + 2", ENV).getCompiledExpression();
+                    compiledExpressionOf(MathExpression.compile("40 + 2", ENV));
             CompiledExpression second =
-                    ExpressionRuntimeSupport.compileMath("40 + 2", ENV).getCompiledExpression();
+                    compiledExpressionOf(MathExpression.compile("40 + 2", ENV));
 
             assertThat(second).isSameAs(first);
         }
@@ -92,7 +95,7 @@ class ExpressionRuntimeSupportLifecycleTest {
         @Test
         @DisplayName("rejects null CacheConfig")
         void rejectsNullCacheConfig() {
-            assertThatThrownBy(() -> ExpressionRuntimeSupport.reconfigure(null))
+            assertThatThrownBy(() -> ExpressionEngine.reconfigureDefault(null))
                     .isInstanceOf(NullPointerException.class);
         }
     }
@@ -107,104 +110,37 @@ class ExpressionRuntimeSupportLifecycleTest {
         @DisplayName("forces a new compilation on the next call")
         void forcesNewCompilationAfterInvalidation() {
             CompiledExpression before =
-                    ExpressionRuntimeSupport.compileMath("30 + 3", ENV).getCompiledExpression();
+                    compiledExpressionOf(MathExpression.compile("30 + 3", ENV));
 
-            ExpressionRuntimeSupport.invalidateCache();
+            ExpressionEngine.invalidateDefaultCache();
 
             CompiledExpression after =
-                    ExpressionRuntimeSupport.compileMath("30 + 3", ENV).getCompiledExpression();
+                    compiledExpressionOf(MathExpression.compile("30 + 3", ENV));
             assertThat(after).isNotSameAs(before);
         }
 
         @Test
         @DisplayName("warms the cache again after the first post-invalidation compilation")
         void warmsTheCacheAfterFirstPostInvalidationCompile() {
-            ExpressionRuntimeSupport.invalidateCache();
+            ExpressionEngine.invalidateDefaultCache();
 
             CompiledExpression afterInvalidation =
-                    ExpressionRuntimeSupport.compileMath("30 + 3", ENV).getCompiledExpression();
+                    compiledExpressionOf(MathExpression.compile("30 + 3", ENV));
             CompiledExpression cachedAgain =
-                    ExpressionRuntimeSupport.compileMath("30 + 3", ENV).getCompiledExpression();
+                    compiledExpressionOf(MathExpression.compile("30 + 3", ENV));
 
             assertThat(cachedAgain).isSameAs(afterInvalidation);
         }
     }
 
-    // --- explicit compiler overloads (Option C) ---
-
-    @Nested
-    @DisplayName("explicit compiler overloads")
-    class ExplicitCompilerOverloads {
-
-        @Test
-        @DisplayName("compileMath with explicit compiler caches within that compiler")
-        void compileMathWithExplicitCompilerCachesWithinThatCompiler() {
-            var compiler = new ExpressionCompiler(CacheConfig.defaults());
-
-            CompiledExpression first =
-                    ExpressionRuntimeSupport.compileMath("7 * 6", ENV, compiler).getCompiledExpression();
-            CompiledExpression second =
-                    ExpressionRuntimeSupport.compileMath("7 * 6", ENV, compiler).getCompiledExpression();
-
-            assertThat(second).isSameAs(first);
-        }
-
-        @Test
-        @DisplayName("compileLogical with explicit compiler caches within that compiler")
-        void compileLogicalWithExplicitCompilerCachesWithinThatCompiler() {
-            var compiler = new ExpressionCompiler(CacheConfig.defaults());
-
-            CompiledExpression first =
-                    ExpressionRuntimeSupport.compileLogical("7 > 6", ENV, compiler).getCompiledExpression();
-            CompiledExpression second =
-                    ExpressionRuntimeSupport.compileLogical("7 > 6", ENV, compiler).getCompiledExpression();
-
-            assertThat(second).isSameAs(first);
-        }
-
-        @Test
-        @DisplayName("compileAssignments with explicit compiler caches within that compiler")
-        void compileAssignmentsWithExplicitCompilerCachesWithinThatCompiler() {
-            var compiler = new ExpressionCompiler(CacheConfig.defaults());
-
-            CompiledExpression first =
-                    ExpressionRuntimeSupport.compileAssignments("x = 7 * 6;", ENV, compiler).getCompiledExpression();
-            CompiledExpression second =
-                    ExpressionRuntimeSupport.compileAssignments("x = 7 * 6;", ENV, compiler).getCompiledExpression();
-
-            assertThat(second).isSameAs(first);
-        }
-
-        @Test
-        @DisplayName("invalidating the explicit compiler does not affect the singleton cache")
-        void invalidatingExplicitCompilerDoesNotAffectSingleton() {
-            var explicitCompiler = new ExpressionCompiler(CacheConfig.defaults());
-
-            // Warm both the singleton and the explicit compiler with the same expression.
-            CompiledExpression singletonEntry =
-                    ExpressionRuntimeSupport.compileMath("8 * 8", ENV).getCompiledExpression();
-            ExpressionRuntimeSupport.compileMath("8 * 8", ENV, explicitCompiler);
-
-            // Invalidate only the explicit compiler.
-            explicitCompiler.invalidateCache();
-
-            // Explicit compiler must produce a new entry (cache was cleared).
-            CompiledExpression explicitAfter =
-                    ExpressionRuntimeSupport.compileMath("8 * 8", ENV, explicitCompiler).getCompiledExpression();
-
-            // Singleton cache must be unaffected.
-            CompiledExpression singletonAfter =
-                    ExpressionRuntimeSupport.compileMath("8 * 8", ENV).getCompiledExpression();
-
-            assertThat(explicitAfter).isNotSameAs(singletonEntry);
-            assertThat(singletonAfter).isSameAs(singletonEntry);
-        }
-
-        @Test
-        @DisplayName("rejects null compiler argument")
-        void rejectsNullCompilerArgument() {
-            assertThatThrownBy(() -> ExpressionRuntimeSupport.compileMath("1 + 1", ENV, null))
-                    .isInstanceOf(NullPointerException.class);
+    private static CompiledExpression compiledExpressionOf(MathExpression expression) {
+        try {
+            Field runtimeField = MathExpression.class.getDeclaredField("runtime");
+            runtimeField.setAccessible(true);
+            ExpressionRuntimeSupport runtime = (ExpressionRuntimeSupport) runtimeField.get(expression);
+            return runtime.getCompiledExpression();
+        } catch (ReflectiveOperationException e) {
+            throw new AssertionError("Unable to inspect compiled expression", e);
         }
     }
 }

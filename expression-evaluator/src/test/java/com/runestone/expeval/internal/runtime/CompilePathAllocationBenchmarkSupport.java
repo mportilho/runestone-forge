@@ -2,6 +2,7 @@ package com.runestone.expeval.internal.runtime;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
+import com.runestone.expeval.api.CacheConfig;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 
 import java.math.BigDecimal;
@@ -45,15 +46,15 @@ public final class CompilePathAllocationBenchmarkSupport {
 
     private final ExpressionEnvironment simpleEnv;
     private final ExpressionEnvironment mathEnv;
-    private final ExpressionCompiler sharedCompiler;
+    private final ExpressionCompilationCache sharedCache;
 
     public CompilePathAllocationBenchmarkSupport() {
         simpleEnv = ExpressionEnvironmentBuilder.empty();
         mathEnv = new ExpressionEnvironmentBuilder().addMathFunctions().build();
-        sharedCompiler = new ExpressionCompiler();
+        sharedCache = new ExpressionCompilationCache(CacheConfig.defaults());
         // Warm the cache so subsequent calls return immediately from Caffeine
-        sharedCompiler.compile(SIMPLE_MATH_EXPRESSION, ExpressionResultType.MATH, simpleEnv);
-        sharedCompiler.compile(FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv);
+        sharedCache.compile(SIMPLE_MATH_EXPRESSION, ExpressionResultType.MATH, simpleEnv);
+        sharedCache.compile(FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv);
     }
 
     /**
@@ -61,9 +62,7 @@ public final class CompilePathAllocationBenchmarkSupport {
      * Measures Smell A only: RuntimeValueFactory + RuntimeCoercionService allocation per call.
      */
     public ExpressionRuntimeSupport compileSimpleCacheHit() {
-        return ExpressionRuntimeSupport.compile(
-            SIMPLE_MATH_EXPRESSION, ExpressionResultType.MATH, simpleEnv, sharedCompiler
-        );
+        return ExpressionRuntimeSupport.from(sharedCache.compile(SIMPLE_MATH_EXPRESSION, ExpressionResultType.MATH, simpleEnv), simpleEnv);
     }
 
     /**
@@ -72,9 +71,7 @@ public final class CompilePathAllocationBenchmarkSupport {
      * many symbols seeded via {@code MutableBindings.seedDefaults()}.
      */
     public ExpressionRuntimeSupport compileFunctionCacheHit() {
-        return ExpressionRuntimeSupport.compile(
-            FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv, sharedCompiler
-        );
+        return ExpressionRuntimeSupport.from(sharedCache.compile(FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv), mathEnv);
     }
 
     /**
@@ -83,10 +80,8 @@ public final class CompilePathAllocationBenchmarkSupport {
      * Use {@code -prof gc} to isolate allocation by comparing against cache-hit.
      */
     public ExpressionRuntimeSupport compileFunctionCacheMiss() {
-        ExpressionCompiler freshCompiler = new ExpressionCompiler();
-        return ExpressionRuntimeSupport.compile(
-            FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv, freshCompiler
-        );
+        ExpressionCompilationCache freshCache = new ExpressionCompilationCache(CacheConfig.defaults());
+        return ExpressionRuntimeSupport.from(freshCache.compile(FUNCTION_CALL_EXPRESSION, ExpressionResultType.MATH, mathEnv), mathEnv);
     }
 
     /**

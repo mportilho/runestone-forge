@@ -2,7 +2,6 @@ package com.runestone.expeval.api;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
 
 import java.util.Map;
@@ -16,12 +15,11 @@ import java.util.Objects;
  * {@code compile} factory methods. Once compiled, the same instance can be evaluated repeatedly
  * by calling {@link #compute(Map)} with the desired variable values.
  *
- * <h2>Singleton vs. injected compiler</h2>
+ * <h2>Singleton vs. configured engine</h2>
  * <p>The two-argument overload {@link #compile(String, ExpressionEnvironment)} uses the JVM-wide
- * singleton {@link ExpressionCompiler}. Use the three-argument overload
- * {@link #compile(String, ExpressionEnvironment, ExpressionCompiler)} when the compiler must be
- * managed externally — for example in tests that need isolated caches or in a Spring application
- * where the compiler is declared as a {@code @Bean}.
+ * singleton. Use {@link ExpressionEngine} when cache configuration and lifecycle must be managed
+ * explicitly — for example in tests that need isolated caches or in a Spring application where the
+ * engine is declared as a {@code @Bean}.
  *
  * <h2>Thread safety</h2>
  * <p>Instances are thread-safe. The same compiled instance may be shared and evaluated
@@ -35,8 +33,12 @@ public final class AssignmentExpression {
         this.runtime = Objects.requireNonNull(runtime, "runtime must not be null");
     }
 
+    static AssignmentExpression from(ExpressionRuntimeSupport runtime) {
+        return new AssignmentExpression(runtime);
+    }
+
     /**
-     * Compiles an assignment block with an empty environment using the JVM-wide singleton compiler.
+     * Compiles an assignment block with an empty environment using the JVM-wide singleton runtime.
      *
      * @param source expression source text; must not be blank
      * @return a compiled expression ready for evaluation
@@ -47,7 +49,7 @@ public final class AssignmentExpression {
     }
 
     /**
-     * Compiles an assignment block with the given environment using the JVM-wide singleton compiler.
+     * Compiles an assignment block with the given environment using the JVM-wide singleton runtime.
      *
      * @param source      expression source text; must not be blank
      * @param environment execution environment providing functions and external symbols;
@@ -56,29 +58,21 @@ public final class AssignmentExpression {
      * @throws ExpressionCompilationException if the expression has semantic errors
      */
     public static AssignmentExpression compile(String source, ExpressionEnvironment environment) {
-        return new AssignmentExpression(ExpressionRuntimeSupport.compileAssignments(source, environment));
+        return ExpressionEngine.defaultEngine().compileAssignments(source, environment);
     }
 
     /**
-     * Compiles an assignment block with the given environment using an explicit compiler.
-     *
-     * <p>Use this overload when the compiler is managed externally (DI / Spring {@code @Bean})
-     * and its cache lifecycle must be controlled independently of the JVM-wide singleton:
-     *
-     * <pre>{@code
-     * @Autowired ExpressionCompiler compiler;
-     *
-     * AssignmentExpression expr = AssignmentExpression.compile("x = a + b", environment, compiler);
-     * }</pre>
+     * Compiles an assignment block with the given environment using an explicit engine.
      *
      * @param source      expression source text; must not be blank
      * @param environment execution environment; must not be {@code null}
-     * @param compiler    compiler instance to use; must not be {@code null}
+     * @param engine      expression engine to use; must not be {@code null}
      * @return a compiled expression ready for evaluation
      * @throws ExpressionCompilationException if the expression has semantic errors
      */
-    public static AssignmentExpression compile(String source, ExpressionEnvironment environment, ExpressionCompiler compiler) {
-        return new AssignmentExpression(ExpressionRuntimeSupport.compileAssignments(source, environment, compiler));
+    public static AssignmentExpression compile(String source, ExpressionEnvironment environment, ExpressionEngine engine) {
+        return Objects.requireNonNull(engine, "engine must not be null")
+                .compileAssignments(source, environment);
     }
 
     /**
@@ -99,7 +93,15 @@ public final class AssignmentExpression {
      * @return a {@link ValidationResult} describing any compilation issues found
      */
     public static ValidationResult validate(String source, ExpressionEnvironment environment) {
-        return ExpressionRuntimeSupport.validateAssignments(source, environment);
+        return ExpressionEngine.defaultEngine().validateAssignments(source, environment);
+    }
+
+    /**
+     * Validates an assignment block source text against the given environment using an explicit engine.
+     */
+    public static ValidationResult validate(String source, ExpressionEnvironment environment, ExpressionEngine engine) {
+        return Objects.requireNonNull(engine, "engine must not be null")
+                .validateAssignments(source, environment);
     }
 
     /**

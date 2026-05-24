@@ -1,9 +1,10 @@
 package com.runestone.expeval.perf.jmh.compilation;
 
+import com.runestone.expeval.api.CacheConfig;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
+import com.runestone.expeval.internal.runtime.ExpressionCompilationCache;
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -27,7 +28,7 @@ public class ExpressionEvaluatorExecutionPlanBenchmark {
 
     @Benchmark
     public Object compileMathLiteralDense(CompileState state) {
-        return new ExpressionCompiler().compile(
+        return new ExpressionCompilationCache(CacheConfig.defaults()).compile(
             MATH_LITERAL_DENSE_EXPRESSION,
             ExpressionResultType.MATH,
             state.environment
@@ -36,7 +37,7 @@ public class ExpressionEvaluatorExecutionPlanBenchmark {
 
     @Benchmark
     public Object compileLogicalMixedLiteralDense(CompileState state) {
-        return new ExpressionCompiler().compile(
+        return new ExpressionCompilationCache(CacheConfig.defaults()).compile(
             LOGICAL_MIXED_LITERAL_EXPRESSION,
             ExpressionResultType.LOGICAL,
             state.environment
@@ -73,8 +74,9 @@ public class ExpressionEvaluatorExecutionPlanBenchmark {
         @Setup(Level.Trial)
         public void setUp() {
             ExpressionEnvironment environment = ExpressionEnvironmentBuilder.empty();
-            mathRuntime = ExpressionRuntimeSupport.compileMath(MATH_LITERAL_DENSE_EXPRESSION, environment);
-            logicalRuntime = ExpressionRuntimeSupport.compileLogical(LOGICAL_MIXED_LITERAL_EXPRESSION, environment);
+            ExpressionCompilationCache cache = new ExpressionCompilationCache(CacheConfig.defaults());
+            mathRuntime = ExpressionRuntimeSupport.from(cache.compile(MATH_LITERAL_DENSE_EXPRESSION, ExpressionResultType.MATH, environment), environment);
+            logicalRuntime = ExpressionRuntimeSupport.from(cache.compile(LOGICAL_MIXED_LITERAL_EXPRESSION, ExpressionResultType.LOGICAL, environment), environment);
         }
     }
 

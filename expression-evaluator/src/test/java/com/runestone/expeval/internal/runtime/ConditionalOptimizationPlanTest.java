@@ -48,7 +48,9 @@ class ConditionalOptimizationPlanTest {
     @Test
     @DisplayName("Evaluate simple conditional correctly - then branch")
     void evaluateSimpleConditionalThenBranch() {
-        ExpressionRuntimeSupport runtime = ExpressionRuntimeSupport.compileMath("if x > 0 then 1 else 0 endif", ENV);
+        ExpressionRuntimeSupport runtime = ExpressionRuntimeSupport.from(
+                compiler.compile("if x > 0 then 1 else 0 endif", ExpressionResultType.MATH, ENV),
+                ENV);
         
         BigDecimal result = runtime.computeMath(Map.of("x", new BigDecimal("10")));
         assertThat(result).isEqualByComparingTo("1");
@@ -57,7 +59,9 @@ class ConditionalOptimizationPlanTest {
     @Test
     @DisplayName("Evaluate simple conditional correctly - else branch")
     void evaluateSimpleConditionalElseBranch() {
-        ExpressionRuntimeSupport runtime = ExpressionRuntimeSupport.compileMath("if x > 0 then 1 else 0 endif", ENV);
+        ExpressionRuntimeSupport runtime = ExpressionRuntimeSupport.from(
+                compiler.compile("if x > 0 then 1 else 0 endif", ExpressionResultType.MATH, ENV),
+                ENV);
         
         BigDecimal result = runtime.computeMath(Map.of("x", new BigDecimal("-10")));
         assertThat(result).isEqualByComparingTo("0");

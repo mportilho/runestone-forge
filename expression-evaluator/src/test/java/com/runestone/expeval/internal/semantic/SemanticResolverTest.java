@@ -8,8 +8,10 @@ import com.runestone.expeval.internal.ast.ExpressionFileNode;
 import com.runestone.expeval.internal.ast.ExpressionNode;
 import com.runestone.expeval.internal.ast.FunctionCallNode;
 import com.runestone.expeval.internal.ast.IdentifierNode;
+import com.runestone.expeval.api.CacheConfig;
 import com.runestone.expeval.internal.runtime.CompiledExpression;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
+import com.runestone.expeval.internal.runtime.ExpressionCompilationCache;
+import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.runtime.SemanticModel;
 import com.runestone.expeval.internal.runtime.SymbolRef;
@@ -26,8 +28,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SemanticResolverTest {
 
-    private final ExpressionCompiler compiler = new ExpressionCompiler();
-
     @Test
     void shouldResolveTypesAndBuildSymbolIndexesForAssignmentsAndComparisons() {
         ExpressionEnvironment environment = new ExpressionEnvironmentBuilder()
@@ -36,7 +36,7 @@ class SemanticResolverTest {
             .registerExternalSymbol("limit", BigDecimal.ZERO, true)
             .build();
 
-        CompiledExpression compiled = compiler.compile(
+        CompiledExpression compiled = new ExpressionCompilationCache(CacheConfig.defaults()).compile(
             "fee = principal + principal * rate; fee > limit",
             ExpressionResultType.LOGICAL,
             environment
@@ -74,7 +74,7 @@ class SemanticResolverTest {
             .registerExternalSymbol("principal", BigDecimal.TEN, true)
             .build();
 
-        CompiledExpression compiled = compiler.compile(
+        CompiledExpression compiled = new ExpressionCompilationCache(CacheConfig.defaults()).compile(
             "bonus(principal) + 1",
             ExpressionResultType.MATH,
             environment
@@ -92,7 +92,7 @@ class SemanticResolverTest {
     void shouldClassifyQuotedStringLiteralsBeforeTemporalParsing() {
         ExpressionEnvironment environment = ObjectNavigationBenchmarkSupport.typedEnvironment();
 
-        CompiledExpression compiled = compiler.compile(
+        CompiledExpression compiled = new ExpressionCompilationCache(CacheConfig.defaults()).compile(
             "usuario.endereco.bairro.codigo = \"BAT-100\"",
             ExpressionResultType.LOGICAL,
             environment

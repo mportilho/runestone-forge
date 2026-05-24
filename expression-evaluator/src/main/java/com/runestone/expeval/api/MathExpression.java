@@ -2,7 +2,6 @@ package com.runestone.expeval.api;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
 
 import java.math.BigDecimal;
@@ -16,12 +15,11 @@ import java.util.Objects;
  * instance can be evaluated repeatedly by calling {@link #compute(Map)} with the desired variable
  * values.
  *
- * <h2>Singleton vs. injected compiler</h2>
+ * <h2>Singleton vs. configured engine</h2>
  * <p>The two-argument overload {@link #compile(String, ExpressionEnvironment)} uses the JVM-wide
- * singleton {@link ExpressionCompiler}. Use the three-argument overload
- * {@link #compile(String, ExpressionEnvironment, ExpressionCompiler)} when the compiler must be
- * managed externally — for example in tests that need isolated caches or in a Spring application
- * where the compiler is declared as a {@code @Bean}.
+ * singleton. Use {@link ExpressionEngine} when cache configuration and lifecycle must be managed
+ * explicitly — for example in tests that need isolated caches or in a Spring application where the
+ * engine is declared as a {@code @Bean}.
  *
  * <h2>Thread safety</h2>
  * <p>Instances are thread-safe. The same compiled instance may be shared and evaluated
@@ -35,8 +33,12 @@ public final class MathExpression {
         this.runtime = Objects.requireNonNull(runtime, "runtime must not be null");
     }
 
+    static MathExpression from(ExpressionRuntimeSupport runtime) {
+        return new MathExpression(runtime);
+    }
+
     /**
-     * Compiles a math expression with an empty environment using the JVM-wide singleton compiler.
+     * Compiles a math expression with an empty environment using the JVM-wide singleton runtime.
      *
      * @param source expression source text; must not be blank
      * @return a compiled expression ready for evaluation
@@ -47,7 +49,7 @@ public final class MathExpression {
     }
 
     /**
-     * Compiles a math expression with the given environment using the JVM-wide singleton compiler.
+     * Compiles a math expression with the given environment using the JVM-wide singleton runtime.
      *
      * @param source      expression source text; must not be blank
      * @param environment execution environment providing functions and external symbols;
@@ -56,29 +58,32 @@ public final class MathExpression {
      * @throws ExpressionCompilationException if the expression has semantic errors
      */
     public static MathExpression compile(String source, ExpressionEnvironment environment) {
-        return new MathExpression(ExpressionRuntimeSupport.compileMath(source, environment));
+        return ExpressionEngine.defaultEngine().compileMath(source, environment);
     }
 
     /**
-     * Compiles a math expression with the given environment using an explicit compiler.
+     * Compiles a math expression with the given environment using an explicit engine.
      *
-     * <p>Use this overload when the compiler is managed externally (DI / Spring {@code @Bean})
-     * and its cache lifecycle must be controlled independently of the JVM-wide singleton:
+     * <p>Use this overload when cache configuration and lifecycle must be controlled independently
+     * of the JVM-wide singleton:
      *
      * <pre>{@code
-     * @Autowired ExpressionCompiler compiler;
+     * ExpressionEngine engine = ExpressionEngine.builder()
+     *         .cacheConfig(new CacheConfig(4_096, Duration.ofHours(1)))
+     *         .build();
      *
-     * MathExpression expr = MathExpression.compile("a + b", environment, compiler);
+     * MathExpression expr = MathExpression.compile("a + b", environment, engine);
      * }</pre>
      *
      * @param source      expression source text; must not be blank
      * @param environment execution environment; must not be {@code null}
-     * @param compiler    compiler instance to use; must not be {@code null}
+     * @param engine      expression engine to use; must not be {@code null}
      * @return a compiled expression ready for evaluation
      * @throws ExpressionCompilationException if the expression has semantic errors
      */
-    public static MathExpression compile(String source, ExpressionEnvironment environment, ExpressionCompiler compiler) {
-        return new MathExpression(ExpressionRuntimeSupport.compileMath(source, environment, compiler));
+    public static MathExpression compile(String source, ExpressionEnvironment environment, ExpressionEngine engine) {
+        return Objects.requireNonNull(engine, "engine must not be null")
+                .compileMath(source, environment);
     }
 
     /**
@@ -99,7 +104,15 @@ public final class MathExpression {
      * @return a {@link ValidationResult} describing any compilation issues found
      */
     public static ValidationResult validate(String source, ExpressionEnvironment environment) {
-        return ExpressionRuntimeSupport.validateMath(source, environment);
+        return ExpressionEngine.defaultEngine().validateMath(source, environment);
+    }
+
+    /**
+     * Validates a math expression source text against the given environment using an explicit engine.
+     */
+    public static ValidationResult validate(String source, ExpressionEnvironment environment, ExpressionEngine engine) {
+        return Objects.requireNonNull(engine, "engine must not be null")
+                .validateMath(source, environment);
     }
 
     /**

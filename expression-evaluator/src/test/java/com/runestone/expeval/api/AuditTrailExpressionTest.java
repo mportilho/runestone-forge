@@ -240,8 +240,7 @@ class AuditTrailExpressionTest {
                     .registerExternalSymbol("CONST_X", new BigDecimal("42"), false)
                     .build();
 
-            AuditResult<BigDecimal> result = MathExpression.compile("CONST_X + 1", env,
-                            new com.runestone.expeval.internal.runtime.ExpressionCompiler())
+            AuditResult<BigDecimal> result = MathExpression.compile("CONST_X + 1", env, new ExpressionEngine())
                     .computeWithAudit();
 
             assertThat(result.trace().events())

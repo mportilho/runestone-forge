@@ -97,7 +97,7 @@ expr.compute(Map.of("x", new BigDecimal("0.1")));
 
 ## Global Cache
 
-The singleton `ExpressionCompiler` maintains one Caffeine cache shared across all environments in the JVM. Cache size and TTL are set at startup via system properties and cannot be changed at runtime. If you need independent caches, create a dedicated `ExpressionCompiler` instance for each scope and pass it explicitly to `compile()`. See [Advanced Topics](08-advanced-topics.md#using-a-custom-compiler).
+The static `compile(...)` methods use one Caffeine cache shared across all environments in the JVM. Cache size and TTL are set at startup via system properties. If you need independent caches, create a dedicated `ExpressionEngine` instance for each scope. See [Advanced Topics](08-advanced-topics.md#using-a-custom-engine).
 
 ## Navigation Depth
 

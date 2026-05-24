@@ -2,7 +2,6 @@ package com.runestone.expeval.api;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
 
 import java.util.Map;
@@ -15,12 +14,11 @@ import java.util.Objects;
  * instance can be evaluated repeatedly by calling {@link #compute(Map)} with the desired variable
  * values.
  *
- * <h2>Singleton vs. injected compiler</h2>
+ * <h2>Singleton vs. configured engine</h2>
  * <p>The two-argument overload {@link #compile(String, ExpressionEnvironment)} uses the JVM-wide
- * singleton {@link ExpressionCompiler}. Use the three-argument overload
- * {@link #compile(String, ExpressionEnvironment, ExpressionCompiler)} when the compiler must be
- * managed externally — for example in tests that need isolated caches or in a Spring application
- * where the compiler is declared as a {@code @Bean}.
+ * singleton. Use {@link ExpressionEngine} when cache configuration and lifecycle must be managed
+ * explicitly — for example in tests that need isolated caches or in a Spring application where the
+ * engine is declared as a {@code @Bean}.
  *
  * <h2>Thread safety</h2>
  * <p>Instances are thread-safe. The same compiled instance may be shared and evaluated
@@ -34,8 +32,12 @@ public final class LogicalExpression {
         this.runtime = Objects.requireNonNull(runtime, "runtime must not be null");
     }
 
+    static LogicalExpression from(ExpressionRuntimeSupport runtime) {
+        return new LogicalExpression(runtime);
+    }
+
     /**
-     * Compiles a logical expression with an empty environment using the JVM-wide singleton compiler.
+     * Compiles a logical expression with an empty environment using the JVM-wide singleton runtime.
      *
      * @param source expression source text; must not be blank
      * @return a compiled expression ready for evaluation
@@ -46,7 +48,7 @@ public final class LogicalExpression {
     }
 
     /**
-     * Compiles a logical expression with the given environment using the JVM-wide singleton compiler.
+     * Compiles a logical expression with the given environment using the JVM-wide singleton runtime.
      *
      * @param source      expression source text; must not be blank
      * @param environment execution environment providing functions and external symbols;
@@ -55,29 +57,21 @@ public final class LogicalExpression {
      * @throws ExpressionCompilationException if the expression has semantic errors
      */
     public static LogicalExpression compile(String source, ExpressionEnvironment environment) {
-        return new LogicalExpression(ExpressionRuntimeSupport.compileLogical(source, environment));
+        return ExpressionEngine.defaultEngine().compileLogical(source, environment);
     }
 
     /**
-     * Compiles a logical expression with the given environment using an explicit compiler.
-     *
-     * <p>Use this overload when the compiler is managed externally (DI / Spring {@code @Bean})
-     * and its cache lifecycle must be controlled independently of the JVM-wide singleton:
-     *
-     * <pre>{@code
-     * @Autowired ExpressionCompiler compiler;
-     *
-     * LogicalExpression expr = LogicalExpression.compile("a > b", environment, compiler);
-     * }</pre>
+     * Compiles a logical expression with the given environment using an explicit engine.
      *
      * @param source      expression source text; must not be blank
      * @param environment execution environment; must not be {@code null}
-     * @param compiler    compiler instance to use; must not be {@code null}
+     * @param engine      expression engine to use; must not be {@code null}
      * @return a compiled expression ready for evaluation
      * @throws ExpressionCompilationException if the expression has semantic errors
      */
-    public static LogicalExpression compile(String source, ExpressionEnvironment environment, ExpressionCompiler compiler) {
-        return new LogicalExpression(ExpressionRuntimeSupport.compileLogical(source, environment, compiler));
+    public static LogicalExpression compile(String source, ExpressionEnvironment environment, ExpressionEngine engine) {
+        return Objects.requireNonNull(engine, "engine must not be null")
+                .compileLogical(source, environment);
     }
 
     /**
@@ -98,7 +92,15 @@ public final class LogicalExpression {
      * @return a {@link ValidationResult} describing any compilation issues found
      */
     public static ValidationResult validate(String source, ExpressionEnvironment environment) {
-        return ExpressionRuntimeSupport.validateLogical(source, environment);
+        return ExpressionEngine.defaultEngine().validateLogical(source, environment);
+    }
+
+    /**
+     * Validates a logical expression source text against the given environment using an explicit engine.
+     */
+    public static ValidationResult validate(String source, ExpressionEnvironment environment, ExpressionEngine engine) {
+        return Objects.requireNonNull(engine, "engine must not be null")
+                .validateLogical(source, environment);
     }
 
     /**

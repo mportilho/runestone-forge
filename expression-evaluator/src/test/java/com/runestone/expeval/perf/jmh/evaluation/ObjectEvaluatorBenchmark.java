@@ -1,6 +1,6 @@
 package com.runestone.expeval.perf.jmh.evaluation;
 
-import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
+import com.runestone.expeval.api.MathExpression;
 import com.runestone.expeval.perf.ExpressionBenchmarkSupport;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -38,7 +38,7 @@ public class ObjectEvaluatorBenchmark {
 
     @Benchmark
     public BigDecimal literalDense(LiteralDenseState s) {
-        return s.runtime.computeMath(ExpressionBenchmarkSupport.literalSeedToMap(
+        return s.expression.compute(ExpressionBenchmarkSupport.literalSeedToMap(
             ExpressionBenchmarkSupport.literalSeed(s.index++)));
     }
 
@@ -46,7 +46,7 @@ public class ObjectEvaluatorBenchmark {
 
     @Benchmark
     public BigDecimal variableChurn(VariableChurnState s) {
-        return s.runtime.computeMath(ExpressionBenchmarkSupport.frameToMap(
+        return s.expression.compute(ExpressionBenchmarkSupport.frameToMap(
             ExpressionBenchmarkSupport.variableFrame(s.index++)));
     }
 
@@ -54,7 +54,7 @@ public class ObjectEvaluatorBenchmark {
 
     @Benchmark
     public BigDecimal userFunction(UserFunctionState s) {
-        return s.runtime.computeMath(ExpressionBenchmarkSupport.frameToMap(
+        return s.expression.compute(ExpressionBenchmarkSupport.frameToMap(
             ExpressionBenchmarkSupport.userFunctionFrame(s.index++)));
     }
 
@@ -62,7 +62,7 @@ public class ObjectEvaluatorBenchmark {
 
     @Benchmark
     public BigDecimal conditional(ConditionalState s) {
-        return s.runtime.computeMath(ExpressionBenchmarkSupport.frameToMap(
+        return s.expression.compute(ExpressionBenchmarkSupport.frameToMap(
             ExpressionBenchmarkSupport.variableFrame(s.index++)));
     }
 
@@ -70,7 +70,7 @@ public class ObjectEvaluatorBenchmark {
 
     @Benchmark
     public BigDecimal logarithmChain(LogarithmChainState s) {
-        return s.runtime.computeMath(ExpressionBenchmarkSupport.frameToMap(
+        return s.expression.compute(ExpressionBenchmarkSupport.frameToMap(
             ExpressionBenchmarkSupport.variableFrame(s.index++)));
     }
 
@@ -78,7 +78,7 @@ public class ObjectEvaluatorBenchmark {
 
     @Benchmark
     public BigDecimal powerChain(PowerChainState s) {
-        return s.runtime.computeMath(ExpressionBenchmarkSupport.frameToMap(
+        return s.expression.compute(ExpressionBenchmarkSupport.frameToMap(
             ExpressionBenchmarkSupport.variableFrame(s.index++)));
     }
 
@@ -86,12 +86,12 @@ public class ObjectEvaluatorBenchmark {
 
     @State(Scope.Thread)
     public static class LiteralDenseState {
-        ExpressionRuntimeSupport runtime;
+        MathExpression expression;
         int index;
 
         @Setup(Level.Trial)
         public void setUp() {
-            runtime = ExpressionRuntimeSupport.compileMath(
+            expression = MathExpression.compile(
                 ExpressionBenchmarkSupport.LITERAL_DENSE_EXPRESSION,
                 ExpressionBenchmarkSupport.emptyEnvironment());
         }
@@ -99,12 +99,12 @@ public class ObjectEvaluatorBenchmark {
 
     @State(Scope.Thread)
     public static class VariableChurnState {
-        ExpressionRuntimeSupport runtime;
+        MathExpression expression;
         int index;
 
         @Setup(Level.Trial)
         public void setUp() {
-            runtime = ExpressionRuntimeSupport.compileMath(
+            expression = MathExpression.compile(
                 ExpressionBenchmarkSupport.VARIABLE_CHURN_EXPRESSION,
                 ExpressionBenchmarkSupport.emptyEnvironment());
         }
@@ -112,12 +112,12 @@ public class ObjectEvaluatorBenchmark {
 
     @State(Scope.Thread)
     public static class UserFunctionState {
-        ExpressionRuntimeSupport runtime;
+        MathExpression expression;
         int index;
 
         @Setup(Level.Trial)
         public void setUp() {
-            runtime = ExpressionRuntimeSupport.compileMath(
+            expression = MathExpression.compile(
                 ExpressionBenchmarkSupport.USER_FUNCTION_EXPRESSION,
                 ExpressionBenchmarkSupport.userFunctionEnvironment());
         }
@@ -125,12 +125,12 @@ public class ObjectEvaluatorBenchmark {
 
     @State(Scope.Thread)
     public static class ConditionalState {
-        ExpressionRuntimeSupport runtime;
+        MathExpression expression;
         int index;
 
         @Setup(Level.Trial)
         public void setUp() {
-            runtime = ExpressionRuntimeSupport.compileMath(
+            expression = MathExpression.compile(
                 ExpressionBenchmarkSupport.CONDITIONAL_EXPRESSION,
                 ExpressionBenchmarkSupport.emptyEnvironment());
         }
@@ -138,12 +138,12 @@ public class ObjectEvaluatorBenchmark {
 
     @State(Scope.Thread)
     public static class LogarithmChainState {
-        ExpressionRuntimeSupport runtime;
+        MathExpression expression;
         int index;
 
         @Setup(Level.Trial)
         public void setUp() {
-            runtime = ExpressionRuntimeSupport.compileMath(
+            expression = MathExpression.compile(
                 ExpressionBenchmarkSupport.LOGARITHM_CHAIN_EXPRESSION,
                 ExpressionBenchmarkSupport.logarithmEnvironment());
         }
@@ -151,12 +151,12 @@ public class ObjectEvaluatorBenchmark {
 
     @State(Scope.Thread)
     public static class PowerChainState {
-        ExpressionRuntimeSupport runtime;
+        MathExpression expression;
         int index;
 
         @Setup(Level.Trial)
         public void setUp() {
-            runtime = ExpressionRuntimeSupport.compileMath(
+            expression = MathExpression.compile(
                 ExpressionBenchmarkSupport.POWER_CHAIN_EXPRESSION,
                 ExpressionBenchmarkSupport.emptyEnvironment());
         }

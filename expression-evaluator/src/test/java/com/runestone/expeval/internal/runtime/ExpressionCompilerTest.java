@@ -1,14 +1,11 @@
-package com.runestone.expeval.internal.compiler;
+package com.runestone.expeval.internal.runtime;
 
 import com.runestone.expeval.api.CompilationIssue;
-import com.runestone.expeval.api.ExpressionCompilationException;
 import com.runestone.expeval.api.IssueCode;
+import com.runestone.expeval.api.SemanticResolutionException;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
-import com.runestone.expeval.internal.runtime.CompiledExpression;
-import com.runestone.expeval.internal.runtime.ExpressionCompiler;
-import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -25,9 +22,9 @@ class ExpressionCompilerTest {
     void shouldRejectUnknownFunctionsDuringCompilation() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
 
-        assertThatThrownBy(() -> ExpressionRuntimeSupport.compile("missing() + 1", ExpressionResultType.MATH, environment))
-            .isInstanceOf(ExpressionCompilationException.class)
-            .extracting(exception -> ((ExpressionCompilationException) exception).issues())
+        assertThatThrownBy(() -> compiler.compile("missing() + 1", ExpressionResultType.MATH, environment))
+            .isInstanceOf(SemanticResolutionException.class)
+            .extracting(exception -> ((SemanticResolutionException) exception).issues())
             .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(CompilationIssue.class))
             .extracting(CompilationIssue::code)
             .contains(IssueCode.UNKNOWN_FUNCTION);
@@ -39,9 +36,9 @@ class ExpressionCompilerTest {
             .registerStaticProvider(ProviderFixture.class)
             .build();
 
-        assertThatThrownBy(() -> ExpressionRuntimeSupport.compile("bonus(1, 2)", ExpressionResultType.MATH, environment))
-            .isInstanceOf(ExpressionCompilationException.class)
-            .extracting(exception -> ((ExpressionCompilationException) exception).issues())
+        assertThatThrownBy(() -> compiler.compile("bonus(1, 2)", ExpressionResultType.MATH, environment))
+            .isInstanceOf(SemanticResolutionException.class)
+            .extracting(exception -> ((SemanticResolutionException) exception).issues())
             .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(CompilationIssue.class))
             .extracting(CompilationIssue::code)
             .contains(IssueCode.INVALID_FUNCTION_ARITY);
@@ -53,16 +50,16 @@ class ExpressionCompilerTest {
             .registerStaticProvider(ProviderFixture.class)
             .build();
 
-        assertThatThrownBy(() -> ExpressionRuntimeSupport.compile("pick(value) + 1", ExpressionResultType.MATH, environment))
-            .isInstanceOf(ExpressionCompilationException.class)
-            .extracting(exception -> ((ExpressionCompilationException) exception).issues())
+        assertThatThrownBy(() -> compiler.compile("pick(value) + 1", ExpressionResultType.MATH, environment))
+            .isInstanceOf(SemanticResolutionException.class)
+            .extracting(exception -> ((SemanticResolutionException) exception).issues())
             .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(CompilationIssue.class))
             .extracting(CompilationIssue::code)
             .contains(IssueCode.AMBIGUOUS_FUNCTION);
     }
 
     @Test
-    void shouldReuseCompiledExpressionsFromTheCacheForTheSameEnvironment() {
+    void shouldCompileRepeatedlyForTheSameEnvironment() {
         ExpressionEnvironment environment = new ExpressionEnvironmentBuilder()
             .registerStaticProvider(ProviderFixture.class)
             .registerExternalSymbol("principal", BigDecimal.ONE, true)
@@ -71,11 +68,12 @@ class ExpressionCompilerTest {
         CompiledExpression first = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, environment);
         CompiledExpression second = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, environment);
 
-        assertThat(second).isSameAs(first);
+        assertThat(first).isNotNull();
+        assertThat(second).isNotSameAs(first);
     }
 
     @Test
-    void shouldShareCacheAcrossEquivalentEnvironmentsBuiltIndependently() {
+    void shouldCompileEquivalentEnvironmentsBuiltIndependently() {
         ExpressionEnvironment env1 = new ExpressionEnvironmentBuilder()
             .registerStaticProvider(ProviderFixture.class)
             .registerExternalSymbol("principal", BigDecimal.ONE, true)
@@ -88,23 +86,23 @@ class ExpressionCompilerTest {
         CompiledExpression first = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, env1);
         CompiledExpression second = compiler.compile("bonus(principal) + 1", ExpressionResultType.MATH, env2);
 
-        assertThat(second).isSameAs(first);
+        assertThat(first).isNotNull();
+        assertThat(second).isNotNull();
     }
 
     @Test
-    void shouldCacheCompiledExpressionWithFoldedPropertyChain() {
+    void shouldCompileExpressionWithFoldedPropertyChain() {
         ExpressionEnvironment environment = new ExpressionEnvironmentBuilder()
             .registerExternalSymbol("prices", List.of(BigDecimal.ONE, BigDecimal.TEN), false)
             .build();
 
-        CompiledExpression first = compiler.compile("prices[1]", ExpressionResultType.MATH, environment);
-        CompiledExpression second = compiler.compile("prices[1]", ExpressionResultType.MATH, environment);
+        CompiledExpression result = compiler.compile("prices[1]", ExpressionResultType.MATH, environment);
 
-        assertThat(second).isSameAs(first);
+        assertThat(result).isNotNull();
     }
 
     @Test
-    void shouldNotShareCacheAcrossDifferentInstanceProviderInstances() {
+    void shouldCompileDifferentInstanceProviderInstances() {
         ExpressionEnvironment env1 = new ExpressionEnvironmentBuilder()
             .registerInstanceProvider(new InstanceProviderFixture(BigDecimal.ONE))
             .build();
@@ -115,7 +113,8 @@ class ExpressionCompilerTest {
         CompiledExpression first = compiler.compile("multiply(2)", ExpressionResultType.MATH, env1);
         CompiledExpression second = compiler.compile("multiply(2)", ExpressionResultType.MATH, env2);
 
-        assertThat(second).isNotSameAs(first);
+        assertThat(first).isNotNull();
+        assertThat(second).isNotNull();
     }
 
     public static final class ProviderFixture {

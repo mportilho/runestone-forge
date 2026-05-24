@@ -3,11 +3,11 @@ package com.runestone.expeval.api;
 import java.time.Duration;
 
 /**
- * Cache configuration for the expression compiler.
+ * Cache configuration for an {@link ExpressionEngine}.
  *
- * <p>Instances are immutable and can be passed to
- * {@link com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport#configure(CacheConfig)}
- * before the first compilation to override the JVM-wide singleton cache settings.
+ * <p>Instances are immutable and can be passed to {@link ExpressionEngine#ExpressionEngine(CacheConfig)}
+ * or {@link ExpressionEngine.Builder#cacheConfig(CacheConfig)} to create an engine with an isolated
+ * compilation cache.
  *
  * <p>System-property defaults (read at first access):
  * <ul>

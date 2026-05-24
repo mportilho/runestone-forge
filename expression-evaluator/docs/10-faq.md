@@ -33,11 +33,11 @@ Set system properties before the JVM starts:
 -Dexpeval.cache.ttlSeconds=3600
 ```
 
-For isolated cache control per module, create a dedicated `ExpressionCompiler`:
+For isolated cache control per module, create a dedicated `ExpressionEngine`:
 
 ```java
-ExpressionCompiler compiler = new ExpressionCompiler(CacheConfig.of(256, Duration.ofMinutes(30)));
-MathExpression expr = MathExpression.compile("...", env, compiler);
+ExpressionEngine engine = new ExpressionEngine(new CacheConfig(256, Duration.ofMinutes(30)));
+MathExpression expr = engine.compileMath("...", env);
 ```
 
 ## Is it thread-safe to share one `MathExpression` across threads?

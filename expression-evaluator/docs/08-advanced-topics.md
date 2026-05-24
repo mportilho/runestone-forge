@@ -64,18 +64,19 @@ CompletableFuture<BigDecimal> f2 = CompletableFuture.supplyAsync(() ->
 
 `currDate`, `currTime`, and `currDateTime` are re-evaluated on each `compute()` call. Multiple references to `currDate` within a single expression resolve to the same instant (cached inside the `ExecutionScope` for that call). Across calls, each gets a fresh value.
 
-## Using a Custom Compiler
+## Using a Custom Engine
 
-By default, all expressions share a JVM-wide singleton `ExpressionCompiler` with a shared Caffeine cache. If you need separate cache lifecycle, isolation between tenants, or different TTL policies per module, pass an explicit compiler:
+By default, the static `compile(...)` methods use a JVM-wide singleton with a shared Caffeine cache. If you need separate cache lifecycle, isolation between tenants, or different TTL policies per module, create an explicit `ExpressionEngine`:
 
 ```java
-CacheConfig config = CacheConfig.of(512, Duration.ofHours(1));
-ExpressionCompiler compiler = new ExpressionCompiler(config);
+ExpressionEngine engine = ExpressionEngine.builder()
+    .cacheConfig(new CacheConfig(512, Duration.ofHours(1)))
+    .build();
 
-MathExpression expr = MathExpression.compile("a + b", env, compiler);
+MathExpression expr = engine.compileMath("a + b", env);
 ```
 
-The compiler is independent of the environment. You can combine any compiler with any environment. When the compiler is garbage-collected, its cache is released.
+The engine is independent of the environment. You can combine any engine with any environment. When the engine is garbage-collected, its cache is released.
 
 ## Custom Type Coercion
 

@@ -14,6 +14,7 @@ Verified reference for the current `expression-evaluator` runtime. Use this docu
 - `MathExpression.validate(...)`
 - `LogicalExpression.validate(...)`
 - `AssignmentExpression.validate(...)`
+- `ExpressionEngine`
 
 ### Evaluation entry points
 
@@ -27,8 +28,7 @@ Verified reference for the current `expression-evaluator` runtime. Use this docu
 - `ExpressionEnvironment.builder()`
 - `ExpressionEnvironmentBuilder.empty()`
 - `CacheConfig`
-- `ExpressionRuntimeSupport`
-- `ExpressionCompiler`
+- `ExpressionEngine`
 
 The default environment is empty. No function providers are registered unless the caller adds them explicitly.
 
@@ -58,7 +58,7 @@ source string
 5. `MathEvaluator` / `LogicalEvaluator`
    Execute the compiled plan inside an `ExecutionScope`.
 
-`ExpressionCompiler` caches the compiled result by `(source, environmentId, resultType)`.
+`ExpressionEngine` owns the compilation cache. Entries are keyed by `(source, environmentId, resultType)`.
 
 ---
 
@@ -660,22 +660,22 @@ Defaults come from JVM properties:
 - `expeval.cache.maximumSize` default `1024`
 - `expeval.cache.ttlSeconds` default `0` meaning no TTL
 
-### Singleton compiler lifecycle
+### Default engine lifecycle
 
-`ExpressionRuntimeSupport` manages a lazily-initialized JVM-wide `ExpressionCompiler`.
+The static public APIs use a lazily-initialized JVM-wide `ExpressionEngine`.
 
 Available controls:
 
-- `configure(CacheConfig)`
+- `ExpressionEngine.configureDefault(CacheConfig)`
   Applies only if the singleton has not been initialized yet.
-- `reconfigure(CacheConfig)`
+- `ExpressionEngine.reconfigureDefault(CacheConfig)`
   Replaces the singleton immediately.
-- `invalidateCache()`
-  Clears cached entries without replacing the compiler.
+- `ExpressionEngine.invalidateDefaultCache()`
+  Clears cached entries without replacing the default engine.
 
-### DI use case
+### Isolated engine use case
 
-The public APIs also expose overloads that accept an explicit `ExpressionCompiler`, which is the right choice when the compiler lifecycle should be controlled by DI or tests.
+Use `ExpressionEngine` when cache configuration and lifecycle should be controlled by DI, tests, tenants, or application modules.
 
 ---
 
