@@ -9,7 +9,6 @@ import org.jspecify.annotations.Nullable;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -36,8 +35,10 @@ final class VectorAggregationEvaluator {
         if (list.isEmpty()) {
             return emptyAggregationValue(kind);
         }
-        List<BigDecimal> values = toNumericList(list, transform, scope, source, runtimeServices, nodeEvaluator);
-        return aggregate(values, kind, mathContext);
+        if (transform == null) {
+            return aggregatePlain(list, kind, source, runtimeServices, mathContext);
+        }
+        return aggregateTransformed(list, kind, transform, scope, source, runtimeServices, mathContext, nodeEvaluator);
     }
 
     private static Object emptyAggregationValue(VectorAggregationKind kind) {
@@ -48,24 +49,31 @@ final class VectorAggregationEvaluator {
         };
     }
 
-    private static Object aggregate(List<BigDecimal> values, VectorAggregationKind kind, MathContext mathContext) {
-        BigDecimal accumulator = values.getFirst();
+    private static Object aggregatePlain(
+            List<?> values,
+            VectorAggregationKind kind,
+            String source,
+            RuntimeServices runtimeServices,
+            MathContext mathContext) {
         switch (kind) {
             case SUM -> {
-                for (int index = 1; index < values.size(); index++) {
-                    accumulator = accumulator.add(values.get(index), mathContext);
+                BigDecimal accumulator = BigDecimal.ZERO;
+                for (Object value : values) {
+                    accumulator = accumulator.add(asBigDecimal(value, source, runtimeServices), mathContext);
                 }
                 return accumulator;
             }
             case AVG -> {
-                for (int index = 1; index < values.size(); index++) {
-                    accumulator = accumulator.add(values.get(index), mathContext);
+                BigDecimal accumulator = BigDecimal.ZERO;
+                for (Object value : values) {
+                    accumulator = accumulator.add(asBigDecimal(value, source, runtimeServices), mathContext);
                 }
                 return accumulator.divide(BigDecimal.valueOf(values.size()), mathContext);
             }
             case MIN -> {
+                BigDecimal accumulator = asBigDecimal(values.getFirst(), source, runtimeServices);
                 for (int index = 1; index < values.size(); index++) {
-                    BigDecimal value = values.get(index);
+                    BigDecimal value = asBigDecimal(values.get(index), source, runtimeServices);
                     if (value.compareTo(accumulator) < 0) {
                         accumulator = value;
                     }
@@ -73,8 +81,9 @@ final class VectorAggregationEvaluator {
                 return accumulator;
             }
             case MAX -> {
+                BigDecimal accumulator = asBigDecimal(values.getFirst(), source, runtimeServices);
                 for (int index = 1; index < values.size(); index++) {
-                    BigDecimal value = values.get(index);
+                    BigDecimal value = asBigDecimal(values.get(index), source, runtimeServices);
                     if (value.compareTo(accumulator) > 0) {
                         accumulator = value;
                     }
@@ -82,8 +91,9 @@ final class VectorAggregationEvaluator {
                 return accumulator;
             }
             case PROD -> {
+                BigDecimal accumulator = asBigDecimal(values.getFirst(), source, runtimeServices);
                 for (int index = 1; index < values.size(); index++) {
-                    accumulator = accumulator.multiply(values.get(index), mathContext);
+                    accumulator = accumulator.multiply(asBigDecimal(values.get(index), source, runtimeServices), mathContext);
                 }
                 return accumulator;
             }
@@ -91,31 +101,88 @@ final class VectorAggregationEvaluator {
         }
     }
 
-    private static List<BigDecimal> toNumericList(
+    private static Object aggregateTransformed(
             List<?> list,
-            @Nullable ExecutableNode transform,
+            VectorAggregationKind kind,
+            ExecutableNode transform,
             ExecutionScope scope,
             String source,
             RuntimeServices runtimeServices,
+            MathContext mathContext,
             NodeEvaluator nodeEvaluator) {
-        if (transform == null) {
-            List<BigDecimal> result = new ArrayList<>(list.size());
-            for (Object element : list) {
-                result.add(asBigDecimal(element, source, runtimeServices));
-            }
-            return result;
-        }
         FilterContextStack stack = FilterContextStack.INSTANCE.get();
-        List<BigDecimal> result = new ArrayList<>(list.size());
-        for (Object element : list) {
-            stack.pushElement(element);
-            try {
-                result.add(asBigDecimal(nodeEvaluator.evaluate(transform, scope), source, runtimeServices));
-            } finally {
-                stack.pop();
+        switch (kind) {
+            case SUM -> {
+                BigDecimal accumulator = BigDecimal.ZERO;
+                for (Object element : list) {
+                    accumulator = accumulator.add(
+                            evaluateTransformedNumber(element, transform, scope, source, runtimeServices, nodeEvaluator, stack),
+                            mathContext);
+                }
+                return accumulator;
             }
+            case AVG -> {
+                BigDecimal accumulator = BigDecimal.ZERO;
+                for (Object element : list) {
+                    accumulator = accumulator.add(
+                            evaluateTransformedNumber(element, transform, scope, source, runtimeServices, nodeEvaluator, stack),
+                            mathContext);
+                }
+                return accumulator.divide(BigDecimal.valueOf(list.size()), mathContext);
+            }
+            case MIN -> {
+                BigDecimal accumulator = evaluateTransformedNumber(
+                        list.getFirst(), transform, scope, source, runtimeServices, nodeEvaluator, stack);
+                for (int index = 1; index < list.size(); index++) {
+                    BigDecimal value = evaluateTransformedNumber(
+                            list.get(index), transform, scope, source, runtimeServices, nodeEvaluator, stack);
+                    if (value.compareTo(accumulator) < 0) {
+                        accumulator = value;
+                    }
+                }
+                return accumulator;
+            }
+            case MAX -> {
+                BigDecimal accumulator = evaluateTransformedNumber(
+                        list.getFirst(), transform, scope, source, runtimeServices, nodeEvaluator, stack);
+                for (int index = 1; index < list.size(); index++) {
+                    BigDecimal value = evaluateTransformedNumber(
+                            list.get(index), transform, scope, source, runtimeServices, nodeEvaluator, stack);
+                    if (value.compareTo(accumulator) > 0) {
+                        accumulator = value;
+                    }
+                }
+                return accumulator;
+            }
+            case PROD -> {
+                BigDecimal accumulator = evaluateTransformedNumber(
+                        list.getFirst(), transform, scope, source, runtimeServices, nodeEvaluator, stack);
+                for (int index = 1; index < list.size(); index++) {
+                    accumulator = accumulator.multiply(
+                            evaluateTransformedNumber(
+                                    list.get(index), transform, scope, source, runtimeServices, nodeEvaluator, stack),
+                            mathContext);
+                }
+                return accumulator;
+            }
+            default -> throw new IllegalStateException("Unhandled aggregation kind: " + kind);
         }
-        return result;
+    }
+
+    private static BigDecimal evaluateTransformedNumber(
+            Object element,
+            ExecutableNode transform,
+            ExecutionScope scope,
+            String source,
+            RuntimeServices runtimeServices,
+            NodeEvaluator nodeEvaluator,
+            FilterContextStack stack) {
+        stack.pushElement(element);
+        try {
+            return asBigDecimal(nodeEvaluator.evaluate(transform, scope), source, runtimeServices);
+        } finally {
+            stack.pop();
+        }
     }
 
     private static BigDecimal asBigDecimal(Object value, String source, RuntimeServices runtimeServices) {

@@ -1,3 +1,114 @@
+## PERF-003: Compute-path navigation allocation and single-pass vector aggregation
+
+**Date:** 2026-05-24
+
+**Scenario:** Validate two runtime-only optimizations after PERF-002 identified broad compute-path
+slowdowns: remove per-property-chain `PropertyAccessEvaluator` allocation and make vector
+aggregations accumulate in one pass instead of materializing an intermediate `List<BigDecimal>`.
+
+**Machine:** OpenJDK 25.0.2 / Linux x86-64, -Xms1g -Xmx1g
+
+**JMH config:** 3 forks x 5 warmup + 10 measurement iterations x 500 ms; `AverageTime / ns`; `-prof gc`
+
+**Command:**
+
+```shell
+/home/marcelo/.agents/skills/performance-benchmark/scripts/run-jmh.sh . \
+  "ObjectNavigationBenchmark|CollectionNavigationBenchmark|VectorMapTransformBenchmark" \
+  "/tmp/performance-benchmark/expression-evaluator-compute-optimized-20260524.json"
+```
+
+**Artifacts:**
+
+- Before JSON: `/tmp/performance-benchmark/expression-evaluator-current-20260523.json`
+- After JSON: `/tmp/performance-benchmark/expression-evaluator-compute-optimized-20260524.json`
+- Comparison: `/tmp/performance-benchmark/expression-evaluator-compute-optimized-comparison-20260524.md`
+- Full tool output: `/home/marcelo/.local/share/opencode/tool-output/tool_e5811253d001mQ0WqGkPdugD7O`
+
+### Focused Comparison vs PERF-002 Current State
+
+| Benchmark | Before ns/op | After ns/op | Delta | B/op Before -> After | Status |
+|---|---:|---:|---:|---:|---|
+| collection.VectorMapTransformBenchmark.mapExtractPropertySum | 895.6 | 699.5 | +21.90% | 728 -> 312 | Significant gain |
+| collection.VectorMapTransformBenchmark.mapComputedFieldSum | 1499.2 | 1204.5 | +19.65% | 1080 -> 640 | Significant gain |
+| collection.VectorMapTransformBenchmark.mapEntryValuesSum | 1031.4 | 842.8 | +18.29% | 960 -> 472 | Significant gain |
+| collection.VectorMapTransformBenchmark.mapChainedSum | 1431.3 | 1188.3 | +16.98% | 1344 -> 760 | Significant gain |
+| navigation.ObjectNavigationBenchmark.typedNestedProperty | 216.6 | 186.7 | +13.78% | 104 -> 64 | Significant gain |
+| collection.CollectionNavigationBenchmark.listFilterCount | 1058.6 | 916.2 | +13.45% | 312 -> 120 | Significant gain |
+| collection.VectorMapTransformBenchmark.mapComputedFieldAvg | 2695.3 | 2340.1 | +13.18% | 2574 -> 1798 | Significant gain |
+| collection.VectorMapTransformBenchmark.wildcardProjectionSum | 662.4 | 599.7 | +9.47% | 872 -> 816 | Minor improvement |
+| navigation.ObjectNavigationBenchmark.typedMethodNoArg | 159.7 | 145.6 | +8.83% | 144 -> 104 | Minor improvement |
+| navigation.ObjectNavigationBenchmark.reflectiveNestedProperty | 351.5 | 326.3 | +7.17% | 104 -> 64 | Minor improvement |
+| navigation.ObjectNavigationBenchmark.typedMethodWithArgument | 231.1 | 216.2 | +6.46% | 152 -> 104 | Minor improvement |
+| navigation.ObjectNavigationBenchmark.reflectiveMethodWithArgument | 326.7 | 310.0 | +5.11% | 176 -> 128 | Minor improvement |
+
+**Average focused improvement:** +8.34%
+
+**Decision:** ACCEPT - the targeted runtime changes reduce allocation and improve the affected
+compute benchmarks, with the largest gains in vector map/aggregation and typed nested-property
+navigation. `mapValuesCount` and `compileTypedNestedProperty` were slightly slower in this focused
+run, but both are within measurement noise relative to their reported errors and are not direct
+targets of the runtime changes.
+
+---
+
+## PERF-002: Current state after expression-evaluator refactor
+
+**Date:** 2026-05-24
+
+**Scenario:** Current-state JMH capture after the structural `expression-evaluator` refactor. This
+run intentionally measures the current state only, using the already registered PERF-000/PERF-001
+numbers as comparison references.
+
+**Machine:** OpenJDK 25.0.2 / Linux x86-64, -Xms1g -Xmx1g
+
+**JMH config:** 3 forks x 5 warmup + 10 measurement iterations x 500 ms; `AverageTime / ns`; `-prof gc`
+
+**Command:**
+
+```shell
+/home/marcelo/.agents/skills/performance-benchmark/scripts/run-jmh.sh . ".*Benchmark" \
+  "/tmp/performance-benchmark/expression-evaluator-current-20260523.json"
+```
+
+**Artifacts:**
+
+- Raw JSON: `/tmp/performance-benchmark/expression-evaluator-current-20260523.json`
+- Generated summary: `/tmp/performance-benchmark/expression-evaluator-current-20260523-summary.md`
+- Full tool output: `/home/marcelo/.local/share/opencode/tool-output/tool_e57dabe91001EuGlhbUJ8Qh8n`
+
+### Summary vs registered baselines
+
+| Metric | Count |
+|---|---:|
+| Current JMH result rows | 98 |
+| Rows comparable with PERF-000/PERF-001 | 49 |
+| >= 10% slower | 49 |
+| Within +/- 10% | 0 |
+| >= 10% faster | 0 |
+
+### Largest slowdowns vs registered baselines
+
+| Benchmark | Baseline | Current | Delta | Baseline B/op | Current B/op | Source |
+|---|---:|---:|---:|---:|---:|---|
+| navigation.ObjectNavigationBenchmark.compileTypedMethodWithArgument | 29972.42 | 75215.05 | +150.9% | 15144.8 | 16409.0 | PERF-000 |
+| navigation.ObjectNavigationBenchmark.compileReflectiveMethodWithArgument | 24229.99 | 51604.10 | +113.0% | 14063.5 | 15212.5 | PERF-000 |
+| navigation.ObjectNavigationBenchmark.compileTypedNestedProperty | 16189.80 | 33261.86 | +105.4% | 11372.4 | 12266.5 | PERF-000 |
+| collection.CollectionNavigationBenchmark.listFilterCount | 595.36 | 1058.63 | +77.8% | 216.0 | 312.0 | PERF-001 |
+| collection.VectorMapTransformBenchmark.mapEntryValuesSum | 606.22 | 1031.41 | +70.1% | 696.0 | 960.0 | PERF-001 |
+| collection.CollectionNavigationBenchmark.deepScanCount | 1402.36 | 2283.80 | +62.9% | 528.0 | 528.0 | PERF-001 |
+| collection.CollectionNavigationBenchmark.indexAccess | 70.85 | 115.09 | +62.4% | 64.0 | 64.0 | PERF-001 |
+| collection.VectorMapTransformBenchmark.mapChainedSum | 893.13 | 1431.35 | +60.3% | 1080.0 | 1344.0 | PERF-001 |
+| collection.VectorMapTransformBenchmark.mapComputedFieldAvg | 1747.99 | 2695.34 | +54.2% | 2381.7 | 2573.7 | PERF-001 |
+| collection.VectorMapTransformBenchmark.mapComputedFieldSum | 974.40 | 1499.19 | +53.9% | 1224.0 | 1080.0 | PERF-001 |
+
+**Decision:** INVESTIGATE - this is a current-only run, not a same-session before/after A/B. However,
+the comparison against the registered baselines shows broad slowdown across every comparable row,
+including benchmarks with unchanged allocation. The next performance task should rerun a focused
+subset repeatedly and profile navigation/compilation hot paths before changing code.
+
+---
+
 ## PERF-001: NodeEvaluator callback — no regression + CollectionNavigation baseline
 
 **Date:** 2026-04-21

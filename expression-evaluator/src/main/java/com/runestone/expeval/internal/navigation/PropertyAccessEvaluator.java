@@ -10,24 +10,18 @@ import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 final class PropertyAccessEvaluator {
 
-    private final String source;
-    private final RuntimeServices runtimeServices;
-    private final NodeEvaluator nodeEvaluator;
-
-    PropertyAccessEvaluator(String source, RuntimeServices runtimeServices, NodeEvaluator nodeEvaluator) {
-        this.source = Objects.requireNonNull(source, "source");
-        this.runtimeServices = Objects.requireNonNull(runtimeServices, "runtimeServices");
-        this.nodeEvaluator = Objects.requireNonNull(nodeEvaluator, "nodeEvaluator");
+    private PropertyAccessEvaluator() {
     }
 
-    Object evaluateFieldGet(
+    static Object evaluateFieldGet(
             ExecutablePropertyChain node,
             Object current,
-            ExecutablePropertyChain.ExecutableFieldGet fieldGet) {
+            ExecutablePropertyChain.ExecutableFieldGet fieldGet,
+            String source,
+            RuntimeServices runtimeServices) {
         try {
             Object result = fieldGet.getter().invoke(current);
             return runtimeServices.coerceToResolvedType(result, fieldGet.resolvedType());
@@ -45,11 +39,14 @@ final class PropertyAccessEvaluator {
         }
     }
 
-    Object evaluateMethod(
+    static Object evaluateMethod(
             ExecutablePropertyChain node,
             ExecutionScope scope,
             Object current,
-            ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke) {
+            ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke,
+            String source,
+            RuntimeServices runtimeServices,
+            NodeEvaluator nodeEvaluator) {
         int arity = methodInvoke.arguments().size();
         List<ExecutableNode> arguments = methodInvoke.arguments();
         List<Class<?>> parameterTypes = methodInvoke.parameterTypes();
@@ -57,43 +54,43 @@ final class PropertyAccessEvaluator {
             Object result = switch (arity) {
                 case 0 -> methodInvoke.handle().invoke(current);
                 case 1 -> {
-                    Object argument1 = evaluateArgument(arguments, parameterTypes, scope, 0);
+                    Object argument1 = evaluateArgument(arguments, parameterTypes, scope, 0, runtimeServices, nodeEvaluator);
                     yield methodInvoke.handle().invoke(current, argument1);
                 }
                 case 2 -> {
-                    Object argument1 = evaluateArgument(arguments, parameterTypes, scope, 0);
-                    Object argument2 = evaluateArgument(arguments, parameterTypes, scope, 1);
+                    Object argument1 = evaluateArgument(arguments, parameterTypes, scope, 0, runtimeServices, nodeEvaluator);
+                    Object argument2 = evaluateArgument(arguments, parameterTypes, scope, 1, runtimeServices, nodeEvaluator);
                     yield methodInvoke.handle().invoke(current, argument1, argument2);
                 }
                 case 3 -> {
-                    Object argument1 = evaluateArgument(arguments, parameterTypes, scope, 0);
-                    Object argument2 = evaluateArgument(arguments, parameterTypes, scope, 1);
-                    Object argument3 = evaluateArgument(arguments, parameterTypes, scope, 2);
+                    Object argument1 = evaluateArgument(arguments, parameterTypes, scope, 0, runtimeServices, nodeEvaluator);
+                    Object argument2 = evaluateArgument(arguments, parameterTypes, scope, 1, runtimeServices, nodeEvaluator);
+                    Object argument3 = evaluateArgument(arguments, parameterTypes, scope, 2, runtimeServices, nodeEvaluator);
                     yield methodInvoke.handle().invoke(current, argument1, argument2, argument3);
                 }
                 case 4 -> {
-                    Object argument1 = evaluateArgument(arguments, parameterTypes, scope, 0);
-                    Object argument2 = evaluateArgument(arguments, parameterTypes, scope, 1);
-                    Object argument3 = evaluateArgument(arguments, parameterTypes, scope, 2);
-                    Object argument4 = evaluateArgument(arguments, parameterTypes, scope, 3);
+                    Object argument1 = evaluateArgument(arguments, parameterTypes, scope, 0, runtimeServices, nodeEvaluator);
+                    Object argument2 = evaluateArgument(arguments, parameterTypes, scope, 1, runtimeServices, nodeEvaluator);
+                    Object argument3 = evaluateArgument(arguments, parameterTypes, scope, 2, runtimeServices, nodeEvaluator);
+                    Object argument4 = evaluateArgument(arguments, parameterTypes, scope, 3, runtimeServices, nodeEvaluator);
                     yield methodInvoke.handle().invoke(current, argument1, argument2, argument3, argument4);
                 }
                 case 5 -> {
-                    Object argument1 = evaluateArgument(arguments, parameterTypes, scope, 0);
-                    Object argument2 = evaluateArgument(arguments, parameterTypes, scope, 1);
-                    Object argument3 = evaluateArgument(arguments, parameterTypes, scope, 2);
-                    Object argument4 = evaluateArgument(arguments, parameterTypes, scope, 3);
-                    Object argument5 = evaluateArgument(arguments, parameterTypes, scope, 4);
+                    Object argument1 = evaluateArgument(arguments, parameterTypes, scope, 0, runtimeServices, nodeEvaluator);
+                    Object argument2 = evaluateArgument(arguments, parameterTypes, scope, 1, runtimeServices, nodeEvaluator);
+                    Object argument3 = evaluateArgument(arguments, parameterTypes, scope, 2, runtimeServices, nodeEvaluator);
+                    Object argument4 = evaluateArgument(arguments, parameterTypes, scope, 3, runtimeServices, nodeEvaluator);
+                    Object argument5 = evaluateArgument(arguments, parameterTypes, scope, 4, runtimeServices, nodeEvaluator);
                     yield methodInvoke.handle().invoke(
                             current, argument1, argument2, argument3, argument4, argument5);
                 }
                 case 6 -> {
-                    Object argument1 = evaluateArgument(arguments, parameterTypes, scope, 0);
-                    Object argument2 = evaluateArgument(arguments, parameterTypes, scope, 1);
-                    Object argument3 = evaluateArgument(arguments, parameterTypes, scope, 2);
-                    Object argument4 = evaluateArgument(arguments, parameterTypes, scope, 3);
-                    Object argument5 = evaluateArgument(arguments, parameterTypes, scope, 4);
-                    Object argument6 = evaluateArgument(arguments, parameterTypes, scope, 5);
+                    Object argument1 = evaluateArgument(arguments, parameterTypes, scope, 0, runtimeServices, nodeEvaluator);
+                    Object argument2 = evaluateArgument(arguments, parameterTypes, scope, 1, runtimeServices, nodeEvaluator);
+                    Object argument3 = evaluateArgument(arguments, parameterTypes, scope, 2, runtimeServices, nodeEvaluator);
+                    Object argument4 = evaluateArgument(arguments, parameterTypes, scope, 3, runtimeServices, nodeEvaluator);
+                    Object argument5 = evaluateArgument(arguments, parameterTypes, scope, 4, runtimeServices, nodeEvaluator);
+                    Object argument6 = evaluateArgument(arguments, parameterTypes, scope, 5, runtimeServices, nodeEvaluator);
                     yield methodInvoke.handle().invoke(
                             current, argument1, argument2, argument3, argument4, argument5, argument6);
                 }
@@ -101,7 +98,8 @@ final class PropertyAccessEvaluator {
                     Object[] args = new Object[arity + 1];
                     args[0] = current;
                     for (int index = 0; index < arity; index++) {
-                        args[index + 1] = evaluateArgument(arguments, parameterTypes, scope, index);
+                        args[index + 1] = evaluateArgument(
+                                arguments, parameterTypes, scope, index, runtimeServices, nodeEvaluator);
                     }
                     yield methodInvoke.handle().invokeWithArguments(args);
                 }
@@ -121,7 +119,7 @@ final class PropertyAccessEvaluator {
         }
     }
 
-    Object resolveReflectiveProperty(Object target, String name) {
+    static Object resolveReflectiveProperty(Object target, String name, String source) {
         if (target instanceof Map<?, ?> map) {
             @SuppressWarnings("unchecked")
             Map<String, Object> typed = (Map<String, Object>) map;
@@ -146,50 +144,56 @@ final class PropertyAccessEvaluator {
         }
     }
 
-    Object invokeReflectiveMethod(
+    static Object invokeReflectiveMethod(
             ExecutionScope scope,
             Object target,
-            ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke) {
+            ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke,
+            String source,
+            NodeEvaluator nodeEvaluator) {
         Object[] arguments = new Object[reflectiveMethodInvoke.arguments().size()];
         for (int index = 0; index < reflectiveMethodInvoke.arguments().size(); index++) {
             arguments[index] = nodeEvaluator.evaluate(reflectiveMethodInvoke.arguments().get(index), scope);
         }
-        return invokeMethodReflective(target, reflectiveMethodInvoke.name(), arguments);
+        return invokeMethodReflective(target, reflectiveMethodInvoke.name(), arguments, source);
     }
 
-    List<Object> projectReflectivePropertyOverList(List<?> list, String propertyName) {
+    static List<Object> projectReflectivePropertyOverList(List<?> list, String propertyName, String source) {
         List<Object> result = new ArrayList<>(list.size());
         for (Object element : list) {
             if (element != null) {
-                result.add(resolveReflectiveProperty(element, propertyName));
+                result.add(resolveReflectiveProperty(element, propertyName, source));
             }
         }
         return result;
     }
 
-    List<Object> projectFieldGetOverList(
+    static List<Object> projectFieldGetOverList(
             List<?> list,
             ExecutablePropertyChain node,
-            ExecutablePropertyChain.ExecutableFieldGet fieldGet) {
+            ExecutablePropertyChain.ExecutableFieldGet fieldGet,
+            String source,
+            RuntimeServices runtimeServices) {
         List<Object> result = new ArrayList<>(list.size());
         for (Object element : list) {
             if (element != null) {
-                result.add(evaluateFieldGet(node, element, fieldGet));
+                result.add(evaluateFieldGet(node, element, fieldGet, source, runtimeServices));
             }
         }
         return result;
     }
 
-    private Object evaluateArgument(
+    private static Object evaluateArgument(
             List<ExecutableNode> arguments,
             List<Class<?>> parameterTypes,
             ExecutionScope scope,
-            int index) {
+            int index,
+            RuntimeServices runtimeServices,
+            NodeEvaluator nodeEvaluator) {
         Object evaluated = nodeEvaluator.evaluate(arguments.get(index), scope);
         return runtimeServices.coerce(evaluated, parameterTypes.get(index));
     }
 
-    private Object invokeMethodReflective(Object target, String name, Object[] arguments) {
+    private static Object invokeMethodReflective(Object target, String name, Object[] arguments, String source) {
         Class<?> targetClass = target.getClass();
         MethodHandle handle = ReflectiveAccessCache.method(targetClass, name, arguments.length);
         if (handle == null) {

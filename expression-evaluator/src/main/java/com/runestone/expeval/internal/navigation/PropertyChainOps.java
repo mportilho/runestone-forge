@@ -22,11 +22,10 @@ public final class PropertyChainOps {
                     node,
                     scope,
                     source,
-                    eval,
-                    new PropertyAccessEvaluator(source, runtimeServices, eval));
+                    runtimeServices,
+                    eval);
         }
 
-        PropertyAccessEvaluator accessEvaluator = new PropertyAccessEvaluator(source, runtimeServices, eval);
         Object current = eval.evaluate(node.root(), scope);
         List<ExecutablePropertyChain.ExecutableAccess> chain = node.chain();
         int chainStart = 0;
@@ -48,23 +47,25 @@ public final class PropertyChainOps {
             }
             if (inCollection && current instanceof List<?> list) {
                 if (access instanceof ExecutablePropertyChain.ReflectivePropertyAccess pa) {
-                    current = accessEvaluator.projectReflectivePropertyOverList(list, pa.name());
+                    current = PropertyAccessEvaluator.projectReflectivePropertyOverList(list, pa.name(), source);
                     continue;
                 }
                 if (access instanceof ExecutablePropertyChain.ExecutableFieldGet fieldGet) {
-                    current = accessEvaluator.projectFieldGetOverList(list, node, fieldGet);
+                    current = PropertyAccessEvaluator.projectFieldGetOverList(
+                            list, node, fieldGet, source, runtimeServices);
                     continue;
                 }
             }
             current = switch (access) {
                 case ExecutablePropertyChain.ExecutableFieldGet fieldGet ->
-                        accessEvaluator.evaluateFieldGet(node, current, fieldGet);
+                        PropertyAccessEvaluator.evaluateFieldGet(node, current, fieldGet, source, runtimeServices);
                 case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke ->
-                        accessEvaluator.evaluateMethod(node, scope, current, methodInvoke);
+                        PropertyAccessEvaluator.evaluateMethod(
+                                node, scope, current, methodInvoke, source, runtimeServices, eval);
                 case ExecutablePropertyChain.ReflectivePropertyAccess propertyAccess ->
-                        accessEvaluator.resolveReflectiveProperty(current, propertyAccess.name());
+                        PropertyAccessEvaluator.resolveReflectiveProperty(current, propertyAccess.name(), source);
                 case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke ->
-                        accessEvaluator.invokeReflectiveMethod(scope, current, reflectiveMethodInvoke);
+                        PropertyAccessEvaluator.invokeReflectiveMethod(scope, current, reflectiveMethodInvoke, source, eval);
                 case ExecutablePropertyChain.ExecutableIndexAccess ia ->
                         CollectionAccessOps.applyIndex(current,
                                 (int) asBigDecimalStrict(eval.evaluate(ia.index(), scope), runtimeServices).longValue(),
@@ -110,7 +111,7 @@ public final class PropertyChainOps {
     }
 
     private static Object evaluateLegacyPropertyChain(ExecutablePropertyChain node, ExecutionScope scope,
-            String source, NodeEvaluator eval, PropertyAccessEvaluator accessEvaluator) {
+            String source, RuntimeServices runtimeServices, NodeEvaluator eval) {
         Object current = eval.evaluate(node.root(), scope);
         List<ExecutablePropertyChain.ExecutableAccess> chain = node.chain();
         int chainStart = 0;
@@ -120,7 +121,8 @@ public final class PropertyChainOps {
             current = "key".equals(sentinel) ? mapCtx.mapKey() : mapCtx.mapValue();
             chainStart = 1;
         }
-        for (ExecutablePropertyChain.ExecutableAccess access : chain.subList(chainStart, chain.size())) {
+        for (int index = chainStart; index < chain.size(); index++) {
+            ExecutablePropertyChain.ExecutableAccess access = chain.get(index);
             if (current == null) {
                 if (isSafeAccess(access)) {
                     return null;
@@ -130,13 +132,14 @@ public final class PropertyChainOps {
             }
             current = switch (access) {
                 case ExecutablePropertyChain.ExecutableFieldGet fieldGet ->
-                        accessEvaluator.evaluateFieldGet(node, current, fieldGet);
+                        PropertyAccessEvaluator.evaluateFieldGet(node, current, fieldGet, source, runtimeServices);
                 case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke ->
-                        accessEvaluator.evaluateMethod(node, scope, current, methodInvoke);
+                        PropertyAccessEvaluator.evaluateMethod(
+                                node, scope, current, methodInvoke, source, runtimeServices, eval);
                 case ExecutablePropertyChain.ReflectivePropertyAccess propertyAccess ->
-                        accessEvaluator.resolveReflectiveProperty(current, propertyAccess.name());
+                        PropertyAccessEvaluator.resolveReflectiveProperty(current, propertyAccess.name(), source);
                 case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke ->
-                        accessEvaluator.invokeReflectiveMethod(scope, current, reflectiveMethodInvoke);
+                        PropertyAccessEvaluator.invokeReflectiveMethod(scope, current, reflectiveMethodInvoke, source, eval);
                 default -> throw new IllegalStateException("legacy property chain contains unsupported access: " + access);
             };
         }
