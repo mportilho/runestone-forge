@@ -4,6 +4,7 @@ import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.api.ExpressionEvaluationException;
 import com.runestone.expeval.api.FunctionInvocationException;
 import com.runestone.expeval.catalog.*;
+import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.ast.*;
 import com.runestone.expeval.internal.ast.BinaryOperator;
 import com.runestone.expeval.internal.ast.TernaryOperationNode;
@@ -359,8 +360,8 @@ final class ExecutionPlanBuilder {
 
         // '@' root has no external symbol binding; create a special sentinel identifier.
         ExecutableNode root;
-        if ("@".equals(node.rootIdentifier())) {
-            root = new ExecutableIdentifier(new SymbolRef("@", SymbolKind.EXTERNAL), node.sourceSpan());
+        if (LanguageSymbols.CURRENT_ELEMENT.equals(node.rootIdentifier())) {
+            root = new ExecutableIdentifier(new SymbolRef(LanguageSymbols.CURRENT_ELEMENT, SymbolKind.EXTERNAL), node.sourceSpan());
         } else {
             SymbolRef rootRef = model.findSymbol(node.nodeId())
                     .orElseThrow(() -> new IllegalStateException(
@@ -374,10 +375,10 @@ final class ExecutionPlanBuilder {
             }
         }
 
-        ResolvedType currentType = "@".equals(node.rootIdentifier())
+        ResolvedType currentType = LanguageSymbols.CURRENT_ELEMENT.equals(node.rootIdentifier())
                 ? UnknownType.INSTANCE
                 : resolveRootType(
-                        model.findSymbol(node.nodeId()).orElse(new SymbolRef("@", SymbolKind.EXTERNAL)),
+                        model.findSymbol(node.nodeId()).orElse(new SymbolRef(LanguageSymbols.CURRENT_ELEMENT, SymbolKind.EXTERNAL)),
                         model, externalSymbolCatalog);
 
         if (isLegacyAccessChain(node.chain())) {
@@ -653,7 +654,7 @@ final class ExecutionPlanBuilder {
             case ExecutableLiteral ignored -> true;
             case ExecutableDynamicLiteral ignored -> false;
             case ExecutableIdentifier identifier ->
-                    allowFilterContext && "@".equals(identifier.ref().name());
+                    allowFilterContext && LanguageSymbols.CURRENT_ELEMENT.equals(identifier.ref().name());
             case ExecutablePropertyChain chain ->
                     isFoldablePropertyChainNode(chain, allowFilterContext);
             case ExecutableFunctionCall functionCall ->
@@ -959,8 +960,8 @@ final class ExecutionPlanBuilder {
 
     private ExecutableNode buildIdentifier(IdentifierNode id, SemanticModel model, FoldContext foldContext) {
         // '@' is the filter-predicate current-element sentinel — no model symbol, always dynamic
-        if ("@".equals(id.name())) {
-            return new ExecutableIdentifier(new SymbolRef("@", SymbolKind.EXTERNAL), id.sourceSpan());
+        if (LanguageSymbols.CURRENT_ELEMENT.equals(id.name())) {
+            return new ExecutableIdentifier(new SymbolRef(LanguageSymbols.CURRENT_ELEMENT, SymbolKind.EXTERNAL), id.sourceSpan());
         }
         SymbolRef ref = model.findSymbol(id.nodeId())
                 .orElseThrow(() -> new IllegalStateException(
@@ -1076,7 +1077,7 @@ final class ExecutionPlanBuilder {
         }
 
         private Object evaluateIdentifier(ExecutableIdentifier identifier) {
-            if (!"@".equals(identifier.ref().name())) {
+            if (!LanguageSymbols.CURRENT_ELEMENT.equals(identifier.ref().name())) {
                 throw new IllegalStateException("identifier is not constant-foldable: " + identifier.ref().name());
             }
             var context = FilterContextStack.INSTANCE.get().peek();

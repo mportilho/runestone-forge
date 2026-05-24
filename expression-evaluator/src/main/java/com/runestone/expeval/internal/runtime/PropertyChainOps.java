@@ -1,6 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
 import com.runestone.expeval.api.ExpressionEvaluationException;
+import com.runestone.expeval.internal.LanguageSymbols;
 import com.runestone.expeval.internal.navigation.FilterContext;
 import com.runestone.expeval.internal.navigation.TypeIntrospectionSupport;
 
@@ -344,7 +345,7 @@ final class PropertyChainOps {
     private static boolean isMapKeySentinel(ExecutableNode root,
             List<ExecutablePropertyChain.ExecutableAccess> chain) {
         if (root instanceof ExecutableIdentifier id
-                && "@".equals(id.ref().name())
+                && LanguageSymbols.CURRENT_ELEMENT.equals(id.ref().name())
                 && !chain.isEmpty()
                 && chain.getFirst() instanceof ExecutablePropertyChain.ReflectivePropertyAccess rpa
                 && ("key".equals(rpa.name()) || "value".equals(rpa.name()))) {
