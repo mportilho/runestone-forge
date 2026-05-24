@@ -1,15 +1,18 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.execution.eval.Evaluator;
 import com.runestone.expeval.internal.execution.eval.ExecutionScope;
+import com.runestone.expeval.internal.execution.eval.LogicalEvaluator;
+import com.runestone.expeval.internal.execution.eval.MathEvaluator;
 import com.runestone.expeval.internal.execution.plan.ExternalBindingPlan;
 
 import com.runestone.expeval.api.*;
 import com.runestone.expeval.api.SemanticResolutionException;
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
-import com.runestone.expeval.compiler.ExpressionCompilerAccess;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.internal.audit.AuditCollector;
 import com.runestone.expeval.internal.compiler.CompiledExpression;
+import com.runestone.expeval.internal.compiler.ExpressionCompiler;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.grammar.ParsingException;
 import com.runestone.expeval.internal.semantic.SemanticModel;
@@ -26,7 +29,7 @@ import java.util.stream.Collectors;
  * <ol>
  *   <li><strong>Static factory</strong> — the {@code compileMath}, {@code compileLogical}, and
  *       {@code compileAssignments} methods compile a source string and return a ready-to-evaluate
- *       instance backed by the JVM-wide {@link com.runestone.expeval.compiler.ExpressionCompiler} singleton.</li>
+     *       instance backed by the JVM-wide compiler singleton.</li>
  *   <li><strong>Evaluation context</strong> — each instance holds the compiled plan and the
  *       evaluators for a single expression. Call {@code computeMath} / {@code computeLogical} /
  *       {@code computeAssignments} with a {@code Map<String, Object>} of variable values to
@@ -42,14 +45,13 @@ import java.util.stream.Collectors;
  * Use {@link #invalidateCache()} to clear cached entries without replacing the compiler.
  *
  * <h2>Compiler injection (DI)</h2>
- * <p>When the singleton model is unsuitable — for example when running multiple isolated
- * expression engines in the same JVM or in a Spring context that manages the compiler as a
- * {@code @Bean} — pass an explicit {@link com.runestone.expeval.compiler.ExpressionCompiler} to the overloaded compile methods:
+     * <p>When the singleton model is unsuitable — for example when running multiple isolated
+     * expression engines in the same JVM or in a Spring context that manages the engine as a
+     * {@code @Bean} — use {@link ExpressionEngine}:
  *
  * <pre>{@code
- * ExpressionCompiler myCompiler = new ExpressionCompiler(new CacheConfig(4_096, null));
- * ExpressionRuntimeSupport runtime =
- *         ExpressionRuntimeSupport.compileMath(source, environment, myCompiler);
+     * ExpressionEngine engine = new ExpressionEngine(new CacheConfig(4_096, null));
+     * MathExpression expression = engine.compileMath(source, environment);
  * }</pre>
  *
  * <h2>Thread safety</h2>
@@ -59,7 +61,7 @@ import java.util.stream.Collectors;
  */
 public final class ExpressionRuntimeSupport {
 
-    private static volatile com.runestone.expeval.compiler.ExpressionCompiler COMPILER;
+    private static volatile ExpressionCompiler COMPILER;
 
     /**
      * Configures the JVM-wide expression compiler <strong>before the first compilation</strong>.
@@ -72,7 +74,7 @@ public final class ExpressionRuntimeSupport {
         if (COMPILER == null) {
             synchronized (ExpressionRuntimeSupport.class) {
                 if (COMPILER == null) {
-                    COMPILER = new com.runestone.expeval.compiler.ExpressionCompiler(cacheConfig);
+                    COMPILER = new ExpressionCompiler(cacheConfig);
                 }
             }
         }
@@ -87,7 +89,7 @@ public final class ExpressionRuntimeSupport {
     public static void reconfigure(CacheConfig cacheConfig) {
         Objects.requireNonNull(cacheConfig, "cacheConfig must not be null");
         synchronized (ExpressionRuntimeSupport.class) {
-            COMPILER = new com.runestone.expeval.compiler.ExpressionCompiler(cacheConfig);
+            COMPILER = new ExpressionCompiler(cacheConfig);
         }
     }
 
@@ -98,13 +100,13 @@ public final class ExpressionRuntimeSupport {
         getCompiler().invalidateCache();
     }
 
-    private static com.runestone.expeval.compiler.ExpressionCompiler getCompiler() {
-        com.runestone.expeval.compiler.ExpressionCompiler c = COMPILER;
+    private static ExpressionCompiler getCompiler() {
+        ExpressionCompiler c = COMPILER;
         if (c == null) {
             synchronized (ExpressionRuntimeSupport.class) {
                 c = COMPILER;
                 if (c == null) {
-                    COMPILER = c = new com.runestone.expeval.compiler.ExpressionCompiler();
+                    COMPILER = c = new ExpressionCompiler();
                 }
             }
         }
@@ -164,10 +166,10 @@ public final class ExpressionRuntimeSupport {
     }
 
     /**
-     * Compiles a math expression using an explicit {@link com.runestone.expeval.compiler.ExpressionCompiler}.
+     * Compiles a math expression using an explicit internal compiler.
      */
     public static ExpressionRuntimeSupport compileMath(String source, ExpressionEnvironment environment,
-                                                       com.runestone.expeval.compiler.ExpressionCompiler compiler) {
+                                                       ExpressionCompiler compiler) {
         return compile(source, ExpressionResultType.MATH, environment, compiler);
     }
 
@@ -179,10 +181,10 @@ public final class ExpressionRuntimeSupport {
     }
 
     /**
-     * Compiles a logical expression using an explicit {@link com.runestone.expeval.compiler.ExpressionCompiler}.
+     * Compiles a logical expression using an explicit internal compiler.
      */
     public static ExpressionRuntimeSupport compileLogical(String source, ExpressionEnvironment environment,
-                                                          com.runestone.expeval.compiler.ExpressionCompiler compiler) {
+                                                          ExpressionCompiler compiler) {
         return compile(source, ExpressionResultType.LOGICAL, environment, compiler);
     }
 
@@ -194,10 +196,10 @@ public final class ExpressionRuntimeSupport {
     }
 
     /**
-     * Compiles an assignment block using an explicit {@link com.runestone.expeval.compiler.ExpressionCompiler}.
+     * Compiles an assignment block using an explicit internal compiler.
      */
     public static ExpressionRuntimeSupport compileAssignments(String source, ExpressionEnvironment environment,
-                                                              com.runestone.expeval.compiler.ExpressionCompiler compiler) {
+                                                              ExpressionCompiler compiler) {
         return compile(source, ExpressionResultType.ASSIGNMENTS, environment, compiler);
     }
 
@@ -214,11 +216,17 @@ public final class ExpressionRuntimeSupport {
     }
 
     public static ValidationResult validate(String source, ExpressionResultType resultType, ExpressionEnvironment environment) {
+        return validate(source, resultType, environment, getCompiler());
+    }
+
+    public static ValidationResult validate(String source, ExpressionResultType resultType, ExpressionEnvironment environment,
+                                            ExpressionCompiler compiler) {
         Objects.requireNonNull(source, "source must not be null");
         Objects.requireNonNull(resultType, "resultType must not be null");
         Objects.requireNonNull(environment, "environment must not be null");
+        Objects.requireNonNull(compiler, "compiler must not be null");
         try {
-            ExpressionRuntimeSupport runtime = compile(source, resultType, environment);
+            ExpressionRuntimeSupport runtime = compile(source, resultType, environment, compiler);
             SemanticModel model = runtime.getCompiledExpression().semanticModel();
             Set<String> assignedVariables = model.internalSymbolsByName().keySet();
             Set<String> userVariables = model.externalSymbolsByName().keySet();
@@ -251,17 +259,17 @@ public final class ExpressionRuntimeSupport {
     }
 
     /**
-     * Compiles an expression using an explicit {@link com.runestone.expeval.compiler.ExpressionCompiler}.
+     * Compiles an expression using an explicit internal compiler.
      */
     public static ExpressionRuntimeSupport compile(String source, ExpressionResultType resultType,
                                                     ExpressionEnvironment environment,
-                                                    com.runestone.expeval.compiler.ExpressionCompiler compiler) {
+                                                    ExpressionCompiler compiler) {
         Objects.requireNonNull(source, "source must not be null");
         Objects.requireNonNull(resultType, "resultType must not be null");
         Objects.requireNonNull(environment, "environment must not be null");
         Objects.requireNonNull(compiler, "compiler must not be null");
         try {
-            CompiledExpression compiled = ExpressionCompilerAccess.compile(compiler, source, resultType, environment);
+            CompiledExpression compiled = compiler.compile(source, resultType, environment);
             return from(compiled, environment);
         } catch (SemanticResolutionException e) {
             throw new ExpressionCompilationException(source, e.issues(), e);

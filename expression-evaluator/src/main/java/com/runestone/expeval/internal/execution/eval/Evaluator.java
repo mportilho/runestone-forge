@@ -1,15 +1,13 @@
-package com.runestone.expeval.internal.runtime;
-
-import com.runestone.expeval.internal.execution.eval.ExecutionScope;
+package com.runestone.expeval.internal.execution.eval;
 
 import java.util.Map;
 
 /**
  * Common contract shared by {@link AbstractObjectEvaluator}, allowing
- * {@link ExpressionRuntimeSupport} to swap implementations without
+ * {@link com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport} to swap implementations without
  * touching its public API.
  */
-interface Evaluator<T> {
+public interface Evaluator<T> {
 
     T evaluate(ExecutionScope scope);
 

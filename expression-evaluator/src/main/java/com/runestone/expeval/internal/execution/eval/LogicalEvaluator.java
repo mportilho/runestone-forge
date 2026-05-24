@@ -1,12 +1,13 @@
-package com.runestone.expeval.internal.runtime;
+package com.runestone.expeval.internal.execution.eval;
 
 import com.runestone.expeval.internal.compiler.CompiledExpression;
+import com.runestone.expeval.internal.runtime.RuntimeServices;
 
 import java.math.MathContext;
 
-final class LogicalEvaluator extends AbstractObjectEvaluator<Boolean> {
+public final class LogicalEvaluator extends AbstractObjectEvaluator<Boolean> {
 
-    LogicalEvaluator(CompiledExpression compiledExpression, RuntimeServices runtimeServices, MathContext mathContext) {
+    public LogicalEvaluator(CompiledExpression compiledExpression, RuntimeServices runtimeServices, MathContext mathContext) {
         super(compiledExpression, runtimeServices, mathContext);
     }
 

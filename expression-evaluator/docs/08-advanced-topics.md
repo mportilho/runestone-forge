@@ -64,18 +64,18 @@ CompletableFuture<BigDecimal> f2 = CompletableFuture.supplyAsync(() ->
 
 `currDate`, `currTime`, and `currDateTime` are re-evaluated on each `compute()` call. Multiple references to `currDate` within a single expression resolve to the same instant (cached inside the `ExecutionScope` for that call). Across calls, each gets a fresh value.
 
-## Using a Custom Compiler
+## Using a Custom Engine
 
-By default, all expressions share a JVM-wide singleton `ExpressionCompiler` with a shared Caffeine cache. If you need separate cache lifecycle, isolation between tenants, or different TTL policies per module, pass an explicit compiler:
+By default, all expressions share a JVM-wide singleton compiler with a shared Caffeine cache. If you need separate cache lifecycle, isolation between tenants, or different TTL policies per module, use an explicit `ExpressionEngine`:
 
 ```java
 CacheConfig config = CacheConfig.of(512, Duration.ofHours(1));
-ExpressionCompiler compiler = new ExpressionCompiler(config);
+ExpressionEngine engine = new ExpressionEngine(config);
 
-MathExpression expr = MathExpression.compile("a + b", env, compiler);
+MathExpression expr = engine.compileMath("a + b", env);
 ```
 
-The compiler is independent of the environment. You can combine any compiler with any environment. When the compiler is garbage-collected, its cache is released.
+The engine is independent of the environment. You can combine any engine with any environment. When the engine is garbage-collected, its cache is released.
 
 ## Custom Type Coercion
 
@@ -92,7 +92,7 @@ The conversion service is called when the engine needs to coerce a binding value
 
 ## ExpressionEnvironmentId and Cache Sharing
 
-Two environments built with identical static configuration produce the same `ExpressionEnvironmentId` (a SHA-256 hash over the ordered configuration). They share cache entries in the singleton compiler.
+Two environments built with identical static configuration produce the same `ExpressionEnvironmentId` (a SHA-256 hash over the ordered configuration). They share cache entries in the singleton compiler or in the same `ExpressionEngine` instance.
 
 The hash covers: registered static providers (by class), registered external symbols (sorted by name and value), `MathContext`, and `transcendentalMathContext`. Instance-based providers use `System.identityHashCode`, so two separate provider objects always produce different IDs even if they are instances of the same class.
 

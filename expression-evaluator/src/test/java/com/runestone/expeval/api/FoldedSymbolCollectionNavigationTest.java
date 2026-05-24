@@ -7,7 +7,6 @@ import com.runestone.expeval.api.support.FoldingNavigationFixtures.Book;
 import com.runestone.expeval.api.support.FoldingNavigationFixtures.TrackedList;
 import com.runestone.expeval.api.support.FoldingNavigationFixtures.TrackedMap;
 import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -95,7 +94,7 @@ class FoldedSymbolCollectionNavigationTest {
     }
 
     private static MathExpression compile(String source, ExpressionEnvironment environment) {
-        return MathExpression.compile(source, environment, new ExpressionCompiler());
+        return MathExpression.compile(source, environment, new ExpressionEngine());
     }
 
     private static ExpressionEnvironment pricesEnv(TrackedList<BigDecimal> prices) {

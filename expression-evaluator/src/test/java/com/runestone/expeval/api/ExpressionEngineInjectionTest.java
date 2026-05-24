@@ -1,8 +1,6 @@
 package com.runestone.expeval.api;
 
-import com.runestone.expeval.api.CacheConfig;
 import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -14,30 +12,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies functional correctness of the explicit-compiler overloads introduced in Option C for
+ * Verifies functional correctness of explicit-engine compilation for
  * {@link MathExpression}, {@link LogicalExpression}, and {@link AssignmentExpression}.
  *
- * <p>Cache-sharing and cache-isolation behaviour between an injected compiler and the JVM-wide
+ * <p>Cache-sharing and cache-isolation behaviour between an injected engine and the JVM-wide
  * singleton are verified at a lower level in {@code ExpressionRuntimeSupportLifecycleTest}.
  * Tests here focus on the public API contract: correct evaluation results and null-safety.
  */
-@DisplayName("Explicit compiler injection — public API overloads")
-class ExpressionCompilerInjectionTest {
+@DisplayName("Explicit engine injection — public API")
+class ExpressionEngineInjectionTest {
 
     private static final ExpressionEnvironment ENV = ExpressionEnvironment.builder().build();
 
     // --- MathExpression ---
 
     @Nested
-    @DisplayName("MathExpression.compile(source, env, compiler)")
+    @DisplayName("MathExpression with explicit engine")
     class MathExpressionOverload {
 
         @Test
         @DisplayName("evaluates a simple arithmetic expression correctly")
         void evaluatesArithmeticExpression() {
-            var compiler = new ExpressionCompiler(CacheConfig.defaults());
+            var engine = new ExpressionEngine(CacheConfig.defaults());
 
-            BigDecimal result = MathExpression.compile("3 + 4", ENV, compiler).compute();
+            BigDecimal result = engine.compileMath("3 + 4", ENV).compute();
 
             assertThat(result).isEqualByComparingTo("7");
         }
@@ -48,17 +46,17 @@ class ExpressionCompilerInjectionTest {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
                     .registerExternalSymbol("x", BigDecimal.TEN, true)
                     .build();
-            var compiler = new ExpressionCompiler(CacheConfig.defaults());
+            var engine = new ExpressionEngine(CacheConfig.defaults());
 
-            BigDecimal result = MathExpression.compile("x * 2", env, compiler)
+            BigDecimal result = engine.compileMath("x * 2", env)
                     .compute(Map.of("x", 5));
 
             assertThat(result).isEqualByComparingTo("10");
         }
 
         @Test
-        @DisplayName("rejects null compiler")
-        void rejectsNullCompiler() {
+        @DisplayName("rejects null engine")
+        void rejectsNullEngine() {
             assertThatThrownBy(() -> MathExpression.compile("1 + 1", ENV, null))
                     .isInstanceOf(NullPointerException.class);
         }
@@ -66,10 +64,10 @@ class ExpressionCompilerInjectionTest {
         @Test
         @DisplayName("produces the same result as the singleton overload")
         void producesSameResultAsSingletonOverload() {
-            var compiler = new ExpressionCompiler(CacheConfig.defaults());
+            var engine = new ExpressionEngine(CacheConfig.defaults());
             String source = "12 * 12";
 
-            BigDecimal viaInjected = MathExpression.compile(source, ENV, compiler).compute();
+            BigDecimal viaInjected = MathExpression.compile(source, ENV, engine).compute();
             BigDecimal viaSingleton = MathExpression.compile(source, ENV).compute();
 
             assertThat(viaInjected).isEqualByComparingTo(viaSingleton);
@@ -80,15 +78,15 @@ class ExpressionCompilerInjectionTest {
     // --- LogicalExpression ---
 
     @Nested
-    @DisplayName("LogicalExpression.compile(source, env, compiler)")
+    @DisplayName("LogicalExpression with explicit engine")
     class LogicalExpressionOverload {
 
         @Test
         @DisplayName("evaluates a simple comparison correctly")
         void evaluatesSimpleComparison() {
-            var compiler = new ExpressionCompiler(CacheConfig.defaults());
+            var engine = new ExpressionEngine(CacheConfig.defaults());
 
-            boolean result = LogicalExpression.compile("5 > 3", ENV, compiler).compute();
+            boolean result = engine.compileLogical("5 > 3", ENV).compute();
 
             assertThat(result).isTrue();
         }
@@ -96,16 +94,16 @@ class ExpressionCompilerInjectionTest {
         @Test
         @DisplayName("evaluates a false comparison correctly")
         void evaluatesFalseComparison() {
-            var compiler = new ExpressionCompiler(CacheConfig.defaults());
+            var engine = new ExpressionEngine(CacheConfig.defaults());
 
-            boolean result = LogicalExpression.compile("5 < 3", ENV, compiler).compute();
+            boolean result = engine.compileLogical("5 < 3", ENV).compute();
 
             assertThat(result).isFalse();
         }
 
         @Test
-        @DisplayName("rejects null compiler")
-        void rejectsNullCompiler() {
+        @DisplayName("rejects null engine")
+        void rejectsNullEngine() {
             assertThatThrownBy(() -> LogicalExpression.compile("1 > 0", ENV, null))
                     .isInstanceOf(NullPointerException.class);
         }
@@ -113,10 +111,10 @@ class ExpressionCompilerInjectionTest {
         @Test
         @DisplayName("produces the same result as the singleton overload")
         void producesSameResultAsSingletonOverload() {
-            var compiler = new ExpressionCompiler(CacheConfig.defaults());
+            var engine = new ExpressionEngine(CacheConfig.defaults());
             String source = "10 >= 10";
 
-            boolean viaInjected = LogicalExpression.compile(source, ENV, compiler).compute();
+            boolean viaInjected = LogicalExpression.compile(source, ENV, engine).compute();
             boolean viaSingleton = LogicalExpression.compile(source, ENV).compute();
 
             assertThat(viaInjected).isEqualTo(viaSingleton);
@@ -126,15 +124,15 @@ class ExpressionCompilerInjectionTest {
     // --- AssignmentExpression ---
 
     @Nested
-    @DisplayName("AssignmentExpression.compile(source, env, compiler)")
+    @DisplayName("AssignmentExpression with explicit engine")
     class AssignmentExpressionOverload {
 
         @Test
         @DisplayName("evaluates a single assignment correctly")
         void evaluatesSingleAssignment() {
-            var compiler = new ExpressionCompiler(CacheConfig.defaults());
+            var engine = new ExpressionEngine(CacheConfig.defaults());
 
-            Map<String, Object> result = AssignmentExpression.compile("total = 6 * 7;", ENV, compiler).compute();
+            Map<String, Object> result = engine.compileAssignments("total = 6 * 7;", ENV).compute();
 
             assertThat(result).containsKey("total");
             assertThat((BigDecimal) result.get("total")).isEqualByComparingTo("42");
@@ -146,10 +144,10 @@ class ExpressionCompilerInjectionTest {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
                     .registerExternalSymbol("rate", new BigDecimal("0.10"), true)
                     .build();
-            var compiler = new ExpressionCompiler(CacheConfig.defaults());
+            var engine = new ExpressionEngine(CacheConfig.defaults());
 
             Map<String, Object> result = AssignmentExpression
-                    .compile("base = 100; tax = base * rate;", env, compiler)
+                    .compile("base = 100; tax = base * rate;", env, engine)
                     .compute(Map.of("rate", new BigDecimal("0.10")));
 
             assertThat(result).containsKey("base").containsKey("tax");
@@ -158,8 +156,8 @@ class ExpressionCompilerInjectionTest {
         }
 
         @Test
-        @DisplayName("rejects null compiler")
-        void rejectsNullCompiler() {
+        @DisplayName("rejects null engine")
+        void rejectsNullEngine() {
             assertThatThrownBy(() -> AssignmentExpression.compile("x = 1", ENV, null))
                     .isInstanceOf(NullPointerException.class);
         }
@@ -167,10 +165,10 @@ class ExpressionCompilerInjectionTest {
         @Test
         @DisplayName("produces the same result as the singleton overload")
         void producesSameResultAsSingletonOverload() {
-            var compiler = new ExpressionCompiler(CacheConfig.defaults());
+            var engine = new ExpressionEngine(CacheConfig.defaults());
             String source = "result = 9 * 9;";
 
-            Map<String, Object> viaInjected = AssignmentExpression.compile(source, ENV, compiler).compute();
+            Map<String, Object> viaInjected = AssignmentExpression.compile(source, ENV, engine).compute();
             Map<String, Object> viaSingleton = AssignmentExpression.compile(source, ENV).compute();
 
             assertThat((BigDecimal) viaInjected.get("result"))

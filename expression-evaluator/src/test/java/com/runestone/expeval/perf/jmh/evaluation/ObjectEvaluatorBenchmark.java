@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Benchmarks the six canonical evaluation scenarios (PERF-039 / PERF-040) using the
- * standard evaluator ({@link com.runestone.expeval.internal.runtime.AbstractObjectEvaluator}).
+ * standard evaluator ({@link com.runestone.expeval.internal.execution.eval.AbstractObjectEvaluator}).
  *
  * <p>Run via {@link ObjectEvaluatorBenchmarkRunner} or with the JMH script:
  * <pre>

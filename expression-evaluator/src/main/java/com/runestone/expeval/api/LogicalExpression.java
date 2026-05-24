@@ -2,7 +2,6 @@ package com.runestone.expeval.api;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
 
 import java.util.Map;
@@ -15,12 +14,11 @@ import java.util.Objects;
  * instance can be evaluated repeatedly by calling {@link #compute(Map)} with the desired variable
  * values.
  *
- * <h2>Singleton vs. injected compiler</h2>
- * <p>The two-argument overload {@link #compile(String, ExpressionEnvironment)} uses the JVM-wide
- * singleton {@link ExpressionCompiler}. Use the three-argument overload
- * {@link #compile(String, ExpressionEnvironment, ExpressionCompiler)} when the compiler must be
- * managed externally — for example in tests that need isolated caches or in a Spring application
- * where the compiler is declared as a {@code @Bean}.
+     * <h2>Singleton vs. injected engine</h2>
+     * <p>The two-argument overload {@link #compile(String, ExpressionEnvironment)} uses the JVM-wide
+     * singleton. Use {@link ExpressionEngine} when the compilation cache must be
+     * managed externally — for example in tests that need isolated caches or in a Spring application
+     * where the engine is declared as a {@code @Bean}.
  *
  * <h2>Thread safety</h2>
  * <p>Instances are thread-safe. The same compiled instance may be shared and evaluated
@@ -32,6 +30,10 @@ public final class LogicalExpression {
 
     private LogicalExpression(ExpressionRuntimeSupport runtime) {
         this.runtime = Objects.requireNonNull(runtime, "runtime must not be null");
+    }
+
+    static LogicalExpression from(ExpressionRuntimeSupport runtime) {
+        return new LogicalExpression(runtime);
     }
 
     /**
@@ -59,25 +61,25 @@ public final class LogicalExpression {
     }
 
     /**
-     * Compiles a logical expression with the given environment using an explicit compiler.
+     * Compiles a logical expression with the given environment using an explicit engine.
      *
-     * <p>Use this overload when the compiler is managed externally (DI / Spring {@code @Bean})
+     * <p>Use this overload when the engine is managed externally (DI / Spring {@code @Bean})
      * and its cache lifecycle must be controlled independently of the JVM-wide singleton:
      *
      * <pre>{@code
-     * @Autowired ExpressionCompiler compiler;
+     * @Autowired ExpressionEngine engine;
      *
-     * LogicalExpression expr = LogicalExpression.compile("a > b", environment, compiler);
+     * LogicalExpression expr = LogicalExpression.compile("a > b", environment, engine);
      * }</pre>
      *
      * @param source      expression source text; must not be blank
      * @param environment execution environment; must not be {@code null}
-     * @param compiler    compiler instance to use; must not be {@code null}
+     * @param engine      engine instance to use; must not be {@code null}
      * @return a compiled expression ready for evaluation
      * @throws ExpressionCompilationException if the expression has semantic errors
      */
-    public static LogicalExpression compile(String source, ExpressionEnvironment environment, ExpressionCompiler compiler) {
-        return new LogicalExpression(ExpressionRuntimeSupport.compileLogical(source, environment, compiler));
+    public static LogicalExpression compile(String source, ExpressionEnvironment environment, ExpressionEngine engine) {
+        return Objects.requireNonNull(engine, "engine must not be null").compileLogical(source, environment);
     }
 
     /**

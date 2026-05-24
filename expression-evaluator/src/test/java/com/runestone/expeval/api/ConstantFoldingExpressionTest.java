@@ -1,7 +1,6 @@
 package com.runestone.expeval.api;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,7 +24,7 @@ import static org.assertj.core.api.Assertions.within;
  *
  * <p>Skipped categories:
  * <ul>
- *   <li>Error path / invalid input — compile-time errors are covered by ExpressionCompilerTest;
+ *   <li>Error path / invalid input — compile-time errors are covered by DefaultExpressionCompilerTest;
  *       folding adds no new error paths at runtime.
  *   <li>Concurrency — evaluation is stateless per scope; the Caffeine cache is thread-safe.
  * </ul>
@@ -244,7 +243,7 @@ class ConstantFoldingExpressionTest {
      * These tests verify that a foldable function is called exactly once (at build time)
      * and never again during {@code compute()}, regardless of how many times it is called.
      *
-     * <p>Each test uses a fresh {@link ExpressionCompiler} to prevent the Caffeine cache from
+     * <p>Each test uses a fresh {@link ExpressionEngine} to prevent the Caffeine cache from
      * returning a previously compiled expression that would skip the build-time invocation.
      */
     @Nested
@@ -262,9 +261,9 @@ class ConstantFoldingExpressionTest {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
                     .registerStaticProvider(CountedFunctions.class, true)
                     .build();
-            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+            ExpressionEngine freshEngine = new ExpressionEngine();
 
-            MathExpression expr = MathExpression.compile("counted(5)", env, freshCompiler);
+            MathExpression expr = MathExpression.compile("counted(5)", env, freshEngine);
             assertThat(CountedFunctions.CALL_COUNT.get())
                     .as("function must be called exactly once at fold time")
                     .isEqualTo(1);
@@ -283,9 +282,9 @@ class ConstantFoldingExpressionTest {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
                     .registerStaticProvider(CountedFunctions.class)   // foldable=false
                     .build();
-            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+            ExpressionEngine freshEngine = new ExpressionEngine();
 
-            MathExpression expr = MathExpression.compile("counted(5)", env, freshCompiler);
+            MathExpression expr = MathExpression.compile("counted(5)", env, freshEngine);
             assertThat(CountedFunctions.CALL_COUNT.get())
                     .as("non-foldable function must not be called at build time")
                     .isEqualTo(0);
@@ -304,10 +303,10 @@ class ConstantFoldingExpressionTest {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
                     .registerStaticProvider(CountedFunctions.class, true)
                     .build();
-            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+            ExpressionEngine freshEngine = new ExpressionEngine();
 
             // inner counted(5) folds first (1 call), outer counted(result) folds next (1 call) = 2 total
-            MathExpression expr = MathExpression.compile("counted(counted(5))", env, freshCompiler);
+            MathExpression expr = MathExpression.compile("counted(counted(5))", env, freshEngine);
             assertThat(CountedFunctions.CALL_COUNT.get())
                     .as("both inner and outer calls must be invoked at fold time")
                     .isEqualTo(2);
@@ -504,10 +503,10 @@ class ConstantFoldingExpressionTest {
                     .registerStaticProvider(CountedFunctions.class, true) // foldable = true
                     .build();
 
-            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+            ExpressionEngine freshEngine = new ExpressionEngine();
 
             // If CONST_PI is folded to 3.14159, then counted(3.14159) can be folded at compile time.
-            MathExpression expr = MathExpression.compile("counted(CONST_PI)", env, freshCompiler);
+            MathExpression expr = MathExpression.compile("counted(CONST_PI)", env, freshEngine);
 
             assertThat(CountedFunctions.CALL_COUNT.get())
                     .as("function should be called exactly once at compile time if variable is folded")
@@ -527,9 +526,9 @@ class ConstantFoldingExpressionTest {
                     .registerStaticProvider(CountedFunctions.class, true) // foldable = true
                     .build();
 
-            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+            ExpressionEngine freshEngine = new ExpressionEngine();
 
-            MathExpression expr = MathExpression.compile("counted(VAR_X)", env, freshCompiler);
+            MathExpression expr = MathExpression.compile("counted(VAR_X)", env, freshEngine);
 
             assertThat(CountedFunctions.CALL_COUNT.get())
                     .as("function should NOT be called at compile time if variable is overridable")
@@ -555,9 +554,9 @@ class ConstantFoldingExpressionTest {
                     .registerStaticProvider(CountedFunctions.class, true) // foldable = true
                     .build();
 
-            ExpressionCompiler freshCompiler = new ExpressionCompiler();
+            ExpressionEngine freshEngine = new ExpressionEngine();
 
-            MathExpression expr = MathExpression.compile("counted(CONST_INT)", env, freshCompiler);
+            MathExpression expr = MathExpression.compile("counted(CONST_INT)", env, freshEngine);
 
             assertThat(CountedFunctions.CALL_COUNT.get())
                     .as("should be folded even if original external is Integer")

@@ -4,7 +4,6 @@ import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval.api.support.FoldingNavigationFixtures.CountingBox;
 import com.runestone.expeval.api.support.FoldingNavigationFixtures.CountingTypedBox;
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -222,7 +221,7 @@ class ObjectNavigationTest {
                 .registerExternalSymbol("BOX", box, false)
                 .build();
 
-        MathExpression expression = MathExpression.compile("BOX.multiply(3)", env, new ExpressionCompiler());
+        MathExpression expression = MathExpression.compile("BOX.multiply(3)", env, new ExpressionEngine());
 
         assertThat(box.calls()).isEqualTo(1);
         box.resetCalls();

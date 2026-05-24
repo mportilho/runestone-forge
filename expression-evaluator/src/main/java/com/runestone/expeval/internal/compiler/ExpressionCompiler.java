@@ -46,7 +46,7 @@ import java.util.Objects;
  * {@code @Bean}. Use {@link #invalidateCache()} to clear all cached entries without discarding
  * the instance.
  */
-public final class DefaultExpressionCompiler {
+public final class ExpressionCompiler {
 
     private final ExpressionEvaluatorParserFacade parserFacade;
     private final SemanticAstBuilder astBuilder;
@@ -66,7 +66,7 @@ public final class DefaultExpressionCompiler {
      *
      * @see CacheConfig#defaults()
      */
-    public DefaultExpressionCompiler() {
+    public ExpressionCompiler() {
         this(new ExpressionEvaluatorParserFacade(), new SemanticAstBuilder(), new SemanticResolver(), new ExecutionPlanBuilder(), CacheConfig.defaults());
     }
 
@@ -79,19 +79,19 @@ public final class DefaultExpressionCompiler {
      * <pre>{@code
      * // Spring example
      * @Bean
-     * public ExpressionCompiler expressionCompiler() {
-     *     return new ExpressionCompiler(new CacheConfig(4_096, Duration.ofHours(1)));
+     * public ExpressionEngine expressionEngine() {
+     *     return new ExpressionEngine(new CacheConfig(4_096, Duration.ofHours(1)));
      * }
      * }</pre>
      *
      * @param cacheConfig cache settings; must not be {@code null}
      */
-    public DefaultExpressionCompiler(CacheConfig cacheConfig) {
+    public ExpressionCompiler(CacheConfig cacheConfig) {
         this(new ExpressionEvaluatorParserFacade(), new SemanticAstBuilder(), new SemanticResolver(), new ExecutionPlanBuilder(), cacheConfig);
     }
 
-    DefaultExpressionCompiler(ExpressionEvaluatorParserFacade parserFacade, SemanticAstBuilder astBuilder,
-                              SemanticResolver semanticResolver, ExecutionPlanBuilder planBuilder, CacheConfig cacheConfig) {
+    ExpressionCompiler(ExpressionEvaluatorParserFacade parserFacade, SemanticAstBuilder astBuilder,
+                       SemanticResolver semanticResolver, ExecutionPlanBuilder planBuilder, CacheConfig cacheConfig) {
         this.parserFacade = Objects.requireNonNull(parserFacade, "parserFacade must not be null");
         this.astBuilder = Objects.requireNonNull(astBuilder, "astBuilder must not be null");
         this.semanticResolver = Objects.requireNonNull(semanticResolver, "semanticResolver must not be null");

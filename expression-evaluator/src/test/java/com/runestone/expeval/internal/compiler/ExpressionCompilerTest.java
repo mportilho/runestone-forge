@@ -3,7 +3,6 @@ package com.runestone.expeval.internal.compiler;
 import com.runestone.expeval.api.CompilationIssue;
 import com.runestone.expeval.api.ExpressionCompilationException;
 import com.runestone.expeval.api.IssueCode;
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;

@@ -28,7 +28,7 @@ Verified reference for the current `expression-evaluator` runtime. Use this docu
 - `ExpressionEnvironmentBuilder.empty()`
 - `CacheConfig`
 - `ExpressionRuntimeSupport`
-- `ExpressionCompiler`
+- `ExpressionEngine`
 
 The default environment is empty. No function providers are registered unless the caller adds them explicitly.
 
@@ -58,7 +58,7 @@ source string
 5. `MathEvaluator` / `LogicalEvaluator`
    Execute the compiled plan inside an `ExecutionScope`.
 
-`ExpressionCompiler` caches the compiled result by `(source, environmentId, resultType)`.
+`DefaultExpressionCompiler` caches the compiled result by `(source, environmentId, resultType)`. Public callers use `ExpressionEngine` when they need an independently managed cache.
 
 ---
 
@@ -662,7 +662,7 @@ Defaults come from JVM properties:
 
 ### Singleton compiler lifecycle
 
-`ExpressionRuntimeSupport` manages a lazily-initialized JVM-wide `ExpressionCompiler`.
+`ExpressionRuntimeSupport` manages a lazily-initialized JVM-wide `DefaultExpressionCompiler`.
 
 Available controls:
 
@@ -675,7 +675,7 @@ Available controls:
 
 ### DI use case
 
-The public APIs also expose overloads that accept an explicit `ExpressionCompiler`, which is the right choice when the compiler lifecycle should be controlled by DI or tests.
+The public API exposes `ExpressionEngine`, which is the right choice when cache lifecycle should be controlled by DI or tests.
 
 ---
 

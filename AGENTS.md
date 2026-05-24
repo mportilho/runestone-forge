@@ -64,7 +64,7 @@ Public API (package `com.runestone.expeval.api`, `environment` and `catalog`):
 - `MathExpression`, `LogicalExpression` — compiled, reusable expression objects.
 - `FunctionCatalog`, `ExternalSymbolCatalog` — central repositories for available functions and external symbols.
 
-Compilation pipeline (all internal, coordinated by `ExpressionCompiler`):
+Compilation pipeline (all internal, coordinated by `ExpressionCompiler`; public callers use `ExpressionEngine` for isolated cache lifecycle):
 1. **Parse** — `ExpressionEvaluatorParserFacade` wraps the ANTLR grammar; supports `SLL` with `LL` fallback via `PredictionStrategy`.
 2. **AST** — `SemanticAstBuilder` maps the ANTLR parse tree to typed `Node` subclasses (`BinaryOperationNode`, `FunctionCallNode`, `ConditionalNode`, `VectorLiteralNode`, etc.) in `internal.ast`.
 3. **Semantic resolution** — `SemanticResolver` walks the AST against `FunctionCatalog` and `ExternalSymbolCatalog`, producing a `SemanticModel` with `SymbolRef` bindings and typed `ResolvedType` annotations.
@@ -73,7 +73,7 @@ Compilation pipeline (all internal, coordinated by `ExpressionCompiler`):
 
 Type system: `ResolvedType` hierarchy with `ScalarType`, `VectorType`, and `UnknownType`; runtime values are `RuntimeValue` objects coerced via `RuntimeCoercionService`.
 
-Compiled expressions are cached in `ExpressionCompiler` by `(source, environmentId, resultType)` using Caffeine (max 1 024 entries).
+Compiled expressions are cached in `ExpressionCompiler` by `(source, environmentId, resultType)` using Caffeine (max 1 024 entries by default).
 
 ## Tech Stack
 

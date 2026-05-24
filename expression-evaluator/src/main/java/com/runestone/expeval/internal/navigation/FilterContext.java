@@ -6,7 +6,7 @@ import org.jspecify.annotations.Nullable;
  * Encapsulates the current element being tested inside a {@code [?(...)] } filter predicate.
  *
  * <p>A pool of {@code FilterContext} instances (one per active nesting level) is maintained by
- * {@code AbstractObjectEvaluator.FilterContextStack} to support nested filters such as
+ * {@link com.runestone.expeval.internal.execution.eval.FilterContextStack} to support nested filters such as
  * {@code [?(@.authors[?(@.name =~ ".*")])]}. Each instance is mutated in-place rather than
  * replaced, eliminating per-element allocation on hot filter paths.
  *

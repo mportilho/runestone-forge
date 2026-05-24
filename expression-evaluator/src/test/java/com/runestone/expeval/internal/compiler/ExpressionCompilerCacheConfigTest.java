@@ -1,7 +1,6 @@
 package com.runestone.expeval.internal.compiler;
 
 import com.runestone.expeval.api.CacheConfig;
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.testing.ExpressionCompilerInspector;
 import org.junit.jupiter.api.DisplayName;
@@ -13,7 +12,7 @@ import java.time.Duration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@DisplayName("ExpressionCompiler — CacheConfig and invalidateCache")
+@DisplayName("DefaultExpressionCompiler — CacheConfig and invalidateCache")
 class ExpressionCompilerCacheConfigTest {
 
     private static final ExpressionEnvironment ENV = ExpressionEnvironment.builder().build();

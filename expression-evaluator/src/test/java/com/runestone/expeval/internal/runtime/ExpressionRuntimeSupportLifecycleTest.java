@@ -1,9 +1,9 @@
 package com.runestone.expeval.internal.runtime;
 
 import com.runestone.expeval.api.CacheConfig;
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.internal.compiler.CompiledExpression;
+import com.runestone.expeval.internal.compiler.ExpressionCompiler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -132,11 +132,11 @@ class ExpressionRuntimeSupportLifecycleTest {
         }
     }
 
-    // --- explicit compiler overloads (Option C) ---
+    // --- explicit internal compiler overloads ---
 
     @Nested
-    @DisplayName("explicit compiler overloads")
-    class ExplicitCompilerOverloads {
+    @DisplayName("explicit internal compiler overloads")
+    class ExplicitInternalCompilerOverloads {
 
         @Test
         @DisplayName("compileMath with explicit compiler caches within that compiler")

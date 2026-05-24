@@ -2,7 +2,6 @@ package com.runestone.expeval.api;
 
 import com.runestone.expeval.environment.ExpressionEnvironment;
 import com.runestone.expeval.environment.ExpressionEnvironmentBuilder;
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -529,7 +528,7 @@ class FoldedAuditTrailTest {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
                     .registerExternalSymbol("CONST_STABLE", new BigDecimal("42"), false)
                     .build();
-            MathExpression expr = MathExpression.compile("CONST_STABLE + 1", env, new ExpressionCompiler());
+            MathExpression expr = MathExpression.compile("CONST_STABLE + 1", env, new ExpressionEngine());
 
             AuditResult<BigDecimal> first = expr.computeWithAudit();
             AuditResult<BigDecimal> second = expr.computeWithAudit();
@@ -554,7 +553,7 @@ class FoldedAuditTrailTest {
             ExpressionEnvironment env = ExpressionEnvironment.builder()
                     .registerExternalSymbol("CONST_RATE_STABLE", new BigDecimal("10"), false)
                     .build();
-            MathExpression expr = MathExpression.compile("CONST_RATE_STABLE + y", env, new ExpressionCompiler());
+            MathExpression expr = MathExpression.compile("CONST_RATE_STABLE + y", env, new ExpressionEngine());
 
             AuditResult<BigDecimal> first = expr.computeWithAudit(Map.of("y", new BigDecimal("1")));
             AuditResult<BigDecimal> second = expr.computeWithAudit(Map.of("y", new BigDecimal("999")));

@@ -1,9 +1,9 @@
 package com.runestone.expeval.perf.jmh.navigation;
 
+import com.runestone.expeval.api.ExpressionEngine;
 import com.runestone.expeval.api.LogicalExpression;
 import com.runestone.expeval.api.MathExpression;
 import com.runestone.expeval.environment.ExpressionEnvironment;
-import com.runestone.expeval.compiler.ExpressionCompiler;
 import com.runestone.expeval.perf.ObjectNavigationBenchmarkSupport;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -83,7 +83,7 @@ public class ObjectNavigationBenchmark {
         return LogicalExpression.compile(
                 ObjectNavigationBenchmarkSupport.NESTED_PROPERTY_EXPRESSION,
                 state.environment,
-                state.compiler
+                state.engine
         );
     }
 
@@ -92,7 +92,7 @@ public class ObjectNavigationBenchmark {
         return MathExpression.compile(
                 ObjectNavigationBenchmarkSupport.METHOD_WITH_ARG_EXPRESSION,
                 state.environment,
-                state.compiler
+                state.engine
         );
     }
 
@@ -101,7 +101,7 @@ public class ObjectNavigationBenchmark {
         return MathExpression.compile(
                 ObjectNavigationBenchmarkSupport.METHOD_WITH_ARG_EXPRESSION,
                 state.environment,
-                state.compiler
+                state.engine
         );
     }
 
@@ -182,7 +182,7 @@ public class ObjectNavigationBenchmark {
     @State(Scope.Thread)
     public static class CompileTypedNestedPropertyState {
         private ExpressionEnvironment environment;
-        private ExpressionCompiler compiler;
+        private ExpressionEngine engine;
 
         @Setup(Level.Trial)
         public void setUpEnvironment() {
@@ -191,14 +191,14 @@ public class ObjectNavigationBenchmark {
 
         @Setup(Level.Invocation)
         public void setUpInvocation() {
-            compiler = new ExpressionCompiler();
+            engine = new ExpressionEngine();
         }
     }
 
     @State(Scope.Thread)
     public static class CompileTypedMethodWithArgumentState {
         private ExpressionEnvironment environment;
-        private ExpressionCompiler compiler;
+        private ExpressionEngine engine;
 
         @Setup(Level.Trial)
         public void setUpEnvironment() {
@@ -207,14 +207,14 @@ public class ObjectNavigationBenchmark {
 
         @Setup(Level.Invocation)
         public void setUpInvocation() {
-            compiler = new ExpressionCompiler();
+            engine = new ExpressionEngine();
         }
     }
 
     @State(Scope.Thread)
     public static class CompileReflectiveMethodWithArgumentState {
         private ExpressionEnvironment environment;
-        private ExpressionCompiler compiler;
+        private ExpressionEngine engine;
 
         @Setup(Level.Trial)
         public void setUpEnvironment() {
@@ -223,7 +223,7 @@ public class ObjectNavigationBenchmark {
 
         @Setup(Level.Invocation)
         public void setUpInvocation() {
-            compiler = new ExpressionCompiler();
+            engine = new ExpressionEngine();
         }
     }
 }
