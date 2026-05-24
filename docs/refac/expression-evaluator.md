@@ -49,6 +49,25 @@ Large manual files:
 - Main boundary smell: public API imports and exposes classes from `internal.runtime`.
 - Main duplication hotspots: runtime invocation, constant folding evaluation, navigation classification, string literal `@`, source pointer formatting.
 
+## Refactoring Direction
+
+The desired direction is to separate code by stable responsibilities in the expression pipeline, not to create one class for every branch, operator, grammar alternative, or special case.
+
+Good split candidates:
+
+- A pipeline phase with its own vocabulary and invariants, such as semantic resolution, execution planning, evaluation, runtime coercion, navigation, or audit.
+- A cohesive responsibility that is used from multiple branches, such as symbol binding, navigation typing, executable node construction, literal materialization, or runtime invocation.
+- A collaborator that can be characterized and tested without reproducing the entire compiler pipeline.
+
+Avoid split candidates:
+
+- One class per `if`/`switch` branch.
+- One class per operator unless the operator family has materially different rules and enough behavior to justify it.
+- Generic `*Utils` classes that only move private methods without creating a clearer boundary.
+- Public interfaces for collaborators that have one implementation and no external polymorphic consumer.
+
+Prefer a small number of package-private `final` collaborators per phase. Keep branch-specific code as private methods or compact strategy tables inside those collaborators until a second real responsibility appears.
+
 ## Detailed Findings
 
 | Severity | Issue | Evidence | Recommendation |
@@ -56,10 +75,10 @@ Large manual files:
 | High | Public API exposes internal compiler type | `MathExpression.java:5` imports `com.runestone.expeval.internal.runtime.ExpressionCompiler`; `MathExpression.java:80` exposes it in a public method. Similar pattern exists in logical and assignment expression facades. | Move `ExpressionCompiler` to a public package such as `com.runestone.expeval.compiler`, or create a public interface/facade and keep implementation internal. |
 | High | Public environment exposes internal runtime services | `ExpressionEnvironment.java:7` imports `RuntimeServices`; `ExpressionEnvironment.java:21` stores it; `ExpressionEnvironment.java:69` exposes `public RuntimeServices runtimeServices()`. | Make runtime service access internal or expose a narrow public runtime/conversion interface if needed. |
 | High | `internal.runtime` mixes too many phases | 47 Java files include `ExpressionCompiler`, `SemanticResolver`, `ExecutionPlanBuilder`, `Executable*`, `MathEvaluator`, `LogicalEvaluator`, `RuntimeCoercionService`, `PropertyChainOps`, `AuditCollector`. | Split by pipeline phase: compiler, semantic, execution plan, execution eval, runtime services, navigation, audit. |
-| High | `SemanticResolver` has too many reasons to change | 991 lines covering assignment symbols, literal type inference, identifiers, `@`, function overloads, property/member navigation, collection functions, operators, result type validation. | Extract `SymbolResolver`, `LiteralTypeInferencer`, `NavigationTypeResolver`, `FunctionOverloadResolver`, and `OperatorTypeChecker`. |
-| High | `ExecutionPlanBuilder` mixes plan construction with folding/evaluation concerns | 1160 lines covering symbol indexing, defaults, external binding plans, audit event estimation, node building, navigation building, foldability rules, literal materialization, constant folding evaluator. | Extract `SymbolIndexAllocator`, `ExternalBindingPlanner`, `AuditEventEstimator`, `ExecutableNodeBuilder`, `NavigationPlanBuilder`, `ConstantFolder`, and `LiteralMaterializer`. |
-| Medium-high | `SemanticAstBuilder` is a parse mapping god class | 1423 lines; maps math/logical/assignment, literals, operators, property chains, filters, lambdas, collection functions, spans. | Split by mapping area: assignment, expression, literal, navigation, filter, source span/node factory. |
-| Medium-high | Evaluation logic is duplicated between runtime and constant folding | Runtime evaluation lives in `AbstractObjectEvaluator`; folding evaluator lives inside `ExecutionPlanBuilder`. Both handle binary short-circuit, conditionals, vectors, function calls. | Create a reusable `ExecutableNodeInterpreter` or make constant folding use the same evaluator with a restricted `EvaluationPolicy`. |
+| High | `SemanticResolver` has too many reasons to change | 991 lines covering assignment symbols, literal type inference, identifiers, `@`, function overloads, property/member navigation, collection functions, operators, result type validation. | Extract a few cohesive phase collaborators: symbol/scope resolution, callable/operator typing, and navigation typing. Keep individual operator and literal branches inside those collaborators unless they grow into independent responsibilities. |
+| High | `ExecutionPlanBuilder` mixes plan construction with folding/evaluation concerns | 1160 lines covering symbol indexing, defaults, external binding plans, audit event estimation, node building, navigation building, foldability rules, literal materialization, constant folding evaluator. | Split into broad planning responsibilities: binding/index planning, executable expression planning, navigation planning, and constant folding/literal materialization. Avoid one planner per node kind. |
+| Medium-high | `SemanticAstBuilder` is a parse mapping god class | 1423 lines; maps math/logical/assignment, literals, operators, property chains, filters, lambdas, collection functions, spans. | Split into entrypoint/orchestration plus assignment mapping, expression mapping, navigation/filter mapping, and shared literal/operator/source-span support. Do not create one mapper per grammar alternative. |
+| Medium-high | Evaluation logic is duplicated between runtime and constant folding | Runtime evaluation lives in `AbstractObjectEvaluator`; folding evaluator lives inside `ExecutionPlanBuilder`. Both handle binary short-circuit, conditionals, vectors, function calls. | Share the common evaluation mechanics where it stays cheap, or keep a dedicated constant-folding path that reuses operator/function helpers. Avoid a new policy/interpreter layer if it adds dispatch to hot evaluation. |
 | Medium | Runtime invocation by arity appears in multiple places | Invocation logic exists in `FunctionDescriptor`, `AbstractObjectEvaluator`, and `PropertyChainOps`. | Extract `RuntimeInvocationSupport` or `MethodHandleInvoker`, preserving fast paths 0-6 in one place. |
 | Medium | Main navigation code is not in `internal.navigation` | `internal.navigation` contains enums/cache/introspection, while `PropertyChainOps`, `CollectionNavigationOps`, `ExecutablePropertyChain`, `FilterContextStack`, `DeepScanContext` are in `internal.runtime`. | Move navigation execution/planning classes under navigation or execution-navigation subpackages. |
 | Medium | Sentinel `@` is represented as repeated string literal | Search found relevant occurrences in `SemanticAstBuilder`, `SemanticResolver`, `ExecutionPlanBuilder`, `AbstractObjectEvaluator`, and `PropertyChainOps`. | Introduce `LanguageSymbols.CURRENT_ELEMENT` or `SymbolKind.CURRENT_ELEMENT`. Avoid fake external `SymbolRef("@", SymbolKind.EXTERNAL)`. |
@@ -160,9 +179,9 @@ com.runestone.expeval.internal.ast.mapping
   SemanticAstBuilder
   AssignmentAstMapper
   ExpressionAstMapper
-  LiteralAstMapper
   NavigationAstMapper
-  SourceSpanFactory
+  LiteralAndOperatorMapper
+  AstNodeFactory
 
 com.runestone.expeval.internal.compiler
   CompilationPipeline
@@ -177,9 +196,8 @@ com.runestone.expeval.internal.semantic
   SymbolRef
   SymbolKind
   ResolvedFunctionBinding
-  SymbolResolver
-  FunctionOverloadResolver
-  OperatorTypeChecker
+  SymbolScopeResolver
+  CallableTypeResolver
   NavigationTypeResolver
 
 com.runestone.expeval.internal.execution.plan
@@ -187,8 +205,10 @@ com.runestone.expeval.internal.execution.plan
   ExecutionPlan
   ExecutableNode
   Executable*
-  ConstantFolder
-  LiteralMaterializer
+  BindingPlanBuilder
+  ExecutableExpressionBuilder
+  NavigationPlanBuilder
+  ConstantFoldingSupport
 
 com.runestone.expeval.internal.execution.eval
   MathEvaluator
@@ -223,7 +243,7 @@ com.runestone.expeval.internal.audit
 
 The exact package names matter less than the direction: compiler orchestration, semantic resolution, execution plan, evaluation, runtime services, navigation, and audit should not all live in one package.
 
-## `SemanticResolver` Split
+## `SemanticResolver` Responsibility Split
 
 Current responsibilities include:
 
@@ -248,25 +268,21 @@ SemanticResolver
 SemanticSession
   - owns mutable maps/issues during one resolution
 
-SymbolResolver
-  - assignments, external symbols, identifiers, current element
+SymbolScopeResolver
+  - assignments, external symbols, identifiers, current element, and result symbol lookup
 
-LiteralTypeInferencer
-  - literal -> ResolvedType
-
-FunctionOverloadResolver
-  - catalog lookup and overload disambiguation
+CallableTypeResolver
+  - catalog lookup, overload disambiguation, callable result types, and operator-family type rules
 
 NavigationTypeResolver
-  - property chain, collection/map navigation, deep scan, filters
-
-OperatorTypeChecker
-  - unary/binary/ternary/postfix/coalesce/regex rules
+  - property chains, member calls, collection/map navigation, deep scan, filters, and current element scoping inside navigation
 ```
 
-This should be done by extracting private methods into package-private classes one group at a time. Avoid changing behavior while moving logic.
+Keep literal inference and individual operator branches as private methods inside these collaborators at first. Extract them only if they become independently testable responsibilities with repeated use or complex state.
 
-## `ExecutionPlanBuilder` Split
+This should be done by extracting private methods into package-private `final` classes one responsibility group at a time. Avoid changing behavior while moving logic.
+
+## `ExecutionPlanBuilder` Responsibility Split
 
 Current responsibilities include:
 
@@ -288,34 +304,22 @@ Suggested extraction:
 ExecutionPlanBuilder
   - orchestrates plan building
 
-SymbolIndexAllocator
-  - deterministic symbol index assignment
+BindingPlanBuilder
+  - deterministic symbol index assignment, external defaults, external binding plans, and audit event capacity estimates
 
-ExternalBindingPlanner
-  - defaults and binding plans
-
-AuditEventEstimator
-  - max audit event count
-
-ExecutableNodeBuilder
-  - AST node -> executable node
+ExecutableExpressionBuilder
+  - AST/semantic node -> executable node for scalar, logical, conditional, vector, assignment, and callable expressions
 
 NavigationPlanBuilder
-  - property chain AST/resolved navigation -> executable navigation
+  - property-chain AST/resolved navigation -> executable navigation, including collection/map/deep-scan steps
 
-LiteralMaterializer
-  - AST literal -> runtime literal value
-
-ConstantFolder
-  - foldability rules and fold orchestration
-
-ConstantExpressionEvaluator
-  - execution of foldable executable subtrees, ideally sharing runtime evaluator logic
+ConstantFoldingSupport
+  - foldability rules, literal materialization, and execution of foldable executable subtrees, ideally sharing runtime evaluator logic where it does not add overhead
 ```
 
-First extraction candidate: `SymbolIndexAllocator`. It has a clear, small responsibility and existing comments already define its invariants.
+First extraction candidate: `BindingPlanBuilder`. It has a clear responsibility boundary and can absorb symbol index allocation without creating a tiny allocator class that is only meaningful inside the builder.
 
-## `SemanticAstBuilder` Split
+## `SemanticAstBuilder` Responsibility Split
 
 Current responsibilities include:
 
@@ -344,26 +348,17 @@ AssignmentAstMapper
 ExpressionAstMapper
   - math/logical expression parse contexts
 
-LiteralAstMapper
-  - string, number, boolean, date/time/datetime literals
-
 NavigationAstMapper
-  - property chain, wildcard, slice, deep scan, map projection, aggregation
+  - property chain, wildcard, slice, deep scan, map projection, aggregation, filter expressions, and current element references
 
-FilterAstMapper
-  - filter expressions and current element references
+LiteralAndOperatorMapper
+  - string, number, boolean, date/time/datetime literals and token/context -> AST operator enum
 
-OperatorMapper
-  - token/context -> AST operator enum
-
-SourceSpanFactory
-  - parser context/token -> SourceSpan
-
-NodeFactory
-  - node IDs and common construction helpers
+AstNodeFactory
+  - node IDs, parser context/token -> SourceSpan, and common construction helpers
 ```
 
-Keep `SemanticAstBuilder` as the public class used by the parser facade. Move internals behind package-private collaborators.
+Keep `SemanticAstBuilder` as the public class used by the parser facade. Move internals behind package-private collaborators, but keep grammar-alternative-specific code as methods inside the relevant mapper.
 
 ## Navigation Concerns
 
@@ -387,6 +382,8 @@ Recommended improvements:
 - Consider `ResolvedNavigationChain` as an intermediate semantic result.
 - Move runtime navigation operations into `internal.navigation` or `internal.execution.navigation`.
 
+Do not split navigation into one class per step type at first. The useful boundary is semantic navigation typing, executable navigation planning, and runtime navigation execution. Step-specific branches can stay inside those three responsibilities until their behavior becomes large enough to justify dedicated collaborators.
+
 ## Runtime Invocation Duplication
 
 Invocation concerns appear in:
@@ -408,6 +405,8 @@ RuntimeInvocationSupport
 ```
 
 Keep optimized arity paths if they are important, but put them in one helper. That avoids maintaining arity 0-6 logic in several places.
+
+Do not split invocation into one class per arity. Keep arity-specific fast paths in one implementation so performance-sensitive behavior remains easy to audit.
 
 ## Performance Guardrails
 
@@ -446,9 +445,9 @@ Recommended baseline coverage:
 8. Move evaluators to `internal.execution.eval`: `MathEvaluator`, `LogicalEvaluator`, `AbstractObjectEvaluator`, `OperatorEvaluator`, `ExecutionScope`, `NodeEvaluator`.
 9. Move navigation execution classes to navigation-focused package: `PropertyChainOps`, `CollectionNavigationOps`, `FilterContextStack`, `DeepScanContext`.
 10. Add `LanguageSymbols.CURRENT_ELEMENT` and replace scattered `"@"` checks.
-11. Extract small collaborators from `ExecutionPlanBuilder`, starting with `SymbolIndexAllocator` and `ExternalBindingPlanner`.
+11. Extract cohesive collaborators from `ExecutionPlanBuilder`, starting with `BindingPlanBuilder` and then `ExecutableExpressionBuilder`.
 12. Compare performance against the baseline after each extraction that touches evaluation, invocation, navigation, coercion, reflection, or folding.
-13. Extract small collaborators from `SemanticResolver`, starting with `LiteralTypeInferencer` and `OperatorTypeChecker`.
+13. Extract cohesive collaborators from `SemanticResolver`, starting with `SymbolScopeResolver`, then `CallableTypeResolver` and `NavigationTypeResolver`.
 14. Split `SemanticAstBuilder` last, because grammar/AST mapping changes tend to be broad and should happen after package boundaries are clearer.
 
 ## Suggested Tests
