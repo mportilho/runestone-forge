@@ -1,5 +1,6 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.semantic.SymbolRef;
 import com.runestone.expeval.types.ResolvedType;
 
 record ExternalBindingPlan(SymbolRef symbolRef, ResolvedType declaredType, boolean overridable) {

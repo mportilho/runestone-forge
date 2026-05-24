@@ -3,6 +3,8 @@ package com.runestone.expeval.internal.runtime;
 import com.runestone.expeval.internal.navigation.MapProjectionKind;
 import com.runestone.expeval.internal.navigation.NavigationMode;
 import com.runestone.expeval.internal.navigation.VectorAggregationKind;
+import com.runestone.expeval.internal.semantic.ResolvedFunctionBinding;
+import com.runestone.expeval.internal.semantic.SymbolRef;
 import com.runestone.expeval.types.ResolvedType;
 import org.jspecify.annotations.Nullable;
 

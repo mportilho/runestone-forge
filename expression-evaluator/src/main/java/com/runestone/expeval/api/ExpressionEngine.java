@@ -6,7 +6,7 @@ import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.grammar.ParsingException;
 import com.runestone.expeval.internal.runtime.ExpressionCompilationCache;
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
-import com.runestone.expeval.internal.runtime.SemanticModel;
+import com.runestone.expeval.internal.semantic.SemanticModel;
 
 import java.util.List;
 import java.util.Objects;

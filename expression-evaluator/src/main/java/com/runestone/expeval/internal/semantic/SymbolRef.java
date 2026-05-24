@@ -1,4 +1,4 @@
-package com.runestone.expeval.internal.runtime;
+package com.runestone.expeval.internal.semantic;
 
 import java.util.Objects;
 
@@ -27,7 +27,7 @@ public final class SymbolRef {
         return index;
     }
 
-    void setIndex(int index) {
+    public void setIndex(int index) {
         if (index < 0) {
             throw new IllegalArgumentException("index must be >= 0, got: " + index);
         }

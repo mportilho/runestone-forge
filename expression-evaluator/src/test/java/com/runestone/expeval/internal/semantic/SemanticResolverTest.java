@@ -13,8 +13,6 @@ import com.runestone.expeval.internal.runtime.CompiledExpression;
 import com.runestone.expeval.internal.runtime.ExpressionCompilationCache;
 import com.runestone.expeval.internal.runtime.ExpressionRuntimeSupport;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
-import com.runestone.expeval.internal.runtime.SemanticModel;
-import com.runestone.expeval.internal.runtime.SymbolRef;
 import com.runestone.expeval.perf.ObjectNavigationBenchmarkSupport;
 import com.runestone.expeval.types.ScalarType;
 import org.junit.jupiter.api.Test;

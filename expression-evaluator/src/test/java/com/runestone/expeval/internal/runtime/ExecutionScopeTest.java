@@ -1,5 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.semantic.SymbolKind;
+import com.runestone.expeval.internal.semantic.SymbolRef;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

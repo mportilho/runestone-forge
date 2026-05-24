@@ -9,6 +9,8 @@ import com.runestone.expeval.internal.ast.SourceSpan;
 import com.runestone.expeval.internal.ast.mapping.SemanticAstBuilder;
 import com.runestone.expeval.internal.grammar.ExpressionEvaluatorParserFacade;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
+import com.runestone.expeval.internal.semantic.ResolutionContext;
+import com.runestone.expeval.internal.semantic.SemanticModel;
 
 import java.util.List;
 import java.util.Objects;

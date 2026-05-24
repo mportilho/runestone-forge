@@ -1,4 +1,4 @@
-package com.runestone.expeval.internal.runtime;
+package com.runestone.expeval.internal.semantic;
 
 import com.runestone.expeval.internal.ast.AssignmentNode;
 import com.runestone.expeval.internal.ast.ExpressionFileNode;

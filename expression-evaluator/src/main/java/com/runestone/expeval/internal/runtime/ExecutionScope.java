@@ -1,5 +1,8 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.semantic.SymbolKind;
+import com.runestone.expeval.internal.semantic.SymbolRef;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;

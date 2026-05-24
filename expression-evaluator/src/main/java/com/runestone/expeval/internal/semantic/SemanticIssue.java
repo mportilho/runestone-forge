@@ -1,4 +1,4 @@
-package com.runestone.expeval.internal.runtime;
+package com.runestone.expeval.internal.semantic;
 
 import com.runestone.expeval.api.IssueCode;
 import com.runestone.expeval.internal.ast.SourceSpan;

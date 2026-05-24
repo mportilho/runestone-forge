@@ -1,6 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
 import com.runestone.expeval.internal.ast.SourceSpan;
+import com.runestone.expeval.internal.semantic.SymbolRef;
 
 import java.util.Objects;
 

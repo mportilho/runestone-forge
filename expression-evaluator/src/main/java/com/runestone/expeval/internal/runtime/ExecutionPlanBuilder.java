@@ -9,6 +9,10 @@ import com.runestone.expeval.internal.ast.BinaryOperator;
 import com.runestone.expeval.internal.ast.TernaryOperationNode;
 import com.runestone.expeval.internal.navigation.NavigationMode;
 import com.runestone.expeval.internal.navigation.VectorAggregationKind;
+import com.runestone.expeval.internal.semantic.ResolvedFunctionBinding;
+import com.runestone.expeval.internal.semantic.SemanticModel;
+import com.runestone.expeval.internal.semantic.SymbolKind;
+import com.runestone.expeval.internal.semantic.SymbolRef;
 import com.runestone.expeval.types.*;
 
 import java.math.BigDecimal;

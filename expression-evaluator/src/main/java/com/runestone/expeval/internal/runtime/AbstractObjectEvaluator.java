@@ -6,6 +6,7 @@ import com.runestone.expeval.api.ExpressionEvaluationException;
 import com.runestone.expeval.catalog.FunctionDescriptor;
 import com.runestone.expeval.internal.ast.BinaryOperator;
 import com.runestone.expeval.internal.ast.SourceSpan;
+import com.runestone.expeval.internal.semantic.SymbolRef;
 
 import java.math.MathContext;
 import java.time.LocalDate;

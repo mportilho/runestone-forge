@@ -5,6 +5,7 @@ import com.runestone.expeval.catalog.FunctionDescriptor;
 import com.runestone.expeval.internal.navigation.MapProjectionKind;
 import com.runestone.expeval.internal.navigation.TypeIntrospectionSupport;
 import com.runestone.expeval.internal.navigation.VectorAggregationKind;
+import com.runestone.expeval.internal.semantic.ResolvedFunctionBinding;
 import org.jspecify.annotations.Nullable;
 
 import java.lang.invoke.MethodHandle;

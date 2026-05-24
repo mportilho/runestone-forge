@@ -1,5 +1,7 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.expeval.internal.semantic.SymbolRef;
+
 import java.util.List;
 import java.util.Objects;
 

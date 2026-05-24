@@ -4,6 +4,7 @@ import com.runestone.expeval.api.AuditEvent;
 import com.runestone.expeval.api.AuditResult;
 import com.runestone.expeval.catalog.ExternalSymbolCatalog;
 import com.runestone.expeval.environment.ExpressionEnvironment;
+import com.runestone.expeval.internal.semantic.SemanticModel;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
