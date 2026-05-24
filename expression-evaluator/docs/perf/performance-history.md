@@ -1,3 +1,9 @@
+## Benchmark Organization
+
+Current benchmark packages and JMH commands are documented in [`benchmark-organization.md`](benchmark-organization.md). Historical entries keep the benchmark labels emitted by JMH at the time of each run, even when later package reorganizations change fully qualified names.
+
+---
+
 ## PERF-001: NodeEvaluator callback — no regression + CollectionNavigation baseline
 
 **Date:** 2026-04-21

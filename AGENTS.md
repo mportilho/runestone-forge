@@ -87,6 +87,7 @@ Compiled expressions are cached in `ExpressionCompiler` by `(source, environment
 ## Key Reference Documents
 
 - **`expression-evaluator/docs/runtime-internals.md`** — Verified findings about the expression-evaluator runtime: compilation pipeline, type system, `RuntimeValue` variants, `RuntimeCoercionService` coercion order, array-parameter coercion fix, overload disambiguation rules, `RuntimeValueFactory` wrapping logic, grammar syntax for date/datetime literals and type-hinted variables, and `ExpressionEnvironmentBuilder` convenience methods. Read this before exploring the expression-evaluator internals from scratch.
+- **`expression-evaluator/docs/perf/benchmark-organization.md`** — Package layout, classification, and JMH commands for `expression-evaluator` performance benchmarks. Read this before adding, moving, or running expression-evaluator benchmarks.
 
 ## Agent Skills
 
