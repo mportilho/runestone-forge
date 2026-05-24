@@ -68,6 +68,8 @@ Avoid split candidates:
 
 Prefer a small number of package-private `final` collaborators per phase. Keep branch-specific code as private methods or compact strategy tables inside those collaborators until a second real responsibility appears.
 
+When extracting collaborators, preserve object lifetime. Prefer moving existing state and behavior to collaborators created once during compiler/environment construction, or to stateless shared instances, instead of allocating new helper objects during expression compilation or evaluation loops.
+
 ## Detailed Findings
 
 | Severity | Issue | Evidence | Recommendation |
@@ -413,6 +415,8 @@ Do not split invocation into one class per arity. Keep arity-specific fast paths
 These refactorings are primarily structural. They should preserve the runtime performance profile unless a deliberate, benchmark-backed optimization is being made.
 
 - Package moves must be behavior-only refactors and should not change allocation patterns.
+- Refactoring must not introduce new per-node, per-expression, per-argument, or per-evaluation helper object allocations unless there is a measured reason.
+- Extracted collaborators should be reused through constructor-injected fields, static stateless instances, or existing runtime services instead of being instantiated inside recursive visitors, builders, evaluators, navigation loops, or function invocation paths.
 - Evaluation hot paths must not introduce per-node policy dispatch, reflection discovery, generic varargs, or unnecessary `Object[]` allocation.
 - Keep arity-specific invocation fast paths for common arities 0 through 6.
 - Centralized invocation support must not replace specialized method-handle paths with generic reflection or varargs-based dispatch.
