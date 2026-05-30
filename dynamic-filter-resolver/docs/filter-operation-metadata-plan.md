@@ -52,7 +52,8 @@ public enum FilterValueShape {
     TARGET_FIELD,
     STRING,
     BOOLEAN,
-    ARRAY
+    ARRAY,
+    RANGE
 }
 ```
 
@@ -74,10 +75,16 @@ public record FilterOperationMetadata(FilterValueShape valueShape) {
     public static FilterOperationMetadata arrayValue() {
         return new FilterOperationMetadata(FilterValueShape.ARRAY);
     }
+
+    public static FilterOperationMetadata rangeValue() {
+        return new FilterOperationMetadata(FilterValueShape.RANGE);
+    }
 }
 ```
 
-`Dynamic.class` pode continuar como pseudo-operacao especial no OpenAPI, pois nao e registrada diretamente no JPA.
+Todos os built-ins registraveis tambem devem ter metadados explicitos no registry. Isso deixa o registry como fonte unica do formato esperado do parametro e reduz regras especiais no OpenAPI.
+
+`Dynamic.class` e `Decorated.class` continuam como pseudo-operacoes e nao devem ser registradas diretamente no JPA. `Dynamic.class` permanece especial no OpenAPI porque seu valor e composto por codigo de operacao + valores, nao pela operacao final registrada.
 
 ## API Desejada no Registry
 
@@ -158,7 +165,43 @@ Built-ins recomendados:
 |---|---|
 | `IsNull.class` | `BOOLEAN` |
 | `IsIn.class` | `ARRAY` |
+| `Between.class` | `RANGE` |
 | Demais comparacoes escalares | `TARGET_FIELD` |
+| `Dynamic.class` | Nao registrar; pseudo-operacao especial |
+| `Decorated.class` | Nao registrar; pseudo-operacao resolvida por decorators |
+
+Mapeamento detalhado recomendado:
+
+| Operacao | Metadata | Observacao |
+|---|---|---|
+| `Equals.class` | `TARGET_FIELD` | Valor unico convertido para o tipo do campo. |
+| `Like.class` | `TARGET_FIELD` | Valor unico; normalmente string, mas preserva comportamento atual baseado no campo. |
+| `StartsWith.class` | `TARGET_FIELD` | Valor unico. |
+| `EndsWith.class` | `TARGET_FIELD` | Valor unico. |
+| `Greater.class` | `TARGET_FIELD` | Valor unico convertido para o tipo do campo. |
+| `GreaterOrEquals.class` | `TARGET_FIELD` | Valor unico convertido para o tipo do campo. |
+| `Less.class` | `TARGET_FIELD` | Valor unico convertido para o tipo do campo. |
+| `LessOrEquals.class` | `TARGET_FIELD` | Valor unico convertido para o tipo do campo. |
+| `IsNull.class` | `BOOLEAN` | Parametro indica se deve testar nulo ou nao nulo. |
+| `IsIn.class` | `ARRAY` | Lista aberta de valores. |
+| `Between.class` | `RANGE` | Exatamente dois valores: inicio e fim. |
+
+Exemplo esperado no registro dos built-ins:
+
+```java
+registry.register(IsNull.class, isNullOperation, FilterOperationMetadata.booleanValue());
+registry.register(IsIn.class, isInOperation, FilterOperationMetadata.arrayValue());
+registry.register(Between.class, betweenOperation, FilterOperationMetadata.rangeValue());
+
+registry.register(Equals.class, equalsOperation, FilterOperationMetadata.targetField());
+registry.register(Like.class, likeOperation, FilterOperationMetadata.targetField());
+registry.register(StartsWith.class, startsWithOperation, FilterOperationMetadata.targetField());
+registry.register(EndsWith.class, endsWithOperation, FilterOperationMetadata.targetField());
+registry.register(Greater.class, greaterOperation, FilterOperationMetadata.targetField());
+registry.register(GreaterOrEquals.class, greaterOrEqualsOperation, FilterOperationMetadata.targetField());
+registry.register(Less.class, lessOperation, FilterOperationMetadata.targetField());
+registry.register(LessOrEquals.class, lessOrEqualsOperation, FilterOperationMetadata.targetField());
+```
 
 Contributors customizados continuam usando o mesmo ponto de extensao, agora com a possibilidade de informar metadados:
 
@@ -187,6 +230,7 @@ Mapeamento OpenAPI:
 |---|---|
 | `BOOLEAN` | `BooleanSchema` |
 | `ARRAY` | `ArraySchema` com item baseado no schema atual ou `StringSchema` |
+| `RANGE` | `ArraySchema` com `minItems(2)`, `maxItems(2)` e item baseado no campo alvo |
 | `STRING` | `StringSchema` |
 | `TARGET_FIELD` | Schema do campo alvo, com fallback atual |
 
@@ -296,8 +340,9 @@ Durante a implementacao, validar se `DataConversionService` consegue reduzir ess
 | META-009 | Atualizar `DynaFilterOperationCustomizer` para usar metadata antes do fallback | Pendente | Alta |
 | META-010 | Adicionar testes de registry/service para metadata default e customizada | Pendente | Alta |
 | META-011 | Adicionar testes OpenAPI para operacao customizada `BOOLEAN` | Pendente | Alta |
-| META-012 | Adicionar exemplo/teste de `IsFimVigente` customizado com `Clock` fixo | Pendente | Media |
-| META-013 | Documentar uso de metadata em `custom-filter-operations.md` | Pendente | Media |
+| META-012 | Adicionar testes OpenAPI para built-ins usando metadata (`IsNull`, `IsIn`, `Between`) | Pendente | Alta |
+| META-013 | Adicionar exemplo/teste de `IsFimVigente` customizado com `Clock` fixo | Pendente | Media |
+| META-014 | Documentar uso de metadata em `custom-filter-operations.md` | Pendente | Media |
 
 ## Criterios de Aceite
 
@@ -308,7 +353,9 @@ Durante a implementacao, validar se `DataConversionService` consegue reduzir ess
 | O OpenAPI usa `BooleanSchema` para operacao customizada com metadata `BOOLEAN`. | Pendente |
 | `IsNull.class` continua aparecendo como boolean no OpenAPI. | Pendente |
 | `IsIn.class` continua aparecendo como array no OpenAPI. | Pendente |
+| `Between.class` aparece como array com exatamente dois itens no OpenAPI. | Pendente |
 | `Dynamic.class` continua com schema array e `minItems(2)`. | Pendente |
+| `Decorated.class` continua sem registro direto no JPA e sem metadata propria. | Pendente |
 | `IsFimVigente` customizado consegue aplicar `true` e `false` com `Clock` fixo em teste. | Pendente |
 | Parametro ausente em `IsFimVigente` continua ignorando o filtro. | Pendente |
 | Nao ha dependencia de OpenAPI no pacote `core`. | Pendente |
