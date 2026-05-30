@@ -91,7 +91,7 @@ public class TestFilterOperationService {
         Assertions.assertThat(stringFilterOperationService.findMetadata(Dynamic.class))
                 .isEqualTo(FilterOperationMetadata.dynamicValue());
         Assertions.assertThat(stringFilterOperationService.findMetadata(Decorated.class))
-                .isEqualTo(FilterOperationMetadata.none());
+                .isEqualTo(FilterOperationMetadata.stringValue());
     }
 
     @Test

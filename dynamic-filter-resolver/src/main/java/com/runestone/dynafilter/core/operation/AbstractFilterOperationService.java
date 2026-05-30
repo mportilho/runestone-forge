@@ -37,7 +37,7 @@ public abstract class AbstractFilterOperationService<T> implements FilterOperati
     @SuppressWarnings("rawtypes")
     private static final Map<Class<? extends FilterOperation>, FilterOperationMetadata> PSEUDO_OPERATION_METADATA = Map.of(
             Dynamic.class, FilterOperationMetadata.dynamicValue(),
-            Decorated.class, FilterOperationMetadata.none()
+            Decorated.class, FilterOperationMetadata.stringValue()
     );
 
     @SuppressWarnings("rawtypes")

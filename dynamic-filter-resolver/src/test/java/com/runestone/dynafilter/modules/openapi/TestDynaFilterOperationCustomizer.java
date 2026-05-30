@@ -169,13 +169,16 @@ public class TestDynaFilterOperationCustomizer {
     }
 
     @Test
-    @DisplayName("Decorated filter parameters are not documented")
-    public void testDecoratedFilterDoesNotExposeParameter() throws NoSuchMethodException {
+    @DisplayName("Decorated filter parameters are documented as strings")
+    public void testDecoratedFilterExposesParameter() throws NoSuchMethodException {
         Operation operation = customize("documentDecoratedFilter");
 
+        Parameter parameter = findParameter(operation, "decorValue");
+
+        Assertions.assertThat(parameter.getSchema()).isInstanceOf(StringSchema.class);
         Assertions.assertThat(operation.getParameters())
                 .extracting(Parameter::getName)
-                .doesNotContain("decorValue", "filters");
+                .doesNotContain("filters");
     }
 
     private static Operation customize(String methodName) throws NoSuchMethodException {

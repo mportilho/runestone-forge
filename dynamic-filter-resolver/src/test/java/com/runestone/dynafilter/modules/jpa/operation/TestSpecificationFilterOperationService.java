@@ -79,7 +79,7 @@ public class TestSpecificationFilterOperationService {
         Assertions.assertThat(service.findMetadata(Between.class)).isEqualTo(FilterOperationMetadata.rangeValue());
         Assertions.assertThat(service.findMetadata(Equals.class)).isEqualTo(FilterOperationMetadata.targetField());
         Assertions.assertThat(service.findMetadata(Dynamic.class)).isEqualTo(FilterOperationMetadata.dynamicValue());
-        Assertions.assertThat(service.findMetadata(Decorated.class)).isEqualTo(FilterOperationMetadata.none());
+        Assertions.assertThat(service.findMetadata(Decorated.class)).isEqualTo(FilterOperationMetadata.stringValue());
     }
 
     @Test

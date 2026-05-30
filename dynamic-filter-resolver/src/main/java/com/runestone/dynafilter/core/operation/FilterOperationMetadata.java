@@ -55,8 +55,4 @@ public record FilterOperationMetadata(FilterValueShape valueShape) {
     public static FilterOperationMetadata dynamicValue() {
         return new FilterOperationMetadata(FilterValueShape.DYNAMIC);
     }
-
-    public static FilterOperationMetadata none() {
-        return new FilterOperationMetadata(FilterValueShape.NONE);
-    }
 }

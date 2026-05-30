@@ -30,6 +30,5 @@ public enum FilterValueShape {
     BOOLEAN,
     ARRAY,
     RANGE,
-    DYNAMIC,
-    NONE
+    DYNAMIC
 }

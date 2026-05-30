@@ -113,9 +113,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             parameter.setName(parameterName);
 
             FilterOperationMetadata metadata = filterOperationService.findMetadata(filter.operation());
-            if (FilterValueShape.NONE.equals(metadata.valueShape())) {
-                continue;
-            } else if (FilterValueShape.DYNAMIC.equals(metadata.valueShape())) {
+            if (FilterValueShape.DYNAMIC.equals(metadata.valueShape())) {
                 parameter.setSchema(createArraySchema(new StringSchema(), 2, null));
             } else {
                 Field field = findFilterField(methodParameter, filter);
@@ -178,7 +176,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             case RANGE -> createArraySchema(schemaFromType, 2, 2);
             case STRING -> new StringSchema();
             case TARGET_FIELD -> createTargetFieldSchema(parameter.getSchema(), schemaFromType);
-            case DYNAMIC, NONE -> throw new IllegalStateException("Unsupported schema shape in common schema creation: " + metadata.valueShape());
+            case DYNAMIC -> throw new IllegalStateException("Unsupported schema shape in common schema creation: " + metadata.valueShape());
         };
 
         parameter.setSchema(newSchema);
