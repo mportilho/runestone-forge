@@ -48,9 +48,9 @@ O desenho deve preservar a separacao atual entre:
 | EXT-013 | Adicionar testes de operacao customizada no core e JPA | Concluido | Alta |
 | EXT-014 | Adicionar exemplo de uso para aplicacoes consumidoras | Pendente | Media |
 
-## Diagnostico Atual
+## Diagnostico Inicial
 
-O desenho atual ja separa parcialmente o tipo abstrato de operacao e a implementacao por adaptador. O problema e que o contrato publico usa `DefinedFilterOperation`, fechando artificialmente o conjunto de operacoes permitidas.
+Antes desta refatoracao, o desenho ja separava parcialmente o tipo abstrato de operacao e a implementacao por adaptador. O problema era que o contrato publico usava `DefinedFilterOperation`, fechando artificialmente o conjunto de operacoes permitidas.
 
 | Local | Situacao atual | Impacto |
 |---|---|---|
@@ -328,7 +328,7 @@ Comportamento esperado:
 
 ### EXT-010 - Ajustar OpenAPI com fallback para operacoes customizadas
 
-Status: Concluido
+Status: Pendente
 
 Objetivo: garantir que operacoes customizadas aparecam na documentacao sem exigir SPI adicional na primeira fase.
 
@@ -389,7 +389,7 @@ public enum DynamicValueShape {
 
 ### EXT-013 - Adicionar testes de operacao customizada
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: provar a extensibilidade, a remocao de `DefinedFilterOperation` e a compatibilidade dos usos normais de operacoes built-in.
 
@@ -480,11 +480,11 @@ Observacao: esse exemplo e propositalmente simples. Uma implementacao real pode 
 
 | Criterio | Status |
 |---|---|
-| Uma aplicacao consumidora consegue declarar uma interface propria que estende `FilterOperation<T>`. | Pendente |
-| Essa interface pode ser usada diretamente em `@Filter(operation = MinhaOperacao.class)`. | Pendente |
-| `DefinedFilterOperation` foi removido e nao ha referencias remanescentes no codigo fonte. | Pendente |
-| O modulo JPA consegue registrar a traducao da operacao customizada para `Specification<?>`. | Pendente |
-| Operacoes built-in continuam funcionando sem mudanca no codigo consumidor. | Pendente |
-| `Decorated.class` e `Dynamic.class` mantem comportamento atual. | Pendente |
-| Operacao customizada sem registro falha com mensagem diagnostica. | Pendente |
-| Testes do modulo `dynamic-filter-resolver` passam. | Pendente |
+| Uma aplicacao consumidora consegue declarar uma interface propria que estende `FilterOperation<T>`. | Concluido |
+| Essa interface pode ser usada diretamente em `@Filter(operation = MinhaOperacao.class)`. | Concluido |
+| `DefinedFilterOperation` foi removido e nao ha referencias remanescentes no codigo fonte. | Concluido |
+| O modulo JPA consegue registrar a traducao da operacao customizada para `Specification<?>`. | Concluido |
+| Operacoes built-in continuam funcionando sem mudanca no codigo consumidor. | Concluido |
+| `Decorated.class` e `Dynamic.class` mantem comportamento atual. | Concluido |
+| Operacao customizada sem registro falha com mensagem diagnostica. | Concluido |
+| Testes do modulo `dynamic-filter-resolver` passam. | Concluido |
