@@ -30,7 +30,7 @@ import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.FilterModifier;
 import com.runestone.dynafilter.core.model.statement.*;
 import com.runestone.dynafilter.core.operation.ComparisonOperation;
-import com.runestone.dynafilter.core.operation.DefinedFilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
 
 import java.util.Arrays;
@@ -83,8 +83,9 @@ public abstract class DefaultStatementGenerator<T> implements StatementGenerator
      * @param description     the user readable description of the filter
      * @return a new instance of {@link FilterData}
      */
-    protected FilterData createFilterData(String path, String[] parameters, Class<?> targetType, Class<? super DefinedFilterOperation> operation,
-                                          Object negateParameter, Object[] values, List<Class<? extends FilterModifier>> modifiers, String description) {
+    protected FilterData createFilterData(String path, String[] parameters, Class<?> targetType,
+                                           @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,
+                                           Object negateParameter, Object[] values, List<Class<? extends FilterModifier>> modifiers, String description) {
         Object[] comparisonValue;
         boolean negate;
 

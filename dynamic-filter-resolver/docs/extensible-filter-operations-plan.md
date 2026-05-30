@@ -15,8 +15,8 @@ O desenho deve preservar a separacao atual entre:
 | Item | Status |
 |---|---|
 | Planejamento documentado | Concluido |
-| Implementacao no codigo | Pendente |
-| Testes automatizados | Pendente |
+| Implementacao no codigo | Em andamento |
+| Testes automatizados | Em andamento |
 | Documentacao de uso para consumidores | Pendente |
 
 ## Legenda de Status
@@ -33,8 +33,8 @@ O desenho deve preservar a separacao atual entre:
 
 | ID | Tarefa | Status | Prioridade |
 |---|---|---|---|
-| EXT-001 | Abrir o tipo de `operation` no core | Pendente | Alta |
-| EXT-002 | Remover completamente `DefinedFilterOperation` | Pendente | Alta |
+| EXT-001 | Abrir o tipo de `operation` no core | Concluido | Alta |
+| EXT-002 | Remover completamente `DefinedFilterOperation` | Concluido | Alta |
 | EXT-003 | Criar registry generico de operacoes | Pendente | Alta |
 | EXT-004 | Atualizar `AbstractFilterOperationService` para usar o registry aberto | Pendente | Alta |
 | EXT-005 | Criar ponto de extensao JPA via contributor | Pendente | Alta |
@@ -126,7 +126,7 @@ SpecificationFilterOperationContributor fullTextSearchOperation(DataConversionSe
 
 ### EXT-001 - Abrir o tipo de `operation` no core
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: substituir o limite `DefinedFilterOperation` por um contrato aberto baseado em `FilterOperation`.
 
@@ -151,7 +151,7 @@ Motivo: anotacoes Java nao conseguem preservar bem o parametro generico de `Filt
 
 ### EXT-002 - Remover completamente `DefinedFilterOperation`
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: eliminar a interface agregadora fechada para que `FilterOperation` seja o unico contrato publico de operacao.
 

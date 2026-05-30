@@ -27,7 +27,7 @@ package com.runestone.dynafilter.modules.jpa.operation;
 import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.exceptions.FilterOperationNotDefinedException;
 import com.runestone.dynafilter.core.model.FilterData;
-import com.runestone.dynafilter.core.operation.DefinedFilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.types.*;
 import com.runestone.dynafilter.modules.jpa.operation.specification.*;
 import org.assertj.core.api.Assertions;
@@ -80,7 +80,7 @@ public class TestSpecificationFilterOperationService {
     }
 
     private record RegisteredOperation(
-            Class<? super DefinedFilterOperation> operation,
+            @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,
             String[] parameters,
             Object[] values,
             Class<? extends Specification> specificationType

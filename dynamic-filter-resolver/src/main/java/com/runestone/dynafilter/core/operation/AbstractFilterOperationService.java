@@ -33,10 +33,12 @@ import java.util.function.Supplier;
 
 public abstract class AbstractFilterOperationService<T> implements FilterOperationService<T> {
 
-    private final Map<Class<? super DefinedFilterOperation>, FilterOperation<T>> operationMap;
+    @SuppressWarnings("rawtypes")
+    private final Map<Class<? extends FilterOperation>, FilterOperation<T>> operationMap;
 
-    public AbstractFilterOperationService(Supplier<Map<Class<? super DefinedFilterOperation>, FilterOperation<T>>> operationMap) {
-        this.operationMap = operationMap.get();
+    @SuppressWarnings("rawtypes")
+    public AbstractFilterOperationService(Supplier<Map<Class<? extends FilterOperation>, FilterOperation<T>>> operationMap) {
+        this.operationMap = Map.copyOf(operationMap.get());
     }
 
     @Override

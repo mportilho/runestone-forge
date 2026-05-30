@@ -26,7 +26,6 @@ package com.runestone.dynafilter.modules.jpa.operation;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.operation.AbstractFilterOperationService;
-import com.runestone.dynafilter.core.operation.DefinedFilterOperation;
 import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.types.*;
 import com.runestone.dynafilter.modules.jpa.operation.specification.*;
@@ -39,7 +38,7 @@ public class SpecificationFilterOperationService extends AbstractFilterOperation
 
     public SpecificationFilterOperationService(DataConversionService conversionService) {
         super(() -> {
-            Map<Class<? super DefinedFilterOperation>, FilterOperation<Specification<?>>> operations = new HashMap<>();
+            Map<Class<? extends FilterOperation>, FilterOperation<Specification<?>>> operations = new HashMap<>();
             operations.put(Between.class, (Between<Specification<?>>) filterData -> new SpecificationBetween<>(filterData, conversionService));
             operations.put(EndsWith.class, (EndsWith<Specification<?>>) filterData -> new SpecificationEndsWith<>(filterData, conversionService));
             operations.put(Equals.class, (Equals<Specification<?>>) filterData -> new SpecificationEquals<>(filterData, conversionService));

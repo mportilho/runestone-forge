@@ -25,7 +25,7 @@
 package com.runestone.dynafilter.core.model;
 
 import com.runestone.dynafilter.core.exceptions.MultipleFilterDataValuesException;
-import com.runestone.dynafilter.core.operation.DefinedFilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperation;
 
 import java.util.List;
 
@@ -50,7 +50,7 @@ public record FilterData(
         String path,
         String[] parameters,
         Class<?> targetType,
-        Class<? super DefinedFilterOperation> operation,
+        @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,
         boolean negate,
         Object[] values,
         List<Class<? extends FilterModifier>> modifiers,
@@ -80,7 +80,7 @@ public record FilterData(
      * @return a new instance of {@link FilterData}
      */
     public static FilterData of(String path, String[] parameters, Class<?> targetType,
-                                Class<? super DefinedFilterOperation> operation, Object[] values) {
+                                @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation, Object[] values) {
         return new FilterData(path, parameters, targetType, operation, false, values, null, null);
     }
 

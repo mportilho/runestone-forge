@@ -25,7 +25,7 @@
 package com.runestone.dynafilter.core.generator.annotation;
 
 import com.runestone.dynafilter.core.model.FilterModifier;
-import com.runestone.dynafilter.core.operation.DefinedFilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperation;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
@@ -66,7 +66,8 @@ public @interface Filter {
     /**
      * @return Operation to be used as a query filter
      */
-    Class<? super DefinedFilterOperation> operation();
+    @SuppressWarnings("rawtypes")
+    Class<? extends FilterOperation> operation();
 
     /**
      * Negate the filter's logic. Can be parsed by the Spring Expression Language

@@ -1,7 +1,7 @@
 package com.runestone.dynafilter.core.model;
 
 import com.runestone.dynafilter.core.generator.annotation.Filter;
-import com.runestone.dynafilter.core.operation.DefinedFilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperation;
 
 import java.util.List;
 
@@ -24,7 +24,7 @@ public record FilterRequestData(
         String path,
         String[] parameters,
         Class<?> targetType,
-        Class<? super DefinedFilterOperation> operation,
+        @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,
         String negate,
         Object[] defaultValues,
         Object[] constantValues,

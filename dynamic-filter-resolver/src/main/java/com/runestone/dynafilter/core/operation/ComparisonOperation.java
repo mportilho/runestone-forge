@@ -40,13 +40,16 @@ public enum ComparisonOperation {
     BT(Between.class)
     ;
 
-    private final Class<? super DefinedFilterOperation> operation;
+    @SuppressWarnings("rawtypes")
+    private final Class<? extends FilterOperation> operation;
 
-    ComparisonOperation(Class<? super DefinedFilterOperation> operation) {
+    @SuppressWarnings("rawtypes")
+    ComparisonOperation(Class<? extends FilterOperation> operation) {
         this.operation = operation;
     }
 
-    public Class<? super DefinedFilterOperation> getOperation() {
+    @SuppressWarnings("rawtypes")
+    public Class<? extends FilterOperation> getOperation() {
         return operation;
     }
 }
