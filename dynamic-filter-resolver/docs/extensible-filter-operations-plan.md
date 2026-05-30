@@ -40,7 +40,7 @@ O desenho deve preservar a separacao atual entre:
 | EXT-005 | Criar ponto de extensao JPA via contributor | Concluido | Alta |
 | EXT-006 | Refatorar `SpecificationFilterOperationService` para registrar built-ins e contributors | Concluido | Alta |
 | EXT-007 | Atualizar a auto-configuracao Spring para coletar contributors | Concluido | Alta |
-| EXT-008 | Validar operacoes nao registradas no startup quando possivel | Pendente | Media |
+| EXT-008 | Validar operacoes nao registradas no startup quando possivel | Concluido | Media |
 | EXT-009 | Manter tratamento especial de `Decorated` e `Dynamic` | Concluido | Alta |
 | EXT-010 | Ajustar OpenAPI com fallback para operacoes customizadas | Pendente | Media |
 | EXT-011 | Avaliar SPI OpenAPI especifica para operacoes customizadas | Pendente | Baixa |
@@ -328,7 +328,7 @@ Comportamento esperado:
 
 ### EXT-010 - Ajustar OpenAPI com fallback para operacoes customizadas
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: garantir que operacoes customizadas aparecam na documentacao sem exigir SPI adicional na primeira fase.
 
