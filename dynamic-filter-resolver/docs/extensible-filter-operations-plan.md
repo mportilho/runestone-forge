@@ -34,7 +34,7 @@ O desenho deve preservar a separacao atual entre:
 | ID | Tarefa | Status | Prioridade |
 |---|---|---|---|
 | EXT-001 | Abrir o tipo de `operation` no core | Pendente | Alta |
-| EXT-002 | Manter `DefinedFilterOperation` apenas como compatibilidade | Pendente | Alta |
+| EXT-002 | Remover completamente `DefinedFilterOperation` | Pendente | Alta |
 | EXT-003 | Criar registry generico de operacoes | Pendente | Alta |
 | EXT-004 | Atualizar `AbstractFilterOperationService` para usar o registry aberto | Pendente | Alta |
 | EXT-005 | Criar ponto de extensao JPA via contributor | Pendente | Alta |
@@ -58,12 +58,35 @@ O desenho atual ja separa parcialmente o tipo abstrato de operacao e a implement
 | `core/model/FilterData.java` | `Class<? super DefinedFilterOperation> operation` | O modelo interno tambem assume conjunto fechado. |
 | `core/model/FilterRequestData.java` | Mesmo tipo fechado | A documentacao OpenAPI herda a mesma limitacao. |
 | `core/operation/AbstractFilterOperationService.java` | `Map<Class<? super DefinedFilterOperation>, FilterOperation<T>>` | O registry por adaptador tambem e fechado. |
+| `core/operation/ComparisonOperation.java` | Enum retorna `Class<? super DefinedFilterOperation>` | `Dynamic.class` continua dependendo do tipo agregador fechado para mapear codigos built-in. |
+| `core/operation/DefinedFilterOperation.java` | Interface agregadora de todas as operacoes built-in | O tipo existe apenas para fechar artificialmente a API publica. |
 | `modules/jpa/operation/SpecificationFilterOperationService.java` | Mapa fixo de operacoes JPA | Nao ha ponto simples para aplicacoes consumidoras registrarem novas operacoes. |
 | `core/generator/DefaultStatementGenerator.java` | `Dynamic.class` usa `ComparisonOperation` | Operacoes dinamicas por codigo continuam limitadas ao enum built-in. |
 
+### Varredura de Codigo para Remocao de `DefinedFilterOperation`
+
+Varredura executada no modulo `dynamic-filter-resolver` encontrou os seguintes pontos que devem entrar na refatoracao:
+
+| Local | Referencia encontrada | Ajuste planejado |
+|---|---|---|
+| `core/operation/DefinedFilterOperation.java` | Interface agregadora `DefinedFilterOperation extends Between, Decorated, Dynamic, ...` | Excluir o arquivo. As operacoes built-in ja estendem `FilterOperation<T>` diretamente. |
+| `core/generator/annotation/Filter.java` | Import de `DefinedFilterOperation` e assinatura `Class<? super DefinedFilterOperation> operation()` | Trocar para `@SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation()` e importar `FilterOperation`. |
+| `core/model/FilterData.java` | Import de `DefinedFilterOperation`, componente `operation` e factory `of(...)` com tipo fechado | Trocar ambos para `Class<? extends FilterOperation>` e importar `FilterOperation`. |
+| `core/model/FilterRequestData.java` | Import de `DefinedFilterOperation` e componente `operation` com tipo fechado | Trocar para `Class<? extends FilterOperation>` e importar `FilterOperation`. |
+| `core/operation/ComparisonOperation.java` | Campo, construtor e getter retornando `Class<? super DefinedFilterOperation>` | Trocar para `Class<? extends FilterOperation>`; manter os valores built-in apontando para as interfaces em `operation.types`. |
+| `core/generator/DefaultStatementGenerator.java` | Import de `DefinedFilterOperation` e parametro `operation` de `createFilterData(...)` com tipo fechado | Trocar para `Class<? extends FilterOperation>` e manter a traducao de `Dynamic.class` via `ComparisonOperation`. |
+| `core/operation/FilterOperationService.java` | Contrato ainda nao expoe consulta de suporte por operacao | Adicionar `supports(Class<? extends FilterOperation>)` para validacao antecipada sem depender da implementacao concreta. |
+| `core/operation/AbstractFilterOperationService.java` | `Map<Class<? super DefinedFilterOperation>, FilterOperation<T>>` e construtor com supplier do mesmo tipo | Trocar para `Map<Class<? extends FilterOperation>, FilterOperation<T>>`; adicionar `supports(...)` no contrato para validacao antecipada. |
+| `modules/jpa/operation/SpecificationFilterOperationService.java` | Import de `DefinedFilterOperation` e mapa local com tipo fechado | Trocar para registry/mapa aberto baseado em `Class<? extends FilterOperation>` e aplicar contributors JPA. |
+| `modules/jpa/spring/FilterConfigurationAnalyserBeanPostProcessor.java` | Hoje valida metadados e campos, mas nao valida suporte da operacao no adapter JPA | Injetar/usar `FilterOperationService<Specification<?>>` em EXT-008 para falhar no startup quando uma operacao nao estiver registrada. |
+| `core/generator/ConditionalStatementBuilder.java` | Arquivo inteiro comentado ainda menciona `DefinedFilterOperation` | Remover o arquivo comentado ou limpar as referencias durante a refatoracao para evitar codigo morto com API removida. |
+| Testes em `src/test/java` | `StringFilterOperationService` usa o construtor fechado indiretamente; testes usam built-ins, `Dynamic.class` e `Decorated.class` | Ajustar testes para o novo tipo aberto e adicionar cenarios de operacao customizada sem depender de `DefinedFilterOperation`. |
+
+Observacao da varredura: as interfaces built-in em `core/operation/types` (`Between`, `Equals`, `Like`, `Dynamic`, `Decorated`, etc.) ja estendem `FilterOperation<T>` diretamente. Portanto, remover `DefinedFilterOperation` nao exige alterar a hierarquia das operacoes built-in, apenas os pontos que usam a interface agregadora como limite generico.
+
 ## Decisao Arquitetural Recomendada
 
-Abrir o contrato de `@Filter.operation()` para qualquer tipo que estenda `FilterOperation`, mas manter a implementacao concreta registrada por adaptador.
+Abrir o contrato de `@Filter.operation()` para qualquer tipo que estenda `FilterOperation`, remover `DefinedFilterOperation` e manter a implementacao concreta registrada por adaptador.
 
 Exemplo de tipo de operacao na aplicacao consumidora:
 
@@ -114,6 +137,7 @@ Arquivos esperados:
 - `core/model/FilterRequestData.java`
 - `core/operation/ComparisonOperation.java`
 - `core/generator/DefaultStatementGenerator.java`
+- `core/operation/DefinedFilterOperation.java` deve ser removido por EXT-002
 - Chamadores afetados por esses tipos
 
 Tipo recomendado:
@@ -125,17 +149,24 @@ Class<? extends FilterOperation> operation();
 
 Motivo: anotacoes Java nao conseguem preservar bem o parametro generico de `FilterOperation<T>` nesse ponto. O tipo bruto fica contido no metadado da operacao, enquanto a seguranca do retorno continua no adaptador via `FilterOperationService<T>`.
 
-### EXT-002 - Manter `DefinedFilterOperation` apenas como compatibilidade
+### EXT-002 - Remover completamente `DefinedFilterOperation`
 
 Status: Pendente
 
-Objetivo: evitar quebra desnecessaria para codigo que ainda referencie `DefinedFilterOperation`.
+Objetivo: eliminar a interface agregadora fechada para que `FilterOperation` seja o unico contrato publico de operacao.
 
 Diretriz:
 
-- Nao remover `DefinedFilterOperation` nesta mudanca.
-- Atualizar a documentacao Java para indicar que novas operacoes devem estender `FilterOperation` diretamente.
-- Considerar `@Deprecated` apenas em uma versao futura, se houver estrategia de versionamento clara.
+- Remover `core/operation/DefinedFilterOperation.java`.
+- Remover todos os imports, assinaturas e generics baseados em `DefinedFilterOperation`.
+- Usar `Class<? extends FilterOperation>` nos metadados e registries de operacao.
+- Manter `Between`, `Equals`, `Like`, `Dynamic`, `Decorated` e demais built-ins como interfaces publicas que estendem `FilterOperation<T>` diretamente.
+- Tratar a remocao como mudanca de API publica e registrar no changelog/release notes quando a implementacao for concluida.
+
+Impacto esperado:
+
+- Codigo consumidor que declare variaveis, metodos ou imports de `DefinedFilterOperation` deixara de compilar e devera migrar para `FilterOperation` ou para a interface concreta da operacao.
+- Usos normais de `@Filter(operation = Equals.class)`, `@Filter(operation = Dynamic.class)` e demais built-ins continuam compilando apos EXT-001, pois essas interfaces ja implementam o contrato aberto.
 
 ### EXT-003 - Criar registry generico de operacoes
 
@@ -182,7 +213,21 @@ Mudanca esperada:
 private final Map<Class<? extends FilterOperation>, FilterOperation<T>> operationMap;
 ```
 
-Tambem e recomendavel adicionar suporte a consulta:
+Construtor esperado:
+
+```java
+public AbstractFilterOperationService(Supplier<Map<Class<? extends FilterOperation>, FilterOperation<T>>> operationMap) {
+    this.operationMap = Map.copyOf(operationMap.get());
+}
+```
+
+Tambem e necessario expor suporte a consulta no contrato `FilterOperationService<T>`, nao apenas na classe abstrata, para que validadores e adaptadores possam depender da interface:
+
+```java
+boolean supports(Class<? extends FilterOperation> operationType);
+```
+
+Implementacao esperada na classe abstrata:
 
 ```java
 public boolean supports(Class<? extends FilterOperation> operationType) {
@@ -346,13 +391,14 @@ public enum DynamicValueShape {
 
 Status: Pendente
 
-Objetivo: provar a extensibilidade e preservar compatibilidade.
+Objetivo: provar a extensibilidade, a remocao de `DefinedFilterOperation` e a compatibilidade dos usos normais de operacoes built-in.
 
 Cenarios minimos:
 
 | Cenario | Resultado esperado |
 |---|---|
 | `@Filter(operation = CustomOperation.class)` compila | A anotacao aceita operacao fora de `DefinedFilterOperation`. |
+| Codigo do modulo nao referencia `DefinedFilterOperation` | A interface foi removida e nao restam imports, generics ou comentarios dependentes dela. |
 | `AnnotationStatementGenerator` processa `CustomOperation.class` | `FilterData.operation()` preserva a operacao customizada. |
 | Contributor JPA registra operacao customizada | `SpecificationFilterOperationService` resolve e cria a specification. |
 | Operacao customizada sem contributor | Falha com mensagem clara. |
@@ -402,7 +448,7 @@ Observacao: esse exemplo e propositalmente simples. Uma implementacao real pode 
 
 | Risco | Mitigacao |
 |---|---|
-| Quebra binaria por alterar assinatura de `Filter.operation()` | Avaliar impacto de versao. Como e anotacao publica, tratar como mudanca de API. |
+| Quebra binaria por alterar assinatura de `Filter.operation()` e remover `DefinedFilterOperation` | Tratar como mudanca de API publica, documentar migracao para `FilterOperation` e validar os usos built-in existentes. |
 | Duplicidade de registro de operacao | Registry deve falhar em duplicidade por padrao. |
 | Operacao customizada usada sem implementacao JPA | Validar no startup quando o contexto JPA estiver disponivel. |
 | Acoplamento indevido do core com JPA ou OpenAPI | Manter contributors especificos nos modulos adaptadores. |
@@ -416,11 +462,11 @@ Observacao: esse exemplo e propositalmente simples. Uma implementacao real pode 
 | Permitir override de operacoes built-in | Nao permitir na primeira fase | Evita comportamento inesperado e facilita diagnostico. |
 | Implementar aliases customizados para `Dynamic.class` agora | Nao implementar agora | Mantem a primeira entrega menor e focada. |
 | Criar SPI OpenAPI customizada agora | Nao implementar agora | O fallback comum atende operacoes escalares simples. |
-| Marcar `DefinedFilterOperation` como deprecated | Nao nesta primeira mudanca | Evita sinalizar remocao sem estrategia de versionamento. |
+| Compatibilidade com codigo que importa `DefinedFilterOperation` | Nao preservar nesta mudanca | A remocao simplifica a API e elimina o tipo fechado, mas exige nota de migracao. |
 
 ## Ordem Recomendada de Execucao
 
-1. Executar EXT-001 e EXT-002 para abrir a API mantendo compatibilidade conceitual.
+1. Executar EXT-001 e EXT-002 para abrir a API e remover completamente `DefinedFilterOperation`.
 2. Executar EXT-003 e EXT-004 para criar a base de registro extensivel.
 3. Executar EXT-005, EXT-006 e EXT-007 para expor o ponto de extensao JPA via Spring.
 4. Executar EXT-009 para garantir que `Decorated` e `Dynamic` nao regrediram.
@@ -436,6 +482,7 @@ Observacao: esse exemplo e propositalmente simples. Uma implementacao real pode 
 |---|---|
 | Uma aplicacao consumidora consegue declarar uma interface propria que estende `FilterOperation<T>`. | Pendente |
 | Essa interface pode ser usada diretamente em `@Filter(operation = MinhaOperacao.class)`. | Pendente |
+| `DefinedFilterOperation` foi removido e nao ha referencias remanescentes no codigo fonte. | Pendente |
 | O modulo JPA consegue registrar a traducao da operacao customizada para `Specification<?>`. | Pendente |
 | Operacoes built-in continuam funcionando sem mudanca no codigo consumidor. | Pendente |
 | `Decorated.class` e `Dynamic.class` mantem comportamento atual. | Pendente |
