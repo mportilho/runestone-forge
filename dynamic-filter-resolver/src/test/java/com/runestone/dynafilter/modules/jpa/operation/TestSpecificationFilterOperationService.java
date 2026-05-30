@@ -25,6 +25,7 @@
 package com.runestone.dynafilter.modules.jpa.operation;
 
 import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.exceptions.FilterOperationNotDefinedException;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.FilterOperation;
@@ -88,11 +89,76 @@ public class TestSpecificationFilterOperationService {
         Assertions.assertThat(service.supports(Dynamic.class)).isFalse();
     }
 
+    @Test
+    @DisplayName("SpecificationFilterOperationService resolves operations registered by contributors")
+    public void testContributorRegistersCustomOperation() {
+        Specification<?> customSpecification = (root, query, builder) -> null;
+        SpecificationFilterOperationContributor contributor = registry ->
+                registry.register(CustomOperation.class, filterData -> customSpecification);
+        SpecificationFilterOperationService service = new SpecificationFilterOperationService(
+                new DefaultDataConversionService(),
+                List.of(contributor)
+        );
+        FilterData filterData = FilterData.of("name", new String[]{"name"}, String.class, CustomOperation.class, new Object[]{"John"});
+
+        Specification<?> specification = service.createFilter(filterData);
+
+        Assertions.assertThat(specification).isSameAs(customSpecification);
+        Assertions.assertThat(service.supports(CustomOperation.class)).isTrue();
+    }
+
+    @Test
+    @DisplayName("SpecificationFilterOperationService rejects custom operations without a contributor")
+    public void testCustomOperationWithoutContributorFails() {
+        SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
+        FilterData filterData = FilterData.of("name", new String[]{"name"}, String.class, CustomOperation.class, new Object[]{"John"});
+
+        Assertions.assertThatThrownBy(() -> service.createFilter(filterData))
+                .isInstanceOf(FilterOperationNotDefinedException.class)
+                .hasMessageContaining("CustomOperation")
+                .hasMessageContaining(SpecificationFilterOperationService.class.getCanonicalName());
+    }
+
+    @Test
+    @DisplayName("SpecificationFilterOperationService rejects contributors that override built-in operations")
+    public void testContributorCannotOverrideBuiltInOperation() {
+        SpecificationFilterOperationContributor contributor = registry ->
+                registry.register(Equals.class, filterData -> (root, query, builder) -> null);
+
+        Assertions.assertThatThrownBy(() -> new SpecificationFilterOperationService(
+                        new DefaultDataConversionService(),
+                        List.of(contributor)
+                ))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining(Equals.class.getCanonicalName())
+                .hasMessageContaining("already registered");
+    }
+
+    @Test
+    @DisplayName("SpecificationFilterOperationService rejects duplicate registrations from contributors")
+    public void testDuplicateContributorRegistrationFails() {
+        SpecificationFilterOperationContributor firstContributor = registry ->
+                registry.register(CustomOperation.class, filterData -> (root, query, builder) -> null);
+        SpecificationFilterOperationContributor secondContributor = registry ->
+                registry.register(CustomOperation.class, filterData -> (root, query, builder) -> null);
+
+        Assertions.assertThatThrownBy(() -> new SpecificationFilterOperationService(
+                        new DefaultDataConversionService(),
+                        List.of(firstContributor, secondContributor)
+                ))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining(CustomOperation.class.getCanonicalName())
+                .hasMessageContaining("already registered");
+    }
+
     private record RegisteredOperation(
             @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,
             String[] parameters,
             Object[] values,
             Class<? extends Specification> specificationType
     ) {
+    }
+
+    private interface CustomOperation<T> extends FilterOperation<T> {
     }
 }

@@ -49,7 +49,7 @@ public final class FilterOperationRegistry<T> {
     }
 
     @SuppressWarnings("rawtypes")
-    Map<Class<? extends FilterOperation>, FilterOperation<T>> toMap() {
+    public Map<Class<? extends FilterOperation>, FilterOperation<T>> toMap() {
         return Map.copyOf(operations);
     }
 

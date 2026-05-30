@@ -37,15 +37,15 @@ O desenho deve preservar a separacao atual entre:
 | EXT-002 | Remover completamente `DefinedFilterOperation` | Concluido | Alta |
 | EXT-003 | Criar registry generico de operacoes | Concluido | Alta |
 | EXT-004 | Atualizar `AbstractFilterOperationService` para usar o registry aberto | Concluido | Alta |
-| EXT-005 | Criar ponto de extensao JPA via contributor | Pendente | Alta |
-| EXT-006 | Refatorar `SpecificationFilterOperationService` para registrar built-ins e contributors | Pendente | Alta |
-| EXT-007 | Atualizar a auto-configuracao Spring para coletar contributors | Pendente | Alta |
+| EXT-005 | Criar ponto de extensao JPA via contributor | Concluido | Alta |
+| EXT-006 | Refatorar `SpecificationFilterOperationService` para registrar built-ins e contributors | Concluido | Alta |
+| EXT-007 | Atualizar a auto-configuracao Spring para coletar contributors | Concluido | Alta |
 | EXT-008 | Validar operacoes nao registradas no startup quando possivel | Pendente | Media |
-| EXT-009 | Manter tratamento especial de `Decorated` e `Dynamic` | Pendente | Alta |
+| EXT-009 | Manter tratamento especial de `Decorated` e `Dynamic` | Concluido | Alta |
 | EXT-010 | Ajustar OpenAPI com fallback para operacoes customizadas | Pendente | Media |
 | EXT-011 | Avaliar SPI OpenAPI especifica para operacoes customizadas | Pendente | Baixa |
 | EXT-012 | Avaliar aliases customizados para `Dynamic.class` em fase posterior | Pendente | Baixa |
-| EXT-013 | Adicionar testes de operacao customizada no core e JPA | Pendente | Alta |
+| EXT-013 | Adicionar testes de operacao customizada no core e JPA | Concluido | Alta |
 | EXT-014 | Adicionar exemplo de uso para aplicacoes consumidoras | Pendente | Media |
 
 ## Diagnostico Atual
@@ -239,7 +239,7 @@ Essa consulta permite validacao antecipada no startup.
 
 ### EXT-005 - Criar ponto de extensao JPA via contributor
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: permitir que a aplicacao consumidora registre operacoes JPA sem substituir todo o `DynamicFilterResolver`.
 
@@ -258,7 +258,7 @@ Motivo: uma interface especifica para JPA e mais facil de consumir via Spring do
 
 ### EXT-006 - Refatorar `SpecificationFilterOperationService`
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: registrar operacoes built-in e aplicar contributors externos.
 
@@ -271,7 +271,7 @@ Diretriz:
 
 ### EXT-007 - Atualizar auto-configuracao Spring
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: permitir injecao automatica dos contributors declarados pela aplicacao consumidora.
 
@@ -301,7 +301,7 @@ public DynamicFilterResolver<Specification<?>> dynamicFilterResolver(
 
 ### EXT-008 - Validar operacoes nao registradas no startup
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: detectar erro de configuracao antes da primeira chamada HTTP.
 
@@ -316,7 +316,7 @@ Regras:
 
 ### EXT-009 - Manter tratamento especial de `Decorated` e `Dynamic`
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: evitar regressao em pseudo-operacoes existentes.
 
