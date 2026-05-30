@@ -24,39 +24,33 @@
 
 package com.runestone.dynafilter.core.operation;
 
-import com.runestone.dynafilter.core.exceptions.FilterOperationNotDefinedException;
-import com.runestone.dynafilter.core.model.FilterData;
+import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Supplier;
 
-public abstract class AbstractFilterOperationService<T> implements FilterOperationService<T> {
-
-    @SuppressWarnings("rawtypes")
-    private final Map<Class<? extends FilterOperation>, FilterOperation<T>> operationMap;
+public final class FilterOperationRegistry<T> {
 
     @SuppressWarnings("rawtypes")
-    public AbstractFilterOperationService(Supplier<Map<Class<? extends FilterOperation>, FilterOperation<T>>> operationMap) {
-        this.operationMap = Map.copyOf(operationMap.get());
-    }
+    private final Map<Class<? extends FilterOperation>, FilterOperation<T>> operations = new LinkedHashMap<>();
 
-    @Override
-    public T createFilter(FilterData filterData) {
-        Objects.requireNonNull(filterData, "filterData cannot be null");
-        FilterOperation<T> filterOperation = operationMap.get(filterData.operation());
-        if (filterOperation == null) {
-            throw new FilterOperationNotDefinedException(String.format("No filter found for operation '%s' on service %s",
-                    filterData.operation().getSimpleName(), this.getClass().getCanonicalName()));
-        }
-        return filterOperation.createFilter(filterData);
-    }
-
-    @Override
     @SuppressWarnings("rawtypes")
-    public boolean supports(Class<? extends FilterOperation> operationType) {
+    public void register(Class<? extends FilterOperation> operationType, FilterOperation<T> operation) {
         Objects.requireNonNull(operationType, "operationType cannot be null");
-        return operationMap.containsKey(operationType);
+        Objects.requireNonNull(operation, "operation cannot be null");
+
+        FilterOperation<T> previous = operations.putIfAbsent(operationType, operation);
+        if (previous != null) {
+            throw new DynamicFilterConfigurationException(
+                    "Filter operation '%s' is already registered".formatted(operationType.getCanonicalName())
+            );
+        }
+    }
+
+    @SuppressWarnings("rawtypes")
+    Map<Class<? extends FilterOperation>, FilterOperation<T>> toMap() {
+        return Map.copyOf(operations);
     }
 
 }

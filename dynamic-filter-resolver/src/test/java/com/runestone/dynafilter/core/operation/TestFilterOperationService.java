@@ -29,11 +29,13 @@ import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.core.operation.types.Like;
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 public class TestFilterOperationService {
 
     @Test
+    @DisplayName("FilterOperationService creates a filter with a registered operation")
     public void testFilterOperationService() {
         var stringFilterOperationService = new StringFilterOperationService();
         var filterData = FilterData.of("name", new String[]{"clientName"}, String.class, Equals.class, new Object[]{"Joe"});
@@ -42,10 +44,30 @@ public class TestFilterOperationService {
     }
 
     @Test
+    @DisplayName("FilterOperationService rejects an unregistered operation")
     public void testNoFilterOperationFoundOnService() {
         var stringFilterOperationService = new StringFilterOperationService();
         var filterData = FilterData.of("name", new String[]{"clientName"}, String.class, Like.class, new Object[][]{{"Joe"}});
         Assertions.assertThatThrownBy(() -> stringFilterOperationService.createFilter(filterData)).isInstanceOf(FilterOperationNotDefinedException.class);
+    }
+
+    @Test
+    @DisplayName("FilterOperationService reports support for registered operations")
+    public void testSupportsRegisteredOperation() {
+        var stringFilterOperationService = new StringFilterOperationService();
+
+        Assertions.assertThat(stringFilterOperationService.supports(Equals.class)).isTrue();
+        Assertions.assertThat(stringFilterOperationService.supports(Like.class)).isFalse();
+    }
+
+    @Test
+    @DisplayName("FilterOperationService rejects null operation support checks")
+    public void testSupportsNullOperationFails() {
+        var stringFilterOperationService = new StringFilterOperationService();
+
+        Assertions.assertThatThrownBy(() -> stringFilterOperationService.supports(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("operationType cannot be null");
     }
 
 }

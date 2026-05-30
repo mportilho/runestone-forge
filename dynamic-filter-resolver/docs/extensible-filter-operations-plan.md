@@ -35,8 +35,8 @@ O desenho deve preservar a separacao atual entre:
 |---|---|---|---|
 | EXT-001 | Abrir o tipo de `operation` no core | Concluido | Alta |
 | EXT-002 | Remover completamente `DefinedFilterOperation` | Concluido | Alta |
-| EXT-003 | Criar registry generico de operacoes | Pendente | Alta |
-| EXT-004 | Atualizar `AbstractFilterOperationService` para usar o registry aberto | Pendente | Alta |
+| EXT-003 | Criar registry generico de operacoes | Concluido | Alta |
+| EXT-004 | Atualizar `AbstractFilterOperationService` para usar o registry aberto | Concluido | Alta |
 | EXT-005 | Criar ponto de extensao JPA via contributor | Pendente | Alta |
 | EXT-006 | Refatorar `SpecificationFilterOperationService` para registrar built-ins e contributors | Pendente | Alta |
 | EXT-007 | Atualizar a auto-configuracao Spring para coletar contributors | Pendente | Alta |
@@ -170,7 +170,7 @@ Impacto esperado:
 
 ### EXT-003 - Criar registry generico de operacoes
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: centralizar registro, validacao e exposicao imutavel das operacoes disponiveis.
 
@@ -203,7 +203,7 @@ Politica recomendada: registros duplicados devem falhar. Override de operacoes b
 
 ### EXT-004 - Atualizar `AbstractFilterOperationService`
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: trocar o mapa fechado por um mapa aberto.
 

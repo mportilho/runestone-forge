@@ -79,6 +79,15 @@ public class TestSpecificationFilterOperationService {
                 .hasMessageContaining(SpecificationFilterOperationService.class.getCanonicalName());
     }
 
+    @Test
+    @DisplayName("SpecificationFilterOperationService reports support for built-in operations only")
+    public void testSupportsRegisteredOperations() {
+        SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
+
+        Assertions.assertThat(service.supports(Equals.class)).isTrue();
+        Assertions.assertThat(service.supports(Dynamic.class)).isFalse();
+    }
+
     private record RegisteredOperation(
             @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,
             String[] parameters,
