@@ -24,15 +24,22 @@
 
 package com.runestone.dynafilter.modules.openapi;
 
+import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.generator.annotation.FilterTarget;
 import com.runestone.dynafilter.core.operation.FilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
+import com.runestone.dynafilter.core.operation.FilterOperationService;
+import com.runestone.dynafilter.core.operation.types.Between;
+import com.runestone.dynafilter.core.operation.types.Decorated;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.core.operation.types.IsIn;
 import com.runestone.dynafilter.core.operation.types.IsNull;
+import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationContributor;
+import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.BooleanSchema;
@@ -41,9 +48,11 @@ import io.swagger.v3.oas.models.parameters.Parameter;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.method.HandlerMethod;
 
 import java.lang.reflect.Method;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -83,6 +92,21 @@ public class TestDynaFilterOperationCustomizer {
     }
 
     @Test
+    @DisplayName("Between filter parameters are documented as arrays with exactly two items")
+    public void testBetweenFilterCreatesRangeSchema() throws NoSuchMethodException {
+        Operation operation = customize("documentBetweenFilter");
+
+        Parameter parameter = findParameter(operation, "registeredAt");
+
+        Assertions.assertThat(parameter.getSchema()).isInstanceOf(ArraySchema.class);
+        ArraySchema schema = (ArraySchema) parameter.getSchema();
+        Assertions.assertThat(schema.getMinItems()).isEqualTo(2);
+        Assertions.assertThat(schema.getMaxItems()).isEqualTo(2);
+        Assertions.assertThat(schema.getItems().getType()).isEqualTo("string");
+        Assertions.assertThat(schema.getItems().getFormat()).isEqualTo("date");
+    }
+
+    @Test
     @DisplayName("Common filter parameters use the schema resolved from the target field")
     public void testCommonFilterUsesTargetFieldSchema() throws NoSuchMethodException {
         Operation operation = customize("documentCommonFilter");
@@ -94,9 +118,9 @@ public class TestDynaFilterOperationCustomizer {
     }
 
     @Test
-    @DisplayName("Custom filter parameters use the schema resolved from the target field")
+    @DisplayName("Registered custom filter parameters use the schema resolved from the target field")
     public void testCustomFilterUsesTargetFieldSchema() throws NoSuchMethodException {
-        Operation operation = customize("documentCustomFilter");
+        Operation operation = customize("documentCustomFilter", operationService(List.of(customOperationContributor(FilterOperationMetadata.targetField()))));
 
         Parameter parameter = findParameter(operation, "priority");
 
@@ -105,13 +129,33 @@ public class TestDynaFilterOperationCustomizer {
     }
 
     @Test
-    @DisplayName("Custom filter parameters fall back to string schema when the target field is not resolved")
+    @DisplayName("Registered custom filter parameters fall back to string schema when the target field is not resolved")
     public void testCustomFilterWithoutResolvableFieldUsesStringSchema() throws NoSuchMethodException {
-        Operation operation = customize("documentCustomFilterWithoutResolvableField");
+        Operation operation = customize("documentCustomFilterWithoutResolvableField", operationService(List.of(customOperationContributor(FilterOperationMetadata.targetField()))));
 
         Parameter parameter = findParameter(operation, "custom");
 
         Assertions.assertThat(parameter.getSchema()).isInstanceOf(StringSchema.class);
+    }
+
+    @Test
+    @DisplayName("Custom filter metadata can document parameters as booleans")
+    public void testCustomBooleanMetadataCreatesBooleanSchema() throws NoSuchMethodException {
+        SpecificationFilterOperationContributor contributor = customOperationContributor(FilterOperationMetadata.booleanValue());
+        Operation operation = customize("documentCustomBooleanMetadataFilter", operationService(List.of(contributor)));
+
+        Parameter parameter = findParameter(operation, "vigente");
+
+        Assertions.assertThat(parameter.getSchema()).isInstanceOf(BooleanSchema.class);
+    }
+
+    @Test
+    @DisplayName("Unregistered custom filter metadata fails OpenAPI customization")
+    public void testUnregisteredCustomFilterMetadataFails() {
+        Assertions.assertThatThrownBy(() -> customize("documentCustomFilter"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Cannot build custom OpenAPI parameters")
+                .hasRootCauseInstanceOf(com.runestone.dynafilter.core.exceptions.FilterOperationNotDefinedException.class);
     }
 
     @Test
@@ -124,12 +168,38 @@ public class TestDynaFilterOperationCustomizer {
                 .doesNotContain("status", "filters");
     }
 
+    @Test
+    @DisplayName("Decorated filter parameters are not documented")
+    public void testDecoratedFilterDoesNotExposeParameter() throws NoSuchMethodException {
+        Operation operation = customize("documentDecoratedFilter");
+
+        Assertions.assertThat(operation.getParameters())
+                .extracting(Parameter::getName)
+                .doesNotContain("decorValue", "filters");
+    }
+
     private static Operation customize(String methodName) throws NoSuchMethodException {
+        return customize(methodName, operationService(List.of()));
+    }
+
+    private static Operation customize(String methodName, FilterOperationService<Specification<?>> filterOperationService) throws NoSuchMethodException {
         Operation operation = new Operation();
         operation.setParameters(new ArrayList<>(List.of(new Parameter().name("filters"))));
 
-        DynaFilterOperationCustomizer customizer = new DynaFilterOperationCustomizer(null);
+        DynaFilterOperationCustomizer customizer = new DynaFilterOperationCustomizer(null, filterOperationService);
         return customizer.customize(operation, handlerMethod(methodName));
+    }
+
+    private static SpecificationFilterOperationService operationService(List<SpecificationFilterOperationContributor> contributors) {
+        return new SpecificationFilterOperationService(new DefaultDataConversionService(), contributors);
+    }
+
+    private static SpecificationFilterOperationContributor customOperationContributor(FilterOperationMetadata metadata) {
+        return registry -> registry.register(
+                CustomOperation.class,
+                filterData -> (root, query, builder) -> null,
+                metadata
+        );
     }
 
     private static HandlerMethod handlerMethod(String methodName) throws NoSuchMethodException {
@@ -170,6 +240,14 @@ public class TestDynaFilterOperationCustomizer {
         ) {
         }
 
+        public void documentBetweenFilter(
+                @io.swagger.v3.oas.annotations.Parameter(name = "filters")
+                @FilterTarget(OpenApiFilterTarget.class)
+                @Conjunction(@Filter(path = "registeredAt", parameters = "registeredAt", operation = Between.class))
+                ConditionalStatement filters
+        ) {
+        }
+
         public void documentCommonFilter(
                 @io.swagger.v3.oas.annotations.Parameter(name = "filters")
                 @FilterTarget(OpenApiFilterTarget.class)
@@ -194,10 +272,26 @@ public class TestDynaFilterOperationCustomizer {
         ) {
         }
 
+        public void documentCustomBooleanMetadataFilter(
+                @io.swagger.v3.oas.annotations.Parameter(name = "filters")
+                @FilterTarget(OpenApiFilterTarget.class)
+                @Conjunction(@Filter(path = "fimVigencia", parameters = "vigente", operation = CustomOperation.class))
+                ConditionalStatement filters
+        ) {
+        }
+
         public void documentConstantValueFilter(
                 @io.swagger.v3.oas.annotations.Parameter(name = "filters")
                 @FilterTarget(OpenApiFilterTarget.class)
                 @Conjunction(@Filter(path = "status", parameters = "status", operation = Equals.class, constantValues = "ACTIVE"))
+                ConditionalStatement filters
+        ) {
+        }
+
+        public void documentDecoratedFilter(
+                @io.swagger.v3.oas.annotations.Parameter(name = "filters")
+                @FilterTarget(OpenApiFilterTarget.class)
+                @Conjunction(@Filter(path = "decorValue", parameters = "decorValue", operation = Decorated.class))
                 ConditionalStatement filters
         ) {
         }
@@ -210,6 +304,9 @@ public class TestDynaFilterOperationCustomizer {
         private Boolean deleted;
         private String status;
         private Integer priority;
+        private LocalDate registeredAt;
+        private LocalDate fimVigencia;
+        private String decorValue;
     }
 
     private interface CustomOperation<T> extends FilterOperation<T> {

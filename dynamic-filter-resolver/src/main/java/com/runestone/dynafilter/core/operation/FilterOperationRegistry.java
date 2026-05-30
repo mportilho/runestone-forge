@@ -36,9 +36,18 @@ public final class FilterOperationRegistry<T> {
     private final Map<Class<? extends FilterOperation>, FilterOperation<T>> operations = new LinkedHashMap<>();
 
     @SuppressWarnings("rawtypes")
+    private final Map<Class<? extends FilterOperation>, FilterOperationMetadata> metadata = new LinkedHashMap<>();
+
+    @SuppressWarnings("rawtypes")
     public void register(Class<? extends FilterOperation> operationType, FilterOperation<T> operation) {
+        register(operationType, operation, FilterOperationMetadata.targetField());
+    }
+
+    @SuppressWarnings("rawtypes")
+    public void register(Class<? extends FilterOperation> operationType, FilterOperation<T> operation, FilterOperationMetadata operationMetadata) {
         Objects.requireNonNull(operationType, "operationType cannot be null");
         Objects.requireNonNull(operation, "operation cannot be null");
+        Objects.requireNonNull(operationMetadata, "operationMetadata cannot be null");
 
         FilterOperation<T> previous = operations.putIfAbsent(operationType, operation);
         if (previous != null) {
@@ -46,11 +55,17 @@ public final class FilterOperationRegistry<T> {
                     "Filter operation '%s' is already registered".formatted(operationType.getCanonicalName())
             );
         }
+        metadata.put(operationType, operationMetadata);
     }
 
     @SuppressWarnings("rawtypes")
     public Map<Class<? extends FilterOperation>, FilterOperation<T>> toMap() {
         return Map.copyOf(operations);
+    }
+
+    @SuppressWarnings("rawtypes")
+    public Map<Class<? extends FilterOperation>, FilterOperationMetadata> toMetadataMap() {
+        return Map.copyOf(metadata);
     }
 
 }

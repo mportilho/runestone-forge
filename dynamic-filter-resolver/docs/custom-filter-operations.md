@@ -87,6 +87,7 @@ package com.example.config;
 import com.example.filters.FullTextSearch;
 import com.example.filters.FullTextSearchSpecification;
 import com.runestone.converters.DataConversionService;
+import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
 import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationContributor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -106,6 +107,53 @@ class DynamicFilterConfiguration {
 
 Duplicate registrations fail fast. This includes attempts to override built-in operations.
 
+## Operation Metadata
+
+Custom operations can also describe the expected input value shape through `FilterOperationMetadata`. The metadata lives in `core` and is independent from JPA, OpenAPI, SpringDoc, or any concrete schema type.
+
+Available shapes:
+
+- `targetField()` documents and interprets values like the target field type. This is the default when metadata is omitted.
+- `stringValue()` documents the parameter as a string.
+- `booleanValue()` documents the parameter as a boolean.
+- `arrayValue()` documents the parameter as an array.
+- `rangeValue()` documents the parameter as an array with exactly two items.
+- `dynamicValue()` documents the pseudo-operation value used by `Dynamic.class`.
+- `none()` marks a pseudo-operation with no documentable request parameter, used by `Decorated.class`.
+
+Example for a custom boolean operation:
+
+```java
+@Bean
+SpecificationFilterOperationContributor isFimVigenteOperation(
+        DataConversionService conversionService,
+        Clock clock
+) {
+    return registry -> registry.register(
+            IsFimVigente.class,
+            filterData -> new SpecificationIsFimVigente<>(filterData, conversionService, clock),
+            FilterOperationMetadata.booleanValue()
+    );
+}
+```
+
+When this contributor is used by the OpenAPI customizer, `@Filter(operation = IsFimVigente.class)` is documented as a boolean parameter even if the target field is a temporal type.
+
+`IsFimVigente` can remain an application-defined operation:
+
+```java
+public interface IsFimVigente<T> extends FilterOperation<T> {
+}
+```
+
+Recommended runtime semantics for that operation:
+
+- `true`: `fimVigencia IS NULL OR fimVigencia < now`
+- `false`: negation of `fimVigencia IS NULL OR fimVigencia < now`
+- absent parameter: no filter is generated, unless the application configures `defaultValues` or `required`
+
+Use an injectable `Clock` for `now` so tests can fix the current instant and applications can control the time zone.
+
 ## Missing Registration
 
 If an application uses a custom operation in `@Filter` without registering a JPA contributor, startup validation fails when the JPA servlet configuration is active.
@@ -118,10 +166,16 @@ Filter operation 'com.example.filters.FullTextSearch' used by path 'description'
 
 ## OpenAPI Behavior
 
-Custom operations are documented using the common parameter schema:
+OpenAPI documentation uses operation metadata when available:
 
-- If the filter target field is resolved, the parameter schema follows that field type.
-- If the target field cannot be resolved, the parameter falls back to `StringSchema`.
-- `Dynamic.class`, `IsIn.class`, and `IsNull.class` keep their specialized schemas.
+- `BOOLEAN` becomes a boolean schema.
+- `ARRAY` becomes an array schema.
+- `RANGE` becomes an array schema with `minItems = 2` and `maxItems = 2`.
+- `STRING` becomes a string schema.
+- `TARGET_FIELD` follows the target field type.
+- `DYNAMIC` becomes an array schema with at least two items.
+- `NONE` is not exposed as an OpenAPI parameter.
 
-No OpenAPI-specific SPI is required for scalar custom operations. Add one later only if a custom operation needs a special parameter shape.
+Every operation known by a `FilterOperationService` must provide metadata. A metadata lookup for an unregistered operation fails with the same configuration error style used by runtime filter creation.
+
+`Dynamic.class` and `Decorated.class` are still pseudo-operations and are not registered as JPA operations. Their metadata is exposed by the operation service so OpenAPI and other integrations can apply the correct behavior without treating missing metadata as normal.

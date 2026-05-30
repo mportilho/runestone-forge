@@ -24,16 +24,12 @@
 
 package com.runestone.dynafilter.core.operation;
 
-import com.runestone.dynafilter.core.model.FilterData;
-
-public interface FilterOperationService<T> {
-
-    T createFilter(FilterData filterData);
-
-    @SuppressWarnings("rawtypes")
-    boolean supports(Class<? extends FilterOperation> operationType);
-
-    @SuppressWarnings("rawtypes")
-    FilterOperationMetadata findMetadata(Class<? extends FilterOperation> operationType);
-
+public enum FilterValueShape {
+    TARGET_FIELD,
+    STRING,
+    BOOLEAN,
+    ARRAY,
+    RANGE,
+    DYNAMIC,
+    NONE
 }

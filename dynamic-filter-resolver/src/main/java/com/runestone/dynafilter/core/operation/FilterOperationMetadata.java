@@ -24,16 +24,39 @@
 
 package com.runestone.dynafilter.core.operation;
 
-import com.runestone.dynafilter.core.model.FilterData;
+import java.util.Objects;
 
-public interface FilterOperationService<T> {
+public record FilterOperationMetadata(FilterValueShape valueShape) {
 
-    T createFilter(FilterData filterData);
+    public FilterOperationMetadata {
+        Objects.requireNonNull(valueShape, "valueShape cannot be null");
+    }
 
-    @SuppressWarnings("rawtypes")
-    boolean supports(Class<? extends FilterOperation> operationType);
+    public static FilterOperationMetadata targetField() {
+        return new FilterOperationMetadata(FilterValueShape.TARGET_FIELD);
+    }
 
-    @SuppressWarnings("rawtypes")
-    FilterOperationMetadata findMetadata(Class<? extends FilterOperation> operationType);
+    public static FilterOperationMetadata stringValue() {
+        return new FilterOperationMetadata(FilterValueShape.STRING);
+    }
 
+    public static FilterOperationMetadata booleanValue() {
+        return new FilterOperationMetadata(FilterValueShape.BOOLEAN);
+    }
+
+    public static FilterOperationMetadata arrayValue() {
+        return new FilterOperationMetadata(FilterValueShape.ARRAY);
+    }
+
+    public static FilterOperationMetadata rangeValue() {
+        return new FilterOperationMetadata(FilterValueShape.RANGE);
+    }
+
+    public static FilterOperationMetadata dynamicValue() {
+        return new FilterOperationMetadata(FilterValueShape.DYNAMIC);
+    }
+
+    public static FilterOperationMetadata none() {
+        return new FilterOperationMetadata(FilterValueShape.NONE);
+    }
 }

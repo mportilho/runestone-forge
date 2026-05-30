@@ -27,6 +27,7 @@ package com.runestone.dynafilter.core.generator.annotation;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.statement.LogicalStatement;
+import com.runestone.dynafilter.core.model.statement.NoOpStatement;
 import com.runestone.dynafilter.core.operation.FilterOperation;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
@@ -53,11 +54,29 @@ public class TestAnnotationStatementGeneratorWithCustomOperations {
         Assertions.assertThat(filterData.values()).containsExactly("needle");
     }
 
+    @Test
+    @DisplayName("AnnotationStatementGenerator ignores absent IsFimVigente custom parameters")
+    public void testAbsentIsFimVigenteParameterIsIgnored() {
+        AnnotationStatementInput input = new AnnotationStatementInput(SearchWithIsFimVigente.class, null);
+        AnnotationStatementGenerator generator = new AnnotationStatementGenerator();
+
+        StatementWrapper statementWrapper = generator.generateStatements(input, Map.of());
+
+        Assertions.assertThat(statementWrapper.statement()).isInstanceOf(NoOpStatement.class);
+    }
+
     @Conjunction(@Filter(path = "description", parameters = "q", operation = CustomOperation.class))
     private interface SearchWithCustomOperation {
     }
 
+    @Conjunction(@Filter(path = "fimVigencia", parameters = "vigente", operation = IsFimVigente.class))
+    private interface SearchWithIsFimVigente {
+    }
+
     private interface CustomOperation<T> extends FilterOperation<T> {
+    }
+
+    private interface IsFimVigente<T> extends FilterOperation<T> {
     }
 
 }

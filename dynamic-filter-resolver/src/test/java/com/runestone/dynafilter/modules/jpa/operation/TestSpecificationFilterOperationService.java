@@ -29,6 +29,7 @@ import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationExcept
 import com.runestone.dynafilter.core.exceptions.FilterOperationNotDefinedException;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.FilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
 import com.runestone.dynafilter.core.operation.types.*;
 import com.runestone.dynafilter.modules.jpa.operation.specification.*;
 import org.assertj.core.api.Assertions;
@@ -69,6 +70,19 @@ public class TestSpecificationFilterOperationService {
     }
 
     @Test
+    @DisplayName("SpecificationFilterOperationService exposes metadata for built-in operations")
+    public void testBuiltInOperationMetadata() {
+        SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
+
+        Assertions.assertThat(service.findMetadata(IsNull.class)).isEqualTo(FilterOperationMetadata.booleanValue());
+        Assertions.assertThat(service.findMetadata(IsIn.class)).isEqualTo(FilterOperationMetadata.arrayValue());
+        Assertions.assertThat(service.findMetadata(Between.class)).isEqualTo(FilterOperationMetadata.rangeValue());
+        Assertions.assertThat(service.findMetadata(Equals.class)).isEqualTo(FilterOperationMetadata.targetField());
+        Assertions.assertThat(service.findMetadata(Dynamic.class)).isEqualTo(FilterOperationMetadata.dynamicValue());
+        Assertions.assertThat(service.findMetadata(Decorated.class)).isEqualTo(FilterOperationMetadata.none());
+    }
+
+    @Test
     @DisplayName("SpecificationFilterOperationService rejects pseudo operations that are not registered directly")
     public void testUnregisteredOperationFails() {
         SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
@@ -94,7 +108,7 @@ public class TestSpecificationFilterOperationService {
     public void testContributorRegistersCustomOperation() {
         Specification<?> customSpecification = (root, query, builder) -> null;
         SpecificationFilterOperationContributor contributor = registry ->
-                registry.register(CustomOperation.class, filterData -> customSpecification);
+                registry.register(CustomOperation.class, filterData -> customSpecification, FilterOperationMetadata.booleanValue());
         SpecificationFilterOperationService service = new SpecificationFilterOperationService(
                 new DefaultDataConversionService(),
                 List.of(contributor)
@@ -105,6 +119,19 @@ public class TestSpecificationFilterOperationService {
 
         Assertions.assertThat(specification).isSameAs(customSpecification);
         Assertions.assertThat(service.supports(CustomOperation.class)).isTrue();
+        Assertions.assertThat(service.findMetadata(CustomOperation.class)).isEqualTo(FilterOperationMetadata.booleanValue());
+    }
+
+    @Test
+    @DisplayName("SpecificationFilterOperationService rejects metadata lookups for unregistered custom operations")
+    public void testCustomOperationMetadataWithoutContributorFails() {
+        SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
+
+        Assertions.assertThatThrownBy(() -> service.findMetadata(CustomOperation.class))
+                .isInstanceOf(FilterOperationNotDefinedException.class)
+                .hasMessageContaining("No filter metadata found")
+                .hasMessageContaining("CustomOperation")
+                .hasMessageContaining(SpecificationFilterOperationService.class.getCanonicalName());
     }
 
     @Test

@@ -26,14 +26,13 @@ package com.runestone.dynafilter.modules.jpa.operation;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.operation.AbstractFilterOperationService;
-import com.runestone.dynafilter.core.operation.FilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
 import com.runestone.dynafilter.core.operation.FilterOperationRegistry;
 import com.runestone.dynafilter.core.operation.types.*;
 import com.runestone.dynafilter.modules.jpa.operation.specification.*;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 public class SpecificationFilterOperationService extends AbstractFilterOperationService<Specification<?>> {
@@ -43,11 +42,10 @@ public class SpecificationFilterOperationService extends AbstractFilterOperation
     }
 
     public SpecificationFilterOperationService(DataConversionService conversionService, List<SpecificationFilterOperationContributor> contributors) {
-        super(() -> createOperationMap(conversionService, contributors));
+        super(createOperationRegistry(conversionService, contributors));
     }
 
-    @SuppressWarnings("rawtypes")
-    private static Map<Class<? extends FilterOperation>, FilterOperation<Specification<?>>> createOperationMap(
+    private static FilterOperationRegistry<Specification<?>> createOperationRegistry(
             DataConversionService conversionService,
             List<SpecificationFilterOperationContributor> contributors
     ) {
@@ -59,21 +57,21 @@ public class SpecificationFilterOperationService extends AbstractFilterOperation
         for (SpecificationFilterOperationContributor contributor : contributors) {
             Objects.requireNonNull(contributor, "contributor cannot be null").contribute(registry);
         }
-        return registry.toMap();
+        return registry;
     }
 
     private static void registerBuiltInOperations(FilterOperationRegistry<Specification<?>> registry, DataConversionService conversionService) {
-        registry.register(Between.class, (Between<Specification<?>>) filterData -> new SpecificationBetween<>(filterData, conversionService));
-        registry.register(EndsWith.class, (EndsWith<Specification<?>>) filterData -> new SpecificationEndsWith<>(filterData, conversionService));
-        registry.register(Equals.class, (Equals<Specification<?>>) filterData -> new SpecificationEquals<>(filterData, conversionService));
-        registry.register(Greater.class, (Greater<Specification<?>>) filterData -> new SpecificationGreater<>(filterData, conversionService));
-        registry.register(GreaterOrEquals.class, (GreaterOrEquals<Specification<?>>) filterData -> new SpecificationGreaterOrEquals<>(filterData, conversionService));
-        registry.register(IsIn.class, (IsIn<Specification<?>>) filterData -> new SpecificationIsIn<>(filterData, conversionService));
-        registry.register(IsNull.class, (IsNull<Specification<?>>) filterData -> new SpecificationIsNull<>(filterData, conversionService));
-        registry.register(Less.class, (Less<Specification<?>>) filterData -> new SpecificationLess<>(filterData, conversionService));
-        registry.register(LessOrEquals.class, (LessOrEquals<Specification<?>>) filterData -> new SpecificationLessOrEquals<>(filterData, conversionService));
-        registry.register(Like.class, (Like<Specification<?>>) filterData -> new SpecificationLike<>(filterData, conversionService));
-        registry.register(StartsWith.class, (StartsWith<Specification<?>>) filterData -> new SpecificationStartsWith<>(filterData, conversionService));
+        registry.register(Between.class, (Between<Specification<?>>) filterData -> new SpecificationBetween<>(filterData, conversionService), FilterOperationMetadata.rangeValue());
+        registry.register(EndsWith.class, (EndsWith<Specification<?>>) filterData -> new SpecificationEndsWith<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(Equals.class, (Equals<Specification<?>>) filterData -> new SpecificationEquals<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(Greater.class, (Greater<Specification<?>>) filterData -> new SpecificationGreater<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(GreaterOrEquals.class, (GreaterOrEquals<Specification<?>>) filterData -> new SpecificationGreaterOrEquals<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(IsIn.class, (IsIn<Specification<?>>) filterData -> new SpecificationIsIn<>(filterData, conversionService), FilterOperationMetadata.arrayValue());
+        registry.register(IsNull.class, (IsNull<Specification<?>>) filterData -> new SpecificationIsNull<>(filterData, conversionService), FilterOperationMetadata.booleanValue());
+        registry.register(Less.class, (Less<Specification<?>>) filterData -> new SpecificationLess<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(LessOrEquals.class, (LessOrEquals<Specification<?>>) filterData -> new SpecificationLessOrEquals<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(Like.class, (Like<Specification<?>>) filterData -> new SpecificationLike<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(StartsWith.class, (StartsWith<Specification<?>>) filterData -> new SpecificationStartsWith<>(filterData, conversionService), FilterOperationMetadata.targetField());
     }
 
 }

@@ -26,6 +26,8 @@ package com.runestone.dynafilter.core.operation;
 
 import com.runestone.dynafilter.core.exceptions.FilterOperationNotDefinedException;
 import com.runestone.dynafilter.core.model.FilterData;
+import com.runestone.dynafilter.core.operation.types.Decorated;
+import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.core.operation.types.Like;
 import org.assertj.core.api.Assertions;
@@ -68,6 +70,57 @@ public class TestFilterOperationService {
         Assertions.assertThatThrownBy(() -> stringFilterOperationService.supports(null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("operationType cannot be null");
+    }
+
+    @Test
+    @DisplayName("FilterOperationService exposes metadata registered through a registry")
+    public void testFindMetadataForRegistryBackedService() {
+        FilterOperationRegistry<String> registry = new FilterOperationRegistry<>();
+        registry.register(Equals.class, new EqualsTestFilter(), FilterOperationMetadata.booleanValue());
+        var stringFilterOperationService = new RegistryBackedStringFilterOperationService(registry);
+
+        Assertions.assertThat(stringFilterOperationService.findMetadata(Equals.class))
+                .isEqualTo(FilterOperationMetadata.booleanValue());
+    }
+
+    @Test
+    @DisplayName("FilterOperationService exposes metadata for pseudo operations")
+    public void testFindMetadataForPseudoOperations() {
+        var stringFilterOperationService = new StringFilterOperationService();
+
+        Assertions.assertThat(stringFilterOperationService.findMetadata(Dynamic.class))
+                .isEqualTo(FilterOperationMetadata.dynamicValue());
+        Assertions.assertThat(stringFilterOperationService.findMetadata(Decorated.class))
+                .isEqualTo(FilterOperationMetadata.none());
+    }
+
+    @Test
+    @DisplayName("FilterOperationService rejects metadata lookups for unregistered operations")
+    public void testFindMetadataForUnregisteredOperationFails() {
+        var stringFilterOperationService = new StringFilterOperationService();
+
+        Assertions.assertThatThrownBy(() -> stringFilterOperationService.findMetadata(Like.class))
+                .isInstanceOf(FilterOperationNotDefinedException.class)
+                .hasMessageContaining("No filter metadata found")
+                .hasMessageContaining("Like")
+                .hasMessageContaining(StringFilterOperationService.class.getCanonicalName());
+    }
+
+    @Test
+    @DisplayName("FilterOperationService rejects null metadata lookups")
+    public void testFindMetadataNullOperationFails() {
+        var stringFilterOperationService = new StringFilterOperationService();
+
+        Assertions.assertThatThrownBy(() -> stringFilterOperationService.findMetadata(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("operationType cannot be null");
+    }
+
+    private static final class RegistryBackedStringFilterOperationService extends AbstractFilterOperationService<String> {
+
+        private RegistryBackedStringFilterOperationService(FilterOperationRegistry<String> registry) {
+            super(registry);
+        }
     }
 
 }

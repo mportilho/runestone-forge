@@ -41,7 +41,20 @@ public class TestFilterOperationRegistry {
         registry.register(Equals.class, operation);
 
         Assertions.assertThat(registry.toMap()).containsEntry(Equals.class, operation);
+        Assertions.assertThat(registry.toMetadataMap()).containsEntry(Equals.class, FilterOperationMetadata.targetField());
         Assertions.assertThatThrownBy(() -> registry.toMap().clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    @DisplayName("FilterOperationRegistry exposes custom metadata as an immutable map")
+    public void testRegisteredOperationMetadataIsExposedAsImmutableMap() {
+        FilterOperationRegistry<String> registry = new FilterOperationRegistry<>();
+
+        registry.register(Equals.class, new EqualsTestFilter(), FilterOperationMetadata.booleanValue());
+
+        Assertions.assertThat(registry.toMetadataMap()).containsEntry(Equals.class, FilterOperationMetadata.booleanValue());
+        Assertions.assertThatThrownBy(() -> registry.toMetadataMap().clear())
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
@@ -75,6 +88,16 @@ public class TestFilterOperationRegistry {
         Assertions.assertThatThrownBy(() -> registry.register(Equals.class, null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("operation cannot be null");
+    }
+
+    @Test
+    @DisplayName("FilterOperationRegistry rejects null operation metadata")
+    public void testNullOperationMetadataFails() {
+        FilterOperationRegistry<String> registry = new FilterOperationRegistry<>();
+
+        Assertions.assertThatThrownBy(() -> registry.register(Equals.class, new EqualsTestFilter(), null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("operationMetadata cannot be null");
     }
 
 }
