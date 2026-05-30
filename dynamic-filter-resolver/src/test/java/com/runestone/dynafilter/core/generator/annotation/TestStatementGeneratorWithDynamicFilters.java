@@ -31,9 +31,19 @@ import com.runestone.dynafilter.core.generator.annotation.tool.FilterDataCounter
 import com.runestone.dynafilter.core.generator.annotation.tool.NegatedStmtCounterVisitor;
 import com.runestone.dynafilter.core.generator.annotation.tool.StatementTypeCounterVisitor;
 import com.runestone.dynafilter.core.generator.annotation.tool.ValueFinderVisitor;
+import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.statement.AbstractStatement;
+import com.runestone.dynafilter.core.model.statement.CompoundStatement;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
+import com.runestone.dynafilter.core.model.statement.LogicalStatement;
+import com.runestone.dynafilter.core.model.statement.NegatedStatement;
+import com.runestone.dynafilter.core.model.statement.StatementVisitor;
+import com.runestone.dynafilter.core.operation.types.Between;
+import com.runestone.dynafilter.core.operation.types.GreaterOrEquals;
+import com.runestone.dynafilter.core.operation.types.IsIn;
+import com.runestone.dynafilter.core.operation.types.Less;
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -58,6 +68,22 @@ public class TestStatementGeneratorWithDynamicFilters {
         Assertions.assertThat(NegatedStmtCounterVisitor.countFilters(statement)).isEqualTo(0);
         Assertions.assertThat(ValueFinderVisitor.find("name", statement)).isEqualTo(new Object[]{"John"});
         Assertions.assertThat(ValueFinderVisitor.find("age", statement)).isEqualTo(new Object[]{18});
+    }
+
+    @Test
+    @DisplayName("Dynamic filters are translated to the final built-in operation stored in FilterData")
+    public void testDynamicOperationIsTranslatedToFinalFilterDataOperation() {
+        FilterData greaterOrEquals = createDynamicAgeFilter("ge", 18);
+        FilterData negatedLess = createDynamicAgeFilter("nlt", 18);
+        FilterData isIn = createDynamicAgeFilter("in", 18, 19, 20);
+        FilterData between = createDynamicAgeFilter("bt", 18, 200);
+
+        Assertions.assertThat(greaterOrEquals.operation()).isEqualTo(GreaterOrEquals.class);
+        Assertions.assertThat(greaterOrEquals.negate()).isFalse();
+        Assertions.assertThat(negatedLess.operation()).isEqualTo(Less.class);
+        Assertions.assertThat(negatedLess.negate()).isTrue();
+        Assertions.assertThat(isIn.operation()).isEqualTo(IsIn.class);
+        Assertions.assertThat(between.operation()).isEqualTo(Between.class);
     }
 
     @Test
@@ -262,6 +288,52 @@ public class TestStatementGeneratorWithDynamicFilters {
         Assertions.assertThatThrownBy(() -> generator.generateStatements(annotationStatementInput, map))
                 .isExactlyInstanceOf(StatementGenerationException.class)
                 .hasMessageContaining("Invalid comparison operation [QWERTY] on path [age]");
+    }
+
+    private static FilterData createDynamicAgeFilter(Object... dynamicValues) {
+        var annotationStatementInput = new AnnotationStatementInput(null, SearchDynamic.class.getAnnotations());
+        AnnotationStatementGenerator generator = new AnnotationStatementGenerator();
+        Map<String, Object> map = Map.of(
+                "name", "John",
+                "age", dynamicValues
+        );
+
+        StatementWrapper statementWrapper = generator.generateStatements(annotationStatementInput, map);
+        return findFilterData("age", statementWrapper.statement());
+    }
+
+    private static FilterData findFilterData(String path, AbstractStatement statement) {
+        FilterDataFinderVisitor visitor = new FilterDataFinderVisitor(path);
+        statement.acceptVisitor(visitor);
+        return visitor.filterData;
+    }
+
+    private static final class FilterDataFinderVisitor implements StatementVisitor {
+
+        private final String path;
+        private FilterData filterData;
+
+        private FilterDataFinderVisitor(String path) {
+            this.path = path;
+        }
+
+        @Override
+        public void visit(NegatedStatement negatedStatement) {
+            negatedStatement.getStatement().acceptVisitor(this);
+        }
+
+        @Override
+        public void visit(CompoundStatement compoundStatement) {
+            compoundStatement.getLeftStatement().acceptVisitor(this);
+            compoundStatement.getRightStatement().acceptVisitor(this);
+        }
+
+        @Override
+        public void visit(LogicalStatement logicalStatement) {
+            if (logicalStatement.getFilterData().path().equals(path)) {
+                filterData = logicalStatement.getFilterData();
+            }
+        }
     }
 
 }
