@@ -25,8 +25,11 @@
 package com.runestone.dynafilter.modules.openapi;
 
 import com.fasterxml.jackson.annotation.JsonView;
+import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.generator.annotation.*;
 import com.runestone.dynafilter.core.model.FilterRequestData;
+import com.runestone.dynafilter.core.operation.ComparisonOperation;
+import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.operation.types.IsIn;
@@ -117,8 +120,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
                 arraySchema.items(parameter.getSchema() != null ? parameter.getSchema() : new StringSchema());
                 parameter.setSchema(arraySchema);
             } else {
-                Class<?> filterTargetClass = TypeAnnotationUtils.findFilterTargetClass(methodParameter.getParameter());
-                Field field = TypeAnnotationUtils.findFilterField(filterTargetClass, filter.path());
+                Field field = findFilterField(methodParameter, filter);
                 createCommonSchema(filter, field, methodParameter, parameter);
             }
 
@@ -134,6 +136,37 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
                 operation.getParameters().add(parameter);
             }
         }
+    }
+
+    private Field findFilterField(MethodParameter methodParameter, FilterRequestData filter) {
+        try {
+            Class<?> filterTargetClass = TypeAnnotationUtils.findFilterTargetClass(methodParameter.getParameter());
+            if (filterTargetClass == null) {
+                if (isCustomOperation(filter.operation())) {
+                    return null;
+                }
+                throw new DynamicFilterConfigurationException("Cannot resolve target type for filter path '%s'"
+                        .formatted(filter.path()));
+            }
+            return TypeAnnotationUtils.findFilterField(filterTargetClass, filter.path());
+        } catch (DynamicFilterConfigurationException e) {
+            if (isCustomOperation(filter.operation())) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    private static boolean isCustomOperation(@SuppressWarnings("rawtypes") Class<? extends FilterOperation> operationType) {
+        if (Decorated.class.equals(operationType) || Dynamic.class.equals(operationType)) {
+            return false;
+        }
+        for (ComparisonOperation comparisonOperation : ComparisonOperation.values()) {
+            if (comparisonOperation.getOperation().equals(operationType)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

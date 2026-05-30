@@ -15,9 +15,9 @@ O desenho deve preservar a separacao atual entre:
 | Item | Status |
 |---|---|
 | Planejamento documentado | Concluido |
-| Implementacao no codigo | Em andamento |
-| Testes automatizados | Em andamento |
-| Documentacao de uso para consumidores | Pendente |
+| Implementacao no codigo | Concluido |
+| Testes automatizados | Concluido |
+| Documentacao de uso para consumidores | Concluido |
 
 ## Legenda de Status
 
@@ -42,11 +42,11 @@ O desenho deve preservar a separacao atual entre:
 | EXT-007 | Atualizar a auto-configuracao Spring para coletar contributors | Concluido | Alta |
 | EXT-008 | Validar operacoes nao registradas no startup quando possivel | Concluido | Media |
 | EXT-009 | Manter tratamento especial de `Decorated` e `Dynamic` | Concluido | Alta |
-| EXT-010 | Ajustar OpenAPI com fallback para operacoes customizadas | Pendente | Media |
-| EXT-011 | Avaliar SPI OpenAPI especifica para operacoes customizadas | Pendente | Baixa |
-| EXT-012 | Avaliar aliases customizados para `Dynamic.class` em fase posterior | Pendente | Baixa |
+| EXT-010 | Ajustar OpenAPI com fallback para operacoes customizadas | Concluido | Media |
+| EXT-011 | Avaliar SPI OpenAPI especifica para operacoes customizadas | Descartado | Baixa |
+| EXT-012 | Avaliar aliases customizados para `Dynamic.class` em fase posterior | Descartado | Baixa |
 | EXT-013 | Adicionar testes de operacao customizada no core e JPA | Concluido | Alta |
-| EXT-014 | Adicionar exemplo de uso para aplicacoes consumidoras | Pendente | Media |
+| EXT-014 | Adicionar exemplo de uso para aplicacoes consumidoras | Concluido | Media |
 
 ## Diagnostico Inicial
 
@@ -328,7 +328,7 @@ Comportamento esperado:
 
 ### EXT-010 - Ajustar OpenAPI com fallback para operacoes customizadas
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: garantir que operacoes customizadas aparecam na documentacao sem exigir SPI adicional na primeira fase.
 
@@ -341,7 +341,7 @@ Comportamento recomendado:
 
 ### EXT-011 - Avaliar SPI OpenAPI especifica
 
-Status: Pendente
+Status: Descartado
 
 Objetivo: permitir documentacao especializada para operacoes customizadas com formato proprio.
 
@@ -356,15 +356,15 @@ public interface FilterOperationOpenApiCustomizer {
 }
 ```
 
-Decisao recomendada: nao implementar na primeira fase, a menos que ja exista um caso real de operacao customizada com parametros especiais.
+Decisao: nao implementar nesta fase, pois ainda nao ha caso real de operacao customizada com parametros especiais. O fallback comum de EXT-010 cobre operacoes escalares simples.
 
 ### EXT-012 - Avaliar aliases customizados para `Dynamic.class`
 
-Status: Pendente
+Status: Descartado
 
 Objetivo: permitir que filtros dinamicos aceitem codigos alem de `EQ`, `LT`, `LE`, `GT`, `GE`, `LK`, `SW`, `EW`, `IN` e `BT`.
 
-Decisao recomendada: tratar como fase posterior.
+Decisao: tratar como fase posterior.
 
 Motivo: esse caso exige metadados adicionais sobre formato dos valores, como valor unico, array ou intervalo. Misturar essa alteracao com a abertura de `@Filter.operation()` aumenta o risco da primeira entrega.
 
@@ -408,7 +408,7 @@ Cenarios minimos:
 
 ### EXT-014 - Adicionar exemplo de uso para aplicacoes consumidoras
 
-Status: Pendente
+Status: Concluido
 
 Objetivo: documentar como criar e registrar uma operacao customizada.
 
@@ -419,6 +419,8 @@ Conteudo recomendado:
 - Implementar uma `Specification<T>`.
 - Registrar via `SpecificationFilterOperationContributor`.
 - Explicar comportamento quando o registro estiver ausente.
+
+Documento criado: [`custom-filter-operations.md`](custom-filter-operations.md).
 
 ## Exemplo de Implementacao JPA Customizada
 
@@ -487,4 +489,6 @@ Observacao: esse exemplo e propositalmente simples. Uma implementacao real pode 
 | Operacoes built-in continuam funcionando sem mudanca no codigo consumidor. | Concluido |
 | `Decorated.class` e `Dynamic.class` mantem comportamento atual. | Concluido |
 | Operacao customizada sem registro falha com mensagem diagnostica. | Concluido |
+| Operacoes customizadas aparecem no OpenAPI com schema do campo alvo ou fallback `StringSchema`. | Concluido |
+| Documentacao de uso para consumidores foi adicionada. | Concluido |
 | Testes do modulo `dynamic-filter-resolver` passam. | Concluido |

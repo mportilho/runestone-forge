@@ -28,6 +28,7 @@ import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.generator.annotation.FilterTarget;
+import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.core.operation.types.IsIn;
@@ -90,6 +91,27 @@ public class TestDynaFilterOperationCustomizer {
 
         Assertions.assertThat(parameter.getSchema()).isInstanceOf(StringSchema.class);
         Assertions.assertThat(parameter.getDescription()).isEqualTo("User name");
+    }
+
+    @Test
+    @DisplayName("Custom filter parameters use the schema resolved from the target field")
+    public void testCustomFilterUsesTargetFieldSchema() throws NoSuchMethodException {
+        Operation operation = customize("documentCustomFilter");
+
+        Parameter parameter = findParameter(operation, "priority");
+
+        Assertions.assertThat(parameter.getSchema().getType()).isEqualTo("integer");
+        Assertions.assertThat(parameter.getDescription()).isEqualTo("Search priority");
+    }
+
+    @Test
+    @DisplayName("Custom filter parameters fall back to string schema when the target field is not resolved")
+    public void testCustomFilterWithoutResolvableFieldUsesStringSchema() throws NoSuchMethodException {
+        Operation operation = customize("documentCustomFilterWithoutResolvableField");
+
+        Parameter parameter = findParameter(operation, "custom");
+
+        Assertions.assertThat(parameter.getSchema()).isInstanceOf(StringSchema.class);
     }
 
     @Test
@@ -156,6 +178,22 @@ public class TestDynaFilterOperationCustomizer {
         ) {
         }
 
+        public void documentCustomFilter(
+                @io.swagger.v3.oas.annotations.Parameter(name = "filters")
+                @FilterTarget(OpenApiFilterTarget.class)
+                @Conjunction(@Filter(path = "priority", parameters = "priority", operation = CustomOperation.class, description = "Search priority"))
+                ConditionalStatement filters
+        ) {
+        }
+
+        public void documentCustomFilterWithoutResolvableField(
+                @io.swagger.v3.oas.annotations.Parameter(name = "filters")
+                @FilterTarget(OpenApiFilterTarget.class)
+                @Conjunction(@Filter(path = "custom", parameters = "custom", operation = CustomOperation.class))
+                ConditionalStatement filters
+        ) {
+        }
+
         public void documentConstantValueFilter(
                 @io.swagger.v3.oas.annotations.Parameter(name = "filters")
                 @FilterTarget(OpenApiFilterTarget.class)
@@ -171,5 +209,9 @@ public class TestDynaFilterOperationCustomizer {
         private String tags;
         private Boolean deleted;
         private String status;
+        private Integer priority;
+    }
+
+    private interface CustomOperation<T> extends FilterOperation<T> {
     }
 }
