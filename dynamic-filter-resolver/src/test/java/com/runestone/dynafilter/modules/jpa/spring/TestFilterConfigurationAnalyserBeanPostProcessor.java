@@ -29,6 +29,7 @@ import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationExcept
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils;
+import com.runestone.dynafilter.core.model.modifiers.ModIgnorePath;
 import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.operation.types.Decorated;
@@ -38,6 +39,7 @@ import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperati
 import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.spring.tools.SearchState;
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.bind.annotation.RestController;
@@ -100,6 +102,41 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    @DisplayName("Warmup fails when a filter path does not exist and ModIgnorePath is absent")
+    public void testWarmupFailsForMissingEntityPathWithoutIgnorePathModifier() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new MissingPathController(), "missingPathController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining("missingPath")
+                .hasMessageContaining(FilterValidationEntity.class.getCanonicalName());
+    }
+
+    @Test
+    @DisplayName("Warmup skips entity path validation when a filter uses ModIgnorePath")
+    public void testWarmupSkipsMissingEntityPathWithIgnorePathModifier() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatCode(() -> postProcessor.postProcessAfterInitialization(new IgnorePathController(), "ignorePathController"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("ModIgnorePath does not skip operation registration validation")
+    public void testWarmupStillValidatesOperationWithIgnorePathModifier() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new IgnorePathWithUnregisteredOperationController(), "ignorePathWithUnregisteredOperationController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining(CustomOperation.class.getCanonicalName())
+                .hasMessageContaining("missingPath")
+                .hasMessageContaining("not registered for JPA specifications");
+    }
+
     private static FilterConfigurationAnalyserBeanPostProcessor newPostProcessor() {
         return newPostProcessor(new SpecificationFilterOperationService(new DefaultDataConversionService()));
     }
@@ -136,6 +173,33 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
         }
     }
 
+    @RestController
+    private static class MissingPathController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({@Filter(path = "missingPath", parameters = "missingPath", operation = Equals.class)})
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
+    @RestController
+    private static class IgnorePathController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({@Filter(path = "missingPath", parameters = "missingPath", operation = Equals.class, modifiers = ModIgnorePath.class)})
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
+    @RestController
+    private static class IgnorePathWithUnregisteredOperationController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({@Filter(path = "missingPath", parameters = "missingPath", operation = CustomOperation.class, modifiers = ModIgnorePath.class)})
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
     @Conjunction({
             @Filter(path = "state", parameters = {}, operation = Equals.class),
     })
@@ -156,5 +220,10 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
     }
 
     private interface CustomOperation<T> extends FilterOperation<T> {
+    }
+
+    private static class FilterValidationEntity {
+        @SuppressWarnings("unused")
+        private String existingPath;
     }
 }

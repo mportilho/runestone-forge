@@ -5,6 +5,7 @@ import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
 import com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils;
 import com.runestone.dynafilter.core.model.FilterRequestData;
+import com.runestone.dynafilter.core.model.modifiers.ModIgnorePath;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
@@ -51,7 +52,11 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanPostPro
 
         Class<?> entityClass = TypeAnnotationUtils.findFilterTargetClass(parameter);
         if (entityClass != null) {
-            allFilters.forEach(filter -> findFilterField(entityClass, filter.path()));
+            allFilters.forEach(filter -> {
+                if (filter.modifiers() == null || !filter.modifiers().contains(ModIgnorePath.class)) {
+                    findFilterField(entityClass, filter.path());
+                }
+            });
         }
         allFilters.forEach(this::checkRegisteredOperation);
     }
