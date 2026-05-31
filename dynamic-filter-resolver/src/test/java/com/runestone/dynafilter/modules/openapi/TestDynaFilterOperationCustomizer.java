@@ -169,6 +169,16 @@ public class TestDynaFilterOperationCustomizer {
     }
 
     @Test
+    @DisplayName("Hidden filters are not exposed as OpenAPI parameters")
+    public void testHiddenFilterDoesNotExposeParameter() throws NoSuchMethodException {
+        Operation operation = customize("documentHiddenFilter");
+
+        Assertions.assertThat(operation.getParameters())
+                .extracting(Parameter::getName)
+                .doesNotContain("internalStatus", "filters");
+    }
+
+    @Test
     @DisplayName("Decorated filter parameters are documented as strings")
     public void testDecoratedFilterExposesParameter() throws NoSuchMethodException {
         Operation operation = customize("documentDecoratedFilter");
@@ -287,6 +297,14 @@ public class TestDynaFilterOperationCustomizer {
                 @io.swagger.v3.oas.annotations.Parameter(name = "filters")
                 @FilterTarget(OpenApiFilterTarget.class)
                 @Conjunction(@Filter(path = "status", parameters = "status", operation = Equals.class, constantValues = "ACTIVE"))
+                ConditionalStatement filters
+        ) {
+        }
+
+        public void documentHiddenFilter(
+                @io.swagger.v3.oas.annotations.Parameter(name = "filters")
+                @FilterTarget(OpenApiFilterTarget.class)
+                @Conjunction(@Filter(path = "status", parameters = "internalStatus", operation = Equals.class, hidden = true))
                 ConditionalStatement filters
         ) {
         }

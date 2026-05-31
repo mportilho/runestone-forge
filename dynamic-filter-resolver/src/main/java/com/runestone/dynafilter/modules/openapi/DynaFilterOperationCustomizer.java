@@ -96,6 +96,9 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
      * representation
      */
     private void customizeParameter(Operation operation, MethodParameter methodParameter, FilterRequestData filter) {
+        if (filter.hidden()) {
+            return;
+        }
         if (filter.constantValues() != null && filter.constantValues().length > 0) {
             return;
         }
@@ -165,7 +168,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
         return true;
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings({"rawtypes"})
     private void createSchema(FilterRequestData filter, Field field, MethodParameter methodParameter,
                               io.swagger.v3.oas.models.parameters.Parameter parameter, FilterOperationMetadata metadata) {
         Schema schemaFromType = resolveSchemaFromField(field, methodParameter);
@@ -190,7 +193,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
         }
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings({"rawtypes"})
     private Schema resolveSchemaFromField(Field field, MethodParameter methodParameter) {
         if (field == null) {
             return new StringSchema();
@@ -209,7 +212,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
         return newSchema;
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings({"rawtypes"})
     private static ArraySchema createArraySchema(Schema itemSchema, Integer minItems, Integer maxItems) {
         ArraySchema arraySchema = new ArraySchema();
         arraySchema.type("array");
@@ -229,7 +232,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
     private static JsonView getJsonViewFromMethod(MethodParameter methodParameter) {
         JsonView[] jsonViews = requireNonNull(methodParameter.getMethod()).getAnnotationsByType(JsonView.class);
         JsonView jsonView = null;
-        if (jsonViews != null && jsonViews.length > 0) {
+        if (jsonViews.length > 0) {
             jsonView = jsonViews[0];
         }
         return jsonView;

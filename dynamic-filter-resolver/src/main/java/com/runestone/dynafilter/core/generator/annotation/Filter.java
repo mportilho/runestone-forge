@@ -108,6 +108,11 @@ public @interface Filter {
     boolean required() default false;
 
     /**
+     * @return Indicates this filter should be hidden from generated OpenAPI documentation
+     */
+    boolean hidden() default false;
+
+    /**
      * Additional generic modifiers for configuring the filter construction.
      *
      * <p>
