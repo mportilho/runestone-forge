@@ -37,23 +37,6 @@ public record FilterRequestData(
 
 ) {
 
-    public FilterRequestData(
-            String path,
-            String[] parameters,
-            Class<?> targetType,
-            @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,
-            String negate,
-            Object[] defaultValues,
-            Object[] constantValues,
-            String format,
-            boolean required,
-            List<Class<? extends FilterModifier>> modifiers,
-            String description
-    ) {
-        this(path, parameters, targetType, operation, negate, defaultValues, constantValues, format, required, false,
-                modifiers, description);
-    }
-
     public static FilterRequestData of(Filter filter) {
         return new FilterRequestData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(),
                 filter.negate(), filter.defaultValues(), filter.constantValues(), filter.format(), filter.required(),

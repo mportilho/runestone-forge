@@ -123,6 +123,7 @@ public class DynamicFilterRepositorySortPerfBenchmark {
                 null,
                 null,
                 false,
+                false,
                 List.of(),
                 null
         );
