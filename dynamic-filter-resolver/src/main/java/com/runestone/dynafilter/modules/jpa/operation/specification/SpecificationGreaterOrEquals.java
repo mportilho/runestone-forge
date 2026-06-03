@@ -43,7 +43,11 @@ public class SpecificationGreaterOrEquals<T> implements Specification<T> {
     @Override
     @SuppressWarnings({"unchecked"})
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        Expression<? extends Comparable<?>> expression = JpaPredicateUtils.computeAttributePath(filterData, root);
+        JpaPredicateUtils.PathResolution<? extends Comparable<?>> resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+        if (resolution.crossedPluralAssociation()) {
+            query.distinct(true);
+        }
+        Expression<? extends Comparable<?>> expression = resolution.expression();
         Object value = dataConversionService.convert(filterData.findOneValue(), expression.getJavaType());
         if (expression.getJavaType().equals(String.class) && filterData.hasModifier(ModIgnoreCase.class)) {
             expression = criteriaBuilder.upper((Expression<String>) expression);

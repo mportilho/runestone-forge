@@ -46,12 +46,17 @@ public class SpecificationIsIn<T> implements Specification<T> {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        Expression expressionTemp = JpaPredicateUtils.computeAttributePath(filterData, root);
+        JpaPredicateUtils.PathResolution<?> resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+        Expression expressionTemp = resolution.expression();
         Object rawValues = filterData.values()[0];
         Object[] arrayValues = rawValues instanceof Object[] arr ? arr : new Object[]{rawValues};
 
-        if (Collection.class.isAssignableFrom(expressionTemp.getJavaType())) {
-            expressionTemp = JpaPredicateUtils.computeAttributeJoinPath(filterData, root);
+        boolean finalAttributeIsCollection = Collection.class.isAssignableFrom(expressionTemp.getJavaType());
+        if (finalAttributeIsCollection) {
+            resolution = JpaPredicateUtils.resolveAttributeJoinPath(filterData, root);
+            expressionTemp = resolution.expression();
+        }
+        if (finalAttributeIsCollection || resolution.crossedPluralAssociation()) {
             query.distinct(true);
         }
 

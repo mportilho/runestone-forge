@@ -63,38 +63,46 @@ class JpaPredicateUtils {
     }
 
     /**
-     * Obtains the actual JPA Criteria {@link Path} object to the desired path
+     * Resolves the actual JPA Criteria {@link Path} object to the desired path
      * defined on {@link FilterData} object. Joins automatically when navigating through entities.
      */
-    public static <T> Path<T> computeAttributePath(FilterData filterData, Root<?> root) {
+    public static <T> PathResolution<T> resolveAttributePath(FilterData filterData, Root<?> root) {
         String path = Objects.requireNonNull(filterData.path(), "Path cannot be null").trim();
         String key = root.getJavaType().getCanonicalName() + "." + path;
         ParsedPath parsedPath = PARSED_PATH_CACHE.computeIfAbsent(key, k -> JpaPredicateUtils.parsePath(path));
         JoinType joinType = getJoinType(filterData);
         From<?, ?> from = root;
+        boolean crossedPluralAssociation = false;
 
         for (String associationSegment : parsedPath.associationSegments()) {
-            from = getOrCreateJoin(from, associationSegment, joinType);
+            Join<?, ?> join = getOrCreateJoin(from, associationSegment, joinType);
+            crossedPluralAssociation = crossedPluralAssociation || isPluralAttribute(join);
+            from = join;
         }
-        return from.get(parsedPath.attributeSegment());
+        return new PathResolution<>(from.get(parsedPath.attributeSegment()), crossedPluralAssociation);
     }
 
     /**
-     * Like {@link #computeAttributePath} but joins the final segment too.
+     * Like {@link #resolveAttributePath} but joins the final segment too.
      * Use this for plural attributes ({@code @ElementCollection}, collections) so that
      * the returned {@link Expression} reflects the element type rather than the collection type.
      */
     @SuppressWarnings("unchecked")
-    public static <T> Expression<T> computeAttributeJoinPath(FilterData filterData, Root<?> root) {
+    public static <T> PathResolution<T> resolveAttributeJoinPath(FilterData filterData, Root<?> root) {
         String path = Objects.requireNonNull(filterData.path(), "Path cannot be null").trim();
         String key = root.getJavaType().getCanonicalName() + "." + path;
         ParsedPath parsedPath = PARSED_PATH_CACHE.computeIfAbsent(key, k -> JpaPredicateUtils.parsePath(path));
         JoinType joinType = getJoinType(filterData);
         From<?, ?> from = root;
+        boolean crossedPluralAssociation = false;
         for (String associationSegment : parsedPath.associationSegments()) {
-            from = getOrCreateJoin(from, associationSegment, joinType);
+            Join<?, ?> join = getOrCreateJoin(from, associationSegment, joinType);
+            crossedPluralAssociation = crossedPluralAssociation || isPluralAttribute(join);
+            from = join;
         }
-        return (Expression<T>) getOrCreateJoin(from, parsedPath.attributeSegment(), joinType);
+        Join<?, ?> join = getOrCreateJoin(from, parsedPath.attributeSegment(), joinType);
+        crossedPluralAssociation = crossedPluralAssociation || isPluralAttribute(join);
+        return new PathResolution<>((Path<T>) join, crossedPluralAssociation);
     }
 
     /**
@@ -122,12 +130,16 @@ class JpaPredicateUtils {
      */
     private static Join<?, ?> getOrCreateJoin(From<?, ?> from, String attribute, JoinType joinType) {
         for (Join<?, ?> join : from.getJoins()) {
-            boolean sameName = join.getAttribute().getName().equals(attribute);
+            boolean sameName = join.getAttribute() != null && join.getAttribute().getName().equals(attribute);
             if (sameName && join.getJoinType().equals(joinType)) {
                 return join;
             }
         }
         return from.join(attribute, joinType);
+    }
+
+    private static boolean isPluralAttribute(Join<?, ?> join) {
+        return join.getAttribute() != null && join.getAttribute().isCollection();
     }
 
     static void clearCaches() {
@@ -177,6 +189,9 @@ class JpaPredicateUtils {
     }
 
     private record ParsedPath(String[] associationSegments, String attributeSegment) {
+    }
+
+    record PathResolution<T>(Path<T> expression, boolean crossedPluralAssociation) {
     }
 
 }

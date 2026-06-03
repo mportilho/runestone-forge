@@ -43,7 +43,11 @@ public class SpecificationEquals<T> implements Specification<T> {
     @Override
     @SuppressWarnings("unchecked")
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        Expression<T> expression = JpaPredicateUtils.computeAttributePath(filterData, root);
+        JpaPredicateUtils.PathResolution<T> resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+        if (resolution.crossedPluralAssociation()) {
+            query.distinct(true);
+        }
+        Expression<T> expression = resolution.expression();
         Object value = dataConversionService.convert(filterData.findOneValue(), expression.getJavaType());
 
         if (expression.getJavaType().equals(String.class) && filterData.hasModifier(ModIgnoreCase.class)) {

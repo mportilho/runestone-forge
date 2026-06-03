@@ -43,7 +43,11 @@ public class SpecificationBetween<T> implements Specification<T> {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        Expression<Comparable> expression = JpaPredicateUtils.computeAttributePath(filterData, root);
+        JpaPredicateUtils.PathResolution<Comparable> resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+        if (resolution.crossedPluralAssociation()) {
+            query.distinct(true);
+        }
+        Expression<Comparable> expression = resolution.expression();
         Comparable lowerValue = dataConversionService.convert(filterData.findValueOnIndex(0), expression.getJavaType());
         Comparable upperValue = dataConversionService.convert(filterData.findValueOnIndex(1), expression.getJavaType());
 

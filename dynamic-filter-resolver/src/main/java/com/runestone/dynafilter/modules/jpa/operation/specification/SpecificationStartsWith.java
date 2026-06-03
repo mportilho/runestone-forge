@@ -42,7 +42,11 @@ public class SpecificationStartsWith<T> implements Specification<T> {
 
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        Path<String> path = JpaPredicateUtils.computeAttributePath(filterData, root);
+        JpaPredicateUtils.PathResolution<String> resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+        if (resolution.crossedPluralAssociation()) {
+            query.distinct(true);
+        }
+        Path<String> path = resolution.expression();
         String value = dataConversionService.convert(filterData.findOneValue(), path.getJavaType());
 
         Expression<String> expression;

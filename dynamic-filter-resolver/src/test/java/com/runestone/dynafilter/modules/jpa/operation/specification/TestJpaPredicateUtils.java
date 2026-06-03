@@ -59,8 +59,10 @@ public class TestJpaPredicateUtils {
     public void testSimplePath() {
         FilterData filterData = FilterData.of("name", new String[]{"name"}, String.class, Like.class, new Object[]{"John"});
         Specification<Person> specification = (root, query, builder) -> {
-            var path = JpaPredicateUtils.computeAttributePath(filterData, root);
+            var resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+            var path = resolution.expression();
             Assertions.assertThat(path).isNotNull();
+            Assertions.assertThat(resolution.crossedPluralAssociation()).isFalse();
             if (path instanceof AbstractSqmPath<Object> abstractSqmPath) {
                 Assertions.assertThat(abstractSqmPath.getLhs().getNodeType().getJavaType()).isEqualTo(Person.class);
                 Assertions.assertThat(abstractSqmPath.getExpressible().getJavaType()).isEqualTo(String.class);
@@ -77,8 +79,10 @@ public class TestJpaPredicateUtils {
         FilterData filterData = new FilterData("person.height", new String[]{"personHeight"}, String.class, Like.class,
                 false, new Object[]{BigDecimal.valueOf(180)}, List.of(ModJoinTypeRight.class), null);
         Specification<Address> specification = (root, query, builder) -> {
-            var path = JpaPredicateUtils.computeAttributePath(filterData, root);
+            var resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+            var path = resolution.expression();
             Assertions.assertThat(path).isNotNull();
+            Assertions.assertThat(resolution.crossedPluralAssociation()).isFalse();
             if (path instanceof AbstractSqmPath<Object> abstractSqmPath) {
                 Assertions.assertThat(abstractSqmPath.getLhs().getNodeType().getJavaType()).isEqualTo(Person.class);
                 Assertions.assertThat(abstractSqmPath.getExpressible().getJavaType()).isEqualTo(BigDecimal.class);
@@ -99,24 +103,30 @@ public class TestJpaPredicateUtils {
                 false, new Object[]{"CA"}, List.of(ModJoinTypeInner.class), null);
 
         Specification<Address> specification = (root, query, builder) -> {
-            var pathHeight = JpaPredicateUtils.computeAttributePath(filterDataHeight, root);
+            var heightResolution = JpaPredicateUtils.resolveAttributePath(filterDataHeight, root);
+            var pathHeight = heightResolution.expression();
             Assertions.assertThat(pathHeight).isNotNull();
+            Assertions.assertThat(heightResolution.crossedPluralAssociation()).isFalse();
             if (pathHeight instanceof AbstractSqmPath<Object> abstractSqmPath) {
                 Assertions.assertThat(abstractSqmPath.getLhs().getNodeType().getJavaType()).isEqualTo(Person.class);
                 Assertions.assertThat(abstractSqmPath.getExpressible().getJavaType()).isEqualTo(BigDecimal.class);
                 Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces(".height");
             }
 
-            var pathWeight = JpaPredicateUtils.computeAttributePath(filterDataWeight, root);
+            var weightResolution = JpaPredicateUtils.resolveAttributePath(filterDataWeight, root);
+            var pathWeight = weightResolution.expression();
             Assertions.assertThat(pathWeight).isNotNull();
+            Assertions.assertThat(weightResolution.crossedPluralAssociation()).isFalse();
             if (pathWeight instanceof AbstractSqmPath<Object> abstractSqmPath) {
                 Assertions.assertThat(abstractSqmPath.getLhs().getNodeType().getJavaType()).isEqualTo(Person.class);
                 Assertions.assertThat(abstractSqmPath.getExpressible().getJavaType()).isEqualTo(BigDecimal.class);
                 Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces(".weight");
             }
 
-            var pathState = JpaPredicateUtils.computeAttributePath(filterDataState, root);
+            var stateResolution = JpaPredicateUtils.resolveAttributePath(filterDataState, root);
+            var pathState = stateResolution.expression();
             Assertions.assertThat(pathState).isNotNull();
+            Assertions.assertThat(stateResolution.crossedPluralAssociation()).isFalse();
             if (pathState instanceof AbstractSqmPath<Object> abstractSqmPath) {
                 Assertions.assertThat(abstractSqmPath.getLhs().getNodeType().getJavaType()).isEqualTo(Location.class);
                 Assertions.assertThat(abstractSqmPath.getExpressible().getJavaType()).isEqualTo(String.class);
@@ -126,6 +136,22 @@ public class TestJpaPredicateUtils {
             return builder.equal(root.get("street"), "John");
         };
         addressRepository.findAll(specification);
+    }
+
+    @Test
+    public void testPluralAssociationPathMetadata() {
+        FilterData filterData = new FilterData("addresses.location.state", new String[]{"state"}, String.class, Like.class,
+                false, new Object[]{"SP"}, null, null);
+
+        Specification<Person> specification = (root, query, builder) -> {
+            var resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+
+            Assertions.assertThat(resolution.expression()).isNotNull();
+            Assertions.assertThat(resolution.crossedPluralAssociation()).isTrue();
+
+            return builder.conjunction();
+        };
+        personRepository.findAll(specification);
     }
 
 }

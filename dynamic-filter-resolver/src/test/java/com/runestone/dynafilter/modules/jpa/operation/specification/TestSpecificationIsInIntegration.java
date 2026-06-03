@@ -37,6 +37,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ContextConfiguration;
 
 import java.util.List;
@@ -137,5 +139,20 @@ public class TestSpecificationIsInIntegration {
                 .hasSize(2)
                 .extracting(Produto::getNome)
                 .containsExactlyInAnyOrder("Notebook", "Consultoria TI");
+    }
+
+    @Test
+    public void test_IsIn_OnElementCollection_MultiValueEntity_PageCountUsesDistinct() {
+        FilterData filterData = new FilterData("tipos", new String[]{"tipos"}, Object.class,
+                IsIn.class, false, new Object[]{new Object[]{"SERVICO", "ELETRONICO"}}, null, "");
+
+        SpecificationIsIn<Produto> spec = new SpecificationIsIn<>(filterData, conversionService);
+        Page<Produto> page = produtoRepository.findAll(spec, PageRequest.of(0, 1));
+
+        Assertions.assertThat(page.getContent())
+                .hasSize(1)
+                .extracting(Produto::getNome)
+                .containsAnyOf("Notebook", "Consultoria TI");
+        Assertions.assertThat(page.getTotalElements()).isEqualTo(2L);
     }
 }
