@@ -21,6 +21,7 @@ import java.util.List;
 
 import static com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils.findFilterField;
 import static com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils.listAllFilterRequestData;
+import static com.runestone.dynafilter.helpers.StringHelper.formatPath;
 
 public class FilterConfigurationAnalyserBeanPostProcessor implements BeanPostProcessor {
 
@@ -69,7 +70,7 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanPostPro
         }
         if (!filterOperationService.supports(filter.operation())) {
             throw new DynamicFilterConfigurationException("Filter operation '%s' used on path '%s' is not registered for JPA specifications"
-                    .formatted(filter.operation().getCanonicalName(), filter.path()));
+                    .formatted(filter.operation().getCanonicalName(), formatPath(filter.path())));
         }
     }
 

@@ -26,6 +26,8 @@ package com.runestone.dynafilter.core.generator.annotation.tool;
 
 import com.runestone.dynafilter.core.model.statement.*;
 
+import java.util.Arrays;
+
 public class ValueFinderVisitor implements StatementVisitor {
 
     private final String parameter;
@@ -54,7 +56,7 @@ public class ValueFinderVisitor implements StatementVisitor {
 
     @Override
     public void visit(LogicalStatement logicalStatement) {
-        if (logicalStatement.getFilterData().path().equals(parameter)) {
+        if (Arrays.asList(logicalStatement.getFilterData().path()).contains(parameter)) {
             value = logicalStatement.getFilterData().values();
         }
     }

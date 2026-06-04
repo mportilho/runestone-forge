@@ -30,6 +30,7 @@ import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.runestone.dynafilter.helpers.StringHelper;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -175,7 +176,7 @@ public class TypeAnnotationUtils {
 
     private static void validateFilter(Filter filter) {
         if (filter.parameters().length == 0) {
-            throw new IllegalArgumentException("No parameter configured for filter of path " + filter.path());
+            throw new IllegalArgumentException("No parameter configured for filter of path " + StringHelper.formatPath(filter.path()));
         }
         if (filter.constantValues().length != 0 && filter.constantValues().length != filter.parameters().length) {
             throw new IllegalArgumentException(String.format("Parameters and constant values have different sizes. Parameters required: '%s'",

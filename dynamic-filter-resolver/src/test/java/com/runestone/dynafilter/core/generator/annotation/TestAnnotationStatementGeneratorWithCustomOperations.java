@@ -48,7 +48,7 @@ public class TestAnnotationStatementGeneratorWithCustomOperations {
         Assertions.assertThat(statementWrapper.statement()).isInstanceOf(LogicalStatement.class);
         LogicalStatement statement = (LogicalStatement) statementWrapper.statement();
         FilterData filterData = statement.getFilterData();
-        Assertions.assertThat(filterData.path()).isEqualTo("description");
+        Assertions.assertThat(filterData.path()).containsExactly("description");
         Assertions.assertThat(filterData.parameters()).containsExactly("q");
         Assertions.assertThat(filterData.operation()).isEqualTo(CustomOperation.class);
         Assertions.assertThat(filterData.values()).containsExactly("needle");

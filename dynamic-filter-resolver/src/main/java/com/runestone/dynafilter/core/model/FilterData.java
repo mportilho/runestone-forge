@@ -29,6 +29,8 @@ import com.runestone.dynafilter.core.operation.FilterOperation;
 
 import java.util.List;
 
+import static com.runestone.dynafilter.helpers.StringHelper.formatPath;
+
 /**
  * Represents the data that will be used to build a filter.
  *
@@ -112,10 +114,6 @@ public record FilterData(
 
     public boolean hasModifier(Class<? extends FilterModifier> modifier) {
         return modifiers != null && modifiers.contains(modifier);
-    }
-
-    private static String formatPath(String[] path) {
-        return String.join(", ", path);
     }
 
 }

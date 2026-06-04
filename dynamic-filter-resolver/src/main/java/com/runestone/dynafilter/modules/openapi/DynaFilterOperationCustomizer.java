@@ -31,6 +31,7 @@ import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.operation.*;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
+import com.runestone.dynafilter.helpers.StringHelper;
 import io.swagger.v3.core.util.AnnotationsUtils;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.models.Operation;
@@ -141,7 +142,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
                     return null;
                 }
                 throw new DynamicFilterConfigurationException("Cannot resolve target type for filter path(s) '%s'"
-                        .formatted(String.join(", ", filter.path())));
+                        .formatted(StringHelper.formatPath(filter.path())));
             }
             return TypeAnnotationUtils.findFilterField(filterTargetClass, filter.path()[0]);
         } catch (DynamicFilterConfigurationException e) {

@@ -25,6 +25,7 @@
 package com.runestone.dynafilter.core.statement.tool;
 
 import com.runestone.dynafilter.core.model.statement.*;
+import com.runestone.dynafilter.helpers.StringHelper;
 
 public class StringStatementAnalyser implements StatementAnalyser<String> {
 
@@ -35,9 +36,9 @@ public class StringStatementAnalyser implements StatementAnalyser<String> {
 
     @Override
     public String analyseLogicalStatement(LogicalStatement logicalStatement) {
-        return logicalStatement.getFilterData().path() + " " +
-                logicalStatement.getFilterData().operation().getSimpleName() + " " +
-                logicalStatement.getFilterData().findOneValue();
+        return StringHelper.formatPath(logicalStatement.getFilterData().path()) + " " +
+                            logicalStatement.getFilterData().operation().getSimpleName() + " " +
+                            logicalStatement.getFilterData().findOneValue();
     }
 
     @Override

@@ -46,6 +46,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Map;
 
 public class TestStatementGeneratorWithDynamicFilters {
@@ -330,7 +331,7 @@ public class TestStatementGeneratorWithDynamicFilters {
 
         @Override
         public void visit(LogicalStatement logicalStatement) {
-            if (logicalStatement.getFilterData().path().equals(path)) {
+            if (Arrays.asList(logicalStatement.getFilterData().path()).contains(path)) {
                 filterData = logicalStatement.getFilterData();
             }
         }

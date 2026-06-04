@@ -92,7 +92,7 @@ public class DynamicFilterRepositorySortPerfBenchmark {
         List<Sort.Order> orderList = sort.stream().map(order -> {
             for (FilterRequestData filter : filters) {
                 String[] parameters = filter.parameters();
-                if (parameters.length > 0 && order.getProperty().equals(parameters[0]) && !order.getProperty().equals(filter.path())) {
+                if (parameters.length > 0 && filter.path().length > 0 && order.getProperty().equals(parameters[0]) && !order.getProperty().equals(filter.path()[0])) {
                     return order.withProperty(filter.path()[0]);
                 }
             }
