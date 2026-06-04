@@ -22,36 +22,45 @@
  * SOFTWARE.
  */
 
-package com.runestone.dynafilter.modules.jpa.operation.specification;
+package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
+import com.runestone.dynafilter.modules.jpa.operation.specification.JpaPredicateUtils;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import org.springframework.data.jpa.domain.Specification;
 
-public class SpecificationIsNull<T> implements Specification<T> {
+import java.util.Collection;
+import java.util.Objects;
+
+public class SpecificationSizeBetween<T> implements Specification<T> {
+
+    private static final String OPERATION_NAME = "SizeBetween";
 
     private final FilterData filterData;
     private final DataConversionService dataConversionService;
 
-    public SpecificationIsNull(FilterData filterData, DataConversionService dataConversionService) {
-        this.filterData = filterData;
-        this.dataConversionService = dataConversionService;
+    public SpecificationSizeBetween(FilterData filterData, DataConversionService dataConversionService) {
+        this.filterData = Objects.requireNonNull(filterData, "filterData cannot be null");
+        this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService cannot be null");
     }
 
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        String filterPath = filterData.path()[0];
-        JpaPredicateUtils.PathResolution<Object> resolution = JpaPredicateUtils.resolveAttributePath(filterPath, filterData, root);
-        JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
-        Path<Object> path = resolution.expression();
-        return dataConversionService.convert(filterData.findOneValue(), Boolean.class)
-                ? criteriaBuilder.isNull(path)
-                : criteriaBuilder.isNotNull(path);
+        JpaExtensionPredicateUtils.requirePathCount(filterData, 1, OPERATION_NAME);
+        JpaExtensionPredicateUtils.requireValueCount(filterData, 2, OPERATION_NAME);
+        JpaPredicateUtils.PathResolution<?> resolution = JpaPredicateUtils.resolveAttributePath(filterData.path()[0], filterData, root);
+        Expression<Collection<?>> collectionExpression = JpaExtensionPredicateUtils.collectionExpression(resolution.expression(), OPERATION_NAME);
+        int lowerSize = JpaExtensionPredicateUtils.convertSize(filterData.findValueOnIndex(0), dataConversionService, OPERATION_NAME, "lower size");
+        int upperSize = JpaExtensionPredicateUtils.convertSize(filterData.findValueOnIndex(1), dataConversionService, OPERATION_NAME, "upper size");
+        if (lowerSize > upperSize) {
+            throw new IllegalArgumentException("SizeBetween requires lower size to be less than or equal to upper size");
+        }
+        return criteriaBuilder.between(criteriaBuilder.size(collectionExpression), lowerSize, upperSize);
     }
 
 }

@@ -45,16 +45,14 @@ public class SpecificationLessOrEquals<T> implements Specification<T> {
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
         String filterPath = filterData.path()[0];
         JpaPredicateUtils.PathResolution<? extends Comparable<?>> resolution = JpaPredicateUtils.resolveAttributePath(filterPath, filterData, root);
-        if (resolution.crossedPluralAssociation()) {
-            query.distinct(true);
-        }
+        JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
         Expression<? extends Comparable<?>> expression = resolution.expression();
         Object value = dataConversionService.convert(filterData.findOneValue(), expression.getJavaType());
         if (expression.getJavaType().equals(String.class) && filterData.hasModifier(ModIgnoreCase.class)) {
             expression = criteriaBuilder.upper((Expression<String>) expression);
             value = value != null ? value.toString().toUpperCase() : null;
         }
-        return JpaPredicateUtils.toComparablePredicate(expression, value, criteriaBuilder::lessThanOrEqualTo, criteriaBuilder::le);
+        return JpaPredicateUtils.toLessThanOrEqualToPredicate(criteriaBuilder, expression, value);
     }
 
 }

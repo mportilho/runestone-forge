@@ -49,16 +49,17 @@ public class SpecificationIsIn<T> implements Specification<T> {
         String path = filterData.path()[0];
         JpaPredicateUtils.PathResolution<?> resolution = JpaPredicateUtils.resolveAttributePath(path, filterData, root);
         Expression expressionTemp = resolution.expression();
-        Object rawValues = filterData.values()[0];
-        Object[] arrayValues = rawValues instanceof Object[] arr ? arr : new Object[]{rawValues};
+        Object[] arrayValues = JpaPredicateUtils.valuesAsArray(filterData.values()[0]);
 
         boolean finalAttributeIsCollection = Collection.class.isAssignableFrom(expressionTemp.getJavaType());
         if (finalAttributeIsCollection) {
             resolution = JpaPredicateUtils.resolveAttributeJoinPath(path, filterData, root);
             expressionTemp = resolution.expression();
         }
-        if (finalAttributeIsCollection || resolution.crossedPluralAssociation()) {
+        if (finalAttributeIsCollection) {
             query.distinct(true);
+        } else {
+            JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
         }
 
         boolean ignoreCase = expressionTemp.getJavaType().equals(String.class) && filterData.hasModifier(ModIgnoreCase.class);

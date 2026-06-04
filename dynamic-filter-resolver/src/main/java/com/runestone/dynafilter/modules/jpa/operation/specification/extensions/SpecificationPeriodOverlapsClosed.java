@@ -22,37 +22,31 @@
  * SOFTWARE.
  */
 
-package com.runestone.dynafilter.modules.jpa.operation.specification;
+package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
-import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
-import jakarta.persistence.criteria.*;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import org.springframework.data.jpa.domain.Specification;
 
-public class SpecificationGreaterOrEquals<T> implements Specification<T> {
+import java.util.Objects;
+
+public class SpecificationPeriodOverlapsClosed<T> implements Specification<T> {
 
     private final FilterData filterData;
     private final DataConversionService dataConversionService;
 
-    public SpecificationGreaterOrEquals(FilterData filterData, DataConversionService dataConversionService) {
-        this.filterData = filterData;
-        this.dataConversionService = dataConversionService;
+    public SpecificationPeriodOverlapsClosed(FilterData filterData, DataConversionService dataConversionService) {
+        this.filterData = Objects.requireNonNull(filterData, "filterData cannot be null");
+        this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService cannot be null");
     }
 
     @Override
-    @SuppressWarnings({"unchecked"})
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        String filterPath = filterData.path()[0];
-        JpaPredicateUtils.PathResolution<? extends Comparable<?>> resolution = JpaPredicateUtils.resolveAttributePath(filterPath, filterData, root);
-        JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
-        Expression<? extends Comparable<?>> expression = resolution.expression();
-        Object value = dataConversionService.convert(filterData.findOneValue(), expression.getJavaType());
-        if (expression.getJavaType().equals(String.class) && filterData.hasModifier(ModIgnoreCase.class)) {
-            expression = criteriaBuilder.upper((Expression<String>) expression);
-            value = value != null ? value.toString().toUpperCase() : null;
-        }
-        return JpaPredicateUtils.toGreaterThanOrEqualToPredicate(criteriaBuilder, expression, value);
+        return SpecificationPeriodOverlapsSupport.toPredicate(filterData, dataConversionService, root, query, criteriaBuilder, IntervalBoundMode.CLOSED);
     }
 
 }

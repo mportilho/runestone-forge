@@ -45,9 +45,7 @@ public class SpecificationBetween<T> implements Specification<T> {
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
         String filterPath = filterData.path()[0];
         JpaPredicateUtils.PathResolution<Comparable> resolution = JpaPredicateUtils.resolveAttributePath(filterPath, filterData, root);
-        if (resolution.crossedPluralAssociation()) {
-            query.distinct(true);
-        }
+        JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
         Expression<Comparable> expression = resolution.expression();
         Comparable lowerValue = dataConversionService.convert(filterData.findValueOnIndex(0), expression.getJavaType());
         Comparable upperValue = dataConversionService.convert(filterData.findValueOnIndex(1), expression.getJavaType());

@@ -31,12 +31,15 @@ import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
 import com.runestone.dynafilter.core.operation.types.*;
+import com.runestone.dynafilter.core.operation.types.extensions.*;
 import com.runestone.dynafilter.modules.jpa.operation.specification.*;
+import com.runestone.dynafilter.modules.jpa.operation.specification.extensions.*;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public class TestSpecificationFilterOperationService {
@@ -57,7 +60,20 @@ public class TestSpecificationFilterOperationService {
                 new RegisteredOperation(Less.class, new String[]{"value"}, new Object[]{"value"}, SpecificationLess.class),
                 new RegisteredOperation(LessOrEquals.class, new String[]{"value"}, new Object[]{"value"}, SpecificationLessOrEquals.class),
                 new RegisteredOperation(Like.class, new String[]{"value"}, new Object[]{"value"}, SpecificationLike.class),
-                new RegisteredOperation(StartsWith.class, new String[]{"value"}, new Object[]{"value"}, SpecificationStartsWith.class)
+                new RegisteredOperation(StartsWith.class, new String[]{"value"}, new Object[]{"value"}, SpecificationStartsWith.class),
+                new RegisteredOperation(AnyFieldLike.class, new String[]{"value"}, new Object[]{"value"}, SpecificationAnyFieldLike.class),
+                new RegisteredOperation(CollectionSize.class, new String[]{"size"}, new Object[]{1}, SpecificationCollectionSize.class),
+                new RegisteredOperation(ContainsAll.class, new String[]{"values"}, new Object[]{new Object[]{"a", "b"}}, SpecificationContainsAll.class),
+                new RegisteredOperation(EffectiveAtClosed.class, new String[]{"value"}, new Object[]{LocalDate.of(2026, 1, 1)}, SpecificationEffectiveAtClosed.class),
+                new RegisteredOperation(EffectiveAtHalfOpen.class, new String[]{"value"}, new Object[]{LocalDate.of(2026, 1, 1)}, SpecificationEffectiveAtHalfOpen.class),
+                new RegisteredOperation(EffectiveAtOpen.class, new String[]{"value"}, new Object[]{LocalDate.of(2026, 1, 1)}, SpecificationEffectiveAtOpen.class),
+                new RegisteredOperation(IsBlank.class, new String[]{"value"}, new Object[]{true}, SpecificationIsBlank.class),
+                new RegisteredOperation(IsEmptyCollection.class, new String[]{"value"}, new Object[]{true}, SpecificationIsEmptyCollection.class),
+                new RegisteredOperation(OnDate.class, new String[]{"value"}, new Object[]{LocalDate.of(2026, 1, 1)}, SpecificationOnDate.class),
+                new RegisteredOperation(PeriodOverlapsClosed.class, new String[]{"from", "to"}, new Object[]{LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31)}, SpecificationPeriodOverlapsClosed.class),
+                new RegisteredOperation(PeriodOverlapsHalfOpen.class, new String[]{"from", "to"}, new Object[]{LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31)}, SpecificationPeriodOverlapsHalfOpen.class),
+                new RegisteredOperation(PeriodOverlapsOpen.class, new String[]{"from", "to"}, new Object[]{LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31)}, SpecificationPeriodOverlapsOpen.class),
+                new RegisteredOperation(SizeBetween.class, new String[]{"from", "to"}, new Object[]{1, 3}, SpecificationSizeBetween.class)
         );
 
         for (RegisteredOperation operation : operations) {
@@ -78,6 +94,12 @@ public class TestSpecificationFilterOperationService {
         Assertions.assertThat(service.findMetadata(IsIn.class)).isEqualTo(FilterOperationMetadata.arrayValue());
         Assertions.assertThat(service.findMetadata(Between.class)).isEqualTo(FilterOperationMetadata.rangeValue());
         Assertions.assertThat(service.findMetadata(Equals.class)).isEqualTo(FilterOperationMetadata.targetField());
+        Assertions.assertThat(service.findMetadata(IsBlank.class)).isEqualTo(FilterOperationMetadata.booleanValue());
+        Assertions.assertThat(service.findMetadata(IsEmptyCollection.class)).isEqualTo(FilterOperationMetadata.booleanValue());
+        Assertions.assertThat(service.findMetadata(ContainsAll.class)).isEqualTo(FilterOperationMetadata.arrayValue());
+        Assertions.assertThat(service.findMetadata(PeriodOverlapsHalfOpen.class)).isEqualTo(FilterOperationMetadata.rangeValue());
+        Assertions.assertThat(service.findMetadata(CollectionSize.class)).isEqualTo(FilterOperationMetadata.stringValue());
+        Assertions.assertThat(service.findMetadata(OnDate.class)).isEqualTo(FilterOperationMetadata.stringValue());
         Assertions.assertThat(service.findMetadata(Dynamic.class)).isEqualTo(FilterOperationMetadata.dynamicValue());
         Assertions.assertThat(service.findMetadata(Decorated.class)).isEqualTo(FilterOperationMetadata.stringValue());
     }
@@ -100,6 +122,7 @@ public class TestSpecificationFilterOperationService {
         SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
 
         Assertions.assertThat(service.supports(Equals.class)).isTrue();
+        Assertions.assertThat(service.supports(EffectiveAtHalfOpen.class)).isTrue();
         Assertions.assertThat(service.supports(Dynamic.class)).isFalse();
     }
 

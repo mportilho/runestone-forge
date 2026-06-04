@@ -24,6 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification;
 
+import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeLeft;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeRight;
@@ -31,6 +32,7 @@ import jakarta.persistence.criteria.*;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
@@ -60,6 +62,50 @@ public class JpaPredicateUtils {
             return numberPredicateFunction.apply((Expression<Number>) path, (Number) value);
         }
         return comparablePredicateFunction.apply((Expression<? extends Comparable<Object>>) path, (Comparable<Object>) value);
+    }
+
+    public static Predicate toLessThanPredicate(CriteriaBuilder criteriaBuilder, Expression<?> expression, Object value) {
+        return toComparablePredicate(expression, value, criteriaBuilder::lessThan, criteriaBuilder::lt);
+    }
+
+    public static Predicate toLessThanOrEqualToPredicate(CriteriaBuilder criteriaBuilder, Expression<?> expression, Object value) {
+        return toComparablePredicate(expression, value, criteriaBuilder::lessThanOrEqualTo, criteriaBuilder::le);
+    }
+
+    public static Predicate toGreaterThanPredicate(CriteriaBuilder criteriaBuilder, Expression<?> expression, Object value) {
+        return toComparablePredicate(expression, value, criteriaBuilder::greaterThan, criteriaBuilder::gt);
+    }
+
+    public static Predicate toGreaterThanOrEqualToPredicate(CriteriaBuilder criteriaBuilder, Expression<?> expression, Object value) {
+        return toComparablePredicate(expression, value, criteriaBuilder::greaterThanOrEqualTo, criteriaBuilder::ge);
+    }
+
+    public static void applyDistinctIfNeeded(PathResolution<?> resolution, CriteriaQuery<?> query) {
+        if (resolution.crossedPluralAssociation()) {
+            query.distinct(true);
+        }
+    }
+
+    public static Object[] valuesAsArray(Object rawValues) {
+        if (rawValues == null) {
+            return new Object[]{null};
+        }
+        if (rawValues instanceof Object[] values) {
+            return values;
+        }
+        if (rawValues instanceof Collection<?> values) {
+            return values.toArray();
+        }
+        return new Object[]{rawValues};
+    }
+
+    public static Object[] convertValues(Object[] rawValues, Class<?> targetType, DataConversionService conversionService) {
+        Objects.requireNonNull(rawValues, "rawValues cannot be null");
+        Objects.requireNonNull(targetType, "targetType cannot be null");
+        Objects.requireNonNull(conversionService, "conversionService cannot be null");
+        return Arrays.stream(rawValues)
+                .map(value -> value == null ? null : conversionService.convert(value, targetType))
+                .toArray();
     }
 
     /**

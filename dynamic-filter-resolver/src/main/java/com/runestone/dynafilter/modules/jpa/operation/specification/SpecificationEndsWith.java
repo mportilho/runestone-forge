@@ -44,9 +44,7 @@ public class SpecificationEndsWith<T> implements Specification<T> {
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
         String filterPath = filterData.path()[0];
         JpaPredicateUtils.PathResolution<String> resolution = JpaPredicateUtils.resolveAttributePath(filterPath, filterData, root);
-        if (resolution.crossedPluralAssociation()) {
-            query.distinct(true);
-        }
+        JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
         Path<String> path = resolution.expression();
         String value = dataConversionService.convert(filterData.findOneValue(), path.getJavaType());
 

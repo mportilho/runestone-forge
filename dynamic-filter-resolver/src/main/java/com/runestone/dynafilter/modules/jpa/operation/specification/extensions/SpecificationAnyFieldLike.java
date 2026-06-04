@@ -22,41 +22,51 @@
  * SOFTWARE.
  */
 
-package com.runestone.dynafilter.modules.jpa.operation.specification;
+package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
-import jakarta.persistence.criteria.*;
+import com.runestone.dynafilter.modules.jpa.operation.specification.JpaPredicateUtils;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import org.springframework.data.jpa.domain.Specification;
 
-public class SpecificationLike<T> implements Specification<T> {
+import java.util.Objects;
+
+public class SpecificationAnyFieldLike<T> implements Specification<T> {
 
     private final FilterData filterData;
     private final DataConversionService dataConversionService;
 
-    public SpecificationLike(FilterData filterData, DataConversionService dataConversionService) {
-        this.filterData = filterData;
-        this.dataConversionService = dataConversionService;
+    public SpecificationAnyFieldLike(FilterData filterData, DataConversionService dataConversionService) {
+        this.filterData = Objects.requireNonNull(filterData, "filterData cannot be null");
+        this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService cannot be null");
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        String filterPath = filterData.path()[0];
-        JpaPredicateUtils.PathResolution<String> resolution = JpaPredicateUtils.resolveAttributePath(filterPath, filterData, root);
-        JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
-        Path<String> path = resolution.expression();
-        String value = dataConversionService.convert(filterData.findOneValue(), path.getJavaType());
-
-        Expression<String> expression;
+        String value = dataConversionService.convert(filterData.findOneValue(), String.class);
         if (filterData.hasModifier(ModIgnoreCase.class)) {
-            expression = criteriaBuilder.upper(path);
             value = value != null ? "%" + value.toUpperCase() + "%" : null;
         } else {
-            expression = path;
             value = value != null ? "%" + value + "%" : null;
         }
-        return criteriaBuilder.like(expression, value);
+
+        Predicate[] predicates = new Predicate[filterData.path().length];
+        for (int i = 0; i < filterData.path().length; i++) {
+            JpaPredicateUtils.PathResolution<String> resolution = JpaPredicateUtils.resolveAttributePath(filterData.path()[i], filterData, root);
+            JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
+            Path<String> path = resolution.expression();
+            Expression<String> expression = filterData.hasModifier(ModIgnoreCase.class) ? criteriaBuilder.upper(path) : path;
+            predicates[i] = criteriaBuilder.like(expression, value);
+        }
+        return criteriaBuilder.or(predicates);
     }
 
 }
