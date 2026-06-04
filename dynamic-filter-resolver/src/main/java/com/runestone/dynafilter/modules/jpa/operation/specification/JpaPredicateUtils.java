@@ -40,7 +40,7 @@ import java.util.function.BiFunction;
  *
  * @author Marcelo Portilho
  */
-class JpaPredicateUtils {
+public class JpaPredicateUtils {
 
     private static final String[] EMPTY_SEGMENTS = {};
     private static final Map<String, ParsedPath> PARSED_PATH_CACHE = Caffeine.newBuilder()
@@ -191,7 +191,7 @@ class JpaPredicateUtils {
     private record ParsedPath(String[] associationSegments, String attributeSegment) {
     }
 
-    record PathResolution<T>(Path<T> expression, boolean crossedPluralAssociation) {
+    public record PathResolution<T>(Path<T> expression, boolean crossedPluralAssociation) {
     }
 
 }
