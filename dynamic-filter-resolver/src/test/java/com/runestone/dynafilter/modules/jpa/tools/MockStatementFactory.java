@@ -31,12 +31,12 @@ import com.runestone.dynafilter.core.operation.types.Like;
 public class MockStatementFactory {
 
     public static LogicalStatement createLogicalStatementOnName() {
-        var filterDataName = new FilterData("name", new String[]{"clientName"}, String.class, Like.class, true, new Object[]{"Joe"}, null, "");
+        var filterDataName = new FilterData(new String[]{"name"}, new String[]{"clientName"}, String.class, Like.class, true, new Object[]{"Joe"}, null, "");
         return new LogicalStatement(filterDataName);
     }
 
     public static LogicalStatement createLogicalStatementOnClientJob() {
-        var filterDataJob = new FilterData("job", new String[]{"clientJob"}, String.class, Like.class, true, new Object[]{"Developer"}, null, "");
+        var filterDataJob = new FilterData(new String[]{"job"}, new String[]{"clientJob"}, String.class, Like.class, true, new Object[]{"Developer"}, null, "");
         return new LogicalStatement(filterDataJob);
     }
 

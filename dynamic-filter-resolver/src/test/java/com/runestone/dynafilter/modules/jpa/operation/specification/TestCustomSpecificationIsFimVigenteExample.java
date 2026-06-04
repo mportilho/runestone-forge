@@ -157,7 +157,7 @@ public class TestCustomSpecificationIsFimVigenteExample {
         @Override
         @SuppressWarnings({"unchecked", "rawtypes"})
         public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-            JpaPredicateUtils.PathResolution<?> resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+            JpaPredicateUtils.PathResolution<?> resolution = JpaPredicateUtils.resolveAttributePath(filterData.path()[0], filterData, root);
             if (resolution.crossedPluralAssociation()) {
                 query.distinct(true);
             }

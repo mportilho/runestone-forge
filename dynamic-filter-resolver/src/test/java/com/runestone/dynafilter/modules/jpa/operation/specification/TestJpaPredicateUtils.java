@@ -59,7 +59,7 @@ public class TestJpaPredicateUtils {
     public void testSimplePath() {
         FilterData filterData = FilterData.of("name", new String[]{"name"}, String.class, Like.class, new Object[]{"John"});
         Specification<Person> specification = (root, query, builder) -> {
-            var resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+            var resolution = JpaPredicateUtils.resolveAttributePath("name", filterData, root);
             var path = resolution.expression();
             Assertions.assertThat(path).isNotNull();
             Assertions.assertThat(resolution.crossedPluralAssociation()).isFalse();
@@ -76,10 +76,10 @@ public class TestJpaPredicateUtils {
 
     @Test
     public void testJoinPath() {
-        FilterData filterData = new FilterData("person.height", new String[]{"personHeight"}, String.class, Like.class,
+        FilterData filterData = new FilterData(new String[]{"person.height"}, new String[]{"personHeight"}, String.class, Like.class,
                 false, new Object[]{BigDecimal.valueOf(180)}, List.of(ModJoinTypeRight.class), null);
         Specification<Address> specification = (root, query, builder) -> {
-            var resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+            var resolution = JpaPredicateUtils.resolveAttributePath("person.height", filterData, root);
             var path = resolution.expression();
             Assertions.assertThat(path).isNotNull();
             Assertions.assertThat(resolution.crossedPluralAssociation()).isFalse();
@@ -95,15 +95,15 @@ public class TestJpaPredicateUtils {
 
     @Test
     public void testMultipleJoinPaths() {
-        FilterData filterDataHeight = new FilterData("person.height", new String[]{"personHeight"}, String.class, Like.class,
+        FilterData filterDataHeight = new FilterData(new String[]{"person.height"}, new String[]{"personHeight"}, String.class, Like.class,
                 false, new Object[]{BigDecimal.valueOf(180)}, null, null);
-        FilterData filterDataWeight = new FilterData("person.weight", new String[]{"personWeight"}, String.class, Like.class,
+        FilterData filterDataWeight = new FilterData(new String[]{"person.weight"}, new String[]{"personWeight"}, String.class, Like.class,
                 false, new Object[]{BigDecimal.valueOf(90)}, null, null);
-        FilterData filterDataState = new FilterData("location.state", new String[]{"personState"}, String.class, Like.class,
+        FilterData filterDataState = new FilterData(new String[]{"location.state"}, new String[]{"personState"}, String.class, Like.class,
                 false, new Object[]{"CA"}, List.of(ModJoinTypeInner.class), null);
 
         Specification<Address> specification = (root, query, builder) -> {
-            var heightResolution = JpaPredicateUtils.resolveAttributePath(filterDataHeight, root);
+            var heightResolution = JpaPredicateUtils.resolveAttributePath("person.height", filterDataHeight, root);
             var pathHeight = heightResolution.expression();
             Assertions.assertThat(pathHeight).isNotNull();
             Assertions.assertThat(heightResolution.crossedPluralAssociation()).isFalse();
@@ -113,7 +113,7 @@ public class TestJpaPredicateUtils {
                 Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces(".height");
             }
 
-            var weightResolution = JpaPredicateUtils.resolveAttributePath(filterDataWeight, root);
+            var weightResolution = JpaPredicateUtils.resolveAttributePath("person.weight", filterDataWeight, root);
             var pathWeight = weightResolution.expression();
             Assertions.assertThat(pathWeight).isNotNull();
             Assertions.assertThat(weightResolution.crossedPluralAssociation()).isFalse();
@@ -123,7 +123,7 @@ public class TestJpaPredicateUtils {
                 Assertions.assertThat(abstractSqmPath.getExpressible().toString()).containsIgnoringWhitespaces(".weight");
             }
 
-            var stateResolution = JpaPredicateUtils.resolveAttributePath(filterDataState, root);
+            var stateResolution = JpaPredicateUtils.resolveAttributePath("location.state", filterDataState, root);
             var pathState = stateResolution.expression();
             Assertions.assertThat(pathState).isNotNull();
             Assertions.assertThat(stateResolution.crossedPluralAssociation()).isFalse();
@@ -140,11 +140,11 @@ public class TestJpaPredicateUtils {
 
     @Test
     public void testPluralAssociationPathMetadata() {
-        FilterData filterData = new FilterData("addresses.location.state", new String[]{"state"}, String.class, Like.class,
+        FilterData filterData = new FilterData(new String[]{"addresses.location.state"}, new String[]{"state"}, String.class, Like.class,
                 false, new Object[]{"SP"}, null, null);
 
         Specification<Person> specification = (root, query, builder) -> {
-            var resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+            var resolution = JpaPredicateUtils.resolveAttributePath("addresses.location.state", filterData, root);
 
             Assertions.assertThat(resolution.expression()).isNotNull();
             Assertions.assertThat(resolution.crossedPluralAssociation()).isTrue();

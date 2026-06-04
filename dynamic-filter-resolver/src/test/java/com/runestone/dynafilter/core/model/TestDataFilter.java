@@ -90,7 +90,7 @@ public class TestDataFilter {
 
     @Test
     public void testFilterDataWithModifier() {
-        var filterDataName = new FilterData("name", new String[]{"clientName"}, String.class, Like.class, true,
+        var filterDataName = new FilterData(new String[]{"name"}, new String[]{"clientName"}, String.class, Like.class, true,
                 new Object[]{"John"}, List.of(ModIgnoreCase.class), "");
         Assertions.assertThat(filterDataName.hasModifier(ModIgnoreCase.class)).isTrue();
         Assertions.assertThat(filterDataName.hasModifier(UnnamedInterface.class)).isFalse();

@@ -47,8 +47,8 @@ public class TestStatements {
     @Test
     public void testStatementsWithNegation() {
         var stringStatementAnalyser = new StringStatementAnalyser();
-        var filterDataName = new FilterData("name", new String[]{"clientName"}, String.class, Like.class, true, new Object[]{"Joe"}, null, "");
-        var filterDataJob = new FilterData("job", new String[]{"clientJob"}, String.class, Equals.class, true, new Object[]{"Developer"}, null, "");
+        var filterDataName = new FilterData(new String[]{"name"}, new String[]{"clientName"}, String.class, Like.class, true, new Object[]{"Joe"}, null, "");
+        var filterDataJob = new FilterData(new String[]{"job"}, new String[]{"clientJob"}, String.class, Equals.class, true, new Object[]{"Developer"}, null, "");
 
         var compoundStatementNode = getCompoundStatementNode(filterDataName, filterDataJob);
         Assertions.assertThat(compoundStatementNode.acceptAnalyser(stringStatementAnalyser))

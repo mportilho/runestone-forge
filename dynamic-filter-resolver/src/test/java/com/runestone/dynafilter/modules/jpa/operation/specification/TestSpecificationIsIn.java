@@ -82,7 +82,7 @@ public class TestSpecificationIsIn {
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("name", new String[]{"name"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"name"}, String.class,
                 IsIn.class, false, new Object[]{new String[]{"v1", "v2", "v3"}}, null, "");
 
         SpecificationIsIn<Person> specification = new SpecificationIsIn<>(filterData, dataConversionService);
@@ -99,7 +99,7 @@ public class TestSpecificationIsIn {
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("name", new String[]{"name"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"name"}, String.class,
                 IsIn.class, false, new Object[]{new String[]{"v1", "v2", "v3"}}, List.of(ModIgnoreCase.class), "");
 
         SpecificationIsIn<Person> specification = new SpecificationIsIn<>(filterData, dataConversionService);
@@ -116,7 +116,7 @@ public class TestSpecificationIsIn {
         when(path.getJavaType()).thenReturn(BigDecimal.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("height", new String[]{"height"}, BigDecimal.class,
+        FilterData filterData = new FilterData(new String[]{"height"}, new String[]{"height"}, BigDecimal.class,
                 Between.class, false, new Object[]{new Object[]{180, 200}}, null, "");
 
         SpecificationIsIn<Person> specification = new SpecificationIsIn<>(filterData, dataConversionService);
@@ -133,7 +133,7 @@ public class TestSpecificationIsIn {
         when(path.getJavaType()).thenReturn(BigDecimal.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("height", new String[]{"height"}, BigDecimal.class,
+        FilterData filterData = new FilterData(new String[]{"height"}, new String[]{"height"}, BigDecimal.class,
                 Between.class, false, new Object[]{new Object[]{180, 200}}, List.of(ModIgnoreCase.class), "");
 
         SpecificationIsIn<Person> specification = new SpecificationIsIn<>(filterData, dataConversionService);
@@ -152,7 +152,7 @@ public class TestSpecificationIsIn {
         when(root.join(anyString(), any())).thenReturn(join);
         when(join.getJavaType()).thenReturn(Status.class);
 
-        FilterData filterData = new FilterData("statuses", new String[]{"statuses"}, Object.class,
+        FilterData filterData = new FilterData(new String[]{"statuses"}, new String[]{"statuses"}, Object.class,
                 IsIn.class, false, new Object[]{new Object[]{"ACTIVE", "INACTIVE"}}, null, "");
 
         SpecificationIsIn<Person> specification = new SpecificationIsIn<>(filterData, dataConversionService);
@@ -171,7 +171,7 @@ public class TestSpecificationIsIn {
         when(root.join(anyString(), any())).thenReturn(join);
         when(join.getJavaType()).thenReturn(Status.class);
 
-        FilterData filterData = new FilterData("statuses", new String[]{"statuses"}, Object.class,
+        FilterData filterData = new FilterData(new String[]{"statuses"}, new String[]{"statuses"}, Object.class,
                 IsIn.class, false, new Object[]{"ACTIVE"}, null, "");
 
         SpecificationIsIn<Person> specification = new SpecificationIsIn<>(filterData, dataConversionService);

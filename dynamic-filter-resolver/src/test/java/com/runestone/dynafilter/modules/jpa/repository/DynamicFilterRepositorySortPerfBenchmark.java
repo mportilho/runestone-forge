@@ -1,18 +1,7 @@
 package com.runestone.dynafilter.modules.jpa.repository;
 
 import com.runestone.dynafilter.core.model.FilterRequestData;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.Threads;
-import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 import org.springframework.data.domain.Sort;
 
@@ -104,7 +93,7 @@ public class DynamicFilterRepositorySortPerfBenchmark {
             for (FilterRequestData filter : filters) {
                 String[] parameters = filter.parameters();
                 if (parameters.length > 0 && order.getProperty().equals(parameters[0]) && !order.getProperty().equals(filter.path())) {
-                    return order.withProperty(filter.path());
+                    return order.withProperty(filter.path()[0]);
                 }
             }
             return order;
@@ -114,7 +103,7 @@ public class DynamicFilterRepositorySortPerfBenchmark {
 
     private static FilterRequestData filter(String path, String... parameters) {
         return new FilterRequestData(
-                path,
+                new String[]{path},
                 parameters,
                 null,
                 null,

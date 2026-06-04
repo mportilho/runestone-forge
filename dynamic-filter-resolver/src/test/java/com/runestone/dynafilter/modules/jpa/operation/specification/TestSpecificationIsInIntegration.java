@@ -72,7 +72,7 @@ public class TestSpecificationIsInIntegration {
 
     @Test
     public void test_IsIn_OnElementCollection_SingleEnumValue() {
-        FilterData filterData = new FilterData("tipos", new String[]{"tipos"}, Object.class,
+        FilterData filterData = new FilterData(new String[]{"tipos"}, new String[]{"tipos"}, Object.class,
                 IsIn.class, false, new Object[]{new Object[]{"ELETRONICO"}}, null, "");
 
         SpecificationIsIn<Produto> spec = new SpecificationIsIn<>(filterData, conversionService);
@@ -86,7 +86,7 @@ public class TestSpecificationIsInIntegration {
 
     @Test
     public void test_IsIn_OnElementCollection_MultipleEnumValues() {
-        FilterData filterData = new FilterData("tipos", new String[]{"tipos"}, Object.class,
+        FilterData filterData = new FilterData(new String[]{"tipos"}, new String[]{"tipos"}, Object.class,
                 IsIn.class, false, new Object[]{new Object[]{"VESTUARIO", "ALIMENTICIO"}}, null, "");
 
         SpecificationIsIn<Produto> spec = new SpecificationIsIn<>(filterData, conversionService);
@@ -100,7 +100,7 @@ public class TestSpecificationIsInIntegration {
 
     @Test
     public void test_IsIn_OnElementCollection_EnumValueNotPresent_ReturnsEmpty() {
-        FilterData filterData = new FilterData("tipos", new String[]{"tipos"}, Object.class,
+        FilterData filterData = new FilterData(new String[]{"tipos"}, new String[]{"tipos"}, Object.class,
                 IsIn.class, false, new Object[]{new Object[]{"SERVICO"}}, null, "");
 
         SpecificationIsIn<Produto> spec = new SpecificationIsIn<>(filterData, conversionService);
@@ -114,7 +114,7 @@ public class TestSpecificationIsInIntegration {
 
     @Test
     public void test_IsIn_OnElementCollection_WithEnumDirectValue() {
-        FilterData filterData = new FilterData("tipos", new String[]{"tipos"}, Object.class,
+        FilterData filterData = new FilterData(new String[]{"tipos"}, new String[]{"tipos"}, Object.class,
                 IsIn.class, false, new Object[]{new Object[]{TipoProduto.ELETRONICO}}, null, "");
 
         SpecificationIsIn<Produto> spec = new SpecificationIsIn<>(filterData, conversionService);
@@ -129,7 +129,7 @@ public class TestSpecificationIsInIntegration {
     @Test
     public void test_IsIn_OnElementCollection_MultiValueEntity_NoDuplicates() {
         // "Consultoria TI" has both SERVICO and ELETRONICO; filtering for both should return it once
-        FilterData filterData = new FilterData("tipos", new String[]{"tipos"}, Object.class,
+        FilterData filterData = new FilterData(new String[]{"tipos"}, new String[]{"tipos"}, Object.class,
                 IsIn.class, false, new Object[]{new Object[]{"SERVICO", "ELETRONICO"}}, null, "");
 
         SpecificationIsIn<Produto> spec = new SpecificationIsIn<>(filterData, conversionService);
@@ -143,7 +143,7 @@ public class TestSpecificationIsInIntegration {
 
     @Test
     public void test_IsIn_OnElementCollection_MultiValueEntity_PageCountUsesDistinct() {
-        FilterData filterData = new FilterData("tipos", new String[]{"tipos"}, Object.class,
+        FilterData filterData = new FilterData(new String[]{"tipos"}, new String[]{"tipos"}, Object.class,
                 IsIn.class, false, new Object[]{new Object[]{"SERVICO", "ELETRONICO"}}, null, "");
 
         SpecificationIsIn<Produto> spec = new SpecificationIsIn<>(filterData, conversionService);

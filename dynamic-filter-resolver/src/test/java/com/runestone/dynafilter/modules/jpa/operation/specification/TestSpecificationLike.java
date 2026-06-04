@@ -72,7 +72,7 @@ public class TestSpecificationLike {
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("name", new String[]{"name"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"name"}, String.class,
                 Between.class, false, new String[]{"TestValue"}, null, "");
 
         SpecificationLike<Person> specification = new SpecificationLike<>(filterData, dataConversionService);
@@ -89,7 +89,7 @@ public class TestSpecificationLike {
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("name", new String[]{"name"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"name"}, String.class,
                 Between.class, false, new String[]{"TestValue"}, List.of(ModIgnoreCase.class), "");
 
         SpecificationLike<Person> specification = new SpecificationLike<>(filterData, dataConversionService);

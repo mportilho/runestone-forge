@@ -215,7 +215,7 @@ public class DynamicFilterResolverPerf02Benchmark {
 
         private static FilterData createFilterData(String path, Object value) {
             return new FilterData(
-                    path,
+                    new String[]{path},
                     new String[]{path.replace('.', '_')},
                     null,
                     Equals.class,

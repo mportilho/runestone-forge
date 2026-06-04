@@ -97,7 +97,7 @@ public class TestSpecificationPluralAssociationDistinctIntegration {
     @Test
     @DisplayName("Equals across OneToMany returns distinct root rows and count")
     public void testEqualsAcrossOneToManyReturnsDistinctRowsAndCount() {
-        FilterData filterData = new FilterData("addresses.location.state", new String[]{"state"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"addresses.location.state"}, new String[]{"state"}, String.class,
                 Equals.class, false, new Object[]{"SP"}, null, "");
         SpecificationEquals<Person> specification = new SpecificationEquals<>(filterData, CONVERSION_SERVICE);
 
@@ -113,7 +113,7 @@ public class TestSpecificationPluralAssociationDistinctIntegration {
     @Test
     @DisplayName("Like across OneToMany returns each root only once")
     public void testLikeAcrossOneToManyReturnsDistinctRows() {
-        FilterData filterData = new FilterData("addresses.street", new String[]{"street"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"addresses.street"}, new String[]{"street"}, String.class,
                 Like.class, false, new Object[]{"Main"}, null, "");
         SpecificationLike<Person> specification = new SpecificationLike<>(filterData, CONVERSION_SERVICE);
 
@@ -128,7 +128,7 @@ public class TestSpecificationPluralAssociationDistinctIntegration {
     @Test
     @DisplayName("IsIn across OneToMany and final simple attribute returns distinct root rows")
     public void testIsInAcrossOneToManyFinalSimpleAttributeReturnsDistinctRows() {
-        FilterData filterData = new FilterData("addresses.location.state", new String[]{"states"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"addresses.location.state"}, new String[]{"states"}, String.class,
                 IsIn.class, false, new Object[]{new Object[]{"SP"}}, null, "");
         SpecificationIsIn<Person> specification = new SpecificationIsIn<>(filterData, CONVERSION_SERVICE);
 
@@ -143,7 +143,7 @@ public class TestSpecificationPluralAssociationDistinctIntegration {
     @Test
     @DisplayName("ManyToOne path does not mark the CriteriaQuery as distinct")
     public void testManyToOnePathDoesNotMarkQueryAsDistinct() {
-        FilterData filterData = new FilterData("person.name", new String[]{"personName"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"person.name"}, new String[]{"personName"}, String.class,
                 Equals.class, false, new Object[]{"John Doe"}, null, "");
         SpecificationEquals<Address> specification = new SpecificationEquals<>(filterData, CONVERSION_SERVICE);
         CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
