@@ -67,10 +67,10 @@ public class TestJpaPredicateUtilsUnit {
     private Attribute attribute;
 
     @Test
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public void testResolveAttributePathReportsIntermediatePluralAssociation() {
-        FilterData filterData = new FilterData("addresses.street", new String[]{"street"}, String.class,
-                Equals.class, false, new Object[]{"Main"}, null, "");
+        String fieldPath = "addresses.street";
+        FilterData filterData = FilterData.of(fieldPath, new String[]{"street"}, String.class,
+                Equals.class, new Object[]{"Main"});
         when(root.getJavaType()).thenReturn(Person.class);
         when(root.getJoins()).thenReturn(Set.of());
         when(root.join("addresses", JoinType.INNER)).thenReturn(join);
@@ -78,17 +78,17 @@ public class TestJpaPredicateUtilsUnit {
         when(attribute.isCollection()).thenReturn(true);
         when(join.get("street")).thenReturn(path);
 
-        JpaPredicateUtils.PathResolution<String> resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+        JpaPredicateUtils.PathResolution<String> resolution = JpaPredicateUtils.resolveAttributePath(fieldPath, filterData, root);
 
         Assertions.assertThat(resolution.expression()).isSameAs(path);
         Assertions.assertThat(resolution.crossedPluralAssociation()).isTrue();
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public void testResolveAttributePathKeepsSingularAssociationNonDistinct() {
-        FilterData filterData = new FilterData("person.name", new String[]{"personName"}, String.class,
-                Equals.class, false, new Object[]{"John"}, null, "");
+        String fieldPath = "person.name";
+        FilterData filterData = FilterData.of(fieldPath, new String[]{"personName"}, String.class,
+                Equals.class, new Object[]{"John"});
         when(root.getJavaType()).thenReturn(Address.class);
         when(root.getJoins()).thenReturn(Set.of());
         when(root.join("person", JoinType.INNER)).thenReturn(join);
@@ -96,24 +96,24 @@ public class TestJpaPredicateUtilsUnit {
         when(attribute.isCollection()).thenReturn(false);
         when(join.get("name")).thenReturn(path);
 
-        JpaPredicateUtils.PathResolution<String> resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+        JpaPredicateUtils.PathResolution<String> resolution = JpaPredicateUtils.resolveAttributePath(fieldPath, filterData, root);
 
         Assertions.assertThat(resolution.expression()).isSameAs(path);
         Assertions.assertThat(resolution.crossedPluralAssociation()).isFalse();
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public void testResolveAttributeJoinPathReportsFinalPluralAttribute() {
-        FilterData filterData = new FilterData("statuses", new String[]{"statuses"}, Object.class,
-                IsIn.class, false, new Object[]{new Object[]{"ACTIVE"}}, null, "");
+        String fieldPath = "statuses";
+        FilterData filterData = FilterData.of(fieldPath, new String[]{"statuses"}, Object.class,
+                IsIn.class, new Object[]{new Object[]{"ACTIVE"}});
         when(root.getJavaType()).thenReturn(Person.class);
         when(root.getJoins()).thenReturn(Set.of());
         when(root.join("statuses", JoinType.INNER)).thenReturn(join);
         when(join.getAttribute()).thenReturn(attribute);
         when(attribute.isCollection()).thenReturn(true);
 
-        JpaPredicateUtils.PathResolution<Object> resolution = JpaPredicateUtils.resolveAttributeJoinPath(filterData, root);
+        JpaPredicateUtils.PathResolution<Object> resolution = JpaPredicateUtils.resolveAttributeJoinPath(fieldPath, filterData, root);
 
         Assertions.assertThat(resolution.expression()).isSameAs(join);
         Assertions.assertThat(resolution.crossedPluralAssociation()).isTrue();

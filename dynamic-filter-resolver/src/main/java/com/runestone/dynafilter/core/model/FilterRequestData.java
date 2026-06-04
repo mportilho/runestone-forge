@@ -22,7 +22,7 @@ import java.util.List;
  * @param description    the user readable description of the filter
  */
 public record FilterRequestData(
-        String path,
+        String[] path,
         String[] parameters,
         Class<?> targetType,
         @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,

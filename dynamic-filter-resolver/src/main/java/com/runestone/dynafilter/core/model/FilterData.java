@@ -37,7 +37,7 @@ import java.util.List;
  * position is the parameter's position, corresponding to the 'parameters' attribute,  and the second is the values it has.
  * </p>
  *
- * @param path        the path to the attribute to be filtered
+ * @param path        the paths to the attributes to be filtered
  * @param parameters  the parameters that will be used to build the filter
  * @param targetType  the target type of the attribute to be filtered
  * @param operation   the operation that will be used to build the filter
@@ -47,7 +47,7 @@ import java.util.List;
  * @param description the user readable description of the filter
  */
 public record FilterData(
-        String path,
+        String[] path,
         String[] parameters,
         Class<?> targetType,
         @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,
@@ -59,13 +59,13 @@ public record FilterData(
 
     public FilterData {
         if (parameters == null || parameters.length == 0) {
-            throw new IllegalArgumentException("On path '%s', parameters cannot be null or empty".formatted(path));
+            throw new IllegalArgumentException("On path '%s', parameters cannot be null or empty".formatted(formatPath(path)));
         }
         if (values == null || values.length == 0) {
-            throw new IllegalArgumentException("On path '%s', values cannot be null or empty".formatted(path));
+            throw new IllegalArgumentException("On path '%s', values cannot be null or empty".formatted(formatPath(path)));
         }
         if (parameters.length != values.length) {
-            throw new IllegalArgumentException("On path '%s', parameters and values must have the same length, as each parameter must have a corresponding value".formatted(path));
+            throw new IllegalArgumentException("On path '%s', parameters and values must have the same length, as each parameter must have a corresponding value".formatted(formatPath(path)));
         }
     }
 
@@ -81,7 +81,7 @@ public record FilterData(
      */
     public static FilterData of(String path, String[] parameters, Class<?> targetType,
                                 @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation, Object[] values) {
-        return new FilterData(path, parameters, targetType, operation, false, values, null, null);
+        return new FilterData(new String[]{path}, parameters, targetType, operation, false, values, null, null);
     }
 
     /**
@@ -92,7 +92,7 @@ public record FilterData(
     @SuppressWarnings("unchecked")
     public <R> R findOneValue() {
         if (values.length > 1) {
-            throw new MultipleFilterDataValuesException(String.format("Multiple values found while fetching a single one for path [%s]", path));
+            throw new MultipleFilterDataValuesException(String.format("Multiple values found while fetching a single one for path [%s]", formatPath(path)));
         }
         return (R) values[0];
     }
@@ -105,13 +105,17 @@ public record FilterData(
      */
     public Object findValueOnIndex(int i) {
         if (i >= values.length) {
-            throw new ArrayIndexOutOfBoundsException(String.format("Accessing nonexistent index [%s] for path [%s]", i, path));
+            throw new ArrayIndexOutOfBoundsException(String.format("Accessing nonexistent index [%s] for path [%s]", i, formatPath(path)));
         }
         return values[i];
     }
 
     public boolean hasModifier(Class<? extends FilterModifier> modifier) {
         return modifiers != null && modifiers.contains(modifier);
+    }
+
+    private static String formatPath(String[] path) {
+        return String.join(", ", path);
     }
 
 }

@@ -179,7 +179,7 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
                 continue;
             }
 
-            String path = filter.path();
+            String path = filter.path()[0];
             if (path != null && !parameter.equals(path)) {
                 parameterPathMap.put(parameter, path);
             }

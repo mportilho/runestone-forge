@@ -48,9 +48,9 @@ public @interface Filter {
      * <b>Path</b> is the notation from which the target attribute can be found on a
      * specified root type, like <code>Person.addresses.streetName</code>
      *
-     * @return Name or path to the required attribute
+     * @return Names or paths to the required attributes
      */
-    String path();
+    String[] path();
 
     /**
      * @return Parameters needed to be supplied by the caller, exposed as input data

@@ -83,7 +83,7 @@ public abstract class DefaultStatementGenerator<T> implements StatementGenerator
      * @param description     the user readable description of the filter
      * @return a new instance of {@link FilterData}
      */
-    protected FilterData createFilterData(String path, String[] parameters, Class<?> targetType,
+    protected FilterData createFilterData(String[] path, String[] parameters, Class<?> targetType,
                                            @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,
                                            Object negateParameter, Object[] values, List<Class<? extends FilterModifier>> modifiers, String description) {
         Object[] comparisonValue;

@@ -28,11 +28,7 @@ import com.fasterxml.jackson.annotation.JsonView;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.generator.annotation.*;
 import com.runestone.dynafilter.core.model.FilterRequestData;
-import com.runestone.dynafilter.core.operation.ComparisonOperation;
-import com.runestone.dynafilter.core.operation.FilterOperation;
-import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
-import com.runestone.dynafilter.core.operation.FilterOperationService;
-import com.runestone.dynafilter.core.operation.FilterValueShape;
+import com.runestone.dynafilter.core.operation.*;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
 import io.swagger.v3.core.util.AnnotationsUtils;
@@ -144,10 +140,10 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
                 if (isCustomOperation(filter.operation())) {
                     return null;
                 }
-                throw new DynamicFilterConfigurationException("Cannot resolve target type for filter path '%s'"
-                        .formatted(filter.path()));
+                throw new DynamicFilterConfigurationException("Cannot resolve target type for filter path(s) '%s'"
+                        .formatted(String.join(", ", filter.path())));
             }
-            return TypeAnnotationUtils.findFilterField(filterTargetClass, filter.path());
+            return TypeAnnotationUtils.findFilterField(filterTargetClass, filter.path()[0]);
         } catch (DynamicFilterConfigurationException e) {
             if (isCustomOperation(filter.operation())) {
                 return null;
@@ -175,11 +171,13 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
 
         Schema newSchema = switch (metadata.valueShape()) {
             case BOOLEAN -> new BooleanSchema();
-            case ARRAY -> createArraySchema(parameter.getSchema() != null ? parameter.getSchema() : new StringSchema(), null, null);
+            case ARRAY ->
+                    createArraySchema(parameter.getSchema() != null ? parameter.getSchema() : new StringSchema(), null, null);
             case RANGE -> createArraySchema(schemaFromType, 2, 2);
             case STRING -> new StringSchema();
             case TARGET_FIELD -> createTargetFieldSchema(parameter.getSchema(), schemaFromType);
-            case DYNAMIC -> throw new IllegalStateException("Unsupported schema shape in common schema creation: " + metadata.valueShape());
+            case DYNAMIC ->
+                    throw new IllegalStateException("Unsupported schema shape in common schema creation: " + metadata.valueShape());
         };
 
         parameter.setSchema(newSchema);

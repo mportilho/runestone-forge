@@ -15,9 +15,9 @@ import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.List;
 
 import static com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils.findFilterField;
 import static com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils.listAllFilterRequestData;
@@ -53,8 +53,10 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanPostPro
         Class<?> entityClass = TypeAnnotationUtils.findFilterTargetClass(parameter);
         if (entityClass != null) {
             allFilters.forEach(filter -> {
-                if (filter.modifiers() == null || !filter.modifiers().contains(ModIgnorePath.class)) {
-                    findFilterField(entityClass, filter.path());
+                if (filter.modifiers() == null || filter.modifiers().isEmpty() || !filter.modifiers().contains(ModIgnorePath.class)) {
+                    for (String path : filter.path()) {
+                        findFilterField(entityClass, path);
+                    }
                 }
             });
         }
@@ -74,6 +76,6 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanPostPro
     private static boolean isDynamicFilterParameter(Parameter parameter) {
         Class<?> parameterType = parameter.getType();
         return ConditionalStatement.class.equals(parameterType)
-                || (parameterType.isInterface() && Specification.class.isAssignableFrom(parameterType));
+               || (parameterType.isInterface() && Specification.class.isAssignableFrom(parameterType));
     }
 }

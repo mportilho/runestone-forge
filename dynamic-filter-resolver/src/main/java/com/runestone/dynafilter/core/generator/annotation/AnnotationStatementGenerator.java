@@ -33,8 +33,6 @@ import com.runestone.dynafilter.core.model.statement.*;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 
 import java.util.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 public class AnnotationStatementGenerator extends DefaultStatementGenerator<AnnotationStatementInput> {
 
@@ -79,7 +77,8 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
     }
 
     private Map<String, FilterData> createDecoratedFiltersData(List<FilterAnnotationData> filterAnnotationDataList, Map<String, Object> parametersMap) {
-        return filterAnnotationDataList
+        Map<String, FilterData> decoratedFilters = new HashMap<>();
+        filterAnnotationDataList
                 .stream()
                 .flatMap(data -> data.filters().stream())
                 .filter(filter -> Decorated.class.equals(filter.operation()))
@@ -88,7 +87,12 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
                     return values != null ? createFilterData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(),
                             filter.negate(), values, List.of(filter.modifiers()), filter.description()) : null;
                 }).filter(Objects::nonNull)
-                .collect(Collectors.toUnmodifiableMap(FilterData::path, Function.identity()));
+                .forEach(filter -> {
+                    for (String path : filter.path()) {
+                        decoratedFilters.put(path, filter);
+                    }
+                });
+        return Collections.unmodifiableMap(decoratedFilters);
     }
 
     /**

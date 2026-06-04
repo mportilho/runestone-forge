@@ -66,8 +66,8 @@ class JpaPredicateUtils {
      * Resolves the actual JPA Criteria {@link Path} object to the desired path
      * defined on {@link FilterData} object. Joins automatically when navigating through entities.
      */
-    public static <T> PathResolution<T> resolveAttributePath(FilterData filterData, Root<?> root) {
-        String path = Objects.requireNonNull(filterData.path(), "Path cannot be null").trim();
+    public static <T> PathResolution<T> resolveAttributePath(String path, FilterData filterData, Root<?> root) {
+        Objects.requireNonNull(path, "Path cannot be null");
         String key = root.getJavaType().getCanonicalName() + "." + path;
         ParsedPath parsedPath = PARSED_PATH_CACHE.computeIfAbsent(key, k -> JpaPredicateUtils.parsePath(path));
         JoinType joinType = getJoinType(filterData);
@@ -88,8 +88,8 @@ class JpaPredicateUtils {
      * the returned {@link Expression} reflects the element type rather than the collection type.
      */
     @SuppressWarnings("unchecked")
-    public static <T> PathResolution<T> resolveAttributeJoinPath(FilterData filterData, Root<?> root) {
-        String path = Objects.requireNonNull(filterData.path(), "Path cannot be null").trim();
+    public static <T> PathResolution<T> resolveAttributeJoinPath(String path, FilterData filterData, Root<?> root) {
+        Objects.requireNonNull(filterData.path(), "Path cannot be null");
         String key = root.getJavaType().getCanonicalName() + "." + path;
         ParsedPath parsedPath = PARSED_PATH_CACHE.computeIfAbsent(key, k -> JpaPredicateUtils.parsePath(path));
         JoinType joinType = getJoinType(filterData);
@@ -125,7 +125,7 @@ class JpaPredicateUtils {
      * creates a new one if not.
      *
      * @param from      the {@link From} to get the current joins from.
-     * @param attribute the {@link Attribute} to look for in the current joins.
+     * @param attribute the attribute to look for in the current joins.
      * @return will never be {@literal null}.
      */
     private static Join<?, ?> getOrCreateJoin(From<?, ?> from, String attribute, JoinType joinType) {

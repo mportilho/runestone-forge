@@ -43,7 +43,8 @@ public class SpecificationLessOrEquals<T> implements Specification<T> {
     @Override
     @SuppressWarnings({"unchecked"})
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        JpaPredicateUtils.PathResolution<? extends Comparable<?>> resolution = JpaPredicateUtils.resolveAttributePath(filterData, root);
+        String filterPath = filterData.path()[0];
+        JpaPredicateUtils.PathResolution<? extends Comparable<?>> resolution = JpaPredicateUtils.resolveAttributePath(filterPath, filterData, root);
         if (resolution.crossedPluralAssociation()) {
             query.distinct(true);
         }
