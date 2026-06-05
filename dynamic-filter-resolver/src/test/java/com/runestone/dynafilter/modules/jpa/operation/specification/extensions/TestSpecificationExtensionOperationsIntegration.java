@@ -29,6 +29,7 @@ import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
 import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.types.extensions.*;
+import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.FilterExtensionRecordRepository;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.InMemoryDatabaseApplication;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.jpamodels.FilterExtensionRecord;
@@ -48,6 +49,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
+import java.util.TimeZone;
 
 @DataJpaTest
 @ContextConfiguration(classes = InMemoryDatabaseApplication.class)
@@ -194,6 +196,19 @@ public class TestSpecificationExtensionOperationsIntegration {
     }
 
     @Test
+    @DisplayName("OnDate accepts java.sql.Date filter values")
+    public void testOnDateAcceptsSqlDateFilterValue() {
+        Specification<FilterExtensionRecord> specification = new SpecificationOnDate<>(
+                filterData("createdAt", OnDate.class, java.sql.Date.valueOf(LocalDate.of(2026, 6, 4))),
+                CONVERSION_SERVICE,
+                SAO_PAULO
+        );
+
+        List<FilterExtensionRecord> result = repository.findAll(specification);
+        Assertions.assertThat(codes(result)).containsExactlyInAnyOrder("BLANK_NULL", "BLANK_SPACES", "FILLED_ALPHA");
+    }
+
+    @Test
     @DisplayName("OnDate uses the configured ZoneId for Instant day boundaries")
     public void testOnDateUsesConfiguredZoneForInstantDayBoundaries() {
         Specification<FilterExtensionRecord> specification = new SpecificationOnDate<>(
@@ -202,6 +217,25 @@ public class TestSpecificationExtensionOperationsIntegration {
 
         List<FilterExtensionRecord> result = repository.findAll(specification);
         Assertions.assertThat(codes(result)).containsExactlyInAnyOrder("BLANK_EMPTY", "BLANK_SPACES", "FILLED_ALPHA");
+    }
+
+    @Test
+    @DisplayName("SpecificationFilterOperationService defaults OnDate to UTC")
+    public void testSpecificationFilterOperationServiceDefaultsOnDateToUtc() {
+        TimeZone originalDefault = TimeZone.getDefault();
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone(SAO_PAULO));
+            SpecificationFilterOperationService service = new SpecificationFilterOperationService(CONVERSION_SERVICE);
+            @SuppressWarnings("unchecked")
+            Specification<FilterExtensionRecord> specification = (Specification<FilterExtensionRecord>) service.createFilter(
+                    filterData("publishedAt", OnDate.class, LocalDate.of(2026, 6, 4))
+            );
+
+            List<FilterExtensionRecord> result = repository.findAll(specification);
+            Assertions.assertThat(codes(result)).containsExactlyInAnyOrder("BLANK_EMPTY", "BLANK_SPACES");
+        } finally {
+            TimeZone.setDefault(originalDefault);
+        }
     }
 
     @Test
@@ -321,6 +355,50 @@ public class TestSpecificationExtensionOperationsIntegration {
 
         List<FilterExtensionRecord> result = repository.findAll(specification);
         Assertions.assertThat(codes(result)).containsExactlyInAnyOrder("BLANK_SPACES", "FILLED_ALPHA");
+    }
+
+    @Test
+    @DisplayName("NullOrLess matches null values and values before the reference")
+    public void testNullOrLessMatchesNullAndValuesBeforeReference() {
+        Specification<FilterExtensionRecord> specification = new SpecificationNullOrLess<>(
+                filterData("effectiveEnd", NullOrLess.class, LocalDate.of(2026, 1, 20)), CONVERSION_SERVICE
+        );
+
+        List<FilterExtensionRecord> result = repository.findAll(specification);
+        Assertions.assertThat(codes(result)).containsExactlyInAnyOrder("BLANK_NULL", "BLANK_SPACES");
+    }
+
+    @Test
+    @DisplayName("NullOrLessOrEquals matches null values and values at or before the reference")
+    public void testNullOrLessOrEqualsMatchesNullAndValuesAtOrBeforeReference() {
+        Specification<FilterExtensionRecord> specification = new SpecificationNullOrLessOrEquals<>(
+                filterData("effectiveEnd", NullOrLessOrEquals.class, LocalDate.of(2026, 1, 20)), CONVERSION_SERVICE
+        );
+
+        List<FilterExtensionRecord> result = repository.findAll(specification);
+        Assertions.assertThat(codes(result)).containsExactlyInAnyOrder("BLANK_NULL", "BLANK_EMPTY", "BLANK_SPACES");
+    }
+
+    @Test
+    @DisplayName("NullOrGreater matches null values and values after the reference")
+    public void testNullOrGreaterMatchesNullAndValuesAfterReference() {
+        Specification<FilterExtensionRecord> specification = new SpecificationNullOrGreater<>(
+                filterData("effectiveEnd", NullOrGreater.class, LocalDate.of(2026, 1, 20)), CONVERSION_SERVICE
+        );
+
+        List<FilterExtensionRecord> result = repository.findAll(specification);
+        Assertions.assertThat(codes(result)).containsExactlyInAnyOrder("BLANK_SPACES", "FILLED_ALPHA", "FILLED_BRAVO");
+    }
+
+    @Test
+    @DisplayName("NullOrGreaterOrEquals matches null values and values at or after the reference")
+    public void testNullOrGreaterOrEqualsMatchesNullAndValuesAtOrAfterReference() {
+        Specification<FilterExtensionRecord> specification = new SpecificationNullOrGreaterOrEquals<>(
+                filterData("effectiveEnd", NullOrGreaterOrEquals.class, LocalDate.of(2026, 1, 20)), CONVERSION_SERVICE
+        );
+
+        List<FilterExtensionRecord> result = repository.findAll(specification);
+        Assertions.assertThat(codes(result)).containsExactlyInAnyOrder("BLANK_EMPTY", "BLANK_SPACES", "FILLED_ALPHA", "FILLED_BRAVO");
     }
 
     private static FilterExtensionRecord record(

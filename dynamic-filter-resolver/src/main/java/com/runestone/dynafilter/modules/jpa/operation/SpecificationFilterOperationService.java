@@ -35,17 +35,20 @@ import com.runestone.dynafilter.modules.jpa.operation.specification.extensions.*
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 
 public class SpecificationFilterOperationService extends AbstractFilterOperationService<Specification<?>> {
 
+    private static final ZoneId DEFAULT_ZONE_ID = ZoneOffset.UTC;
+
     public SpecificationFilterOperationService(DataConversionService conversionService) {
-        this(conversionService, ZoneId.systemDefault(), List.of());
+        this(conversionService, DEFAULT_ZONE_ID, List.of());
     }
 
     public SpecificationFilterOperationService(DataConversionService conversionService, List<SpecificationFilterOperationContributor> contributors) {
-        this(conversionService, ZoneId.systemDefault(), contributors);
+        this(conversionService, DEFAULT_ZONE_ID, contributors);
     }
 
     public SpecificationFilterOperationService(DataConversionService conversionService, ZoneId zoneId) {
@@ -97,6 +100,10 @@ public class SpecificationFilterOperationService extends AbstractFilterOperation
         registry.register(EffectiveAtOpen.class, (EffectiveAtOpen<Specification<?>>) filterData -> new SpecificationEffectiveAtOpen<>(filterData, conversionService), FilterOperationMetadata.targetField());
         registry.register(IsBlank.class, (IsBlank<Specification<?>>) filterData -> new SpecificationIsBlank<>(filterData, conversionService), FilterOperationMetadata.booleanValue());
         registry.register(IsEmptyCollection.class, (IsEmptyCollection<Specification<?>>) filterData -> new SpecificationIsEmptyCollection<>(filterData, conversionService), FilterOperationMetadata.booleanValue());
+        registry.register(NullOrGreater.class, (NullOrGreater<Specification<?>>) filterData -> new SpecificationNullOrGreater<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(NullOrGreaterOrEquals.class, (NullOrGreaterOrEquals<Specification<?>>) filterData -> new SpecificationNullOrGreaterOrEquals<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(NullOrLess.class, (NullOrLess<Specification<?>>) filterData -> new SpecificationNullOrLess<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(NullOrLessOrEquals.class, (NullOrLessOrEquals<Specification<?>>) filterData -> new SpecificationNullOrLessOrEquals<>(filterData, conversionService), FilterOperationMetadata.targetField());
         registry.register(OnDate.class, (OnDate<Specification<?>>) filterData -> new SpecificationOnDate<>(filterData, conversionService, zoneId), FilterOperationMetadata.stringValue());
         registry.register(PeriodOverlapsClosed.class, (PeriodOverlapsClosed<Specification<?>>) filterData -> new SpecificationPeriodOverlapsClosed<>(filterData, conversionService), FilterOperationMetadata.rangeValue());
         registry.register(PeriodOverlapsHalfOpen.class, (PeriodOverlapsHalfOpen<Specification<?>>) filterData -> new SpecificationPeriodOverlapsHalfOpen<>(filterData, conversionService), FilterOperationMetadata.rangeValue());

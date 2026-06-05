@@ -69,6 +69,10 @@ public class TestSpecificationFilterOperationService {
                 new RegisteredOperation(EffectiveAtOpen.class, new String[]{"value"}, new Object[]{LocalDate.of(2026, 1, 1)}, SpecificationEffectiveAtOpen.class),
                 new RegisteredOperation(IsBlank.class, new String[]{"value"}, new Object[]{true}, SpecificationIsBlank.class),
                 new RegisteredOperation(IsEmptyCollection.class, new String[]{"value"}, new Object[]{true}, SpecificationIsEmptyCollection.class),
+                new RegisteredOperation(NullOrGreater.class, new String[]{"value"}, new Object[]{LocalDate.of(2026, 1, 1)}, SpecificationNullOrGreater.class),
+                new RegisteredOperation(NullOrGreaterOrEquals.class, new String[]{"value"}, new Object[]{LocalDate.of(2026, 1, 1)}, SpecificationNullOrGreaterOrEquals.class),
+                new RegisteredOperation(NullOrLess.class, new String[]{"value"}, new Object[]{LocalDate.of(2026, 1, 1)}, SpecificationNullOrLess.class),
+                new RegisteredOperation(NullOrLessOrEquals.class, new String[]{"value"}, new Object[]{LocalDate.of(2026, 1, 1)}, SpecificationNullOrLessOrEquals.class),
                 new RegisteredOperation(OnDate.class, new String[]{"value"}, new Object[]{LocalDate.of(2026, 1, 1)}, SpecificationOnDate.class),
                 new RegisteredOperation(PeriodOverlapsClosed.class, new String[]{"from", "to"}, new Object[]{LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31)}, SpecificationPeriodOverlapsClosed.class),
                 new RegisteredOperation(PeriodOverlapsHalfOpen.class, new String[]{"from", "to"}, new Object[]{LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31)}, SpecificationPeriodOverlapsHalfOpen.class),
@@ -98,6 +102,10 @@ public class TestSpecificationFilterOperationService {
         Assertions.assertThat(service.findMetadata(IsEmptyCollection.class)).isEqualTo(FilterOperationMetadata.booleanValue());
         Assertions.assertThat(service.findMetadata(ContainsAll.class)).isEqualTo(FilterOperationMetadata.arrayValue());
         Assertions.assertThat(service.findMetadata(PeriodOverlapsHalfOpen.class)).isEqualTo(FilterOperationMetadata.rangeValue());
+        Assertions.assertThat(service.findMetadata(NullOrLess.class)).isEqualTo(FilterOperationMetadata.targetField());
+        Assertions.assertThat(service.findMetadata(NullOrLessOrEquals.class)).isEqualTo(FilterOperationMetadata.targetField());
+        Assertions.assertThat(service.findMetadata(NullOrGreater.class)).isEqualTo(FilterOperationMetadata.targetField());
+        Assertions.assertThat(service.findMetadata(NullOrGreaterOrEquals.class)).isEqualTo(FilterOperationMetadata.targetField());
         Assertions.assertThat(service.findMetadata(CollectionSize.class)).isEqualTo(FilterOperationMetadata.stringValue());
         Assertions.assertThat(service.findMetadata(OnDate.class)).isEqualTo(FilterOperationMetadata.stringValue());
         Assertions.assertThat(service.findMetadata(Dynamic.class)).isEqualTo(FilterOperationMetadata.dynamicValue());
@@ -123,6 +131,7 @@ public class TestSpecificationFilterOperationService {
 
         Assertions.assertThat(service.supports(Equals.class)).isTrue();
         Assertions.assertThat(service.supports(EffectiveAtHalfOpen.class)).isTrue();
+        Assertions.assertThat(service.supports(NullOrLess.class)).isTrue();
         Assertions.assertThat(service.supports(Dynamic.class)).isFalse();
     }
 

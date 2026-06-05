@@ -87,6 +87,9 @@ public class SpecificationOnDate<T> implements Specification<T> {
         if (value instanceof Instant instant) {
             return instant.atZone(zoneId).toLocalDate();
         }
+        if (value instanceof java.sql.Date date) {
+            return date.toLocalDate();
+        }
         if (value instanceof Date date) {
             return date.toInstant().atZone(zoneId).toLocalDate();
         }
