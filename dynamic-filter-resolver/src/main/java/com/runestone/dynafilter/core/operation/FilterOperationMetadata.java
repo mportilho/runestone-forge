@@ -60,6 +60,6 @@ public record FilterOperationMetadata(
     }
 
     public static FilterOperationMetadata dynamicValue() {
-        return new FilterOperationMetadata(FilterValueShape.DYNAMIC);
+        return new FilterOperationMetadata(FilterValueShape.DYNAMIC, FilterArity.exactly(1), FilterArity.exactly(1), null);
     }
 }

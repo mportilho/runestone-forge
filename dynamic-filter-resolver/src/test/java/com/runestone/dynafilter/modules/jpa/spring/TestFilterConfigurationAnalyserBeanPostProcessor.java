@@ -33,6 +33,7 @@ import com.runestone.dynafilter.core.model.modifiers.ModIgnorePath;
 import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
+import com.runestone.dynafilter.core.operation.types.Between;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.operation.types.Equals;
@@ -95,7 +96,7 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
     }
 
     @Test
-    public void testWarmupIgnoresDynamicAndDecoratedPseudoOperations() {
+    public void testWarmupAcceptsValidDynamicAndDecoratedPseudoOperations() {
         TypeAnnotationUtils.clearCaches();
         FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
 
@@ -136,6 +137,63 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
                 .hasMessageContaining(CustomOperation.class.getCanonicalName())
                 .hasMessageContaining("missingPath")
                 .hasMessageContaining("not registered for JPA specifications");
+    }
+
+    @Test
+    @DisplayName("Warmup fails when operation metadata rejects the configured path count")
+    public void testWarmupFailsForInvalidPathArity() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new InvalidPathArityController(), "invalidPathArityController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining(Equals.class.getCanonicalName())
+                .hasMessageContaining("requires exactly 1 path(s)")
+                .hasMessageContaining("configured count is 2");
+    }
+
+    @Test
+    @DisplayName("Warmup fails when operation metadata rejects the configured parameter count")
+    public void testWarmupFailsForInvalidValueArity() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new InvalidValueArityController(), "invalidValueArityController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining(Between.class.getCanonicalName())
+                .hasMessageContaining("requires exactly 2 parameter(s)")
+                .hasMessageContaining("configured count is 1");
+    }
+
+    @Test
+    @DisplayName("Warmup validates Dynamic pseudo-operation metadata")
+    public void testWarmupFailsForInvalidDynamicValueArity() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new InvalidDynamicArityController(), "invalidDynamicArityController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining(Dynamic.class.getCanonicalName())
+                .hasMessageContaining("requires exactly 1 parameter(s)")
+                .hasMessageContaining("configured count is 2");
+    }
+
+    @Test
+    @DisplayName("Warmup fails when filter parameter names are repeated")
+    public void testWarmupFailsForDuplicatedFilterParameterNames() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new DuplicatedParameterNamesController(), "duplicatedParameterNamesController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining("sharedParameter")
+                .hasMessageContaining("configured more than once across filters")
+                .hasMessageContaining(DuplicatedParameterNamesController.class.getCanonicalName())
+                .hasMessageContaining("#search")
+                .hasMessageContaining("parameter 0")
+                .hasMessageContaining(Equals.class.getCanonicalName())
+                .hasMessageContaining("existingPath")
+                .hasMessageContaining("otherExistingPath");
     }
 
     private static FilterConfigurationAnalyserBeanPostProcessor newPostProcessor() {
@@ -201,6 +259,45 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
         }
     }
 
+    @RestController
+    private static class InvalidPathArityController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({@Filter(path = {"existingPath", "otherExistingPath"}, parameters = "existingPath", operation = Equals.class)})
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
+    @RestController
+    private static class InvalidValueArityController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({@Filter(path = "existingPath", parameters = "existingPath", operation = Between.class)})
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
+    @RestController
+    private static class InvalidDynamicArityController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({@Filter(path = "existingPath", parameters = {"operation", "value"}, operation = Dynamic.class)})
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
+    @RestController
+    private static class DuplicatedParameterNamesController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({
+                        @Filter(path = "existingPath", parameters = "sharedParameter", operation = Equals.class),
+                        @Filter(path = "otherExistingPath", parameters = "sharedParameter", operation = Equals.class)
+                })
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
     @Conjunction({
             @Filter(path = "state", parameters = {}, operation = Equals.class),
     })
@@ -226,5 +323,8 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
     private static class FilterValidationEntity {
         @SuppressWarnings("unused")
         private String existingPath;
+
+        @SuppressWarnings("unused")
+        private String otherExistingPath;
     }
 }

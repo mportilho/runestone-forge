@@ -28,8 +28,10 @@ import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.exceptions.FilterOperationNotDefinedException;
 import com.runestone.dynafilter.core.model.FilterData;
+import com.runestone.dynafilter.core.operation.FilterArity;
 import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
+import com.runestone.dynafilter.core.operation.FilterValueShape;
 import com.runestone.dynafilter.core.operation.types.*;
 import com.runestone.dynafilter.core.operation.types.extensions.*;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationContributor;
@@ -96,20 +98,23 @@ public class TestSpecificationFilterOperationService {
     public void testBuiltInOperationMetadata() {
         JpaFilterOperationService service = new JpaFilterOperationService(new DefaultDataConversionService());
 
-        Assertions.assertThat(service.findMetadata(IsNull.class)).isEqualTo(FilterOperationMetadata.booleanValue());
-        Assertions.assertThat(service.findMetadata(IsIn.class)).isEqualTo(FilterOperationMetadata.arrayValue());
-        Assertions.assertThat(service.findMetadata(Between.class)).isEqualTo(FilterOperationMetadata.targetField());
-        Assertions.assertThat(service.findMetadata(Equals.class)).isEqualTo(FilterOperationMetadata.targetField());
-        Assertions.assertThat(service.findMetadata(IsBlank.class)).isEqualTo(FilterOperationMetadata.booleanValue());
-        Assertions.assertThat(service.findMetadata(IsEmptyCollection.class)).isEqualTo(FilterOperationMetadata.booleanValue());
-        Assertions.assertThat(service.findMetadata(ContainsAll.class)).isEqualTo(FilterOperationMetadata.arrayValue());
-        Assertions.assertThat(service.findMetadata(PeriodOverlapsHalfOpen.class)).isEqualTo(FilterOperationMetadata.targetField());
-        Assertions.assertThat(service.findMetadata(NullOrLess.class)).isEqualTo(FilterOperationMetadata.targetField());
-        Assertions.assertThat(service.findMetadata(NullOrLessOrEquals.class)).isEqualTo(FilterOperationMetadata.targetField());
-        Assertions.assertThat(service.findMetadata(NullOrGreater.class)).isEqualTo(FilterOperationMetadata.targetField());
-        Assertions.assertThat(service.findMetadata(NullOrGreaterOrEquals.class)).isEqualTo(FilterOperationMetadata.targetField());
-        Assertions.assertThat(service.findMetadata(CollectionSize.class)).isEqualTo(FilterOperationMetadata.stringValue());
-        Assertions.assertThat(service.findMetadata(OnDate.class)).isEqualTo(FilterOperationMetadata.stringValue());
+        Assertions.assertThat(service.findMetadata(IsNull.class)).isEqualTo(metadata(FilterValueShape.BOOLEAN, 1, 1));
+        Assertions.assertThat(service.findMetadata(IsIn.class)).isEqualTo(metadata(FilterValueShape.ARRAY, 1, 1));
+        Assertions.assertThat(service.findMetadata(Between.class)).isEqualTo(metadata(FilterValueShape.TARGET_FIELD, 1, 2));
+        Assertions.assertThat(service.findMetadata(Equals.class)).isEqualTo(metadata(FilterValueShape.TARGET_FIELD, 1, 1));
+        Assertions.assertThat(service.findMetadata(IsBlank.class)).isEqualTo(metadata(FilterValueShape.BOOLEAN, 1, 1));
+        Assertions.assertThat(service.findMetadata(IsEmptyCollection.class)).isEqualTo(metadata(FilterValueShape.BOOLEAN, 1, 1));
+        Assertions.assertThat(service.findMetadata(ContainsAll.class)).isEqualTo(metadata(FilterValueShape.ARRAY, 1, 1));
+        Assertions.assertThat(service.findMetadata(EffectiveAtHalfOpen.class)).isEqualTo(metadata(FilterValueShape.TARGET_FIELD, 2, 1));
+        Assertions.assertThat(service.findMetadata(PeriodOverlapsHalfOpen.class)).isEqualTo(metadata(FilterValueShape.TARGET_FIELD, 2, 2));
+        Assertions.assertThat(service.findMetadata(SizeBetween.class)).isEqualTo(metadata(FilterValueShape.TARGET_FIELD, 1, 2));
+        Assertions.assertThat(service.findMetadata(AnyFieldLike.class)).isEqualTo(metadata(FilterValueShape.STRING, FilterArity.atLeast(1), 1));
+        Assertions.assertThat(service.findMetadata(NullOrLess.class)).isEqualTo(metadata(FilterValueShape.TARGET_FIELD, 1, 1));
+        Assertions.assertThat(service.findMetadata(NullOrLessOrEquals.class)).isEqualTo(metadata(FilterValueShape.TARGET_FIELD, 1, 1));
+        Assertions.assertThat(service.findMetadata(NullOrGreater.class)).isEqualTo(metadata(FilterValueShape.TARGET_FIELD, 1, 1));
+        Assertions.assertThat(service.findMetadata(NullOrGreaterOrEquals.class)).isEqualTo(metadata(FilterValueShape.TARGET_FIELD, 1, 1));
+        Assertions.assertThat(service.findMetadata(CollectionSize.class)).isEqualTo(metadata(FilterValueShape.STRING, 1, 1));
+        Assertions.assertThat(service.findMetadata(OnDate.class)).isEqualTo(metadata(FilterValueShape.STRING, 1, 1));
         Assertions.assertThat(service.findMetadata(Dynamic.class)).isEqualTo(FilterOperationMetadata.dynamicValue());
         Assertions.assertThat(service.findMetadata(Decorated.class)).isEqualTo(FilterOperationMetadata.stringValue());
     }
@@ -221,5 +226,13 @@ public class TestSpecificationFilterOperationService {
     }
 
     private interface CustomOperation<T> extends FilterOperation<T> {
+    }
+
+    private static FilterOperationMetadata metadata(FilterValueShape valueShape, int pathCount, int valueCount) {
+        return metadata(valueShape, FilterArity.exactly(pathCount), valueCount);
+    }
+
+    private static FilterOperationMetadata metadata(FilterValueShape valueShape, FilterArity pathArity, int valueCount) {
+        return new FilterOperationMetadata(valueShape, pathArity, FilterArity.exactly(valueCount), null);
     }
 }

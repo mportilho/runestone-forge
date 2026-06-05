@@ -26,9 +26,11 @@ package com.runestone.dynafilter.modules.jpa.api;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.operation.AbstractFilterOperationService;
+import com.runestone.dynafilter.core.operation.FilterArity;
 import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
 import com.runestone.dynafilter.core.operation.FilterOperationRegistry;
+import com.runestone.dynafilter.core.operation.FilterValueShape;
 import com.runestone.dynafilter.core.operation.types.Between;
 import com.runestone.dynafilter.core.operation.types.EndsWith;
 import com.runestone.dynafilter.core.operation.types.Equals;
@@ -135,34 +137,58 @@ public class JpaFilterOperationService extends AbstractFilterOperationService<Sp
     }
 
     private static void registerBuiltInOperations(JpaFilterOperationRegistry registry) {
-        registry.register(Between.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationBetween<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(EndsWith.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationEndsWith<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(Equals.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationEquals<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(Greater.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationGreater<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(GreaterOrEquals.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationGreaterOrEquals<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(IsIn.class, FilterOperationMetadata.arrayValue(), ctx -> new SpecificationIsIn<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(IsNull.class, FilterOperationMetadata.booleanValue(), ctx -> new SpecificationIsNull<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(Less.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationLess<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(LessOrEquals.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationLessOrEquals<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(Like.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationLike<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(StartsWith.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationStartsWith<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(AnyFieldLike.class, FilterOperationMetadata.stringValue(), ctx -> new SpecificationAnyFieldLike<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(CollectionSize.class, FilterOperationMetadata.stringValue(), ctx -> new SpecificationCollectionSize<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(ContainsAll.class, FilterOperationMetadata.arrayValue(), ctx -> new SpecificationContainsAll<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(EffectiveAtClosed.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationEffectiveAtClosed<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(EffectiveAtHalfOpen.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationEffectiveAtHalfOpen<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(EffectiveAtOpen.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationEffectiveAtOpen<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(IsBlank.class, FilterOperationMetadata.booleanValue(), ctx -> new SpecificationIsBlank<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(IsEmptyCollection.class, FilterOperationMetadata.booleanValue(), ctx -> new SpecificationIsEmptyCollection<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(NullOrGreater.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationNullOrGreater<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(NullOrGreaterOrEquals.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationNullOrGreaterOrEquals<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(NullOrLess.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationNullOrLess<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(NullOrLessOrEquals.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationNullOrLessOrEquals<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(OnDate.class, FilterOperationMetadata.stringValue(), ctx -> new SpecificationOnDate<>(ctx.filterData(), ctx.conversionService(), ctx.zoneId()));
-        registry.register(PeriodOverlapsClosed.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationPeriodOverlapsClosed<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(PeriodOverlapsHalfOpen.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationPeriodOverlapsHalfOpen<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(PeriodOverlapsOpen.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationPeriodOverlapsOpen<>(ctx.filterData(), ctx.conversionService()));
-        registry.register(SizeBetween.class, FilterOperationMetadata.targetField(), ctx -> new SpecificationSizeBetween<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(Between.class, targetField(1, 2), ctx -> new SpecificationBetween<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(EndsWith.class, targetField(1, 1), ctx -> new SpecificationEndsWith<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(Equals.class, targetField(1, 1), ctx -> new SpecificationEquals<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(Greater.class, targetField(1, 1), ctx -> new SpecificationGreater<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(GreaterOrEquals.class, targetField(1, 1), ctx -> new SpecificationGreaterOrEquals<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(IsIn.class, arrayValue(1, 1), ctx -> new SpecificationIsIn<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(IsNull.class, booleanValue(1, 1), ctx -> new SpecificationIsNull<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(Less.class, targetField(1, 1), ctx -> new SpecificationLess<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(LessOrEquals.class, targetField(1, 1), ctx -> new SpecificationLessOrEquals<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(Like.class, targetField(1, 1), ctx -> new SpecificationLike<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(StartsWith.class, targetField(1, 1), ctx -> new SpecificationStartsWith<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(AnyFieldLike.class, stringValue(FilterArity.atLeast(1), 1), ctx -> new SpecificationAnyFieldLike<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(CollectionSize.class, stringValue(1, 1), ctx -> new SpecificationCollectionSize<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(ContainsAll.class, arrayValue(1, 1), ctx -> new SpecificationContainsAll<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(EffectiveAtClosed.class, targetField(2, 1), ctx -> new SpecificationEffectiveAtClosed<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(EffectiveAtHalfOpen.class, targetField(2, 1), ctx -> new SpecificationEffectiveAtHalfOpen<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(EffectiveAtOpen.class, targetField(2, 1), ctx -> new SpecificationEffectiveAtOpen<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(IsBlank.class, booleanValue(1, 1), ctx -> new SpecificationIsBlank<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(IsEmptyCollection.class, booleanValue(1, 1), ctx -> new SpecificationIsEmptyCollection<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(NullOrGreater.class, targetField(1, 1), ctx -> new SpecificationNullOrGreater<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(NullOrGreaterOrEquals.class, targetField(1, 1), ctx -> new SpecificationNullOrGreaterOrEquals<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(NullOrLess.class, targetField(1, 1), ctx -> new SpecificationNullOrLess<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(NullOrLessOrEquals.class, targetField(1, 1), ctx -> new SpecificationNullOrLessOrEquals<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(OnDate.class, stringValue(1, 1), ctx -> new SpecificationOnDate<>(ctx.filterData(), ctx.conversionService(), ctx.zoneId()));
+        registry.register(PeriodOverlapsClosed.class, targetField(2, 2), ctx -> new SpecificationPeriodOverlapsClosed<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(PeriodOverlapsHalfOpen.class, targetField(2, 2), ctx -> new SpecificationPeriodOverlapsHalfOpen<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(PeriodOverlapsOpen.class, targetField(2, 2), ctx -> new SpecificationPeriodOverlapsOpen<>(ctx.filterData(), ctx.conversionService()));
+        registry.register(SizeBetween.class, targetField(1, 2), ctx -> new SpecificationSizeBetween<>(ctx.filterData(), ctx.conversionService()));
+    }
+
+    private static FilterOperationMetadata targetField(int pathCount, int valueCount) {
+        return metadata(FilterValueShape.TARGET_FIELD, FilterArity.exactly(pathCount), FilterArity.exactly(valueCount));
+    }
+
+    private static FilterOperationMetadata stringValue(int pathCount, int valueCount) {
+        return stringValue(FilterArity.exactly(pathCount), valueCount);
+    }
+
+    private static FilterOperationMetadata stringValue(FilterArity pathArity, int valueCount) {
+        return metadata(FilterValueShape.STRING, pathArity, FilterArity.exactly(valueCount));
+    }
+
+    private static FilterOperationMetadata booleanValue(int pathCount, int valueCount) {
+        return metadata(FilterValueShape.BOOLEAN, FilterArity.exactly(pathCount), FilterArity.exactly(valueCount));
+    }
+
+    private static FilterOperationMetadata arrayValue(int pathCount, int valueCount) {
+        return metadata(FilterValueShape.ARRAY, FilterArity.exactly(pathCount), FilterArity.exactly(valueCount));
+    }
+
+    private static FilterOperationMetadata metadata(FilterValueShape valueShape, FilterArity pathArity, FilterArity valueArity) {
+        return new FilterOperationMetadata(valueShape, pathArity, valueArity, null);
     }
 
     private record DefaultJpaFilterOperationRegistry(
