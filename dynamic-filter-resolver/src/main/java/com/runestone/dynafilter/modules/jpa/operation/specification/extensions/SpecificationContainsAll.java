@@ -56,7 +56,7 @@ public class SpecificationContainsAll<T> implements Specification<T> {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
         FilterDataRequirements.requireShape(filterData, 1, 1, OPERATION_NAME);
-        JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
+        JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root, query);
         Expression<Collection<?>> collectionExpression = JpaCollections.requireCollectionExpression(resolution.expression(), OPERATION_NAME);
         Object[] rawValues = JpaValues.asArray(filterData.findOneValue());
         if (rawValues.length == 0) {

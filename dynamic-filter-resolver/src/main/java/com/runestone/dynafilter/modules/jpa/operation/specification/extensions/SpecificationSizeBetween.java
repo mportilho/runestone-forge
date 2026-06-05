@@ -54,7 +54,7 @@ public class SpecificationSizeBetween<T> implements Specification<T> {
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
         FilterDataRequirements.requireShape(filterData, 1, 2, OPERATION_NAME);
-        JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
+        JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root, query);
         Expression<Collection<?>> collectionExpression = JpaCollections.requireCollectionExpression(resolution.expression(), OPERATION_NAME);
         int lowerSize = JpaCollections.requireNonNegativeSize(filterData.findValueOnIndex(0), dataConversionService, OPERATION_NAME, "lower size");
         int upperSize = JpaCollections.requireNonNegativeSize(filterData.findValueOnIndex(1), dataConversionService, OPERATION_NAME, "upper size");

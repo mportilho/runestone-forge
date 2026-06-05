@@ -27,6 +27,8 @@ package com.runestone.dynafilter.modules.jpa.operation.specification;
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
+import com.runestone.dynafilter.modules.jpa.support.JpaComparisons;
+import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
 import jakarta.persistence.criteria.*;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -44,15 +46,14 @@ public class SpecificationLessOrEquals<T> implements Specification<T> {
     @SuppressWarnings({"unchecked"})
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
         String filterPath = filterData.path()[0];
-        JpaPredicateUtils.PathResolution<? extends Comparable<?>> resolution = JpaPredicateUtils.resolveAttributePath(filterPath, filterData, root);
-        JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
+        JpaPaths.ResolvedJpaPath<? extends Comparable<?>> resolution = JpaPaths.resolveAttributePath(filterPath, filterData, root, query);
         Expression<? extends Comparable<?>> expression = resolution.expression();
         Object value = dataConversionService.convert(filterData.findOneValue(), expression.getJavaType());
         if (expression.getJavaType().equals(String.class) && filterData.hasModifier(ModIgnoreCase.class)) {
             expression = criteriaBuilder.upper((Expression<String>) expression);
             value = value != null ? value.toString().toUpperCase() : null;
         }
-        return JpaPredicateUtils.toLessThanOrEqualToPredicate(criteriaBuilder, expression, value);
+        return JpaComparisons.lessThanOrEqualTo(criteriaBuilder, expression, value);
     }
 
 }

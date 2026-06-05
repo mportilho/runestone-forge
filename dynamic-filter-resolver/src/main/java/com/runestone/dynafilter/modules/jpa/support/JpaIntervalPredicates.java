@@ -50,10 +50,10 @@ public final class JpaIntervalPredicates {
 
         Predicate started = switch (bounds) {
             case CLOSED, START_INCLUSIVE_END_EXCLUSIVE -> JpaComparisons.lessThanOrEqualTo(criteriaBuilder, startExpression, startReference);
-            case OPEN -> JpaComparisons.lessThan(criteriaBuilder, startExpression, startReference);
+            case OPEN, START_EXCLUSIVE_END_INCLUSIVE -> JpaComparisons.lessThan(criteriaBuilder, startExpression, startReference);
         };
         Predicate endMatches = switch (bounds) {
-            case CLOSED -> JpaComparisons.greaterThanOrEqualTo(criteriaBuilder, endExpression, endReference);
+            case CLOSED, START_EXCLUSIVE_END_INCLUSIVE -> JpaComparisons.greaterThanOrEqualTo(criteriaBuilder, endExpression, endReference);
             case OPEN, START_INCLUSIVE_END_EXCLUSIVE -> JpaComparisons.greaterThan(criteriaBuilder, endExpression, endReference);
         };
         return criteriaBuilder.and(started, criteriaBuilder.or(criteriaBuilder.isNull(endExpression), endMatches));
@@ -74,11 +74,11 @@ public final class JpaIntervalPredicates {
 
         Predicate startBeforeFilterEnd = switch (bounds) {
             case CLOSED -> JpaComparisons.lessThanOrEqualTo(criteriaBuilder, periodStartExpression, filterEndForStartExpression);
-            case OPEN, START_INCLUSIVE_END_EXCLUSIVE -> JpaComparisons.lessThan(criteriaBuilder, periodStartExpression, filterEndForStartExpression);
+            case OPEN, START_INCLUSIVE_END_EXCLUSIVE, START_EXCLUSIVE_END_INCLUSIVE -> JpaComparisons.lessThan(criteriaBuilder, periodStartExpression, filterEndForStartExpression);
         };
         Predicate endAfterFilterStart = switch (bounds) {
             case CLOSED -> JpaComparisons.greaterThanOrEqualTo(criteriaBuilder, periodEndExpression, filterStartForEndExpression);
-            case OPEN, START_INCLUSIVE_END_EXCLUSIVE -> JpaComparisons.greaterThan(criteriaBuilder, periodEndExpression, filterStartForEndExpression);
+            case OPEN, START_INCLUSIVE_END_EXCLUSIVE, START_EXCLUSIVE_END_INCLUSIVE -> JpaComparisons.greaterThan(criteriaBuilder, periodEndExpression, filterStartForEndExpression);
         };
         return criteriaBuilder.and(startBeforeFilterEnd, criteriaBuilder.or(criteriaBuilder.isNull(periodEndExpression), endAfterFilterStart));
     }

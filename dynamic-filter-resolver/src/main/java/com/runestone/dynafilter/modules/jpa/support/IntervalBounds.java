@@ -27,5 +27,6 @@ package com.runestone.dynafilter.modules.jpa.support;
 public enum IntervalBounds {
     CLOSED,
     OPEN,
-    START_INCLUSIVE_END_EXCLUSIVE
+    START_INCLUSIVE_END_EXCLUSIVE,
+    START_EXCLUSIVE_END_INCLUSIVE
 }

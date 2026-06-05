@@ -50,8 +50,7 @@ public class SpecificationIsBlank<T> implements Specification<T> {
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
         FilterDataRequirements.requirePathCount(filterData, 1, "IsBlank");
-        JpaPaths.ResolvedJpaPath<String> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
-        JpaPaths.applyDistinctIfNeeded(resolution, query);
+        JpaPaths.ResolvedJpaPath<String> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root, query);
         Expression<String> expression = resolution.expression();
         Predicate blankPredicate = criteriaBuilder.or(
                 criteriaBuilder.isNull(expression),

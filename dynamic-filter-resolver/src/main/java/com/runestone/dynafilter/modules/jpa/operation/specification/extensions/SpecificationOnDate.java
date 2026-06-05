@@ -61,8 +61,7 @@ public class SpecificationOnDate<T> implements Specification<T> {
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
         FilterDataRequirements.requireShape(filterData, 1, 1, OPERATION_NAME);
-        JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
-        JpaPaths.applyDistinctIfNeeded(resolution, query);
+        JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root, query);
         Expression<?> expression = resolution.expression();
         LocalDate date = toLocalDate(FilterDataRequirements.requireValue(filterData.findOneValue(), OPERATION_NAME, "date"));
 

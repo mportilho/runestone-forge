@@ -50,10 +50,8 @@ public final class JpaSpecifications {
             String operationName = effectiveAtOperationName(bounds);
             FilterDataRequirements.requireShape(filterData, 2, 1, operationName);
 
-            JpaPaths.ResolvedJpaPath<?> startResolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
-            JpaPaths.ResolvedJpaPath<?> endResolution = JpaPaths.resolveAttributePath(filterData.path()[1], filterData, root);
-            JpaPaths.applyDistinctIfNeeded(startResolution, query);
-            JpaPaths.applyDistinctIfNeeded(endResolution, query);
+            JpaPaths.ResolvedJpaPath<?> startResolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root, query);
+            JpaPaths.ResolvedJpaPath<?> endResolution = JpaPaths.resolveAttributePath(filterData.path()[1], filterData, root, query);
 
             Object reference = FilterDataRequirements.requireValue(filterData.findOneValue(), operationName, "reference value");
             Expression<?> startExpression = startResolution.expression();
@@ -77,10 +75,8 @@ public final class JpaSpecifications {
             String operationName = periodOverlapsOperationName(bounds);
             FilterDataRequirements.requireShape(filterData, 2, 2, operationName);
 
-            JpaPaths.ResolvedJpaPath<?> startResolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
-            JpaPaths.ResolvedJpaPath<?> endResolution = JpaPaths.resolveAttributePath(filterData.path()[1], filterData, root);
-            JpaPaths.applyDistinctIfNeeded(startResolution, query);
-            JpaPaths.applyDistinctIfNeeded(endResolution, query);
+            JpaPaths.ResolvedJpaPath<?> startResolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root, query);
+            JpaPaths.ResolvedJpaPath<?> endResolution = JpaPaths.resolveAttributePath(filterData.path()[1], filterData, root, query);
 
             Object filterStart = FilterDataRequirements.requireValue(filterData.findValueOnIndex(0), operationName, "filter start");
             Object filterEnd = FilterDataRequirements.requireValue(filterData.findValueOnIndex(1), operationName, "filter end");
@@ -112,8 +108,7 @@ public final class JpaSpecifications {
             String operationName = nullOrComparisonOperationName(operator);
             FilterDataRequirements.requireShape(filterData, 1, 1, operationName);
 
-            JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
-            JpaPaths.applyDistinctIfNeeded(resolution, query);
+            JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root, query);
 
             Expression<?> expression = resolution.expression();
             Object rawValue = FilterDataRequirements.requireValue(filterData.findOneValue(), operationName, "comparison value");
@@ -127,6 +122,7 @@ public final class JpaSpecifications {
             case CLOSED -> "EffectiveAtClosed";
             case OPEN -> "EffectiveAtOpen";
             case START_INCLUSIVE_END_EXCLUSIVE -> "EffectiveAtHalfOpen";
+            case START_EXCLUSIVE_END_INCLUSIVE -> "EffectiveAtStartExclusiveEndInclusive";
         };
     }
 
@@ -135,6 +131,7 @@ public final class JpaSpecifications {
             case CLOSED -> "PeriodOverlapsClosed";
             case OPEN -> "PeriodOverlapsOpen";
             case START_INCLUSIVE_END_EXCLUSIVE -> "PeriodOverlapsHalfOpen";
+            case START_EXCLUSIVE_END_INCLUSIVE -> "PeriodOverlapsStartExclusiveEndInclusive";
         };
     }
 

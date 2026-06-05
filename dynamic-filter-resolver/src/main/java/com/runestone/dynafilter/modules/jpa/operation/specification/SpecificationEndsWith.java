@@ -27,6 +27,7 @@ package com.runestone.dynafilter.modules.jpa.operation.specification;
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
+import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
 import jakarta.persistence.criteria.*;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -43,8 +44,7 @@ public class SpecificationEndsWith<T> implements Specification<T> {
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
         String filterPath = filterData.path()[0];
-        JpaPredicateUtils.PathResolution<String> resolution = JpaPredicateUtils.resolveAttributePath(filterPath, filterData, root);
-        JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
+        JpaPaths.ResolvedJpaPath<String> resolution = JpaPaths.resolveAttributePath(filterPath, filterData, root, query);
         Path<String> path = resolution.expression();
         String value = dataConversionService.convert(filterData.findOneValue(), path.getJavaType());
 

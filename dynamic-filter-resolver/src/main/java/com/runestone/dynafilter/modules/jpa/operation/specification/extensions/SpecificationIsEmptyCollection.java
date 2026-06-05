@@ -54,7 +54,7 @@ public class SpecificationIsEmptyCollection<T> implements Specification<T> {
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
         FilterDataRequirements.requirePathCount(filterData, 1, OPERATION_NAME);
-        JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
+        JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root, query);
         Expression<Collection<?>> collectionExpression = JpaCollections.requireCollectionExpression(resolution.expression(), OPERATION_NAME);
         Boolean matchEmpty = dataConversionService.convert(filterData.findOneValue(), Boolean.class);
         return Boolean.TRUE.equals(matchEmpty)

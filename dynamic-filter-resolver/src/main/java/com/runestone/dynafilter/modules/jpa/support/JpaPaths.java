@@ -72,6 +72,13 @@ public final class JpaPaths {
         return new ResolvedJpaPath<>(from.get(parsedPath.attributeSegment()), crossedPluralAssociation);
     }
 
+    public static <T> ResolvedJpaPath<T> resolveAttributePath(String path, FilterData filterData, Root<?> root, CriteriaQuery<?> query) {
+        Objects.requireNonNull(query, "query cannot be null");
+        ResolvedJpaPath<T> resolvedPath = resolveAttributePath(path, filterData, root);
+        applyDistinctIfNeeded(resolvedPath, query);
+        return resolvedPath;
+    }
+
     @SuppressWarnings("unchecked")
     public static <T> ResolvedJpaPath<T> resolveAttributeJoinPath(String path, FilterData filterData, Root<?> root) {
         Objects.requireNonNull(path, "path cannot be null");
@@ -89,6 +96,13 @@ public final class JpaPaths {
         Join<?, ?> join = getOrCreateJoin(from, parsedPath.attributeSegment(), joinType);
         crossedPluralAssociation = crossedPluralAssociation || isPluralAttribute(join);
         return new ResolvedJpaPath<>((Path<T>) join, crossedPluralAssociation);
+    }
+
+    public static <T> ResolvedJpaPath<T> resolveAttributeJoinPath(String path, FilterData filterData, Root<?> root, CriteriaQuery<?> query) {
+        Objects.requireNonNull(query, "query cannot be null");
+        ResolvedJpaPath<T> resolvedPath = resolveAttributeJoinPath(path, filterData, root);
+        applyDistinctIfNeeded(resolvedPath, query);
+        return resolvedPath;
     }
 
     static void clearCaches() {
