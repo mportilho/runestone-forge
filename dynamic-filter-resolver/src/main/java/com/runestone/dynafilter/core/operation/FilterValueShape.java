@@ -29,6 +29,5 @@ public enum FilterValueShape {
     STRING,
     BOOLEAN,
     ARRAY,
-    RANGE,
     DYNAMIC
 }

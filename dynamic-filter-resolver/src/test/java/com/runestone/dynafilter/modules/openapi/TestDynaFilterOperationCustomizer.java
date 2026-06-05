@@ -92,18 +92,17 @@ public class TestDynaFilterOperationCustomizer {
     }
 
     @Test
-    @DisplayName("Between filter parameters are documented as arrays with exactly two items")
-    public void testBetweenFilterCreatesRangeSchema() throws NoSuchMethodException {
+    @DisplayName("Between filter parameters are documented as target field scalar parameters")
+    public void testBetweenFilterCreatesTargetFieldSchemas() throws NoSuchMethodException {
         Operation operation = customize("documentBetweenFilter");
 
-        Parameter parameter = findParameter(operation, "registeredAt");
+        Parameter from = findParameter(operation, "registeredAtFrom");
+        Parameter to = findParameter(operation, "registeredAtTo");
 
-        Assertions.assertThat(parameter.getSchema()).isInstanceOf(ArraySchema.class);
-        ArraySchema schema = (ArraySchema) parameter.getSchema();
-        Assertions.assertThat(schema.getMinItems()).isEqualTo(2);
-        Assertions.assertThat(schema.getMaxItems()).isEqualTo(2);
-        Assertions.assertThat(schema.getItems().getType()).isEqualTo("string");
-        Assertions.assertThat(schema.getItems().getFormat()).isEqualTo("date");
+        Assertions.assertThat(from.getSchema().getType()).isEqualTo("string");
+        Assertions.assertThat(from.getSchema().getFormat()).isEqualTo("date");
+        Assertions.assertThat(to.getSchema().getType()).isEqualTo("string");
+        Assertions.assertThat(to.getSchema().getFormat()).isEqualTo("date");
     }
 
     @Test
@@ -256,7 +255,7 @@ public class TestDynaFilterOperationCustomizer {
         public void documentBetweenFilter(
                 @io.swagger.v3.oas.annotations.Parameter(name = "filters")
                 @FilterTarget(OpenApiFilterTarget.class)
-                @Conjunction(@Filter(path = "registeredAt", parameters = "registeredAt", operation = Between.class))
+                @Conjunction(@Filter(path = "registeredAt", parameters = {"registeredAtFrom", "registeredAtTo"}, operation = Between.class))
                 ConditionalStatement filters
         ) {
         }

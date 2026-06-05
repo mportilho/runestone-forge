@@ -174,7 +174,6 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             case BOOLEAN -> new BooleanSchema();
             case ARRAY ->
                     createArraySchema(parameter.getSchema() != null ? parameter.getSchema() : new StringSchema(), null, null);
-            case RANGE -> createArraySchema(schemaFromType, 2, 2);
             case STRING -> new StringSchema();
             case TARGET_FIELD -> createTargetFieldSchema(parameter.getSchema(), schemaFromType);
             case DYNAMIC ->
@@ -187,7 +186,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
         if (filter.defaultValues() != null && filter.defaultValues().length == 1) {
             newSchema.setDefault(filter.defaultValues()[0]);
         }
-        if (!metadata.valueShape().equals(FilterValueShape.ARRAY) && !metadata.valueShape().equals(FilterValueShape.RANGE)) {
+        if (!metadata.valueShape().equals(FilterValueShape.ARRAY)) {
             SchemaValidationUtils.applyValidations(newSchema, field);
         }
     }

@@ -81,7 +81,7 @@ public class SpecificationFilterOperationService extends AbstractFilterOperation
     }
 
     private static void registerBuiltInOperations(FilterOperationRegistry<Specification<?>> registry, DataConversionService conversionService, ZoneId zoneId) {
-        registry.register(Between.class, (Between<Specification<?>>) filterData -> new SpecificationBetween<>(filterData, conversionService), FilterOperationMetadata.rangeValue());
+        registry.register(Between.class, (Between<Specification<?>>) filterData -> new SpecificationBetween<>(filterData, conversionService), FilterOperationMetadata.targetField());
         registry.register(EndsWith.class, (EndsWith<Specification<?>>) filterData -> new SpecificationEndsWith<>(filterData, conversionService), FilterOperationMetadata.targetField());
         registry.register(Equals.class, (Equals<Specification<?>>) filterData -> new SpecificationEquals<>(filterData, conversionService), FilterOperationMetadata.targetField());
         registry.register(Greater.class, (Greater<Specification<?>>) filterData -> new SpecificationGreater<>(filterData, conversionService), FilterOperationMetadata.targetField());
@@ -105,10 +105,10 @@ public class SpecificationFilterOperationService extends AbstractFilterOperation
         registry.register(NullOrLess.class, (NullOrLess<Specification<?>>) filterData -> new SpecificationNullOrLess<>(filterData, conversionService), FilterOperationMetadata.targetField());
         registry.register(NullOrLessOrEquals.class, (NullOrLessOrEquals<Specification<?>>) filterData -> new SpecificationNullOrLessOrEquals<>(filterData, conversionService), FilterOperationMetadata.targetField());
         registry.register(OnDate.class, (OnDate<Specification<?>>) filterData -> new SpecificationOnDate<>(filterData, conversionService, zoneId), FilterOperationMetadata.stringValue());
-        registry.register(PeriodOverlapsClosed.class, (PeriodOverlapsClosed<Specification<?>>) filterData -> new SpecificationPeriodOverlapsClosed<>(filterData, conversionService), FilterOperationMetadata.rangeValue());
-        registry.register(PeriodOverlapsHalfOpen.class, (PeriodOverlapsHalfOpen<Specification<?>>) filterData -> new SpecificationPeriodOverlapsHalfOpen<>(filterData, conversionService), FilterOperationMetadata.rangeValue());
-        registry.register(PeriodOverlapsOpen.class, (PeriodOverlapsOpen<Specification<?>>) filterData -> new SpecificationPeriodOverlapsOpen<>(filterData, conversionService), FilterOperationMetadata.rangeValue());
-        registry.register(SizeBetween.class, (SizeBetween<Specification<?>>) filterData -> new SpecificationSizeBetween<>(filterData, conversionService), FilterOperationMetadata.rangeValue());
+        registry.register(PeriodOverlapsClosed.class, (PeriodOverlapsClosed<Specification<?>>) filterData -> new SpecificationPeriodOverlapsClosed<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(PeriodOverlapsHalfOpen.class, (PeriodOverlapsHalfOpen<Specification<?>>) filterData -> new SpecificationPeriodOverlapsHalfOpen<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(PeriodOverlapsOpen.class, (PeriodOverlapsOpen<Specification<?>>) filterData -> new SpecificationPeriodOverlapsOpen<>(filterData, conversionService), FilterOperationMetadata.targetField());
+        registry.register(SizeBetween.class, (SizeBetween<Specification<?>>) filterData -> new SpecificationSizeBetween<>(filterData, conversionService), FilterOperationMetadata.targetField());
     }
 
 }

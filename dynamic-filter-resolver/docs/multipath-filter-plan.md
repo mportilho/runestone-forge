@@ -26,7 +26,7 @@ Legend:
 | `[ ]` | Built-in operations | Register all existing built-in operations as exactly-one-path operations. |
 | `[ ]` | Decorated filters | Restrict `Decorated` to exactly one path. |
 | `[ ]` | OpenAPI | Support multipath only for field-independent value shapes. |
-| `[ ]` | OpenAPI | Reject multipath for `TARGET_FIELD` and `RANGE` value shapes. |
+| `[ ]` | OpenAPI | Reject multipath for `TARGET_FIELD` value shapes. |
 | `[ ]` | Repository sort | Do not translate sort properties for multipath filters. |
 | `[ ]` | JPA API | Expose a public helper for resolving JPA paths with joins. |
 | `[ ]` | Tests | Add unit tests for annotation path normalization and validation. |
@@ -280,9 +280,8 @@ Allowed for multipath:
 Rejected for multipath in the first implementation:
 
 - `TARGET_FIELD`
-- `RANGE`
 
-Reason: `TARGET_FIELD` and `RANGE` currently derive parameter schema from one target field. With multiple paths, fields may have different Java types, Bean Validation annotations, enum values, or JSON schema metadata.
+Reason: `TARGET_FIELD` currently derives parameter schema from one target field. With multiple paths, fields may have different Java types, Bean Validation annotations, enum values, or JSON schema metadata.
 
 The first implementation should fail fast with a clear message instead of choosing the first path implicitly.
 
@@ -460,7 +459,6 @@ The operation owns the `OR` semantics. Another operation could use `AND`, compar
 - Multipath operation with `STRING` shape is documented as a string query parameter.
 - Multipath operation with `BOOLEAN` shape is documented as a boolean query parameter.
 - Multipath operation with `TARGET_FIELD` shape fails with a clear configuration error.
-- Multipath operation with `RANGE` shape fails with a clear configuration error.
 - Single-path field-dependent operations keep current schema behavior.
 
 ### Repository Sort Tests
@@ -496,7 +494,7 @@ Behavior compatibility:
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| OpenAPI documents the wrong schema for multipath field-dependent operations. | Public API documentation becomes misleading. | Reject multipath for `TARGET_FIELD` and `RANGE` in the MVP. |
+| OpenAPI documents the wrong schema for multipath field-dependent operations. | Public API documentation becomes misleading. | Reject multipath for `TARGET_FIELD` in the MVP. |
 | Existing custom operations receive multipath data accidentally. | Runtime failures in user code. | Default all operations to exactly one path unless metadata explicitly opts into more. |
 | Sort translation chooses a surprising path. | Incorrect or confusing ordering. | Skip sort translation for multipath filters. |
 | Decorated filters collide on path keys. | Incorrect decorator behavior. | Restrict `Decorated` to exactly one path. |

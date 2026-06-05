@@ -117,7 +117,6 @@ Available shapes:
 - `stringValue()` documents the parameter as a string.
 - `booleanValue()` documents the parameter as a boolean.
 - `arrayValue()` documents the parameter as an array.
-- `rangeValue()` documents the parameter as an array with exactly two items.
 - `dynamicValue()` documents the pseudo-operation value used by `Dynamic.class`.
 - `none()` marks a pseudo-operation with no documentable request parameter, used by `Decorated.class`.
 
@@ -170,7 +169,6 @@ OpenAPI documentation uses operation metadata when available:
 
 - `BOOLEAN` becomes a boolean schema.
 - `ARRAY` becomes an array schema.
-- `RANGE` becomes an array schema with `minItems = 2` and `maxItems = 2`.
 - `STRING` becomes a string schema.
 - `TARGET_FIELD` follows the target field type.
 - `DYNAMIC` becomes an array schema with at least two items.

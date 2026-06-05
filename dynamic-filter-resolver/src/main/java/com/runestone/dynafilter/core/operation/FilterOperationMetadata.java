@@ -48,10 +48,6 @@ public record FilterOperationMetadata(FilterValueShape valueShape) {
         return new FilterOperationMetadata(FilterValueShape.ARRAY);
     }
 
-    public static FilterOperationMetadata rangeValue() {
-        return new FilterOperationMetadata(FilterValueShape.RANGE);
-    }
-
     public static FilterOperationMetadata dynamicValue() {
         return new FilterOperationMetadata(FilterValueShape.DYNAMIC);
     }

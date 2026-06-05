@@ -96,12 +96,12 @@ public class TestSpecificationFilterOperationService {
 
         Assertions.assertThat(service.findMetadata(IsNull.class)).isEqualTo(FilterOperationMetadata.booleanValue());
         Assertions.assertThat(service.findMetadata(IsIn.class)).isEqualTo(FilterOperationMetadata.arrayValue());
-        Assertions.assertThat(service.findMetadata(Between.class)).isEqualTo(FilterOperationMetadata.rangeValue());
+        Assertions.assertThat(service.findMetadata(Between.class)).isEqualTo(FilterOperationMetadata.targetField());
         Assertions.assertThat(service.findMetadata(Equals.class)).isEqualTo(FilterOperationMetadata.targetField());
         Assertions.assertThat(service.findMetadata(IsBlank.class)).isEqualTo(FilterOperationMetadata.booleanValue());
         Assertions.assertThat(service.findMetadata(IsEmptyCollection.class)).isEqualTo(FilterOperationMetadata.booleanValue());
         Assertions.assertThat(service.findMetadata(ContainsAll.class)).isEqualTo(FilterOperationMetadata.arrayValue());
-        Assertions.assertThat(service.findMetadata(PeriodOverlapsHalfOpen.class)).isEqualTo(FilterOperationMetadata.rangeValue());
+        Assertions.assertThat(service.findMetadata(PeriodOverlapsHalfOpen.class)).isEqualTo(FilterOperationMetadata.targetField());
         Assertions.assertThat(service.findMetadata(NullOrLess.class)).isEqualTo(FilterOperationMetadata.targetField());
         Assertions.assertThat(service.findMetadata(NullOrLessOrEquals.class)).isEqualTo(FilterOperationMetadata.targetField());
         Assertions.assertThat(service.findMetadata(NullOrGreater.class)).isEqualTo(FilterOperationMetadata.targetField());
