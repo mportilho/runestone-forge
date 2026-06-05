@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 
-package com.runestone.dynafilter.modules.jpa.support;
+package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
@@ -52,7 +52,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class TestJpaSpecifications {
+class TestExtendedSpecifications {
 
     @Mock
     private DataConversionService conversionService;
@@ -116,7 +116,7 @@ class TestJpaSpecifications {
         when(criteriaBuilder.greaterThanOrEqualTo(any(Expression.class), eq(endReference))).thenReturn(endPredicate);
         stubOpenEndedComposition(endPath);
 
-        Predicate result = JpaSpecifications.effectiveAt(filterData, conversionService, IntervalBounds.CLOSED)
+        Predicate result = new SpecificationEffectiveAtClosed<>(filterData, conversionService)
                 .toPredicate(root, query, criteriaBuilder);
 
         assertThat(result).isSameAs(resultPredicate);
@@ -139,7 +139,7 @@ class TestJpaSpecifications {
         when(criteriaBuilder.greaterThan(any(Expression.class), eq(convertedFilterStart))).thenReturn(endPredicate);
         stubOpenEndedComposition(endPath);
 
-        Predicate result = JpaSpecifications.periodOverlaps(filterData, conversionService, IntervalBounds.START_INCLUSIVE_END_EXCLUSIVE)
+        Predicate result = new SpecificationPeriodOverlapsHalfOpen<>(filterData, conversionService)
                 .toPredicate(root, query, criteriaBuilder);
 
         assertThat(result).isSameAs(resultPredicate);
@@ -158,7 +158,7 @@ class TestJpaSpecifications {
         when(criteriaBuilder.lt(any(Expression.class), eq(18))).thenReturn(comparisonPredicate);
         when(criteriaBuilder.or(nullValuePredicate, comparisonPredicate)).thenReturn(resultPredicate);
 
-        Predicate result = JpaSpecifications.nullOrComparison(filterData, conversionService, ComparisonOperator.LESS_THAN)
+        Predicate result = new SpecificationNullOrLess<>(filterData, conversionService)
                 .toPredicate(root, query, criteriaBuilder);
 
         assertThat(result).isSameAs(resultPredicate);
@@ -167,19 +167,19 @@ class TestJpaSpecifications {
     }
 
     @Test
-    @DisplayName("specification factories reject null mandatory arguments")
-    void testSpecificationFactoriesRejectNullMandatoryArguments() {
+    @DisplayName("extended specifications reject null mandatory constructor arguments")
+    void testExtendedSpecificationsRejectNullMandatoryConstructorArguments() {
         FilterData filterData = filterData(new String[]{"age"}, new String[]{"age"}, new Object[]{"18"});
 
         assertThatNullPointerException()
-                .isThrownBy(() -> JpaSpecifications.effectiveAt(null, conversionService, IntervalBounds.CLOSED))
+                .isThrownBy(() -> new SpecificationEffectiveAtClosed<>(null, conversionService))
                 .withMessage("filterData cannot be null");
         assertThatNullPointerException()
-                .isThrownBy(() -> JpaSpecifications.periodOverlaps(filterData, null, IntervalBounds.CLOSED))
-                .withMessage("conversionService cannot be null");
+                .isThrownBy(() -> new SpecificationPeriodOverlapsClosed<>(filterData, null))
+                .withMessage("dataConversionService cannot be null");
         assertThatNullPointerException()
-                .isThrownBy(() -> JpaSpecifications.nullOrComparison(filterData, conversionService, null))
-                .withMessage("operator cannot be null");
+                .isThrownBy(() -> new SpecificationNullOrLess<>(null, conversionService))
+                .withMessage("filterData cannot be null");
     }
 
     @Test
@@ -188,7 +188,7 @@ class TestJpaSpecifications {
         FilterData filterData = filterData(new String[]{"start"}, new String[]{"reference"}, new Object[]{"raw-reference"});
 
         assertThatExceptionOfType(DynamicFilterConfigurationException.class)
-                .isThrownBy(() -> JpaSpecifications.effectiveAt(filterData, conversionService, IntervalBounds.CLOSED)
+                .isThrownBy(() -> new SpecificationEffectiveAtClosed<>(filterData, conversionService)
                         .toPredicate(root, query, criteriaBuilder))
                 .withMessage("EffectiveAtClosed requires exactly 2 path(s)");
     }

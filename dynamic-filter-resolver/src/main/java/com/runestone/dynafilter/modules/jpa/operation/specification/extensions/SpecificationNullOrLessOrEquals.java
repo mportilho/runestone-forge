@@ -27,29 +27,11 @@ package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.modules.jpa.support.ComparisonOperator;
-import com.runestone.dynafilter.modules.jpa.support.JpaSpecifications;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
-import org.springframework.data.jpa.domain.Specification;
 
-import java.util.Objects;
-
-public class SpecificationNullOrLessOrEquals<T> implements Specification<T> {
-
-    private final FilterData filterData;
-    private final DataConversionService dataConversionService;
+public class SpecificationNullOrLessOrEquals<T> extends AbstractNullOrComparisonSpecification<T> {
 
     public SpecificationNullOrLessOrEquals(FilterData filterData, DataConversionService dataConversionService) {
-        this.filterData = Objects.requireNonNull(filterData, "filterData cannot be null");
-        this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService cannot be null");
-    }
-
-    @Override
-    public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        return JpaSpecifications.<T>nullOrComparison(filterData, dataConversionService, ComparisonOperator.LESS_THAN_OR_EQUAL_TO)
-                .toPredicate(root, query, criteriaBuilder);
+        super(filterData, dataConversionService, ComparisonOperator.LESS_THAN_OR_EQUAL_TO);
     }
 
 }
