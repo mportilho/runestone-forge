@@ -22,27 +22,24 @@
  * SOFTWARE.
  */
 
-package com.runestone.dynafilter.modules.jpa.operation.specification;
+package com.runestone.dynafilter.modules.jpa.support;
 
-import com.runestone.converters.DataConversionService;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeLeft;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeRight;
-import jakarta.persistence.criteria.*;
-import com.github.benmanes.caffeine.cache.Caffeine;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.From;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Root;
 
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.BiFunction;
 
-/**
- * Helper class for manipulating JPA Criteria objects
- *
- * @author Marcelo Portilho
- */
-final class JpaPredicateUtils {
+public final class JpaPaths {
 
     private static final String[] EMPTY_SEGMENTS = {};
     private static final Map<String, ParsedPath> PARSED_PATH_CACHE = Caffeine.newBuilder()
@@ -50,72 +47,19 @@ final class JpaPredicateUtils {
             .executor(Runnable::run)
             .<String, ParsedPath>build().asMap();
 
-    /**
-     * Calls comparison methods of {@link CriteriaBuilder} on generic type objects
-     */
-    @SuppressWarnings({"unchecked"})
-    public static Predicate toComparablePredicate(
-            Expression<?> path, Object value,
-            BiFunction<Expression<? extends Comparable<Object>>, Comparable<Object>, Predicate> comparablePredicateFunction,
-            BiFunction<Expression<Number>, Number, Predicate> numberPredicateFunction) {
-        if (value instanceof Number) {
-            return numberPredicateFunction.apply((Expression<Number>) path, (Number) value);
-        }
-        return comparablePredicateFunction.apply((Expression<? extends Comparable<Object>>) path, (Comparable<Object>) value);
+    private JpaPaths() {
     }
 
-    public static Predicate toLessThanPredicate(CriteriaBuilder criteriaBuilder, Expression<?> expression, Object value) {
-        return toComparablePredicate(expression, value, criteriaBuilder::lessThan, criteriaBuilder::lt);
-    }
-
-    public static Predicate toLessThanOrEqualToPredicate(CriteriaBuilder criteriaBuilder, Expression<?> expression, Object value) {
-        return toComparablePredicate(expression, value, criteriaBuilder::lessThanOrEqualTo, criteriaBuilder::le);
-    }
-
-    public static Predicate toGreaterThanPredicate(CriteriaBuilder criteriaBuilder, Expression<?> expression, Object value) {
-        return toComparablePredicate(expression, value, criteriaBuilder::greaterThan, criteriaBuilder::gt);
-    }
-
-    public static Predicate toGreaterThanOrEqualToPredicate(CriteriaBuilder criteriaBuilder, Expression<?> expression, Object value) {
-        return toComparablePredicate(expression, value, criteriaBuilder::greaterThanOrEqualTo, criteriaBuilder::ge);
-    }
-
-    public static void applyDistinctIfNeeded(PathResolution<?> resolution, CriteriaQuery<?> query) {
-        if (resolution.crossedPluralAssociation()) {
+    public static void applyDistinctIfNeeded(ResolvedJpaPath<?> path, CriteriaQuery<?> query) {
+        if (path.crossedPluralAssociation()) {
             query.distinct(true);
         }
     }
 
-    public static Object[] valuesAsArray(Object rawValues) {
-        if (rawValues == null) {
-            return new Object[]{null};
-        }
-        if (rawValues instanceof Object[] values) {
-            return values;
-        }
-        if (rawValues instanceof Collection<?> values) {
-            return values.toArray();
-        }
-        return new Object[]{rawValues};
-    }
-
-    public static Object[] convertValues(Object[] rawValues, Class<?> targetType, DataConversionService conversionService) {
-        Objects.requireNonNull(rawValues, "rawValues cannot be null");
-        Objects.requireNonNull(targetType, "targetType cannot be null");
-        Objects.requireNonNull(conversionService, "conversionService cannot be null");
-        return Arrays.stream(rawValues)
-                .map(value -> value == null ? null : conversionService.convert(value, targetType))
-                .toArray();
-    }
-
-    /**
-     * Resolves the actual JPA Criteria {@link Path} object to the desired path
-     * defined on {@link FilterData} object. Joins automatically when navigating through entities.
-     */
-    public static <T> PathResolution<T> resolveAttributePath(String path, FilterData filterData, Root<?> root) {
-        Objects.requireNonNull(path, "Path cannot be null");
+    public static <T> ResolvedJpaPath<T> resolveAttributePath(String path, FilterData filterData, Root<?> root) {
+        Objects.requireNonNull(path, "path cannot be null");
         String key = root.getJavaType().getCanonicalName() + "." + path;
-        ParsedPath parsedPath = PARSED_PATH_CACHE.computeIfAbsent(key, k -> JpaPredicateUtils.parsePath(path));
+        ParsedPath parsedPath = PARSED_PATH_CACHE.computeIfAbsent(key, k -> parsePath(path));
         JoinType joinType = getJoinType(filterData);
         From<?, ?> from = root;
         boolean crossedPluralAssociation = false;
@@ -125,22 +69,18 @@ final class JpaPredicateUtils {
             crossedPluralAssociation = crossedPluralAssociation || isPluralAttribute(join);
             from = join;
         }
-        return new PathResolution<>(from.get(parsedPath.attributeSegment()), crossedPluralAssociation);
+        return new ResolvedJpaPath<>(from.get(parsedPath.attributeSegment()), crossedPluralAssociation);
     }
 
-    /**
-     * Like {@link #resolveAttributePath} but joins the final segment too.
-     * Use this for plural attributes ({@code @ElementCollection}, collections) so that
-     * the returned {@link Expression} reflects the element type rather than the collection type.
-     */
     @SuppressWarnings("unchecked")
-    public static <T> PathResolution<T> resolveAttributeJoinPath(String path, FilterData filterData, Root<?> root) {
-        Objects.requireNonNull(filterData.path(), "Path cannot be null");
+    public static <T> ResolvedJpaPath<T> resolveAttributeJoinPath(String path, FilterData filterData, Root<?> root) {
+        Objects.requireNonNull(path, "path cannot be null");
         String key = root.getJavaType().getCanonicalName() + "." + path;
-        ParsedPath parsedPath = PARSED_PATH_CACHE.computeIfAbsent(key, k -> JpaPredicateUtils.parsePath(path));
+        ParsedPath parsedPath = PARSED_PATH_CACHE.computeIfAbsent(key, k -> parsePath(path));
         JoinType joinType = getJoinType(filterData);
         From<?, ?> from = root;
         boolean crossedPluralAssociation = false;
+
         for (String associationSegment : parsedPath.associationSegments()) {
             Join<?, ?> join = getOrCreateJoin(from, associationSegment, joinType);
             crossedPluralAssociation = crossedPluralAssociation || isPluralAttribute(join);
@@ -148,15 +88,13 @@ final class JpaPredicateUtils {
         }
         Join<?, ?> join = getOrCreateJoin(from, parsedPath.attributeSegment(), joinType);
         crossedPluralAssociation = crossedPluralAssociation || isPluralAttribute(join);
-        return new PathResolution<>((Path<T>) join, crossedPluralAssociation);
+        return new ResolvedJpaPath<>((Path<T>) join, crossedPluralAssociation);
     }
 
-    /**
-     * Obtains the actual JPA JoinType object to the desired path defined on {@link FilterData} object.
-     *
-     * @param filterData the {@link FilterData} object to get the join type from
-     * @return will never be {@literal null}. Defaults to {@link JoinType#INNER} if no join type is defined
-     */
+    static void clearCaches() {
+        PARSED_PATH_CACHE.clear();
+    }
+
     private static JoinType getJoinType(FilterData filterData) {
         if (filterData.hasModifier(ModJoinTypeRight.class)) {
             return JoinType.RIGHT;
@@ -166,14 +104,6 @@ final class JpaPredicateUtils {
         return JoinType.INNER;
     }
 
-    /**
-     * Returns an existing join for the given attribute if one already exists or
-     * creates a new one if not.
-     *
-     * @param from      the {@link From} to get the current joins from.
-     * @param attribute the attribute to look for in the current joins.
-     * @return will never be {@literal null}.
-     */
     private static Join<?, ?> getOrCreateJoin(From<?, ?> from, String attribute, JoinType joinType) {
         for (Join<?, ?> join : from.getJoins()) {
             boolean sameName = join.getAttribute() != null && join.getAttribute().getName().equals(attribute);
@@ -188,10 +118,6 @@ final class JpaPredicateUtils {
         return join.getAttribute() != null && join.getAttribute().isCollection();
     }
 
-    static void clearCaches() {
-        PARSED_PATH_CACHE.clear();
-    }
-
     private static ParsedPath parsePath(String path) {
         String[] segments = splitPath(path);
         if (segments.length == 0) {
@@ -203,7 +129,7 @@ final class JpaPredicateUtils {
     }
 
     private static String[] splitPath(String path) {
-        String nonNullPath = Objects.requireNonNull(path, "Path cannot be null").trim();
+        String nonNullPath = Objects.requireNonNull(path, "path cannot be null").trim();
         if (nonNullPath.isEmpty()) {
             return EMPTY_SEGMENTS;
         }
@@ -237,7 +163,7 @@ final class JpaPredicateUtils {
     private record ParsedPath(String[] associationSegments, String attributeSegment) {
     }
 
-    public record PathResolution<T>(Path<T> expression, boolean crossedPluralAssociation) {
+    public record ResolvedJpaPath<T>(Path<T> expression, boolean crossedPluralAssociation) {
     }
 
 }

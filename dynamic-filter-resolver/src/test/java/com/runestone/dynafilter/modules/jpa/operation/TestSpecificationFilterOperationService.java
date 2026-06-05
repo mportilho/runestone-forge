@@ -32,6 +32,8 @@ import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
 import com.runestone.dynafilter.core.operation.types.*;
 import com.runestone.dynafilter.core.operation.types.extensions.*;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationContributor;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.operation.specification.*;
 import com.runestone.dynafilter.modules.jpa.operation.specification.extensions.*;
 import org.assertj.core.api.Assertions;
@@ -47,7 +49,7 @@ public class TestSpecificationFilterOperationService {
     @Test
     @DisplayName("SpecificationFilterOperationService resolves every built-in operation currently registered")
     public void testBuiltInOperationRegistrations() {
-        SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
+        JpaFilterOperationService service = new JpaFilterOperationService(new DefaultDataConversionService());
 
         List<RegisteredOperation> operations = List.of(
                 new RegisteredOperation(Between.class, new String[]{"from", "to"}, new Object[]{"a", "z"}, SpecificationBetween.class),
@@ -92,7 +94,7 @@ public class TestSpecificationFilterOperationService {
     @Test
     @DisplayName("SpecificationFilterOperationService exposes metadata for built-in operations")
     public void testBuiltInOperationMetadata() {
-        SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
+        JpaFilterOperationService service = new JpaFilterOperationService(new DefaultDataConversionService());
 
         Assertions.assertThat(service.findMetadata(IsNull.class)).isEqualTo(FilterOperationMetadata.booleanValue());
         Assertions.assertThat(service.findMetadata(IsIn.class)).isEqualTo(FilterOperationMetadata.arrayValue());
@@ -115,19 +117,19 @@ public class TestSpecificationFilterOperationService {
     @Test
     @DisplayName("SpecificationFilterOperationService rejects pseudo operations that are not registered directly")
     public void testUnregisteredOperationFails() {
-        SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
+        JpaFilterOperationService service = new JpaFilterOperationService(new DefaultDataConversionService());
         FilterData filterData = FilterData.of("name", new String[]{"name"}, String.class, Dynamic.class, new Object[]{"John"});
 
         Assertions.assertThatThrownBy(() -> service.createFilter(filterData))
                 .isInstanceOf(FilterOperationNotDefinedException.class)
                 .hasMessageContaining("Dynamic")
-                .hasMessageContaining(SpecificationFilterOperationService.class.getCanonicalName());
+                .hasMessageContaining(JpaFilterOperationService.class.getCanonicalName());
     }
 
     @Test
     @DisplayName("SpecificationFilterOperationService reports support for built-in operations only")
     public void testSupportsRegisteredOperations() {
-        SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
+        JpaFilterOperationService service = new JpaFilterOperationService(new DefaultDataConversionService());
 
         Assertions.assertThat(service.supports(Equals.class)).isTrue();
         Assertions.assertThat(service.supports(EffectiveAtHalfOpen.class)).isTrue();
@@ -139,9 +141,9 @@ public class TestSpecificationFilterOperationService {
     @DisplayName("SpecificationFilterOperationService resolves operations registered by contributors")
     public void testContributorRegistersCustomOperation() {
         Specification<?> customSpecification = (root, query, builder) -> null;
-        SpecificationFilterOperationContributor contributor = registry ->
-                registry.register(CustomOperation.class, filterData -> customSpecification, FilterOperationMetadata.booleanValue());
-        SpecificationFilterOperationService service = new SpecificationFilterOperationService(
+        JpaFilterOperationContributor contributor = registry ->
+                registry.register(CustomOperation.class, FilterOperationMetadata.booleanValue(), context -> customSpecification);
+        JpaFilterOperationService service = new JpaFilterOperationService(
                 new DefaultDataConversionService(),
                 List.of(contributor)
         );
@@ -157,34 +159,34 @@ public class TestSpecificationFilterOperationService {
     @Test
     @DisplayName("SpecificationFilterOperationService rejects metadata lookups for unregistered custom operations")
     public void testCustomOperationMetadataWithoutContributorFails() {
-        SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
+        JpaFilterOperationService service = new JpaFilterOperationService(new DefaultDataConversionService());
 
         Assertions.assertThatThrownBy(() -> service.findMetadata(CustomOperation.class))
                 .isInstanceOf(FilterOperationNotDefinedException.class)
                 .hasMessageContaining("No filter metadata found")
                 .hasMessageContaining("CustomOperation")
-                .hasMessageContaining(SpecificationFilterOperationService.class.getCanonicalName());
+                .hasMessageContaining(JpaFilterOperationService.class.getCanonicalName());
     }
 
     @Test
     @DisplayName("SpecificationFilterOperationService rejects custom operations without a contributor")
     public void testCustomOperationWithoutContributorFails() {
-        SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
+        JpaFilterOperationService service = new JpaFilterOperationService(new DefaultDataConversionService());
         FilterData filterData = FilterData.of("name", new String[]{"name"}, String.class, CustomOperation.class, new Object[]{"John"});
 
         Assertions.assertThatThrownBy(() -> service.createFilter(filterData))
                 .isInstanceOf(FilterOperationNotDefinedException.class)
                 .hasMessageContaining("CustomOperation")
-                .hasMessageContaining(SpecificationFilterOperationService.class.getCanonicalName());
+                .hasMessageContaining(JpaFilterOperationService.class.getCanonicalName());
     }
 
     @Test
     @DisplayName("SpecificationFilterOperationService rejects contributors that override built-in operations")
     public void testContributorCannotOverrideBuiltInOperation() {
-        SpecificationFilterOperationContributor contributor = registry ->
-                registry.register(Equals.class, filterData -> (root, query, builder) -> null);
+        JpaFilterOperationContributor contributor = registry ->
+                registry.register(Equals.class, FilterOperationMetadata.targetField(), context -> (root, query, builder) -> null);
 
-        Assertions.assertThatThrownBy(() -> new SpecificationFilterOperationService(
+        Assertions.assertThatThrownBy(() -> new JpaFilterOperationService(
                         new DefaultDataConversionService(),
                         List.of(contributor)
                 ))
@@ -196,12 +198,12 @@ public class TestSpecificationFilterOperationService {
     @Test
     @DisplayName("SpecificationFilterOperationService rejects duplicate registrations from contributors")
     public void testDuplicateContributorRegistrationFails() {
-        SpecificationFilterOperationContributor firstContributor = registry ->
-                registry.register(CustomOperation.class, filterData -> (root, query, builder) -> null);
-        SpecificationFilterOperationContributor secondContributor = registry ->
-                registry.register(CustomOperation.class, filterData -> (root, query, builder) -> null);
+        JpaFilterOperationContributor firstContributor = registry ->
+                registry.register(CustomOperation.class, FilterOperationMetadata.targetField(), context -> (root, query, builder) -> null);
+        JpaFilterOperationContributor secondContributor = registry ->
+                registry.register(CustomOperation.class, FilterOperationMetadata.targetField(), context -> (root, query, builder) -> null);
 
-        Assertions.assertThatThrownBy(() -> new SpecificationFilterOperationService(
+        Assertions.assertThatThrownBy(() -> new JpaFilterOperationService(
                         new DefaultDataConversionService(),
                         List.of(firstContributor, secondContributor)
                 ))

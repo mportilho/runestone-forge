@@ -29,6 +29,8 @@ import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.FilterOperation;
+import com.runestone.dynafilter.modules.jpa.support.JpaComparisons;
+import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.jpamodels.Person;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -157,7 +159,7 @@ public class TestCustomSpecificationIsFimVigenteExample {
         @Override
         @SuppressWarnings({"unchecked", "rawtypes"})
         public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-            JpaPredicateUtils.PathResolution<?> resolution = JpaPredicateUtils.resolveAttributePath(filterData.path()[0], filterData, root);
+            JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
             if (resolution.crossedPluralAssociation()) {
                 query.distinct(true);
             }
@@ -165,7 +167,7 @@ public class TestCustomSpecificationIsFimVigenteExample {
             Object now = nowFor(expression.getJavaType(), clock);
             Predicate activePredicate = criteriaBuilder.or(
                     criteriaBuilder.isNull(expression),
-                    JpaPredicateUtils.toComparablePredicate(expression, now, criteriaBuilder::lessThan, criteriaBuilder::lt)
+                    JpaComparisons.comparable(expression, now, criteriaBuilder::lessThan, criteriaBuilder::lt)
             );
             Boolean active = conversionService.convert(filterData.findOneValue(), Boolean.class);
             return Boolean.TRUE.equals(active) ? activePredicate : criteriaBuilder.not(activePredicate);

@@ -27,7 +27,9 @@ package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.model.FilterData;
-import com.runestone.dynafilter.modules.jpa.operation.specification.JpaPredicateUtils;
+import com.runestone.dynafilter.core.operation.support.FilterDataRequirements;
+import com.runestone.dynafilter.modules.jpa.support.JpaComparisons;
+import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
@@ -58,12 +60,11 @@ public class SpecificationOnDate<T> implements Specification<T> {
 
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        JpaExtensionPredicateUtils.requirePathCount(filterData, 1, OPERATION_NAME);
-        JpaExtensionPredicateUtils.requireValueCount(filterData, 1, OPERATION_NAME);
-        JpaPredicateUtils.PathResolution<?> resolution = JpaPredicateUtils.resolveAttributePath(filterData.path()[0], filterData, root);
-        JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
+        FilterDataRequirements.requireShape(filterData, 1, 1, OPERATION_NAME);
+        JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
+        JpaPaths.applyDistinctIfNeeded(resolution, query);
         Expression<?> expression = resolution.expression();
-        LocalDate date = toLocalDate(JpaExtensionPredicateUtils.requireValue(filterData.findOneValue(), OPERATION_NAME, "date"));
+        LocalDate date = toLocalDate(FilterDataRequirements.requireValue(filterData.findOneValue(), OPERATION_NAME, "date"));
 
         Class<?> expressionType = expression.getJavaType();
         if (LocalDate.class.equals(expressionType)) {
@@ -72,8 +73,8 @@ public class SpecificationOnDate<T> implements Specification<T> {
         Object start = startOfDay(expressionType, date);
         Object nextDay = startOfNextDay(expressionType, date);
         return criteriaBuilder.and(
-                JpaPredicateUtils.toGreaterThanOrEqualToPredicate(criteriaBuilder, expression, start),
-                JpaPredicateUtils.toLessThanPredicate(criteriaBuilder, expression, nextDay)
+                JpaComparisons.greaterThanOrEqualTo(criteriaBuilder, expression, start),
+                JpaComparisons.lessThan(criteriaBuilder, expression, nextDay)
         );
     }
 

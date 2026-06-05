@@ -26,6 +26,8 @@ package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
+import com.runestone.dynafilter.modules.jpa.support.IntervalBounds;
+import com.runestone.dynafilter.modules.jpa.support.JpaSpecifications;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
@@ -46,7 +48,8 @@ public class SpecificationEffectiveAtClosed<T> implements Specification<T> {
 
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        return SpecificationEffectiveAtSupport.toPredicate(filterData, dataConversionService, root, query, criteriaBuilder, IntervalBoundMode.CLOSED);
+        return JpaSpecifications.<T>effectiveAt(filterData, dataConversionService, IntervalBounds.CLOSED)
+                .toPredicate(root, query, criteriaBuilder);
     }
 
 }

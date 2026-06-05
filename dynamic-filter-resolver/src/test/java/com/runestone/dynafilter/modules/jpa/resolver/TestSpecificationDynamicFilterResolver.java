@@ -27,7 +27,7 @@ package com.runestone.dynafilter.modules.jpa.resolver;
 import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.tools.MockStatementFactory;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,11 +39,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class TestSpecificationDynamicFilterResolver {
 
-    private SpecificationFilterOperationService filterOperationService;
+    private JpaFilterOperationService filterOperationService;
 
     @BeforeEach
     public void setup() {
-        filterOperationService = Mockito.spy(new SpecificationFilterOperationService(new DefaultDataConversionService()));
+        filterOperationService = Mockito.spy(new JpaFilterOperationService(new DefaultDataConversionService()));
     }
 
     @Test

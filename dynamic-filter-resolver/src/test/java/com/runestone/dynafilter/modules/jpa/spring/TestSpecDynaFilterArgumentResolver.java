@@ -26,7 +26,7 @@ package com.runestone.dynafilter.modules.jpa.spring;
 
 import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
 import com.runestone.dynafilter.modules.jpa.spring.tools.SearchLanguages;
 import com.runestone.dynafilter.modules.jpa.spring.tools.SearchState;
@@ -47,7 +47,7 @@ public class TestSpecDynaFilterArgumentResolver {
     private SpecificationDynamicFilterArgumentResolver createSpecificationDynaFilterArgumentResolver() {
         GenericApplicationContext applicationContext = Mockito.mock(GenericApplicationContext.class);
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null);
-        SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
+        JpaFilterOperationService service = new JpaFilterOperationService(new DefaultDataConversionService());
         SpecificationDynamicFilterResolver resolver = new SpecificationDynamicFilterResolver(service);
         SpringFilterDecoratorFactory filterDecoratorFactory = new SpringFilterDecoratorFactory(applicationContext);
         return new SpecificationDynamicFilterArgumentResolver(generator, resolver, filterDecoratorFactory);
@@ -64,7 +64,7 @@ public class TestSpecDynaFilterArgumentResolver {
                 .isExactlyInstanceOf(NullPointerException.class)
                 .hasMessageContaining("Dynamic filter resolver");
 
-        SpecificationFilterOperationService service = new SpecificationFilterOperationService(new DefaultDataConversionService());
+        JpaFilterOperationService service = new JpaFilterOperationService(new DefaultDataConversionService());
         SpecificationDynamicFilterResolver resolver = new SpecificationDynamicFilterResolver(service);
         Assertions.assertThatThrownBy(() -> new SpecificationDynamicFilterArgumentResolver(generator, resolver, null))
                 .isExactlyInstanceOf(NullPointerException.class)

@@ -26,6 +26,8 @@ package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
+import com.runestone.dynafilter.modules.jpa.support.IntervalBounds;
+import com.runestone.dynafilter.modules.jpa.support.JpaSpecifications;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
@@ -46,7 +48,8 @@ public class SpecificationEffectiveAtHalfOpen<T> implements Specification<T> {
 
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        return SpecificationEffectiveAtSupport.toPredicate(filterData, dataConversionService, root, query, criteriaBuilder, IntervalBoundMode.HALF_OPEN);
+        return JpaSpecifications.<T>effectiveAt(filterData, dataConversionService, IntervalBounds.START_INCLUSIVE_END_EXCLUSIVE)
+                .toPredicate(root, query, criteriaBuilder);
     }
 
 }

@@ -22,10 +22,10 @@
  * SOFTWARE.
  */
 
-package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
+package com.runestone.dynafilter.modules.jpa.support;
 
-enum IntervalBoundMode {
+public enum IntervalBounds {
     CLOSED,
     OPEN,
-    HALF_OPEN
+    START_INCLUSIVE_END_EXCLUSIVE
 }

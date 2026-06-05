@@ -29,8 +29,8 @@ import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationContributor;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationContributor;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
@@ -68,9 +68,9 @@ public class DynamicFilterServletAutoConfiguration implements EmbeddedValueResol
     @ConditionalOnMissingBean
     public FilterOperationService<Specification<?>> specificationFilterOperationService(
             DataConversionService dataConversionService,
-            ObjectProvider<SpecificationFilterOperationContributor> contributors
+            ObjectProvider<JpaFilterOperationContributor> contributors
     ) {
-        return new SpecificationFilterOperationService(dataConversionService, contributors.orderedStream().toList());
+        return new JpaFilterOperationService(dataConversionService, contributors.orderedStream().toList());
     }
 
     @Bean

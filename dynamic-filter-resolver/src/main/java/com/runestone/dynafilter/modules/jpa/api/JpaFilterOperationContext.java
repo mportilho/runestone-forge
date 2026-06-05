@@ -22,34 +22,24 @@
  * SOFTWARE.
  */
 
-package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
+package com.runestone.dynafilter.modules.jpa.api;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
-import com.runestone.dynafilter.modules.jpa.support.IntervalBounds;
-import com.runestone.dynafilter.modules.jpa.support.JpaSpecifications;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
-import org.springframework.data.jpa.domain.Specification;
 
+import java.time.ZoneId;
 import java.util.Objects;
 
-public class SpecificationEffectiveAtOpen<T> implements Specification<T> {
+public record JpaFilterOperationContext(
+        FilterData filterData,
+        DataConversionService conversionService,
+        ZoneId zoneId
+) {
 
-    private final FilterData filterData;
-    private final DataConversionService dataConversionService;
-
-    public SpecificationEffectiveAtOpen(FilterData filterData, DataConversionService dataConversionService) {
-        this.filterData = Objects.requireNonNull(filterData, "filterData cannot be null");
-        this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService cannot be null");
-    }
-
-    @Override
-    public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        return JpaSpecifications.<T>effectiveAt(filterData, dataConversionService, IntervalBounds.OPEN)
-                .toPredicate(root, query, criteriaBuilder);
+    public JpaFilterOperationContext {
+        Objects.requireNonNull(filterData, "filterData cannot be null");
+        Objects.requireNonNull(conversionService, "conversionService cannot be null");
+        Objects.requireNonNull(zoneId, "zoneId cannot be null");
     }
 
 }

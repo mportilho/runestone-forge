@@ -26,7 +26,9 @@ package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
-import com.runestone.dynafilter.modules.jpa.operation.specification.JpaPredicateUtils;
+import com.runestone.dynafilter.core.operation.support.FilterDataRequirements;
+import com.runestone.dynafilter.modules.jpa.support.JpaCollections;
+import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
@@ -51,11 +53,10 @@ public class SpecificationCollectionSize<T> implements Specification<T> {
 
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        JpaExtensionPredicateUtils.requirePathCount(filterData, 1, OPERATION_NAME);
-        JpaExtensionPredicateUtils.requireValueCount(filterData, 1, OPERATION_NAME);
-        JpaPredicateUtils.PathResolution<?> resolution = JpaPredicateUtils.resolveAttributePath(filterData.path()[0], filterData, root);
-        Expression<Collection<?>> collectionExpression = JpaExtensionPredicateUtils.collectionExpression(resolution.expression(), OPERATION_NAME);
-        int size = JpaExtensionPredicateUtils.convertSize(filterData.findOneValue(), dataConversionService, OPERATION_NAME, "size");
+        FilterDataRequirements.requireShape(filterData, 1, 1, OPERATION_NAME);
+        JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
+        Expression<Collection<?>> collectionExpression = JpaCollections.requireCollectionExpression(resolution.expression(), OPERATION_NAME);
+        int size = JpaCollections.requireNonNegativeSize(filterData.findOneValue(), dataConversionService, OPERATION_NAME, "size");
         return criteriaBuilder.equal(criteriaBuilder.size(collectionExpression), size);
     }
 

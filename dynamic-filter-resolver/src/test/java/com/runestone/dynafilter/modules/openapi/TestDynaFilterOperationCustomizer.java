@@ -38,8 +38,8 @@ import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.core.operation.types.IsIn;
 import com.runestone.dynafilter.core.operation.types.IsNull;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationContributor;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationContributor;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.BooleanSchema;
@@ -140,7 +140,7 @@ public class TestDynaFilterOperationCustomizer {
     @Test
     @DisplayName("Custom filter metadata can document parameters as booleans")
     public void testCustomBooleanMetadataCreatesBooleanSchema() throws NoSuchMethodException {
-        SpecificationFilterOperationContributor contributor = customOperationContributor(FilterOperationMetadata.booleanValue());
+        JpaFilterOperationContributor contributor = customOperationContributor(FilterOperationMetadata.booleanValue());
         Operation operation = customize("documentCustomBooleanMetadataFilter", operationService(List.of(contributor)));
 
         Parameter parameter = findParameter(operation, "vigente");
@@ -202,15 +202,15 @@ public class TestDynaFilterOperationCustomizer {
         return customizer.customize(operation, handlerMethod(methodName));
     }
 
-    private static SpecificationFilterOperationService operationService(List<SpecificationFilterOperationContributor> contributors) {
-        return new SpecificationFilterOperationService(new DefaultDataConversionService(), contributors);
+    private static JpaFilterOperationService operationService(List<JpaFilterOperationContributor> contributors) {
+        return new JpaFilterOperationService(new DefaultDataConversionService(), contributors);
     }
 
-    private static SpecificationFilterOperationContributor customOperationContributor(FilterOperationMetadata metadata) {
+    private static JpaFilterOperationContributor customOperationContributor(FilterOperationMetadata metadata) {
         return registry -> registry.register(
                 CustomOperation.class,
-                filterData -> (root, query, builder) -> null,
-                metadata
+                metadata,
+                context -> (root, query, builder) -> null
         );
     }
 

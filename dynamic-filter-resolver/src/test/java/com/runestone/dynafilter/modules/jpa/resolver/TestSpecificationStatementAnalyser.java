@@ -33,7 +33,7 @@ import com.runestone.dynafilter.core.model.statement.NegatedStatement;
 import com.runestone.dynafilter.core.model.statement.NoOpStatement;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.operation.types.Like;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.tools.MockStatementFactory;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -50,11 +50,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestSpecificationStatementAnalyser {
 
-    private SpecificationFilterOperationService filterOperationService;
+    private JpaFilterOperationService filterOperationService;
 
     @BeforeEach
     public void setup() {
-        filterOperationService = Mockito.spy(new SpecificationFilterOperationService(new DefaultDataConversionService()));
+        filterOperationService = Mockito.spy(new JpaFilterOperationService(new DefaultDataConversionService()));
     }
 
     @Test

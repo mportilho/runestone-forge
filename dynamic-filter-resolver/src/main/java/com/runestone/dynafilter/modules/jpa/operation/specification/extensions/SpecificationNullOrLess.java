@@ -26,6 +26,8 @@ package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
+import com.runestone.dynafilter.modules.jpa.support.ComparisonOperator;
+import com.runestone.dynafilter.modules.jpa.support.JpaSpecifications;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
@@ -46,14 +48,8 @@ public class SpecificationNullOrLess<T> implements Specification<T> {
 
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        return SpecificationNullOrComparisonSupport.toPredicate(
-                filterData,
-                dataConversionService,
-                root,
-                query,
-                criteriaBuilder,
-                SpecificationNullOrComparisonSupport.Mode.LESS
-        );
+        return JpaSpecifications.<T>nullOrComparison(filterData, dataConversionService, ComparisonOperator.LESS_THAN)
+                .toPredicate(root, query, criteriaBuilder);
     }
 
 }

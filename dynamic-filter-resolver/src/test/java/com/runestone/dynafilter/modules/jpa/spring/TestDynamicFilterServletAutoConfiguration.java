@@ -29,10 +29,11 @@ import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.statement.LogicalStatement;
 import com.runestone.dynafilter.core.operation.FilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.operation.types.Like;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationContributor;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationContributor;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -80,8 +81,8 @@ public class TestDynamicFilterServletAutoConfiguration {
     public void testSpecificationFilterOperationServiceCreationWithContributors() {
         DynamicFilterServletAutoConfiguration servletConfig = new DynamicFilterServletAutoConfiguration();
         Specification<?> customSpecification = (root, query, builder) -> null;
-        SpecificationFilterOperationContributor contributor = registry ->
-                registry.register(CustomOperation.class, filterData -> customSpecification);
+        JpaFilterOperationContributor contributor = registry ->
+                registry.register(CustomOperation.class, FilterOperationMetadata.targetField(), context -> customSpecification);
 
         FilterOperationService<Specification<?>> operationService = servletConfig.specificationFilterOperationService(
                 new DefaultDataConversionService(),
@@ -95,13 +96,13 @@ public class TestDynamicFilterServletAutoConfiguration {
         Assertions.assertThat(operationService.supports(CustomOperation.class)).isTrue();
     }
 
-    private ObjectProvider<SpecificationFilterOperationContributor> emptyContributors() {
+    private ObjectProvider<JpaFilterOperationContributor> emptyContributors() {
         return contributors();
     }
 
     @SuppressWarnings("unchecked")
-    private ObjectProvider<SpecificationFilterOperationContributor> contributors(SpecificationFilterOperationContributor... contributors) {
-        ObjectProvider<SpecificationFilterOperationContributor> provider = Mockito.mock(ObjectProvider.class);
+    private ObjectProvider<JpaFilterOperationContributor> contributors(JpaFilterOperationContributor... contributors) {
+        ObjectProvider<JpaFilterOperationContributor> provider = Mockito.mock(ObjectProvider.class);
         Mockito.when(provider.orderedStream()).thenReturn(Stream.of(contributors));
         return provider;
     }

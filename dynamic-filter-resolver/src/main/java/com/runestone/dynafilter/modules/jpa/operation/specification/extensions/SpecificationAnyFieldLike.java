@@ -27,7 +27,7 @@ package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
-import com.runestone.dynafilter.modules.jpa.operation.specification.JpaPredicateUtils;
+import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
@@ -60,8 +60,8 @@ public class SpecificationAnyFieldLike<T> implements Specification<T> {
 
         Predicate[] predicates = new Predicate[filterData.path().length];
         for (int i = 0; i < filterData.path().length; i++) {
-            JpaPredicateUtils.PathResolution<String> resolution = JpaPredicateUtils.resolveAttributePath(filterData.path()[i], filterData, root);
-            JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
+            JpaPaths.ResolvedJpaPath<String> resolution = JpaPaths.resolveAttributePath(filterData.path()[i], filterData, root);
+            JpaPaths.applyDistinctIfNeeded(resolution, query);
             Path<String> path = resolution.expression();
             Expression<String> expression = filterData.hasModifier(ModIgnoreCase.class) ? criteriaBuilder.upper(path) : path;
             predicates[i] = criteriaBuilder.like(expression, value);

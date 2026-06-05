@@ -10,7 +10,7 @@ import com.runestone.dynafilter.core.model.statement.LogicOperator;
 import com.runestone.dynafilter.core.model.statement.LogicalStatement;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.resolver.Fetching;
 import com.runestone.dynafilter.modules.jpa.resolver.FetchingFilterDecorator;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationStatementAnalyser;
@@ -141,7 +141,7 @@ public class DynamicFilterResolverPerf02Benchmark {
             EntityManagerFactory emf = applicationContext.getBean(EntityManagerFactory.class);
             this.entityManager = emf.createEntityManager();
 
-            SpecificationFilterOperationService operationService = new SpecificationFilterOperationService(new DefaultDataConversionService());
+            JpaFilterOperationService operationService = new JpaFilterOperationService(new DefaultDataConversionService());
             SpecificationStatementAnalyser analyser = new SpecificationStatementAnalyser(operationService);
 
             AbstractStatement statement = createHeavyConjunction(50);

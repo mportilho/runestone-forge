@@ -26,7 +26,8 @@ package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
-import com.runestone.dynafilter.modules.jpa.operation.specification.JpaPredicateUtils;
+import com.runestone.dynafilter.core.operation.support.FilterDataRequirements;
+import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
@@ -48,9 +49,9 @@ public class SpecificationIsBlank<T> implements Specification<T> {
 
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        JpaExtensionPredicateUtils.requirePathCount(filterData, 1, "IsBlank");
-        JpaPredicateUtils.PathResolution<String> resolution = JpaPredicateUtils.resolveAttributePath(filterData.path()[0], filterData, root);
-        JpaPredicateUtils.applyDistinctIfNeeded(resolution, query);
+        FilterDataRequirements.requirePathCount(filterData, 1, "IsBlank");
+        JpaPaths.ResolvedJpaPath<String> resolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
+        JpaPaths.applyDistinctIfNeeded(resolution, query);
         Expression<String> expression = resolution.expression();
         Predicate blankPredicate = criteriaBuilder.or(
                 criteriaBuilder.isNull(expression),

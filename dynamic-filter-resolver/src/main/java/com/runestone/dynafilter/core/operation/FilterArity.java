@@ -24,42 +24,37 @@
 
 package com.runestone.dynafilter.core.operation;
 
-import java.util.Objects;
+public record FilterArity(int min, int max) {
 
-public record FilterOperationMetadata(
-        FilterValueShape valueShape,
-        FilterArity pathArity,
-        FilterArity valueArity,
-        String description
-) {
+    public static final int UNBOUNDED = Integer.MAX_VALUE;
 
-    public FilterOperationMetadata(FilterValueShape valueShape) {
-        this(valueShape, FilterArity.any(), FilterArity.any(), null);
+    public FilterArity {
+        if (min < 0) {
+            throw new IllegalArgumentException("min cannot be negative");
+        }
+        if (max < min) {
+            throw new IllegalArgumentException("max cannot be less than min");
+        }
     }
 
-    public FilterOperationMetadata {
-        Objects.requireNonNull(valueShape, "valueShape cannot be null");
-        Objects.requireNonNull(pathArity, "pathArity cannot be null");
-        Objects.requireNonNull(valueArity, "valueArity cannot be null");
+    public static FilterArity any() {
+        return new FilterArity(0, UNBOUNDED);
     }
 
-    public static FilterOperationMetadata targetField() {
-        return new FilterOperationMetadata(FilterValueShape.TARGET_FIELD);
+    public static FilterArity exactly(int count) {
+        return new FilterArity(count, count);
     }
 
-    public static FilterOperationMetadata stringValue() {
-        return new FilterOperationMetadata(FilterValueShape.STRING);
+    public static FilterArity atLeast(int count) {
+        return new FilterArity(count, UNBOUNDED);
     }
 
-    public static FilterOperationMetadata booleanValue() {
-        return new FilterOperationMetadata(FilterValueShape.BOOLEAN);
+    public static FilterArity between(int min, int max) {
+        return new FilterArity(min, max);
     }
 
-    public static FilterOperationMetadata arrayValue() {
-        return new FilterOperationMetadata(FilterValueShape.ARRAY);
+    public boolean accepts(int count) {
+        return count >= min && count <= max;
     }
 
-    public static FilterOperationMetadata dynamicValue() {
-        return new FilterOperationMetadata(FilterValueShape.DYNAMIC);
-    }
 }

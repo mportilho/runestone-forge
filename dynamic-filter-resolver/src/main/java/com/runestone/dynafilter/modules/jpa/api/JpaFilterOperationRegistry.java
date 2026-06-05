@@ -22,14 +22,14 @@
  * SOFTWARE.
  */
 
-package com.runestone.dynafilter.modules.jpa.operation;
+package com.runestone.dynafilter.modules.jpa.api;
 
-import com.runestone.dynafilter.core.operation.FilterOperationRegistry;
-import org.springframework.data.jpa.domain.Specification;
+import com.runestone.dynafilter.core.operation.FilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
 
-@FunctionalInterface
-public interface SpecificationFilterOperationContributor {
+public interface JpaFilterOperationRegistry {
 
-    void contribute(FilterOperationRegistry<Specification<?>> registry);
+    @SuppressWarnings("rawtypes")
+    void register(Class<? extends FilterOperation> operationType, FilterOperationMetadata metadata, JpaSpecificationFactory factory);
 
 }

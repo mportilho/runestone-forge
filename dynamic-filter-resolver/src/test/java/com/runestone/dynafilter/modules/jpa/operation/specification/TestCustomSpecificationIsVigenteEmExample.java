@@ -35,6 +35,8 @@ import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.statement.LogicalStatement;
 import com.runestone.dynafilter.core.operation.FilterOperation;
+import com.runestone.dynafilter.modules.jpa.support.JpaComparisons;
+import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.jpamodels.Person;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -179,8 +181,8 @@ public class TestCustomSpecificationIsVigenteEmExample {
             if (filterData.path().length != 2) {
                 throw new DynamicFilterConfigurationException("IsVigenteEm requires exactly two paths: dataInicioVigencia and dataFimVigencia");
             }
-            JpaPredicateUtils.PathResolution<? extends Comparable<?>> inicioResolution = JpaPredicateUtils.resolveAttributePath(filterData.path()[0], filterData, root);
-            JpaPredicateUtils.PathResolution<? extends Comparable<?>> fimResolution = JpaPredicateUtils.resolveAttributePath(filterData.path()[1], filterData, root);
+            JpaPaths.ResolvedJpaPath<? extends Comparable<?>> inicioResolution = JpaPaths.resolveAttributePath(filterData.path()[0], filterData, root);
+            JpaPaths.ResolvedJpaPath<? extends Comparable<?>> fimResolution = JpaPaths.resolveAttributePath(filterData.path()[1], filterData, root);
             if (inicioResolution.crossedPluralAssociation() || fimResolution.crossedPluralAssociation()) {
                 query.distinct(true);
             }
@@ -190,10 +192,10 @@ public class TestCustomSpecificationIsVigenteEmExample {
 
             Object inicioValue = conversionService.convert(value, inicioExpression.getJavaType());
             Object fimValue = conversionService.convert(value, fimExpression.getJavaType());
-            Predicate inicioInclusivo = JpaPredicateUtils.toComparablePredicate(
+            Predicate inicioInclusivo = JpaComparisons.comparable(
                     inicioExpression, inicioValue, criteriaBuilder::lessThanOrEqualTo, criteriaBuilder::le
             );
-            Predicate fimExclusivo = JpaPredicateUtils.toComparablePredicate(
+            Predicate fimExclusivo = JpaComparisons.comparable(
                     fimExpression, fimValue, criteriaBuilder::greaterThan, criteriaBuilder::gt
             );
             return criteriaBuilder.and(inicioInclusivo, fimExclusivo);

@@ -29,7 +29,7 @@ import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
 import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.types.extensions.*;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.FilterExtensionRecordRepository;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.InMemoryDatabaseApplication;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.jpamodels.FilterExtensionRecord;
@@ -225,7 +225,7 @@ public class TestSpecificationExtensionOperationsIntegration {
         TimeZone originalDefault = TimeZone.getDefault();
         try {
             TimeZone.setDefault(TimeZone.getTimeZone(SAO_PAULO));
-            SpecificationFilterOperationService service = new SpecificationFilterOperationService(CONVERSION_SERVICE);
+            JpaFilterOperationService service = new JpaFilterOperationService(CONVERSION_SERVICE);
             @SuppressWarnings("unchecked")
             Specification<FilterExtensionRecord> specification = (Specification<FilterExtensionRecord>) service.createFilter(
                     filterData("publishedAt", OnDate.class, LocalDate.of(2026, 6, 4))

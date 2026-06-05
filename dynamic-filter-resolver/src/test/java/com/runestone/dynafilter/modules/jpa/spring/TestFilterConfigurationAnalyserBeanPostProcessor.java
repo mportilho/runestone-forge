@@ -31,12 +31,13 @@ import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnorePath;
 import com.runestone.dynafilter.core.operation.FilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.operation.types.Equals;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationContributor;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationContributor;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.spring.tools.SearchState;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
@@ -83,10 +84,10 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
     @Test
     public void testWarmupAcceptsCustomOperationRegisteredByContributor() {
         TypeAnnotationUtils.clearCaches();
-        SpecificationFilterOperationContributor contributor = registry ->
-                registry.register(CustomOperation.class, filterData -> (root, query, builder) -> null);
+        JpaFilterOperationContributor contributor = registry ->
+                registry.register(CustomOperation.class, FilterOperationMetadata.targetField(), context -> (root, query, builder) -> null);
         FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor(
-                new SpecificationFilterOperationService(new DefaultDataConversionService(), List.of(contributor))
+                new JpaFilterOperationService(new DefaultDataConversionService(), List.of(contributor))
         );
 
         Assertions.assertThatCode(() -> postProcessor.postProcessAfterInitialization(new UnregisteredOperationController(), "registeredOperationController"))
@@ -138,7 +139,7 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
     }
 
     private static FilterConfigurationAnalyserBeanPostProcessor newPostProcessor() {
-        return newPostProcessor(new SpecificationFilterOperationService(new DefaultDataConversionService()));
+        return newPostProcessor(new JpaFilterOperationService(new DefaultDataConversionService()));
     }
 
     private static FilterConfigurationAnalyserBeanPostProcessor newPostProcessor(FilterOperationService<Specification<?>> filterOperationService) {
