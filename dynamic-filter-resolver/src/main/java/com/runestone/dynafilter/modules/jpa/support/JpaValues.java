@@ -26,7 +26,6 @@ package com.runestone.dynafilter.modules.jpa.support;
 
 import com.runestone.converters.DataConversionService;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Objects;
 
@@ -52,9 +51,13 @@ public final class JpaValues {
         Objects.requireNonNull(rawValues, "rawValues cannot be null");
         Objects.requireNonNull(targetType, "targetType cannot be null");
         Objects.requireNonNull(conversionService, "conversionService cannot be null");
-        return Arrays.stream(rawValues)
-                .map(value -> value == null ? null : conversionService.convert(value, targetType))
-                .toArray();
+
+        Object[] values = new Object[rawValues.length];
+        for (int i = 0; i < rawValues.length; i++) {
+            Object obj = rawValues[i];
+            values[i] = obj != null ? conversionService.convert(obj, targetType) : null;
+        }
+        return values;
     }
 
 }

@@ -84,6 +84,19 @@ Compiled expressions are cached in `ExpressionCompiler` by `(source, environment
 - **JUnit 5**, **AssertJ**, **Mockito 5** — testing
 - **JMH 1.37** — microbenchmarks (in `benchmark/` and `perf/` test packages)
 
+## Performance Requirements
+
+Performance is a first-class concern in this repository. The modules in this project are intended to be used as reusable infrastructure, often on request paths, expression-evaluation paths, conversion paths, and filtering/query-building paths. Small implementation choices can compound significantly for downstream applications.
+
+When generating or modifying code:
+
+- Treat allocation rate, dispatch overhead, repeated conversions, repeated path resolution, and unnecessary intermediate objects as design concerns.
+- Prefer direct Java constructs for hot-path code. A plain `for` loop is often preferable to a `Stream` pipeline when mapping small arrays or collections in frequently called methods.
+- Avoid abstraction for abstraction's sake. Add helpers, layers, or generic mechanisms only when they improve correctness, reuse, or clarity enough to justify their runtime cost.
+- Preserve behavioral compatibility while optimizing. Null handling, exception messages, conversion semantics, validation order, and public API behavior must not change accidentally.
+- Use caching deliberately for expensive repeated work, but avoid caches that introduce stale data, memory leaks, or unnecessary synchronization.
+- Benchmark meaningful performance work with JMH when the impact is not obvious or when changing code in known hot paths.
+
 ## Key Reference Documents
 
 - **`expression-evaluator/docs/runtime-internals.md`** — Verified findings about the expression-evaluator runtime: compilation pipeline, type system, `RuntimeValue` variants, `RuntimeCoercionService` coercion order, array-parameter coercion fix, overload disambiguation rules, `RuntimeValueFactory` wrapping logic, grammar syntax for date/datetime literals and type-hinted variables, and `ExpressionEnvironmentBuilder` convenience methods. Read this before exploring the expression-evaluator internals from scratch.
