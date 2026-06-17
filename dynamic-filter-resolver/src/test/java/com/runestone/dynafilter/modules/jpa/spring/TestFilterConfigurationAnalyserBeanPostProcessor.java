@@ -29,6 +29,7 @@ import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationExcept
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils;
+import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnorePath;
 import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
@@ -37,6 +38,12 @@ import com.runestone.dynafilter.core.operation.types.Between;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.operation.types.Equals;
+import com.runestone.dynafilter.core.operation.types.Greater;
+import com.runestone.dynafilter.core.operation.types.Like;
+import com.runestone.dynafilter.core.operation.types.extensions.AnyFieldLike;
+import com.runestone.dynafilter.core.operation.types.extensions.ContainsAll;
+import com.runestone.dynafilter.core.operation.types.extensions.EffectiveAtClosed;
+import com.runestone.dynafilter.core.operation.types.extensions.OnDate;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationContributor;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.spring.tools.SearchState;
@@ -46,6 +53,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public class TestFilterConfigurationAnalyserBeanPostProcessor {
@@ -196,6 +204,96 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
                 .hasMessageContaining("otherExistingPath");
     }
 
+    @Test
+    @DisplayName("Warmup fails when AnyFieldLike repeats the same path")
+    public void testWarmupFailsForDuplicatedAnyFieldLikePath() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new DuplicatedAnyFieldLikePathController(), "duplicatedAnyFieldLikePathController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining(AnyFieldLike.class.getCanonicalName())
+                .hasMessageContaining("existingPath")
+                .hasMessageContaining("configured more than once in path");
+    }
+
+    @Test
+    @DisplayName("Warmup fails when a filter path has invalid syntax even with ModIgnorePath")
+    public void testWarmupFailsForInvalidPathSyntax() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new InvalidPathSyntaxController(), "invalidPathSyntaxController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining("Invalid path segment")
+                .hasMessageContaining("existingPath.");
+    }
+
+    @Test
+    @DisplayName("Warmup fails when a text operation targets a non-text path")
+    public void testWarmupFailsForTextOperationOnNonTextPath() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new TextOperationOnNonTextPathController(), "textOperationOnNonTextPathController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining(Like.class.getCanonicalName())
+                .hasMessageContaining("numericPath")
+                .hasMessageContaining("requires a String path");
+    }
+
+    @Test
+    @DisplayName("Warmup fails when a collection operation targets a scalar path")
+    public void testWarmupFailsForCollectionOperationOnScalarPath() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new CollectionOperationOnScalarPathController(), "collectionOperationOnScalarPathController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining(ContainsAll.class.getCanonicalName())
+                .hasMessageContaining("existingPath")
+                .hasMessageContaining("requires a collection path");
+    }
+
+    @Test
+    @DisplayName("Warmup fails when OnDate targets an unsupported path type")
+    public void testWarmupFailsForOnDateOnUnsupportedPathType() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new OnDateOnUnsupportedPathTypeController(), "onDateOnUnsupportedPathTypeController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining(OnDate.class.getCanonicalName())
+                .hasMessageContaining("existingPath")
+                .hasMessageContaining("supports LocalDate, LocalDateTime, Instant and Date paths");
+    }
+
+    @Test
+    @DisplayName("Warmup fails when a comparison operation targets a non-comparable path")
+    public void testWarmupFailsForComparisonOperationOnNonComparablePath() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new ComparisonOperationOnNonComparablePathController(), "comparisonOperationOnNonComparablePathController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining(Greater.class.getCanonicalName())
+                .hasMessageContaining("tags")
+                .hasMessageContaining("requires a comparable path");
+    }
+
+    @Test
+    @DisplayName("Warmup fails when an interval operation targets a non-comparable endpoint")
+    public void testWarmupFailsForIntervalOperationOnNonComparablePath() {
+        TypeAnnotationUtils.clearCaches();
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor();
+
+        Assertions.assertThatThrownBy(() -> postProcessor.postProcessAfterInitialization(new IntervalOperationOnNonComparablePathController(), "intervalOperationOnNonComparablePathController"))
+                .isInstanceOf(DynamicFilterConfigurationException.class)
+                .hasMessageContaining(EffectiveAtClosed.class.getCanonicalName())
+                .hasMessageContaining("tags")
+                .hasMessageContaining("requires comparable path(s)");
+    }
+
     private static FilterConfigurationAnalyserBeanPostProcessor newPostProcessor() {
         return newPostProcessor(new JpaFilterOperationService(new DefaultDataConversionService()));
     }
@@ -298,6 +396,71 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
         }
     }
 
+    @RestController
+    private static class DuplicatedAnyFieldLikePathController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({
+                        @Filter(path = {"existingPath", "existingPath", "otherExistingPath"}, parameters = "term", operation = AnyFieldLike.class, modifiers = ModIgnoreCase.class)
+                })
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
+    @RestController
+    private static class InvalidPathSyntaxController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({@Filter(path = "existingPath.", parameters = "term", operation = Equals.class, modifiers = ModIgnorePath.class)})
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
+    @RestController
+    private static class TextOperationOnNonTextPathController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({@Filter(path = "numericPath", parameters = "term", operation = Like.class)})
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
+    @RestController
+    private static class CollectionOperationOnScalarPathController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({@Filter(path = "existingPath", parameters = "values", operation = ContainsAll.class)})
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
+    @RestController
+    private static class OnDateOnUnsupportedPathTypeController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({@Filter(path = "existingPath", parameters = "date", operation = OnDate.class)})
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
+    @RestController
+    private static class ComparisonOperationOnNonComparablePathController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({@Filter(path = "tags", parameters = "value", operation = Greater.class)})
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
+    @RestController
+    private static class IntervalOperationOnNonComparablePathController {
+        @SuppressWarnings("unused")
+        public void search(
+                @Conjunction({@Filter(path = {"datePath", "tags"}, parameters = "reference", operation = EffectiveAtClosed.class)})
+                Specification<FilterValidationEntity> specification) {
+        }
+    }
+
     @Conjunction({
             @Filter(path = "state", parameters = {}, operation = Equals.class),
     })
@@ -326,5 +489,14 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
 
         @SuppressWarnings("unused")
         private String otherExistingPath;
+
+        @SuppressWarnings("unused")
+        private int numericPath;
+
+        @SuppressWarnings("unused")
+        private List<String> tags;
+
+        @SuppressWarnings("unused")
+        private LocalDate datePath;
     }
 }
