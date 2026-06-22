@@ -28,6 +28,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeLeft;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeRight;
+import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModSkipDistinct;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Join;
@@ -56,6 +57,12 @@ public final class JpaPaths {
         }
     }
 
+    public static void applyDistinctIfNeeded(ResolvedJpaPath<?> path, FilterData filterData, CriteriaQuery<?> query) {
+        if (path.crossedPluralAssociation() && !filterData.hasModifier(ModSkipDistinct.class)) {
+            query.distinct(true);
+        }
+    }
+
     public static <T> ResolvedJpaPath<T> resolveAttributePath(String path, FilterData filterData, Root<?> root) {
         Objects.requireNonNull(path, "path cannot be null");
         String key = root.getJavaType().getCanonicalName() + "." + path;
@@ -75,7 +82,7 @@ public final class JpaPaths {
     public static <T> ResolvedJpaPath<T> resolveAttributePath(String path, FilterData filterData, Root<?> root, CriteriaQuery<?> query) {
         Objects.requireNonNull(query, "query cannot be null");
         ResolvedJpaPath<T> resolvedPath = resolveAttributePath(path, filterData, root);
-        applyDistinctIfNeeded(resolvedPath, query);
+        applyDistinctIfNeeded(resolvedPath, filterData, query);
         return resolvedPath;
     }
 
@@ -101,7 +108,7 @@ public final class JpaPaths {
     public static <T> ResolvedJpaPath<T> resolveAttributeJoinPath(String path, FilterData filterData, Root<?> root, CriteriaQuery<?> query) {
         Objects.requireNonNull(query, "query cannot be null");
         ResolvedJpaPath<T> resolvedPath = resolveAttributeJoinPath(path, filterData, root);
-        applyDistinctIfNeeded(resolvedPath, query);
+        applyDistinctIfNeeded(resolvedPath, filterData, query);
         return resolvedPath;
     }
 

@@ -38,6 +38,7 @@ import com.runestone.dynafilter.core.operation.types.extensions.PeriodOverlapsHa
 import com.runestone.dynafilter.core.operation.types.extensions.PeriodOverlapsOpen;
 import com.runestone.dynafilter.core.operation.types.extensions.SizeBetween;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeLeft;
+import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModSkipDistinct;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -60,6 +61,8 @@ import java.time.LocalDateTime;
 `modifiers = {ModIgnoreCase.class}` aplica comparacoes textuais sem diferenciar maiusculas e minusculas quando a operacao suporta esse modificador.
 
 `modifiers = {ModJoinTypeLeft.class}` altera o tipo de join usado ao navegar por associacoes. Sem modificador, o padrao e `INNER JOIN`.
+
+`modifiers = {ModSkipDistinct.class}` impede que a resolucao de paths por associacoes plurais marque a consulta com `distinct(true)`. Use quando o `SELECT DISTINCT` gerado pelo Criteria API for incompativel com o banco, por exemplo em consultas Oracle envolvendo colunas `CLOB`. Ao usar este modificador, a remocao de duplicatas deixa de ser feita automaticamente pela query.
 
 ## Equals
 

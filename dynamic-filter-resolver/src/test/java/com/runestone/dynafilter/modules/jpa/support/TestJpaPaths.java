@@ -29,6 +29,7 @@ import com.runestone.dynafilter.core.model.FilterModifier;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeLeft;
 import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModJoinTypeRight;
+import com.runestone.dynafilter.modules.jpa.operation.modifiers.ModSkipDistinct;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
@@ -117,6 +118,30 @@ class TestJpaPaths {
         assertThat(resolved.crossedPluralAssociation()).isTrue();
         verify(root).join("addresses", JoinType.INNER);
         verify(query).distinct(true);
+    }
+
+    @Test
+    @DisplayName("resolveAttributePath does not mark distinct when ModSkipDistinct is present")
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void testResolveAttributePathSkipsDistinctForPluralAssociationWhenModifierIsPresent() {
+        when(root.getJavaType()).thenReturn(Object.class);
+        when(root.getJoins()).thenReturn(Set.of());
+        when(root.join("addresses", JoinType.INNER)).thenReturn(join);
+        when(join.getAttribute()).thenReturn(attribute);
+        when(attribute.isCollection()).thenReturn(true);
+        when(join.get("street")).thenReturn(path);
+
+        JpaPaths.ResolvedJpaPath<?> resolved = JpaPaths.resolveAttributePath(
+                "addresses.street",
+                filterData(List.of(ModSkipDistinct.class)),
+                root,
+                query
+        );
+
+        assertThat(resolved.expression()).isSameAs(path);
+        assertThat(resolved.crossedPluralAssociation()).isTrue();
+        verify(root).join("addresses", JoinType.INNER);
+        verify(query, never()).distinct(true);
     }
 
     @Test
