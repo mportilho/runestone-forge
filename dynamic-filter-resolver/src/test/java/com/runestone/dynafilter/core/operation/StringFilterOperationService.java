@@ -26,13 +26,15 @@ package com.runestone.dynafilter.core.operation;
 
 import com.runestone.dynafilter.core.operation.types.Equals;
 
-import java.util.Map;
-
 public class StringFilterOperationService extends AbstractFilterOperationService<String> {
 
     public StringFilterOperationService() {
-        super(() -> Map.of(
-                Equals.class, new EqualsTestFilter()
-        ));
+        super(createRegistry());
+    }
+
+    private static FilterOperationRegistry<String> createRegistry() {
+        FilterOperationRegistry<String> registry = new FilterOperationRegistry<>();
+        registry.register(Equals.class, new EqualsTestFilter());
+        return registry;
     }
 }

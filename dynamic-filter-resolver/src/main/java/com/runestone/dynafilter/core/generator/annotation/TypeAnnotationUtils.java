@@ -29,6 +29,8 @@ import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.runestone.dynafilter.helpers.StringHelper;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -43,7 +45,10 @@ public class TypeAnnotationUtils {
     private static final int DEFAULT_CACHE_MAX_SIZE = 4096;
     private static final String CACHE_MAX_SIZE_PROPERTY = "runestone.dynafilter.annotation.cache.max-size";
     private static final int CACHE_MAX_SIZE = resolveCacheMaxSize();
-    private static final Map<AnnotationStatementInput, AnnotationMetadata> CACHE_METADATA = new LruMetadataCache(CACHE_MAX_SIZE);
+    private static final Map<AnnotationStatementInput, AnnotationMetadata> CACHE_METADATA = Caffeine.newBuilder()
+            .maximumSize(CACHE_MAX_SIZE)
+            .executor(Runnable::run)
+            .<AnnotationStatementInput, AnnotationMetadata>build().asMap();
 
     private TypeAnnotationUtils() {
     }
@@ -131,14 +136,7 @@ public class TypeAnnotationUtils {
         }
 
         AnnotationMetadata builtMetadata = buildMetadata(annotationStatementInput);
-        synchronized (CACHE_METADATA) {
-            AnnotationMetadata existing = CACHE_METADATA.get(annotationStatementInput);
-            if (existing != null) {
-                return existing;
-            }
-            CACHE_METADATA.put(annotationStatementInput, builtMetadata);
-            return builtMetadata;
-        }
+        return CACHE_METADATA.computeIfAbsent(annotationStatementInput, k -> builtMetadata);
     }
 
     private static AnnotationMetadata buildMetadata(AnnotationStatementInput annotationStatementInput) {
@@ -178,7 +176,7 @@ public class TypeAnnotationUtils {
 
     private static void validateFilter(Filter filter) {
         if (filter.parameters().length == 0) {
-            throw new IllegalArgumentException("No parameter configured for filter of path " + filter.path());
+            throw new IllegalArgumentException("No parameter configured for filter of path " + StringHelper.formatPath(filter.path()));
         }
         if (filter.constantValues().length != 0 && filter.constantValues().length != filter.parameters().length) {
             throw new IllegalArgumentException(String.format("Parameters and constant values have different sizes. Parameters required: '%s'",
@@ -422,9 +420,7 @@ public class TypeAnnotationUtils {
     }
 
     static int cacheSize() {
-        synchronized (CACHE_METADATA) {
-            return CACHE_METADATA.size();
-        }
+        return CACHE_METADATA.size();
     }
 
     static int cacheMaxSize() {
@@ -441,40 +437,6 @@ public class TypeAnnotationUtils {
             return parsedValue > 0 ? parsedValue : DEFAULT_CACHE_MAX_SIZE;
         } catch (NumberFormatException ignored) {
             return DEFAULT_CACHE_MAX_SIZE;
-        }
-    }
-
-    private static final class LruMetadataCache extends LinkedHashMap<AnnotationStatementInput, AnnotationMetadata> {
-        private final int maxEntries;
-
-        private LruMetadataCache(int maxEntries) {
-            super(Math.min(maxEntries, 512), 0.75f, true);
-            this.maxEntries = maxEntries;
-        }
-
-        @Override
-        public synchronized AnnotationMetadata get(Object key) {
-            return super.get(key);
-        }
-
-        @Override
-        public synchronized AnnotationMetadata put(AnnotationStatementInput key, AnnotationMetadata value) {
-            return super.put(key, value);
-        }
-
-        @Override
-        public synchronized void clear() {
-            super.clear();
-        }
-
-        @Override
-        public synchronized int size() {
-            return super.size();
-        }
-
-        @Override
-        protected boolean removeEldestEntry(Map.Entry<AnnotationStatementInput, AnnotationMetadata> eldest) {
-            return size() > maxEntries;
         }
     }
 

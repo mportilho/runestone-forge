@@ -25,7 +25,6 @@
 package com.runestone.memoization;
 
 import java.util.Objects;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
@@ -37,10 +36,8 @@ import java.util.function.Supplier;
  */
 public class MemoizedSupplier<T> implements Supplier<T> {
 
-    private Supplier<T> delegate;
-    private volatile boolean initialized;
+    private volatile Supplier<T> delegate;
     private T cache;
-    private volatile ReentrantLock reentrantLock;
 
     /**
      * Creates a new {@link MemoizedSupplier} instance that caches the result of the delegate supplier.
@@ -53,34 +50,19 @@ public class MemoizedSupplier<T> implements Supplier<T> {
 
     @Override
     public T get() {
-        if (!initialized) {
-            ReentrantLock lock = getReentrantLock();
-            lock.lock();
-            try {
-                if (!initialized) {
-                    T value = delegate.get();
+        Supplier<T> d = delegate;
+        if (d != null) {
+            synchronized (this) {
+                d = delegate;
+                if (d != null) {
+                    T value = d.get();
                     cache = value;
-                    initialized = true;
-                    delegate = null; // to GC
+                    delegate = null; // to GC and as a marker for initialization
                     return value;
                 }
-            } finally {
-                lock.unlock();
-                this.reentrantLock = null; // to GC
             }
         }
         return cache;
-    }
-
-    private ReentrantLock getReentrantLock() {
-        if (reentrantLock == null) {
-            synchronized (this) {
-                if (reentrantLock == null) {
-                    reentrantLock = new ReentrantLock();
-                }
-            }
-        }
-        return reentrantLock;
     }
 
 }

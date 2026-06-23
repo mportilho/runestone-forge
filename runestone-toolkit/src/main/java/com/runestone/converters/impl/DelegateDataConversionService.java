@@ -26,6 +26,8 @@ package com.runestone.converters.impl;
 
 import com.runestone.converters.DataConversionService;
 
+import java.util.Objects;
+
 public class DelegateDataConversionService implements DataConversionService {
 
     private final DefaultDataConversionService defaultDataConversionService;
@@ -33,7 +35,7 @@ public class DelegateDataConversionService implements DataConversionService {
 
     public DelegateDataConversionService(DataConversionService delegate) {
         this.defaultDataConversionService = new DefaultDataConversionService(false);
-        this.delegate = delegate;
+        this.delegate = Objects.requireNonNull(delegate, "Delegate conversion service must be provided");
     }
 
     @Override

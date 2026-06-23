@@ -1,0 +1,3 @@
+segments = customerSegments(customerId);
+weights = [baseWeight(productId), if hasBonus(customerId) then bonusWeight() else 0 endif, exposure(productId)];
+normalize(weights)

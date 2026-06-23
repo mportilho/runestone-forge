@@ -26,17 +26,30 @@ package com.runestone.dynafilter.core.operation;
 
 import com.runestone.dynafilter.core.exceptions.FilterOperationNotDefinedException;
 import com.runestone.dynafilter.core.model.FilterData;
+import com.runestone.dynafilter.core.operation.types.Decorated;
+import com.runestone.dynafilter.core.operation.types.Dynamic;
 
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Supplier;
 
 public abstract class AbstractFilterOperationService<T> implements FilterOperationService<T> {
 
-    private final Map<Class<? super DefinedFilterOperation>, FilterOperation<T>> operationMap;
+    @SuppressWarnings("rawtypes")
+    private static final Map<Class<? extends FilterOperation>, FilterOperationMetadata> PSEUDO_OPERATION_METADATA = Map.of(
+            Dynamic.class, FilterOperationMetadata.dynamicValue(),
+            Decorated.class, FilterOperationMetadata.stringValue()
+    );
 
-    public AbstractFilterOperationService(Supplier<Map<Class<? super DefinedFilterOperation>, FilterOperation<T>>> operationMap) {
-        this.operationMap = operationMap.get();
+    @SuppressWarnings("rawtypes")
+    private final Map<Class<? extends FilterOperation>, FilterOperation<T>> operationMap;
+
+    @SuppressWarnings("rawtypes")
+    private final Map<Class<? extends FilterOperation>, FilterOperationMetadata> metadataMap;
+
+    public AbstractFilterOperationService(FilterOperationRegistry<T> registry) {
+        Objects.requireNonNull(registry, "registry cannot be null");
+        this.operationMap = registry.toMap();
+        this.metadataMap = registry.toMetadataMap();
     }
 
     @Override
@@ -48,6 +61,30 @@ public abstract class AbstractFilterOperationService<T> implements FilterOperati
                     filterData.operation().getSimpleName(), this.getClass().getCanonicalName()));
         }
         return filterOperation.createFilter(filterData);
+    }
+
+    @Override
+    @SuppressWarnings("rawtypes")
+    public boolean supports(Class<? extends FilterOperation> operationType) {
+        Objects.requireNonNull(operationType, "operationType cannot be null");
+        return operationMap.containsKey(operationType);
+    }
+
+    @Override
+    @SuppressWarnings("rawtypes")
+    public FilterOperationMetadata findMetadata(Class<? extends FilterOperation> operationType) {
+        Objects.requireNonNull(operationType, "operationType cannot be null");
+        FilterOperationMetadata pseudoOperationMetadata = PSEUDO_OPERATION_METADATA.get(operationType);
+        if (pseudoOperationMetadata != null) {
+            return pseudoOperationMetadata;
+        }
+
+        FilterOperationMetadata operationMetadata = metadataMap.get(operationType);
+        if (operationMetadata == null) {
+            throw new FilterOperationNotDefinedException(String.format("No filter metadata found for operation '%s' on service %s",
+                    operationType.getSimpleName(), this.getClass().getCanonicalName()));
+        }
+        return operationMetadata;
     }
 
 }

@@ -73,7 +73,7 @@ public class TestSpecificationGreaterOrEquals {
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("name", new String[]{"name"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"name"}, String.class,
                 Between.class, false, new String[]{"TestValue"}, null, "");
 
         SpecificationGreaterOrEquals<Person> specification = new SpecificationGreaterOrEquals<>(filterData, dataConversionService);
@@ -90,7 +90,7 @@ public class TestSpecificationGreaterOrEquals {
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("name", new String[]{"name"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"name"}, String.class,
                 Between.class, false, new String[]{"TestValue"}, List.of(ModIgnoreCase.class), "");
 
         SpecificationGreaterOrEquals<Person> specification = new SpecificationGreaterOrEquals<>(filterData, dataConversionService);
@@ -107,7 +107,7 @@ public class TestSpecificationGreaterOrEquals {
         when(path.getJavaType()).thenReturn(BigDecimal.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("height", new String[]{"height"}, BigDecimal.class,
+        FilterData filterData = new FilterData(new String[]{"height"}, new String[]{"height"}, BigDecimal.class,
                 Between.class, false, new Object[]{180}, null, "");
 
         SpecificationGreaterOrEquals<Person> specification = new SpecificationGreaterOrEquals<>(filterData, dataConversionService);
@@ -124,7 +124,7 @@ public class TestSpecificationGreaterOrEquals {
         when(path.getJavaType()).thenReturn(BigDecimal.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("height", new String[]{"height"}, BigDecimal.class,
+        FilterData filterData = new FilterData(new String[]{"height"}, new String[]{"height"}, BigDecimal.class,
                 Between.class, false, new Object[]{180}, List.of(ModIgnoreCase.class), "");
 
         SpecificationGreaterOrEquals<Person> specification = new SpecificationGreaterOrEquals<>(filterData, dataConversionService);

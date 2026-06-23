@@ -26,6 +26,7 @@ package com.runestone.utils;
 
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.ResolverStyle;
 import java.time.temporal.ChronoField;
 
 public class DateUtils {
@@ -39,13 +40,15 @@ public class DateUtils {
 
     static {
         YEAR_MONTH_FORMATTER = new DateTimeFormatterBuilder()
-                .appendPattern("[yyyyMM][MM/yyyy][MM-yyyy][yyyy/MM][yyyy-MM]")
-                .toFormatter();
+                .appendPattern("[uuuuMM][MM/uuuu][MM-uuuu][uuuu/MM][uuuu-MM]")
+                .toFormatter()
+                .withResolverStyle(ResolverStyle.STRICT);
 
         DATE_FORMATTER = new DateTimeFormatterBuilder()
                 .appendOptional(DateTimeFormatter.BASIC_ISO_DATE)
-                .appendPattern("[yyyy/MM/dd][yyyy-MM-dd][dd/MM/yyyy][dd-MM-yyyy]")
-                .toFormatter();
+                .appendPattern("[uuuu/MM/dd][uuuu-MM-dd][dd/MM/uuuu][dd-MM-uuuu]")
+                .toFormatter()
+                .withResolverStyle(ResolverStyle.STRICT);
 
         TIME_FORMATTER = new DateTimeFormatterBuilder()
                 .appendPattern("HH:mm[:ss[.SSSSSSSSS][.SSSSSS][.SSS]]")
@@ -54,7 +57,8 @@ public class DateUtils {
                 .optionalStart().appendPattern("[ Z][Z][XXX]['Z']").optionalEnd()
                 .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)
                 .parseDefaulting(ChronoField.NANO_OF_SECOND, 0)
-                .toFormatter();
+                .toFormatter()
+                .withResolverStyle(ResolverStyle.STRICT);
 
         DATETIME_FORMATTER = new DateTimeFormatterBuilder()
                 .append(DATE_FORMATTER)
@@ -66,7 +70,8 @@ public class DateUtils {
                 .appendZoneRegionId()
                 .appendLiteral(']')
                 .optionalEnd()
-                .toFormatter();
+                .toFormatter()
+                .withResolverStyle(ResolverStyle.STRICT);
 
         DATETIME_FORMATTER_PADDING_TIME = new DateTimeFormatterBuilder()
                 .append(DATETIME_FORMATTER)
@@ -74,7 +79,8 @@ public class DateUtils {
                 .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)
                 .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)
                 .parseDefaulting(ChronoField.NANO_OF_SECOND, 0)
-                .toFormatter();
+                .toFormatter()
+                .withResolverStyle(ResolverStyle.STRICT);
     }
 
     private DateUtils() {

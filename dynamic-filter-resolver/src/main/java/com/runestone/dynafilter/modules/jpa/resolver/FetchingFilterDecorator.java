@@ -31,6 +31,7 @@ import jakarta.persistence.criteria.Fetch;
 import jakarta.persistence.criteria.FetchParent;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Root;
+import org.springframework.data.core.PropertyPath;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;

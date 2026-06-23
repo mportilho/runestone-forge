@@ -74,7 +74,7 @@ public class TestSpecificationBetween {
         when(root.get(anyString())).thenReturn(path);
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
-        FilterData filterData = new FilterData("name", new String[]{"name"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"name"}, String.class,
                 Between.class, false, new String[]{"TestValue"}, null, "");
 
         SpecificationBetween<Person> specification = new SpecificationBetween<>(filterData, dataConversionService);
@@ -90,7 +90,7 @@ public class TestSpecificationBetween {
         when(path.getJavaType()).thenReturn(BigDecimal.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("height", new String[]{"minHeight", "maxHeight"}, BigDecimal.class,
+        FilterData filterData = new FilterData(new String[]{"height"}, new String[]{"minHeight", "maxHeight"}, BigDecimal.class,
                 Between.class, false, new String[]{null, null}, null, "");
 
         SpecificationBetween<Person> specification = new SpecificationBetween<>(filterData, dataConversionService);
@@ -106,7 +106,7 @@ public class TestSpecificationBetween {
         when(root.get(anyString())).thenReturn(path);
         when(path.getJavaType()).thenReturn(BigDecimal.class);
         when(builder.upper(any())).thenReturn(path);
-        FilterData filterData = new FilterData("height", new String[]{"minHeight", "maxHeight"}, BigDecimal.class,
+        FilterData filterData = new FilterData(new String[]{"height"}, new String[]{"minHeight", "maxHeight"}, BigDecimal.class,
                 Between.class, false, new Object[]{140, 200}, null, "");
 
         SpecificationBetween<Person> specification = new SpecificationBetween<>(filterData, dataConversionService);
@@ -124,7 +124,7 @@ public class TestSpecificationBetween {
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("name", new String[]{"minName", "maxName"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"minName", "maxName"}, String.class,
                 Between.class, false, new String[]{"a", "c"}, List.of(ModIgnoreCase.class), "");
 
         SpecificationBetween<Person> specification = new SpecificationBetween<>(filterData, dataConversionService);

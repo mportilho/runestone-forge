@@ -1,7 +1,7 @@
 package com.runestone.dynafilter.core.model;
 
 import com.runestone.dynafilter.core.generator.annotation.Filter;
-import com.runestone.dynafilter.core.operation.DefinedFilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperation;
 
 import java.util.List;
 
@@ -17,19 +17,21 @@ import java.util.List;
  * @param constantValues the defined constant values that will be used to build the filter
  * @param format         the format pattern to assist data conversion for the corresponding path type
  * @param required       if the filter is required. Default is false
+ * @param hidden         if the filter should be hidden from generated OpenAPI documentation. Default is false
  * @param modifiers      the modifiers that will be used to build the filter
  * @param description    the user readable description of the filter
  */
 public record FilterRequestData(
-        String path,
+        String[] path,
         String[] parameters,
         Class<?> targetType,
-        Class<? super DefinedFilterOperation> operation,
+        @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,
         String negate,
         Object[] defaultValues,
         Object[] constantValues,
         String format,
         boolean required,
+        boolean hidden,
         List<Class<? extends FilterModifier>> modifiers,
         String description
 
@@ -38,7 +40,7 @@ public record FilterRequestData(
     public static FilterRequestData of(Filter filter) {
         return new FilterRequestData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(),
                 filter.negate(), filter.defaultValues(), filter.constantValues(), filter.format(), filter.required(),
-                List.of(filter.modifiers()), filter.description());
+                filter.hidden(), List.of(filter.modifiers()), filter.description());
     }
 
 

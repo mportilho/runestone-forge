@@ -19,7 +19,7 @@ On pom.xml file, add the following lines to the build/plugins section:
 <plugin>
     <groupId>org.apache.maven.plugins</groupId>
     <artifactId>maven-surefire-plugin</artifactId>
-    <version>3.0.0-M5</version>
+    <version>3.5.4</version>
     <configuration>
         <argLine>-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true</argLine>
     </configuration>

@@ -1,0 +1,2 @@
+window = if isHoliday(currDate) then [cutoffFallback(), reviewFallback()] else [cutoffTime(), reviewTime()] endif;
+currTime <= <time>settlementLimit and currDateTime >= scheduleStart() and audit(window)

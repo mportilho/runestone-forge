@@ -30,4 +30,10 @@ public interface FilterOperationService<T> {
 
     T createFilter(FilterData filterData);
 
+    @SuppressWarnings("rawtypes")
+    boolean supports(Class<? extends FilterOperation> operationType);
+
+    @SuppressWarnings("rawtypes")
+    FilterOperationMetadata findMetadata(Class<? extends FilterOperation> operationType);
+
 }

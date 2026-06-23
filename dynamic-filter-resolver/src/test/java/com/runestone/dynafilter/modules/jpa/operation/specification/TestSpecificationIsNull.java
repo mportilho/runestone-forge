@@ -72,7 +72,7 @@ public class TestSpecificationIsNull {
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("name", new String[]{"name"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"name"}, String.class,
                 Between.class, false, new Object[]{true}, null, "");
 
         SpecificationIsNull<Person> specification = new SpecificationIsNull<>(filterData, dataConversionService);
@@ -89,7 +89,7 @@ public class TestSpecificationIsNull {
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("name", new String[]{"name"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"name"}, String.class,
                 Between.class, false, new Object[]{false}, null, "");
 
         SpecificationIsNull<Person> specification = new SpecificationIsNull<>(filterData, dataConversionService);
@@ -106,7 +106,7 @@ public class TestSpecificationIsNull {
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("name", new String[]{"name"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"name"}, String.class,
                 Between.class, false, new Object[]{null}, null, "");
 
         SpecificationIsNull<Person> specification = new SpecificationIsNull<>(filterData, dataConversionService);

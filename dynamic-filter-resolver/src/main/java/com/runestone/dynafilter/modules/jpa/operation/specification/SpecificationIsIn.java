@@ -27,10 +27,13 @@ package com.runestone.dynafilter.modules.jpa.operation.specification;
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
+import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
+import com.runestone.dynafilter.modules.jpa.support.JpaValues;
 import jakarta.persistence.criteria.*;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.Arrays;
+import java.util.Collection;
 
 public class SpecificationIsIn<T> implements Specification<T> {
 
@@ -45,16 +48,27 @@ public class SpecificationIsIn<T> implements Specification<T> {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        Expression expressionTemp = JpaPredicateUtils.computeAttributePath(filterData, root);
-        Object rawValues = filterData.values()[0];
-        Object[] arrayValues = rawValues instanceof Object[] arr ? arr : new Object[]{rawValues};
-        boolean ignoreCase = expressionTemp.getJavaType().equals(String.class) && filterData.hasModifier(ModIgnoreCase.class);
+        String path = filterData.path()[0];
+        JpaPaths.ResolvedJpaPath<?> resolution = JpaPaths.resolveAttributePath(path, filterData, root);
+        Expression expressionTemp = resolution.expression();
+        Object[] arrayValues = JpaValues.asArray(filterData.values()[0]);
 
+        boolean finalAttributeIsCollection = Collection.class.isAssignableFrom(expressionTemp.getJavaType());
+        if (finalAttributeIsCollection) {
+            resolution = JpaPaths.resolveAttributeJoinPath(path, filterData, root, query);
+            expressionTemp = resolution.expression();
+        } else {
+            resolution = JpaPaths.resolveAttributePath(path, filterData, root, query);
+            expressionTemp = resolution.expression();
+        }
+
+        boolean ignoreCase = expressionTemp.getJavaType().equals(String.class) && filterData.hasModifier(ModIgnoreCase.class);
         Expression expression = ignoreCase ? criteriaBuilder.upper(expressionTemp) : expressionTemp;
-        Object[] arr = Arrays.stream(arrayValues).map(v -> {
-            Object valueTemp = dataConversionService.convert(v, expression.getJavaType());
-            return ignoreCase && valueTemp != null ? valueTemp.toString().toUpperCase() : valueTemp;
-        }).toArray();
+        final Class<?> targetType = expressionTemp.getJavaType();
+        Object[] convertedValues = JpaValues.convert(arrayValues, targetType, dataConversionService);
+        Object[] arr = ignoreCase
+                ? Arrays.stream(convertedValues).map(value -> value != null ? value.toString().toUpperCase() : null).toArray()
+                : convertedValues;
         return expression.in(arr);
     }
 

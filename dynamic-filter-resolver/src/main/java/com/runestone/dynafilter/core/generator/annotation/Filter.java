@@ -25,7 +25,7 @@
 package com.runestone.dynafilter.core.generator.annotation;
 
 import com.runestone.dynafilter.core.model.FilterModifier;
-import com.runestone.dynafilter.core.operation.DefinedFilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperation;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
@@ -48,9 +48,9 @@ public @interface Filter {
      * <b>Path</b> is the notation from which the target attribute can be found on a
      * specified root type, like <code>Person.addresses.streetName</code>
      *
-     * @return Name or path to the required attribute
+     * @return Names or paths to the required attributes
      */
-    String path();
+    String[] path();
 
     /**
      * @return Parameters needed to be supplied by the caller, exposed as input data
@@ -66,7 +66,8 @@ public @interface Filter {
     /**
      * @return Operation to be used as a query filter
      */
-    Class<? super DefinedFilterOperation> operation();
+    @SuppressWarnings("rawtypes")
+    Class<? extends FilterOperation> operation();
 
     /**
      * Negate the filter's logic. Can be parsed by the Spring Expression Language
@@ -105,6 +106,11 @@ public @interface Filter {
      * @return Indicates this filter is required
      */
     boolean required() default false;
+
+    /**
+     * @return Indicates this filter should be hidden from generated OpenAPI documentation
+     */
+    boolean hidden() default false;
 
     /**
      * Additional generic modifiers for configuring the filter construction.

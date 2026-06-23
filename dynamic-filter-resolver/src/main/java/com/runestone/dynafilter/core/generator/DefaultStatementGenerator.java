@@ -30,12 +30,15 @@ import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.FilterModifier;
 import com.runestone.dynafilter.core.model.statement.*;
 import com.runestone.dynafilter.core.operation.ComparisonOperation;
-import com.runestone.dynafilter.core.operation.DefinedFilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
+import com.runestone.dynafilter.helpers.StringHelper;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
+import static com.runestone.dynafilter.helpers.StringHelper.formatPath;
 
 public abstract class DefaultStatementGenerator<T> implements StatementGenerator<T> {
 
@@ -83,8 +86,9 @@ public abstract class DefaultStatementGenerator<T> implements StatementGenerator
      * @param description     the user readable description of the filter
      * @return a new instance of {@link FilterData}
      */
-    protected FilterData createFilterData(String path, String[] parameters, Class<?> targetType, Class<? super DefinedFilterOperation> operation,
-                                          Object negateParameter, Object[] values, List<Class<? extends FilterModifier>> modifiers, String description) {
+    protected FilterData createFilterData(String[] path, String[] parameters, Class<?> targetType,
+                                           @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,
+                                           Object negateParameter, Object[] values, List<Class<? extends FilterModifier>> modifiers, String description) {
         Object[] comparisonValue;
         boolean negate;
 
@@ -100,7 +104,7 @@ public abstract class DefaultStatementGenerator<T> implements StatementGenerator
                 if (comparisonOperationValue.length() == 3) {
                     if (comparisonOperationValue.charAt(0) != 'N' && comparisonOperationValue.charAt(0) != 'n') {
                         throw new StatementGenerationException("Invalid negating character [%s] on path [%s]. 'N' should be preceding the operation, case insensitive"
-                                .formatted(comparisonOperationValue.charAt(0), path));
+                                .formatted(comparisonOperationValue.charAt(0), formatPath(path)));
                     }
                     negate = true;
                     operation = ComparisonOperation.valueOf(comparisonOperationValue.substring(1).toUpperCase()).getOperation();
@@ -108,7 +112,7 @@ public abstract class DefaultStatementGenerator<T> implements StatementGenerator
                     negate = false;
                     operation = ComparisonOperation.valueOf(comparisonOperationValue.toUpperCase()).getOperation();
                 } else {
-                    throw new StatementGenerationException("Invalid comparison operation [%s] on path [%s]".formatted(comparisonOperationValue, path));
+                    throw new StatementGenerationException("Invalid comparison operation [%s] on path [%s]".formatted(comparisonOperationValue, formatPath(path)));
                 }
 
                 if (ComparisonOperation.IN.getOperation().equals(operation) && comparisonValue.length > 0 && !comparisonValue[0].getClass().isArray()) {

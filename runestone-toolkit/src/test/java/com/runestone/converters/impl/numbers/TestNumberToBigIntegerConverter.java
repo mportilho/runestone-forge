@@ -57,4 +57,32 @@ public class TestNumberToBigIntegerConverter {
         assertThat(converter.convert(new LongAccumulator(Long::sum, 1))).isEqualTo(BigInteger.valueOf(1));
         assertThat(converter.convert(new LongAdder())).isEqualTo(BigInteger.valueOf(0));
     }
+
+    @Test
+    public void testNullConversion() {
+        var converter = new NumberToBigIntegerConverter();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Cannot convert null to BigInteger");
+    }
+
+    @Test
+    public void testEdgeCases() {
+        var converter = new NumberToBigIntegerConverter();
+        assertThat(converter.convert(Double.MAX_VALUE)).isEqualTo(BigInteger.valueOf(Double.valueOf(Double.MAX_VALUE).longValue()));
+        assertThat(converter.convert(Float.NaN)).isEqualTo(BigInteger.valueOf(Float.valueOf(Float.NaN).longValue()));
+        assertThat(converter.convert(Double.POSITIVE_INFINITY)).isEqualTo(BigInteger.valueOf(Double.valueOf(Double.POSITIVE_INFINITY).longValue()));
+    }
+
+    @Test
+    public void testFloatingPointConversions() {
+        var converter = new NumberToBigIntegerConverter();
+        assertThat(converter.convert(0.1f)).isEqualTo(BigInteger.ZERO);
+        assertThat(converter.convert(0.9d)).isEqualTo(BigInteger.ZERO);
+        assertThat(converter.convert(1.5f)).isEqualTo(BigInteger.ONE);
+        assertThat(converter.convert(1.9d)).isEqualTo(BigInteger.ONE);
+        assertThat(converter.convert(new BigDecimal("1.9"))).isEqualTo(BigInteger.ONE);
+        assertThat(converter.convert(-1.9d)).isEqualTo(BigInteger.valueOf(-1));
+    }
+
 }

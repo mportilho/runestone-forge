@@ -32,10 +32,6 @@ public class NumberToBigIntegerConverter implements DataConverter<Number, BigInt
 
     @Override
     public BigInteger convert(Number data) {
-        return switch (data) {
-            case BigInteger bi -> bi;
-            case Number n -> BigInteger.valueOf(n.longValue());
-            case null -> throw new IllegalArgumentException("Cannot convert null to BigInteger");
-        };
+        return NumberConversionSupport.convert(data, BigInteger.class, number -> BigInteger.valueOf(number.longValue()));
     }
 }

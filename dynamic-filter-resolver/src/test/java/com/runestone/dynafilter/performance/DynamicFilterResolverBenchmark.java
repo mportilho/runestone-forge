@@ -6,7 +6,7 @@ import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGen
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
 import com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils;
 import com.runestone.dynafilter.core.generator.annotation.testquery.SearchPeopleAndGames;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
 import com.runestone.dynafilter.modules.jpa.resolver.tools.SearchMultiDataEmployees;
 import com.runestone.dynafilter.modules.jpa.spring.SpecificationDynamicFilterArgumentResolver;
@@ -77,7 +77,7 @@ public class DynamicFilterResolverBenchmark {
         @Setup(Level.Trial)
         public void setup() {
             generator = new AnnotationStatementGenerator(null);
-            resolver = new SpecificationDynamicFilterResolver(new SpecificationFilterOperationService(new DefaultDataConversionService()));
+            resolver = new SpecificationDynamicFilterResolver(new JpaFilterOperationService(new DefaultDataConversionService()));
             input = new AnnotationStatementInput(SearchPeopleAndGames.class, SearchPeopleAndGames.class.getAnnotations());
             parameters = Map.of(
                     "name", "English",
@@ -129,7 +129,7 @@ public class DynamicFilterResolverBenchmark {
 
     private static SpecificationDynamicFilterArgumentResolver createArgumentResolver() {
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null);
-        SpecificationFilterOperationService operationService = new SpecificationFilterOperationService(new DefaultDataConversionService());
+        JpaFilterOperationService operationService = new JpaFilterOperationService(new DefaultDataConversionService());
         SpecificationDynamicFilterResolver resolver = new SpecificationDynamicFilterResolver(operationService);
         GenericApplicationContext applicationContext = new GenericApplicationContext();
         applicationContext.refresh();

@@ -26,8 +26,10 @@ package com.runestone.dynafilter.modules.jpa.operation.specification;
 
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
+import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import org.springframework.data.jpa.domain.Specification;
@@ -44,9 +46,12 @@ public class SpecificationIsNull<T> implements Specification<T> {
 
     @Override
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
+        String filterPath = filterData.path()[0];
+        JpaPaths.ResolvedJpaPath<Object> resolution = JpaPaths.resolveAttributePath(filterPath, filterData, root, query);
+        Path<Object> path = resolution.expression();
         return dataConversionService.convert(filterData.findOneValue(), Boolean.class)
-                ? criteriaBuilder.isNull(JpaPredicateUtils.computeAttributePath(filterData, root))
-                : criteriaBuilder.isNotNull(JpaPredicateUtils.computeAttributePath(filterData, root));
+                ? criteriaBuilder.isNull(path)
+                : criteriaBuilder.isNotNull(path);
     }
 
 }

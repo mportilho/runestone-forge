@@ -34,6 +34,7 @@ import com.runestone.dynafilter.core.generator.annotation.tool.StatementTypeCoun
 import com.runestone.dynafilter.core.generator.annotation.tool.ValueFinderVisitor;
 import com.runestone.dynafilter.core.model.statement.AbstractStatement;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
+import com.runestone.dynafilter.core.operation.types.Decorated;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -78,6 +79,7 @@ public class TestStatementGenWithFilterDecorators {
         Assertions.assertThat(ValueFinderVisitor.find("decorValue", statement)).isNull();
         Assertions.assertThat(statementWrapper.decoratedFilters()).hasSize(1);
         Assertions.assertThat(statementWrapper.findDecoratedFilterByPath("decorValue").orElseThrow().values()).isEqualTo(new Object[]{123});
+        Assertions.assertThat(statementWrapper.findDecoratedFilterByPath("decorValue").orElseThrow().operation()).isEqualTo(Decorated.class);
     }
 
 }

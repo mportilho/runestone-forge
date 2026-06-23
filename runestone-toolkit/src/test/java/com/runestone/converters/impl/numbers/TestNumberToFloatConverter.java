@@ -57,4 +57,29 @@ public class TestNumberToFloatConverter {
         assertThat(converter.convert(new LongAccumulator(Long::sum, 1))).isEqualTo(1F);
         assertThat(converter.convert(new LongAdder())).isEqualTo(0F);
     }
+
+    @Test
+    public void testNullConversion() {
+        var converter = new NumberToFloatConverter();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Cannot convert null to Float");
+    }
+
+    @Test
+    public void testEdgeCases() {
+        var converter = new NumberToFloatConverter();
+        assertThat(converter.convert(Double.MAX_VALUE)).isEqualTo(Double.valueOf(Double.MAX_VALUE).floatValue());
+        assertThat(converter.convert(Float.NaN)).isNaN();
+        assertThat(converter.convert(Double.POSITIVE_INFINITY)).isEqualTo(Float.POSITIVE_INFINITY);
+    }
+
+    @Test
+    public void testFloatingPointConversions() {
+        var converter = new NumberToFloatConverter();
+        assertThat(converter.convert(0.1d)).isEqualTo(0.1f);
+        assertThat(converter.convert(new BigDecimal("0.1"))).isEqualTo(0.1f);
+        assertThat(converter.convert(1.9d)).isEqualTo(1.9f);
+    }
+
 }

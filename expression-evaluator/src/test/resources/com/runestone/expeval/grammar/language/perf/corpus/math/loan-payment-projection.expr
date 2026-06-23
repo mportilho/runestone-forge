@@ -1,0 +1,4 @@
+principal = <number>loanPrincipal;
+rate = if hasCampaign(customerId) then campaignRate(customerId) else defaultRate(region) endif;
+term = if isPreferred(customerId) then 360 else 240 endif;
+payment(principal; rate; term)

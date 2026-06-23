@@ -72,7 +72,7 @@ public class TestSpecificationEndsWith {
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("name", new String[]{"name"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"name"}, String.class,
                 Between.class, false, new String[]{"TestValue"}, null, "");
 
         SpecificationEndsWith<Person> specification = new SpecificationEndsWith<>(filterData, dataConversionService);
@@ -89,7 +89,7 @@ public class TestSpecificationEndsWith {
         when(path.getJavaType()).thenReturn(String.class);
         when(builder.upper(any())).thenReturn(path);
 
-        FilterData filterData = new FilterData("name", new String[]{"name"}, String.class,
+        FilterData filterData = new FilterData(new String[]{"name"}, new String[]{"name"}, String.class,
                 Between.class, false, new String[]{"TestValue"}, List.of(ModIgnoreCase.class), "");
 
         SpecificationEndsWith<Person> specification = new SpecificationEndsWith<>(filterData, dataConversionService);

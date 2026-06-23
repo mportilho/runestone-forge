@@ -27,10 +27,13 @@ package com.runestone.dynafilter.modules.jpa.spring;
 import com.runestone.converters.DataConversionService;
 import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
+import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
-import com.runestone.dynafilter.modules.jpa.operation.SpecificationFilterOperationService;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationContributor;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
@@ -63,9 +66,17 @@ public class DynamicFilterServletAutoConfiguration implements EmbeddedValueResol
 
     @Bean
     @ConditionalOnMissingBean
-    public DynamicFilterResolver<Specification<?>> dynamicFilterResolver(DataConversionService dataConversionService) {
-        SpecificationFilterOperationService service = new SpecificationFilterOperationService(dataConversionService);
-        return new SpecificationDynamicFilterResolver(service);
+    public FilterOperationService<Specification<?>> specificationFilterOperationService(
+            DataConversionService dataConversionService,
+            ObjectProvider<JpaFilterOperationContributor> contributors
+    ) {
+        return new JpaFilterOperationService(dataConversionService, contributors.orderedStream().toList());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DynamicFilterResolver<Specification<?>> dynamicFilterResolver(FilterOperationService<Specification<?>> filterOperationService) {
+        return new SpecificationDynamicFilterResolver(filterOperationService);
     }
 
     @Bean

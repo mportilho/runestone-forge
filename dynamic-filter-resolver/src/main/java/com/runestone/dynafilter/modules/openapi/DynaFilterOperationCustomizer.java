@@ -89,7 +89,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
      * representation
      */
     private void customizeParameter(Operation operation, MethodParameter methodParameter, FilterRequestData filter) {
-        if ((filter.constantValues() != null && filter.constantValues().length > 0) || Decorated.class.equals(filter.operation())) {
+        if (filter.constantValues() != null && filter.constantValues().length > 0) {
             return;
         }
 

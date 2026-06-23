@@ -24,9 +24,9 @@
 
 package com.runestone.dynafilter.modules.jpa.tools.app.database;
 
+import com.runestone.dynafilter.modules.jpa.repository.DynamicFilterJpaRepository;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.jpamodels.Address;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface AddressRepository extends JpaRepository<Address, Long>, JpaSpecificationExecutor<Address> {
+public interface AddressRepository extends DynamicFilterJpaRepository<Address, Long>, JpaSpecificationExecutor<Address> {
 }

@@ -25,9 +25,11 @@
 package com.runestone.dynafilter.core.model;
 
 import com.runestone.dynafilter.core.exceptions.MultipleFilterDataValuesException;
-import com.runestone.dynafilter.core.operation.DefinedFilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperation;
 
 import java.util.List;
+
+import static com.runestone.dynafilter.helpers.StringHelper.formatPath;
 
 /**
  * Represents the data that will be used to build a filter.
@@ -37,7 +39,7 @@ import java.util.List;
  * position is the parameter's position, corresponding to the 'parameters' attribute,  and the second is the values it has.
  * </p>
  *
- * @param path        the path to the attribute to be filtered
+ * @param path        the paths to the attributes to be filtered
  * @param parameters  the parameters that will be used to build the filter
  * @param targetType  the target type of the attribute to be filtered
  * @param operation   the operation that will be used to build the filter
@@ -47,10 +49,10 @@ import java.util.List;
  * @param description the user readable description of the filter
  */
 public record FilterData(
-        String path,
+        String[] path,
         String[] parameters,
         Class<?> targetType,
-        Class<? super DefinedFilterOperation> operation,
+        @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation,
         boolean negate,
         Object[] values,
         List<Class<? extends FilterModifier>> modifiers,
@@ -59,13 +61,13 @@ public record FilterData(
 
     public FilterData {
         if (parameters == null || parameters.length == 0) {
-            throw new IllegalArgumentException("On path '%s', parameters cannot be null or empty".formatted(path));
+            throw new IllegalArgumentException("On path '%s', parameters cannot be null or empty".formatted(formatPath(path)));
         }
         if (values == null || values.length == 0) {
-            throw new IllegalArgumentException("On path '%s', values cannot be null or empty".formatted(path));
+            throw new IllegalArgumentException("On path '%s', values cannot be null or empty".formatted(formatPath(path)));
         }
         if (parameters.length != values.length) {
-            throw new IllegalArgumentException("On path '%s', parameters and values must have the same length, as each parameter must have a corresponding value".formatted(path));
+            throw new IllegalArgumentException("On path '%s', parameters and values must have the same length, as each parameter must have a corresponding value".formatted(formatPath(path)));
         }
     }
 
@@ -80,8 +82,8 @@ public record FilterData(
      * @return a new instance of {@link FilterData}
      */
     public static FilterData of(String path, String[] parameters, Class<?> targetType,
-                                Class<? super DefinedFilterOperation> operation, Object[] values) {
-        return new FilterData(path, parameters, targetType, operation, false, values, null, null);
+                                @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation, Object[] values) {
+        return new FilterData(new String[]{path}, parameters, targetType, operation, false, values, null, null);
     }
 
     /**
@@ -92,7 +94,7 @@ public record FilterData(
     @SuppressWarnings("unchecked")
     public <R> R findOneValue() {
         if (values.length > 1) {
-            throw new MultipleFilterDataValuesException(String.format("Multiple values found while fetching a single one for path [%s]", path));
+            throw new MultipleFilterDataValuesException(String.format("Multiple values found while fetching a single one for path [%s]", formatPath(path)));
         }
         return (R) values[0];
     }
@@ -105,7 +107,7 @@ public record FilterData(
      */
     public Object findValueOnIndex(int i) {
         if (i >= values.length) {
-            throw new ArrayIndexOutOfBoundsException(String.format("Accessing nonexistent index [%s] for path [%s]", i, path));
+            throw new ArrayIndexOutOfBoundsException(String.format("Accessing nonexistent index [%s] for path [%s]", i, formatPath(path)));
         }
         return values[i];
     }

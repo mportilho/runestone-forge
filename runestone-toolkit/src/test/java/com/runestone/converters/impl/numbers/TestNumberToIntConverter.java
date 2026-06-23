@@ -58,4 +58,31 @@ public class TestNumberToIntConverter {
         assertThat(converter.convert(new LongAdder())).isEqualTo(0);
     }
 
+    @Test
+    public void testNullConversion() {
+        var converter = new NumberToIntConverter();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Cannot convert null to Integer");
+    }
+
+    @Test
+    public void testEdgeCases() {
+        var converter = new NumberToIntConverter();
+        assertThat(converter.convert(Double.MAX_VALUE)).isEqualTo(Double.valueOf(Double.MAX_VALUE).intValue());
+        assertThat(converter.convert(Float.NaN)).isEqualTo(Float.valueOf(Float.NaN).intValue());
+        assertThat(converter.convert(Double.POSITIVE_INFINITY)).isEqualTo(Double.valueOf(Double.POSITIVE_INFINITY).intValue());
+    }
+
+    @Test
+    public void testFloatingPointConversions() {
+        var converter = new NumberToIntConverter();
+        assertThat(converter.convert(0.1f)).isEqualTo(0);
+        assertThat(converter.convert(0.9d)).isEqualTo(0);
+        assertThat(converter.convert(1.5f)).isEqualTo(1);
+        assertThat(converter.convert(1.9d)).isEqualTo(1);
+        assertThat(converter.convert(new BigDecimal("1.9"))).isEqualTo(1);
+        assertThat(converter.convert(-1.9d)).isEqualTo(-1);
+    }
+
 }

@@ -24,10 +24,13 @@
 
 package com.runestone.dynafilter.modules.jpa.tools.app.database;
 
+import com.runestone.dynafilter.modules.jpa.repository.DynamicFilterJpaRepositoryImpl;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @SpringBootApplication
+@EnableJpaRepositories(repositoryBaseClass = DynamicFilterJpaRepositoryImpl.class)
 public class InMemoryDatabaseApplication {
 
     public static void main(String[] args) {

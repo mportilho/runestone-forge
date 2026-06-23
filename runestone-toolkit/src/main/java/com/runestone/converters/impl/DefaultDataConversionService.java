@@ -28,13 +28,25 @@ import com.runestone.converters.DataConversionService;
 import com.runestone.converters.DataConverter;
 import com.runestone.converters.NoDataConverterFoundException;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Collection;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class DefaultDataConversionService implements DataConversionService {
 
-    private static final Map<ConverterPairKey, DataConverter<?, ?>> CONVERTERS = loadConverters();
+    private static final Map<ConverterPairKey, DataConverter<?, ?>> CONVERTERS = new ConcurrentHashMap<>(loadConverters());
+    private static final ClassValue<EnumMetadata<?>> ENUM_METADATA_CACHE = new ClassValue<>() {
+        @Override
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        protected EnumMetadata<?> computeValue(Class<?> type) {
+            return new EnumMetadata(type);
+        }
+    };
 
     private final boolean throwIfNull;
 
@@ -48,26 +60,90 @@ public class DefaultDataConversionService implements DataConversionService {
 
     @Override
     public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
-        return CONVERTERS.containsKey(new ConverterPairKey(sourceType, targetType));
+        if (sourceType == null || targetType == null) {
+            return false;
+        }
+        if (CollectionArrayConversionSupport.canConvert(sourceType, targetType)) {
+            return true;
+        }
+        if (targetType.isAssignableFrom(sourceType) || canConvertPrimitive(sourceType, targetType)) {
+            return true;
+        }
+        if (targetType.isEnum() && (String.class.isAssignableFrom(sourceType) || Number.class.isAssignableFrom(sourceType))) {
+            return true;
+        }
+        if (CONVERTERS.containsKey(new ConverterPairKey(sourceType, targetType))) {
+            return true;
+        }
+        for (ConverterPairKey key : CONVERTERS.keySet()) {
+            if (key.targetType().equals(targetType) && key.sourceType().isAssignableFrom(sourceType)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({ "unchecked", "null" })
     public <S, T> T convert(S source, Class<T> targetType) {
         Objects.requireNonNull(targetType, "Target Type must be provided");
         if (source == null) {
             return null;
-        } else if (source.getClass().equals(targetType)) {
+        } else if (targetType.isInstance(source)) {
             return (T) source;
         }
+        T collectionArrayConversion = CollectionArrayConversionSupport.convert(source, targetType, this);
+        if (collectionArrayConversion != null) {
+            return collectionArrayConversion;
+        }
+        T directNumberConversion = convertNumberTypes(source, targetType);
+        if (directNumberConversion != null) {
+            return directNumberConversion;
+        }
 
-        DataConverter<S, T> dataConverter = (DataConverter<S, T>) CONVERTERS.get(new ConverterPairKey(source.getClass(), targetType));
+        DataConverter<S, T> dataConverter = getConverter(source.getClass(), targetType);
         T convertedValue = dataConverter != null ? dataConverter.convert(source) : fallbackConversion(source, targetType);
 
         if (convertedValue == null && throwIfNull) {
             throw new NoDataConverterFoundException(source.getClass(), targetType);
         }
         return convertedValue;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <S, T> T convertNumberTypes(S source, Class<T> targetType) {
+        if (!(source instanceof Number number)) {
+            return null;
+        }
+        if (targetType == Integer.class || targetType == int.class) {
+            return (T) Integer.valueOf(number.intValue());
+        }
+        if (targetType == Long.class || targetType == long.class) {
+            return (T) Long.valueOf(number.longValue());
+        }
+        if (targetType == Double.class || targetType == double.class) {
+            return (T) Double.valueOf(number.doubleValue());
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <S, T> DataConverter<S, T> getConverter(Class<?> sourceType, Class<?> targetType) {
+        ConverterPairKey key = new ConverterPairKey(sourceType, targetType);
+        DataConverter<?, ?> converter = CONVERTERS.get(key);
+        if (converter != null) {
+            return (DataConverter<S, T>) converter;
+        }
+
+        for (Map.Entry<ConverterPairKey, DataConverter<?, ?>> entry : CONVERTERS.entrySet()) {
+            ConverterPairKey mapKey = entry.getKey();
+            if (mapKey.targetType().equals(targetType) && mapKey.sourceType().isAssignableFrom(sourceType)) {
+                converter = entry.getValue();
+                CONVERTERS.put(key, converter);
+                return (DataConverter<S, T>) converter;
+            }
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")
@@ -80,7 +156,7 @@ public class DefaultDataConversionService implements DataConversionService {
         return convertEnum(source, targetType);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({ "unchecked", "null" })
     private <S, T> T convertPrimitiveTypes(S source, Class<T> targetType) {
         if (source instanceof Number number) {
             return (T) switch (targetType.getName()) {
@@ -96,35 +172,112 @@ public class DefaultDataConversionService implements DataConversionService {
             if (targetType.equals(boolean.class)) {
                 return (T) bool;
             }
-        }
-        return null;
-    }
-
-    private <S, T> T convertEnum(S source, Class<T> targetType) {
-        if (targetType.isEnum()) {
-            if (source instanceof String value) {
-                for (T enumConstant : targetType.getEnumConstants()) {
-                    if (((Enum<?>) enumConstant).name().equalsIgnoreCase(value)) {
-                        return enumConstant;
-                    }
-                }
-            } else if (source instanceof Number value) {
-                for (T enumConstant : targetType.getEnumConstants()) {
-                    if (value.intValue() == ((Enum<?>) enumConstant).ordinal()) {
-                        return enumConstant;
-                    }
-                }
+        } else if (source instanceof Character character) {
+            if (targetType.equals(char.class)) {
+                return (T) character;
             }
         }
         return null;
     }
 
+    @SuppressWarnings({ "unchecked", "null" })
+    private <S, T> T convertEnum(S source, Class<T> targetType) {
+        if (targetType.isEnum()) {
+            EnumMetadata<T> metadata = (EnumMetadata<T>) ENUM_METADATA_CACHE.get(targetType);
+            if (source instanceof String value) {
+                return metadata.getByName(value);
+            } else if (source instanceof Number value) {
+                Integer ordinal = toEnumOrdinal(value);
+                return ordinal == null ? null : metadata.getByOrdinal(ordinal);
+            }
+        }
+        return null;
+    }
+
+    private static boolean canConvertPrimitive(Class<?> sourceType, Class<?> targetType) {
+        if (!targetType.isPrimitive()) {
+            return false;
+        }
+        if (targetType == boolean.class) {
+            return sourceType == boolean.class || Boolean.class.isAssignableFrom(sourceType);
+        }
+        if (targetType == char.class) {
+            return sourceType == char.class || Character.class.isAssignableFrom(sourceType);
+        }
+        return Number.class.isAssignableFrom(sourceType)
+                || sourceType == byte.class
+                || sourceType == short.class
+                || sourceType == int.class
+                || sourceType == long.class
+                || sourceType == float.class
+                || sourceType == double.class;
+    }
+
+    private static Integer toEnumOrdinal(Number value) {
+        return switch (value) {
+            case Byte b -> b.intValue();
+            case Short s -> s.intValue();
+            case Integer i -> i;
+            case Long l -> integerOrdinal(l);
+            case BigInteger bi -> integerOrdinal(bi);
+            case BigDecimal bd -> integerOrdinal(bd);
+            case Float f when Float.isFinite(f) && Math.rint(f) == f -> integerOrdinal(f.longValue());
+            case Double d when Double.isFinite(d) && Math.rint(d) == d -> integerOrdinal(d.longValue());
+            default -> null;
+        };
+    }
+
+    private static Integer integerOrdinal(long value) {
+        if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
+            return null;
+        }
+        return (int) value;
+    }
+
+    private static Integer integerOrdinal(BigInteger value) {
+        if (value.compareTo(BigInteger.valueOf(Integer.MIN_VALUE)) < 0
+                || value.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) > 0) {
+            return null;
+        }
+        return value.intValue();
+    }
+
+    private static Integer integerOrdinal(BigDecimal value) {
+        try {
+            return integerOrdinal(value.toBigIntegerExact());
+        } catch (ArithmeticException e) {
+            return null;
+        }
+    }
+
+    private static final class EnumMetadata<T> {
+        private final T[] constants;
+        private final Map<String, T> nameMap;
+
+        public EnumMetadata(Class<T> enumType) {
+            this.constants = enumType.getEnumConstants();
+            this.nameMap = new HashMap<>();
+            if (constants != null) {
+                for (T constant : constants) {
+                    nameMap.put(((Enum<?>) constant).name().toUpperCase(Locale.ROOT), constant);
+                }
+            }
+        }
+
+        public T getByName(String name) {
+            return nameMap.get(name.toUpperCase(Locale.ROOT));
+        }
+
+        public T getByOrdinal(int ordinal) {
+            if (ordinal >= 0 && ordinal < constants.length) {
+                return constants[ordinal];
+            }
+            return null;
+        }
+    }
+
     private static Map<ConverterPairKey, DataConverter<?, ?>> loadConverters() {
-        Map<ConverterPairKey, DataConverter<?, ?>> converterMap = new HashMap<>();
-        DataConverterLoader.loadStringConverters(converterMap);
-        DataConverterLoader.loadNumberConverters(converterMap);
-        DataConverterLoader.loadDateConverters(converterMap);
-        return converterMap;
+        return DataConverterLoader.loadConverters();
     }
 
 }

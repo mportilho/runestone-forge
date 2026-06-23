@@ -27,6 +27,7 @@ package com.runestone.dynafilter.modules.jpa.operation.specification;
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
+import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
 import jakarta.persistence.criteria.*;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -43,7 +44,9 @@ public class SpecificationBetween<T> implements Specification<T> {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Predicate toPredicate(Root<T> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) {
-        Expression<Comparable> expression = JpaPredicateUtils.computeAttributePath(filterData, root);
+        String filterPath = filterData.path()[0];
+        JpaPaths.ResolvedJpaPath<Comparable> resolution = JpaPaths.resolveAttributePath(filterPath, filterData, root, query);
+        Expression<Comparable> expression = resolution.expression();
         Comparable lowerValue = dataConversionService.convert(filterData.findValueOnIndex(0), expression.getJavaType());
         Comparable upperValue = dataConversionService.convert(filterData.findValueOnIndex(1), expression.getJavaType());
 

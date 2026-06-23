@@ -24,25 +24,23 @@
 
 package com.runestone.memoization;
 
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
  * A {@link Supplier} implementation that caches the result of a delegate supplier and returns the cached value on
- * subsequent calls. The cache expires after a given duration. This implementation is thread-safe and uses a
- * {@link ReentrantLock} to synchronize the access to the cache.
+ * subsequent calls. The cache expires after a given duration. This implementation is thread-safe.
  *
- * @param <T>
+ * @param <T> the type of results supplied by this supplier
  * @author Marcelo Portilho
  */
 public class MemoizedExpiringSupplier<T> implements Supplier<T> {
 
     private final Supplier<T> delegate;
-    private transient T cache;
     private final long durationNanos;
-    private transient volatile long expirationNanos;
-    private volatile ReentrantLock reentrantLock;
+    private volatile T cache;
+    private volatile long expirationNanos;
 
     /**
      * Creates a new {@link MemoizedExpiringSupplier} instance that caches the result of the delegate supplier for the
@@ -56,7 +54,7 @@ public class MemoizedExpiringSupplier<T> implements Supplier<T> {
         if (duration <= 0) {
             throw new IllegalArgumentException(String.format("Provided duration (%s %s) must be greater than zero", duration, timeUnit));
         }
-        this.delegate = delegate;
+        this.delegate = Objects.requireNonNull(delegate, "Supplier delegate must be provided");
         this.durationNanos = timeUnit.toNanos(duration);
     }
 
@@ -65,9 +63,7 @@ public class MemoizedExpiringSupplier<T> implements Supplier<T> {
         long nanos = expirationNanos;
         long now = System.nanoTime();
         if (nanos == 0 || now - nanos >= 0) {
-            ReentrantLock lock = getReentrantLock();
-            lock.lock();
-            try {
+            synchronized (this) {
                 if (nanos == expirationNanos) {
                     T t = delegate.get();
                     cache = t;
@@ -75,22 +71,9 @@ public class MemoizedExpiringSupplier<T> implements Supplier<T> {
                     expirationNanos = (nanos == 0) ? 1 : nanos;
                     return t;
                 }
-            } finally {
-                lock.unlock();
             }
         }
         return cache;
-    }
-
-    private ReentrantLock getReentrantLock() {
-        if (reentrantLock == null) {
-            synchronized (this) {
-                if (reentrantLock == null) {
-                    reentrantLock = new ReentrantLock();
-                }
-            }
-        }
-        return reentrantLock;
     }
 
 }

@@ -89,7 +89,7 @@ public class TestDynamicFilterJpaRepositorySortTranslation {
 
     private static FilterRequestData filter(String path, String... parameters) {
         return new FilterRequestData(
-                path,
+                new String[]{path},
                 parameters,
                 null,
                 null,
@@ -97,6 +97,7 @@ public class TestDynamicFilterJpaRepositorySortTranslation {
                 null,
                 null,
                 null,
+                false,
                 false,
                 List.of(),
                 null

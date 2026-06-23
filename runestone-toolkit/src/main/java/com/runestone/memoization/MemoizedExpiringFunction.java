@@ -21,30 +21,28 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
+ 
 package com.runestone.memoization;
-
+ 
+import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.Objects;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
-
+ 
 /**
  * A {@link Function} implementation that caches the result of a delegate function and returns the cached value on
- * subsequent calls. This implementation is thread-safe and uses a {@link ConcurrentHashMap} to store the cached values.
+ * subsequent calls. This implementation is thread-safe and uses Caffeine to store the cached values.
  * The cache expires after a given duration.
  *
  * @param <T> the type of arguments to the function
  * @param <R> the type of results supplied by this supplier
  */
 public class MemoizedExpiringFunction<T, R> implements Function<T, R> {
-
+ 
     private final Function<T, R> delegate;
-    private ConcurrentMap<T, CacheEntry<R>> cache;
-    private final long durationMillis;
+    private final ConcurrentMap<T, Future<R>> cache;
     private final boolean retryOnError;
-    private final ReentrantLock lock = new ReentrantLock();
-
+ 
     /**
      * Creates a new {@link MemoizedExpiringFunction} instance.
      *
@@ -54,14 +52,31 @@ public class MemoizedExpiringFunction<T, R> implements Function<T, R> {
      * @param retryOnError whether to retry the delegate function on error
      */
     public MemoizedExpiringFunction(Function<T, R> delegate, long duration, TimeUnit timeUnit, boolean retryOnError) {
+        this(delegate, 2048, duration, timeUnit, retryOnError);
+    }
+
+    /**
+     * Creates a new {@link MemoizedExpiringFunction} instance.
+     *
+     * @param delegate     the delegate function to be memoized
+     * @param maximumSize  the maximum number of entries the cache can hold
+     * @param duration     the duration of the cache
+     * @param timeUnit     the time unit of the duration
+     * @param retryOnError whether to retry the delegate function on error
+     */
+    public MemoizedExpiringFunction(Function<T, R> delegate, long maximumSize, long duration, TimeUnit timeUnit, boolean retryOnError) {
         this.delegate = Objects.requireNonNull(delegate, "Function delegate must be provided");
         if (duration <= 0) {
             throw new IllegalArgumentException("Provided duration must be greater than zero");
         }
-        this.durationMillis = timeUnit.toMillis(duration);
         this.retryOnError = retryOnError;
+        this.cache = Caffeine.newBuilder()
+                .maximumSize(maximumSize)
+                .expireAfterWrite(duration, timeUnit)
+                .executor(Runnable::run)
+                .<T, Future<R>>build().asMap();
     }
-
+ 
     /**
      * Creates a new {@link MemoizedExpiringFunction} instance.
      *
@@ -72,60 +87,40 @@ public class MemoizedExpiringFunction<T, R> implements Function<T, R> {
     public MemoizedExpiringFunction(Function<T, R> delegate, long duration, TimeUnit timeUnit) {
         this(delegate, duration, timeUnit, true);
     }
-
+ 
     @Override
     public R apply(T t) {
-        if (cache == null) {
-            lock.lock();
-            try {
-                if (cache == null) {
-                    cache = new ConcurrentHashMap<>(128);
+        Future<R> future = cache.get(t);
+        try {
+            if (future == null) {
+                FutureTask<R> futureTask = new FutureTask<>(() -> delegate.apply(t));
+                future = cache.putIfAbsent(t, futureTask);
+                if (future == null) {
+                    future = futureTask;
+                    futureTask.run();
                 }
-            } finally {
-                lock.unlock();
             }
-        }
-        try {
-            return applyWithExpiry(t);
+            return future.get();
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new IllegalStateException("Memoization interrupted while fetching a new value", e);
-        }
-    }
-
-    private R applyWithExpiry(T t) throws InterruptedException {
-        long currentTime = System.currentTimeMillis();
-        CacheEntry<R> entry = cache.get(t);
-
-        if (entry == null || entry.isExpired(currentTime)) {
-            Callable<R> eval = () -> delegate.apply(t);
-            FutureTask<R> futureTask = new FutureTask<>(eval);
-            entry = new CacheEntry<>(futureTask, currentTime + durationMillis);
-            cache.put(t, entry);
-            futureTask.run();
-        }
-        try {
-            return entry.future().get();
         } catch (CancellationException e) {
-            cache.remove(t, entry);
-        } catch (ExecutionException e) {
-            Throwable throwable = e.getCause();
-            if (retryOnError) {
-                cache.remove(t, entry);
+            if (future != null) {
+                cache.remove(t, future);
             }
-            if (throwable instanceof RuntimeException exception) {
+            throw new IllegalStateException("Memoization cancelled while fetching a new value", e);
+        } catch (ExecutionException e) {
+            if (retryOnError && future != null) {
+                cache.remove(t, future);
+            }
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException exception) {
                 throw exception;
-            } else if (throwable instanceof Error error) {
+            } else if (cause instanceof Error error) {
                 throw error;
             } else {
-                throw new IllegalStateException("Error while fetching new value for memoized function", throwable);
+                throw new IllegalStateException("Error while fetching new value for memoized function", cause);
             }
-        }
-        throw new IllegalStateException("Error while fetching new value for memoized function");
-    }
-
-    private record CacheEntry<R>(FutureTask<R> future, long expirationTime) {
-        boolean isExpired(long currentTime) {
-            return currentTime >= expirationTime;
         }
     }
 }

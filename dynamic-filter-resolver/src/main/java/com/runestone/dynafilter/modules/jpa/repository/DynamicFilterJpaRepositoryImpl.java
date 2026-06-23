@@ -134,11 +134,6 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
     }
 
     @Override
-    public long delete(ConditionalStatement conditionalStatement) {
-        return delete(dynamicFilterResolver.<Specification<T>>createFilter(conditionalStatement));
-    }
-
-    @Override
     public <S extends T, R> R findBy(ConditionalStatement conditionalStatement, Function<FluentQuery.FetchableFluentQuery<S>, R> queryFunction) {
         return findBy(dynamicFilterResolver.<Specification<T>>createFilter(conditionalStatement), queryFunction);
     }
@@ -184,7 +179,7 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
                 continue;
             }
 
-            String path = filter.path();
+            String path = filter.path()[0];
             if (path != null && !parameter.equals(path)) {
                 parameterPathMap.put(parameter, path);
             }
