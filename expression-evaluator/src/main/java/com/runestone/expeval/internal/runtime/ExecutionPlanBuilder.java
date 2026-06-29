@@ -194,6 +194,13 @@ final class ExecutionPlanBuilder {
                 for (ExecutableNode argument : reflectiveMethodInvoke.arguments()) {
                     count += countNodeEvents(argument);
                 }
+                continue;
+            }
+            if (access instanceof ExecutablePropertyChain.ExecutableCollectionFunction collectionFunction) {
+                count++;
+                for (ExecutableNode argument : collectionFunction.arguments()) {
+                    count += countNodeEvents(argument);
+                }
             }
         }
         return count;
@@ -524,7 +531,7 @@ final class ExecutionPlanBuilder {
             steps.add(buildReflectiveAccess(access, argumentNodes, safe));
             currentType = UnknownType.INSTANCE;
         }
-        return foldPropertyChainPrefix(root, steps, runtimeServices, mathContext);
+        return foldPropertyChainPrefix(root, steps, runtimeServices, mathContext, foldContext);
     }
 
     private ExecutableNode buildLegacyPropertyChain(
@@ -574,14 +581,15 @@ final class ExecutionPlanBuilder {
             steps.add(buildReflectiveAccess(access, argumentNodes, safe));
             currentType = UnknownType.INSTANCE;
         }
-        return foldPropertyChainPrefix(root, steps, runtimeServices, mathContext);
+        return foldPropertyChainPrefix(root, steps, runtimeServices, mathContext, foldContext);
     }
 
     private ExecutableNode foldPropertyChainPrefix(
             ExecutableNode root,
             List<ExecutablePropertyChain.ExecutableAccess> steps,
             RuntimeServices runtimeServices,
-            MathContext mathContext) {
+            MathContext mathContext,
+            FoldContext foldContext) {
         if (!isConstantNode(root) || steps.isEmpty()) {
             return new ExecutablePropertyChain(root, steps);
         }
@@ -596,6 +604,7 @@ final class ExecutionPlanBuilder {
                 break;
             }
             ExecutablePropertyChain prefix = new ExecutablePropertyChain(root, steps.subList(0, index + 1));
+            Object previousValue = foldedValue;
             try {
                 foldedValue = PropertyChainOps.evaluatePropertyChain(
                         prefix,
@@ -608,6 +617,15 @@ final class ExecutionPlanBuilder {
                 // Preserve runtime failure timing: invalid constant navigation still fails during compute().
                 break;
             }
+            if (access instanceof ExecutablePropertyChain.ExecutableCollectionFunction collectionFunction) {
+                recordFoldedCollectionFunctionCall(
+                        foldContext,
+                        collectionFunction,
+                        previousValue,
+                        foldedValue,
+                        runtimeServices,
+                        evaluator);
+            }
             foldedSteps = index + 1;
         }
 
@@ -618,6 +636,25 @@ final class ExecutionPlanBuilder {
             return new ExecutableLiteral(foldedValue);
         }
         return new ExecutablePropertyChain(new ExecutableLiteral(foldedValue), steps.subList(foldedSteps, steps.size()));
+    }
+
+    private void recordFoldedCollectionFunctionCall(
+            FoldContext foldContext,
+            ExecutablePropertyChain.ExecutableCollectionFunction collectionFunction,
+            Object current,
+            Object result,
+            RuntimeServices runtimeServices,
+            ConstantNodeEvaluator evaluator) {
+        FunctionDescriptor descriptor = collectionFunction.binding().descriptor();
+        List<Class<?>> parameterTypes = descriptor.parameterTypes();
+        List<ExecutableNode> arguments = collectionFunction.arguments();
+        Object[] auditArgs = new Object[arguments.size() + 1];
+        auditArgs[0] = runtimeServices.coerce(current, parameterTypes.getFirst());
+        for (int index = 0; index < arguments.size(); index++) {
+            Object value = evaluator.evaluate(arguments.get(index), null);
+            auditArgs[index + 1] = runtimeServices.coerce(value, parameterTypes.get(index + 1));
+        }
+        foldContext.variableReads.add(new AuditEvent.FunctionCall(descriptor.name(), auditArgs, result));
     }
 
     private boolean isFoldableAccess(ExecutablePropertyChain.ExecutableAccess access) {

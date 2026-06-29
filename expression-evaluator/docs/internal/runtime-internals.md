@@ -86,6 +86,8 @@ Normalization happens through `RuntimeServices.coerceToResolvedType(...)` at the
 - function results
 - property/method return values when the member has a resolved type
 
+Function invocation uses arity-specialized runtime paths for arities 0 through 6. Those paths evaluate and coerce arguments directly into locals and do not allocate a generic argument array during ordinary `compute(...)`. When audit is active, the same invocation policy creates the owned `FunctionCall` argument array only inside the audit branch.
+
 ---
 
 ## 4. Environment Assembly
@@ -504,7 +506,7 @@ are compiled into `ExecutableRegexOp` during plan build. The `Pattern` is create
 
 - every identifier read
 - every dynamic instant read
-- every function invocation
+- every function invocation, including catalog-backed collection functions such as `items..customFn(...)`
 - every assignment target write
 
 Notes:
@@ -512,7 +514,8 @@ Notes:
 - dynamic instants are marked as `systemProvided = true`
 - ordinary identifiers are marked as `systemProvided = false`
 - destructuring assignments emit one `AssignmentEvent` per target
-- folded function calls still emit `FunctionCall`
+- collection function `FunctionCall` events include the navigated collection/map as the first coerced input argument, followed by explicit expression arguments
+- folded function calls still emit `FunctionCall`; this includes foldable catalog-backed collection functions folded inside a property-chain prefix
 - fully or partially folded property chains keep the pre-stored `VariableRead` events for folded roots; audit equivalence is semantic, not a guarantee of identical internal navigation event counts
 
 ### Convenience views

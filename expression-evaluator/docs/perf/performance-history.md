@@ -4,6 +4,58 @@ Current benchmark packages and JMH commands are documented in [`benchmark-organi
 
 ---
 
+## PERF-004: Function invocation audit policy for collection functions
+
+**Date:** 2026-06-29
+
+**Scenario:** Validate the first stage of `docs/prd/expression-runtime-performance-deepening.md`:
+centralized Function Invocation, coercion, and Audit Trail policy while preserving the existing
+arity-specialized no-audit fast paths. The change also makes Collection Function calls visible in
+`computeWithAudit()` without allocating audit argument arrays in ordinary `compute()`.
+
+**Hypothesis:** Normal function invocation and collection-function invocation should keep unchanged
+allocation in `compute()`. Audit paths may keep their existing audit-event allocation, but should not
+materially regress throughput.
+
+**Machine:** OpenJDK 25.0.3 / Linux x86-64, -Xms1g -Xmx1g
+**JMH config:** 3 forks x 5 warmup + 10 measurement iterations x 500 ms each; `AverageTime / ns`; GC profiler enabled
+
+**Baseline:** Fresh detached worktree at `HEAD` before the stage 1 change, created under
+`/tmp/opencode/runestone-forge-etapa1-baseline`.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta | B/op Before | B/op After |
+|---|---:|---:|---:|---:|---:|
+| evaluation.core.ObjectEvaluatorBenchmark.userFunction | 869.22 | 839.74 | +3.4% | 976.0 | 976.0 |
+| navigation.collection.CollectionNavigationBenchmark.customFunctionCount | 238.63 | 225.25 | +5.6% | 272.0 | 272.0 |
+| runtime.audit.AuditOverheadBenchmark.userFunctionNoAudit | 865.23 | 872.19 | -0.8% | 976.0 | 976.0 |
+| runtime.audit.AuditOverheadBenchmark.userFunctionWithAudit | 1011.78 | 1014.62 | -0.3% | 1712.0 | 1712.0 |
+| runtime.audit.AuditOverheadBenchmark.assignedVariableNoAudit | 734.54 | 721.54 | +1.8% | 1160.0 | 1160.0 |
+| runtime.audit.AuditOverheadBenchmark.assignedVariableWithAudit | 931.52 | 903.33 | +3.0% | 1712.0 | 1712.0 |
+| runtime.audit.AuditOverheadBenchmark.variableChurnNoAudit | 772.45 | 778.52 | -0.8% | 1296.0 | 1296.0 |
+| runtime.audit.AuditOverheadBenchmark.variableChurnWithAudit | 945.69 | 964.55 | -2.0% | 1904.0 | 1904.0 |
+
+**Additional controls:**
+
+| Benchmark group | Result |
+|---|---|
+| `runtime.functions.MathFunctionsBenchmark` | 12 parameterized cases were within -1.8% to +5.6%; most allocation stayed unchanged. The largest allocation movement was `testVariance[size=5000]` (`500777 -> 540367 B/op`), a direct catalog-function control not touched by this change and with nearly identical runtime (`-0.03%`). |
+| `runtime.functions.StringFunctionsRegexBenchmark` | All four string controls measured slower by 4.4% to 5.8%, with unchanged `B/op`. These direct functions were not modified by the stage 1 change, so this is treated as run-to-run noise rather than a causal regression. |
+
+**Decision:** ACCEPT — the changed evaluation hot paths preserved allocation, ordinary `compute()` did
+not add audit allocation, and the collection-function hot path improved in this run. The only slower
+measurements were either below 2% on audit/variable controls or came from untouched string controls
+with stable allocation.
+
+**Notes:**
+
+- Raw JSON results were saved to `/tmp/performance-benchmark/expeval-stage1-before.json` and
+  `/tmp/performance-benchmark/expeval-stage1-after.json`.
+- The comparison report was saved to `/tmp/performance-benchmark/expeval-stage1-comparison.md`.
+- The Maven local cache needed the project parent POM installed before the baseline JMH run because
+  the helper runs from the module directory.
+
+---
+
 ## PERF-003: RuntimeInvocationSupport consolidation
 
 **Date:** 2026-05-24

@@ -267,7 +267,8 @@ final class CollectionNavigationOps {
                 cf.arguments(),
                 scope,
                 runtimeServices,
-                eval);
+                eval,
+                scope == null ? null : scope.audit());
     }
 
     @SuppressWarnings("unchecked")

@@ -23,7 +23,13 @@ final class RuntimeInvocationSupport {
         FunctionDescriptor descriptor = binding.descriptor();
         List<Class<?>> parameterTypes = descriptor.parameterTypes();
         return switch (descriptor.arity()) {
-            case 0 -> runtimeServices.coerceToResolvedType(descriptor.invoke(), binding.returnType());
+            case 0 -> {
+                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(), binding.returnType());
+                if (audit != null) {
+                    auditFunctionCall(audit, descriptor, result);
+                }
+                yield result;
+            }
             case 1 -> {
                 Object a1 = evaluateAndCoerce(argumentNodes, 0, scope, runtimeServices, evaluator, parameterTypes);
                 Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1), binding.returnType());
@@ -104,7 +110,8 @@ final class RuntimeInvocationSupport {
             List<ExecutableNode> extraArgumentNodes,
             ExecutionScope scope,
             RuntimeServices runtimeServices,
-            NodeEvaluator evaluator) {
+            NodeEvaluator evaluator,
+            AuditCollector audit) {
 
         FunctionDescriptor descriptor = binding.descriptor();
         List<Class<?>> parameterTypes = descriptor.parameterTypes();
@@ -112,25 +119,41 @@ final class RuntimeInvocationSupport {
         return switch (totalArity) {
             case 1 -> {
                 Object a1 = runtimeServices.coerce(current, parameterTypes.getFirst());
-                yield runtimeServices.coerceToResolvedType(descriptor.invoke(a1), binding.returnType());
+                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1), binding.returnType());
+                if (audit != null) {
+                    auditFunctionCall(audit, descriptor, result, a1);
+                }
+                yield result;
             }
             case 2 -> {
                 Object a1 = runtimeServices.coerce(current, parameterTypes.getFirst());
                 Object a2 = evaluateAndCoerce(extraArgumentNodes, 0, scope, runtimeServices, evaluator, parameterTypes, 1);
-                yield runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2), binding.returnType());
+                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2), binding.returnType());
+                if (audit != null) {
+                    auditFunctionCall(audit, descriptor, result, a1, a2);
+                }
+                yield result;
             }
             case 3 -> {
                 Object a1 = runtimeServices.coerce(current, parameterTypes.getFirst());
                 Object a2 = evaluateAndCoerce(extraArgumentNodes, 0, scope, runtimeServices, evaluator, parameterTypes, 1);
                 Object a3 = evaluateAndCoerce(extraArgumentNodes, 1, scope, runtimeServices, evaluator, parameterTypes, 1);
-                yield runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3), binding.returnType());
+                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3), binding.returnType());
+                if (audit != null) {
+                    auditFunctionCall(audit, descriptor, result, a1, a2, a3);
+                }
+                yield result;
             }
             case 4 -> {
                 Object a1 = runtimeServices.coerce(current, parameterTypes.getFirst());
                 Object a2 = evaluateAndCoerce(extraArgumentNodes, 0, scope, runtimeServices, evaluator, parameterTypes, 1);
                 Object a3 = evaluateAndCoerce(extraArgumentNodes, 1, scope, runtimeServices, evaluator, parameterTypes, 1);
                 Object a4 = evaluateAndCoerce(extraArgumentNodes, 2, scope, runtimeServices, evaluator, parameterTypes, 1);
-                yield runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3, a4), binding.returnType());
+                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3, a4), binding.returnType());
+                if (audit != null) {
+                    auditFunctionCall(audit, descriptor, result, a1, a2, a3, a4);
+                }
+                yield result;
             }
             case 5 -> {
                 Object a1 = runtimeServices.coerce(current, parameterTypes.getFirst());
@@ -138,7 +161,11 @@ final class RuntimeInvocationSupport {
                 Object a3 = evaluateAndCoerce(extraArgumentNodes, 1, scope, runtimeServices, evaluator, parameterTypes, 1);
                 Object a4 = evaluateAndCoerce(extraArgumentNodes, 2, scope, runtimeServices, evaluator, parameterTypes, 1);
                 Object a5 = evaluateAndCoerce(extraArgumentNodes, 3, scope, runtimeServices, evaluator, parameterTypes, 1);
-                yield runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3, a4, a5), binding.returnType());
+                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3, a4, a5), binding.returnType());
+                if (audit != null) {
+                    auditFunctionCall(audit, descriptor, result, a1, a2, a3, a4, a5);
+                }
+                yield result;
             }
             case 6 -> {
                 Object a1 = runtimeServices.coerce(current, parameterTypes.getFirst());
@@ -147,7 +174,11 @@ final class RuntimeInvocationSupport {
                 Object a4 = evaluateAndCoerce(extraArgumentNodes, 2, scope, runtimeServices, evaluator, parameterTypes, 1);
                 Object a5 = evaluateAndCoerce(extraArgumentNodes, 3, scope, runtimeServices, evaluator, parameterTypes, 1);
                 Object a6 = evaluateAndCoerce(extraArgumentNodes, 4, scope, runtimeServices, evaluator, parameterTypes, 1);
-                yield runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3, a4, a5, a6), binding.returnType());
+                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(a1, a2, a3, a4, a5, a6), binding.returnType());
+                if (audit != null) {
+                    auditFunctionCall(audit, descriptor, result, a1, a2, a3, a4, a5, a6);
+                }
+                yield result;
             }
             default -> {
                 Object[] arguments = new Object[totalArity];
@@ -162,7 +193,11 @@ final class RuntimeInvocationSupport {
                             parameterTypes,
                             1);
                 }
-                yield runtimeServices.coerceToResolvedType(descriptor.invoke(arguments), binding.returnType());
+                Object result = runtimeServices.coerceToResolvedType(descriptor.invoke(arguments), binding.returnType());
+                if (audit != null) {
+                    auditFunctionCall(audit, descriptor, result, arguments);
+                }
+                yield result;
             }
         };
     }
