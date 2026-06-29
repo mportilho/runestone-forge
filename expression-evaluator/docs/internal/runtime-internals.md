@@ -235,11 +235,19 @@ If the current type is `UnknownType`, the resolver tolerates the chain and keeps
 
 `ExecutionPlanBuilder` consumes the compile-time member binding map and copies only runtime-needed data into `ExecutableFieldGet` / `ExecutableMethodInvoke`: resolved handle, parameter types, return type, member name, and safety flag. The member binding map is not part of the execution plan, and evaluation does not consult `SemanticModel` for member lookup.
 
+Object-only property chains are marked as legacy-only at plan construction and evaluated through a direct index loop. That path preserves the typed-handle and reflective-fallback behavior above while avoiding per-evaluation list views.
+
 ### Null handling in chains
 
 - `obj.prop` or `obj.method()` throws `ExpressionEvaluationException` with code `NULL_IN_CHAIN` when a null intermediate value is reached.
 - `obj?.prop` or `obj?.method()` returns `null` for the rest of the chain.
 - `??` can be used after a reference expression to provide a default.
+
+### Collection navigation hot-path notes
+
+- Collection navigation keeps explicit loops rather than streams.
+- Filter and map-transform current-element state is stored in the reusable per-thread `FilterContextStack`; there is no context allocation per navigation step or per element.
+- Map filters iterate entries directly so `@`, `@.key`, and `@.value` are bound from the same map entry without an additional map lookup.
 
 ---
 

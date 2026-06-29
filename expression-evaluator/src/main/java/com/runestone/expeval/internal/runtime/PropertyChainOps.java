@@ -119,7 +119,8 @@ final class PropertyChainOps {
             current = "key".equals(sentinel) ? mapCtx.mapKey() : mapCtx.mapValue();
             chainStart = 1;
         }
-        for (ExecutablePropertyChain.ExecutableAccess access : chain.subList(chainStart, chain.size())) {
+        for (int i = chainStart; i < chain.size(); i++) {
+            ExecutablePropertyChain.ExecutableAccess access = chain.get(i);
             if (current == null) {
                 if (isSafeAccess(access)) {
                     return null;

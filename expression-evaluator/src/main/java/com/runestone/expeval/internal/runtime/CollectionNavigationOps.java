@@ -66,8 +66,9 @@ final class CollectionNavigationOps {
         FilterContextStack stack = FilterContextStack.INSTANCE.get();
         if (current instanceof Map<?, ?> map) {
             Map<Object, Object> result = new LinkedHashMap<>(map.size() * 2);
-            for (Object key : map.keySet()) {
-                Object value = map.get(key);
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                Object key = entry.getKey();
+                Object value = entry.getValue();
                 stack.pushMapEntry(key, value);
                 try {
                     if (asBoolean(eval.evaluate(predicate, scope), source, runtimeServices)) {

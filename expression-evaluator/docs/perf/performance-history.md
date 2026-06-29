@@ -4,6 +4,71 @@ Current benchmark packages and JMH commands are documented in [`benchmark-organi
 
 ---
 
+## PERF-007: Object and Collection Navigation locality
+
+**Date:** 2026-06-29
+
+**Scenario:** Validate stage 4 of `docs/prd/expression-runtime-performance-deepening.md` for
+Object Navigation and Collection Navigation. The change keeps typed object navigation on precomputed
+handles, keeps reflective navigation as fallback, keeps collection loops explicit, and does not add
+per-navigation-step context objects or virtual dispatch.
+
+**Hypothesis:** Removing per-evaluation list-view creation in legacy object-only property chains and
+iterating map-filter entries directly should reduce allocation on object navigation and filter-heavy
+collection navigation while preserving behavior.
+
+**Machine:** OpenJDK 25.0.3 / Linux x86-64, -Xms1g -Xmx1g
+**JMH config:** 3 forks x 5 warmup + 10 measurement iterations x 500 ms each; `AverageTime / ns`; GC profiler enabled
+
+**Baseline:** Fresh same-worktree baseline captured before edits after confirming a clean worktree
+with `git status --short`.
+
+### ObjectNavigationBenchmark
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta | B/op Before | B/op After |
+|---|---:|---:|---:|---:|---:|
+| navigation.object.ObjectNavigationBenchmark.buildTypedEnvironment | 50,276.4 | 50,421.3 | -0.29% | 47,875 | 47,774 |
+| navigation.object.ObjectNavigationBenchmark.compileReflectiveMethodWithArgument | 9,488.9 | 10,268.4 | -8.22% | 14,269 | 14,110 |
+| navigation.object.ObjectNavigationBenchmark.compileTypedMethodWithArgument | 10,980.1 | 11,277.7 | -2.71% | 14,916 | 14,789 |
+| navigation.object.ObjectNavigationBenchmark.compileTypedNestedProperty | 6,925.4 | 6,676.5 | +3.59% | 12,008 | 11,832 |
+| navigation.object.ObjectNavigationBenchmark.reflectiveMethodWithArgument | 200.6 | 194.1 | +3.27% | 152 | 128 |
+| navigation.object.ObjectNavigationBenchmark.reflectiveNestedProperty | 217.5 | 207.3 | +4.67% | 88 | 64 |
+| navigation.object.ObjectNavigationBenchmark.typedMethodNoArg | 95.1 | 85.4 | +10.17% | 128 | 104 |
+| navigation.object.ObjectNavigationBenchmark.typedMethodWithArgument | 136.8 | 134.9 | +1.36% | 128 | 104 |
+| navigation.object.ObjectNavigationBenchmark.typedNestedProperty | 140.4 | 115.0 | +18.13% | 88 | 64 |
+
+### CollectionNavigationBenchmark
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta | B/op Before | B/op After |
+|---|---:|---:|---:|---:|---:|
+| navigation.collection.CollectionNavigationBenchmark.customFunctionCount | 216.2 | 229.0 | -5.89% | 272 | 272 |
+| navigation.collection.CollectionNavigationBenchmark.deepScanCount | 1,099.8 | 1,053.1 | +4.25% | 528 | 528 |
+| navigation.collection.CollectionNavigationBenchmark.indexAccess | 63.3 | 65.8 | -3.96% | 64 | 64 |
+| navigation.collection.CollectionNavigationBenchmark.listFilterCount | 540.9 | 505.4 | +6.57% | 216 | 120 |
+| navigation.collection.CollectionNavigationBenchmark.mapFilterCount | 635.3 | 559.0 | +12.01% | 352 | 256 |
+| navigation.collection.CollectionNavigationBenchmark.mapValuesCount | 65.2 | 65.1 | +0.20% | 64 | 64 |
+
+**Decision:** ACCEPT. The changed object-navigation hot paths reduced allocation by 24 B/op per
+object-chain evaluation and improved typed nested property throughput by 18.13%. Collection filters
+benefited from the same legacy-chain allocation removal inside `@.property` predicates, reducing
+`listFilterCount` by 96 B/op and `mapFilterCount` by 96 B/op; direct map-entry iteration also keeps
+map filter behavior local without a second lookup. The slower object compile measurements have lower
+allocation and wide error intervals, and the slower collection `customFunctionCount`/`indexAccess`
+controls were not causally touched and kept allocation unchanged.
+
+**Notes:**
+
+- Raw JSON results were saved to `/tmp/performance-benchmark/expeval-stage4-object-before.json`,
+  `/tmp/performance-benchmark/expeval-stage4-object-after.json`,
+  `/tmp/performance-benchmark/expeval-stage4-collection-before.json`, and
+  `/tmp/performance-benchmark/expeval-stage4-collection-after.json`.
+- Comparison reports were saved to `/tmp/performance-benchmark/expeval-stage4-object-comparison.md`
+  and `/tmp/performance-benchmark/expeval-stage4-collection-comparison.md`.
+- No benchmark in this stage added per-step context allocation, streams in evaluation loops, or
+  virtual dispatch per navigation step.
+
+---
+
 ## PERF-006: Compile-time Constant Folding policy extraction
 
 **Date:** 2026-06-29

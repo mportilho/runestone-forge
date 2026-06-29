@@ -28,7 +28,7 @@ record ExecutablePropertyChain(
     ExecutablePropertyChain {
         Objects.requireNonNull(root, "root must not be null");
         chain = List.copyOf(Objects.requireNonNull(chain, "chain must not be null"));
-        legacyOnly = chain.stream().allMatch(ExecutablePropertyChain::isLegacyAccess);
+        legacyOnly = isLegacyOnly(chain);
     }
 
     ExecutablePropertyChain(ExecutableNode root, List<ExecutableAccess> chain) {
@@ -43,6 +43,15 @@ record ExecutablePropertyChain(
             case ReflectiveMethodInvoke ignored -> true;
             default -> false;
         };
+    }
+
+    private static boolean isLegacyOnly(List<ExecutableAccess> chain) {
+        for (int i = 0; i < chain.size(); i++) {
+            if (!isLegacyAccess(chain.get(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     sealed interface ExecutableAccess permits
