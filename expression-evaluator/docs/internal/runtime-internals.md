@@ -52,9 +52,9 @@ source string
 2. `SemanticAstBuilder`
    Converts parse trees into typed AST nodes under `internal.ast`.
 3. `SemanticResolver`
-   Resolves identifiers, assignments, function overloads, property chains, and `ResolvedType`s into a `SemanticModel`.
+   Resolves identifiers, assignments, function overloads, property chains, typed member bindings, and `ResolvedType`s into a semantic resolution result.
 4. `ExecutionPlanBuilder`
-   Assigns deterministic symbol indices, seeds external defaults, folds constants, compiles regex patterns, and produces an `ExecutionPlan`.
+   Assigns deterministic symbol indices, consumes compile-time typed member bindings, seeds external defaults, folds constants, compiles regex patterns, and produces an `ExecutionPlan`.
 5. `MathEvaluator` / `LogicalEvaluator`
    Execute the compiled plan inside an `ExecutionScope`.
 
@@ -214,6 +214,8 @@ For members that return another registered type, the resolved type becomes `Obje
 - property or method access
 - optional safe navigation
 
+When a property or method access is backed by registered type-hint metadata, semantic resolution also creates a compile-time `ResolvedMemberBinding` for that chain step. The binding records the selected property getter or method handle, method parameter types, return type, and safe-navigation semantics. This is the single place where typed method overload selection is performed.
+
 If the current type is `ObjectType`, the resolver validates:
 
 - property existence
@@ -230,6 +232,8 @@ If the current type is `UnknownType`, the resolver tolerates the chain and keeps
 
 - typed access with precomputed `MethodHandle`s
 - reflective fallback through `ReflectiveAccessCache`
+
+`ExecutionPlanBuilder` consumes the compile-time member binding map and copies only runtime-needed data into `ExecutableFieldGet` / `ExecutableMethodInvoke`: resolved handle, parameter types, return type, member name, and safety flag. The member binding map is not part of the execution plan, and evaluation does not consult `SemanticModel` for member lookup.
 
 ### Null handling in chains
 

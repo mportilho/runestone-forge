@@ -10,6 +10,7 @@ import com.runestone.expeval.internal.ast.mapping.SemanticAstBuilder;
 import com.runestone.expeval.internal.grammar.ExpressionEvaluatorParserFacade;
 import com.runestone.expeval.internal.grammar.ExpressionResultType;
 import com.runestone.expeval.internal.semantic.ResolutionContext;
+import com.runestone.expeval.internal.semantic.SemanticResolution;
 import com.runestone.expeval.internal.semantic.SemanticModel;
 
 import java.util.List;
@@ -73,7 +74,8 @@ final class ExpressionCompiler {
             case ASSIGNMENTS -> astBuilder.buildAssignmentFile(parserFacade.parseAssignments(source).root());
         };
         ResolutionContext resolutionContext = new ResolutionContext(resultType, environment.functionCatalog(), environment.externalSymbolCatalog(), environment.typeHintCatalog());
-        SemanticModel semanticModel = semanticResolver.resolve(ast, resolutionContext);
+        SemanticResolution semanticResolution = semanticResolver.resolve(ast, resolutionContext);
+        SemanticModel semanticModel = semanticResolution.model();
         if (semanticModel.hasErrors()) {
             List<CompilationIssue> issues = semanticModel.issues().stream()
                     .map(issue -> {
@@ -86,9 +88,9 @@ final class ExpressionCompiler {
         }
         ExecutionPlan executionPlan = planBuilder.build(
                 semanticModel,
+                semanticResolution.memberBindings(),
                 runtimeServices,
                 environment.externalSymbolCatalog(),
-                environment.typeHintCatalog(),
                 environment.mathContext()
         );
         CompiledExpression compiledExpression = new CompiledExpression(source, resultType, semanticModel, executionPlan);

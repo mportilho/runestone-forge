@@ -26,6 +26,9 @@ import com.runestone.expeval.catalog.PropertyDescriptor;
 import com.runestone.expeval.catalog.TypeMetadata;
 import com.runestone.expeval.internal.semantic.ResolutionContext;
 import com.runestone.expeval.internal.semantic.ResolvedFunctionBinding;
+import com.runestone.expeval.internal.semantic.MemberBindingKey;
+import com.runestone.expeval.internal.semantic.ResolvedMemberBinding;
+import com.runestone.expeval.internal.semantic.SemanticResolution;
 import com.runestone.expeval.internal.semantic.SemanticIssue;
 import com.runestone.expeval.internal.semantic.SemanticIssueSeverity;
 import com.runestone.expeval.internal.semantic.SemanticModel;
@@ -58,7 +61,7 @@ import org.jspecify.annotations.Nullable;
 
 public final class SemanticResolver {
 
-    public SemanticModel resolve(ExpressionFileNode file, ResolutionContext context) {
+    public SemanticResolution resolve(ExpressionFileNode file, ResolutionContext context) {
         Objects.requireNonNull(file, "file must not be null");
         Objects.requireNonNull(context, "context must not be null");
         ResolutionSession session = new ResolutionSession(context);
@@ -86,7 +89,7 @@ public final class SemanticResolver {
         } else {
             session.resolvedTypes.put(file.nodeId(), UnknownType.INSTANCE);
         }
-        return new SemanticModel(
+        SemanticModel model = new SemanticModel(
             file,
             session.resolvedTypes,
             session.symbolByNodeId,
@@ -97,6 +100,7 @@ public final class SemanticResolver {
             session.functionBindings,
             session.issues
         );
+        return new SemanticResolution(model, session.memberBindings);
     }
 
     private static final class ResolutionSession {
@@ -109,6 +113,7 @@ public final class SemanticResolver {
         private final Map<String, SymbolRef> externalSymbolsByName = new LinkedHashMap<>();
         private final Map<String, SymbolRef> internalSymbolsByName = new LinkedHashMap<>();
         private final Map<NodeId, ResolvedFunctionBinding> functionBindings = new LinkedHashMap<>();
+        private final Map<MemberBindingKey, ResolvedMemberBinding> memberBindings = new LinkedHashMap<>();
         private final Map<SymbolRef, ResolvedType> internalTypes = new LinkedHashMap<>();
         private final List<SemanticIssue> issues = new ArrayList<>();
 
@@ -255,7 +260,8 @@ public final class SemanticResolver {
                 PropertyChainNode node) {
             ResolvedType current = start;
 
-            for (PropertyChainNode.MemberAccess access : chain) {
+            for (int accessIndex = 0; accessIndex < chain.size(); accessIndex++) {
+                PropertyChainNode.MemberAccess access = chain.get(accessIndex);
                 boolean isSafe = access instanceof PropertyChainNode.SafePropertyAccess
                         || access instanceof PropertyChainNode.SafeMethodCallAccess;
                 List<ResolvedType> argumentTypes = switch (access) {
@@ -287,23 +293,13 @@ public final class SemanticResolver {
                     current = UnknownType.INSTANCE;
                     continue;
                 }
-                current = switch (access) {
-                    case PropertyChainNode.PropertyAccess propertyAccess ->
-                            resolveProperty(metadata, propertyAccess, node.sourceSpan());
-                    case PropertyChainNode.SafePropertyAccess safePropertyAccess ->
-                            resolveProperty(metadata,
-                                    new PropertyChainNode.PropertyAccess(safePropertyAccess.name()),
-                                    node.sourceSpan());
-                    case PropertyChainNode.MethodCallAccess methodCall ->
-                            resolveMethod(metadata, methodCall, argumentTypes, node.sourceSpan());
-                    case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
-                            resolveMethod(metadata,
-                                    new PropertyChainNode.MethodCallAccess(
-                                            safeMethodCall.name(), safeMethodCall.arguments()),
-                                    argumentTypes,
-                                    node.sourceSpan());
-                    default -> throw new IllegalStateException("legacy property chain contains unsupported access: " + access);
-                };
+                ResolvedMemberBinding binding = bindMember(metadata, access, argumentTypes, isSafe, node.sourceSpan());
+                if (binding == null) {
+                    current = UnknownType.INSTANCE;
+                    continue;
+                }
+                memberBindings.put(new MemberBindingKey(node.nodeId(), accessIndex), binding);
+                current = binding.returnType();
             }
 
             return current;
@@ -329,7 +325,8 @@ public final class SemanticResolver {
             ResolvedType current = start;
             boolean vectorMode = current instanceof CollectionType || current == VectorType.INSTANCE;
 
-            for (PropertyChainNode.MemberAccess access : chain) {
+            for (int accessIndex = 0; accessIndex < chain.size(); accessIndex++) {
+                PropertyChainNode.MemberAccess access = chain.get(accessIndex);
                 boolean isSafe = access instanceof PropertyChainNode.SafePropertyAccess
                         || access instanceof PropertyChainNode.SafeMethodCallAccess;
 
@@ -457,22 +454,13 @@ public final class SemanticResolver {
                             smc.arguments().stream().map(this::resolveExpression).toList();
                     default -> List.of();
                 };
-                current = switch (access) {
-                    case PropertyChainNode.PropertyAccess propertyAccess ->
-                            resolveProperty(metadata, propertyAccess, node.sourceSpan());
-                    case PropertyChainNode.SafePropertyAccess safePropertyAccess ->
-                            resolveProperty(metadata,
-                                    new PropertyChainNode.PropertyAccess(safePropertyAccess.name()),
-                                    node.sourceSpan());
-                    case PropertyChainNode.MethodCallAccess methodCall ->
-                            resolveMethod(metadata, methodCall, argumentTypes, node.sourceSpan());
-                    case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
-                            resolveMethod(metadata,
-                                    new PropertyChainNode.MethodCallAccess(
-                                            safeMethodCall.name(), safeMethodCall.arguments()),
-                                    argumentTypes, node.sourceSpan());
-                    default -> UnknownType.INSTANCE;
-                };
+                ResolvedMemberBinding binding = bindMember(metadata, access, argumentTypes, isSafe, node.sourceSpan());
+                if (binding == null) {
+                    current = UnknownType.INSTANCE;
+                    continue;
+                }
+                memberBindings.put(new MemberBindingKey(node.nodeId(), accessIndex), binding);
+                current = binding.returnType();
                 vectorMode = current instanceof CollectionType || current == VectorType.INSTANCE;
             }
             return current;
@@ -731,28 +719,67 @@ public final class SemanticResolver {
             return descriptor.resolvedType();
         }
 
-        private ResolvedType resolveMethod(
+        private ResolvedMemberBinding bindMember(
                 TypeMetadata metadata,
-                PropertyChainNode.MethodCallAccess access,
+                PropertyChainNode.MemberAccess access,
                 List<ResolvedType> argumentTypes,
+                boolean safe,
                 SourceSpan sourceSpan) {
-            List<MethodDescriptor> candidates = metadata.methods().get(access.name());
+            return switch (access) {
+                case PropertyChainNode.PropertyAccess propertyAccess ->
+                        bindProperty(metadata, propertyAccess.name(), safe, sourceSpan);
+                case PropertyChainNode.SafePropertyAccess safePropertyAccess ->
+                        bindProperty(metadata, safePropertyAccess.name(), true, sourceSpan);
+                case PropertyChainNode.MethodCallAccess methodCall ->
+                        bindMethod(metadata, methodCall.name(), methodCall.arguments().size(), argumentTypes, safe, sourceSpan);
+                case PropertyChainNode.SafeMethodCallAccess safeMethodCall ->
+                        bindMethod(metadata, safeMethodCall.name(), safeMethodCall.arguments().size(), argumentTypes, true, sourceSpan);
+                default -> throw new IllegalStateException("object member binding received unsupported access: " + access);
+            };
+        }
+
+        private ResolvedMemberBinding bindProperty(
+                TypeMetadata metadata,
+                String name,
+                boolean safe,
+                SourceSpan sourceSpan) {
+            PropertyDescriptor descriptor = metadata.properties().get(name);
+            if (descriptor == null) {
+                error(IssueCode.UNKNOWN_PROPERTY,
+                        "property '" + name + "' not found on " + metadata.javaClass().getSimpleName(),
+                        sourceSpan);
+                return null;
+            }
+            return ResolvedMemberBinding.property(
+                    descriptor.name(),
+                    descriptor.getter(),
+                    descriptor.resolvedType(),
+                    safe);
+        }
+
+        private ResolvedMemberBinding bindMethod(
+                TypeMetadata metadata,
+                String name,
+                int expectedArity,
+                List<ResolvedType> argumentTypes,
+                boolean safe,
+                SourceSpan sourceSpan) {
+            List<MethodDescriptor> candidates = metadata.methods().get(name);
             if (candidates == null || candidates.isEmpty()) {
                 error(IssueCode.UNKNOWN_METHOD,
-                        "method '" + access.name() + "' not found on " + metadata.javaClass().getSimpleName(),
+                        "method '" + name + "' not found on " + metadata.javaClass().getSimpleName(),
                         sourceSpan);
-                return UnknownType.INSTANCE;
+                return null;
             }
 
-            int expectedArity = access.arguments().size();
             List<MethodDescriptor> arityMatches = candidates.stream()
                     .filter(candidate -> candidate.arity() == expectedArity)
                     .toList();
             if (arityMatches.isEmpty()) {
                 error(IssueCode.INVALID_METHOD_ARITY,
-                        "invalid arity for method '" + access.name() + "' on " + metadata.javaClass().getSimpleName(),
+                        "invalid arity for method '" + name + "' on " + metadata.javaClass().getSimpleName(),
                         sourceSpan);
-                return UnknownType.INSTANCE;
+                return null;
             }
 
             MethodDescriptor exactMatch = null;
@@ -762,19 +789,24 @@ public final class SemanticResolver {
                 }
                 if (exactMatch != null) {
                     error(IssueCode.AMBIGUOUS_METHOD,
-                            "ambiguous method call '" + access.name() + "' on " + metadata.javaClass().getSimpleName(),
+                            "ambiguous method call '" + name + "' on " + metadata.javaClass().getSimpleName(),
                             sourceSpan);
-                    return UnknownType.INSTANCE;
+                    return null;
                 }
                 exactMatch = candidate;
             }
             if (exactMatch == null) {
                 error(IssueCode.INCOMPATIBLE_METHOD_ARGUMENTS,
-                        "incompatible arguments for method '" + access.name() + "' on " + metadata.javaClass().getSimpleName(),
+                        "incompatible arguments for method '" + name + "' on " + metadata.javaClass().getSimpleName(),
                         sourceSpan);
-                return UnknownType.INSTANCE;
+                return null;
             }
-            return exactMatch.returnType();
+            return ResolvedMemberBinding.method(
+                    exactMatch.name(),
+                    exactMatch.handle(),
+                    exactMatch.parameterTypes(),
+                    exactMatch.returnType(),
+                    safe);
         }
 
         private boolean matchesMethodArguments(MethodDescriptor descriptor, List<ResolvedType> argumentTypes) {

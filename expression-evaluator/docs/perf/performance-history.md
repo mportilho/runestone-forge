@@ -4,6 +4,54 @@ Current benchmark packages and JMH commands are documented in [`benchmark-organi
 
 ---
 
+## PERF-005: Compile-time member binding handoff
+
+**Date:** 2026-06-29
+
+**Scenario:** Validate stage 2 of `docs/prd/expression-runtime-performance-deepening.md`:
+typed object member binding is resolved once during semantic resolution and handed to
+`ExecutionPlanBuilder` as compile-time data. The execution plan still stores only runtime-needed
+member data: method/property handles, parameter types, return type, member name, and safe-navigation
+flag.
+
+**Hypothesis:** Type-hinted object navigation should preserve steady-state evaluation allocation and
+avoid material throughput regressions. Compile-path allocation may move slightly because the binding
+handoff is compile-only and is not retained by `ExecutionPlan` or compiled expression cache entries.
+
+**Machine:** OpenJDK 25.0.3 / Linux x86-64, -Xms1g -Xmx1g
+**JMH config:** 3 forks x 5 warmup + 10 measurement iterations x 500 ms each; `AverageTime / ns`; GC profiler enabled
+
+**Baseline:** Fresh detached worktree at `HEAD` before the stage 2 change, created under
+`/tmp/opencode/runestone-forge-etapa2-baseline`.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta | B/op Before | B/op After |
+|---|---:|---:|---:|---:|---:|
+| navigation.object.ObjectNavigationBenchmark.buildTypedEnvironment | 54,524.7 | 56,338.6 | -3.33% | 48,147 | 48,769 |
+| navigation.object.ObjectNavigationBenchmark.compileReflectiveMethodWithArgument | 10,249.0 | 10,007.9 | +2.35% | 14,111 | 14,207 |
+| navigation.object.ObjectNavigationBenchmark.compileTypedMethodWithArgument | 12,983.1 | 12,754.8 | +1.76% | 15,108 | 14,917 |
+| navigation.object.ObjectNavigationBenchmark.compileTypedNestedProperty | 7,175.2 | 6,831.9 | +4.78% | 11,456 | 12,000 |
+| navigation.object.ObjectNavigationBenchmark.reflectiveMethodWithArgument | 209.2 | 212.6 | -1.62% | 144 | 144 |
+| navigation.object.ObjectNavigationBenchmark.reflectiveNestedProperty | 225.6 | 217.5 | +3.57% | 88 | 72 |
+| navigation.object.ObjectNavigationBenchmark.typedMethodNoArg | 99.4 | 95.7 | +3.77% | 128 | 128 |
+| navigation.object.ObjectNavigationBenchmark.typedMethodWithArgument | 142.3 | 139.4 | +2.09% | 128 | 128 |
+| navigation.object.ObjectNavigationBenchmark.typedNestedProperty | 138.1 | 141.7 | -2.62% | 88 | 88 |
+
+**Decision:** ACCEPT - steady-state type-hinted object navigation preserved allocation, typed method
+navigation improved modestly, and the slower runtime measurements were small with unchanged
+allocation. The compile-only binding handoff increased allocation in `compileTypedNestedProperty`
+(`11,456 -> 12,000 B/op`) while improving its measured throughput; this is accepted because the
+binding map is not retained in the execution plan or expression cache.
+
+**Notes:**
+
+- Raw JSON results were saved to `/tmp/performance-benchmark/expeval-stage2-before.json` and
+  `/tmp/performance-benchmark/expeval-stage2-after.json`.
+- The comparison report was saved to `/tmp/performance-benchmark/expeval-stage2-comparison.md`.
+- `buildTypedEnvironment` does not execute the changed compile handoff and is treated as a control
+  measurement for run-to-run noise.
+
+---
+
 ## PERF-004: Function invocation audit policy for collection functions
 
 **Date:** 2026-06-29
