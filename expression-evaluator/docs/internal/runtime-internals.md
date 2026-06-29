@@ -54,7 +54,7 @@ source string
 3. `SemanticResolver`
    Resolves identifiers, assignments, function overloads, property chains, typed member bindings, and `ResolvedType`s into a semantic resolution result.
 4. `ExecutionPlanBuilder`
-   Assigns deterministic symbol indices, consumes compile-time typed member bindings, seeds external defaults, folds constants, compiles regex patterns, and produces an `ExecutionPlan`.
+   Assigns deterministic symbol indices, consumes compile-time typed member bindings, seeds external defaults, delegates constant-folding policy to `ConstantFoldingPolicy`, compiles regex patterns, and produces an `ExecutionPlan`.
 5. `MathEvaluator` / `LogicalEvaluator`
    Execute the compiled plan inside an `ExecutionScope`.
 
@@ -422,7 +422,7 @@ One special tolerance exists: a top-level property chain that still resolves to 
 
 ## 10. Plan Building And Constant Folding
 
-`ExecutionPlanBuilder` is where most runtime optimizations happen.
+`ExecutionPlanBuilder` is where plan construction happens. Constant folding is handled by the compile-time-only `ConstantFoldingPolicy`, which owns the folding context, foldability rules, fold barriers, and constant evaluator while the builder orchestrates node construction.
 
 ### Constant sources
 
@@ -430,11 +430,11 @@ The folding map starts with:
 
 - non-overridable external symbols
 
-Then it grows as the builder walks assignments and expressions.
+Then it grows as `ExecutionPlanBuilder` walks assignments and expressions through `ConstantFoldingPolicy`.
 
 ### Folding behavior
 
-The builder folds:
+The folding policy folds:
 
 - binary operators when both sides are constant
 - unary operators when the operand is constant
@@ -448,13 +448,13 @@ The builder folds:
 
 ### Property-chain prefix folding
 
-When a property chain starts from a constant root, including a non-overridable external symbol that has already been replaced by an `ExecutableLiteral`, `ExecutionPlanBuilder` now evaluates the largest safe prefix at plan-build time.
+When a property chain starts from a constant root, including a non-overridable external symbol that has already been replaced by an `ExecutableLiteral`, `ConstantFoldingPolicy` evaluates the largest safe prefix at plan-build time.
 
 Foldable steps include typed property access, reflective property access, typed methods with constant arguments, index, map-key lookup, slice, wildcard, map projection, vector aggregation, collection functions whose descriptor is foldable, filters, and `..map(@ -> expr)` transforms when their predicate/transform only depends on constants and the current filter context (`@`, `@.key`, `@.value`).
 
-The builder stops at the first semantic barrier and rebuilds the remaining suffix as an `ExecutablePropertyChain` rooted at the folded prefix literal. Barriers include overridable or unknown identifiers, dynamic instants, `deep scan`, reflective method calls without type hints, non-foldable collection functions, and predicates/transforms that capture runtime values.
+The policy stops at the first semantic barrier and rebuilds the remaining suffix as an `ExecutablePropertyChain` rooted at the folded prefix literal. Barriers include overridable or unknown identifiers, dynamic instants, `deep scan`, reflective method calls without type hints, non-foldable collection functions, and predicates/transforms that capture runtime values.
 
-Compile-time navigation reuses the same runtime operations used by `PropertyChainOps` and `CollectionNavigationOps`. If evaluating a candidate prefix would turn a runtime navigation failure into a compilation failure, the builder leaves that step in the runtime suffix instead.
+Compile-time navigation reuses the same runtime operations used by `PropertyChainOps` and `CollectionNavigationOps`. If evaluating a candidate prefix would turn a runtime navigation failure into a compilation failure, the policy leaves that step in the runtime suffix instead.
 
 ### Assignment propagation
 

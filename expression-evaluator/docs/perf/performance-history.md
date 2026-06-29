@@ -4,6 +4,56 @@ Current benchmark packages and JMH commands are documented in [`benchmark-organi
 
 ---
 
+## PERF-006: Compile-time Constant Folding policy extraction
+
+**Date:** 2026-06-29
+
+**Scenario:** Validate stage 3 of `docs/prd/expression-runtime-performance-deepening.md`:
+constant-folding rules, Fold Barriers, folded symbol reads, folded function calls, folded vectors,
+and property-chain prefix folding were extracted from `ExecutionPlanBuilder` into the compile-time
+`ConstantFoldingPolicy`. Runtime evaluators and executable hot-path classes were not changed.
+
+**Hypothesis:** Planning and compile-path allocation should stay materially neutral while improving
+locality of folding rules. Steady-state `compute()` allocation should remain unchanged because the
+execution hot path was not modified.
+
+**Machine:** OpenJDK 25.0.3 / Linux x86-64, -Xms1g -Xmx1g
+**JMH config:** 3 forks x 5 warmup + 10 measurement iterations x 500 ms each; `AverageTime / ns`; GC profiler enabled
+
+**Baseline:** Fresh detached worktree at `HEAD` before the stage 3 change, created under
+`/tmp/opencode/runestone-forge-stage3-baseline`.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta | B/op Before | B/op After |
+|---|---:|---:|---:|---:|---:|
+| planning.ExpressionEvaluatorExecutionPlanBenchmark.compileLogicalMixedLiteralDense | 134,639.7 | 130,002.0 | +3.44% | 81,511 | 81,473 |
+| planning.ExpressionEvaluatorExecutionPlanBenchmark.compileMathLiteralDense | 1,456,425.5 | 1,470,554.2 | -0.97% | 761,973 | 762,496 |
+| planning.ExpressionEvaluatorExecutionPlanBenchmark.computeLogicalMixedLiteralDense | 8.6 | 8.7 | -1.16% | 40 | 40 |
+| planning.ExpressionEvaluatorExecutionPlanBenchmark.computeMathLiteralDense | 8.8 | 9.6 | -8.32% | 40 | 40 |
+| startup.compilation.CompilePathAllocationBenchmark.compileFunctionCacheHit | 13.6 | 13.2 | +2.92% | 0 | 0 |
+| startup.compilation.CompilePathAllocationBenchmark.compileFunctionCacheMiss | 38,576.5 | 38,190.9 | +1.00% | 53,168 | 52,550 |
+| startup.compilation.CompilePathAllocationBenchmark.compileSimpleCacheHit | 13.4 | 13.5 | -0.44% | 0 | 0 |
+
+**Decision:** ACCEPT with residual noise risk. The compile-path benchmark accepted the change and
+cache-miss allocation improved (`53,168 -> 52,550 B/op`). Planning compile measurements were within
+minor movement and allocation remained materially stable. The planning report flagged runtime
+`compute*` controls as throughput regressions, but those measurements kept identical allocation
+(`40 B/op`), included a wide `computeMathLiteralDense` error interval caused by outliers, and no
+runtime evaluator or executable hot-path class changed in this stage. Treat those controls as
+run-to-run noise unless a future dedicated evaluation benchmark reproduces the slowdown.
+
+**Notes:**
+
+- Raw JSON results were saved to `/tmp/performance-benchmark/expeval-stage3-planning-before.json`,
+  `/tmp/performance-benchmark/expeval-stage3-planning-after.json`,
+  `/tmp/performance-benchmark/expeval-stage3-compilation-before.json`, and
+  `/tmp/performance-benchmark/expeval-stage3-compilation-after.json`.
+- Comparison reports were saved to `/tmp/performance-benchmark/expeval-stage3-planning-comparison.md`
+  and `/tmp/performance-benchmark/expeval-stage3-compilation-comparison.md`.
+- A first same-worktree run also showed unchanged `compute()` allocation and similar compile-path
+  behavior, but its artifacts were intentionally superseded by the retained detached-worktree run.
+
+---
+
 ## PERF-005: Compile-time member binding handoff
 
 **Date:** 2026-06-29
