@@ -22,6 +22,7 @@ import java.util.Objects;
 record ExecutablePropertyChain(
         ExecutableNode root,
         List<ExecutableAccess> chain,
+        @Nullable CollectionScalarAggregationProgram scalarAggregationProgram,
         boolean legacyOnly
 ) implements ExecutableNode {
 
@@ -32,7 +33,7 @@ record ExecutablePropertyChain(
     }
 
     ExecutablePropertyChain(ExecutableNode root, List<ExecutableAccess> chain) {
-        this(root, chain, false);
+        this(root, chain, CollectionScalarAggregationPlanner.planOrNull(chain), false);
     }
 
     private static boolean isLegacyAccess(ExecutableAccess access) {

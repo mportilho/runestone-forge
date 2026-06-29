@@ -4,6 +4,57 @@ Current benchmark packages and JMH commands are documented in [`benchmark-organi
 
 ---
 
+## PERF-008: Scalar Aggregation deepening for Collection Navigation
+
+**Date:** 2026-06-29
+
+**Scenario:** Implement `docs/internal/scalar-aggregation-deepening-design.md` for ordinary
+`compute()` evaluation. Eligible Collection Navigation chains ending in Scalar Aggregation now carry
+an optional package-private program on `ExecutablePropertyChain`; `PropertyChainOps` dispatches to it
+only when audit is inactive. The program uses bounded ThreadLocal scratch for eligible suffix steps
+and preserves existing fallback behavior for `computeWithAudit()`, Deep Scan, and collection functions.
+
+**Hypothesis:** Avoiding intermediate `List`/`Map` materialization in scalar aggregation chains should
+reduce allocation and improve hot-path evaluation throughput, especially for slice/property/sum,
+map-transform/sum, and map-filter/values/sum chains.
+
+**Machine:** OpenJDK 25.0.3 / Linux x86-64, -Xms1g -Xmx1g
+**JMH config:** 3 forks x 5 warmup + 10 measurement iterations x 500 ms each; `AverageTime / ns`; GC profiler enabled
+
+**Baseline:** Fresh detached worktree at `HEAD` before the runtime change, created under
+`/tmp/opencode/runestone-forge-scalar-baseline`, with only the new scalar aggregation benchmark files
+added so the benchmark class was identical for before/after measurement.
+
+### ScalarAggregationBenchmark
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta | B/op Before | B/op After |
+|---|---:|---:|---:|---:|---:|
+| navigation.collection.ScalarAggregationBenchmark.countAfterMapTransform | 928.1 | 866.7 | +6.62% | 368 | 336 |
+| navigation.collection.ScalarAggregationBenchmark.directCount | 71.8 | 67.4 | +6.10% | 64 | 64 |
+| navigation.collection.ScalarAggregationBenchmark.directSum | 334.1 | 316.8 | +5.19% | 1,368 | 936 |
+| navigation.collection.ScalarAggregationBenchmark.filterPropertyAvg | 925.9 | 967.1 | -4.44% | 888 | 792 |
+| navigation.collection.ScalarAggregationBenchmark.mapFilterValuesSum | 1,394.0 | 1,238.3 | +11.17% | 1,232 | 816 |
+| navigation.collection.ScalarAggregationBenchmark.mapTransformSum | 752.6 | 674.6 | +10.37% | 2,152 | 1,280 |
+| navigation.collection.ScalarAggregationBenchmark.slicePropertySum | 429.4 | 393.4 | +8.38% | 960 | 472 |
+
+**Decision:** ACCEPT. Average throughput improved by 6.20%, allocation dropped in every benchmark
+except `directCount` where allocation was already unchanged at 64 B/op, and the largest targeted
+chains improved materially: `mapFilterValuesSum` (+11.17%, `1232 -> 816 B/op`) and
+`mapTransformSum` (+10.37%, `2152 -> 1280 B/op`). `filterPropertyAvg` measured 4.44% slower while
+still reducing allocation (`888 -> 792 B/op`); this is accepted as a low-risk trade-off because the
+after confidence interval is wider, behavior tests pass, and the net benchmark group improved.
+
+**Notes:**
+
+- Raw JSON results were saved to `/tmp/performance-benchmark/expeval-scalar-aggregation-before.json`
+  and `/tmp/performance-benchmark/expeval-scalar-aggregation-after.json`.
+- The comparison report was saved to `/tmp/performance-benchmark/expeval-scalar-aggregation-comparison.md`.
+- `computeWithAudit()` intentionally remains on the existing fallback path to preserve Audit Trail
+  event ordering.
+- Deep Scan and collection functions remain ineligible for the scalar aggregation fast path.
+
+---
+
 ## PERF-007: Object and Collection Navigation locality
 
 **Date:** 2026-06-29

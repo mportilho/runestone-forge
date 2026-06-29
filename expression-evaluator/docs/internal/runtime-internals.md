@@ -248,6 +248,8 @@ Object-only property chains are marked as legacy-only at plan construction and e
 - Collection navigation keeps explicit loops rather than streams.
 - Filter and map-transform current-element state is stored in the reusable per-thread `FilterContextStack`; there is no context allocation per navigation step or per element.
 - Map filters iterate entries directly so `@`, `@.key`, and `@.value` are bound from the same map entry without an additional map lookup.
+- Eligible chains ending in Scalar Aggregation carry an optional package-private `CollectionScalarAggregationProgram` on `ExecutablePropertyChain`. `PropertyChainOps` uses it only for ordinary `compute()` when audit is inactive; `computeWithAudit()`, Deep Scan, and collection functions use the existing fallback path.
+- The Scalar Aggregation program uses bounded ThreadLocal scratch for step-level list/map barriers and numeric coercion, clears references in `finally`, and discards over-capacity buffers instead of retaining them indefinitely.
 
 ---
 

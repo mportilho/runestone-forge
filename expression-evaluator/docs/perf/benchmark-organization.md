@@ -43,6 +43,7 @@ com.runestone.expeval.perf.jmh
 │       ├── CollectionNavigationBenchmark
 │       ├── CollectionNavigationBenchmarkRunner
 │       ├── MembershipBenchmark
+│       ├── ScalarAggregationBenchmark
 │       ├── VectorMapTransformBenchmark
 │       └── VectorMapTransformBenchmarkRunner
 └── runtime
@@ -122,6 +123,10 @@ $SKILL_SCRIPTS/run-jmh.sh expression-evaluator \
 $SKILL_SCRIPTS/run-jmh.sh expression-evaluator \
   "com.runestone.expeval.perf.jmh.navigation.collection.MembershipBenchmark" \
   "/tmp/performance-benchmark/expeval-navigation-membership.json"
+
+$SKILL_SCRIPTS/run-jmh.sh expression-evaluator \
+  "com.runestone.expeval.perf.jmh.navigation.collection.ScalarAggregationBenchmark" \
+  "/tmp/performance-benchmark/expeval-navigation-scalar-aggregation.json"
 
 $SKILL_SCRIPTS/run-jmh.sh expression-evaluator \
   "com.runestone.expeval.perf.jmh.navigation.collection.VectorMapTransformBenchmark" \

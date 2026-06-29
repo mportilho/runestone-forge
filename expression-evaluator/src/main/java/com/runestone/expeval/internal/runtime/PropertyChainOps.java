@@ -31,6 +31,21 @@ final class PropertyChainOps {
             current = "key".equals(sentinel) ? mapCtx.mapKey() : mapCtx.mapValue();
             chainStart = 1;
         }
+        CollectionScalarAggregationProgram scalarAggregationProgram = node.scalarAggregationProgram();
+        if (scope != null
+                && !scope.hasAudit()
+                && scalarAggregationProgram != null
+                && chainStart <= scalarAggregationProgram.startIndex()) {
+            for (int i = chainStart; i < scalarAggregationProgram.startIndex(); i++) {
+                current = evaluateAccess(node, scope, source, runtimeServices, mathContext, eval, current, chain.get(i));
+            }
+            return scalarAggregationProgram.compute(current, scope, new ScalarAggregationRuntime(
+                    source,
+                    rootName(node.root()),
+                    runtimeServices,
+                    mathContext,
+                    eval));
+        }
         boolean inCollection = false;
         for (int i = chainStart; i < chain.size(); i++) {
             ExecutablePropertyChain.ExecutableAccess access = chain.get(i);
@@ -51,49 +66,7 @@ final class PropertyChainOps {
                     continue;
                 }
             }
-            current = switch (access) {
-                case ExecutablePropertyChain.ExecutableFieldGet fieldGet ->
-                        invokeGetter(node, current, fieldGet, source, runtimeServices);
-                case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke ->
-                        invokeMethod(node, scope, current, methodInvoke, source, runtimeServices, eval);
-                case ExecutablePropertyChain.ReflectivePropertyAccess propertyAccess ->
-                        resolvePropertyReflective(source, current, propertyAccess.name());
-                case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke -> {
-                    Object[] args = new Object[reflectiveMethodInvoke.arguments().size()];
-                    for (int index = 0; index < reflectiveMethodInvoke.arguments().size(); index++) {
-                        args[index] = eval.evaluate(reflectiveMethodInvoke.arguments().get(index), scope);
-                    }
-                    yield invokeMethodReflective(source, current, reflectiveMethodInvoke.name(), args);
-                }
-                case ExecutablePropertyChain.ExecutableIndexAccess ia ->
-                        CollectionNavigationOps.applyIndex(current,
-                                (int) asBigDecimalStrict(eval.evaluate(ia.index(), scope), runtimeServices).longValue(),
-                                source);
-                case ExecutablePropertyChain.ExecutableMapKeyAccess mka ->
-                        CollectionNavigationOps.applyMapKey(current, mka.key(), source);
-                case ExecutablePropertyChain.ExecutableSliceAccess sa -> {
-                    Integer start = sa.start() == null ? null
-                            : (int) asBigDecimalStrict(eval.evaluate(sa.start(), scope), runtimeServices).longValue();
-                    Integer end = sa.end() == null ? null
-                            : (int) asBigDecimalStrict(eval.evaluate(sa.end(), scope), runtimeServices).longValue();
-                    yield CollectionNavigationOps.applySlice(current, start, end, source);
-                }
-                case ExecutablePropertyChain.ExecutableWildcard ignored ->
-                        CollectionNavigationOps.applyWildcard(current);
-                case ExecutablePropertyChain.ExecutableFilterPredicate fp ->
-                        CollectionNavigationOps.applyFilter(current, fp.predicate(), scope, source, runtimeServices, eval);
-                case ExecutablePropertyChain.ExecutableDeepScan ds ->
-                        CollectionNavigationOps.applyDeepScan(current, ds.propertyName(), source);
-                case ExecutablePropertyChain.ExecutableVectorAggregation va ->
-                        CollectionNavigationOps.applyAggregation(current, va.kind(), va.transform(), scope,
-                                source, runtimeServices, mathContext, eval);
-                case ExecutablePropertyChain.ExecutableVectorMap vm ->
-                        CollectionNavigationOps.applyMapTransform(current, vm.transform(), scope, source, eval);
-                case ExecutablePropertyChain.ExecutableMapProjection mp ->
-                        CollectionNavigationOps.applyMapProjection(current, mp.kind(), source);
-                case ExecutablePropertyChain.ExecutableCollectionFunction cf ->
-                        CollectionNavigationOps.applyCollectionFunction(current, cf, scope, source, runtimeServices, eval);
-            };
+            current = evaluateAccess(node, scope, source, runtimeServices, mathContext, eval, current, access);
             if (access instanceof ExecutablePropertyChain.ExecutableWildcard
                     || access instanceof ExecutablePropertyChain.ExecutableSliceAccess
                     || access instanceof ExecutablePropertyChain.ExecutableFilterPredicate
@@ -106,6 +79,61 @@ final class PropertyChainOps {
             }
         }
         return current;
+    }
+
+    private static Object evaluateAccess(ExecutablePropertyChain node, ExecutionScope scope,
+            String source, RuntimeServices runtimeServices, MathContext mathContext, NodeEvaluator eval,
+            Object current, ExecutablePropertyChain.ExecutableAccess access) {
+        if (current == null) {
+            if (isSafeAccess(access)) {
+                return null;
+            }
+            throw new ExpressionEvaluationException(source, "NULL_IN_CHAIN",
+                    "null value encountered navigating '" + rootName(node.root()) + "'", null);
+        }
+        return switch (access) {
+            case ExecutablePropertyChain.ExecutableFieldGet fieldGet ->
+                    invokeGetter(node, current, fieldGet, source, runtimeServices);
+            case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke ->
+                    invokeMethod(node, scope, current, methodInvoke, source, runtimeServices, eval);
+            case ExecutablePropertyChain.ReflectivePropertyAccess propertyAccess ->
+                    resolvePropertyReflective(source, current, propertyAccess.name());
+            case ExecutablePropertyChain.ReflectiveMethodInvoke reflectiveMethodInvoke -> {
+                Object[] args = new Object[reflectiveMethodInvoke.arguments().size()];
+                for (int index = 0; index < reflectiveMethodInvoke.arguments().size(); index++) {
+                    args[index] = eval.evaluate(reflectiveMethodInvoke.arguments().get(index), scope);
+                }
+                yield invokeMethodReflective(source, current, reflectiveMethodInvoke.name(), args);
+            }
+            case ExecutablePropertyChain.ExecutableIndexAccess ia ->
+                    CollectionNavigationOps.applyIndex(current,
+                            (int) asBigDecimalStrict(eval.evaluate(ia.index(), scope), runtimeServices).longValue(),
+                            source);
+            case ExecutablePropertyChain.ExecutableMapKeyAccess mka ->
+                    CollectionNavigationOps.applyMapKey(current, mka.key(), source);
+            case ExecutablePropertyChain.ExecutableSliceAccess sa -> {
+                Integer start = sa.start() == null ? null
+                        : (int) asBigDecimalStrict(eval.evaluate(sa.start(), scope), runtimeServices).longValue();
+                Integer end = sa.end() == null ? null
+                        : (int) asBigDecimalStrict(eval.evaluate(sa.end(), scope), runtimeServices).longValue();
+                yield CollectionNavigationOps.applySlice(current, start, end, source);
+            }
+            case ExecutablePropertyChain.ExecutableWildcard ignored ->
+                    CollectionNavigationOps.applyWildcard(current);
+            case ExecutablePropertyChain.ExecutableFilterPredicate fp ->
+                    CollectionNavigationOps.applyFilter(current, fp.predicate(), scope, source, runtimeServices, eval);
+            case ExecutablePropertyChain.ExecutableDeepScan ds ->
+                    CollectionNavigationOps.applyDeepScan(current, ds.propertyName(), source);
+            case ExecutablePropertyChain.ExecutableVectorAggregation va ->
+                    CollectionNavigationOps.applyAggregation(current, va.kind(), va.transform(), scope,
+                            source, runtimeServices, mathContext, eval);
+            case ExecutablePropertyChain.ExecutableVectorMap vm ->
+                    CollectionNavigationOps.applyMapTransform(current, vm.transform(), scope, source, eval);
+            case ExecutablePropertyChain.ExecutableMapProjection mp ->
+                    CollectionNavigationOps.applyMapProjection(current, mp.kind(), source);
+            case ExecutablePropertyChain.ExecutableCollectionFunction cf ->
+                    CollectionNavigationOps.applyCollectionFunction(current, cf, scope, source, runtimeServices, eval);
+        };
     }
 
     private static Object evaluateLegacyPropertyChain(ExecutablePropertyChain node, ExecutionScope scope,
@@ -148,7 +176,12 @@ final class PropertyChainOps {
         return current;
     }
 
-    private static Object invokeGetter(ExecutablePropertyChain node, Object current,
+    static Object invokeGetter(ExecutablePropertyChain node, Object current,
+            ExecutablePropertyChain.ExecutableFieldGet fieldGet, String source, RuntimeServices runtimeServices) {
+        return invokeGetter(rootName(node.root()), current, fieldGet, source, runtimeServices);
+    }
+
+    static Object invokeGetter(String rootName, Object current,
             ExecutablePropertyChain.ExecutableFieldGet fieldGet, String source, RuntimeServices runtimeServices) {
         try {
             Object result = fieldGet.getter().invoke(current);
@@ -158,7 +191,7 @@ final class PropertyChainOps {
         } catch (Throwable throwable) {
             ExpressionEvaluationException exception = new ExpressionEvaluationException(
                     source, "PROPERTY_ACCESS_ERROR",
-                    "error accessing '" + fieldGet.name() + "' while navigating '" + rootName(node.root())
+                    "error accessing '" + fieldGet.name() + "' while navigating '" + rootName
                     + "': " + throwable.getMessage(), null);
             exception.initCause(throwable);
             throw exception;
@@ -191,7 +224,7 @@ final class PropertyChainOps {
     }
 
     @SuppressWarnings("unchecked")
-    private static Object resolvePropertyReflective(String source, Object target, String name) {
+    static Object resolvePropertyReflective(String source, Object target, String name) {
         // For Map targets, a dot-notation property access degrades to a key lookup
         if (target instanceof Map<?, ?> map) {
             return ((Map<String, Object>) map).get(name);
@@ -275,7 +308,7 @@ final class PropertyChainOps {
         return false;
     }
 
-    private static boolean isSafeAccess(ExecutablePropertyChain.ExecutableAccess access) {
+    static boolean isSafeAccess(ExecutablePropertyChain.ExecutableAccess access) {
         return switch (access) {
             case ExecutablePropertyChain.ExecutableFieldGet fieldGet -> fieldGet.safe();
             case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke -> methodInvoke.safe();
@@ -286,7 +319,7 @@ final class PropertyChainOps {
         };
     }
 
-    private static String rootName(ExecutableNode root) {
+    static String rootName(ExecutableNode root) {
         if (root instanceof ExecutableIdentifier id) {
             return id.ref().name();
         }
@@ -294,7 +327,7 @@ final class PropertyChainOps {
     }
 
     /** Strict number coercion for index/slice operations — rejects non-numeric values early. */
-    private static BigDecimal asBigDecimalStrict(Object value, RuntimeServices runtimeServices) {
+    static BigDecimal asBigDecimalStrict(Object value, RuntimeServices runtimeServices) {
         if (value instanceof BigDecimal bd) return bd;
         return runtimeServices.asNumber(value);
     }

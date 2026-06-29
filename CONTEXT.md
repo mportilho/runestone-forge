@@ -92,6 +92,10 @@ _Avoid_: Property chain, object traversal
 Navigation over vectors, lists, maps, filters, projections, map transforms, aggregations, and deep scans.
 _Avoid_: Collection traversal, JSONPath-like access
 
+**Scalar Aggregation**:
+A Collection Navigation operation that reduces a collection or map to a scalar Runtime Value such as count, sum, average, minimum, maximum, or product.
+_Avoid_: Terminal aggregation, aggregation shortcut
+
 **Navigation Step**:
 One operation inside Object Navigation or Collection Navigation, such as member access, index access, slice, filter, projection, aggregation, map transform, collection function, or deep scan.
 _Avoid_: Access record, chain element
