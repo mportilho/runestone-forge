@@ -59,8 +59,10 @@ final class ExecutionPlanBuilder {
         int externalSymbolsCount = model.externalSymbolsByName().size();
         Object[] defaults = seedDefaults(model, externalSymbolCatalog, runtimeServices, externalSymbolsCount);
         Map<String, ExternalBindingPlan> externalBindingPlans = seedExternalBindingPlans(model, externalSymbolCatalog);
+        boolean containsDynamicInstant = containsDynamicInstant(assignments, resultNode);
 
-        return new ExecutionPlan(assignments, resultNode, defaults, externalBindingPlans, externalSymbolsCount, maxAuditEvents, foldedVariableReads);
+        return new ExecutionPlan(assignments, resultNode, defaults, externalBindingPlans, externalSymbolsCount, maxAuditEvents,
+                foldedVariableReads, containsDynamicInstant);
     }
 
     /**
@@ -203,6 +205,90 @@ final class ExecutionPlanBuilder {
             }
         }
         return count;
+    }
+
+    private boolean containsDynamicInstant(List<ExecutableAssignment> assignments, ExecutableNode resultExpression) {
+        for (ExecutableAssignment assignment : assignments) {
+            ExecutableNode value = switch (assignment) {
+                case ExecutableSimpleAssignment simple -> simple.value();
+                case ExecutableDestructuringAssignment destructuring -> destructuring.value();
+            };
+            if (containsDynamicInstant(value)) {
+                return true;
+            }
+        }
+        return resultExpression != null && containsDynamicInstant(resultExpression);
+    }
+
+    private boolean containsDynamicInstant(ExecutableNode node) {
+        return switch (node) {
+            case ExecutableLiteral ignored -> false;
+            case ExecutableDynamicLiteral ignored -> true;
+            case ExecutableIdentifier ignored -> false;
+            case ExecutablePropertyChain chain -> containsDynamicInstant(chain);
+            case ExecutableFunctionCall functionCall -> containsDynamicInstant(functionCall.arguments());
+            case ExecutableBinaryOp binaryOp -> containsDynamicInstant(binaryOp.left()) || containsDynamicInstant(binaryOp.right());
+            case ExecutableTernaryOp ternaryOp -> containsDynamicInstant(ternaryOp.first())
+                    || containsDynamicInstant(ternaryOp.second())
+                    || containsDynamicInstant(ternaryOp.third());
+            case ExecutableUnaryOp unaryOp -> containsDynamicInstant(unaryOp.operand());
+            case ExecutablePostfixOp postfixOp -> containsDynamicInstant(postfixOp.operand());
+            case ExecutableConditional conditional -> containsDynamicInstant(conditional.conditions())
+                    || containsDynamicInstant(conditional.results())
+                    || containsDynamicInstant(conditional.elseExpression());
+            case ExecutableSimpleConditional conditional -> containsDynamicInstant(conditional.condition())
+                    || containsDynamicInstant(conditional.thenExpression())
+                    || containsDynamicInstant(conditional.elseExpression());
+            case ExecutableVectorLiteral vectorLiteral -> containsDynamicInstant(vectorLiteral.elements());
+            case ExecutableNullCoalesce nullCoalesce -> containsDynamicInstant(nullCoalesce.left())
+                    || containsDynamicInstant(nullCoalesce.right());
+            case ExecutableRegexOp regexOp -> containsDynamicInstant(regexOp.subject());
+        };
+    }
+
+    private boolean containsDynamicInstant(List<ExecutableNode> nodes) {
+        for (ExecutableNode node : nodes) {
+            if (containsDynamicInstant(node)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsDynamicInstant(ExecutablePropertyChain chain) {
+        if (containsDynamicInstant(chain.root())) {
+            return true;
+        }
+        for (ExecutablePropertyChain.ExecutableAccess access : chain.chain()) {
+            if (containsDynamicInstant(access)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsDynamicInstant(ExecutablePropertyChain.ExecutableAccess access) {
+        return switch (access) {
+            case ExecutablePropertyChain.ExecutableFieldGet ignored -> false;
+            case ExecutablePropertyChain.ReflectivePropertyAccess ignored -> false;
+            case ExecutablePropertyChain.ExecutableMethodInvoke methodInvoke -> containsDynamicInstant(methodInvoke.arguments());
+            case ExecutablePropertyChain.ReflectiveMethodInvoke methodInvoke -> containsDynamicInstant(methodInvoke.arguments());
+            case ExecutablePropertyChain.ExecutableIndexAccess indexAccess -> containsDynamicInstant(indexAccess.index());
+            case ExecutablePropertyChain.ExecutableMapKeyAccess ignored -> false;
+            case ExecutablePropertyChain.ExecutableSliceAccess sliceAccess -> containsDynamicInstantOrFalse(sliceAccess.start())
+                    || containsDynamicInstantOrFalse(sliceAccess.end());
+            case ExecutablePropertyChain.ExecutableWildcard ignored -> false;
+            case ExecutablePropertyChain.ExecutableFilterPredicate filterPredicate -> containsDynamicInstant(filterPredicate.predicate());
+            case ExecutablePropertyChain.ExecutableDeepScan ignored -> false;
+            case ExecutablePropertyChain.ExecutableCollectionFunction collectionFunction -> containsDynamicInstant(collectionFunction.arguments());
+            case ExecutablePropertyChain.ExecutableMapProjection ignored -> false;
+            case ExecutablePropertyChain.ExecutableVectorMap vectorMap -> containsDynamicInstant(vectorMap.transform());
+            case ExecutablePropertyChain.ExecutableVectorAggregation aggregation -> containsDynamicInstantOrFalse(aggregation.transform());
+        };
+    }
+
+    private boolean containsDynamicInstantOrFalse(ExecutableNode node) {
+        return node != null && containsDynamicInstant(node);
     }
 
     private ExecutableAssignment buildAssignment(

@@ -296,6 +296,11 @@ Used when the expression has no assignments.
 - layer 1: shared values or overrides
 - layer 2: defaults when needed
 
+`ExpressionRuntimeSupport` builds a `ReadOnlyScopePlan` for ordinary `compute()` calls. When a plan
+has no assignments and no `Dynamic Instant`, the plan reuses a stateless read-only scope for calls with
+no user overrides. Audited evaluations, assignment evaluations, calls with user overrides, and plans
+containing `currDate`, `currTime`, or `currDateTime` still receive per-call scope instances.
+
 ### `UNBOUND`
 
 `ExecutionScope.UNBOUND` is a sentinel distinct from `null`.
@@ -312,9 +317,14 @@ This distinction matters for:
 
 ### Dynamic instants
 
-`currDate`, `currTime`, and `currDateTime` are resolved once per scope and cached in an `EnumMap<DynamicInstant, Object>`.
+`currDate`, `currTime`, and `currDateTime` are resolved once per scope and cached in three fixed slots
+on `ExecutionScope`.
 
 Repeated reads inside one evaluation return the same instant.
+
+`ExecutionPlan` carries a `containsDynamicInstant` flag computed by `ExecutionPlanBuilder`. That flag
+prevents reuse of the stateless read-only scope for dynamic plans, preserving the per-evaluation cache
+boundary while avoiding the old `EnumMap` allocation.
 
 ---
 

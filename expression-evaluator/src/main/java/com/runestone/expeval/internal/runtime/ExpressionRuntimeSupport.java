@@ -17,12 +17,13 @@ import java.util.*;
  * {@code computeMath} / {@code computeLogical} / {@code computeAssignments} with a
  * {@code Map<String, Object>} of variable values to evaluate. The same instance may safely be
  * called concurrently from multiple threads because there is no mutable per-instance state; each
- * call receives its own {@link ExecutionScope}.
+ * call receives a logically isolated {@link ExecutionScope}. Read-only plans with no dynamic
+ * instants may reuse a stateless scope instance across calls.
  *
  * <h2>Thread safety</h2>
  * <p>All static factory methods and all instance {@code compute*} methods are thread-safe.
- * Compiled instances hold no mutable state: variable values are supplied per call via a
- * {@code Map<String, Object>} and each call builds its own {@link ExecutionScope}.
+ * Compiled instances hold no mutable evaluation state: variable values are supplied per call via
+ * a {@code Map<String, Object>} and stateful evaluations build their own {@link ExecutionScope}.
  */
 public final class ExpressionRuntimeSupport {
 
@@ -45,6 +46,7 @@ public final class ExpressionRuntimeSupport {
     private final int externalSymbolCount;
     private final int maxAuditEvents;
     private final List<AuditEvent> foldedVariableReads;
+    private final ReadOnlyScopePlan readOnlyScopePlan;
 
     private ExpressionRuntimeSupport(CompiledExpression compiledExpression,
                                      Object[] defaultValues,
@@ -65,6 +67,10 @@ public final class ExpressionRuntimeSupport {
         this.externalSymbolCount = compiledExpression.executionPlan().externalSymbolsCount();
         this.maxAuditEvents = compiledExpression.executionPlan().maxAuditEvents();
         this.foldedVariableReads = compiledExpression.executionPlan().foldedVariableReads();
+        this.readOnlyScopePlan = ReadOnlyScopePlan.create(
+                hasAssignments,
+                compiledExpression.executionPlan().containsDynamicInstant(),
+                defaultValues);
     }
 
     public static ExpressionRuntimeSupport from(CompiledExpression compiledExpression, ExpressionEnvironment environment) {
@@ -119,6 +125,10 @@ public final class ExpressionRuntimeSupport {
         if (userValues == null || userValues.isEmpty()) {
             if (hasAssignments) {
                 return ExecutionScope.from(defaultValues, internalSymbolCount);
+            }
+            ExecutionScope cachedScope = readOnlyScopePlan.defaultScopeOrNull();
+            if (cachedScope != null) {
+                return cachedScope;
             }
             return ExecutionScope.readOnly(defaultValues);
         }
@@ -191,6 +201,20 @@ public final class ExpressionRuntimeSupport {
 
     public CompiledExpression getCompiledExpression() {
         return compiledExpression;
+    }
+
+    private record ReadOnlyScopePlan(ExecutionScope defaultScope) {
+
+        static ReadOnlyScopePlan create(boolean hasAssignments, boolean containsDynamicInstant, Object[] defaultValues) {
+            if (hasAssignments || containsDynamicInstant) {
+                return new ReadOnlyScopePlan(null);
+            }
+            return new ReadOnlyScopePlan(ExecutionScope.readOnly(defaultValues));
+        }
+
+        ExecutionScope defaultScopeOrNull() {
+            return defaultScope;
+        }
     }
 
 }

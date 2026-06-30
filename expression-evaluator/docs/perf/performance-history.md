@@ -4,6 +4,49 @@ Current benchmark packages and JMH commands are documented in [`benchmark-organi
 
 ---
 
+## PERF-009: Read-only Execution Scope deepening
+
+**Date:** 2026-06-29
+
+**Scenario:** Deepen the read-only `ExecutionScope` path for ordinary `compute()` evaluation. Plans
+with no assignments, no `Audit Trail`, and no `Dynamic Instant` now reuse a stateless read-only scope
+through `ExpressionRuntimeSupport.ReadOnlyScopePlan`. Plans that contain `currDate`, `currTime`, or
+`currDateTime` still create a per-evaluation scope, but dynamic values are cached in fixed scope slots
+instead of an `EnumMap`.
+
+**Hypothesis:** Removing per-call scope wrapper allocation for stateless read-only plans and replacing
+the `Dynamic Instant` map with fixed slots should reduce `B/op` materially without regressing throughput
+for the touched hot paths.
+
+**Machine:** OpenJDK 25.0.3 / Linux x86-64, -Xms1g -Xmx1g
+**JMH config:** 3 forks x 5 warmup + 10 measurement iterations x 500 ms each; `AverageTime / ns`; GC profiler enabled
+
+**Baseline:** Fresh same-worktree baseline captured before the runtime change, after adding the focused
+`ReadOnlyExecutionScopeBenchmark` so the benchmark class was identical for before/after measurement.
+
+### ReadOnlyExecutionScopeBenchmark
+
+| Benchmark | Before (ns/op) | After (ns/op) | Delta | B/op Before | B/op After |
+|---|---:|---:|---:|---:|---:|
+| runtime.ReadOnlyExecutionScopeBenchmark.defaultOnlySymbol | 30.3 | 27.3 | +9.89% | 40 | ~0 |
+| runtime.ReadOnlyExecutionScopeBenchmark.dynamicInstant | 100.8 | 84.8 | +15.83% | 192 | 128 |
+| runtime.ReadOnlyExecutionScopeBenchmark.foldedLiteral | 9.1 | 7.3 | +19.73% | 40 | ~0 |
+
+**Decision:** ACCEPT. Average throughput improved by 15.15%. The default-only and folded-literal
+read-only paths eliminated the 40 B/op scope allocation, and the dynamic-instant path reduced allocation
+by 64 B/op (`192 -> 128 B/op`) while improving throughput by 15.83%.
+
+**Notes:**
+
+- Raw JSON results were saved to `/tmp/performance-benchmark/readonly-scope-before.json` and
+  `/tmp/performance-benchmark/readonly-scope-after.json`.
+- The comparison report was saved to `/tmp/performance-benchmark/readonly-scope-comparison.md`.
+- Audited evaluations and assignment evaluations intentionally remain on per-call scope instances.
+- Expressions containing `Dynamic Instant` remain per-evaluation scoped to preserve the “same instant
+  within one evaluation, fresh cache across evaluations” contract.
+
+---
+
 ## PERF-008: Scalar Aggregation deepening for Collection Navigation
 
 **Date:** 2026-06-29

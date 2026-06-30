@@ -7,7 +7,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.Objects;
 
 final class ExecutionScope {
@@ -36,7 +35,9 @@ final class ExecutionScope {
     
     private final boolean mutable;
     private final AuditCollector audit;
-    private EnumMap<DynamicInstant, Object> dynamicCache;
+    private Object currentDate;
+    private Object currentTime;
+    private Object currentDateTime;
 
     private ExecutionScope(Object[] layer1,
                            Object[] layer2,
@@ -208,13 +209,31 @@ final class ExecutionScope {
     }
 
     Object resolveDynamic(DynamicInstant kind) {
-        if (dynamicCache == null) {
-            dynamicCache = new EnumMap<>(DynamicInstant.class);
-        }
-        return dynamicCache.computeIfAbsent(Objects.requireNonNull(kind, "kind must not be null"), k -> switch (k) {
-            case CURR_DATE     -> LocalDate.now();
-            case CURR_TIME     -> LocalTime.now();
-            case CURR_DATETIME -> LocalDateTime.now();
-        });
+        return switch (Objects.requireNonNull(kind, "kind must not be null")) {
+            case CURR_DATE -> {
+                Object value = currentDate;
+                if (value == null) {
+                    value = LocalDate.now();
+                    currentDate = value;
+                }
+                yield value;
+            }
+            case CURR_TIME -> {
+                Object value = currentTime;
+                if (value == null) {
+                    value = LocalTime.now();
+                    currentTime = value;
+                }
+                yield value;
+            }
+            case CURR_DATETIME -> {
+                Object value = currentDateTime;
+                if (value == null) {
+                    value = LocalDateTime.now();
+                    currentDateTime = value;
+                }
+                yield value;
+            }
+        };
     }
 }

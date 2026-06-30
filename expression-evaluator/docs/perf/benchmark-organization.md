@@ -47,6 +47,7 @@ com.runestone.expeval.perf.jmh
 │       ├── VectorMapTransformBenchmark
 │       └── VectorMapTransformBenchmarkRunner
 └── runtime
+    ├── ReadOnlyExecutionScopeBenchmark
     ├── audit
     │   └── AuditOverheadBenchmark
     ├── bindings
@@ -136,6 +137,10 @@ $SKILL_SCRIPTS/run-jmh.sh expression-evaluator \
 ### Runtime Services
 
 ```bash
+$SKILL_SCRIPTS/run-jmh.sh expression-evaluator \
+  "com.runestone.expeval.perf.jmh.runtime.ReadOnlyExecutionScopeBenchmark" \
+  "/tmp/performance-benchmark/expeval-runtime-readonly-scope.json"
+
 $SKILL_SCRIPTS/run-jmh.sh expression-evaluator \
   "com.runestone.expeval.perf.jmh.runtime.audit.AuditOverheadBenchmark" \
   "/tmp/performance-benchmark/expeval-runtime-audit.json"

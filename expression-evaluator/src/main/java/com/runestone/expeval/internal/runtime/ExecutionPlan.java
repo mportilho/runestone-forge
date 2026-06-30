@@ -13,7 +13,8 @@ record ExecutionPlan(
         Map<String, ExternalBindingPlan> externalBindings,
         int externalSymbolsCount,
         int maxAuditEvents,
-        List<AuditEvent> foldedVariableReads) {
+        List<AuditEvent> foldedVariableReads,
+        boolean containsDynamicInstant) {
 
     ExecutionPlan {
         assignments = List.copyOf(Objects.requireNonNull(assignments, "assignments must not be null"));

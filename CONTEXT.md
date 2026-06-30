@@ -40,6 +40,10 @@ _Avoid_: Runtime tree, executable AST
 The per-evaluation storage for external overrides, external defaults, internal assignments, dynamic instants, and optional audit collection.
 _Avoid_: Variable map, evaluation context
 
+**Read-only Execution Scope**:
+An Execution Scope for evaluating a Compiled Expression with no Internal Symbol assignment writes and no Audit Trail collection.
+_Avoid_: Stateless scope, immutable evaluation context
+
 **Runtime Value**:
 A plain Java value carried through evaluation, such as a number, boolean, text, temporal value, vector, object, or null.
 _Avoid_: Runtime wrapper, boxed expression value
