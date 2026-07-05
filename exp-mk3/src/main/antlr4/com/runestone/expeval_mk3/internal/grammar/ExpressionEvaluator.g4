@@ -1,111 +1,149 @@
-/*MIT License
-
-Copyright (c) 2021 Marcelo Portilho
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.*/
+/*
+ * ExpressionEvaluator.g4 — versão revisada (gramática combinada, lexer + parser)
+ *
+ * Baseada na gramática original de Marcelo Portilho (MIT License, 2021).
+ *
+ * PRINCIPAIS MUDANÇAS EM RELAÇÃO À ORIGINAL
+ * ------------------------------------------------------------------------------
+ * 1. HIERARQUIA UNIFICADA DE EXPRESSÕES
+ *    As oito famílias tipadas (numericEntity, stringEntity, dateEntity, timeEntity,
+ *    dateTimeEntity, logicalEntity, vectorEntity, genericEntity) foram fundidas em
+ *    uma única cadeia de precedência. A verificação de tipos passa a ser
+ *    responsabilidade da análise semântica (visitor), que já precisava fazê-la de
+ *    qualquer forma, pois toda família aceitava referenceTarget e o tipo real só é
+ *    conhecido em runtime. Isso elimina ~70% das alternativas, todas as duplicações
+ *    de IF/THEN/ELSE e as alternativas mortas de logicalComparisonExpression.
+ *
+ * 2. LITERAIS TEMPORAIS PREFIXADOS
+ *    d"2021-01-02"                          (data)
+ *    t"10:30" / t"10:30:45"                 (hora)
+ *    dt"2021-01-02T10:30:45"                (data e hora)
+ *    dt"2021-01-02T10:30:45+02:00"          (com offset, dentro do literal)
+ *    Isso elimina de uma vez: a colisão TIME vs. slice ([10:20]), o caso quebrado
+ *    [-10:20], o TIME_OFFSET guloso roubando "+10:30" de expressões, o separador
+ *    '-' em DATETIME engolindo subtrações, e o fato de "2021-01-02" nunca poder
+ *    ser interpretado como aritmética. As regras sliceTimeSubscript e COLON_OP
+ *    deixam de ser necessárias.
+ *
+ * 3. MÓDULO |x| REMOVIDO
+ *    Delimitadores idênticos pareados são ambíguos com aninhamento e colidiam com
+ *    CONCAT '||'. Use a função de runtime abs(x). O token '|' isolado deixa de
+ *    existir; '||' é inequivocamente concatenação.
+ *
+ * 4. SQRT REMOVIDO DA GRAMÁTICA
+ *    sqrt(x) passa a ser uma função de runtime comum (functionCallOperation),
+ *    como abs(x), max(x, y) etc. Menos casos especiais no parser.
+ *
+ * 5. INTEIROS E DECIMAIS SEPARADOS (INT / FLOAT)
+ *    Índices e slices agora exigem INT sintaticamente — [1.5:2] vira erro de
+ *    parse, não de runtime. Os tokens mortos POSITIVE e NegativeSymbol foram
+ *    removidos (POSITIVE era inalcançável: NUMBER sempre vencia).
+ *
+ * 6. FILTROS REUTILIZAM A EXPRESSÃO PRINCIPAL
+ *    [?( ... )] aceita qualquer expressão. A restrição de que '@' só é válido
+ *    dentro de filtros/lambdas vira uma checagem semântica simples, em vez de
+ *    uma mini-gramática paralela (filterPredicate/filterAtom/filterValue).
+ *
+ * 7. OPERADORES DE PERTINÊNCIA UNIFORMIZADOS
+ *    'in', 'not in' e 'nin' (sinônimo de 'not in') valem em qualquer contexto,
+ *    inclusive filtros. 'null in v' funciona porque null é um primário comum.
+ *
+ * 8. '??' VIRA OPERADOR BINÁRIO GERAL
+ *    De menor precedência, encadeável (a ?? b ?? c), em vez de sufixo repetido
+ *    em cada família tipada.
+ *
+ * 9. VETOR VAZIO [] PASSA A SER VÁLIDO.
+ *
+ * PRECEDÊNCIA (da menor para a maior):
+ *    ??  <  or  <  and  <  comparação/in/between/regex  <  nand/nor/xor/xnor
+ *        <  || (concat)  <  + -  <  * / mod  <  - unário e not (~ ¬ !)
+ *        <  root  <  ^ (assoc. à direita)  <  % ! pós-fixados  <  primário
+ *
+ * NOTAS DE COMPATIBILIDADE / ARMADILHAS DOCUMENTADAS:
+ *  - Desigualdade é escrita apenas com '<>' (o '!=' foi removido). Assim '5<>3'
+ *    é comparação e '5!' é sempre fatorial, sem a antiga armadilha de '5!=3'.
+ *    Resíduo: '5!~"x"' ainda lexa como '5' '!~' '"x"' (maximal munch de REGEX_NOT_MATCH);
+ *    fatorial seguido de regex-não-casa exige espaço ('5! ~ "x"'). Caso semântica
+ *    sem sentido, apenas documentado.
+ *  - Atribuição usa ':=' (ex.: 'x := 2 + 3;'); '=' é exclusivamente igualdade.
+ *    Isso elimina o lookahead até o ';' que a forma antiga ('=' para ambos) exigia,
+ *    barateando a predição. Sem colisão com o ':' de slices: por maximal munch,
+ *    ':=' só vence quando um '=' segue o ':'.
+ *  - Comparações não são encadeáveis (a < b < c é erro), como na original.
+ *  - Os type hints '<bool>' etc. foram mantidos por compatibilidade; a entrada
+ *    rara 'a<bool>c' ainda lexa o token de hint (limitação de maximal munch).
+ */
 
 grammar ExpressionEvaluator;
 
-/* ########################################  Lexical rules  ######################################## */
+/* ########################################  Regras léxicas  ######################################## */
 
-IF        : 'if' ;
-THEN      : 'then' ;
-ELSE      : 'else' ;
-ELSEIF    : 'elsif' ;
-ENDIF     : 'endif' ;
+IF     : 'if' ;
+THEN   : 'then' ;
+ELSE   : 'else' ;
+ELSEIF : 'elsif' ;
+ENDIF  : 'endif' ;
 
-NULL  : 'null' ;
+NULL   : 'null' ;
 
-AND   : 'and' ;
-OR    : 'or' ;
-XOR   : 'xor' ;
-XNOR  : 'xnor' ;
-NAND  : 'nand' ;
-NOR   : 'nor' ;
-TRUE  : 'true' ;
-FALSE : 'false' ;
+AND    : 'and' ;
+OR     : 'or' ;
+XOR    : 'xor' ;
+XNOR   : 'xnor' ;
+NAND   : 'nand' ;
+NOR    : 'nor' ;
+TRUE   : 'true' ;
+FALSE  : 'false' ;
 
-MULT          : '*' ;
-DIV           : '/' ;
-PLUS          : '+' ;
-MINUS         : '-' ;
-PERCENT       : '%' ;
-MODULO        : 'mod' ;
-MODULUS       : '|' ;
-CONCAT        : '||' ;
-EXCLAMATION   : '!' ;
-EXPONENTIATION: '^' ;
-ROOT          : 'root' | '\u221A' ;
-SQRT          : 'sqrt' ;
+IN      : 'in' ;
+NIN     : 'nin' ;
+NOT_KW  : 'not' ;
+BETWEEN : 'between' ;
+MODULO  : 'mod' ;
+ROOT    : 'root' | '\u221A' ;
+
+MULT           : '*' ;
+DIV            : '/' ;
+PLUS           : '+' ;
+MINUS          : '-' ;
+PERCENT        : '%' ;
+CONCAT         : '||' ;
+EXCLAMATION    : '!' ;
+EXPONENTIATION : '^' ;
 
 GT              : '>' ;
 GE              : '>=' ;
 LT              : '<' ;
 LE              : '<=' ;
 EQ              : '=' ;
-NEQ             : '!=' | '<>' ;
+NEQ             : '<>' ;
 NOT             : '~' | '\u00AC' ;
 REGEX_MATCH     : '=~' ;
 REGEX_NOT_MATCH : '!~' ;
 
-// Date/time current-value tokens
+// Valores temporais correntes
 NOW_DATE     : 'currDate' ;
 NOW_TIME     : 'currTime' ;
 NOW_DATETIME : 'currDateTime' ;
 
-// Grammar assist tokens
-LPAREN             : '(' ;
-RPAREN             : ')' ;
-LBRACKET           : '[' ;
-RBRACKET           : ']' ;
-COMMA              : ',' ;
-SEMI               : ';' ;
-// DOUBLE_PERIOD must precede PERIOD so that '..' is never lexed as two separate PERIOD tokens
-DOUBLE_PERIOD      : '..' ;
-PERIOD             : '.' ;
-NULLCOALESCE       : '??' ;
-SAFE_NAV           : '?.' ;
-// QUESTION must follow NULLCOALESCE and SAFE_NAV so those longer patterns take priority
-QUESTION           : '?' ;
-AT                 : '@' ;
-ARROW              : '->' ;
-IN      : 'in' ;
-NIN     : 'nin' ;
-NOT_KW  : 'not' ;
-BETWEEN : 'between' ;
+// Tokens auxiliares
+LPAREN        : '(' ;
+RPAREN        : ')' ;
+LBRACKET      : '[' ;
+RBRACKET      : ']' ;
+COMMA         : ',' ;
+SEMI          : ';' ;
+DOUBLE_PERIOD : '..' ;   // '..' vence '.' '.' por maximal munch; a ordem aqui é apenas organizacional
+PERIOD        : '.' ;
+NULLCOALESCE  : '??' ;   // '??' e '?.' vencem '?' por maximal munch
+SAFE_NAV      : '?.' ;
+QUESTION      : '?' ;
+COLON         : ':' ;    // usado apenas em slices; literais de hora agora são prefixados (t"...")
+ASSIGN        : ':=' ;   // ':=' vence ':' por maximal munch; em slices ([1:2]) o ':' é seguido de dígito e lexa normalmente
+AT            : '@' ;
+ARROW         : '->' ;
 
-// Literals
-IDENTIFIER : IdentifierText ;
-STRING     : '"' ( '\\' [btnfr"'\\] | ~[\r\n\\"] )* '"';
-NUMBER     : Decimal | OctalDigits | HexDigits ;
-POSITIVE   : PositiveNumber ;
-DATE       : DateFragment ;
-// TIME matches HH:MM or HH:MM:SS. When a TIME token appears inside a subscript ([...])
-// it is treated as a slice (start=hours, end=minutes) via the sliceTimeSubscript rule.
-TIME       : HourFragment Colon MinuteSecondFragment (Colon MinuteSecondFragment)? ;
-TIME_OFFSET: TimeOffsetFragment ;
-DATETIME   : DateFragment ('T' | '-') HourFragment Colon MinuteSecondFragment (Colon MinuteSecondFragment)? ;
-// COLON_OP is declared after TIME and DATETIME; a bare ':' only reaches this rule when it is not
-// part of a longer TIME/DATETIME token (e.g. inside a slice subscript such as [0:2]).
-COLON_OP   : ':' ;
-
-// Type-hint tokens
+// Type hints (mantidos por compatibilidade — ver nota no cabeçalho)
 BOOLEAN_TYPE  : '<bool>' ;
 NUMBER_TYPE   : '<number>' ;
 STRING_TYPE   : '<text>' ;
@@ -114,263 +152,160 @@ TIME_TYPE     : '<time>' ;
 DATETIME_TYPE : '<datetime>' ;
 VECTOR_TYPE   : '<vector>' ;
 
-// Fragments
-fragment IdentifierText      : [a-zA-Z_][a-zA-Z_0-9]* ;
-fragment NegativeSymbol      : '-' ;
-fragment Decimal             : [0-9]+ ('.' [0-9]+)? ;
-fragment PositiveNumber      : [0-9]+ ;
-fragment OctalDigits         : '0' '0'..'7'+ ;
-fragment HexDigits           : '0x' ('0'..'9' | 'a'..'f' | 'A'..'F')+ ;
-fragment Colon               : ':' ;
-fragment DayFragment         : '0' '1'..'9' | '1'..'2' '0'..'9' | '3' '0'..'1' ;
-fragment MonthFragment       : '0' '1'..'9' | '1' '0'..'2' ;
-fragment HourFragment        : '0'..'1' '0'..'9' | '2' '0'..'3' ;
-fragment MinuteSecondFragment: '0'..'5' '0'..'9' ;
-fragment DateFragment        : '0'..'9' '0'..'9' '0'..'9' '0'..'9' '-' MonthFragment '-' DayFragment ;
-fragment TimeOffsetFragment  : ('+' | '-') HourFragment Colon MinuteSecondFragment ;
+// Literais temporais prefixados — o conteúdo é validado estruturalmente pelo lexer
+DATE     : 'd"'  DateFragment '"' ;
+TIME     : 't"'  TimeFragment '"' ;
+DATETIME : 'dt"' DateFragment 'T' TimeFragment TimeOffsetFragment? '"' ;
 
-// Comments and whitespace
+// Literais numéricos e de texto
+IDENTIFIER : [a-zA-Z_][a-zA-Z_0-9]* ;
+STRING     : '"' ( '\\' [btnfr"'\\] | ~[\r\n\\"] )* '"' ;
+FLOAT      : [0-9]+ '.' [0-9]+ ;
+INT        : HexDigits | OctalDigits | [0-9]+ ;
+
+// Fragments
+fragment OctalDigits          : '0' [0-7]+ ;
+fragment HexDigits            : '0x' [0-9a-fA-F]+ ;
+fragment DayFragment          : '0' [1-9] | [1-2] [0-9] | '3' [0-1] ;
+fragment MonthFragment        : '0' [1-9] | '1' [0-2] ;
+fragment HourFragment         : [0-1] [0-9] | '2' [0-3] ;
+fragment MinuteSecondFragment : [0-5] [0-9] ;
+fragment DateFragment         : [0-9] [0-9] [0-9] [0-9] '-' MonthFragment '-' DayFragment ;
+fragment TimeFragment         : HourFragment ':' MinuteSecondFragment (':' MinuteSecondFragment)? ;
+fragment TimeOffsetFragment   : ('+' | '-') HourFragment ':' MinuteSecondFragment ;
+
+// Comentários e espaços
 LINE_COMMENT  : '//' ~[\r\n]* -> skip ;
 BLOCK_COMMENT : '/*' .*? '*/' -> skip ;
 
-WS : [ \r\t\u000C\n]+ -> channel(HIDDEN) ;
+WS         : [ \r\t\u000C\n]+ -> channel(HIDDEN) ;
 ERROR_CHAR : . ;
 
-/* ########################################  Grammar rules  ######################################## */
+/* ########################################  Regras sintáticas  ######################################## */
 
-mathStart
-    : (assignmentExpression)* mathExpression EOF                          # mathInput
-    ;
-
-assignmentStart
-    : assignmentExpression+ EOF                                           # assignmentInput
-    ;
-
-logicalStart
-    : assignmentExpression* logicalExpression EOF                        # logicalInput
+// Ponto de entrada único: zero ou mais atribuições seguidas de uma expressão final opcional.
+// Substitui mathStart / assignmentStart / logicalStart — a validação do tipo do
+// resultado (numérico, lógico etc.) é feita pelo visitor conforme o contexto de uso.
+start
+    : assignmentExpression* expression? EOF                              # startInput
     ;
 
 assignmentExpression
-    : IDENTIFIER EQ assignmentValue SEMI                     # assignmentOperation
-    | vectorOfVariables EQ vectorEntity SEMI                   # destructuringAssignmentOperation
+    : IDENTIFIER ASSIGN expression SEMI                                 # assignmentOperation
+    | vectorOfVariables ASSIGN expression SEMI                          # destructuringAssignmentOperation
     ;
 
-// Logical precedence:
-// NOT (highest) > NAND/NOR/XOR/XNOR > comparison > AND > OR
-logicalExpression
-    : logicalOrExpression                                                # logicalOrOperation
+vectorOfVariables
+    : LBRACKET IDENTIFIER (COMMA IDENTIFIER)* RBRACKET                   # vectorOfVariablesOperation
     ;
 
-logicalOrExpression
-    : logicalAndExpression (OR logicalAndExpression)*                   # logicalOrChainOperation
+// ---------------------------------------------------------------------------
+// Cadeia de precedência unificada
+// ---------------------------------------------------------------------------
+
+expression
+    : coalesceExpression                                                 # expressionOperation
     ;
 
-logicalAndExpression
-    : logicalComparisonExpression (AND logicalComparisonExpression)*    # logicalAndChainOperation
+// a ?? b ?? c — avaliação da esquerda para a direita, primeiro valor não nulo
+coalesceExpression
+    : orExpression (NULLCOALESCE orExpression)*                          # coalesceOperation
     ;
 
-logicalComparisonExpression
-    : logicalBitwiseExpression (comparisonOperator logicalBitwiseExpression)? # logicalComparisonOperation
-    | mathExpression comparisonOperator mathExpression                        # mathComparisonOperation
-    | stringConcatExpression comparisonOperator stringConcatExpression        # stringComparisonOperation
-    | dateEntity comparisonOperator dateEntity                                # dateComparisonOperation
-    | timeEntity comparisonOperator timeEntity                                # timeComparisonOperation
-    | dateTimeEntity comparisonOperator dateTimeEntity                        # dateTimeComparisonOperation
-    | stringConcatExpression REGEX_MATCH STRING                               # regexMatchOperation
-    | stringConcatExpression REGEX_NOT_MATCH STRING                           # regexNotMatchOperation
-    | mathExpression IN vectorEntity                                          # mathInOperation
-    | stringConcatExpression IN vectorEntity                                  # stringInOperation
-    | dateEntity IN vectorEntity                                              # dateInOperation
-    | timeEntity IN vectorEntity                                              # timeInOperation
-    | dateTimeEntity IN vectorEntity                                          # dateTimeInOperation
-    | logicalBitwiseExpression IN vectorEntity                                # logicalInOperation
-    | NULL IN vectorEntity                                                    # nullInOperation
-    | mathExpression NOT_KW IN vectorEntity                                   # mathNotInOperation
-    | stringConcatExpression NOT_KW IN vectorEntity                           # stringNotInOperation
-    | dateEntity NOT_KW IN vectorEntity                                       # dateNotInOperation
-    | timeEntity NOT_KW IN vectorEntity                                       # timeNotInOperation
-    | dateTimeEntity NOT_KW IN vectorEntity                                   # dateTimeNotInOperation
-    | logicalBitwiseExpression NOT_KW IN vectorEntity                         # logicalNotInOperation
-    | NULL NOT_KW IN vectorEntity                                             # nullNotInOperation
-    | mathExpression BETWEEN mathExpression AND mathExpression                # mathBetweenOperation
-    | stringConcatExpression BETWEEN stringConcatExpression AND stringConcatExpression # stringBetweenOperation
-    | dateEntity BETWEEN dateEntity AND dateEntity                            # dateBetweenOperation
-    | timeEntity BETWEEN timeEntity AND timeEntity                            # timeBetweenOperation
-    | dateTimeEntity BETWEEN dateTimeEntity AND dateTimeEntity                # dateTimeBetweenOperation
-    | mathExpression NOT_KW BETWEEN mathExpression AND mathExpression         # mathNotBetweenOperation
-    | stringConcatExpression NOT_KW BETWEEN stringConcatExpression AND stringConcatExpression # stringNotBetweenOperation
-    | dateEntity NOT_KW BETWEEN dateEntity AND dateEntity                     # dateNotBetweenOperation
-    | timeEntity NOT_KW BETWEEN timeEntity AND timeEntity                     # timeNotBetweenOperation
-    | dateTimeEntity NOT_KW BETWEEN dateTimeEntity AND dateTimeEntity         # dateTimeNotBetweenOperation
+orExpression
+    : andExpression (OR andExpression)*                                  # logicalOrOperation
     ;
 
-logicalBitwiseExpression
-    : logicalNotExpression ((NAND | NOR | XOR | XNOR) logicalNotExpression)* # logicalBitwiseOperation
+andExpression
+    : comparisonExpression (AND comparisonExpression)*                   # logicalAndOperation
     ;
 
-logicalNotExpression
-    : (NOT | EXCLAMATION) logicalNotExpression                          # logicalNotOperation
-    | logicalPrimary                                                    # logicalPrimaryOperation
+// Comparações não encadeáveis (no máximo um operador por nível, como na original).
+// BETWEEN reutiliza AND com segurança: os operandos param no nível bitwise,
+// que não consome 'and'.
+comparisonExpression
+    : bitwiseLogicalExpression comparisonOperator bitwiseLogicalExpression                          # comparisonOperation
+    | bitwiseLogicalExpression NOT_KW? IN bitwiseLogicalExpression                                  # inOperation
+    | bitwiseLogicalExpression NIN bitwiseLogicalExpression                                         # ninOperation
+    | bitwiseLogicalExpression NOT_KW? BETWEEN bitwiseLogicalExpression AND bitwiseLogicalExpression # betweenOperation
+    | bitwiseLogicalExpression REGEX_MATCH STRING                                                   # regexMatchOperation
+    | bitwiseLogicalExpression REGEX_NOT_MATCH STRING                                               # regexNotMatchOperation
+    | bitwiseLogicalExpression                                                                      # bitwisePassthroughOperation
     ;
 
-logicalPrimary
-    : LPAREN logicalExpression RPAREN                                   # logicalExpressionParenthesisOperation
-    | logicalEntity                                                     # logicalEntityOperation
+bitwiseLogicalExpression
+    : concatExpression ((NAND | NOR | XOR | XNOR) concatExpression)*     # logicalBitwiseOperation
     ;
 
-// Mathematical precedence:
-// postfix % and ! > exponentiation ^ > root > unary - > *, /, mod > +, -
-mathExpression
-    : sumExpression                                                      # sumOperation
+concatExpression
+    : additiveExpression (CONCAT additiveExpression)*                    # stringConcatenationOperation
     ;
 
-sumExpression
-    : multiplicationExpression ((PLUS | MINUS) multiplicationExpression)* # additiveOperation
+additiveExpression
+    : multiplicativeExpression ((PLUS | MINUS) multiplicativeExpression)* # additiveOperation
     ;
 
-multiplicationExpression
+multiplicativeExpression
     : unaryExpression ((MULT | DIV | MODULO) unaryExpression)*           # multiplicativeOperation
     ;
 
 unaryExpression
     : MINUS unaryExpression                                              # unaryMinusOperation
-    | rootExpression                                                     # rootExpressionOperation
+    | (NOT | EXCLAMATION) unaryExpression                                # logicalNotOperation
+    | rootExpression                                                     # rootPassthroughOperation
     ;
 
 rootExpression
     : exponentiationExpression (ROOT exponentiationExpression)*          # rootChainOperation
     ;
 
+// Recursão em unaryExpression preserva a associatividade à direita e permite 2^-3
 exponentiationExpression
     : postfixExpression (EXPONENTIATION unaryExpression)?                # exponentiationOperation
     ;
 
 postfixExpression
-    : primaryMathExpression ((PERCENT | EXCLAMATION))*                   # postfixOperation
+    : primaryExpression (PERCENT | EXCLAMATION)*                         # postfixOperation
     ;
 
-primaryMathExpression
-    : LPAREN mathExpression RPAREN                                       # mathExpressionParenthesisOperation
-    | SQRT LPAREN mathExpression RPAREN                                  # squareRootOperation
-    | MODULUS mathExpression MODULUS                                     # modulusOperation
-    | numericEntity                                                      # numericEntityOperation
+// ---------------------------------------------------------------------------
+// Primários
+// ---------------------------------------------------------------------------
+
+primaryExpression
+    : LPAREN expression RPAREN                                           # parenthesisOperation
+    | ifExpression                                                       # decisionOperation
+    | typeHint LPAREN expression RPAREN                                  # typeHintOperation
+    | vectorLiteral                                                      # vectorLiteralOperation
+    | referenceTarget                                                    # referenceTargetOperation
+    | literal                                                            # literalOperation
     ;
 
-function
-    : IDENTIFIER LPAREN (allEntityTypes ((COMMA | SEMI) allEntityTypes)*)? RPAREN # functionCallOperation
+ifExpression
+    : IF expression THEN expression
+      (ELSEIF expression THEN expression)*
+      ELSE expression ENDIF                                              # ifThenElseOperation
+    | IF LPAREN expression (COMMA | SEMI) expression
+      ((COMMA | SEMI) expression (COMMA | SEMI) expression)*
+      (COMMA | SEMI) expression RPAREN                                   # functionalIfOperation
     ;
 
-referenceTarget
-    : function                                                           # functionReferenceTarget
-    | IDENTIFIER memberChain*                                            # identifierReferenceTarget
-    | AT memberChain*                                                    # atReferenceTarget
+literal
+    : INT                                                                # intConstantOperation
+    | FLOAT                                                              # floatConstantOperation
+    | STRING                                                             # stringConstantOperation
+    | (TRUE | FALSE)                                                     # logicalConstantOperation
+    | DATE                                                               # dateConstantOperation
+    | TIME                                                               # timeConstantOperation
+    | DATETIME                                                           # dateTimeConstantOperation
+    | NOW_DATE                                                           # dateCurrentValueOperation
+    | NOW_TIME                                                           # timeCurrentValueOperation
+    | NOW_DATETIME                                                       # dateTimeCurrentValueOperation
+    | NULL                                                               # nullConstantOperation
     ;
 
-collectionFunctionArguments
-    : lambdaTransform                                                    # lambdaCollectionFunctionArguments
-    | allEntityTypes (COMMA allEntityTypes)*                             # positionalCollectionFunctionArguments
-    ;
-
-lambdaTransform
-    : AT ARROW allEntityTypes                                            # atLambdaTransform
-    ;
-
-memberChain
-    : DOUBLE_PERIOD IDENTIFIER LPAREN collectionFunctionArguments? RPAREN # collectionFunctionAccess
-    | PERIOD MULT                                                        # childWildcardAccess
-    // methodCallAccess before propertyAccess: 'ident(' must not be parsed as property + extra '('
-    | PERIOD IDENTIFIER LPAREN
-          (allEntityTypes (COMMA allEntityTypes)*)?
-      RPAREN                                                             # methodCallAccess
-    | SAFE_NAV IDENTIFIER LPAREN
-          (allEntityTypes (COMMA allEntityTypes)*)?
-      RPAREN                                                             # safeMethodCallAccess
-    | PERIOD IDENTIFIER                                                  # propertyAccess
-    | SAFE_NAV IDENTIFIER                                                # safePropertyAccess
-    | subscript                                                          # subscriptAccess
-    ;
-
-subscript
-    : LBRACKET MULT RBRACKET                                             # wildcardSubscript
-    | LBRACKET STRING RBRACKET                                           # stringKeySubscript
-    // sliceWithStartSubscript: [start:end?] — e.g. [1:3], [2:]
-    | LBRACKET signedInteger COLON_OP signedInteger? RBRACKET            # sliceWithStartSubscript
-    // sliceToEndSubscript: [:end] — e.g. [:2]
-    | LBRACKET COLON_OP signedInteger RBRACKET                           # sliceToEndSubscript
-    // sliceTimeSubscript: [HH:MM] — time-looking slice e.g. [10:20]; treated as [10:20] slice
-    | LBRACKET TIME RBRACKET                                             # sliceTimeSubscript
-    | LBRACKET signedInteger RBRACKET                                    # indexSubscript
-    | LBRACKET QUESTION LPAREN filterPredicate RPAREN RBRACKET           # filterSubscript
-    ;
-
-signedInteger : MINUS? NUMBER ;
-
-filterPredicate : filterAtom ((AND | OR) filterAtom)* ;
-
-filterAtom
-    : LPAREN filterPredicate RPAREN                                      # parenFilterAtom
-    | filterRelation                                                     # relationFilterAtom
-    ;
-
-filterRelation
-    : filterValue comparisonOperator filterValue                         # comparisonFilterRelation
-    | filterValue REGEX_MATCH STRING                                     # regexMatchFilterRelation
-    | filterValue REGEX_NOT_MATCH STRING                                 # regexNotMatchFilterRelation
-    | filterValue IN  filterValue                                        # inFilterRelation
-    | filterValue NIN filterValue                                        # ninFilterRelation
-    | filterValue                                                        # truthyFilterRelation
-    ;
-
-// filterValue restricts external references to plain dot-notation (no subscripts, wildcards, safe-nav)
-// so that complex expressions cannot appear as filter operands.
-filterValue
-    : AT memberChain*                                                    # currentElementFilterValue
-    | IDENTIFIER (PERIOD IDENTIFIER)*                                    # externalRefFilterValue
-    | numericEntity                                                      # numericFilterValue
-    | stringConcatExpression                                             # stringFilterValue
-    | NULL                                                               # nullFilterValue
-    ;
-
-comparisonOperator
-    : GT                                                                 # greaterThanOperator
-    | GE                                                                 # greaterThanOrEqualOperator
-    | LT                                                                 # lessThanOperator
-    | LE                                                                 # lessThanOrEqualOperator
-    | EQ                                                                 # equalOperator
-    | NEQ                                                                # notEqualOperator
-    ;
-
-allEntityTypes
-    : mathExpression                                                     # mathEntityType
-    | logicalExpression                                                  # logicalEntityType
-    | dateEntity                                                         # dateEntityType
-    | timeEntity                                                         # timeEntityType
-    | dateTimeEntity                                                     # dateTimeEntityType
-    | stringConcatExpression                                             # stringEntityType
-    | vectorEntity                                                       # vectorEntityType
-    | NULL                                                               # nullEntityType
-    ;
-
-assignmentValue
-    : genericEntity                                                      # genericAssignmentValue
-    | mathExpression                                                     # mathAssignmentValue
-    | logicalExpression                                                  # logicalAssignmentValue
-    | dateEntity                                                         # dateAssignmentValue
-    | timeEntity                                                         # timeAssignmentValue
-    | dateTimeEntity                                                     # dateTimeAssignmentValue
-    | stringConcatExpression                                             # stringAssignmentValue
-    | vectorEntity                                                       # vectorAssignmentValue
-    ;
-
-genericEntity
-    : IF logicalExpression THEN genericEntity (ELSEIF logicalExpression THEN genericEntity)* ELSE genericEntity ENDIF # genericDecisionExpression
-    | IF LPAREN logicalExpression (COMMA | SEMI) genericEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) genericEntity)* (COMMA | SEMI) genericEntity RPAREN # genericFunctionDecisionExpression
-    | typeHintExpression                                                                                                                   # typeHintExpressionOperation
-    | referenceTarget                                                                                                                      # referenceTargetOperation
-    ;
-
-typeHintExpression
-    : typeHint LPAREN genericEntity RPAREN                              # typeHintOperation
+vectorLiteral
+    : LBRACKET (expression (COMMA expression)*)? RBRACKET                # vectorOfEntitiesOperation
     ;
 
 typeHint
@@ -383,62 +318,88 @@ typeHint
     | VECTOR_TYPE                                                        # vectorTypeHint
     ;
 
-logicalEntity
-    : (TRUE | FALSE)                                                                                           # logicalConstantOperation
-    | IF logicalExpression THEN logicalExpression (ELSEIF logicalExpression THEN logicalExpression)* ELSE logicalExpression ENDIF # logicalDecisionOperation
-    | IF LPAREN logicalExpression (COMMA | SEMI) logicalExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) logicalExpression)* (COMMA | SEMI) logicalExpression RPAREN # logicalFunctionDecisionOperation
-    | BOOLEAN_TYPE? referenceTarget (NULLCOALESCE logicalExpression)?                                                        # logicalReferenceOperation
+// ---------------------------------------------------------------------------
+// Referências, funções e navegação
+// ---------------------------------------------------------------------------
+
+memberName
+    : IDENTIFIER
+    | IF
+    | THEN
+    | ELSE
+    | ELSEIF
+    | ENDIF
+    | NULL
+    | AND
+    | OR
+    | XOR
+    | XNOR
+    | NAND
+    | NOR
+    | TRUE
+    | FALSE
+    | IN
+    | NIN
+    | NOT_KW
+    | BETWEEN
+    | MODULO
+    | ROOT
+    | NOW_DATE
+    | NOW_TIME
+    | NOW_DATETIME
     ;
 
-numericEntity
-    : IF logicalExpression THEN mathExpression (ELSEIF logicalExpression THEN mathExpression)* ELSE mathExpression ENDIF # mathDecisionOperation
-    | IF LPAREN logicalExpression (COMMA | SEMI) mathExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) mathExpression)* (COMMA | SEMI) mathExpression RPAREN # mathFunctionDecisionOperation
-    | NUMBER                                                                                                             # numericConstantOperation
-    | NUMBER_TYPE? referenceTarget (NULLCOALESCE mathExpression)?                                                         # numericReferenceOperation
+referenceTarget
+    : function memberChain*                                              # functionReferenceTarget
+    | IDENTIFIER memberChain*                                            # identifierReferenceTarget
+    // '@' (elemento corrente) só é válido dentro de filtros [?(...)] e lambdas
+    // '@ -> ...' — validação feita na análise semântica.
+    | AT memberChain*                                                    # atReferenceTarget
     ;
 
-stringConcatExpression
-    : stringEntity (CONCAT stringEntity)*                                                                       # stringConcatenationOperation
+function
+    : IDENTIFIER LPAREN (expression (COMMA expression)*)? RPAREN # functionCallOperation
     ;
 
-stringEntity
-    : IF logicalExpression THEN stringConcatExpression (ELSEIF logicalExpression THEN stringConcatExpression)* ELSE stringConcatExpression ENDIF # stringDecisionOperation
-    | IF LPAREN logicalExpression (COMMA | SEMI) stringConcatExpression ((COMMA | SEMI) logicalExpression (COMMA | SEMI) stringConcatExpression)* (COMMA | SEMI) stringConcatExpression RPAREN # stringFunctionDecisionOperation
-    | STRING                                                                                                    # stringConstantOperation
-    | STRING_TYPE? referenceTarget (NULLCOALESCE stringConcatExpression)?                                       # stringReferenceOperation
+memberChain
+    : DOUBLE_PERIOD memberName LPAREN collectionFunctionArguments? RPAREN # collectionFunctionAccess
+    | PERIOD MULT                                                        # childWildcardAccess
+    // methodCallAccess antes de propertyAccess: 'ident(' não deve virar propriedade + '(' extra
+    | PERIOD memberName LPAREN (expression (COMMA expression)*)? RPAREN  # methodCallAccess
+    | SAFE_NAV memberName LPAREN (expression (COMMA expression)*)? RPAREN # safeMethodCallAccess
+    | PERIOD memberName                                                  # propertyAccess
+    | SAFE_NAV memberName                                                # safePropertyAccess
+    | subscript                                                          # subscriptAccess
     ;
 
-dateEntity
-    : IF logicalExpression THEN dateEntity (ELSEIF logicalExpression THEN dateEntity)* ELSE dateEntity ENDIF # dateDecisionOperation
-    | IF LPAREN logicalExpression (COMMA | SEMI) dateEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateEntity)* (COMMA | SEMI) dateEntity RPAREN # dateFunctionDecisionOperation
-    | DATE                                                                                                     # dateConstantOperation
-    | NOW_DATE                                                                                                 # dateCurrentValueOperation
-    | DATE_TYPE? referenceTarget (NULLCOALESCE dateEntity)?                                                    # dateReferenceOperation
+collectionFunctionArguments
+    : AT ARROW expression                                                # lambdaCollectionFunctionArguments
+    | expression (COMMA expression)*                                     # positionalCollectionFunctionArguments
     ;
 
-timeEntity
-    : IF logicalExpression THEN timeEntity (ELSEIF logicalExpression THEN timeEntity)* ELSE timeEntity ENDIF # timeDecisionOperation
-    | IF LPAREN logicalExpression (COMMA | SEMI) timeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) timeEntity)* (COMMA | SEMI) timeEntity RPAREN # timeFunctionDecisionOperation
-    | TIME                                                                                                     # timeConstantOperation
-    | NOW_TIME                                                                                                 # timeCurrentValueOperation
-    | TIME_TYPE? referenceTarget (NULLCOALESCE timeEntity)?                                                    # timeReferenceOperation
+// Com literais de hora prefixados (t"10:20"), [10:20] é sempre um slice comum:
+// não há mais colisão léxica, e [-10:20], [10:20:30]... simplesmente não existem
+// como tokens — slices negativos ([-10:20]) agora funcionam naturalmente.
+subscript
+    : LBRACKET MULT RBRACKET                                             # wildcardSubscript
+    | LBRACKET STRING RBRACKET                                           # stringKeySubscript
+    | LBRACKET signedInteger COLON signedInteger? RBRACKET               # sliceWithStartSubscript
+    | LBRACKET COLON signedInteger RBRACKET                              # sliceToEndSubscript
+    | LBRACKET signedInteger RBRACKET                                    # indexSubscript
+    | LBRACKET QUESTION LPAREN expression RPAREN RBRACKET                # filterSubscript
     ;
 
-dateTimeEntity
-    : IF logicalExpression THEN dateTimeEntity (ELSEIF logicalExpression THEN dateTimeEntity)* ELSE dateTimeEntity ENDIF # dateTimeDecisionOperation
-    | IF LPAREN logicalExpression (COMMA | SEMI) dateTimeEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) dateTimeEntity)* (COMMA | SEMI) dateTimeEntity RPAREN # dateTimeFunctionDecisionOperation
-    | DATETIME TIME_OFFSET?                                                                                    # dateTimeConstantOperation
-    | NOW_DATETIME                                                                                             # dateTimeCurrentValueOperation
-    | DATETIME_TYPE? referenceTarget (NULLCOALESCE dateTimeEntity)?                                            # dateTimeReferenceOperation
+// INT em vez de NUMBER: [1.5] e [0x1F:2] deixam de parsear como índices válidos
+// (hex/octal em INT ainda passam; rejeite-os no visitor se indesejado).
+signedInteger
+    : MINUS? INT                                                         # signedIntegerOperation
     ;
 
-vectorEntity
-    : IF logicalExpression THEN vectorEntity (ELSEIF logicalExpression THEN vectorEntity)* ELSE vectorEntity ENDIF # vectorDecisionOperation
-    | IF LPAREN logicalExpression (COMMA | SEMI) vectorEntity ((COMMA | SEMI) logicalExpression (COMMA | SEMI) vectorEntity)* (COMMA | SEMI) vectorEntity RPAREN # vectorFunctionDecisionOperation
-    | LBRACKET allEntityTypes (COMMA allEntityTypes)* RBRACKET                               # vectorOfEntitiesOperation
-    | VECTOR_TYPE? referenceTarget (NULLCOALESCE vectorEntity)?                              # vectorReferenceOperation
-    ;
-
-vectorOfVariables
-    : LBRACKET IDENTIFIER (COMMA IDENTIFIER)* RBRACKET                   # vectorOfVariablesOperation
+comparisonOperator
+    : GT                                                                 # greaterThanOperator
+    | GE                                                                 # greaterThanOrEqualOperator
+    | LT                                                                 # lessThanOperator
+    | LE                                                                 # lessThanOrEqualOperator
+    | EQ                                                                 # equalOperator
+    | NEQ                                                                # notEqualOperator
     ;
