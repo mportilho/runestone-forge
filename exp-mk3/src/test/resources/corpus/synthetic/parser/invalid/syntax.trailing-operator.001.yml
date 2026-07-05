@@ -1,0 +1,7 @@
+id: parser.syntax.trailing-operator.001
+phase: parser
+kind: invalid
+source: 'a +'
+coverage: [additive, diagnostic]
+expected:
+  diagnostic: {category: PARSE, code: TBD}

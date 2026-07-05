@@ -1,0 +1,5 @@
+id: parser.assignment.destructuring.001
+phase: parser
+kind: valid
+source: '[a, b] := pair; a'
+coverage: [assignment, destructuring, identifier]

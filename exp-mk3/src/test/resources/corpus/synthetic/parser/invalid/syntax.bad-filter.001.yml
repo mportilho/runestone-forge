@@ -1,0 +1,7 @@
+id: parser.syntax.bad-filter.001
+phase: parser
+kind: invalid
+source: 'items[?(@ >)]'
+coverage: [filter, at-symbol, diagnostic]
+expected:
+  diagnostic: {category: PARSE, code: TBD}

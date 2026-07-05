@@ -1,0 +1,7 @@
+id: parser.syntax.unclosed-string.001
+phase: parser
+kind: invalid
+source: '"abc'
+coverage: [string-literal, diagnostic]
+expected:
+  diagnostic: {category: PARSE, code: TBD}

@@ -1,0 +1,5 @@
+id: parser.literal.int.001
+phase: parser
+kind: valid
+source: '42'
+coverage: [int-literal]

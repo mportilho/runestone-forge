@@ -1,0 +1,6 @@
+id: runtime.arithmetic.decimal.001
+phase: runtime
+kind: valid
+source: '1.5 + 2.25'
+coverage: [float-literal, additive]
+expected: {type: NUMBER, result: "3.75"}

@@ -1,0 +1,10 @@
+id: runtime.vector.numbers.001
+phase: runtime
+kind: valid
+source: '[1, 2]'
+coverage: [vector-literal]
+expected:
+  type: VECTOR
+  result:
+    - {type: NUMBER, value: "1"}
+    - {type: NUMBER, value: "2"}

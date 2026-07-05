@@ -1,0 +1,6 @@
+id: runtime.string.concat.001
+phase: runtime
+kind: valid
+source: '"a" || "b"'
+coverage: [concat, string-literal]
+expected: {type: STRING, result: "ab"}

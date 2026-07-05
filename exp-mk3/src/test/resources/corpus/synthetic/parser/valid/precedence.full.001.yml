@@ -1,0 +1,5 @@
+id: parser.precedence.full.001
+phase: parser
+kind: valid
+source: 'a ?? b or c and d = e xor f || g + h * -i root j ^ k%'
+coverage: [coalesce, logical-or, logical-and, comparison, logical-bitwise, concat, additive, multiplicative, unary, root, exponentiation, postfix-percent, precedence, identifier]

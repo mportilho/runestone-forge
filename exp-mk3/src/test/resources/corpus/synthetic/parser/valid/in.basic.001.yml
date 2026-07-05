@@ -1,0 +1,5 @@
+id: parser.in.basic.001
+phase: parser
+kind: valid
+source: 'a in [1, 2]'
+coverage: [in, vector-literal, identifier]

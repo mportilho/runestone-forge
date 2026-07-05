@@ -1,0 +1,5 @@
+id: parser.collection.map.lambda.001
+phase: parser
+kind: valid
+source: 'values..map(@ -> @ * 2)'
+coverage: [collection-function, lambda, at-symbol, multiplicative, identifier]

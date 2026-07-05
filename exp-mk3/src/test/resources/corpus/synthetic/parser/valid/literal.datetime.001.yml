@@ -1,0 +1,5 @@
+id: parser.literal.datetime.001
+phase: parser
+kind: valid
+source: 'dt"2026-07-05T10:30:45"'
+coverage: [datetime-literal]

@@ -1,0 +1,7 @@
+id: parser.syntax.unclosed-parenthesis.001
+phase: parser
+kind: invalid
+source: '(a + b'
+coverage: [parentheses, diagnostic]
+expected:
+  diagnostic: {category: PARSE, code: TBD}

@@ -1,0 +1,7 @@
+id: parser.semantics.invalid-regex.001
+phase: semantics
+kind: invalid
+source: 'name =~ "["'
+coverage: [regex, string-literal, diagnostic]
+expected:
+  diagnostic: {category: SEMANTIC, code: TBD}

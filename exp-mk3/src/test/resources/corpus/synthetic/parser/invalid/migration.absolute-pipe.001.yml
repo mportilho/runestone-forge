@@ -1,0 +1,7 @@
+id: parser.migration.absolute-pipe.001
+phase: migration
+kind: invalid
+source: '|x|'
+coverage: [migration, diagnostic]
+expected:
+  diagnostic: {category: PARSE, code: TBD}

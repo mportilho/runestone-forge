@@ -1,0 +1,5 @@
+id: parser.method.call.001
+phase: parser
+kind: valid
+source: 'customer.fullName()'
+coverage: [method-call, identifier]

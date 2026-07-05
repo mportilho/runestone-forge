@@ -1,0 +1,5 @@
+id: parser.logical.and.001
+phase: parser
+kind: valid
+source: 'a and b'
+coverage: [logical-and, identifier]

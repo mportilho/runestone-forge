@@ -1,0 +1,7 @@
+id: parser.syntax.unclosed-vector.001
+phase: parser
+kind: invalid
+source: '[1, 2'
+coverage: [vector-literal, diagnostic]
+expected:
+  diagnostic: {category: PARSE, code: TBD}

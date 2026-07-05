@@ -1,0 +1,7 @@
+id: parser.at.symbol.001
+phase: semantics
+kind: invalid
+source: '@'
+coverage: [at-symbol, diagnostic]
+expected:
+  diagnostic: {category: SEMANTIC, code: TBD}

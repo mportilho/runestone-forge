@@ -1,0 +1,5 @@
+id: parser.in.not-in.001
+phase: parser
+kind: valid
+source: 'a not in [1, 2]'
+coverage: [not-in, vector-literal, identifier]

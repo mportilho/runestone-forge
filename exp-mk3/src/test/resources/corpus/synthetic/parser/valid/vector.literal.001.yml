@@ -1,0 +1,5 @@
+id: parser.vector.literal.001
+phase: parser
+kind: valid
+source: '[1, 2, 3]'
+coverage: [vector-literal]

@@ -1,0 +1,5 @@
+id: parser.comparison.not-equal.001
+phase: parser
+kind: valid
+source: 'a <> b'
+coverage: [comparison, identifier]

@@ -1,0 +1,14 @@
+id: runtime.external.symbols.001
+phase: runtime
+kind: valid
+source: 'a + b * 2'
+environment:
+  numericMode: DECIMAL
+  symbols:
+    a: NUMBER
+    b: NUMBER
+inputs:
+  a: {type: NUMBER, value: "10"}
+  b: {type: NUMBER, value: "5"}
+coverage: [identifier, additive, multiplicative]
+expected: {type: NUMBER, result: "20"}

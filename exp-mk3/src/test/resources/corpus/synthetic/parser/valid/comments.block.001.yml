@@ -1,0 +1,5 @@
+id: parser.comments.block.001
+phase: parser
+kind: valid
+source: '/* ignored */ 1'
+coverage: [comments, int-literal]

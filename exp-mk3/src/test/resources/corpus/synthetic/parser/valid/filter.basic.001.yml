@@ -1,0 +1,5 @@
+id: parser.filter.basic.001
+phase: parser
+kind: valid
+source: 'people[?(@.age >= 18)]'
+coverage: [filter, at-symbol, property-access, comparison, identifier]

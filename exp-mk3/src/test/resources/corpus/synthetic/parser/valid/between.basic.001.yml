@@ -1,0 +1,5 @@
+id: parser.between.basic.001
+phase: parser
+kind: valid
+source: 'x between 1 and 10'
+coverage: [between, identifier]

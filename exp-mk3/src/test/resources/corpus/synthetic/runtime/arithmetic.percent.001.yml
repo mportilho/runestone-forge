@@ -1,0 +1,6 @@
+id: runtime.arithmetic.percent.001
+phase: runtime
+kind: valid
+source: '25%'
+coverage: [postfix-percent]
+expected: {type: NUMBER, result: "0.25"}

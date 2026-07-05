@@ -1,0 +1,6 @@
+id: runtime.arithmetic.add.001
+phase: runtime
+kind: valid
+source: '1 + 2'
+coverage: [additive, int-literal]
+expected: {type: NUMBER, result: "3"}

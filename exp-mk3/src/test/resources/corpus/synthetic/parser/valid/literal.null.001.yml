@@ -1,0 +1,5 @@
+id: parser.literal.null.001
+phase: parser
+kind: valid
+source: 'null'
+coverage: [null-literal]

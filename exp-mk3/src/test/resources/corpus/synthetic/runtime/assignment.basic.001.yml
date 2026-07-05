@@ -1,0 +1,6 @@
+id: runtime.assignment.basic.001
+phase: runtime
+kind: valid
+source: 'x := 2; x + 3'
+coverage: [assignment, additive, identifier]
+expected: {type: NUMBER, result: "5"}

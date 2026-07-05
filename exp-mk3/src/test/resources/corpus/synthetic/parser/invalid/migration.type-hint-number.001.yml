@@ -1,0 +1,7 @@
+id: parser.migration.type-hint-number.001
+phase: migration
+kind: invalid
+source: '<number>(x)'
+coverage: [migration, diagnostic]
+expected:
+  diagnostic: {category: SEMANTIC, code: TBD}

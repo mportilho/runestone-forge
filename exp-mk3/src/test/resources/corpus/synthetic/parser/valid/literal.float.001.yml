@@ -1,0 +1,5 @@
+id: parser.literal.float.001
+phase: parser
+kind: valid
+source: '3.14'
+coverage: [float-literal]

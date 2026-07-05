@@ -1,0 +1,5 @@
+id: parser.in.nin.001
+phase: parser
+kind: valid
+source: 'a nin [1, 2]'
+coverage: [not-in, vector-literal, identifier]

@@ -1,0 +1,7 @@
+id: parser.syntax.bad-character.001
+phase: parser
+kind: invalid
+source: 'a # b'
+coverage: [diagnostic]
+expected:
+  diagnostic: {category: LEXICAL, code: TBD}

@@ -1,0 +1,7 @@
+id: parser.migration.date-unprefixed.001
+phase: migration
+kind: invalid
+source: '2026-07-05'
+coverage: [date-literal, migration, diagnostic]
+expected:
+  diagnostic: {category: SEMANTIC, code: TBD}

@@ -1,0 +1,5 @@
+id: parser.literal.current-time.001
+phase: parser
+kind: valid
+source: 'currTime'
+coverage: [current-temporal]

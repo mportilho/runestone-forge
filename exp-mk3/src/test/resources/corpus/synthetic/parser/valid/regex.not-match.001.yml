@@ -1,0 +1,5 @@
+id: parser.regex.not-match.001
+phase: parser
+kind: valid
+source: 'name !~ "^[A-Z]+$"'
+coverage: [regex, string-literal, identifier]

@@ -1,0 +1,5 @@
+id: parser.literal.time.001
+phase: parser
+kind: valid
+source: 't"10:30"'
+coverage: [time-literal]

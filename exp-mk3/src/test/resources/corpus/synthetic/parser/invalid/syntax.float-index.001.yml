@@ -1,0 +1,7 @@
+id: parser.syntax.float-index.001
+phase: parser
+kind: invalid
+source: 'items[1.5]'
+coverage: [subscript-index, diagnostic]
+expected:
+  diagnostic: {category: PARSE, code: TBD}

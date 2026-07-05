@@ -1,0 +1,5 @@
+id: parser.logical.nand.001
+phase: parser
+kind: valid
+source: 'a nand b'
+coverage: [logical-bitwise, identifier]

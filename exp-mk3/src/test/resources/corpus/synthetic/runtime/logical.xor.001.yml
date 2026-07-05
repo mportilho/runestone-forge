@@ -1,0 +1,6 @@
+id: runtime.logical.xor.001
+phase: runtime
+kind: valid
+source: 'true xor false'
+coverage: [logical-bitwise, boolean-literal]
+expected: {type: BOOLEAN, result: true}

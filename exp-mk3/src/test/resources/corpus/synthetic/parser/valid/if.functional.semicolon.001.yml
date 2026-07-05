@@ -1,0 +1,5 @@
+id: parser.if.functional.semicolon.001
+phase: parser
+kind: valid
+source: 'if(flag; 1; 0)'
+coverage: [if-functional, identifier]

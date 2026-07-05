@@ -1,0 +1,5 @@
+id: parser.function.call.001
+phase: parser
+kind: valid
+source: 'sqrt(x)'
+coverage: [function-call, identifier]

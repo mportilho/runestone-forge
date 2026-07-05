@@ -1,0 +1,7 @@
+id: parser.semantics.regex-left-type.001
+phase: semantics
+kind: invalid
+source: '5 !~ "x"'
+coverage: [regex, diagnostic]
+expected:
+  diagnostic: {category: SEMANTIC, code: TBD}

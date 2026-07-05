@@ -1,0 +1,5 @@
+id: parser.logical.xor.001
+phase: parser
+kind: valid
+source: 'a xor b'
+coverage: [logical-bitwise, identifier]

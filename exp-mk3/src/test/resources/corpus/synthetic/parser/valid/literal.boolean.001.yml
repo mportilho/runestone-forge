@@ -1,0 +1,5 @@
+id: parser.literal.boolean.001
+phase: parser
+kind: valid
+source: 'true'
+coverage: [boolean-literal]

@@ -1,0 +1,6 @@
+id: runtime.comparison.not-in.001
+phase: runtime
+kind: valid
+source: '4 not in [1, 2, 3]'
+coverage: [not-in, vector-literal]
+expected: {type: BOOLEAN, result: true}

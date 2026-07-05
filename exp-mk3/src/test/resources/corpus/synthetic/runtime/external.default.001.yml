@@ -1,0 +1,15 @@
+id: runtime.external.default.001
+phase: runtime
+kind: valid
+source: 'a + b'
+environment:
+  numericMode: DECIMAL
+  strict: false
+  symbols:
+    a:
+      type: NUMBER
+    b:
+      type: NUMBER
+      default: {type: NUMBER, value: "5"}
+coverage: [identifier, additive]
+expected: {type: NUMBER, result: "15"}

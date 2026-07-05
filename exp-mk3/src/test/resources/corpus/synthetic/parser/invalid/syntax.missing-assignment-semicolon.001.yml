@@ -1,0 +1,7 @@
+id: parser.syntax.missing-assignment-semicolon.001
+phase: parser
+kind: invalid
+source: 'x := 1 x'
+coverage: [assignment, diagnostic]
+expected:
+  diagnostic: {category: PARSE, code: TBD}

@@ -1,0 +1,5 @@
+id: parser.coalesce.chain.001
+phase: parser
+kind: valid
+source: 'a ?? b ?? c'
+coverage: [coalesce, identifier]

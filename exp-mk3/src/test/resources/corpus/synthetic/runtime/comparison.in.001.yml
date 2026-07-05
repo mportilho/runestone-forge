@@ -1,0 +1,6 @@
+id: runtime.comparison.in.001
+phase: runtime
+kind: valid
+source: '2 in [1, 2, 3]'
+coverage: [in, vector-literal]
+expected: {type: BOOLEAN, result: true}
