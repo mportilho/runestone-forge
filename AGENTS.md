@@ -33,3 +33,4 @@
 
 ## Instruction Sources
 - `CLAUDE.md` only includes `@AGENTS.md`; keep this file as the canonical agent instruction source.
+- Always load the `java-guidelines` skill before doing any work in this project.

@@ -1,11 +1,11 @@
-package com.runestone.expeval_mk3.benchmarks;
+package com.runestone.expeval_mk3.perf.jmh;
 
 import org.openjdk.jmh.annotations.Benchmark;
 
 public class InfrastructureBenchmark {
 
     @Benchmark
-    public int baseline() {
+    public int harnessSmokeCheck() {
         return 42;
     }
 }
