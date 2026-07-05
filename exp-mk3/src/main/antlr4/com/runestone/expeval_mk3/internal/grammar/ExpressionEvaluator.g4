@@ -70,8 +70,6 @@
  *    barateando a predição. Sem colisão com o ':' de slices: por maximal munch,
  *    ':=' só vence quando um '=' segue o ':'.
  *  - Comparações não são encadeáveis (a < b < c é erro), como na original.
- *  - Os type hints '<bool>' etc. foram mantidos por compatibilidade; a entrada
- *    rara 'a<bool>c' ainda lexa o token de hint (limitação de maximal munch).
  */
 
 grammar ExpressionEvaluator;
@@ -142,15 +140,6 @@ COLON         : ':' ;    // usado apenas em slices; literais de hora agora são 
 ASSIGN        : ':=' ;   // ':=' vence ':' por maximal munch; em slices ([1:2]) o ':' é seguido de dígito e lexa normalmente
 AT            : '@' ;
 ARROW         : '->' ;
-
-// Type hints (mantidos por compatibilidade — ver nota no cabeçalho)
-BOOLEAN_TYPE  : '<bool>' ;
-NUMBER_TYPE   : '<number>' ;
-STRING_TYPE   : '<text>' ;
-DATE_TYPE     : '<date>' ;
-TIME_TYPE     : '<time>' ;
-DATETIME_TYPE : '<datetime>' ;
-VECTOR_TYPE   : '<vector>' ;
 
 // Literais temporais prefixados — o conteúdo é validado estruturalmente pelo lexer
 DATE     : 'd"'  DateFragment '"' ;
@@ -275,7 +264,6 @@ postfixExpression
 primaryExpression
     : LPAREN expression RPAREN                                           # parenthesisOperation
     | ifExpression                                                       # decisionOperation
-    | typeHint LPAREN expression RPAREN                                  # typeHintOperation
     | vectorLiteral                                                      # vectorLiteralOperation
     | referenceTarget                                                    # referenceTargetOperation
     | literal                                                            # literalOperation
@@ -306,16 +294,6 @@ literal
 
 vectorLiteral
     : LBRACKET (expression (COMMA expression)*)? RBRACKET                # vectorOfEntitiesOperation
-    ;
-
-typeHint
-    : BOOLEAN_TYPE                                                       # booleanTypeHint
-    | NUMBER_TYPE                                                        # numberTypeHint
-    | STRING_TYPE                                                        # stringTypeHint
-    | DATE_TYPE                                                          # dateTypeHint
-    | TIME_TYPE                                                          # timeTypeHint
-    | DATETIME_TYPE                                                      # dateTimeTypeHint
-    | VECTOR_TYPE                                                        # vectorTypeHint
     ;
 
 // ---------------------------------------------------------------------------
@@ -369,6 +347,7 @@ memberChain
     | SAFE_NAV memberName LPAREN (expression (COMMA expression)*)? RPAREN # safeMethodCallAccess
     | PERIOD memberName                                                  # propertyAccess
     | SAFE_NAV memberName                                                # safePropertyAccess
+    | SAFE_NAV subscript                                                 # safeSubscriptAccess
     | subscript                                                          # subscriptAccess
     ;
 
