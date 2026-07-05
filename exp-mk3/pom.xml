@@ -132,7 +132,7 @@
                                     <classpathScope>test</classpathScope>
                                     <arguments>
                                         <argument>-l</argument>
-                                        <argument>com.runestone.expeval_mk3.perf.jmh.InfrastructureBenchmark</argument>
+                                        <argument>com.runestone.expeval_mk3.perf.jmh.*Benchmark</argument>
                                     </arguments>
                                 </configuration>
                             </execution>

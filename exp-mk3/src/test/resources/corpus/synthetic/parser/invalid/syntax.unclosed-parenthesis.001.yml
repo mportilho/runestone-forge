@@ -4,4 +4,7 @@ kind: invalid
 source: '(a + b'
 coverage: [parentheses, diagnostic]
 expected:
-  diagnostic: {category: PARSE, code: TBD}
+  diagnostic:
+    category: PARSE
+    code: PARSE_MISSING_TOKEN
+    span: {offset: 6, endOffset: 6, line: 1, column: 7}

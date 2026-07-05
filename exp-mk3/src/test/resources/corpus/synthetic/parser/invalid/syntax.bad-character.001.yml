@@ -4,4 +4,7 @@ kind: invalid
 source: 'a # b'
 coverage: [diagnostic]
 expected:
-  diagnostic: {category: LEXICAL, code: TBD}
+  diagnostic:
+    category: PARSE
+    code: PARSE_UNRECOGNIZED_CHARACTER
+    span: {offset: 2, endOffset: 3, line: 1, column: 3}

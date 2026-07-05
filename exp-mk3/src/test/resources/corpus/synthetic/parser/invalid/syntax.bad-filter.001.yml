@@ -4,4 +4,7 @@ kind: invalid
 source: 'items[?(@ >)]'
 coverage: [filter, at-symbol, diagnostic]
 expected:
-  diagnostic: {category: PARSE, code: TBD}
+  diagnostic:
+    category: PARSE
+    code: PARSE_NO_VIABLE_ALTERNATIVE
+    span: {offset: 11, endOffset: 12, line: 1, column: 12}

@@ -4,4 +4,4 @@ kind: invalid
 source: 'x = 2 + 3;'
 coverage: [assignment, migration, diagnostic]
 expected:
-  diagnostic: {category: PARSE, code: TBD}
+  diagnostic: {category: MIGRATION, code: TBD}

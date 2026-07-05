@@ -4,4 +4,7 @@ kind: invalid
 source: '"abc'
 coverage: [string-literal, diagnostic]
 expected:
-  diagnostic: {category: PARSE, code: TBD}
+  diagnostic:
+    category: PARSE
+    code: PARSE_UNRECOGNIZED_CHARACTER
+    span: {offset: 0, endOffset: 1, line: 1, column: 1}

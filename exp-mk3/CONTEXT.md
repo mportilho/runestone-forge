@@ -27,3 +27,15 @@ _Avoid_: Test context, evaluation setup
 **Tag de Cobertura**:
 A controlled marker that identifies which language constructs an expression case covers.
 _Avoid_: Free-form label, test category
+
+**Resultado de Parsing**:
+The ephemeral outcome of parsing an expression source during compilation: either a valid internal parse tree with parser metadata, or one or more positioned expression diagnostics and no valid tree.
+_Avoid_: Parse exception, partial parse tree
+
+**Trecho de Fonte**:
+A half-open character range in an expression source, with zero-based offsets for machines and one-based line and column numbers for human-facing diagnostics. Empty ranges identify insertion points such as missing tokens or end of source.
+_Avoid_: Token position, raw ANTLR location
+
+**Diagnostico de Expressao**:
+A stable, categorized explanation of why an expression source cannot be accepted by a compilation phase, always tied to a source span when it originates from source text.
+_Avoid_: Exception message, ANTLR error text

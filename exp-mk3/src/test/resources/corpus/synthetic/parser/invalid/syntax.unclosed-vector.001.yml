@@ -4,4 +4,7 @@ kind: invalid
 source: '[1, 2'
 coverage: [vector-literal, diagnostic]
 expected:
-  diagnostic: {category: PARSE, code: TBD}
+  diagnostic:
+    category: PARSE
+    code: PARSE_MISSING_TOKEN
+    span: {offset: 5, endOffset: 5, line: 1, column: 6}

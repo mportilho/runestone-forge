@@ -4,4 +4,4 @@ kind: invalid
 source: '10:30'
 coverage: [time-literal, migration, diagnostic]
 expected:
-  diagnostic: {category: PARSE, code: TBD}
+  diagnostic: {category: MIGRATION, code: TBD}

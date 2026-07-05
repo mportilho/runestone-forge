@@ -3,6 +3,7 @@ package com.runestone.expeval_mk3.corpus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.runestone.expeval_mk3.internal.parser.SourceSpan;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -86,9 +87,13 @@ final class ExpressionCaseLoader {
         JsonNode expected = root.get("expected");
         if (kind == CaseKind.INVALID) {
             JsonNode diagnostic = requiredObject(expected, "diagnostic", path);
+            String category = requiredText(diagnostic, "category", path);
+            String code = requiredText(diagnostic, "code", path);
+            List<SourceSpan> spans = diagnosticSpans(diagnostic, category, code, path);
             return new ExpectedDiagnostic(
-                    requiredText(diagnostic, "category", path),
-                    requiredText(diagnostic, "code", path));
+                    category,
+                    code,
+                    spans);
         }
         if (requiresResult(phase)) {
             JsonNode expectedObject = requiredObject(root, "expected", path);
@@ -140,6 +145,35 @@ final class ExpressionCaseLoader {
             throw new IllegalArgumentException("Missing object field '" + field + "' in " + path);
         }
         return node;
+    }
+
+    private static List<SourceSpan> diagnosticSpans(JsonNode diagnostic, String category, String code, Path path) {
+        JsonNode span = diagnostic.get("span");
+        if (span == null) {
+            if ("PARSE".equals(category)) {
+                throw new IllegalArgumentException("Missing diagnostic.span for PARSE case in " + path);
+            }
+            return List.of();
+        }
+        if (!span.isObject()) {
+            throw new IllegalArgumentException("Missing object field 'span' in " + path);
+        }
+        if ("PARSE".equals(category) && "TBD".equals(code)) {
+            throw new IllegalArgumentException("PARSE diagnostic code must be stable in " + path);
+        }
+        return List.of(new SourceSpan(
+                requiredInt(span, "offset", path),
+                requiredInt(span, "endOffset", path),
+                requiredInt(span, "line", path),
+                requiredInt(span, "column", path)));
+    }
+
+    private static int requiredInt(JsonNode root, String field, Path path) {
+        JsonNode node = Objects.requireNonNull(root, "root").get(field);
+        if (node == null || !node.canConvertToInt()) {
+            throw new IllegalArgumentException("Missing integer field '" + field + "' in " + path);
+        }
+        return node.intValue();
     }
 
     private static String requiredText(JsonNode root, String field, Path path) {

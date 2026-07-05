@@ -4,4 +4,7 @@ kind: invalid
 source: 'a +'
 coverage: [additive, diagnostic]
 expected:
-  diagnostic: {category: PARSE, code: TBD}
+  diagnostic:
+    category: PARSE
+    code: PARSE_NO_VIABLE_ALTERNATIVE
+    span: {offset: 3, endOffset: 3, line: 1, column: 4}
