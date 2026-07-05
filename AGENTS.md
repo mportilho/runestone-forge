@@ -34,3 +34,17 @@
 ## Instruction Sources
 - `CLAUDE.md` only includes `@AGENTS.md`; keep this file as the canonical agent instruction source.
 - Always load the `java-guidelines` skill before doing any work in this project.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues for `mportilho/runestone-forge`; external PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical triage roles map directly to same-named GitHub labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context repo: root `CONTEXT.md` is the context index, module `CONTEXT.md` files hold domain language, and root `docs/adr/` holds ADRs. See `docs/agents/domain.md`.
