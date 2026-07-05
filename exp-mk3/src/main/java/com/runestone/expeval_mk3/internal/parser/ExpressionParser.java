@@ -2,6 +2,10 @@ package com.runestone.expeval_mk3.internal.parser;
 
 import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorLexer;
 import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorParser;
+import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCategory;
+import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
+import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.internal.source.SourceSpan;
 import org.antlr.v4.runtime.BailErrorStrategy;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;

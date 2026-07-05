@@ -1,5 +1,7 @@
 package com.runestone.expeval_mk3.internal.parser;
 
+import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
+
 import java.util.List;
 import java.util.Objects;
 

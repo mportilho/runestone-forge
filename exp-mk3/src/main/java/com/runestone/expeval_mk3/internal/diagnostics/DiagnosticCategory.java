@@ -1,4 +1,4 @@
-package com.runestone.expeval_mk3.internal.parser;
+package com.runestone.expeval_mk3.internal.diagnostics;
 
 public enum DiagnosticCategory {
     PARSE,

@@ -1,7 +1,7 @@
 package com.runestone.expeval_mk3.corpus;
 
-import com.runestone.expeval_mk3.internal.parser.DiagnosticCategory;
-import com.runestone.expeval_mk3.internal.parser.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCategory;
+import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.internal.parser.ExpressionParser;
 import com.runestone.expeval_mk3.internal.parser.ParseFailure;
 import com.runestone.expeval_mk3.internal.parser.ParseResult;

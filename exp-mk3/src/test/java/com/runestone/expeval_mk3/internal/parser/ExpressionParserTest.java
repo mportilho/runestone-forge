@@ -1,5 +1,8 @@
 package com.runestone.expeval_mk3.internal.parser;
 
+import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCategory;
+import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
+import com.runestone.expeval_mk3.internal.source.SourceSpan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

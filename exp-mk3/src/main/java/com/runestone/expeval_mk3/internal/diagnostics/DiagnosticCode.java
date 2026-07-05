@@ -1,4 +1,4 @@
-package com.runestone.expeval_mk3.internal.parser;
+package com.runestone.expeval_mk3.internal.diagnostics;
 
 public enum DiagnosticCode {
     PARSE_UNRECOGNIZED_CHARACTER,
