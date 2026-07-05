@@ -41,12 +41,19 @@ public final class JpaCollections {
 
     @SuppressWarnings("unchecked")
     public static Expression<Collection<?>> requireCollectionExpression(Expression<?> expression, String operationName) {
-        Class<?> javaType = expression.getJavaType();
-        if (!Collection.class.isAssignableFrom(javaType)) {
+        if (!isCollectionExpression(expression)) {
+            Class<?> javaType = expression.getJavaType();
             throw new DynamicFilterConfigurationException("%s requires a collection path, but found %s"
                     .formatted(operationName, javaType.getCanonicalName()));
         }
         return (Expression<Collection<?>>) expression;
+    }
+
+    public static boolean isCollectionExpression(Expression<?> expression) {
+        if (Collection.class.isAssignableFrom(expression.getJavaType())) {
+            return true;
+        }
+        return expression instanceof Path<?> path && path.getModel() instanceof PluralAttribute<?, ?, ?>;
     }
 
     public static Class<?> findCollectionElementType(Expression<?> expression) {

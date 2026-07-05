@@ -27,13 +27,13 @@ package com.runestone.dynafilter.modules.jpa.operation.specification;
 import com.runestone.converters.DataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
+import com.runestone.dynafilter.modules.jpa.support.JpaCollections;
 import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
 import com.runestone.dynafilter.modules.jpa.support.JpaValues;
 import jakarta.persistence.criteria.*;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.Arrays;
-import java.util.Collection;
 
 public class SpecificationIsIn<T> implements Specification<T> {
 
@@ -53,7 +53,7 @@ public class SpecificationIsIn<T> implements Specification<T> {
         Expression expressionTemp = resolution.expression();
         Object[] arrayValues = JpaValues.asArray(filterData.values()[0]);
 
-        boolean finalAttributeIsCollection = Collection.class.isAssignableFrom(expressionTemp.getJavaType());
+        boolean finalAttributeIsCollection = JpaCollections.isCollectionExpression(expressionTemp);
         if (finalAttributeIsCollection) {
             resolution = JpaPaths.resolveAttributeJoinPath(path, filterData, root, query);
             expressionTemp = resolution.expression();

@@ -1,170 +1,35 @@
 # AGENTS.md
 
-This file provides guidance to AI agents (Gemini CLI, Claude Code, etc.) when working with code in this repository.
+## Project Shape
+- Java 21 Maven reactor; there is no Maven wrapper, so use local `mvn`.
+- Root modules are `runestone-toolkit`, `dynamic-filter-resolver`, `expression-evaluator`, and `exp-mk3`.
+- `runestone-toolkit` provides shared assertions, memoization, date utilities, and `DataConversionService`; converter implementations are discovered through `src/main/resources/META-INF/services/com.runestone.converters.DataConverter`, so add new converters there.
+- `dynamic-filter-resolver` depends on `runestone-toolkit`; Spring/JPA/WebMVC/Springdoc dependencies are `provided`, with H2/Spring Boot only in tests.
+- `expression-evaluator` depends on `runestone-toolkit`; public entrypoints are in `com.runestone.expeval.api` and compiler/runtime internals are under `com.runestone.expeval.internal`.
+- `exp-mk3` is a rebuild of `expression-evaluator`; when working on it, do not consult or read `expression-evaluator` under any circumstances. Build `exp-mk3` only from its own module contents and its dependencies.
 
-## Project Overview
+## Commands
+- Full verification: `mvn test`.
+- Test one module and its reactor dependencies: `mvn -pl <module> -am test`.
+- Test one class in a module with upstream dependencies: `mvn -pl <module> -am -Dtest=<TestClass> -Dsurefire.failIfNoSpecifiedTests=false test`.
+- Test one class in `runestone-toolkit` only: `mvn -pl runestone-toolkit -Dtest=<TestClass> test`.
+- Update project version: `mvn versions:set -DnewVersion=<version> versions:commit`.
 
-**runestone-forge** is a multi-module Java development toolkit with four modules:
+## Build And Test Gotchas
+- The root Surefire config already sets `-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true`; keep it when touching test/plugin config because Mockito/ByteBuddy tests rely on it.
+- `-am` plus `-Dtest=...` fails in upstream modules without `-Dsurefire.failIfNoSpecifiedTests=false` if those modules do not contain the named test.
+- `mvn -q test` still emits Spring/Hibernate SQL logs from `dynamic-filter-resolver` integration tests; this is normal.
+- `runestone-toolkit/src/test/resources/junit-platform.properties` enables JUnit parallel execution for that module.
+- JMH benchmark/profiling classes live under `src/test/java`, but their `*Benchmark` names are not selected by Surefire defaults unless explicitly targeted.
 
-1. **runestone-toolkit** — Core utilities (memoization, caching, data conversion, assertions). No Spring dependency.
-2. **dynamic-filter-resolver** — Dynamic filtering framework for Spring Data JPA repositories, with OpenAPI integration.
-3. **expression-evaluator** — Redesigned expression evaluator with a multi-phase compilation pipeline, richer type system (scalar, vector, unknown), and Caffeine-based expression cache.
+## Generated Grammar Files
+- `expression-evaluator/src/main/antlr4/.../ExpressionEvaluator.g4` and `exp-mk3/src/main/antlr4/.../ExpressionEvaluator.g4` are grammar sources.
+- There is no ANTLR Maven plugin; generated parser/lexer files for `expression-evaluator` are committed under `src/main/java/com/runestone/expeval/internal/grammar`.
+- If the grammar changes, regenerate and review the committed parser/lexer/token/interp files rather than assuming Maven will generate them during `test`.
 
-## Build & Test Commands
+## Dynamic Filter Notes
+- Spring setup is opt-in through `@EnableDynamicFilterServletConfiguration`; there is no Spring Boot `AutoConfiguration.imports` or `spring.factories` resource.
+- Built-in JPA operations are registered in `JpaFilterOperationService`; extension operations should go through `JpaFilterOperationContributor` rather than editing consumers.
 
-```shell
-# Build all modules
-mvn clean install
-
-# Run all tests
-mvn clean test
-
-# Run integration tests
-mvn verify
-
-# Run tests for a single module
-mvn clean test -pl expression-evaluator
-
-# Run a single test class
-mvn clean test -pl expression-evaluator -Dtest=ExpressionCalculatorTest
-
-# Run a single test method
-mvn clean test -pl expression-evaluator -Dtest=ExpressionCalculatorTest#methodName
-
-# Update project version
-mvn versions:set -DnewVersion=1.2.0 versions:commit
-```
-
-> **JDK 21 test note**: Tests require `-XX:+EnableDynamicAgentLoading -Dnet.bytebuddy.experimental=true` for Mockito/ByteBuddy. These flags are already configured in each module's `pom.xml` under `maven-surefire-plugin`.
->
-> **Sandbox note**: In restricted sandboxed environments, the full Maven test suite may still fail during Mockito initialization with ByteBuddy self-attach errors even with the Surefire flags configured. If that happens, rerun the same Maven test command outside the sandbox before treating it as a code regression.
-
-## Architecture
-
-### runestone-toolkit
-Foundation library used by the other modules. Key packages:
-- `com.runestone.memoization` — `MemoizedFunction`, `MemoizedSupplier` for caching function results.
-- `com.runestone.converters` — Data type conversion service.
-- `com.runestone.assertions` — `Asserts` and `Certify` for design-by-contract and validations.
-
-Uses Caffeine for caching internal structures.
-### dynamic-filter-resolver
-Enables annotating REST controller parameters with filter definitions that are automatically resolved to JPA `Specification` objects.
-- `com.runestone.dynafilter.core` — Framework-agnostic filter core: models, operations, statement generation, and the `DynamicFilterResolver` interface.
-- `com.runestone.dynafilter.modules.jpa` — Spring Data JPA integration: `DynamicFilterJpaRepository`, auto-configuration, `ArgumentResolver`, `WebMvcConfigurer`.
-- `com.runestone.dynafilter.modules.openapi` — SpringDoc OpenAPI integration.
-
-Key pattern: `FilterOperation<R>` strategy interface with multiple JPA `Specification` implementations (Equals, Like, Between, Greater, etc.).
-
-### expression-evaluator
-A redesigned expression evaluator with a multi-phase compilation pipeline and richer type system.
-
-Public API (package `com.runestone.expeval.api`, `environment` and `catalog`):
-- `ExpressionEnvironment` — built via `ExpressionEnvironmentBuilder`; configures the runtime (function catalog, external symbols, data conversion). Scoped by `ExpressionEnvironmentId` for cache keying.
-- `MathExpression`, `LogicalExpression` — compiled, reusable expression objects.
-- `FunctionCatalog`, `ExternalSymbolCatalog` — central repositories for available functions and external symbols.
-
-Compilation pipeline (all internal, coordinated by `ExpressionCompiler`):
-1. **Parse** — `ExpressionEvaluatorParserFacade` wraps the ANTLR grammar; supports `SLL` with `LL` fallback via `PredictionStrategy`.
-2. **AST** — `SemanticAstBuilder` maps the ANTLR parse tree to typed `Node` subclasses (`BinaryOperationNode`, `FunctionCallNode`, `ConditionalNode`, `VectorLiteralNode`, etc.) in `internal.ast`.
-3. **Semantic resolution** — `SemanticResolver` walks the AST against `FunctionCatalog` and `ExternalSymbolCatalog`, producing a `SemanticModel` with `SymbolRef` bindings and typed `ResolvedType` annotations.
-4. **Execution plan** — `ExecutionPlanBuilder` converts the resolved AST to an `ExecutionPlan` of `ExecutableNode` objects (e.g., `ExecutableBinaryOp`, `ExecutableFunctionCall`, `ExecutableConditional`).
-5. **Evaluation** — `MathEvaluator` / `LogicalEvaluator` walk the `ExecutionPlan` within an `ExecutionScope`, returning `RuntimeValue`.
-
-Type system: `ResolvedType` hierarchy with `ScalarType`, `VectorType`, and `UnknownType`; runtime values are `RuntimeValue` objects coerced via `RuntimeCoercionService`.
-
-Compiled expressions are cached in `ExpressionCompiler` by `(source, environmentId, resultType)` using Caffeine (max 1 024 entries).
-
-## Tech Stack
-
-- **Java 21**, **Maven 3.9+**
-- **Spring Boot 4.0.2** (dynamic-filter-resolver only)
-- **SpringDoc OpenAPI 3.0.1** (dynamic-filter-resolver only)
-- **ANTLR 4.13.1**
-- **JUnit 5**, **AssertJ**, **Mockito 5** — testing
-- **JMH 1.37** — microbenchmarks (in `benchmark/` and `perf/` test packages)
-
-## Performance Requirements
-
-Performance is a first-class concern in this repository. The modules in this project are intended to be used as reusable infrastructure, often on request paths, expression-evaluation paths, conversion paths, and filtering/query-building paths. Small implementation choices can compound significantly for downstream applications.
-
-When generating or modifying code:
-
-- Treat allocation rate, dispatch overhead, repeated conversions, repeated path resolution, and unnecessary intermediate objects as design concerns.
-- Prefer direct Java constructs for hot-path code. A plain `for` loop is often preferable to a `Stream` pipeline when mapping small arrays or collections in frequently called methods.
-- Avoid abstraction for abstraction's sake. Add helpers, layers, or generic mechanisms only when they improve correctness, reuse, or clarity enough to justify their runtime cost.
-- Preserve behavioral compatibility while optimizing. Null handling, exception messages, conversion semantics, validation order, and public API behavior must not change accidentally.
-- Use caching deliberately for expensive repeated work, but avoid caches that introduce stale data, memory leaks, or unnecessary synchronization.
-- Benchmark meaningful performance work with JMH when the impact is not obvious or when changing code in known hot paths.
-
-## Key Reference Documents
-
-- **`expression-evaluator/docs/runtime-internals.md`** — Verified findings about the expression-evaluator runtime: compilation pipeline, type system, `RuntimeValue` variants, `RuntimeCoercionService` coercion order, array-parameter coercion fix, overload disambiguation rules, `RuntimeValueFactory` wrapping logic, grammar syntax for date/datetime literals and type-hinted variables, and `ExpressionEnvironmentBuilder` convenience methods. Read this before exploring the expression-evaluator internals from scratch.
-- **`expression-evaluator/docs/perf/benchmark-organization.md`** — Package layout, classification, and JMH commands for `expression-evaluator` performance benchmarks. Read this before adding, moving, or running expression-evaluator benchmarks.
-
-## Agent Skills
-
-- ALWAYS load the java-guidelines skill if present when working with Java files on this project.
-
-## Regenerating the ANTLR Grammar
-
-The default Maven build no longer regenerates the grammar. Generated Java sources remain versioned in
-`expression-evaluator/src/main/java/com/runestone/expeval/internal/grammar`, so normal `mvn test` / `mvn compile`
-does not touch them or recreate stray `.tokens` files under `src/main/java`.
-
-### Regenerate the committed Java sources
-
-```shell
-mvn -pl expression-evaluator -Pantlr-generate generate-sources
-```
-
-This profile generates into `expression-evaluator/target/generated-sources/antlr4` and then copies only the
-generated `.java` files back into
-`expression-evaluator/src/main/java/com/runestone/expeval/internal/grammar`.
-
-### For ANTLR diagnostics
-
-> **Important:** The jar at `~/dev/git/temp/antlr4-4.13.1.jar` is **not** a self-contained uber-jar and
-> **does not work** directly — even with the sibling jars from `~/dev/git/temp/antlr-lib/` on the
-> classpath, the JVM cannot initialize `org.antlr.v4.Tool`. Use the Maven local cache instead.
-
-```shell
-mvn dependency:get -Dartifact=org.antlr:antlr4:4.13.1
-
-ANTLR_TOOL=~/.m2/repository/org/antlr/antlr4/4.13.1/antlr4-4.13.1.jar
-ANTLR_RT=~/.m2/repository/org/antlr/antlr4-runtime/4.13.1/antlr4-runtime-4.13.1.jar
-ANTLR3_RT=~/.m2/repository/org/antlr/antlr-runtime/3.5.3/antlr-runtime-3.5.3.jar
-ST4=~/.m2/repository/org/antlr/ST4/4.3.4/ST4-4.3.4.jar
-ICU4J=$(find ~/.m2/repository -name "icu4j-*.jar" | head -1)
-GRAMMAR_OUT=expression-evaluator/src/main/java/com/runestone/expeval/internal/grammar
-TMPDIR=$(mktemp -d)
-
-java -cp "${ANTLR_TOOL}:${ANTLR_RT}:${ANTLR3_RT}:${ST4}:${ICU4J}" \
-  org.antlr.v4.Tool \
-  -Dlanguage=Java \
-  -visitor \
-  -listener \
-  -Xexact-output-dir \
-  -o "${TMPDIR}" \
-  expression-evaluator/src/main/antlr4/com/runestone/expeval/internal/grammar/ExpressionEvaluator.g4
-
-cp "${TMPDIR}"/*.java "${GRAMMAR_OUT}/"
-rm -rf "${TMPDIR}"
-```
-
-For diagnostics such as `-Xlog`, omit the `cp`/`rm` steps and inspect `${TMPDIR}` directly.
-
-## Decision-making and clarification policy
-
-When a task requires a decision, assumption, trade-off, or interpretation that is not explicitly defined in the current instructions, repository documentation, or user request, do not guess silently.
-
-Instead, pause and open a clarification round with the user before proceeding. Present:
-1. the question that must be decided;
-2. the relevant context or uncertainty;
-3. the viable options, with pros and cons when useful;
-4. your recommended option, if there is enough evidence;
-5. the impact of each option on implementation, tests, security, maintainability, or delivery.
-
-Proceed only after the user delegates or confirms the decision.
-
-Exception: if the decision is low-risk, easily reversible, and follows established project conventions, make the smallest reasonable choice, document the assumption in your final response, and continue.
+## Instruction Sources
+- `CLAUDE.md` only includes `@AGENTS.md`; keep this file as the canonical agent instruction source.
