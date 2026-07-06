@@ -111,6 +111,16 @@ final class AstNodeIdAssigner {
 
     private NavigationLink assignNavigationLink(NavigationLink link) {
         return switch (link) {
+            case CollectionOperationNavigationLink collectionOperation -> new CollectionOperationNavigationLink(
+                    next(),
+                    collectionOperation.sourceSpan(),
+                    collectionOperation.operationName(),
+                    collectionOperation.arguments().stream().map(this::assignCollectionOperationArgument).toList());
+            case FilterNavigationLink filter -> new FilterNavigationLink(
+                    next(),
+                    filter.sourceSpan(),
+                    assignExpression(filter.predicate()),
+                    filter.safeNavigation());
             case MethodNavigationLink method -> new MethodNavigationLink(
                     next(),
                     method.sourceSpan(),
@@ -129,6 +139,28 @@ final class AstNodeIdAssigner {
                     subscript.safeNavigation());
             case WildcardNavigationLink wildcard -> new WildcardNavigationLink(next(), wildcard.sourceSpan());
         };
+    }
+
+    private CollectionOperationArgument assignCollectionOperationArgument(CollectionOperationArgument argument) {
+        return switch (argument) {
+            case LambdaCollectionOperationArgument lambda -> new LambdaCollectionOperationArgument(
+                    next(),
+                    lambda.sourceSpan(),
+                    assignLambda(lambda.lambda()));
+            case PositionalCollectionOperationArgument positional -> new PositionalCollectionOperationArgument(
+                    next(),
+                    positional.sourceSpan(),
+                    assignExpression(positional.expression()));
+        };
+    }
+
+    private LambdaNode assignLambda(LambdaNode lambda) {
+        return new LambdaNode(
+                next(),
+                lambda.sourceSpan(),
+                lambda.currentItemSpan(),
+                lambda.arrowSpan(),
+                assignExpression(lambda.body()));
     }
 
     private ConditionalBranchNode assignConditionalBranch(ConditionalBranchNode branch) {

@@ -569,19 +569,54 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
             case ExpressionEvaluatorParser.ChildWildcardAccessContext wildcard -> Optional.of(new WildcardNavigationLink(
                     NodeId.UNASSIGNED,
                     span(wildcard)));
-            case ExpressionEvaluatorParser.SubscriptAccessContext subscript -> Optional.of(new SubscriptNavigationLink(
-                    NodeId.UNASSIGNED,
-                    span(subscript),
-                    buildSubscript(subscript.subscript()),
-                    false));
-            case ExpressionEvaluatorParser.SafeSubscriptAccessContext subscript -> Optional.of(new SubscriptNavigationLink(
-                    NodeId.UNASSIGNED,
-                    span(subscript),
-                    buildSubscript(subscript.subscript()),
-                    true));
-            case ExpressionEvaluatorParser.CollectionFunctionAccessContext ignored -> throw unsupported(context, "collection function access");
+            case ExpressionEvaluatorParser.SubscriptAccessContext subscript -> buildSubscriptNavigationLink(
+                    subscript,
+                    subscript.subscript(),
+                    false);
+            case ExpressionEvaluatorParser.SafeSubscriptAccessContext subscript -> buildSubscriptNavigationLink(
+                    subscript,
+                    subscript.subscript(),
+                    true);
+            case ExpressionEvaluatorParser.CollectionFunctionAccessContext collection -> buildCollectionOperationNavigationLink(collection);
             default -> throw unsupported(context, "member chain");
         };
+    }
+
+    private Optional<NavigationLink> buildSubscriptNavigationLink(
+            ParserRuleContext context,
+            ExpressionEvaluatorParser.SubscriptContext subscript,
+            boolean safeNavigation) {
+        if (subscript instanceof ExpressionEvaluatorParser.FilterSubscriptContext filter) {
+            return buildFilterNavigationLink(context, filter, safeNavigation);
+        }
+        return Optional.of(new SubscriptNavigationLink(
+                NodeId.UNASSIGNED,
+                span(context),
+                buildSubscript(subscript),
+                safeNavigation));
+    }
+
+    private Optional<NavigationLink> buildFilterNavigationLink(
+            ParserRuleContext context,
+            ExpressionEvaluatorParser.FilterSubscriptContext filter,
+            boolean safeNavigation) {
+        Optional<ExpressionNode> predicate = visit(filter.expression());
+        return predicate.map(expression -> new FilterNavigationLink(
+                NodeId.UNASSIGNED,
+                span(context),
+                expression,
+                safeNavigation));
+    }
+
+    private Optional<NavigationLink> buildCollectionOperationNavigationLink(
+            ExpressionEvaluatorParser.CollectionFunctionAccessContext context) {
+        Optional<List<CollectionOperationArgument>> arguments = buildCollectionOperationArguments(
+                context.collectionFunctionArguments());
+        return arguments.map(nodes -> new CollectionOperationNavigationLink(
+                NodeId.UNASSIGNED,
+                span(context),
+                memberName(context.memberName()),
+                nodes));
     }
 
     private Optional<NavigationLink> buildMethodNavigationLink(
@@ -608,6 +643,56 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
                 span(functionCall),
                 new MemberName(functionCall.IDENTIFIER().getText(), span(functionCall.IDENTIFIER().getSymbol())),
                 nodes));
+    }
+
+    private Optional<List<CollectionOperationArgument>> buildCollectionOperationArguments(
+            ExpressionEvaluatorParser.CollectionFunctionArgumentsContext context) {
+        if (context == null) {
+            return Optional.of(List.of());
+        }
+        return switch (context) {
+            case ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext lambda -> buildLambdaCollectionArgument(lambda)
+                    .map(List::of);
+            case ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext positional ->
+                    buildPositionalCollectionArguments(positional);
+            default -> throw unsupported(context, "collection function arguments");
+        };
+    }
+
+    private Optional<CollectionOperationArgument> buildLambdaCollectionArgument(
+            ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext context) {
+        Optional<ExpressionNode> body = visit(context.expression());
+        if (body.isEmpty()) {
+            return Optional.empty();
+        }
+        ExpressionNode bodyNode = body.orElseThrow();
+        LambdaNode lambda = new LambdaNode(
+                NodeId.UNASSIGNED,
+                span(context.AT().getSymbol(), bodyNode),
+                span(context.AT().getSymbol()),
+                span(context.ARROW().getSymbol()),
+                bodyNode);
+        return Optional.of(new LambdaCollectionOperationArgument(
+                NodeId.UNASSIGNED,
+                span(context),
+                lambda));
+    }
+
+    private Optional<List<CollectionOperationArgument>> buildPositionalCollectionArguments(
+            ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext context) {
+        List<CollectionOperationArgument> arguments = new ArrayList<>(context.expression().size());
+        for (ExpressionEvaluatorParser.ExpressionContext argumentContext : context.expression()) {
+            Optional<ExpressionNode> argument = visit(argumentContext);
+            if (argument.isEmpty()) {
+                return Optional.empty();
+            }
+            ExpressionNode expression = argument.orElseThrow();
+            arguments.add(new PositionalCollectionOperationArgument(
+                    NodeId.UNASSIGNED,
+                    expression.sourceSpan(),
+                    expression));
+        }
+        return Optional.of(arguments);
     }
 
     private Optional<List<ExpressionNode>> buildArguments(List<ExpressionEvaluatorParser.ExpressionContext> argumentContexts) {
@@ -637,7 +722,6 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
             case ExpressionEvaluatorParser.SliceToEndSubscriptContext slice -> new SliceSubscript(
                     Optional.empty(),
                     Optional.of(signedInteger(slice.signedInteger())));
-            case ExpressionEvaluatorParser.FilterSubscriptContext ignored -> throw unsupported(context, "filter subscript");
             default -> throw unsupported(context, "subscript");
         };
     }

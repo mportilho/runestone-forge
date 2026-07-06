@@ -69,6 +69,80 @@ class SemanticAstNavigationTest {
     }
 
     @Test
+    @DisplayName("current item builds as an expression wherever syntax accepts it")
+    void currentItemBuildsAsExpressionWhereverSyntaxAcceptsIt() {
+        ExpressionFileNode ast = build("@");
+
+        CurrentItemNode currentItem = resultAs(ast, CurrentItemNode.class);
+
+        assertThat(currentItem.sourceSpan()).isEqualTo(new SourceSpan(0, 1, 1, 1));
+        assertThat(AstPrettyPrinter.print(ast)).isEqualTo("@");
+        assertRoundTrips(ast);
+    }
+
+    @Test
+    @DisplayName("filters and collection operations keep predicates and typed arguments source-faithful")
+    void filtersAndCollectionOperationsKeepPredicatesAndTypedArgumentsSourceFaithful() {
+        ExpressionFileNode ast = build("items[?(@.active)]..map(@ -> @.price)..take(10, offset)");
+
+        NavigationChainNode chain = resultAs(ast, NavigationChainNode.class);
+        FilterNavigationLink filter = as(chain.links().get(0), FilterNavigationLink.class);
+        CollectionOperationNavigationLink map = as(chain.links().get(1), CollectionOperationNavigationLink.class);
+        CollectionOperationNavigationLink take = as(chain.links().get(2), CollectionOperationNavigationLink.class);
+        NavigationChainNode predicate = as(filter.predicate(), NavigationChainNode.class);
+        LambdaCollectionOperationArgument lambdaArgument = as(
+                map.arguments().getFirst(),
+                LambdaCollectionOperationArgument.class);
+        NavigationChainNode lambdaBody = as(lambdaArgument.lambda().body(), NavigationChainNode.class);
+        PositionalCollectionOperationArgument takeCount = as(
+                take.arguments().get(0),
+                PositionalCollectionOperationArgument.class);
+        PositionalCollectionOperationArgument takeOffset = as(
+                take.arguments().get(1),
+                PositionalCollectionOperationArgument.class);
+
+        assertThat(filter.safeNavigation()).isFalse();
+        assertThat(filter.sourceSpan()).isEqualTo(new SourceSpan(5, 18, 1, 6));
+        assertThat(predicate.receiver()).isInstanceOf(CurrentItemNode.class);
+        assertThat(as(predicate.links().getFirst(), PropertyNavigationLink.class).memberName().value()).isEqualTo("active");
+        assertThat(map.operationName()).isEqualTo(new MemberName("map", new SourceSpan(20, 23, 1, 21)));
+        assertThat(map.arguments()).hasSize(1);
+        assertThat(lambdaArgument.lambda().sourceSpan()).isEqualTo(new SourceSpan(24, 36, 1, 25));
+        assertThat(lambdaArgument.lambda().currentItemSpan()).isEqualTo(new SourceSpan(24, 25, 1, 25));
+        assertThat(lambdaArgument.lambda().arrowSpan()).isEqualTo(new SourceSpan(26, 28, 1, 27));
+        assertThat(lambdaBody.receiver()).isInstanceOf(CurrentItemNode.class);
+        assertThat(as(lambdaBody.links().getFirst(), PropertyNavigationLink.class).memberName().value()).isEqualTo("price");
+        assertThat(take.operationName().value()).isEqualTo("take");
+        assertThat(take.arguments()).hasSize(2);
+        assertThat(takeCount.expression()).isInstanceOf(LiteralNode.class);
+        assertThat(takeOffset.expression()).isEqualTo(new IdentifierNode(takeOffset.expression().id(), takeOffset.sourceSpan(), "offset"));
+        assertThat(AstPrettyPrinter.print(ast)).isEqualTo("items[?(@.active)]..map(@ -> @.price)..take(10, offset)");
+        assertRoundTrips(ast);
+    }
+
+    @Test
+    @DisplayName("nested filter and lambda sources round-trip without semantic frame annotations")
+    void nestedFilterAndLambdaSourcesRoundTripWithoutSemanticFrameAnnotations() {
+        ExpressionFileNode ast = build("items[?(@.children[?(@.active)]..map(@ -> @.score))]..sum()");
+
+        NavigationChainNode chain = resultAs(ast, NavigationChainNode.class);
+        FilterNavigationLink outerFilter = as(chain.links().getFirst(), FilterNavigationLink.class);
+        NavigationChainNode predicate = as(outerFilter.predicate(), NavigationChainNode.class);
+        FilterNavigationLink nestedFilter = as(predicate.links().get(1), FilterNavigationLink.class);
+        CollectionOperationNavigationLink map = as(predicate.links().get(2), CollectionOperationNavigationLink.class);
+        CollectionOperationNavigationLink sum = as(chain.links().get(1), CollectionOperationNavigationLink.class);
+
+        assertThat(outerFilter.predicate()).isInstanceOf(NavigationChainNode.class);
+        assertThat(nestedFilter.predicate()).isInstanceOf(NavigationChainNode.class);
+        assertThat(map.arguments().getFirst()).isInstanceOf(LambdaCollectionOperationArgument.class);
+        assertThat(sum.operationName().value()).isEqualTo("sum");
+        assertThat(sum.arguments()).isEmpty();
+        assertThat(AstPrettyPrinter.print(ast)).isEqualTo(
+                "items[?(@.children[?(@.active)]..map(@ -> @.score))]..sum()");
+        assertRoundTrips(ast);
+    }
+
+    @Test
     @DisplayName("subscripts build source-faithful typed links and preserve integer literal formats")
     void subscriptsBuildSourceFaithfulTypedLinksAndPreserveIntegerLiteralFormats() {
         ExpressionFileNode ast = build("items[0x0A][-07:10][5:][:-0xF]?.[*]");

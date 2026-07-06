@@ -254,6 +254,16 @@ class SemanticAstPipelineTest {
 
     private static NavigationLink shiftNodeIds(NavigationLink link, int offset) {
         return switch (link) {
+            case CollectionOperationNavigationLink collectionOperation -> new CollectionOperationNavigationLink(
+                    shift(collectionOperation.id(), offset),
+                    collectionOperation.sourceSpan(),
+                    collectionOperation.operationName(),
+                    collectionOperation.arguments().stream().map(argument -> shiftNodeIds(argument, offset)).toList());
+            case FilterNavigationLink filter -> new FilterNavigationLink(
+                    shift(filter.id(), offset),
+                    filter.sourceSpan(),
+                    shiftNodeIds(filter.predicate(), offset),
+                    filter.safeNavigation());
             case MethodNavigationLink method -> new MethodNavigationLink(
                     shift(method.id(), offset),
                     method.sourceSpan(),
@@ -274,6 +284,28 @@ class SemanticAstPipelineTest {
                     shift(wildcard.id(), offset),
                     wildcard.sourceSpan());
         };
+    }
+
+    private static CollectionOperationArgument shiftNodeIds(CollectionOperationArgument argument, int offset) {
+        return switch (argument) {
+            case LambdaCollectionOperationArgument lambda -> new LambdaCollectionOperationArgument(
+                    shift(lambda.id(), offset),
+                    lambda.sourceSpan(),
+                    shiftNodeIds(lambda.lambda(), offset));
+            case PositionalCollectionOperationArgument positional -> new PositionalCollectionOperationArgument(
+                    shift(positional.id(), offset),
+                    positional.sourceSpan(),
+                    shiftNodeIds(positional.expression(), offset));
+        };
+    }
+
+    private static LambdaNode shiftNodeIds(LambdaNode lambda, int offset) {
+        return new LambdaNode(
+                shift(lambda.id(), offset),
+                lambda.sourceSpan(),
+                lambda.currentItemSpan(),
+                lambda.arrowSpan(),
+                shiftNodeIds(lambda.body(), offset));
     }
 
     private static ConditionalBranchNode shiftNodeIds(ConditionalBranchNode branch, int offset) {

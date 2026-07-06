@@ -72,6 +72,11 @@ final class AstPrettyPrinter {
 
     private static String printNavigationLink(NavigationLink link) {
         return switch (link) {
+            case CollectionOperationNavigationLink collectionOperation -> ".."
+                    + collectionOperation.operationName().value() + "("
+                    + printCollectionOperationArguments(collectionOperation.arguments()) + ")";
+            case FilterNavigationLink filter -> (filter.safeNavigation() ? "?." : "")
+                    + "[?(" + printExpression(filter.predicate()) + ")]";
             case MethodNavigationLink method -> (method.safeNavigation() ? "?." : ".")
                     + method.memberName().value() + "(" + printArguments(method.arguments()) + ")";
             case PropertyNavigationLink property -> (property.safeNavigation() ? "?." : ".")
@@ -79,6 +84,21 @@ final class AstPrettyPrinter {
             case SubscriptNavigationLink subscript -> (subscript.safeNavigation() ? "?." : "")
                     + printSubscript(subscript.subscript());
             case WildcardNavigationLink ignored -> ".*";
+        };
+    }
+
+    private static String printCollectionOperationArguments(List<CollectionOperationArgument> arguments) {
+        List<String> printed = new ArrayList<>(arguments.size());
+        for (CollectionOperationArgument argument : arguments) {
+            printed.add(printCollectionOperationArgument(argument));
+        }
+        return String.join(", ", printed);
+    }
+
+    private static String printCollectionOperationArgument(CollectionOperationArgument argument) {
+        return switch (argument) {
+            case LambdaCollectionOperationArgument lambda -> "@ -> " + printExpression(lambda.lambda().body());
+            case PositionalCollectionOperationArgument positional -> printExpression(positional.expression());
         };
     }
 
