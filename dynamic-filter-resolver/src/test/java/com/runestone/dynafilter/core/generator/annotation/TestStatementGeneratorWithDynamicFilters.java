@@ -39,6 +39,8 @@ import com.runestone.dynafilter.core.model.statement.LogicalStatement;
 import com.runestone.dynafilter.core.model.statement.NegatedStatement;
 import com.runestone.dynafilter.core.model.statement.StatementVisitor;
 import com.runestone.dynafilter.core.operation.types.Between;
+import com.runestone.dynafilter.core.operation.types.Dynamic;
+import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.core.operation.types.GreaterOrEquals;
 import com.runestone.dynafilter.core.operation.types.IsIn;
 import com.runestone.dynafilter.core.operation.types.Less;
@@ -85,6 +87,45 @@ public class TestStatementGeneratorWithDynamicFilters {
         Assertions.assertThat(negatedLess.negate()).isTrue();
         Assertions.assertThat(isIn.operation()).isEqualTo(IsIn.class);
         Assertions.assertThat(between.operation()).isEqualTo(Between.class);
+    }
+
+    @Test
+    @DisplayName("Dynamic filters accept the comparison operation after the value without forwarding it as a filter value")
+    public void testDynamicOperationAfterValueIsNotForwardedAsComparisonValue() {
+        FilterData equals = createDynamicAgeFilter("2139", "EQ");
+
+        Assertions.assertThat(equals.operation()).isEqualTo(Equals.class);
+        Assertions.assertThat(equals.values()).containsExactly("2139");
+        Assertions.assertThat((String) equals.findOneValue()).isEqualTo("2139");
+    }
+
+    @Test
+    @DisplayName("Dynamic filters expand repeated HTTP parameter arrays before removing the comparison operation")
+    public void testDynamicOperationFromRepeatedHttpParameterIsNotForwardedAsComparisonValue() {
+        FilterData equals = createDynamicAgeFilterFromParameterValue(new String[]{"2139", "EQ"});
+
+        Assertions.assertThat(equals.operation()).isEqualTo(Equals.class);
+        Assertions.assertThat(equals.values()).containsExactly("2139");
+        Assertions.assertThat((String) equals.findOneValue()).isEqualTo("2139");
+    }
+
+    @Test
+    @DisplayName("Dynamic filters with separate operation parameter do not forward the operation as a filter value")
+    public void testDynamicOperationSeparateParameterIsNotForwardedAsComparisonValue() {
+        var annotationStatementInput = new AnnotationStatementInput(null, SearchDynamicWithSeparateOperation.class.getAnnotations());
+        AnnotationStatementGenerator generator = new AnnotationStatementGenerator();
+        Map<String, Object> map = Map.of(
+                "age", "2139",
+                "ageOperation", "EQ"
+        );
+
+        StatementWrapper statementWrapper = generator.generateStatements(annotationStatementInput, map);
+        FilterData equals = findFilterData("age", statementWrapper.statement());
+
+        Assertions.assertThat(equals.operation()).isEqualTo(Equals.class);
+        Assertions.assertThat(equals.parameters()).containsExactly("age");
+        Assertions.assertThat(equals.values()).containsExactly("2139");
+        Assertions.assertThat((String) equals.findOneValue()).isEqualTo("2139");
     }
 
     @Test
@@ -292,11 +333,15 @@ public class TestStatementGeneratorWithDynamicFilters {
     }
 
     private static FilterData createDynamicAgeFilter(Object... dynamicValues) {
+        return createDynamicAgeFilterFromParameterValue(dynamicValues);
+    }
+
+    private static FilterData createDynamicAgeFilterFromParameterValue(Object ageValue) {
         var annotationStatementInput = new AnnotationStatementInput(null, SearchDynamic.class.getAnnotations());
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator();
         Map<String, Object> map = Map.of(
                 "name", "John",
-                "age", dynamicValues
+                "age", ageValue
         );
 
         StatementWrapper statementWrapper = generator.generateStatements(annotationStatementInput, map);
@@ -307,6 +352,10 @@ public class TestStatementGeneratorWithDynamicFilters {
         FilterDataFinderVisitor visitor = new FilterDataFinderVisitor(path);
         statement.acceptVisitor(visitor);
         return visitor.filterData;
+    }
+
+    @Conjunction(@Filter(path = "age", parameters = {"age", "ageOperation"}, operation = Dynamic.class))
+    private interface SearchDynamicWithSeparateOperation {
     }
 
     private static final class FilterDataFinderVisitor implements StatementVisitor {

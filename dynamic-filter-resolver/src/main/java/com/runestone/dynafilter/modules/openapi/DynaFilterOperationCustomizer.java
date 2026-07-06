@@ -25,12 +25,12 @@
 package com.runestone.dynafilter.modules.openapi;
 
 import com.fasterxml.jackson.annotation.JsonView;
+import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.generator.annotation.*;
 import com.runestone.dynafilter.core.model.FilterRequestData;
-import com.runestone.dynafilter.core.operation.types.Decorated;
-import com.runestone.dynafilter.core.operation.types.Dynamic;
-import com.runestone.dynafilter.core.operation.types.IsIn;
-import com.runestone.dynafilter.core.operation.types.IsNull;
+import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
+import com.runestone.dynafilter.core.operation.FilterOperationService;
+import com.runestone.dynafilter.core.operation.FilterValueShape;
 import io.swagger.v3.core.util.AnnotationsUtils;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.models.Operation;
@@ -45,6 +45,7 @@ import org.springframework.web.method.HandlerMethod;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
@@ -52,9 +53,12 @@ import static java.util.Objects.requireNonNull;
 public class DynaFilterOperationCustomizer implements OperationCustomizer {
 
     private final ParameterNameDiscoverer parameterNameDiscoverer;
+    private final FilterOperationService<?> filterOperationService;
 
-    public DynaFilterOperationCustomizer(ParameterNameDiscoverer parameterNameDiscoverer) {
+    public DynaFilterOperationCustomizer(ParameterNameDiscoverer parameterNameDiscoverer,
+                                         FilterOperationService<?> filterOperationService) {
         this.parameterNameDiscoverer = parameterNameDiscoverer;
+        this.filterOperationService = Objects.requireNonNull(filterOperationService, "filterOperationService cannot be null");
     }
 
     @Override
@@ -89,13 +93,11 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
      * representation
      */
     private void customizeParameter(Operation operation, MethodParameter methodParameter, FilterRequestData filter) {
-        if (filter.constantValues() != null && filter.constantValues().length > 0) {
+        if (filter.hidden() || filter.constantValues() != null && filter.constantValues().length > 0) {
             return;
         }
 
-        if (Dynamic.class.equals(filter.operation()) && filter.parameters().length > 1) {
-            throw new IllegalStateException("Dynamic filter operation cannot have two parameters");
-        }
+        FilterOperationMetadata metadata = filterOperationService.findMetadata(filter.operation());
 
         for (String parameterName : filter.parameters()) {
             Optional<io.swagger.v3.oas.models.parameters.Parameter> optParameter = operation.getParameters().stream()
@@ -105,20 +107,24 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             io.swagger.v3.oas.models.parameters.Parameter parameter = optParameter.orElse(new io.swagger.v3.oas.models.parameters.Parameter());
             parameter.setName(parameterName);
 
-            if (Dynamic.class.equals(filter.operation())) {
+            if (FilterValueShape.DYNAMIC.equals(metadata.valueShape())) {
                 ArraySchema arraySchema = new ArraySchema();
                 arraySchema.type("array");
                 arraySchema.minItems(2);
                 arraySchema.items(new StringSchema());
                 parameter.setSchema(arraySchema);
-            } else if (IsIn.class.equals(filter.operation())) {
+            } else if (FilterValueShape.ARRAY.equals(metadata.valueShape())) {
                 ArraySchema arraySchema = new ArraySchema();
                 arraySchema.type("array");
                 arraySchema.items(parameter.getSchema() != null ? parameter.getSchema() : new StringSchema());
                 parameter.setSchema(arraySchema);
+            } else if (FilterValueShape.BOOLEAN.equals(metadata.valueShape())) {
+                parameter.setSchema(new BooleanSchema());
+            } else if (FilterValueShape.STRING.equals(metadata.valueShape())) {
+                parameter.setSchema(new StringSchema());
             } else {
                 Class<?> filterTargetClass = TypeAnnotationUtils.findFilterTargetClass(methodParameter.getParameter());
-                Field field = TypeAnnotationUtils.findFilterField(filterTargetClass, filter.path());
+                Field field = findFilterFieldOrNull(filterTargetClass, filter.path()[0]);
                 createCommonSchema(filter, field, methodParameter, parameter);
             }
 
@@ -136,6 +142,14 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
         }
     }
 
+    private static Field findFilterFieldOrNull(Class<?> filterTargetClass, String path) {
+        try {
+            return TypeAnnotationUtils.findFilterField(filterTargetClass, path);
+        } catch (DynamicFilterConfigurationException e) {
+            return null;
+        }
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     private void createCommonSchema(FilterRequestData filter, Field field, MethodParameter methodParameter, io.swagger.v3.oas.models.parameters.Parameter parameter) {
         Schema schemaFromType;
@@ -148,9 +162,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
 
         Schema currentSchema = parameter.getSchema();
         Schema newSchema;
-        if (IsNull.class.equals(filter.operation())) {
-            newSchema = new BooleanSchema();
-        } else if (currentSchema != null) {
+        if (currentSchema != null) {
             newSchema = new Schema();
             newSchema.setType(schemaFromType.getType());
             newSchema.setEnum(schemaFromType.getEnum());

@@ -72,8 +72,8 @@ public abstract class DefaultStatementGenerator<T> implements StatementGenerator
      * Creates a new instance of {@link FilterData} with the provided parameters.
      *
      * <p>
-     * On dynamic filters, the first value is the operation and the second is the value. In addition, the user's choice of negating
-     * the filter has priority over the annotation's choice.
+     * On dynamic filters, one value is the operation and the remaining values are the comparison values. In addition, the user's
+     * choice of negating the filter has priority over the annotation's choice.
      * </p>
      *
      * @param path            the path to the attribute to be filtered
@@ -93,14 +93,19 @@ public abstract class DefaultStatementGenerator<T> implements StatementGenerator
         boolean negate;
 
         if (Dynamic.class.equals(operation)) {
-            if (values[0] instanceof Object[] dynamicValuesArray) {
-                String comparisonOperationValue;
-                try {
-                    comparisonOperationValue = (String) dynamicValuesArray[0];
-                } catch (ClassCastException e) {
-                    throw new StatementGenerationException("Dynamic operation must have a string as first value that indicates the operation");
+            Object[] dynamicValuesArray = values;
+            boolean expandedArrayValue = false;
+            if (values[0] instanceof Object[] array) {
+                dynamicValuesArray = array;
+                expandedArrayValue = true;
+            }
+            if (dynamicValuesArray.length > 1) {
+                int operationIndex = findComparisonOperationIndex(dynamicValuesArray);
+                String comparisonOperationValue = (String) dynamicValuesArray[operationIndex];
+                comparisonValue = copyObjectArrayExcept(dynamicValuesArray, operationIndex);
+                if (comparisonValue.length > 0 && parameters.length == dynamicValuesArray.length) {
+                    parameters = copyStringArrayExcept(parameters, operationIndex);
                 }
-                comparisonValue = Arrays.copyOfRange(dynamicValuesArray, 1, dynamicValuesArray.length);
                 if (comparisonOperationValue.length() == 3) {
                     if (comparisonOperationValue.charAt(0) != 'N' && comparisonOperationValue.charAt(0) != 'n') {
                         throw new StatementGenerationException("Invalid negating character [%s] on path [%s]. 'N' should be preceding the operation, case insensitive"
@@ -121,9 +126,14 @@ public abstract class DefaultStatementGenerator<T> implements StatementGenerator
                     if (comparisonValue.length != 2) {
                         throw new StatementGenerationException("Between operation must have two values");
                     }
-                    parameters = new String[]{parameters[0] + "From", parameters[0] + "To"};
+                    if (parameters.length != 2) {
+                        parameters = new String[]{parameters[0] + "From", parameters[0] + "To"};
+                    }
                 }
             } else {
+                if (expandedArrayValue && dynamicValuesArray[0] instanceof String) {
+                    throw new IllegalArgumentException("On path '%s', values cannot be null or empty".formatted(formatPath(path)));
+                }
                 throw new StatementGenerationException("Dynamic operation must have two values, one indicating the operation and another the value");
             }
         } else {
@@ -132,6 +142,57 @@ public abstract class DefaultStatementGenerator<T> implements StatementGenerator
         }
 
         return new FilterData(path, parameters, targetType, operation, negate, comparisonValue, modifiers, description);
+    }
+
+    private static int findComparisonOperationIndex(Object[] dynamicValuesArray) {
+        if (dynamicValuesArray[0] instanceof String firstValue && isComparisonOperation(firstValue)) {
+            return 0;
+        }
+        int lastIndex = dynamicValuesArray.length - 1;
+        if (lastIndex > 0 && dynamicValuesArray[lastIndex] instanceof String lastValue && isComparisonOperation(lastValue)) {
+            return lastIndex;
+        }
+        if (dynamicValuesArray[0] instanceof String) {
+            return 0;
+        }
+        throw new StatementGenerationException("Dynamic operation must have a string as first value that indicates the operation");
+    }
+
+    private static boolean isComparisonOperation(String value) {
+        String operationName = value.length() == 3 && (value.charAt(0) == 'N' || value.charAt(0) == 'n')
+                ? value.substring(1).toUpperCase()
+                : value.toUpperCase();
+        if (operationName.length() != 2) {
+            return false;
+        }
+        for (ComparisonOperation comparisonOperation : ComparisonOperation.values()) {
+            if (comparisonOperation.name().equals(operationName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Object[] copyObjectArrayExcept(Object[] source, int excludedIndex) {
+        Object[] copy = new Object[source.length - 1];
+        if (excludedIndex > 0) {
+            System.arraycopy(source, 0, copy, 0, excludedIndex);
+        }
+        if (excludedIndex < copy.length) {
+            System.arraycopy(source, excludedIndex + 1, copy, excludedIndex, copy.length - excludedIndex);
+        }
+        return copy;
+    }
+
+    private static String[] copyStringArrayExcept(String[] source, int excludedIndex) {
+        String[] copy = new String[source.length - 1];
+        if (excludedIndex > 0) {
+            System.arraycopy(source, 0, copy, 0, excludedIndex);
+        }
+        if (excludedIndex < copy.length) {
+            System.arraycopy(source, excludedIndex + 1, copy, excludedIndex, copy.length - excludedIndex);
+        }
+        return copy;
     }
 
     /**
