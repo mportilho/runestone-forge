@@ -78,6 +78,29 @@ public final class BoundaryCoercion {
         }
     }
 
+    public boolean canConvert(ExpressionType sourceType, ExpressionType targetType) {
+        Objects.requireNonNull(sourceType, "sourceType");
+        Objects.requireNonNull(targetType, "targetType");
+        if (sourceType.equals(targetType) || targetType == UnknownType.INSTANCE) {
+            return true;
+        }
+        if (sourceType == UnknownType.INSTANCE || sourceType == NullType.INSTANCE || targetType == NullType.INSTANCE) {
+            return false;
+        }
+        return switch (sourceType) {
+            case ScalarType scalarSource -> canConvertScalarSource(scalarSource, targetType);
+            case VectorType vectorSource -> targetType instanceof VectorType vectorTarget
+                    && canConvert(vectorSource.elementType(), vectorTarget.elementType());
+            case CollectionType collectionSource -> targetType instanceof CollectionType collectionTarget
+                    && canConvert(collectionSource.elementType(), collectionTarget.elementType());
+            case MapType mapSource -> targetType instanceof MapType mapTarget
+                    && canConvert(mapSource.valueType(), mapTarget.valueType());
+            case ObjectType ignored -> false;
+            case NullType ignored -> false;
+            case UnknownType ignored -> false;
+        };
+    }
+
     Object convert(Object sourceValue, ExpressionType targetType) {
         return convertBoundaryValue("boundary value", sourceValue, targetType);
     }
@@ -147,6 +170,13 @@ public final class BoundaryCoercion {
     private boolean canConvertScalarType(Class<?> sourceType, ScalarType scalarType) {
         Class<?> targetClass = scalarJavaType(scalarType);
         return targetClass.isAssignableFrom(sourceType) || dataConversionService.canConvert(sourceType, targetClass);
+    }
+
+    private boolean canConvertScalarSource(ScalarType sourceType, ExpressionType targetType) {
+        if (!(targetType instanceof ScalarType scalarTarget)) {
+            return false;
+        }
+        return canConvertScalarType(scalarJavaType(sourceType), scalarTarget);
     }
 
     private static boolean canConvertCollectionType(Class<?> sourceType, ExpressionType elementType) {
