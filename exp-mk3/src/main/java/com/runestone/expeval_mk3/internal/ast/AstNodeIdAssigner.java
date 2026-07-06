@@ -58,10 +58,16 @@ final class AstNodeIdAssigner {
                     conditional.sourceForm(),
                     conditional.branches().stream().map(this::assignConditionalBranch).toList(),
                     assignExpression(conditional.elseExpression()));
+            case CurrentItemNode currentItem -> new CurrentItemNode(next(), currentItem.sourceSpan());
             case CurrentTemporalValueNode currentTemporalValue -> new CurrentTemporalValueNode(
                     next(),
                     currentTemporalValue.sourceSpan(),
                     currentTemporalValue.kind());
+            case FunctionCallNode functionCall -> new FunctionCallNode(
+                    next(),
+                    functionCall.sourceSpan(),
+                    functionCall.name(),
+                    functionCall.arguments().stream().map(this::assignExpression).toList());
             case GroupedExpressionNode grouped -> new GroupedExpressionNode(
                     next(),
                     grouped.sourceSpan(),
@@ -80,6 +86,11 @@ final class AstNodeIdAssigner {
                     nullCoalescence.sourceSpan(),
                     nullCoalescence.operands().stream().map(this::assignExpression).toList(),
                     nullCoalescence.operatorSpans());
+            case NavigationChainNode navigationChain -> new NavigationChainNode(
+                    next(),
+                    navigationChain.sourceSpan(),
+                    assignExpression(navigationChain.receiver()),
+                    navigationChain.links().stream().map(this::assignNavigationLink).toList());
             case PostfixOperationNode postfix -> new PostfixOperationNode(
                     next(),
                     postfix.sourceSpan(),
@@ -95,6 +106,28 @@ final class AstNodeIdAssigner {
                     next(),
                     vectorLiteral.sourceSpan(),
                     vectorLiteral.elements().stream().map(this::assignExpression).toList());
+        };
+    }
+
+    private NavigationLink assignNavigationLink(NavigationLink link) {
+        return switch (link) {
+            case MethodNavigationLink method -> new MethodNavigationLink(
+                    next(),
+                    method.sourceSpan(),
+                    method.memberName(),
+                    method.safeNavigation(),
+                    method.arguments().stream().map(this::assignExpression).toList());
+            case PropertyNavigationLink property -> new PropertyNavigationLink(
+                    next(),
+                    property.sourceSpan(),
+                    property.memberName(),
+                    property.safeNavigation());
+            case SubscriptNavigationLink subscript -> new SubscriptNavigationLink(
+                    next(),
+                    subscript.sourceSpan(),
+                    subscript.subscript(),
+                    subscript.safeNavigation());
+            case WildcardNavigationLink wildcard -> new WildcardNavigationLink(next(), wildcard.sourceSpan());
         };
     }
 

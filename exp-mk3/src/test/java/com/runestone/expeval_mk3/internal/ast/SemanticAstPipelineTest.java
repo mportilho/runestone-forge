@@ -196,6 +196,9 @@ class SemanticAstPipelineTest {
                     conditional.sourceForm(),
                     conditional.branches().stream().map(branch -> shiftNodeIds(branch, offset)).toList(),
                     shiftNodeIds(conditional.elseExpression(), offset));
+            case CurrentItemNode currentItem -> new CurrentItemNode(
+                    shift(currentItem.id(), offset),
+                    currentItem.sourceSpan());
             case IdentifierNode identifier -> new IdentifierNode(
                     shift(identifier.id(), offset),
                     identifier.sourceSpan(),
@@ -204,6 +207,11 @@ class SemanticAstPipelineTest {
                     shift(currentTemporalValue.id(), offset),
                     currentTemporalValue.sourceSpan(),
                     currentTemporalValue.kind());
+            case FunctionCallNode functionCall -> new FunctionCallNode(
+                    shift(functionCall.id(), offset),
+                    functionCall.sourceSpan(),
+                    functionCall.name(),
+                    functionCall.arguments().stream().map(argument -> shiftNodeIds(argument, offset)).toList());
             case GroupedExpressionNode grouped -> new GroupedExpressionNode(
                     shift(grouped.id(), offset),
                     grouped.sourceSpan(),
@@ -216,6 +224,11 @@ class SemanticAstPipelineTest {
                     membership.operatorSpan(),
                     membership.negated(),
                     shiftNodeIds(membership.candidates(), offset));
+            case NavigationChainNode navigationChain -> new NavigationChainNode(
+                    shift(navigationChain.id(), offset),
+                    navigationChain.sourceSpan(),
+                    shiftNodeIds(navigationChain.receiver(), offset),
+                    navigationChain.links().stream().map(link -> shiftNodeIds(link, offset)).toList());
             case NullCoalescenceNode nullCoalescence -> new NullCoalescenceNode(
                     shift(nullCoalescence.id(), offset),
                     nullCoalescence.sourceSpan(),
@@ -236,6 +249,30 @@ class SemanticAstPipelineTest {
                     shift(vectorLiteral.id(), offset),
                     vectorLiteral.sourceSpan(),
                     vectorLiteral.elements().stream().map(element -> shiftNodeIds(element, offset)).toList());
+        };
+    }
+
+    private static NavigationLink shiftNodeIds(NavigationLink link, int offset) {
+        return switch (link) {
+            case MethodNavigationLink method -> new MethodNavigationLink(
+                    shift(method.id(), offset),
+                    method.sourceSpan(),
+                    method.memberName(),
+                    method.safeNavigation(),
+                    method.arguments().stream().map(argument -> shiftNodeIds(argument, offset)).toList());
+            case PropertyNavigationLink property -> new PropertyNavigationLink(
+                    shift(property.id(), offset),
+                    property.sourceSpan(),
+                    property.memberName(),
+                    property.safeNavigation());
+            case SubscriptNavigationLink subscript -> new SubscriptNavigationLink(
+                    shift(subscript.id(), offset),
+                    subscript.sourceSpan(),
+                    subscript.subscript(),
+                    subscript.safeNavigation());
+            case WildcardNavigationLink wildcard -> new WildcardNavigationLink(
+                    shift(wildcard.id(), offset),
+                    wildcard.sourceSpan());
         };
     }
 

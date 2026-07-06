@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.internal.ast;
 
+import java.math.BigInteger;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,11 +40,14 @@ final class AstPrettyPrinter {
             case BinaryOperationNode binary -> printExpression(binary.left()) + " " + binary.operator().canonicalSymbol()
                     + " " + printExpression(binary.right());
             case ConditionalNode conditional -> printConditional(conditional);
+            case CurrentItemNode ignored -> "@";
             case CurrentTemporalValueNode currentTemporalValue -> currentTemporalValue.kind().canonicalName();
+            case FunctionCallNode functionCall -> printFunctionCall(functionCall);
             case GroupedExpressionNode grouped -> "(" + printExpression(grouped.expression()) + ")";
             case IdentifierNode identifier -> identifier.name();
             case LiteralNode literal -> printLiteral(literal.value());
             case MembershipNode membership -> printMembership(membership);
+            case NavigationChainNode navigationChain -> printNavigationChain(navigationChain);
             case NullCoalescenceNode nullCoalescence -> printNullCoalescence(nullCoalescence);
             case PostfixOperationNode postfix -> printPostfix(postfix);
             case UnaryOperationNode unary -> unary.operator().canonicalSymbol() + printExpression(unary.operand());
@@ -55,6 +59,58 @@ final class AstPrettyPrinter {
         return switch (conditional.sourceForm()) {
             case CLASSIC -> printClassicConditional(conditional);
             case FUNCTIONAL -> printFunctionalConditional(conditional);
+        };
+    }
+
+    private static String printNavigationChain(NavigationChainNode navigationChain) {
+        StringBuilder builder = new StringBuilder(printExpression(navigationChain.receiver()));
+        for (NavigationLink link : navigationChain.links()) {
+            builder.append(printNavigationLink(link));
+        }
+        return builder.toString();
+    }
+
+    private static String printNavigationLink(NavigationLink link) {
+        return switch (link) {
+            case MethodNavigationLink method -> (method.safeNavigation() ? "?." : ".")
+                    + method.memberName().value() + "(" + printArguments(method.arguments()) + ")";
+            case PropertyNavigationLink property -> (property.safeNavigation() ? "?." : ".")
+                    + property.memberName().value();
+            case SubscriptNavigationLink subscript -> (subscript.safeNavigation() ? "?." : "")
+                    + printSubscript(subscript.subscript());
+            case WildcardNavigationLink ignored -> ".*";
+        };
+    }
+
+    private static String printFunctionCall(FunctionCallNode functionCall) {
+        return functionCall.name().value() + "(" + printArguments(functionCall.arguments()) + ")";
+    }
+
+    private static String printArguments(List<ExpressionNode> arguments) {
+        List<String> printed = new ArrayList<>(arguments.size());
+        for (ExpressionNode argument : arguments) {
+            printed.add(printExpression(argument));
+        }
+        return String.join(", ", printed);
+    }
+
+    private static String printSubscript(Subscript subscript) {
+        return switch (subscript) {
+            case IndexSubscript index -> "[" + printSignedInteger(index.index()) + "]";
+            case SliceSubscript slice -> "[" + slice.start().map(AstPrettyPrinter::printSignedInteger).orElse("")
+                    + ":" + slice.end().map(AstPrettyPrinter::printSignedInteger).orElse("") + "]";
+            case StringKeySubscript stringKey -> "[" + quote(stringKey.key()) + "]";
+            case WildcardSubscript ignored -> "[*]";
+        };
+    }
+
+    private static String printSignedInteger(SignedIntegerLiteral integer) {
+        BigInteger absoluteValue = integer.value().abs();
+        String sign = integer.value().signum() < 0 ? "-" : "";
+        return switch (integer.format()) {
+            case DECIMAL -> integer.value().toString();
+            case HEXADECIMAL -> sign + "0x" + absoluteValue.toString(16);
+            case OCTAL -> sign + "0" + absoluteValue.toString(8);
         };
     }
 

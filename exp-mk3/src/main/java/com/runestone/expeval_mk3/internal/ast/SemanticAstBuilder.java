@@ -398,20 +398,23 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
 
     @Override
     public Optional<ExpressionNode> visitIdentifierReferenceTarget(ExpressionEvaluatorParser.IdentifierReferenceTargetContext context) {
-        if (context.memberChain().isEmpty()) {
-            return Optional.of(new IdentifierNode(NodeId.UNASSIGNED, span(context), context.IDENTIFIER().getText()));
-        }
-        throw unsupported(context, "member chain");
+        ExpressionNode receiver = new IdentifierNode(NodeId.UNASSIGNED, span(context.IDENTIFIER().getSymbol()), context.IDENTIFIER().getText());
+        return buildNavigationChain(receiver, context.memberChain());
     }
 
     @Override
     public Optional<ExpressionNode> visitFunctionReferenceTarget(ExpressionEvaluatorParser.FunctionReferenceTargetContext context) {
-        throw unsupported(context, "function call");
+        Optional<FunctionCallNode> receiver = buildFunctionCall(context.function());
+        if (receiver.isEmpty()) {
+            return Optional.empty();
+        }
+        return buildNavigationChain(receiver.orElseThrow(), context.memberChain());
     }
 
     @Override
     public Optional<ExpressionNode> visitAtReferenceTarget(ExpressionEvaluatorParser.AtReferenceTargetContext context) {
-        throw unsupported(context, "current item reference");
+        ExpressionNode receiver = new CurrentItemNode(NodeId.UNASSIGNED, span(context.AT().getSymbol()));
+        return buildNavigationChain(receiver, context.memberChain());
     }
 
     @Override
@@ -522,6 +525,152 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
                 operatorSpan,
                 negated,
                 candidates.orElseThrow()));
+    }
+
+    private Optional<ExpressionNode> buildNavigationChain(
+            ExpressionNode receiver,
+            List<ExpressionEvaluatorParser.MemberChainContext> memberChainContexts) {
+        if (memberChainContexts.isEmpty()) {
+            return Optional.of(receiver);
+        }
+        List<NavigationLink> links = new ArrayList<>(memberChainContexts.size());
+        for (ExpressionEvaluatorParser.MemberChainContext memberChainContext : memberChainContexts) {
+            Optional<NavigationLink> link = buildNavigationLink(memberChainContext);
+            if (link.isEmpty()) {
+                return Optional.empty();
+            }
+            links.add(link.orElseThrow());
+        }
+        return Optional.of(new NavigationChainNode(NodeId.UNASSIGNED, span(receiver, links.getLast()), receiver, links));
+    }
+
+    private Optional<NavigationLink> buildNavigationLink(ExpressionEvaluatorParser.MemberChainContext context) {
+        return switch (context) {
+            case ExpressionEvaluatorParser.PropertyAccessContext property -> Optional.of(new PropertyNavigationLink(
+                    NodeId.UNASSIGNED,
+                    span(property),
+                    memberName(property.memberName()),
+                    false));
+            case ExpressionEvaluatorParser.SafePropertyAccessContext property -> Optional.of(new PropertyNavigationLink(
+                    NodeId.UNASSIGNED,
+                    span(property),
+                    memberName(property.memberName()),
+                    true));
+            case ExpressionEvaluatorParser.MethodCallAccessContext method -> buildMethodNavigationLink(
+                    method,
+                    method.memberName(),
+                    method.expression(),
+                    false);
+            case ExpressionEvaluatorParser.SafeMethodCallAccessContext method -> buildMethodNavigationLink(
+                    method,
+                    method.memberName(),
+                    method.expression(),
+                    true);
+            case ExpressionEvaluatorParser.ChildWildcardAccessContext wildcard -> Optional.of(new WildcardNavigationLink(
+                    NodeId.UNASSIGNED,
+                    span(wildcard)));
+            case ExpressionEvaluatorParser.SubscriptAccessContext subscript -> Optional.of(new SubscriptNavigationLink(
+                    NodeId.UNASSIGNED,
+                    span(subscript),
+                    buildSubscript(subscript.subscript()),
+                    false));
+            case ExpressionEvaluatorParser.SafeSubscriptAccessContext subscript -> Optional.of(new SubscriptNavigationLink(
+                    NodeId.UNASSIGNED,
+                    span(subscript),
+                    buildSubscript(subscript.subscript()),
+                    true));
+            case ExpressionEvaluatorParser.CollectionFunctionAccessContext ignored -> throw unsupported(context, "collection function access");
+            default -> throw unsupported(context, "member chain");
+        };
+    }
+
+    private Optional<NavigationLink> buildMethodNavigationLink(
+            ParserRuleContext context,
+            ExpressionEvaluatorParser.MemberNameContext memberName,
+            List<ExpressionEvaluatorParser.ExpressionContext> argumentContexts,
+            boolean safeNavigation) {
+        Optional<List<ExpressionNode>> arguments = buildArguments(argumentContexts);
+        return arguments.map(nodes -> new MethodNavigationLink(
+                NodeId.UNASSIGNED,
+                span(context),
+                memberName(memberName),
+                safeNavigation,
+                nodes));
+    }
+
+    private Optional<FunctionCallNode> buildFunctionCall(ExpressionEvaluatorParser.FunctionContext context) {
+        if (!(context instanceof ExpressionEvaluatorParser.FunctionCallOperationContext functionCall)) {
+            throw unsupported(context, "function call");
+        }
+        Optional<List<ExpressionNode>> arguments = buildArguments(functionCall.expression());
+        return arguments.map(nodes -> new FunctionCallNode(
+                NodeId.UNASSIGNED,
+                span(functionCall),
+                new MemberName(functionCall.IDENTIFIER().getText(), span(functionCall.IDENTIFIER().getSymbol())),
+                nodes));
+    }
+
+    private Optional<List<ExpressionNode>> buildArguments(List<ExpressionEvaluatorParser.ExpressionContext> argumentContexts) {
+        List<ExpressionNode> arguments = new ArrayList<>(argumentContexts.size());
+        for (ExpressionEvaluatorParser.ExpressionContext argumentContext : argumentContexts) {
+            Optional<ExpressionNode> argument = visit(argumentContext);
+            if (argument.isEmpty()) {
+                return Optional.empty();
+            }
+            arguments.add(argument.orElseThrow());
+        }
+        return Optional.of(arguments);
+    }
+
+    private Subscript buildSubscript(ExpressionEvaluatorParser.SubscriptContext context) {
+        return switch (context) {
+            case ExpressionEvaluatorParser.WildcardSubscriptContext ignored -> new WildcardSubscript();
+            case ExpressionEvaluatorParser.StringKeySubscriptContext stringKey ->
+                    new StringKeySubscript(unquote(stringKey.STRING().getText()));
+            case ExpressionEvaluatorParser.IndexSubscriptContext index ->
+                    new IndexSubscript(signedInteger(index.signedInteger()));
+            case ExpressionEvaluatorParser.SliceWithStartSubscriptContext slice -> new SliceSubscript(
+                    Optional.of(signedInteger(slice.signedInteger(0))),
+                    slice.signedInteger().size() == 1
+                            ? Optional.empty()
+                            : Optional.of(signedInteger(slice.signedInteger(1))));
+            case ExpressionEvaluatorParser.SliceToEndSubscriptContext slice -> new SliceSubscript(
+                    Optional.empty(),
+                    Optional.of(signedInteger(slice.signedInteger())));
+            case ExpressionEvaluatorParser.FilterSubscriptContext ignored -> throw unsupported(context, "filter subscript");
+            default -> throw unsupported(context, "subscript");
+        };
+    }
+
+    private static MemberName memberName(ExpressionEvaluatorParser.MemberNameContext context) {
+        return new MemberName(context.getText(), span(context.getStart()));
+    }
+
+    private static SignedIntegerLiteral signedInteger(ExpressionEvaluatorParser.SignedIntegerContext context) {
+        if (!(context instanceof ExpressionEvaluatorParser.SignedIntegerOperationContext signedInteger)) {
+            throw new IllegalArgumentException("Unsupported signed integer context: " + context.getClass().getName());
+        }
+        String unsignedText = signedInteger.INT().getText();
+        IntegerLiteralFormat format = integerFormat(unsignedText);
+        BigInteger value = switch (format) {
+            case DECIMAL -> new BigInteger(unsignedText);
+            case HEXADECIMAL -> new BigInteger(unsignedText.substring(2), 16);
+            case OCTAL -> new BigInteger(unsignedText.substring(1), 8);
+        };
+        if (signedInteger.MINUS() != null) {
+            value = value.negate();
+        }
+        return new SignedIntegerLiteral(value, format);
+    }
+
+    private static IntegerLiteralFormat integerFormat(String text) {
+        if (text.startsWith("0x") || text.startsWith("0X")) {
+            return IntegerLiteralFormat.HEXADECIMAL;
+        }
+        if (isOctalLiteral(text)) {
+            return IntegerLiteralFormat.OCTAL;
+        }
+        return IntegerLiteralFormat.DECIMAL;
     }
 
     private Optional<ConditionalBranchNode> buildConditionalBranch(

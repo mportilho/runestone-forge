@@ -53,9 +53,13 @@ final class AstStructuralEquality {
                     leftConditional.sourceForm() == rightConditional.sourceForm()
                             && equalsBranches(leftConditional.branches(), rightConditional.branches())
                             && equals(leftConditional.elseExpression(), rightConditional.elseExpression());
+            case CurrentItemNode ignored when right instanceof CurrentItemNode -> true;
             case CurrentTemporalValueNode leftCurrentTemporalValue
                     when right instanceof CurrentTemporalValueNode rightCurrentTemporalValue ->
                     leftCurrentTemporalValue.kind() == rightCurrentTemporalValue.kind();
+            case FunctionCallNode leftFunctionCall when right instanceof FunctionCallNode rightFunctionCall ->
+                    leftFunctionCall.name().value().equals(rightFunctionCall.name().value())
+                            && equalsExpressionLists(leftFunctionCall.arguments(), rightFunctionCall.arguments());
             case GroupedExpressionNode leftGrouped when right instanceof GroupedExpressionNode rightGrouped ->
                     equals(leftGrouped.expression(), rightGrouped.expression());
             case IdentifierNode leftIdentifier when right instanceof IdentifierNode rightIdentifier ->
@@ -66,6 +70,9 @@ final class AstStructuralEquality {
                     leftMembership.negated() == rightMembership.negated()
                             && equals(leftMembership.value(), rightMembership.value())
                             && equals(leftMembership.candidates(), rightMembership.candidates());
+            case NavigationChainNode leftNavigationChain when right instanceof NavigationChainNode rightNavigationChain ->
+                    equals(leftNavigationChain.receiver(), rightNavigationChain.receiver())
+                            && equalsNavigationLinks(leftNavigationChain.links(), rightNavigationChain.links());
             case NullCoalescenceNode leftNullCoalescence
                     when right instanceof NullCoalescenceNode rightNullCoalescence ->
                     equalsExpressionLists(leftNullCoalescence.operands(), rightNullCoalescence.operands());
@@ -103,6 +110,35 @@ final class AstStructuralEquality {
             }
         }
         return true;
+    }
+
+    private static boolean equalsNavigationLinks(List<NavigationLink> left, List<NavigationLink> right) {
+        if (left.size() != right.size()) {
+            return false;
+        }
+        for (int index = 0; index < left.size(); index++) {
+            if (!equals(left.get(index), right.get(index))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean equals(NavigationLink left, NavigationLink right) {
+        return switch (left) {
+            case MethodNavigationLink leftMethod when right instanceof MethodNavigationLink rightMethod ->
+                    leftMethod.safeNavigation() == rightMethod.safeNavigation()
+                            && leftMethod.memberName().value().equals(rightMethod.memberName().value())
+                            && equalsExpressionLists(leftMethod.arguments(), rightMethod.arguments());
+            case PropertyNavigationLink leftProperty when right instanceof PropertyNavigationLink rightProperty ->
+                    leftProperty.safeNavigation() == rightProperty.safeNavigation()
+                            && leftProperty.memberName().value().equals(rightProperty.memberName().value());
+            case SubscriptNavigationLink leftSubscript when right instanceof SubscriptNavigationLink rightSubscript ->
+                    leftSubscript.safeNavigation() == rightSubscript.safeNavigation()
+                            && leftSubscript.subscript().equals(rightSubscript.subscript());
+            case WildcardNavigationLink ignored when right instanceof WildcardNavigationLink -> true;
+            default -> false;
+        };
     }
 
     private static boolean equalsPostfixOperators(PostfixOperationNode left, PostfixOperationNode right) {
