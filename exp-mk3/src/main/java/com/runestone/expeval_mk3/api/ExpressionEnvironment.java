@@ -32,6 +32,7 @@ public final class ExpressionEnvironment {
     private final int maxCurrentItemDepth;
     private final int materializationLimit;
     private final String conversionProfileId;
+    private final ExternalSymbolCatalog externalSymbols;
     private final ExpressionEnvironmentId environmentId;
 
     private ExpressionEnvironment(Builder builder) {
@@ -45,6 +46,7 @@ public final class ExpressionEnvironment {
         maxCurrentItemDepth = validateMaxCurrentItemDepth(builder.maxCurrentItemDepth);
         materializationLimit = validateMaterializationLimit(builder.materializationLimit);
         conversionProfileId = validateConversionProfileId(builder.conversionProfileId);
+        externalSymbols = builder.externalSymbols.build();
         environmentId = createEnvironmentId();
     }
 
@@ -96,6 +98,10 @@ public final class ExpressionEnvironment {
         return environmentId;
     }
 
+    public ExternalSymbolCatalog externalSymbols() {
+        return externalSymbols;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -111,7 +117,8 @@ public final class ExpressionEnvironment {
                 && numericMode == that.numericMode
                 && mathContext.equals(that.mathContext)
                 && transcendentalMathContext.equals(that.transcendentalMathContext)
-                && conversionProfileId.equals(that.conversionProfileId);
+                && conversionProfileId.equals(that.conversionProfileId)
+                && externalSymbols.equals(that.externalSymbols);
     }
 
     @Override
@@ -124,7 +131,8 @@ public final class ExpressionEnvironment {
                 strictMode,
                 maxCurrentItemDepth,
                 materializationLimit,
-                conversionProfileId);
+                conversionProfileId,
+                externalSymbols);
     }
 
     @Override
@@ -134,7 +142,7 @@ public final class ExpressionEnvironment {
 
     private ExpressionEnvironmentId createEnvironmentId() {
         StringBuilder canonical = new StringBuilder(256);
-        canonical.append("ExpressionEnvironment:v1\n");
+        canonical.append("ExpressionEnvironment:v2\n");
         appendCanonicalField(canonical, "zoneId", zoneId.getId());
         appendCanonicalField(canonical, "numericMode", numericMode.name());
         appendCanonicalField(canonical, "mathContext", canonicalMathContext(mathContext));
@@ -146,6 +154,19 @@ public final class ExpressionEnvironment {
         appendCanonicalField(canonical, "maxCurrentItemDepth", Integer.toString(maxCurrentItemDepth));
         appendCanonicalField(canonical, "materializationLimit", Integer.toString(materializationLimit));
         appendCanonicalField(canonical, "conversionProfileId", conversionProfileId);
+        appendCanonicalField(canonical, "externalSymbols.count", Integer.toString(externalSymbols.size()));
+        for (ExternalSymbol externalSymbol : externalSymbols.values()) {
+            appendCanonicalField(canonical, "externalSymbol.name", externalSymbol.name());
+            appendCanonicalField(canonical, "externalSymbol.type", ExpressionTypes.canonical(externalSymbol.type()));
+            appendCanonicalField(
+                    canonical,
+                    "externalSymbol.hasDefaultValue",
+                    Boolean.toString(externalSymbol.hasDefaultValue()));
+            externalSymbol.defaultValue().ifPresent(defaultValue -> appendCanonicalField(
+                    canonical,
+                    "externalSymbol.defaultValue",
+                    ExternalSymbolDefaults.canonicalValue(defaultValue.value())));
+        }
 
         return new ExpressionEnvironmentId(sha256Hex(canonical.toString()));
     }
@@ -205,6 +226,7 @@ public final class ExpressionEnvironment {
         private int maxCurrentItemDepth = DEFAULT_MAX_CURRENT_ITEM_DEPTH;
         private int materializationLimit = DEFAULT_MATERIALIZATION_LIMIT;
         private String conversionProfileId = STANDARD_CONVERSION_PROFILE_ID;
+        private ExternalSymbolCatalog.Builder externalSymbols = ExternalSymbolCatalog.builder();
 
         private Builder() {
         }
@@ -218,6 +240,7 @@ public final class ExpressionEnvironment {
             maxCurrentItemDepth = environment.maxCurrentItemDepth;
             materializationLimit = environment.materializationLimit;
             conversionProfileId = environment.conversionProfileId;
+            externalSymbols = environment.externalSymbols.toBuilder();
         }
 
         public Builder zoneId(ZoneId zoneId) {
@@ -259,6 +282,26 @@ public final class ExpressionEnvironment {
 
         public Builder conversionProfileId(String conversionProfileId) {
             this.conversionProfileId = validateConversionProfileId(conversionProfileId);
+            return this;
+        }
+
+        public Builder externalSymbol(String name) {
+            externalSymbols.externalSymbol(name);
+            return this;
+        }
+
+        public Builder externalSymbol(String name, ExpressionType type) {
+            externalSymbols.externalSymbol(name, type);
+            return this;
+        }
+
+        public Builder externalSymbolWithDefault(String name, Object defaultValue) {
+            externalSymbols.externalSymbolWithDefault(name, defaultValue);
+            return this;
+        }
+
+        public Builder externalSymbolWithDefault(String name, ExpressionType type, Object defaultValue) {
+            externalSymbols.externalSymbolWithDefault(name, type, defaultValue);
             return this;
         }
 
