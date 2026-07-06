@@ -35,6 +35,7 @@ final class AstPrettyPrinter {
 
     private static String printExpression(ExpressionNode expression) {
         return switch (expression) {
+            case CurrentTemporalValueNode currentTemporalValue -> currentTemporalValue.kind().canonicalName();
             case IdentifierNode identifier -> identifier.name();
             case LiteralNode literal -> printLiteral(literal.value());
         };

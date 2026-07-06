@@ -39,6 +39,9 @@ final class AstStructuralEquality {
 
     private static boolean equals(ExpressionNode left, ExpressionNode right) {
         return switch (left) {
+            case CurrentTemporalValueNode leftCurrentTemporalValue
+                    when right instanceof CurrentTemporalValueNode rightCurrentTemporalValue ->
+                    leftCurrentTemporalValue.kind() == rightCurrentTemporalValue.kind();
             case IdentifierNode leftIdentifier when right instanceof IdentifierNode rightIdentifier ->
                     leftIdentifier.name().equals(rightIdentifier.name());
             case LiteralNode leftLiteral when right instanceof LiteralNode rightLiteral ->

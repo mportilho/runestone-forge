@@ -1,6 +1,9 @@
 package com.runestone.expeval_mk3.internal.diagnostics;
 
 public enum DiagnosticCode {
+    AST_INVALID_DATE_LITERAL,
+    AST_INVALID_DATETIME_LITERAL,
+    AST_INVALID_TIME_LITERAL,
     PARSE_UNRECOGNIZED_CHARACTER,
     PARSE_UNEXPECTED_TOKEN,
     PARSE_MISSING_TOKEN,

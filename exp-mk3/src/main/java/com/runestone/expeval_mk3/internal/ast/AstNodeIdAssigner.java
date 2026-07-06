@@ -37,6 +37,10 @@ final class AstNodeIdAssigner {
 
     private ExpressionNode assignExpression(ExpressionNode expression) {
         return switch (expression) {
+            case CurrentTemporalValueNode currentTemporalValue -> new CurrentTemporalValueNode(
+                    next(),
+                    currentTemporalValue.sourceSpan(),
+                    currentTemporalValue.kind());
             case IdentifierNode identifier -> new IdentifierNode(next(), identifier.sourceSpan(), identifier.name());
             case LiteralNode literal -> new LiteralNode(next(), literal.sourceSpan(), literal.value());
         };

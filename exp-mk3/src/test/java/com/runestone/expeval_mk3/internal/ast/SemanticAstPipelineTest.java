@@ -106,7 +106,9 @@ class SemanticAstPipelineTest {
     private ExpressionFileNode build(String source) {
         ParseResult parseResult = parser.parse(source);
         assertThat(parseResult).isInstanceOf(ParseSuccess.class);
-        return astBuilder.build((ParseSuccess) parseResult);
+        SemanticAstResult result = astBuilder.build((ParseSuccess) parseResult);
+        assertThat(result).isInstanceOf(SemanticAstSuccess.class);
+        return ((SemanticAstSuccess) result).file();
     }
 
     private static List<Integer> nodeIds(ExpressionFileNode file) {
@@ -177,6 +179,10 @@ class SemanticAstPipelineTest {
                     shift(identifier.id(), offset),
                     identifier.sourceSpan(),
                     identifier.name());
+            case CurrentTemporalValueNode currentTemporalValue -> new CurrentTemporalValueNode(
+                    shift(currentTemporalValue.id(), offset),
+                    currentTemporalValue.sourceSpan(),
+                    currentTemporalValue.kind());
             case LiteralNode literal -> new LiteralNode(shift(literal.id(), offset), literal.sourceSpan(), literal.value());
         };
     }
