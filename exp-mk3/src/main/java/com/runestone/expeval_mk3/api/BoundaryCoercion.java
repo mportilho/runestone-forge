@@ -23,14 +23,20 @@ public final class BoundaryCoercion {
 
     private static final BoundaryCoercion STANDARD = new BoundaryCoercion(
             ExpressionEnvironment.STANDARD_CONVERSION_PROFILE_ID,
-            new DefaultDataConversionService());
+            new DefaultDataConversionService(),
+            true);
 
     private final String profileId;
     private final DataConversionService dataConversionService;
+    private final boolean deterministicForConstants;
 
-    private BoundaryCoercion(String profileId, DataConversionService dataConversionService) {
+    private BoundaryCoercion(
+            String profileId,
+            DataConversionService dataConversionService,
+            boolean deterministicForConstants) {
         this.profileId = validateProfileId(profileId);
         this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService");
+        this.deterministicForConstants = deterministicForConstants;
     }
 
     public static BoundaryCoercion standard() {
@@ -38,11 +44,22 @@ public final class BoundaryCoercion {
     }
 
     public static BoundaryCoercion of(String profileId, DataConversionService dataConversionService) {
-        return new BoundaryCoercion(profileId, dataConversionService);
+        return new BoundaryCoercion(profileId, dataConversionService, false);
+    }
+
+    public static BoundaryCoercion of(
+            String profileId,
+            DataConversionService dataConversionService,
+            ConversionDeterminism determinism) {
+        Objects.requireNonNull(determinism, "determinism");
+        return new BoundaryCoercion(
+                profileId,
+                dataConversionService,
+                determinism == ConversionDeterminism.DETERMINISTIC);
     }
 
     public BoundaryCoercion withProfileId(String profileId) {
-        return new BoundaryCoercion(profileId, dataConversionService);
+        return new BoundaryCoercion(profileId, dataConversionService, deterministicForConstants);
     }
 
     public String profileId() {
@@ -51,6 +68,10 @@ public final class BoundaryCoercion {
 
     DataConversionService dataConversionService() {
         return dataConversionService;
+    }
+
+    public boolean deterministicForConstants() {
+        return deterministicForConstants;
     }
 
     public boolean canConvert(Class<?> sourceType, ExpressionType targetType) {

@@ -7,7 +7,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -36,6 +39,9 @@ public final class ExpressionEnvironment {
     private final String conversionProfileId;
     private final BoundaryCoercion boundaryCoercion;
     private final ExternalSymbolCatalog externalSymbols;
+    private final FunctionCatalog functionCatalog;
+    private final boolean includeStandardFunctions;
+    private final List<FunctionDescriptor> customFunctions;
     private final ExpressionEnvironmentId environmentId;
 
     private ExpressionEnvironment(Builder builder) {
@@ -51,6 +57,9 @@ public final class ExpressionEnvironment {
         boundaryCoercion = Objects.requireNonNull(builder.boundaryCoercion, "boundaryCoercion");
         conversionProfileId = boundaryCoercion.profileId();
         externalSymbols = builder.externalSymbols.build(boundaryCoercion);
+        includeStandardFunctions = builder.includeStandardFunctions;
+        customFunctions = List.copyOf(builder.customFunctions);
+        functionCatalog = buildFunctionCatalog(builder);
         environmentId = createEnvironmentId();
     }
 
@@ -110,6 +119,10 @@ public final class ExpressionEnvironment {
         return externalSymbols;
     }
 
+    public FunctionCatalog functionCatalog() {
+        return functionCatalog;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -126,7 +139,8 @@ public final class ExpressionEnvironment {
                 && mathContext.equals(that.mathContext)
                 && transcendentalMathContext.equals(that.transcendentalMathContext)
                 && conversionProfileId.equals(that.conversionProfileId)
-                && externalSymbols.equals(that.externalSymbols);
+                && externalSymbols.equals(that.externalSymbols)
+                && functionCatalog.equals(that.functionCatalog);
     }
 
     @Override
@@ -140,7 +154,8 @@ public final class ExpressionEnvironment {
                 maxCurrentItemDepth,
                 materializationLimit,
                 conversionProfileId,
-                externalSymbols);
+                externalSymbols,
+                functionCatalog);
     }
 
     @Override
@@ -162,6 +177,15 @@ public final class ExpressionEnvironment {
         appendCanonicalField(canonical, "maxCurrentItemDepth", Integer.toString(maxCurrentItemDepth));
         appendCanonicalField(canonical, "materializationLimit", Integer.toString(materializationLimit));
         appendCanonicalField(canonical, "conversionProfileId", conversionProfileId);
+        appendCanonicalField(canonical, "functionCatalog.count", Integer.toString(functionCatalog.size()));
+        for (FunctionDescriptor function : functionCatalog.functions()) {
+            appendCanonicalField(canonical, "function.name", function.languageName());
+            appendCanonicalField(canonical, "function.parameters", canonicalFunctionParameters(function.parameterTypes()));
+            appendCanonicalField(canonical, "function.returnType", ExpressionTypes.canonical(function.returnType()));
+            appendCanonicalField(canonical, "function.implementation", function.implementationDescription());
+            appendCanonicalField(canonical, "function.pure", Boolean.toString(function.isPure()));
+            appendCanonicalField(canonical, "function.foldable", Boolean.toString(function.isFoldable()));
+        }
         appendCanonicalField(canonical, "externalSymbols.count", Integer.toString(externalSymbols.size()));
         for (ExternalSymbol externalSymbol : externalSymbols.values()) {
             appendCanonicalField(canonical, "externalSymbol.name", externalSymbol.name());
@@ -177,6 +201,33 @@ public final class ExpressionEnvironment {
         }
 
         return new ExpressionEnvironmentId(sha256Hex(canonical.toString()));
+    }
+
+    private FunctionCatalog buildFunctionCatalog(Builder builder) {
+        FunctionCatalog.Builder catalog = FunctionCatalog.builder();
+        if (includeStandardFunctions) {
+            StandardBuiltIns.registerStandardGroups(
+                    catalog,
+                    mathContext,
+                    transcendentalMathContext,
+                    boundaryCoercion,
+                    materializationLimit);
+        }
+        for (FunctionDescriptor descriptor : builder.customFunctions) {
+            catalog.register(descriptor);
+        }
+        return catalog.build();
+    }
+
+    private static String canonicalFunctionParameters(List<ExpressionType> parameterTypes) {
+        StringBuilder canonical = new StringBuilder();
+        for (ExpressionType parameterType : parameterTypes) {
+            if (!canonical.isEmpty()) {
+                canonical.append(',');
+            }
+            canonical.append(ExpressionTypes.canonical(parameterType));
+        }
+        return canonical.toString();
     }
 
     private static void appendCanonicalField(StringBuilder target, String name, String value) {
@@ -227,6 +278,8 @@ public final class ExpressionEnvironment {
         private int materializationLimit = DEFAULT_MATERIALIZATION_LIMIT;
         private BoundaryCoercion boundaryCoercion = BoundaryCoercion.standard();
         private ExternalSymbolCatalog.Builder externalSymbols = ExternalSymbolCatalog.builder();
+        private boolean includeStandardFunctions = true;
+        private List<FunctionDescriptor> customFunctions = new ArrayList<>();
 
         private Builder() {
         }
@@ -241,6 +294,8 @@ public final class ExpressionEnvironment {
             materializationLimit = environment.materializationLimit;
             boundaryCoercion = environment.boundaryCoercion;
             externalSymbols = environment.externalSymbols.toBuilder();
+            includeStandardFunctions = environment.includeStandardFunctions;
+            customFunctions = new ArrayList<>(environment.customFunctions);
         }
 
         public Builder zoneId(ZoneId zoneId) {
@@ -290,6 +345,14 @@ public final class ExpressionEnvironment {
             return this;
         }
 
+        public Builder boundaryCoercion(
+                String conversionProfileId,
+                DataConversionService dataConversionService,
+                ConversionDeterminism determinism) {
+            boundaryCoercion = BoundaryCoercion.of(conversionProfileId, dataConversionService, determinism);
+            return this;
+        }
+
         public Builder externalSymbol(String name) {
             externalSymbols.externalSymbol(name);
             return this;
@@ -307,6 +370,22 @@ public final class ExpressionEnvironment {
 
         public Builder externalSymbolWithDefault(String name, ExpressionType type, Object defaultValue) {
             externalSymbols.externalSymbolWithDefault(name, type, defaultValue);
+            return this;
+        }
+
+        public Builder withoutStandardFunctions() {
+            includeStandardFunctions = false;
+            return this;
+        }
+
+        public Builder function(FunctionDescriptor descriptor) {
+            customFunctions.add(Objects.requireNonNull(descriptor, "descriptor"));
+            return this;
+        }
+
+        public Builder standardFunctionGroup(StandardFunctionGroup group, Collection<FunctionDescriptor> descriptors) {
+            StandardBuiltIns.validateGroup(group, descriptors);
+            customFunctions.addAll(List.copyOf(descriptors));
             return this;
         }
 

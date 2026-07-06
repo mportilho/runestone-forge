@@ -68,6 +68,14 @@ public final class FunctionCatalog {
         return descriptors;
     }
 
+    public Builder toBuilder() {
+        Builder builder = builder();
+        for (FunctionDescriptor descriptor : descriptors) {
+            builder.register(descriptor);
+        }
+        return builder;
+    }
+
     public Optional<FunctionDescriptor> find(FunctionSignature signature) {
         return Optional.ofNullable(descriptorsBySignature.get(Objects.requireNonNull(signature, "signature")));
     }
@@ -104,6 +112,22 @@ public final class FunctionCatalog {
 
     public int size() {
         return descriptors.size();
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof FunctionCatalog that)) {
+            return false;
+        }
+        return descriptors.equals(that.descriptors);
+    }
+
+    @Override
+    public int hashCode() {
+        return descriptors.hashCode();
     }
 
     private static boolean isCoercible(
