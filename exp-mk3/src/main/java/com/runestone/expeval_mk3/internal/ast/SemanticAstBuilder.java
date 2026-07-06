@@ -75,32 +75,81 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
 
     @Override
     public Optional<ExpressionNode> visitComparisonOperation(ExpressionEvaluatorParser.ComparisonOperationContext context) {
-        throw unsupported(context, "comparison operation");
+        Optional<ExpressionNode> left = visit(context.bitwiseLogicalExpression(0));
+        Optional<ExpressionNode> right = visit(context.bitwiseLogicalExpression(1));
+        if (left.isEmpty() || right.isEmpty()) {
+            return Optional.empty();
+        }
+        ExpressionNode leftNode = left.orElseThrow();
+        ExpressionNode rightNode = right.orElseThrow();
+        return Optional.of(new BinaryOperationNode(
+                NodeId.UNASSIGNED,
+                span(leftNode, rightNode),
+                leftNode,
+                comparisonOperator(context.comparisonOperator()),
+                span(context.comparisonOperator()),
+                rightNode));
     }
 
     @Override
     public Optional<ExpressionNode> visitInOperation(ExpressionEvaluatorParser.InOperationContext context) {
-        throw unsupported(context, "in operation");
+        return buildMembership(
+                context,
+                context.bitwiseLogicalExpression(0),
+                context.bitwiseLogicalExpression(1),
+                context.NOT_KW() != null,
+                context.NOT_KW() == null ? span(context.IN().getSymbol()) : span(context.NOT_KW().getSymbol(), context.IN().getSymbol()));
     }
 
     @Override
     public Optional<ExpressionNode> visitNinOperation(ExpressionEvaluatorParser.NinOperationContext context) {
-        throw unsupported(context, "nin operation");
+        return buildMembership(
+                context,
+                context.bitwiseLogicalExpression(0),
+                context.bitwiseLogicalExpression(1),
+                true,
+                span(context.NIN().getSymbol()));
     }
 
     @Override
     public Optional<ExpressionNode> visitBetweenOperation(ExpressionEvaluatorParser.BetweenOperationContext context) {
-        throw unsupported(context, "between operation");
+        Optional<ExpressionNode> value = visit(context.bitwiseLogicalExpression(0));
+        Optional<ExpressionNode> lowerBound = visit(context.bitwiseLogicalExpression(1));
+        Optional<ExpressionNode> upperBound = visit(context.bitwiseLogicalExpression(2));
+        if (value.isEmpty() || lowerBound.isEmpty() || upperBound.isEmpty()) {
+            return Optional.empty();
+        }
+        SourceSpan operatorSpan = context.NOT_KW() == null
+                ? span(context.BETWEEN().getSymbol())
+                : span(context.NOT_KW().getSymbol(), context.BETWEEN().getSymbol());
+        return Optional.of(new BetweenNode(
+                NodeId.UNASSIGNED,
+                span(context),
+                value.orElseThrow(),
+                operatorSpan,
+                context.NOT_KW() != null,
+                lowerBound.orElseThrow(),
+                upperBound.orElseThrow()));
     }
 
     @Override
     public Optional<ExpressionNode> visitRegexMatchOperation(ExpressionEvaluatorParser.RegexMatchOperationContext context) {
-        throw unsupported(context, "regex match operation");
+        return buildRegexOperation(
+                context,
+                context.bitwiseLogicalExpression(),
+                context.STRING(),
+                BinaryOperator.REGEX_MATCH,
+                context.REGEX_MATCH().getSymbol());
     }
 
     @Override
     public Optional<ExpressionNode> visitRegexNotMatchOperation(ExpressionEvaluatorParser.RegexNotMatchOperationContext context) {
-        throw unsupported(context, "regex not-match operation");
+        return buildRegexOperation(
+                context,
+                context.bitwiseLogicalExpression(),
+                context.STRING(),
+                BinaryOperator.REGEX_NOT_MATCH,
+                context.REGEX_NOT_MATCH().getSymbol());
     }
 
     @Override
@@ -113,7 +162,7 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
         if (context.orExpression().size() == 1) {
             return visit(context.orExpression(0));
         }
-        throw unsupported(context, "null coalescence");
+        return buildNullCoalescence(context);
     }
 
     @Override
@@ -121,7 +170,7 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
         if (context.andExpression().size() == 1) {
             return visit(context.andExpression(0));
         }
-        throw unsupported(context, "logical or");
+        return buildLeftAssociative(context.andExpression(), context, ExpressionEvaluatorParser.OR);
     }
 
     @Override
@@ -129,7 +178,7 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
         if (context.comparisonExpression().size() == 1) {
             return visit(context.comparisonExpression(0));
         }
-        throw unsupported(context, "logical and");
+        return buildLeftAssociative(context.comparisonExpression(), context, ExpressionEvaluatorParser.AND);
     }
 
     @Override
@@ -142,7 +191,13 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
         if (context.concatExpression().size() == 1) {
             return visit(context.concatExpression(0));
         }
-        throw unsupported(context, "bitwise logical operation");
+        return buildLeftAssociative(
+                context.concatExpression(),
+                context,
+                ExpressionEvaluatorParser.NAND,
+                ExpressionEvaluatorParser.NOR,
+                ExpressionEvaluatorParser.XOR,
+                ExpressionEvaluatorParser.XNOR);
     }
 
     @Override
@@ -150,7 +205,7 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
         if (context.additiveExpression().size() == 1) {
             return visit(context.additiveExpression(0));
         }
-        throw unsupported(context, "string concatenation");
+        return buildLeftAssociative(context.additiveExpression(), context, ExpressionEvaluatorParser.CONCAT);
     }
 
     @Override
@@ -158,7 +213,11 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
         if (context.multiplicativeExpression().size() == 1) {
             return visit(context.multiplicativeExpression(0));
         }
-        throw unsupported(context, "additive operation");
+        return buildLeftAssociative(
+                context.multiplicativeExpression(),
+                context,
+                ExpressionEvaluatorParser.PLUS,
+                ExpressionEvaluatorParser.MINUS);
     }
 
     @Override
@@ -166,17 +225,34 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
         if (context.unaryExpression().size() == 1) {
             return visit(context.unaryExpression(0));
         }
-        throw unsupported(context, "multiplicative operation");
+        return buildLeftAssociative(
+                context.unaryExpression(),
+                context,
+                ExpressionEvaluatorParser.MULT,
+                ExpressionEvaluatorParser.DIV,
+                ExpressionEvaluatorParser.MODULO);
     }
 
     @Override
     public Optional<ExpressionNode> visitUnaryMinusOperation(ExpressionEvaluatorParser.UnaryMinusOperationContext context) {
-        throw unsupported(context, "unary minus operation");
+        Optional<ExpressionNode> operand = visit(context.unaryExpression());
+        return operand.map(expression -> new UnaryOperationNode(
+                NodeId.UNASSIGNED,
+                span(context),
+                UnaryOperator.NEGATE,
+                span(context.MINUS().getSymbol()),
+                expression));
     }
 
     @Override
     public Optional<ExpressionNode> visitLogicalNotOperation(ExpressionEvaluatorParser.LogicalNotOperationContext context) {
-        throw unsupported(context, "logical not operation");
+        Optional<ExpressionNode> operand = visit(context.unaryExpression());
+        return operand.map(expression -> new UnaryOperationNode(
+                NodeId.UNASSIGNED,
+                span(context),
+                UnaryOperator.LOGICAL_NOT,
+                span(firstTerminal(context).getSymbol()),
+                expression));
     }
 
     @Override
@@ -189,7 +265,7 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
         if (context.exponentiationExpression().size() == 1) {
             return visit(context.exponentiationExpression(0));
         }
-        throw unsupported(context, "root operation");
+        return buildLeftAssociative(context.exponentiationExpression(), context, ExpressionEvaluatorParser.ROOT);
     }
 
     @Override
@@ -197,7 +273,20 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
         if (context.unaryExpression() == null) {
             return visit(context.postfixExpression());
         }
-        throw unsupported(context, "exponentiation");
+        Optional<ExpressionNode> left = visit(context.postfixExpression());
+        Optional<ExpressionNode> right = visit(context.unaryExpression());
+        if (left.isEmpty() || right.isEmpty()) {
+            return Optional.empty();
+        }
+        ExpressionNode leftNode = left.orElseThrow();
+        ExpressionNode rightNode = right.orElseThrow();
+        return Optional.of(new BinaryOperationNode(
+                NodeId.UNASSIGNED,
+                span(leftNode, rightNode),
+                leftNode,
+                BinaryOperator.EXPONENTIATE,
+                span(context.EXPONENTIATION().getSymbol()),
+                rightNode));
     }
 
     @Override
@@ -205,12 +294,23 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
         if (context.PERCENT().isEmpty() && context.EXCLAMATION().isEmpty()) {
             return visit(context.primaryExpression());
         }
-        throw unsupported(context, "postfix operation");
+        Optional<ExpressionNode> operand = visit(context.primaryExpression());
+        if (operand.isEmpty()) {
+            return Optional.empty();
+        }
+        List<PostfixOperatorOccurrence> operators = directOperatorTokens(
+                context,
+                ExpressionEvaluatorParser.PERCENT,
+                ExpressionEvaluatorParser.EXCLAMATION).stream()
+                .map(token -> new PostfixOperatorOccurrence(postfixOperator(token), span(token)))
+                .toList();
+        return Optional.of(new PostfixOperationNode(NodeId.UNASSIGNED, span(context), operand.orElseThrow(), operators));
     }
 
     @Override
     public Optional<ExpressionNode> visitParenthesisOperation(ExpressionEvaluatorParser.ParenthesisOperationContext context) {
-        throw unsupported(context, "source grouping");
+        Optional<ExpressionNode> expression = visit(context.expression());
+        return expression.map(node -> new GroupedExpressionNode(NodeId.UNASSIGNED, span(context), node));
     }
 
     @Override
@@ -341,6 +441,160 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
         return Optional.of(new CurrentTemporalValueNode(NodeId.UNASSIGNED, span(context), CurrentTemporalValueKind.DATETIME));
     }
 
+    private Optional<ExpressionNode> buildMembership(
+            ParserRuleContext context,
+            ParserRuleContext valueContext,
+            ParserRuleContext candidatesContext,
+            boolean negated,
+            SourceSpan operatorSpan) {
+        Optional<ExpressionNode> value = visit(valueContext);
+        Optional<ExpressionNode> candidates = visit(candidatesContext);
+        if (value.isEmpty() || candidates.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new MembershipNode(
+                NodeId.UNASSIGNED,
+                span(context),
+                value.orElseThrow(),
+                operatorSpan,
+                negated,
+                candidates.orElseThrow()));
+    }
+
+    private Optional<ExpressionNode> buildRegexOperation(
+            ParserRuleContext context,
+            ParserRuleContext leftContext,
+            TerminalNode string,
+            BinaryOperator operator,
+            Token operatorToken) {
+        Optional<ExpressionNode> left = visit(leftContext);
+        if (left.isEmpty()) {
+            return Optional.empty();
+        }
+        ExpressionNode leftNode = left.orElseThrow();
+        ExpressionNode rightNode = new LiteralNode(
+                NodeId.UNASSIGNED,
+                span(string.getSymbol()),
+                new StringLiteralValue(unquote(string.getText())));
+        return Optional.of(new BinaryOperationNode(
+                NodeId.UNASSIGNED,
+                span(leftNode, rightNode),
+                leftNode,
+                operator,
+                span(operatorToken),
+                rightNode));
+    }
+
+    private Optional<ExpressionNode> buildNullCoalescence(ExpressionEvaluatorParser.CoalesceOperationContext context) {
+        List<ExpressionNode> operands = new ArrayList<>(context.orExpression().size());
+        for (ExpressionEvaluatorParser.OrExpressionContext operandContext : context.orExpression()) {
+            Optional<ExpressionNode> operand = visit(operandContext);
+            if (operand.isEmpty()) {
+                return Optional.empty();
+            }
+            operands.add(operand.orElseThrow());
+        }
+        List<SourceSpan> operatorSpans = directOperatorTokens(context, ExpressionEvaluatorParser.NULLCOALESCE).stream()
+                .map(SemanticAstBuilder::span)
+                .toList();
+        return Optional.of(new NullCoalescenceNode(NodeId.UNASSIGNED, span(context), operands, operatorSpans));
+    }
+
+    private Optional<ExpressionNode> buildLeftAssociative(
+            List<? extends ParserRuleContext> operandContexts,
+            ParserRuleContext context,
+            int... operatorTypes) {
+        List<Token> operatorTokens = directOperatorTokens(context, operatorTypes);
+        Optional<ExpressionNode> first = visit(operandContexts.getFirst());
+        if (first.isEmpty()) {
+            return Optional.empty();
+        }
+        ExpressionNode current = first.orElseThrow();
+        for (int index = 0; index < operatorTokens.size(); index++) {
+            Optional<ExpressionNode> right = visit(operandContexts.get(index + 1));
+            if (right.isEmpty()) {
+                return Optional.empty();
+            }
+            ExpressionNode rightNode = right.orElseThrow();
+            Token operatorToken = operatorTokens.get(index);
+            current = new BinaryOperationNode(
+                    NodeId.UNASSIGNED,
+                    span(current, rightNode),
+                    current,
+                    binaryOperator(operatorToken),
+                    span(operatorToken),
+                    rightNode);
+        }
+        return Optional.of(current);
+    }
+
+    private static List<Token> directOperatorTokens(ParserRuleContext context, int... operatorTypes) {
+        List<Token> tokens = new ArrayList<>();
+        for (int index = 0; index < context.getChildCount(); index++) {
+            if (context.getChild(index) instanceof TerminalNode terminal && isOneOf(terminal.getSymbol(), operatorTypes)) {
+                tokens.add(terminal.getSymbol());
+            }
+        }
+        return tokens;
+    }
+
+    private static boolean isOneOf(Token token, int... tokenTypes) {
+        for (int tokenType : tokenTypes) {
+            if (token.getType() == tokenType) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static TerminalNode firstTerminal(ParserRuleContext context) {
+        for (int index = 0; index < context.getChildCount(); index++) {
+            if (context.getChild(index) instanceof TerminalNode terminal) {
+                return terminal;
+            }
+        }
+        throw new IllegalArgumentException("Context has no terminal child: " + context.getClass().getName());
+    }
+
+    private static BinaryOperator comparisonOperator(ExpressionEvaluatorParser.ComparisonOperatorContext context) {
+        return switch (context.getStart().getType()) {
+            case ExpressionEvaluatorParser.GT -> BinaryOperator.GREATER_THAN;
+            case ExpressionEvaluatorParser.GE -> BinaryOperator.GREATER_THAN_OR_EQUAL;
+            case ExpressionEvaluatorParser.LT -> BinaryOperator.LESS_THAN;
+            case ExpressionEvaluatorParser.LE -> BinaryOperator.LESS_THAN_OR_EQUAL;
+            case ExpressionEvaluatorParser.EQ -> BinaryOperator.EQUAL;
+            case ExpressionEvaluatorParser.NEQ -> BinaryOperator.NOT_EQUAL;
+            default -> throw new IllegalArgumentException("Unsupported comparison operator: " + context.getText());
+        };
+    }
+
+    private static BinaryOperator binaryOperator(Token token) {
+        return switch (token.getType()) {
+            case ExpressionEvaluatorParser.OR -> BinaryOperator.LOGICAL_OR;
+            case ExpressionEvaluatorParser.AND -> BinaryOperator.LOGICAL_AND;
+            case ExpressionEvaluatorParser.NAND -> BinaryOperator.LOGICAL_NAND;
+            case ExpressionEvaluatorParser.NOR -> BinaryOperator.LOGICAL_NOR;
+            case ExpressionEvaluatorParser.XOR -> BinaryOperator.LOGICAL_XOR;
+            case ExpressionEvaluatorParser.XNOR -> BinaryOperator.LOGICAL_XNOR;
+            case ExpressionEvaluatorParser.CONCAT -> BinaryOperator.CONCAT;
+            case ExpressionEvaluatorParser.PLUS -> BinaryOperator.ADD;
+            case ExpressionEvaluatorParser.MINUS -> BinaryOperator.SUBTRACT;
+            case ExpressionEvaluatorParser.MULT -> BinaryOperator.MULTIPLY;
+            case ExpressionEvaluatorParser.DIV -> BinaryOperator.DIVIDE;
+            case ExpressionEvaluatorParser.MODULO -> BinaryOperator.MODULO;
+            case ExpressionEvaluatorParser.ROOT -> BinaryOperator.ROOT;
+            default -> throw new IllegalArgumentException("Unsupported binary operator token: " + token.getText());
+        };
+    }
+
+    private static PostfixOperator postfixOperator(Token token) {
+        return switch (token.getType()) {
+            case ExpressionEvaluatorParser.PERCENT -> PostfixOperator.PERCENT;
+            case ExpressionEvaluatorParser.EXCLAMATION -> PostfixOperator.FACTORIAL;
+            default -> throw new IllegalArgumentException("Unsupported postfix operator token: " + token.getText());
+        };
+    }
+
     private static LiteralValue parseInteger(String text) {
         BigInteger value;
         if (text.startsWith("0x") || text.startsWith("0X")) {
@@ -451,6 +705,18 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
         int offset = Math.max(0, token.getStartIndex());
         int endOffset = token.getType() == Token.EOF ? offset : Math.max(offset, token.getStopIndex() + 1);
         return new SourceSpan(offset, endOffset, Math.max(1, token.getLine()), token.getCharPositionInLine() + 1);
+    }
+
+    private static SourceSpan span(Token start, Token stop) {
+        SourceSpan startSpan = span(start);
+        SourceSpan stopSpan = span(stop);
+        return new SourceSpan(startSpan.offset(), stopSpan.endOffset(), startSpan.line(), startSpan.column());
+    }
+
+    private static SourceSpan span(AstNode start, AstNode stop) {
+        SourceSpan startSpan = start.sourceSpan();
+        SourceSpan stopSpan = stop.sourceSpan();
+        return new SourceSpan(startSpan.offset(), stopSpan.endOffset(), startSpan.line(), startSpan.column());
     }
 
     private static UnsupportedOperationException unsupported(ParserRuleContext context, String construct) {

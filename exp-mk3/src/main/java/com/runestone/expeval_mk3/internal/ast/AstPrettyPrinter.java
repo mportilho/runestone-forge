@@ -35,10 +35,45 @@ final class AstPrettyPrinter {
 
     private static String printExpression(ExpressionNode expression) {
         return switch (expression) {
+            case BetweenNode between -> printBetween(between);
+            case BinaryOperationNode binary -> printExpression(binary.left()) + " " + binary.operator().canonicalSymbol()
+                    + " " + printExpression(binary.right());
             case CurrentTemporalValueNode currentTemporalValue -> currentTemporalValue.kind().canonicalName();
+            case GroupedExpressionNode grouped -> "(" + printExpression(grouped.expression()) + ")";
             case IdentifierNode identifier -> identifier.name();
             case LiteralNode literal -> printLiteral(literal.value());
+            case MembershipNode membership -> printMembership(membership);
+            case NullCoalescenceNode nullCoalescence -> printNullCoalescence(nullCoalescence);
+            case PostfixOperationNode postfix -> printPostfix(postfix);
+            case UnaryOperationNode unary -> unary.operator().canonicalSymbol() + printExpression(unary.operand());
         };
+    }
+
+    private static String printBetween(BetweenNode between) {
+        String operator = between.negated() ? " not between " : " between ";
+        return printExpression(between.value()) + operator + printExpression(between.lowerBound())
+                + " and " + printExpression(between.upperBound());
+    }
+
+    private static String printMembership(MembershipNode membership) {
+        String operator = membership.negated() ? " not in " : " in ";
+        return printExpression(membership.value()) + operator + printExpression(membership.candidates());
+    }
+
+    private static String printNullCoalescence(NullCoalescenceNode nullCoalescence) {
+        List<String> operands = new ArrayList<>(nullCoalescence.operands().size());
+        for (ExpressionNode operand : nullCoalescence.operands()) {
+            operands.add(printExpression(operand));
+        }
+        return String.join(" ?? ", operands);
+    }
+
+    private static String printPostfix(PostfixOperationNode postfix) {
+        StringBuilder builder = new StringBuilder(printExpression(postfix.operand()));
+        for (PostfixOperatorOccurrence operator : postfix.operators()) {
+            builder.append(operator.operator().canonicalSymbol());
+        }
+        return builder.toString();
     }
 
     private static String printLiteral(LiteralValue value) {

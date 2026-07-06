@@ -175,6 +175,21 @@ class SemanticAstPipelineTest {
 
     private static ExpressionNode shiftNodeIds(ExpressionNode expression, int offset) {
         return switch (expression) {
+            case BetweenNode between -> new BetweenNode(
+                    shift(between.id(), offset),
+                    between.sourceSpan(),
+                    shiftNodeIds(between.value(), offset),
+                    between.operatorSpan(),
+                    between.negated(),
+                    shiftNodeIds(between.lowerBound(), offset),
+                    shiftNodeIds(between.upperBound(), offset));
+            case BinaryOperationNode binary -> new BinaryOperationNode(
+                    shift(binary.id(), offset),
+                    binary.sourceSpan(),
+                    shiftNodeIds(binary.left(), offset),
+                    binary.operator(),
+                    binary.operatorSpan(),
+                    shiftNodeIds(binary.right(), offset));
             case IdentifierNode identifier -> new IdentifierNode(
                     shift(identifier.id(), offset),
                     identifier.sourceSpan(),
@@ -183,7 +198,34 @@ class SemanticAstPipelineTest {
                     shift(currentTemporalValue.id(), offset),
                     currentTemporalValue.sourceSpan(),
                     currentTemporalValue.kind());
+            case GroupedExpressionNode grouped -> new GroupedExpressionNode(
+                    shift(grouped.id(), offset),
+                    grouped.sourceSpan(),
+                    shiftNodeIds(grouped.expression(), offset));
             case LiteralNode literal -> new LiteralNode(shift(literal.id(), offset), literal.sourceSpan(), literal.value());
+            case MembershipNode membership -> new MembershipNode(
+                    shift(membership.id(), offset),
+                    membership.sourceSpan(),
+                    shiftNodeIds(membership.value(), offset),
+                    membership.operatorSpan(),
+                    membership.negated(),
+                    shiftNodeIds(membership.candidates(), offset));
+            case NullCoalescenceNode nullCoalescence -> new NullCoalescenceNode(
+                    shift(nullCoalescence.id(), offset),
+                    nullCoalescence.sourceSpan(),
+                    nullCoalescence.operands().stream().map(operand -> shiftNodeIds(operand, offset)).toList(),
+                    nullCoalescence.operatorSpans());
+            case PostfixOperationNode postfix -> new PostfixOperationNode(
+                    shift(postfix.id(), offset),
+                    postfix.sourceSpan(),
+                    shiftNodeIds(postfix.operand(), offset),
+                    postfix.operators());
+            case UnaryOperationNode unary -> new UnaryOperationNode(
+                    shift(unary.id(), offset),
+                    unary.sourceSpan(),
+                    unary.operator(),
+                    unary.operatorSpan(),
+                    shiftNodeIds(unary.operand(), offset));
         };
     }
 
