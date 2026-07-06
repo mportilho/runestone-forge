@@ -6,6 +6,7 @@ import java.math.MathContext;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -127,6 +128,11 @@ public final class ExpressionEnvironment {
 
     public JavaTypeCatalog javaTypeCatalog() {
         return javaTypeCatalog;
+    }
+
+    public OffsetDateTimeLiteralNormalization normalizeOffsetDateTimeLiteral(OffsetDateTime originalLiteral) {
+        Objects.requireNonNull(originalLiteral, "originalLiteral");
+        return OffsetDateTimeLiteralNormalization.of(originalLiteral, zoneId);
     }
 
     @Override

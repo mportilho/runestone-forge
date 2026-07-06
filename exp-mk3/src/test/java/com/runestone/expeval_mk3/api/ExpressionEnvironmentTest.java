@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -55,6 +57,23 @@ class ExpressionEnvironmentTest {
                 .build();
 
         assertThat(first.environmentId()).isEqualTo(second.environmentId());
+    }
+
+    @Test
+    @DisplayName("otherwise equal environments with different time zones have different environment ids")
+    void otherwiseEqualEnvironmentsWithDifferentTimeZonesHaveDifferentEnvironmentIds() {
+        ExpressionEnvironment utc = ExpressionEnvironment.builder()
+                .zoneId(ZoneId.of("UTC"))
+                .externalSymbol("amount", ScalarType.NUMBER)
+                .build();
+        ExpressionEnvironment saoPaulo = ExpressionEnvironment.builder()
+                .zoneId(ZoneId.of("America/Sao_Paulo"))
+                .externalSymbol("amount", ScalarType.NUMBER)
+                .build();
+
+        assertThat(utc.zoneId()).isEqualTo(ZoneId.of("UTC"));
+        assertThat(saoPaulo.zoneId()).isEqualTo(ZoneId.of("America/Sao_Paulo"));
+        assertThat(utc.environmentId()).isNotEqualTo(saoPaulo.environmentId());
     }
 
     @Test
@@ -293,21 +312,55 @@ class ExpressionEnvironmentTest {
     @Test
     @DisplayName("reserved current temporal names cannot be declared as external symbols")
     void reservedCurrentTemporalNamesCannotBeDeclaredAsExternalSymbols() {
-        assertThatThrownBy(() -> ExpressionEnvironment.builder().externalSymbol("currDate"))
+        for (CurrentTemporalValue currentTemporalValue : CurrentTemporalValue.values()) {
+            String simpleName = currentTemporalValue.simpleName();
+
+            assertThatThrownBy(() -> ExpressionEnvironment.builder().externalSymbol(simpleName))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("reserved");
+            assertThatThrownBy(() -> ExternalSymbol.unknown(simpleName))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("reserved");
+            assertThatThrownBy(() -> ExternalSymbolCatalog.builder().externalSymbol(simpleName))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("reserved");
+        }
+    }
+
+    @Test
+    @DisplayName("current temporal value contracts expose reserved names and semantic types")
+    void currentTemporalValueContractsExposeReservedNamesAndSemanticTypes() {
+        assertThat(CurrentTemporalValue.findBySimpleName("currDate"))
+                .contains(CurrentTemporalValue.DATE);
+        assertThat(CurrentTemporalValue.findBySimpleName("currTime"))
+                .contains(CurrentTemporalValue.TIME);
+        assertThat(CurrentTemporalValue.findBySimpleName("currDateTime"))
+                .contains(CurrentTemporalValue.DATETIME);
+        assertThat(CurrentTemporalValue.DATE.expressionType()).isEqualTo(ScalarType.DATE);
+        assertThat(CurrentTemporalValue.TIME.expressionType()).isEqualTo(ScalarType.TIME);
+        assertThat(CurrentTemporalValue.DATETIME.expressionType()).isEqualTo(ScalarType.DATETIME);
+    }
+
+    @Test
+    @DisplayName("environment normalizes offset date-time literals for resolver metadata")
+    void environmentNormalizesOffsetDateTimeLiteralsForResolverMetadata() {
+        OffsetDateTime originalLiteral = OffsetDateTime.parse("2026-07-06T23:30:00+02:00");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .zoneId(ZoneId.of("America/Sao_Paulo"))
+                .build();
+
+        OffsetDateTimeLiteralNormalization normalization = environment.normalizeOffsetDateTimeLiteral(originalLiteral);
+
+        assertThat(normalization.originalLiteral()).isEqualTo(originalLiteral);
+        assertThat(normalization.environmentZoneId()).isEqualTo(ZoneId.of("America/Sao_Paulo"));
+        assertThat(normalization.normalizedLocalDateTime()).isEqualTo(LocalDateTime.of(2026, 7, 6, 18, 30));
+        assertThat(normalization.expressionType()).isEqualTo(ScalarType.DATETIME);
+        assertThatThrownBy(() -> new OffsetDateTimeLiteralNormalization(
+                originalLiteral,
+                ZoneId.of("America/Sao_Paulo"),
+                LocalDateTime.MIN))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("reserved");
-        assertThatThrownBy(() -> ExpressionEnvironment.builder().externalSymbol("currTime"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("reserved");
-        assertThatThrownBy(() -> ExpressionEnvironment.builder().externalSymbol("currDateTime"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("reserved");
-        assertThatThrownBy(() -> ExternalSymbol.unknown("currDate"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("reserved");
-        assertThatThrownBy(() -> ExternalSymbolCatalog.builder().externalSymbol("currTime"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("reserved");
+                .hasMessageContaining("normalizedLocalDateTime");
     }
 
     private static ExpressionEnvironment.Builder customEnvironmentBuilder() {
