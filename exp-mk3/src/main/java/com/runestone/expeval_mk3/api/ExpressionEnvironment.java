@@ -39,6 +39,7 @@ public final class ExpressionEnvironment {
     private final String conversionProfileId;
     private final BoundaryCoercion boundaryCoercion;
     private final ExternalSymbolCatalog externalSymbols;
+    private final JavaTypeCatalog javaTypeCatalog;
     private final FunctionCatalog functionCatalog;
     private final boolean includeStandardFunctions;
     private final List<FunctionDescriptor> customFunctions;
@@ -57,6 +58,7 @@ public final class ExpressionEnvironment {
         boundaryCoercion = Objects.requireNonNull(builder.boundaryCoercion, "boundaryCoercion");
         conversionProfileId = boundaryCoercion.profileId();
         externalSymbols = builder.externalSymbols.build(boundaryCoercion);
+        javaTypeCatalog = builder.javaTypeCatalog.build();
         includeStandardFunctions = builder.includeStandardFunctions;
         customFunctions = List.copyOf(builder.customFunctions);
         functionCatalog = buildFunctionCatalog(builder);
@@ -123,6 +125,10 @@ public final class ExpressionEnvironment {
         return functionCatalog;
     }
 
+    public JavaTypeCatalog javaTypeCatalog() {
+        return javaTypeCatalog;
+    }
+
     @Override
     public boolean equals(Object other) {
         if (this == other) {
@@ -140,6 +146,7 @@ public final class ExpressionEnvironment {
                 && transcendentalMathContext.equals(that.transcendentalMathContext)
                 && conversionProfileId.equals(that.conversionProfileId)
                 && externalSymbols.equals(that.externalSymbols)
+                && javaTypeCatalog.equals(that.javaTypeCatalog)
                 && functionCatalog.equals(that.functionCatalog);
     }
 
@@ -155,6 +162,7 @@ public final class ExpressionEnvironment {
                 materializationLimit,
                 conversionProfileId,
                 externalSymbols,
+                javaTypeCatalog,
                 functionCatalog);
     }
 
@@ -198,6 +206,31 @@ public final class ExpressionEnvironment {
                     canonical,
                     "externalSymbol.defaultValue",
                     ExternalSymbolDefaults.canonicalValue(defaultValue.value())));
+        }
+        appendCanonicalField(canonical, "javaTypeCatalog.count", Integer.toString(javaTypeCatalog.size()));
+        for (JavaTypeCatalog.RegisteredJavaType javaType : JavaTypeCatalog.canonicalTypes(javaTypeCatalog)) {
+            appendCanonicalField(canonical, "javaType.objectType", ExpressionTypes.canonical(javaType.objectType()));
+            appendCanonicalField(canonical, "javaType.javaClass", javaType.javaClass().getName());
+            appendCanonicalField(canonical, "javaType.properties.count", Integer.toString(javaType.properties().size()));
+            for (JavaTypeCatalog.PropertyMember property : JavaTypeCatalog.canonicalProperties(javaType)) {
+                appendCanonicalField(canonical, "javaType.property.name", property.name());
+                appendCanonicalField(canonical, "javaType.property.returnType", ExpressionTypes.canonical(property.returnType()));
+                appendCanonicalField(canonical, "javaType.property.accessor", JavaTypeCatalog.canonicalMethod(property.accessor()));
+            }
+            appendCanonicalField(canonical, "javaType.methods.count", Integer.toString(javaType.methods().size()));
+            for (JavaTypeCatalog.MethodMember method : JavaTypeCatalog.canonicalMethods(javaType)) {
+                appendCanonicalField(canonical, "javaType.method.name", method.signature().languageName());
+                appendCanonicalField(
+                        canonical,
+                        "javaType.method.parameters",
+                        canonicalFunctionParameters(method.signature().parameterTypes()));
+                appendCanonicalField(canonical, "javaType.method.returnType", ExpressionTypes.canonical(method.returnType()));
+                appendCanonicalField(canonical, "javaType.method.implementation", JavaTypeCatalog.canonicalMethod(method.method()));
+                appendCanonicalField(
+                        canonical,
+                        "javaType.method.explicit",
+                        Boolean.toString(method.explicitlyRegistered()));
+            }
         }
 
         return new ExpressionEnvironmentId(sha256Hex(canonical.toString()));
@@ -278,6 +311,7 @@ public final class ExpressionEnvironment {
         private int materializationLimit = DEFAULT_MATERIALIZATION_LIMIT;
         private BoundaryCoercion boundaryCoercion = BoundaryCoercion.standard();
         private ExternalSymbolCatalog.Builder externalSymbols = ExternalSymbolCatalog.builder();
+        private JavaTypeCatalog.Builder javaTypeCatalog = JavaTypeCatalog.builder();
         private boolean includeStandardFunctions = true;
         private List<FunctionDescriptor> customFunctions = new ArrayList<>();
 
@@ -294,6 +328,7 @@ public final class ExpressionEnvironment {
             materializationLimit = environment.materializationLimit;
             boundaryCoercion = environment.boundaryCoercion;
             externalSymbols = environment.externalSymbols.toBuilder();
+            javaTypeCatalog = environment.javaTypeCatalog.toBuilder();
             includeStandardFunctions = environment.includeStandardFunctions;
             customFunctions = new ArrayList<>(environment.customFunctions);
         }
@@ -370,6 +405,11 @@ public final class ExpressionEnvironment {
 
         public Builder externalSymbolWithDefault(String name, ExpressionType type, Object defaultValue) {
             externalSymbols.externalSymbolWithDefault(name, type, defaultValue);
+            return this;
+        }
+
+        public Builder registerJavaType(JavaTypeCatalog.RegisteredJavaType registeredJavaType) {
+            javaTypeCatalog.registerJavaType(registeredJavaType);
             return this;
         }
 
