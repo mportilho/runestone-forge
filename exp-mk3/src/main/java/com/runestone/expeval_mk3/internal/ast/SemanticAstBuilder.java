@@ -315,12 +315,75 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
 
     @Override
     public Optional<ExpressionNode> visitDecisionOperation(ExpressionEvaluatorParser.DecisionOperationContext context) {
-        throw unsupported(context, "conditional expression");
+        return visit(context.ifExpression());
     }
 
     @Override
     public Optional<ExpressionNode> visitVectorLiteralOperation(ExpressionEvaluatorParser.VectorLiteralOperationContext context) {
-        throw unsupported(context, "vector literal");
+        return visit(context.vectorLiteral());
+    }
+
+    @Override
+    public Optional<ExpressionNode> visitIfThenElseOperation(ExpressionEvaluatorParser.IfThenElseOperationContext context) {
+        List<ExpressionEvaluatorParser.ExpressionContext> expressionContexts = context.expression();
+        int branchCount = (expressionContexts.size() - 1) / 2;
+        List<ConditionalBranchNode> branches = new ArrayList<>(branchCount);
+        for (int index = 0; index < branchCount; index++) {
+            Token branchStart = index == 0 ? context.IF().getSymbol() : context.ELSEIF(index - 1).getSymbol();
+            Optional<ConditionalBranchNode> branch = buildConditionalBranch(
+                    branchStart,
+                    expressionContexts.get(index * 2),
+                    expressionContexts.get(index * 2 + 1));
+            if (branch.isEmpty()) {
+                return Optional.empty();
+            }
+            branches.add(branch.orElseThrow());
+        }
+        Optional<ExpressionNode> elseExpression = visit(expressionContexts.getLast());
+        return elseExpression.map(expression -> new ConditionalNode(
+                NodeId.UNASSIGNED,
+                span(context),
+                ConditionalSourceForm.CLASSIC,
+                branches,
+                expression));
+    }
+
+    @Override
+    public Optional<ExpressionNode> visitFunctionalIfOperation(ExpressionEvaluatorParser.FunctionalIfOperationContext context) {
+        List<ExpressionEvaluatorParser.ExpressionContext> expressionContexts = context.expression();
+        int branchCount = (expressionContexts.size() - 1) / 2;
+        List<ConditionalBranchNode> branches = new ArrayList<>(branchCount);
+        for (int index = 0; index < branchCount; index++) {
+            Optional<ConditionalBranchNode> branch = buildConditionalBranch(
+                    null,
+                    expressionContexts.get(index * 2),
+                    expressionContexts.get(index * 2 + 1));
+            if (branch.isEmpty()) {
+                return Optional.empty();
+            }
+            branches.add(branch.orElseThrow());
+        }
+        Optional<ExpressionNode> elseExpression = visit(expressionContexts.getLast());
+        return elseExpression.map(expression -> new ConditionalNode(
+                NodeId.UNASSIGNED,
+                span(context),
+                ConditionalSourceForm.FUNCTIONAL,
+                branches,
+                expression));
+    }
+
+    @Override
+    public Optional<ExpressionNode> visitVectorOfEntitiesOperation(
+            ExpressionEvaluatorParser.VectorOfEntitiesOperationContext context) {
+        List<ExpressionNode> elements = new ArrayList<>(context.expression().size());
+        for (ExpressionEvaluatorParser.ExpressionContext expressionContext : context.expression()) {
+            Optional<ExpressionNode> expression = visit(expressionContext);
+            if (expression.isEmpty()) {
+                return Optional.empty();
+            }
+            elements.add(expression.orElseThrow());
+        }
+        return Optional.of(new VectorLiteralNode(NodeId.UNASSIGNED, span(context), elements));
     }
 
     @Override
@@ -459,6 +522,25 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
                 operatorSpan,
                 negated,
                 candidates.orElseThrow()));
+    }
+
+    private Optional<ConditionalBranchNode> buildConditionalBranch(
+            Token branchStart,
+            ExpressionEvaluatorParser.ExpressionContext conditionContext,
+            ExpressionEvaluatorParser.ExpressionContext resultContext) {
+        Optional<ExpressionNode> condition = visit(conditionContext);
+        Optional<ExpressionNode> resultExpression = visit(resultContext);
+        if (condition.isEmpty() || resultExpression.isEmpty()) {
+            return Optional.empty();
+        }
+        ExpressionNode conditionNode = condition.orElseThrow();
+        ExpressionNode resultNode = resultExpression.orElseThrow();
+        SourceSpan branchSpan = branchStart == null ? span(conditionNode, resultNode) : span(branchStart, resultNode);
+        return Optional.of(new ConditionalBranchNode(
+                NodeId.UNASSIGNED,
+                branchSpan,
+                conditionNode,
+                resultNode));
     }
 
     private Optional<ExpressionNode> buildRegexOperation(
@@ -710,6 +792,12 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
     private static SourceSpan span(Token start, Token stop) {
         SourceSpan startSpan = span(start);
         SourceSpan stopSpan = span(stop);
+        return new SourceSpan(startSpan.offset(), stopSpan.endOffset(), startSpan.line(), startSpan.column());
+    }
+
+    private static SourceSpan span(Token start, AstNode stop) {
+        SourceSpan startSpan = span(start);
+        SourceSpan stopSpan = stop.sourceSpan();
         return new SourceSpan(startSpan.offset(), stopSpan.endOffset(), startSpan.line(), startSpan.column());
     }
 

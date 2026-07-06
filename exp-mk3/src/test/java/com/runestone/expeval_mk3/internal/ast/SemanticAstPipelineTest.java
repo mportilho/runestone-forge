@@ -190,6 +190,12 @@ class SemanticAstPipelineTest {
                     binary.operator(),
                     binary.operatorSpan(),
                     shiftNodeIds(binary.right(), offset));
+            case ConditionalNode conditional -> new ConditionalNode(
+                    shift(conditional.id(), offset),
+                    conditional.sourceSpan(),
+                    conditional.sourceForm(),
+                    conditional.branches().stream().map(branch -> shiftNodeIds(branch, offset)).toList(),
+                    shiftNodeIds(conditional.elseExpression(), offset));
             case IdentifierNode identifier -> new IdentifierNode(
                     shift(identifier.id(), offset),
                     identifier.sourceSpan(),
@@ -226,7 +232,19 @@ class SemanticAstPipelineTest {
                     unary.operator(),
                     unary.operatorSpan(),
                     shiftNodeIds(unary.operand(), offset));
+            case VectorLiteralNode vectorLiteral -> new VectorLiteralNode(
+                    shift(vectorLiteral.id(), offset),
+                    vectorLiteral.sourceSpan(),
+                    vectorLiteral.elements().stream().map(element -> shiftNodeIds(element, offset)).toList());
         };
+    }
+
+    private static ConditionalBranchNode shiftNodeIds(ConditionalBranchNode branch, int offset) {
+        return new ConditionalBranchNode(
+                shift(branch.id(), offset),
+                branch.sourceSpan(),
+                shiftNodeIds(branch.condition(), offset),
+                shiftNodeIds(branch.resultExpression(), offset));
     }
 
     private static NodeId shift(NodeId id, int offset) {

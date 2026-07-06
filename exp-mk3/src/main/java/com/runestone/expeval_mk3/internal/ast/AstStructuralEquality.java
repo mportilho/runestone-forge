@@ -49,6 +49,10 @@ final class AstStructuralEquality {
                     leftBinary.operator() == rightBinary.operator()
                             && equals(leftBinary.left(), rightBinary.left())
                             && equals(leftBinary.right(), rightBinary.right());
+            case ConditionalNode leftConditional when right instanceof ConditionalNode rightConditional ->
+                    leftConditional.sourceForm() == rightConditional.sourceForm()
+                            && equalsBranches(leftConditional.branches(), rightConditional.branches())
+                            && equals(leftConditional.elseExpression(), rightConditional.elseExpression());
             case CurrentTemporalValueNode leftCurrentTemporalValue
                     when right instanceof CurrentTemporalValueNode rightCurrentTemporalValue ->
                     leftCurrentTemporalValue.kind() == rightCurrentTemporalValue.kind();
@@ -70,8 +74,23 @@ final class AstStructuralEquality {
                             && equalsPostfixOperators(leftPostfix, rightPostfix);
             case UnaryOperationNode leftUnary when right instanceof UnaryOperationNode rightUnary ->
                     leftUnary.operator() == rightUnary.operator() && equals(leftUnary.operand(), rightUnary.operand());
+            case VectorLiteralNode leftVector when right instanceof VectorLiteralNode rightVector ->
+                    equalsExpressionLists(leftVector.elements(), rightVector.elements());
             default -> false;
         };
+    }
+
+    private static boolean equalsBranches(List<ConditionalBranchNode> left, List<ConditionalBranchNode> right) {
+        if (left.size() != right.size()) {
+            return false;
+        }
+        for (int index = 0; index < left.size(); index++) {
+            if (!equals(left.get(index).condition(), right.get(index).condition())
+                    || !equals(left.get(index).resultExpression(), right.get(index).resultExpression())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean equalsExpressionLists(List<ExpressionNode> left, List<ExpressionNode> right) {

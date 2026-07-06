@@ -38,6 +38,7 @@ final class AstPrettyPrinter {
             case BetweenNode between -> printBetween(between);
             case BinaryOperationNode binary -> printExpression(binary.left()) + " " + binary.operator().canonicalSymbol()
                     + " " + printExpression(binary.right());
+            case ConditionalNode conditional -> printConditional(conditional);
             case CurrentTemporalValueNode currentTemporalValue -> currentTemporalValue.kind().canonicalName();
             case GroupedExpressionNode grouped -> "(" + printExpression(grouped.expression()) + ")";
             case IdentifierNode identifier -> identifier.name();
@@ -46,7 +47,40 @@ final class AstPrettyPrinter {
             case NullCoalescenceNode nullCoalescence -> printNullCoalescence(nullCoalescence);
             case PostfixOperationNode postfix -> printPostfix(postfix);
             case UnaryOperationNode unary -> unary.operator().canonicalSymbol() + printExpression(unary.operand());
+            case VectorLiteralNode vectorLiteral -> printVectorLiteral(vectorLiteral);
         };
+    }
+
+    private static String printConditional(ConditionalNode conditional) {
+        return switch (conditional.sourceForm()) {
+            case CLASSIC -> printClassicConditional(conditional);
+            case FUNCTIONAL -> printFunctionalConditional(conditional);
+        };
+    }
+
+    private static String printClassicConditional(ConditionalNode conditional) {
+        StringBuilder builder = new StringBuilder();
+        for (int index = 0; index < conditional.branches().size(); index++) {
+            ConditionalBranchNode branch = conditional.branches().get(index);
+            builder.append(index == 0 ? "if " : " elsif ")
+                    .append(printExpression(branch.condition()))
+                    .append(" then ")
+                    .append(printExpression(branch.resultExpression()));
+        }
+        return builder.append(" else ")
+                .append(printExpression(conditional.elseExpression()))
+                .append(" endif")
+                .toString();
+    }
+
+    private static String printFunctionalConditional(ConditionalNode conditional) {
+        List<String> expressions = new ArrayList<>(conditional.branches().size() * 2 + 1);
+        for (ConditionalBranchNode branch : conditional.branches()) {
+            expressions.add(printExpression(branch.condition()));
+            expressions.add(printExpression(branch.resultExpression()));
+        }
+        expressions.add(printExpression(conditional.elseExpression()));
+        return "if(" + String.join(", ", expressions) + ")";
     }
 
     private static String printBetween(BetweenNode between) {
@@ -66,6 +100,14 @@ final class AstPrettyPrinter {
             operands.add(printExpression(operand));
         }
         return String.join(" ?? ", operands);
+    }
+
+    private static String printVectorLiteral(VectorLiteralNode vectorLiteral) {
+        List<String> elements = new ArrayList<>(vectorLiteral.elements().size());
+        for (ExpressionNode element : vectorLiteral.elements()) {
+            elements.add(printExpression(element));
+        }
+        return "[" + String.join(", ", elements) + "]";
     }
 
     private static String printPostfix(PostfixOperationNode postfix) {
