@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.api;
 
+import com.runestone.converters.DataConversionService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -178,6 +179,68 @@ class ExpressionEnvironmentTest {
     }
 
     @Test
+    @DisplayName("typed external symbol defaults are coerced by the configured boundary profile")
+    void typedExternalSymbolDefaultsAreCoercedByConfiguredBoundaryProfile() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
+                .externalSymbolWithDefault("businessDate", ScalarType.DATE, "2026-07-06")
+                .build();
+
+        assertThat(environment.externalSymbols().asMap().get("amount").defaultValue())
+                .get()
+                .extracting(ExternalSymbolDefault::value)
+                .isEqualTo(new BigDecimal("12.50"));
+        assertThat(environment.externalSymbols().asMap().get("businessDate").defaultValue())
+                .get()
+                .extracting(ExternalSymbolDefault::value)
+                .isEqualTo(LocalDate.of(2026, 7, 6));
+    }
+
+    @Test
+    @DisplayName("custom conversion service is applied only through its declared profile")
+    void customConversionServiceIsAppliedOnlyThroughItsDeclaredProfile() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .boundaryCoercion("prefixed-number-v1", new PrefixedNumberConversionService())
+                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "points:7")
+                .build();
+
+        assertThat(environment.conversionProfileId()).isEqualTo("prefixed-number-v1");
+        assertThat(environment.externalSymbols().asMap().get("amount").defaultValue())
+                .get()
+                .extracting(ExternalSymbolDefault::value)
+                .isEqualTo(new BigDecimal("7"));
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .boundaryCoercion(" ", new PrefixedNumberConversionService()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("profile");
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .conversionProfileId("prefixed-number-v1")
+                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "points:7")
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("amount");
+    }
+
+    @Test
+    @DisplayName("boundary coercion can answer expression type conversion support")
+    void boundaryCoercionCanAnswerExpressionTypeConversionSupport() {
+        BoundaryCoercion coercion = BoundaryCoercion.standard();
+
+        assertThat(coercion.profileId()).isEqualTo(ExpressionEnvironment.STANDARD_CONVERSION_PROFILE_ID);
+        assertThat(coercion.canConvert(String.class, ScalarType.NUMBER)).isTrue();
+        assertThat(coercion.canConvert(Map.class, new MapType(ScalarType.NUMBER))).isFalse();
+        assertThat(coercion.canConvert(Map.class, new MapType(UnknownType.INSTANCE))).isTrue();
+        assertThat(coercion.canConvert("12.50", ScalarType.NUMBER)).isTrue();
+        assertThat(coercion.canConvert("not-a-number", ScalarType.NUMBER)).isFalse();
+        assertThat(coercion.canConvert("2026-07-06", ScalarType.DATE)).isTrue();
+        assertThat(coercion.canConvert(Map.of("amount", "12.50"), new MapType(ScalarType.NUMBER))).isTrue();
+        assertThat(coercion.canConvert(Map.of(7, "seven"), new MapType(ScalarType.STRING))).isFalse();
+        assertThat(coercion.canConvert("customer", new ObjectType("Customer"))).isFalse();
+        assertThat(coercion.convertFunctionBindingFallback("12.50", ScalarType.NUMBER))
+                .isEqualTo(new BigDecimal("12.50"));
+    }
+
+    @Test
     @DisplayName("external symbols contribute deterministically to the environment id")
     void externalSymbolsContributeDeterministicallyToEnvironmentId() {
         ExpressionEnvironment first = ExpressionEnvironment.builder()
@@ -213,6 +276,21 @@ class ExpressionEnvironmentTest {
     }
 
     @Test
+    @DisplayName("conversion profile differences affect the environment id")
+    void conversionProfileDifferencesAffectEnvironmentId() {
+        ExpressionEnvironment standardProfile = ExpressionEnvironment.builder()
+                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
+                .build();
+        ExpressionEnvironment customProfile = ExpressionEnvironment.builder()
+                .boundaryCoercion("standard-copy-v2", BoundaryCoercion.standard().dataConversionService())
+                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
+                .build();
+
+        assertThat(customProfile.boundaryCoercion().profileId()).isEqualTo("standard-copy-v2");
+        assertThat(standardProfile.environmentId()).isNotEqualTo(customProfile.environmentId());
+    }
+
+    @Test
     @DisplayName("reserved current temporal names cannot be declared as external symbols")
     void reservedCurrentTemporalNamesCannotBeDeclaredAsExternalSymbols() {
         assertThatThrownBy(() -> ExpressionEnvironment.builder().externalSymbol("currDate"))
@@ -242,5 +320,22 @@ class ExpressionEnvironmentTest {
                 .maxCurrentItemDepth(7)
                 .materializationLimit(1_234)
                 .conversionProfileId("profile-A");
+    }
+
+    private static final class PrefixedNumberConversionService implements DataConversionService {
+
+        @Override
+        public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
+            return sourceType == String.class && targetType == BigDecimal.class;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <S, T> T convert(S source, Class<T> targetType) {
+            if (source instanceof String text && targetType == BigDecimal.class && text.startsWith("points:")) {
+                return (T) new BigDecimal(text.substring("points:".length()));
+            }
+            throw new IllegalArgumentException("unsupported conversion");
+        }
     }
 }

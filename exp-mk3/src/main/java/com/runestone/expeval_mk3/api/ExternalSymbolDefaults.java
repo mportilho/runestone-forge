@@ -6,13 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 
 final class ExternalSymbolDefaults {
 
@@ -45,31 +41,11 @@ final class ExternalSymbolDefaults {
     }
 
     static Object canonicalize(String name, ExpressionType type, Object value) {
-        return switch (type) {
-            case ScalarType scalarType -> canonicalizeScalarDefault(name, scalarType, value);
-            case VectorType vectorType -> canonicalizeCollectionDefault(
-                    name,
-                    vectorType.elementType(),
-                    value,
-                    "VectorType");
-            case CollectionType collectionType -> canonicalizeCollectionDefault(
-                    name,
-                    collectionType.elementType(),
-                    value,
-                    "CollectionType");
-            case MapType mapType -> canonicalizeMapDefault(name, mapType.valueType(), value);
-            case ObjectType ignored -> throw new IllegalArgumentException(
-                    "object defaults are not supported until Java type metadata is available for external symbol '"
-                            + name
-                            + "'");
-            case NullType ignored -> {
-                if (value != null) {
-                    throw new IllegalArgumentException("external symbol '" + name + "' default must be null");
-                }
-                yield null;
-            }
-            case UnknownType ignored -> canonicalize(name, inferType(name, value), value);
-        };
+        return canonicalize(name, type, value, BoundaryCoercion.standard());
+    }
+
+    static Object canonicalize(String name, ExpressionType type, Object value, BoundaryCoercion boundaryCoercion) {
+        return boundaryCoercion.convertDefault(name, value, type);
     }
 
     static String canonicalValue(Object value) {
@@ -122,100 +98,6 @@ final class ExternalSymbolDefaults {
         return valueType == null ? UnknownType.INSTANCE : valueType;
     }
 
-    private static Object canonicalizeScalarDefault(String name, ScalarType type, Object value) {
-        return switch (type) {
-            case NUMBER -> canonicalizeNumericDefault(name, value);
-            case BOOLEAN -> {
-                if (!(value instanceof Boolean)) {
-                    throw defaultTypeMismatch(name, type, value);
-                }
-                yield value;
-            }
-            case STRING -> {
-                if (!(value instanceof String)) {
-                    throw defaultTypeMismatch(name, type, value);
-                }
-                yield value;
-            }
-            case DATE -> {
-                if (!(value instanceof LocalDate)) {
-                    throw defaultTypeMismatch(name, type, value);
-                }
-                yield value;
-            }
-            case TIME -> {
-                if (!(value instanceof LocalTime)) {
-                    throw defaultTypeMismatch(name, type, value);
-                }
-                yield value;
-            }
-            case DATETIME -> {
-                if (!(value instanceof LocalDateTime)) {
-                    throw defaultTypeMismatch(name, type, value);
-                }
-                yield value;
-            }
-        };
-    }
-
-    private static BigDecimal canonicalizeNumericDefault(String name, Object value) {
-        return switch (value) {
-            case BigDecimal number -> number;
-            case BigInteger number -> new BigDecimal(number);
-            case Byte number -> BigDecimal.valueOf(number.longValue());
-            case Short number -> BigDecimal.valueOf(number.longValue());
-            case Integer number -> BigDecimal.valueOf(number.longValue());
-            case Long number -> BigDecimal.valueOf(number);
-            case Float number -> {
-                finiteFloatingPointType(name, number);
-                yield BigDecimal.valueOf(number.doubleValue());
-            }
-            case Double number -> {
-                finiteFloatingPointType(name, number);
-                yield BigDecimal.valueOf(number);
-            }
-            default -> throw defaultTypeMismatch(name, ScalarType.NUMBER, value);
-        };
-    }
-
-    private static List<Object> canonicalizeCollectionDefault(
-            String name,
-            ExpressionType elementType,
-            Object value,
-            String typeName) {
-        if (!(value instanceof Collection<?> values)) {
-            throw new IllegalArgumentException(
-                    "external symbol '" + name + "' default must be a collection for " + typeName);
-        }
-        List<Object> canonicalValues = new ArrayList<>(values.size());
-        for (Object element : values) {
-            canonicalValues.add(canonicalizeElementDefault(name, elementType, element));
-        }
-        return Collections.unmodifiableList(canonicalValues);
-    }
-
-    private static Object canonicalizeElementDefault(String name, ExpressionType elementType, Object value) {
-        if (elementType == UnknownType.INSTANCE) {
-            return canonicalize(name, inferType(name, value), value);
-        }
-        return canonicalize(name, elementType, value);
-    }
-
-    private static Map<String, Object> canonicalizeMapDefault(String name, ExpressionType valueType, Object value) {
-        if (!(value instanceof Map<?, ?> values)) {
-            throw new IllegalArgumentException("external symbol '" + name + "' default must be a map for MapType");
-        }
-        TreeMap<String, Object> sortedValues = new TreeMap<>();
-        for (Map.Entry<?, ?> entry : values.entrySet()) {
-            if (!(entry.getKey() instanceof String key)) {
-                throw new IllegalArgumentException(
-                        "MapType defaults must be text-keyed for external symbol '" + name + "'");
-            }
-            sortedValues.put(key, canonicalizeElementDefault(name, valueType, entry.getValue()));
-        }
-        return Collections.unmodifiableMap(new LinkedHashMap<>(sortedValues));
-    }
-
     private static void appendCanonicalDefaultValue(StringBuilder canonical, Object value) {
         switch (value) {
             case null -> canonical.append("null");
@@ -263,9 +145,4 @@ final class ExternalSymbolDefaults {
         canonical.append('}');
     }
 
-    private static IllegalArgumentException defaultTypeMismatch(String name, ExpressionType expectedType, Object value) {
-        String actualType = value == null ? "null" : value.getClass().getName();
-        return new IllegalArgumentException(
-                "external symbol '" + name + "' default is not compatible with " + expectedType + ": " + actualType);
-    }
 }

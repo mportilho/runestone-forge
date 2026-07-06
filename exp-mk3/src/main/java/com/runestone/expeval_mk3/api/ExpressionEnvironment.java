@@ -1,5 +1,7 @@
 package com.runestone.expeval_mk3.api;
 
+import com.runestone.converters.DataConversionService;
+
 import java.math.MathContext;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -32,6 +34,7 @@ public final class ExpressionEnvironment {
     private final int maxCurrentItemDepth;
     private final int materializationLimit;
     private final String conversionProfileId;
+    private final BoundaryCoercion boundaryCoercion;
     private final ExternalSymbolCatalog externalSymbols;
     private final ExpressionEnvironmentId environmentId;
 
@@ -45,8 +48,9 @@ public final class ExpressionEnvironment {
         strictMode = builder.strictMode;
         maxCurrentItemDepth = validateMaxCurrentItemDepth(builder.maxCurrentItemDepth);
         materializationLimit = validateMaterializationLimit(builder.materializationLimit);
-        conversionProfileId = validateConversionProfileId(builder.conversionProfileId);
-        externalSymbols = builder.externalSymbols.build();
+        boundaryCoercion = Objects.requireNonNull(builder.boundaryCoercion, "boundaryCoercion");
+        conversionProfileId = boundaryCoercion.profileId();
+        externalSymbols = builder.externalSymbols.build(boundaryCoercion);
         environmentId = createEnvironmentId();
     }
 
@@ -92,6 +96,10 @@ public final class ExpressionEnvironment {
 
     public String conversionProfileId() {
         return conversionProfileId;
+    }
+
+    public BoundaryCoercion boundaryCoercion() {
+        return boundaryCoercion;
     }
 
     public ExpressionEnvironmentId environmentId() {
@@ -208,14 +216,6 @@ public final class ExpressionEnvironment {
         return value;
     }
 
-    private static String validateConversionProfileId(String value) {
-        Objects.requireNonNull(value, "conversionProfileId");
-        if (value.isBlank()) {
-            throw new IllegalArgumentException("conversionProfileId must not be blank");
-        }
-        return value;
-    }
-
     public static final class Builder {
 
         private ZoneId zoneId = DEFAULT_ZONE_ID;
@@ -225,7 +225,7 @@ public final class ExpressionEnvironment {
         private boolean strictMode = DEFAULT_STRICT_MODE;
         private int maxCurrentItemDepth = DEFAULT_MAX_CURRENT_ITEM_DEPTH;
         private int materializationLimit = DEFAULT_MATERIALIZATION_LIMIT;
-        private String conversionProfileId = STANDARD_CONVERSION_PROFILE_ID;
+        private BoundaryCoercion boundaryCoercion = BoundaryCoercion.standard();
         private ExternalSymbolCatalog.Builder externalSymbols = ExternalSymbolCatalog.builder();
 
         private Builder() {
@@ -239,7 +239,7 @@ public final class ExpressionEnvironment {
             strictMode = environment.strictMode;
             maxCurrentItemDepth = environment.maxCurrentItemDepth;
             materializationLimit = environment.materializationLimit;
-            conversionProfileId = environment.conversionProfileId;
+            boundaryCoercion = environment.boundaryCoercion;
             externalSymbols = environment.externalSymbols.toBuilder();
         }
 
@@ -281,7 +281,12 @@ public final class ExpressionEnvironment {
         }
 
         public Builder conversionProfileId(String conversionProfileId) {
-            this.conversionProfileId = validateConversionProfileId(conversionProfileId);
+            boundaryCoercion = boundaryCoercion.withProfileId(conversionProfileId);
+            return this;
+        }
+
+        public Builder boundaryCoercion(String conversionProfileId, DataConversionService dataConversionService) {
+            boundaryCoercion = BoundaryCoercion.of(conversionProfileId, dataConversionService);
             return this;
         }
 

@@ -84,43 +84,94 @@ public final class ExternalSymbolCatalog {
 
     public static final class Builder {
 
-        private final Map<String, ExternalSymbol> symbols = new LinkedHashMap<>();
+        private final Map<String, ExternalSymbolDeclaration> symbols = new LinkedHashMap<>();
 
         private Builder() {
         }
 
         private Builder(ExternalSymbolCatalog catalog) {
-            symbols.putAll(catalog.symbols);
+            for (ExternalSymbol externalSymbol : catalog.symbols.values()) {
+                symbols.put(externalSymbol.name(), ExternalSymbolDeclaration.from(externalSymbol));
+            }
         }
 
         public Builder externalSymbol(String name) {
-            return addExternalSymbol(ExternalSymbol.unknown(name));
+            return addDeclaration(ExternalSymbolDeclaration.unknown(name));
         }
 
         public Builder externalSymbol(String name, ExpressionType type) {
-            return addExternalSymbol(ExternalSymbol.declared(name, type));
+            return addDeclaration(ExternalSymbolDeclaration.declared(name, type));
         }
 
         public Builder externalSymbolWithDefault(String name, Object defaultValue) {
-            String validatedName = ExternalSymbolNames.validate(name);
-            ExpressionType type = ExternalSymbolDefaults.inferType(validatedName, defaultValue);
-            return addExternalSymbol(ExternalSymbol.withDefault(validatedName, type, defaultValue));
+            return addDeclaration(ExternalSymbolDeclaration.withDefault(name, UnknownType.INSTANCE, defaultValue));
         }
 
         public Builder externalSymbolWithDefault(String name, ExpressionType type, Object defaultValue) {
-            return addExternalSymbol(ExternalSymbol.withDefault(name, type, defaultValue));
+            return addDeclaration(ExternalSymbolDeclaration.withDefault(name, type, defaultValue));
         }
 
         public ExternalSymbolCatalog build() {
-            return ExternalSymbolCatalog.from(symbols);
+            return build(BoundaryCoercion.standard());
         }
 
-        private Builder addExternalSymbol(ExternalSymbol externalSymbol) {
-            ExternalSymbol previous = symbols.putIfAbsent(externalSymbol.name(), externalSymbol);
+        ExternalSymbolCatalog build(BoundaryCoercion boundaryCoercion) {
+            Map<String, ExternalSymbol> builtSymbols = new LinkedHashMap<>();
+            for (ExternalSymbolDeclaration declaration : symbols.values()) {
+                ExternalSymbol externalSymbol = declaration.toExternalSymbol(boundaryCoercion);
+                builtSymbols.put(externalSymbol.name(), externalSymbol);
+            }
+            return ExternalSymbolCatalog.from(builtSymbols);
+        }
+
+        private Builder addDeclaration(ExternalSymbolDeclaration declaration) {
+            ExternalSymbolDeclaration previous = symbols.putIfAbsent(declaration.name(), declaration);
             if (previous != null) {
-                throw new IllegalArgumentException("external symbol already declared: " + externalSymbol.name());
+                throw new IllegalArgumentException("external symbol already declared: " + declaration.name());
             }
             return this;
+        }
+
+        private record ExternalSymbolDeclaration(
+                String name,
+                ExpressionType type,
+                boolean hasDefaultValue,
+                Object defaultValue) {
+
+            private ExternalSymbolDeclaration {
+                name = ExternalSymbolNames.validate(name);
+                type = Objects.requireNonNull(type, "type");
+            }
+
+            private static ExternalSymbolDeclaration unknown(String name) {
+                return new ExternalSymbolDeclaration(name, UnknownType.INSTANCE, false, null);
+            }
+
+            private static ExternalSymbolDeclaration declared(String name, ExpressionType type) {
+                return new ExternalSymbolDeclaration(name, type, false, null);
+            }
+
+            private static ExternalSymbolDeclaration withDefault(String name, ExpressionType type, Object defaultValue) {
+                return new ExternalSymbolDeclaration(name, type, true, defaultValue);
+            }
+
+            private static ExternalSymbolDeclaration from(ExternalSymbol externalSymbol) {
+                return externalSymbol.defaultValue()
+                        .map(defaultValue -> withDefault(externalSymbol.name(), externalSymbol.type(), defaultValue.value()))
+                        .orElseGet(() -> externalSymbol.type() == UnknownType.INSTANCE
+                                ? unknown(externalSymbol.name())
+                                : declared(externalSymbol.name(), externalSymbol.type()));
+            }
+
+            private ExternalSymbol toExternalSymbol(BoundaryCoercion boundaryCoercion) {
+                if (hasDefaultValue) {
+                    return ExternalSymbol.withDefault(name, type, defaultValue, boundaryCoercion);
+                }
+                if (type == UnknownType.INSTANCE) {
+                    return ExternalSymbol.unknown(name);
+                }
+                return ExternalSymbol.declared(name, type);
+            }
         }
     }
 }
