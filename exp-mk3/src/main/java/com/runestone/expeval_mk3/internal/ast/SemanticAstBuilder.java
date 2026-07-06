@@ -70,7 +70,33 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
                             identifier.getText()),
                     expression.orElseThrow()));
         }
-        throw unsupported(context, "destructuring assignment");
+        if (context instanceof ExpressionEvaluatorParser.DestructuringAssignmentOperationContext assignment) {
+            Optional<ExpressionNode> expression = visit(assignment.expression());
+            if (expression.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(new AssignmentNode(
+                    NodeId.UNASSIGNED,
+                    span(assignment),
+                    buildDestructuringTarget(assignment.vectorOfVariables()),
+                    expression.orElseThrow()));
+        }
+        throw unsupported(context, "assignment");
+    }
+
+    private static DestructuringAssignmentTargetNode buildDestructuringTarget(
+            ExpressionEvaluatorParser.VectorOfVariablesContext context) {
+        if (!(context instanceof ExpressionEvaluatorParser.VectorOfVariablesOperationContext vector)) {
+            throw unsupported(context, "destructuring assignment target");
+        }
+        List<IdentifierAssignmentTargetNode> elements = new ArrayList<>(vector.IDENTIFIER().size());
+        for (TerminalNode identifier : vector.IDENTIFIER()) {
+            elements.add(new IdentifierAssignmentTargetNode(
+                    NodeId.UNASSIGNED,
+                    span(identifier.getSymbol()),
+                    identifier.getText()));
+        }
+        return new DestructuringAssignmentTargetNode(NodeId.UNASSIGNED, span(vector), elements);
     }
 
     @Override

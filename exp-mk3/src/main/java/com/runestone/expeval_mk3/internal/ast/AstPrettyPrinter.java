@@ -28,10 +28,18 @@ final class AstPrettyPrinter {
     }
 
     private static String printTarget(AssignmentTargetNode target) {
-        if (target instanceof IdentifierAssignmentTargetNode identifier) {
-            return identifier.name();
+        return switch (target) {
+            case DestructuringAssignmentTargetNode destructuring -> printDestructuringTarget(destructuring);
+            case IdentifierAssignmentTargetNode identifier -> identifier.name();
+        };
+    }
+
+    private static String printDestructuringTarget(DestructuringAssignmentTargetNode destructuring) {
+        List<String> elements = new ArrayList<>(destructuring.elements().size());
+        for (IdentifierAssignmentTargetNode element : destructuring.elements()) {
+            elements.add(element.name());
         }
-        throw new IllegalArgumentException("Unsupported assignment target node: " + target.getClass().getName());
+        return "[" + String.join(", ", elements) + "]";
     }
 
     private static String printExpression(ExpressionNode expression) {
