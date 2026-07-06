@@ -1,0 +1,20 @@
+id: semantics.environment.standard-decimal.001
+phase: semantics
+kind: valid
+source: 'amount + sqrt(limit)'
+environment:
+  numericMode: DECIMAL
+  zoneId: UTC
+  strictMode: false
+  standardBuiltIns: true
+  mathContext: {precision: 34, roundingMode: HALF_EVEN}
+  transcendentalMathContext: {precision: 34, roundingMode: HALF_EVEN}
+  limits: {maxCurrentItemDepth: 64, materializationLimit: 10000}
+  conversionProfile: standard
+  symbols:
+    amount: {type: NUMBER}
+    limit: {type: NUMBER, default: "16"}
+    businessDate: {type: DATE, default: "2026-07-06"}
+  functions:
+    - {name: sqrt, parameters: [NUMBER], returns: NUMBER, source: built-in}
+coverage: [identifier, additive, function-call]

@@ -1,0 +1,27 @@
+id: semantics.environment.fast-strict-java.001
+phase: semantics
+kind: valid
+source: 'customer.active and asNumber(customer.score) > 100'
+environment:
+  numericMode: FAST
+  zoneId: America/Sao_Paulo
+  strictMode: true
+  standardBuiltIns: true
+  mathContext: {precision: 19, roundingMode: HALF_UP}
+  transcendentalMathContext: {precision: 23, roundingMode: HALF_EVEN}
+  limits: {maxCurrentItemDepth: 8, materializationLimit: 256}
+  conversionProfile: strict-bank-profile-v1
+  symbols:
+    customer: {type: object:Customer}
+    fallbackScores: {type: vector:NUMBER, default: ["100", "110"]}
+  javaTypes:
+    - objectType: Customer
+      javaClass: example.Customer
+      properties:
+        active: BOOLEAN
+        score: NUMBER
+      methods:
+        normalizeName: {parameters: [STRING], returns: STRING}
+  functions:
+    - {name: asNumber, parameters: [UNKNOWN], returns: NUMBER, source: built-in}
+coverage: [identifier, property-access, logical-and, comparison, function-call]
