@@ -9,6 +9,7 @@ import java.util.Objects;
 public record SemanticSymbolFlow(
         List<AssignmentSymbolFlow> assignments,
         List<SymbolReadSource> resultReads,
+        List<FunctionCallSource> functionCalls,
         Map<NodeId, ExpressionType> knownExpressionTypes,
         CurrentItemFlow currentItems,
         TypeRestrictionFlow typeRestrictions) {
@@ -18,6 +19,8 @@ public record SemanticSymbolFlow(
         assignments = List.copyOf(assignments);
         Objects.requireNonNull(resultReads, "resultReads");
         resultReads = List.copyOf(resultReads);
+        Objects.requireNonNull(functionCalls, "functionCalls");
+        functionCalls = List.copyOf(functionCalls);
         Objects.requireNonNull(knownExpressionTypes, "knownExpressionTypes");
         knownExpressionTypes = Map.copyOf(knownExpressionTypes);
         Objects.requireNonNull(currentItems, "currentItems");

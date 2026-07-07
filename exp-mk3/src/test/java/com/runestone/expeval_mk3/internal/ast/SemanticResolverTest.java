@@ -1,6 +1,9 @@
 package com.runestone.expeval_mk3.internal.ast;
 
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
+import com.runestone.expeval_mk3.api.ExpressionType;
+import com.runestone.expeval_mk3.api.FunctionDescriptor;
+import com.runestone.expeval_mk3.api.FunctionSignature;
 import com.runestone.expeval_mk3.api.NullType;
 import com.runestone.expeval_mk3.api.NumericMode;
 import com.runestone.expeval_mk3.api.ScalarType;
@@ -12,6 +15,7 @@ import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticSeverity;
 import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.internal.semantics.FrameSlotKind;
 import com.runestone.expeval_mk3.internal.semantics.NumericKind;
+import com.runestone.expeval_mk3.internal.semantics.ResolvedFunctionBinding;
 import com.runestone.expeval_mk3.internal.semantics.ResolvedSymbol;
 import com.runestone.expeval_mk3.internal.semantics.ResolvedSymbolKind;
 import com.runestone.expeval_mk3.internal.semantics.SemanticModel;
@@ -21,7 +25,10 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -590,6 +597,200 @@ class SemanticResolverTest {
     }
 
     @Test
+    @DisplayName("exact global function calls resolve to function bindings and result types")
+    void exactGlobalFunctionCallsResolveToFunctionBindingsAndResultTypes() {
+        FunctionDescriptor numberScore = pureFunction("score", ScalarType.NUMBER, ScalarType.NUMBER);
+        FunctionDescriptor textScore = pureFunction("score", ScalarType.STRING, ScalarType.STRING);
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .withoutStandardFunctions()
+                .function(textScore)
+                .function(numberScore)
+                .build();
+        ExpressionFileNode ast = AstTestSupport.build("score(1)");
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        FunctionCallNode call = node(ast, FunctionCallNode.class, 0);
+        assertThat(model.functionBindings())
+                .containsEntry(call.id(), new ResolvedFunctionBinding(
+                        numberScore,
+                        ResolvedFunctionBinding.UnknownArgumentHandling.NONE,
+                        List.of()));
+        assertThat(model.resolvedTypes()).containsEntry(call.id(), ScalarType.NUMBER);
+    }
+
+    @Test
+    @DisplayName("global function calls reject concrete incompatible arguments without boundary coercion")
+    void globalFunctionCallsRejectConcreteIncompatibleArgumentsWithoutBoundaryCoercion() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .withoutStandardFunctions()
+                .function(pureFunction("score", ScalarType.NUMBER, ScalarType.NUMBER))
+                .build();
+        ExpressionFileNode ast = AstTestSupport.build("score(\"12\")");
+
+        SemanticResolutionResult result = resolver.resolve(ast, environment);
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_FUNCTION_ARGUMENT_TYPE_MISMATCH);
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(0, 11, 1, 1));
+                });
+    }
+
+    @Test
+    @DisplayName("unknown function arguments bind only when one semantic signature is possible")
+    void unknownFunctionArgumentsBindOnlyWhenOneSemanticSignatureIsPossible() {
+        FunctionDescriptor onlyScore = pureFunction("score", ScalarType.BOOLEAN, ScalarType.NUMBER);
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .withoutStandardFunctions()
+                .externalSymbol("lateBound")
+                .function(onlyScore)
+                .build();
+        ExpressionFileNode ast = AstTestSupport.build("score(lateBound)");
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        FunctionCallNode call = node(ast, FunctionCallNode.class, 0);
+        assertThat(model.functionBindings())
+                .containsEntry(call.id(), new ResolvedFunctionBinding(
+                        onlyScore,
+                        ResolvedFunctionBinding.UnknownArgumentHandling.RESIDUAL_CHECK,
+                        List.of(identifier(ast, "lateBound", 0).id())));
+        assertThat(model.resolvedTypes()).containsEntry(call.id(), ScalarType.BOOLEAN);
+        assertThat(model.externalSymbols().getFirst().type()).isEqualTo(UnknownType.INSTANCE);
+    }
+
+    @Test
+    @DisplayName("ambiguous unknown function overloads produce a semantic diagnostic")
+    void ambiguousUnknownFunctionOverloadsProduceSemanticDiagnostic() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .withoutStandardFunctions()
+                .externalSymbol("lateBound")
+                .function(pureFunction("score", ScalarType.NUMBER, ScalarType.NUMBER))
+                .function(pureFunction("score", ScalarType.NUMBER, ScalarType.STRING))
+                .build();
+        ExpressionFileNode ast = AstTestSupport.build("score(lateBound)");
+
+        SemanticResolutionResult result = resolver.resolve(ast, environment);
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_AMBIGUOUS_FUNCTION_CALL);
+                    assertThat(diagnostic.message()).contains("declared type").contains("assertion function");
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(0, 16, 1, 1));
+                });
+    }
+
+    @Test
+    @DisplayName("function arguments use post-restriction expression types for overload selection")
+    void functionArgumentsUsePostRestrictionExpressionTypesForOverloadSelection() {
+        FunctionDescriptor numberScore = pureFunction("score", ScalarType.BOOLEAN, ScalarType.NUMBER);
+        FunctionDescriptor textScore = pureFunction("score", ScalarType.STRING, ScalarType.STRING);
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .withoutStandardFunctions()
+                .function(textScore)
+                .function(numberScore)
+                .build();
+        ExpressionFileNode ast = AstTestSupport.build("score(null ?? 1)");
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        FunctionCallNode call = node(ast, FunctionCallNode.class, 0);
+        assertThat(model.functionBindings())
+                .containsEntry(call.id(), new ResolvedFunctionBinding(
+                        numberScore,
+                        ResolvedFunctionBinding.UnknownArgumentHandling.NONE,
+                        List.of()));
+        assertThat(model.resolvedTypes()).containsEntry(call.id(), ScalarType.BOOLEAN);
+    }
+
+    @Test
+    @DisplayName("grouped function arguments use the grouped expression type for overload selection")
+    void groupedFunctionArgumentsUseGroupedExpressionTypeForOverloadSelection() {
+        FunctionDescriptor numberScore = pureFunction("score", ScalarType.BOOLEAN, ScalarType.NUMBER);
+        FunctionDescriptor textScore = pureFunction("score", ScalarType.STRING, ScalarType.STRING);
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .withoutStandardFunctions()
+                .function(textScore)
+                .function(numberScore)
+                .build();
+        ExpressionFileNode ast = AstTestSupport.build("score((null ?? 1))");
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        FunctionCallNode call = node(ast, FunctionCallNode.class, 0);
+        assertThat(model.functionBindings())
+                .containsEntry(call.id(), new ResolvedFunctionBinding(
+                        numberScore,
+                        ResolvedFunctionBinding.UnknownArgumentHandling.NONE,
+                        List.of()));
+        assertThat(model.resolvedTypes()).containsEntry(call.id(), ScalarType.BOOLEAN);
+    }
+
+    @Test
+    @DisplayName("assertion functions refine only the call result without changing the argument symbol type")
+    void assertionFunctionsRefineOnlyTheCallResultWithoutChangingTheArgumentSymbolType() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("lateBound")
+                .build();
+        ExpressionFileNode ast = AstTestSupport.build("value := asNumber(lateBound); lateBound");
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        FunctionCallNode call = node(ast, FunctionCallNode.class, 0);
+        assertThat(model.functionBindings())
+                .extractingByKey(call.id())
+                .extracting(binding -> ((ResolvedFunctionBinding) binding).descriptor().signature())
+                .isEqualTo(FunctionSignature.of("asNumber", List.of(UnknownType.INSTANCE)));
+        assertThat(model.functionBindings())
+                .extractingByKey(call.id())
+                .extracting(binding -> ((ResolvedFunctionBinding) binding).unknownArgumentCheck())
+                .isEqualTo(false);
+        assertThat(model.resolvedTypes()).containsEntry(call.id(), ScalarType.NUMBER);
+        assertThat(model.internalSymbols().getFirst().type()).isEqualTo(ScalarType.NUMBER);
+        assertThat(model.externalSymbols().getFirst().type()).isEqualTo(UnknownType.INSTANCE);
+    }
+
+    @Test
+    @DisplayName("strict mode accepts unknown arguments explicitly consumed by assertion functions")
+    void strictModeAcceptsUnknownArgumentsExplicitlyConsumedByAssertionFunctions() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("lateBound")
+                .strictMode(true)
+                .build();
+        ExpressionFileNode ast = AstTestSupport.build("asNumber(lateBound)");
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        assertThat(model.externalSymbols().getFirst().type()).isEqualTo(UnknownType.INSTANCE);
+        assertThat(model.residualTypeChecks()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("strict mode accepts unknown arguments consumed by asVector assertions")
+    void strictModeAcceptsUnknownArgumentsConsumedByAsVectorAssertions() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("lateBound")
+                .strictMode(true)
+                .build();
+        ExpressionFileNode ast = AstTestSupport.build("asVector(lateBound)");
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        assertThat(model.resolvedTypes()).containsEntry(
+                node(ast, FunctionCallNode.class, 0).id(),
+                new VectorType(UnknownType.INSTANCE));
+        assertThat(model.externalSymbols().getFirst().type()).isEqualTo(UnknownType.INSTANCE);
+        assertThat(model.residualTypeChecks()).isEmpty();
+    }
+
+    @Test
     @DisplayName("empty expression files resolve to a stable semantic error and no model")
     void emptyExpressionFilesResolveToStableSemanticErrorAndNoModel() {
         ExpressionFileNode ast = AstTestSupport.build("");
@@ -646,6 +847,24 @@ class SemanticResolverTest {
 
     private static VectorLiteralNode vector(ExpressionFileNode ast, int occurrence) {
         return node(ast, VectorLiteralNode.class, occurrence);
+    }
+
+    private static FunctionDescriptor pureFunction(
+            String languageName,
+            ExpressionType returnType,
+            ExpressionType... parameterTypes) {
+        FunctionDescriptor.Builder builder = FunctionDescriptor.builder(languageName)
+                .parameterTypes(List.of(parameterTypes))
+                .returnType(returnType)
+                .implementationHandle(argumentHandle(languageName, parameterTypes.length), "test:" + languageName);
+        return builder.pure().build();
+    }
+
+    private static MethodHandle argumentHandle(String languageName, int arity) {
+        return MethodHandles.dropArguments(
+                MethodHandles.constant(Object.class, languageName),
+                0,
+                Collections.nCopies(arity, Object.class));
     }
 
     private static List<IdentifierAssignmentTargetNode> targets(ExpressionFileNode ast, String name) {

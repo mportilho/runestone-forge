@@ -47,6 +47,10 @@ public record SemanticModel(
         return symbols.residualTypeChecks();
     }
 
+    public Map<NodeId, ResolvedFunctionBinding> functionBindings() {
+        return symbols.functionBindings();
+    }
+
     public Map<NodeId, ResolvedSymbol> symbolByNodeId() {
         return symbols.symbolByNodeId();
     }

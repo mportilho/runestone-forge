@@ -110,6 +110,44 @@ public final class FunctionCatalog {
         };
     }
 
+    public FunctionResolution resolveSemantic(String languageName, List<ExpressionType> argumentTypes) {
+        FunctionSignature requestedSignature = FunctionSignature.of(languageName, argumentTypes);
+        FunctionDescriptor exactMatch = descriptorsBySignature.get(requestedSignature);
+        if (exactMatch != null) {
+            return FunctionResolution.exact(exactMatch);
+        }
+
+        List<FunctionDescriptor> overloads = overloadsByNameAndArity.get(NameArity.from(requestedSignature));
+        if (overloads == null) {
+            return FunctionResolution.noMatch();
+        }
+
+        ArrayList<FunctionDescriptor> explicitUnknownCandidates = new ArrayList<>();
+        ArrayList<FunctionDescriptor> unknownArgumentCandidates = new ArrayList<>();
+        for (FunctionDescriptor overload : overloads) {
+            SemanticCompatibility compatibility = semanticCompatibility(
+                    requestedSignature.parameterTypes(),
+                    overload.parameterTypes());
+            if (compatibility == SemanticCompatibility.EXPLICIT_UNKNOWN_ACCEPTING) {
+                explicitUnknownCandidates.add(overload);
+            } else if (compatibility == SemanticCompatibility.UNKNOWN_ARGUMENT_CHECK) {
+                unknownArgumentCandidates.add(overload);
+            }
+        }
+
+        if (!explicitUnknownCandidates.isEmpty()) {
+            return switch (explicitUnknownCandidates.size()) {
+                case 1 -> FunctionResolution.exact(explicitUnknownCandidates.getFirst());
+                default -> FunctionResolution.semanticAmbiguous(explicitUnknownCandidates);
+            };
+        }
+        return switch (unknownArgumentCandidates.size()) {
+            case 0 -> FunctionResolution.noMatch();
+            case 1 -> FunctionResolution.unknownArgument(unknownArgumentCandidates.getFirst());
+            default -> FunctionResolution.semanticAmbiguous(unknownArgumentCandidates);
+        };
+    }
+
     public int size() {
         return descriptors.size();
     }
@@ -151,6 +189,36 @@ public final class FunctionCatalog {
             }
         }
         return Integer.compare(left.size(), right.size());
+    }
+
+    private static SemanticCompatibility semanticCompatibility(
+            List<ExpressionType> sourceTypes,
+            List<ExpressionType> targetTypes) {
+        boolean acceptsUnknownExplicitly = false;
+        boolean hasUnknownSource = false;
+        for (int index = 0; index < sourceTypes.size(); index++) {
+            ExpressionType sourceType = sourceTypes.get(index);
+            ExpressionType targetType = targetTypes.get(index);
+            if (sourceType.equals(targetType)) {
+                continue;
+            }
+            if (targetType == UnknownType.INSTANCE) {
+                acceptsUnknownExplicitly = true;
+                continue;
+            }
+            if (sourceType == UnknownType.INSTANCE) {
+                hasUnknownSource = true;
+                continue;
+            }
+            return SemanticCompatibility.INCOMPATIBLE;
+        }
+        if (acceptsUnknownExplicitly) {
+            return SemanticCompatibility.EXPLICIT_UNKNOWN_ACCEPTING;
+        }
+        if (hasUnknownSource) {
+            return SemanticCompatibility.UNKNOWN_ARGUMENT_CHECK;
+        }
+        return SemanticCompatibility.INCOMPATIBLE;
     }
 
     public static final class Builder {
@@ -204,5 +272,11 @@ public final class FunctionCatalog {
             }
             return Integer.compare(arity, other.arity);
         }
+    }
+
+    private enum SemanticCompatibility {
+        EXPLICIT_UNKNOWN_ACCEPTING,
+        UNKNOWN_ARGUMENT_CHECK,
+        INCOMPATIBLE
     }
 }

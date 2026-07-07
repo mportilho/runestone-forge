@@ -5,9 +5,12 @@ import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
+import com.runestone.expeval_mk3.api.FunctionDescriptor;
+import com.runestone.expeval_mk3.api.FunctionResolution;
 import com.runestone.expeval_mk3.api.NullType;
 import com.runestone.expeval_mk3.api.NumericMode;
 import com.runestone.expeval_mk3.api.ScalarType;
+import com.runestone.expeval_mk3.api.StandardFunctionGroup;
 import com.runestone.expeval_mk3.api.UnknownType;
 import com.runestone.expeval_mk3.api.VectorType;
 import com.runestone.expeval_mk3.internal.ast.AssignedSymbolSource;
@@ -15,6 +18,7 @@ import com.runestone.expeval_mk3.internal.ast.AssignmentSymbolFlow;
 import com.runestone.expeval_mk3.internal.ast.ConcreteTypeRestriction;
 import com.runestone.expeval_mk3.internal.ast.CurrentItemSource;
 import com.runestone.expeval_mk3.internal.ast.ExpressionSemanticTree;
+import com.runestone.expeval_mk3.internal.ast.FunctionCallSource;
 import com.runestone.expeval_mk3.internal.ast.MembershipTypeRestriction;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.NumericConstantRestriction;
@@ -33,13 +37,17 @@ import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticSeverity;
 import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 public final class SemanticResolver {
+
+    private static final Set<String> ASSERTION_FUNCTION_NAMES = StandardFunctionGroup.ASSERTION.requiredFunctionNames();
 
     public SemanticResolutionResult resolve(ExpressionSemanticTree sourceTree, ExpressionEnvironment environment) {
         Objects.requireNonNull(sourceTree, "sourceTree");
@@ -65,7 +73,13 @@ public final class SemanticResolver {
         }
         SymbolResolutionState state = resolveSymbols(symbolFlow, environment, diagnostics);
 
+        state.resolveFunctionBindings(symbolFlow, environment, diagnostics, FunctionBindingPass.INFER_RESULT_TYPES);
         state.resolveTypeRestrictions(symbolFlow, environment, diagnostics);
+        state.resolveFunctionBindings(symbolFlow, environment, diagnostics, FunctionBindingPass.REPORT_DIAGNOSTICS);
+        state.propagateStrictUnknownExemptions(symbolFlow.assignments());
+        if (environment.strictMode()) {
+            state.rejectStrictUnknowns(symbolFlow.typeRestrictions(), diagnostics);
+        }
         if (hasErrors(diagnostics)) {
             return SemanticResolutionResult.withoutModel(diagnostics);
         }
@@ -84,6 +98,23 @@ public final class SemanticResolver {
 
     private static String displayType(ExpressionType type) {
         return type.toString();
+    }
+
+    private enum FunctionBindingPass {
+        INFER_RESULT_TYPES {
+            @Override
+            boolean reportsDiagnostics() {
+                return false;
+            }
+        },
+        REPORT_DIAGNOSTICS {
+            @Override
+            boolean reportsDiagnostics() {
+                return true;
+            }
+        };
+
+        abstract boolean reportsDiagnostics();
     }
 
     private SymbolResolutionState resolveSymbols(
@@ -140,8 +171,11 @@ public final class SemanticResolver {
         private final Map<String, ExpressionType> inferredExternalTypesByName = new LinkedHashMap<>();
         private final Map<NodeId, SymbolBinding> symbolBindings = new LinkedHashMap<>();
         private final Map<NodeId, ExpressionType> resolvedTypes = new LinkedHashMap<>();
+        private final Map<NodeId, ResolvedFunctionBinding> functionBindings = new LinkedHashMap<>();
         private final List<ResidualTypeCheck> residualTypeChecks = new ArrayList<>();
-        private final java.util.Set<NodeId> emptyVectorExemptNodeIds = new java.util.HashSet<>();
+        private final Set<NodeId> emptyVectorExemptNodeIds = new HashSet<>();
+        private final Set<NodeId> functionArgumentUnknownNodeIds = new HashSet<>();
+        private final Set<NodeId> strictUnknownExemptNodeIds = new HashSet<>();
 
         private SymbolResolutionState(Map<NodeId, ExpressionType> knownExpressionTypes) {
             resolvedTypes.putAll(knownExpressionTypes);
@@ -220,6 +254,131 @@ public final class SemanticResolver {
             return Optional.ofNullable(resolvedTypes.get(read.nodeId()));
         }
 
+        private void resolveFunctionBindings(
+                SemanticSymbolFlow symbolFlow,
+                ExpressionEnvironment environment,
+                List<ExpressionDiagnostic> diagnostics,
+                FunctionBindingPass pass) {
+            if (pass.reportsDiagnostics()) {
+                functionBindings.clear();
+                functionArgumentUnknownNodeIds.clear();
+                strictUnknownExemptNodeIds.clear();
+            }
+            for (FunctionCallSource functionCall : symbolFlow.functionCalls()) {
+                resolveFunctionBinding(functionCall, environment, diagnostics, pass);
+            }
+        }
+
+        private void resolveFunctionBinding(
+                FunctionCallSource functionCall,
+                ExpressionEnvironment environment,
+                List<ExpressionDiagnostic> diagnostics,
+                FunctionBindingPass pass) {
+            List<ExpressionType> argumentTypes = functionCall.argumentNodeIds().stream()
+                    .map(this::effectiveType)
+                    .toList();
+            FunctionResolution resolution = environment.functionCatalog().resolveSemantic(functionCall.name(), argumentTypes);
+            switch (resolution.kind()) {
+                case EXACT_MATCH, UNKNOWN_ARGUMENT_MATCH -> bindResolvedFunction(
+                        functionCall,
+                        resolution.descriptor().orElseThrow(),
+                        argumentTypes,
+                        environment,
+                        diagnostics,
+                        pass);
+                case AMBIGUOUS -> {
+                    if (pass.reportsDiagnostics()) {
+                        diagnostics.add(ExpressionDiagnostic.error(
+                                DiagnosticCategory.SEMANTIC,
+                                DiagnosticCode.SEMANTIC_AMBIGUOUS_FUNCTION_CALL,
+                                "Function call is ambiguous for unknown arguments; use a declared type or an explicit assertion function: "
+                                        + functionCall.name(),
+                                functionCall.sourceSpan()));
+                    }
+                }
+                case BOUNDARY_COERCION_MATCH, NO_MATCH -> {
+                    if (pass.reportsDiagnostics()) {
+                        diagnostics.add(ExpressionDiagnostic.error(
+                                DiagnosticCategory.SEMANTIC,
+                                DiagnosticCode.SEMANTIC_FUNCTION_ARGUMENT_TYPE_MISMATCH,
+                                "No semantic function signature matches " + functionCall.name()
+                                        + '(' + displayTypes(argumentTypes) + ')',
+                                functionCall.sourceSpan()));
+                    }
+                }
+            }
+        }
+
+        private void bindResolvedFunction(
+                FunctionCallSource functionCall,
+                FunctionDescriptor descriptor,
+                List<ExpressionType> argumentTypes,
+                ExpressionEnvironment environment,
+                List<ExpressionDiagnostic> diagnostics,
+                FunctionBindingPass pass) {
+            ExpressionType currentType = effectiveType(functionCall.nodeId());
+            if (pass.reportsDiagnostics() && currentType != UnknownType.INSTANCE && !currentType.equals(descriptor.returnType())) {
+                diagnostics.add(ExpressionDiagnostic.error(
+                        DiagnosticCategory.SEMANTIC,
+                        DiagnosticCode.SEMANTIC_TYPE_RESTRICTION_CONFLICT,
+                        "Function result type conflicts with surrounding expression constraints: "
+                                + displayType(descriptor.returnType()) + " and " + displayType(currentType),
+                        functionCall.sourceSpan()));
+            }
+            resolvedTypes.put(functionCall.nodeId(), descriptor.returnType());
+            ArrayList<NodeId> unknownArgumentNodeIds = new ArrayList<>();
+            ResolvedFunctionBinding.UnknownArgumentHandling unknownArgumentHandling =
+                    ResolvedFunctionBinding.UnknownArgumentHandling.NONE;
+            for (int index = 0; index < argumentTypes.size(); index++) {
+                if (argumentTypes.get(index) != UnknownType.INSTANCE) {
+                    continue;
+                }
+                NodeId argumentNodeId = functionCall.argumentNodeIds().get(index);
+                unknownArgumentNodeIds.add(argumentNodeId);
+                if (pass.reportsDiagnostics()) {
+                    functionArgumentUnknownNodeIds.add(argumentNodeId);
+                }
+                if (descriptor.parameterTypes().get(index) == UnknownType.INSTANCE || isAssertionFunction(descriptor)) {
+                    continue;
+                }
+                unknownArgumentHandling = ResolvedFunctionBinding.UnknownArgumentHandling.RESIDUAL_CHECK;
+                if (pass.reportsDiagnostics()) {
+                    addResidualOrStrictDiagnostic(
+                            environment,
+                            functionCall.sourceSpan(),
+                            "Function argument type remains unknown for " + functionCall.name(),
+                            diagnostics);
+                }
+            }
+            functionBindings.put(functionCall.nodeId(), new ResolvedFunctionBinding(
+                    descriptor,
+                    unknownArgumentHandling,
+                    unknownArgumentNodeIds));
+            if (pass.reportsDiagnostics() && isAssertionFunction(descriptor)) {
+                strictUnknownExemptNodeIds.add(functionCall.nodeId());
+            }
+        }
+
+        private static boolean isAssertionFunction(FunctionDescriptor descriptor) {
+            return ASSERTION_FUNCTION_NAMES.contains(descriptor.languageName())
+                    && descriptor.parameterTypes().size() == 1
+                    && descriptor.parameterTypes().getFirst() == UnknownType.INSTANCE;
+        }
+
+        private static String displayTypes(List<ExpressionType> types) {
+            if (types.isEmpty()) {
+                return "";
+            }
+            StringBuilder result = new StringBuilder();
+            for (int index = 0; index < types.size(); index++) {
+                if (index > 0) {
+                    result.append(", ");
+                }
+                result.append(displayType(types.get(index)));
+            }
+            return result.toString();
+        }
+
         private void resolveTypeRestrictions(
                 SemanticSymbolFlow symbolFlow,
                 ExpressionEnvironment environment,
@@ -248,9 +407,6 @@ public final class SemanticResolver {
                         DiagnosticCode.SEMANTIC_INVALID_NUMERIC_CONSTANT,
                         "Numeric operator has an invalid constant operand: " + restriction.kind(),
                         restriction.sourceSpan()));
-            }
-            if (environment.strictMode()) {
-                rejectStrictUnknowns(typeRestrictions, diagnostics);
             }
         }
 
@@ -553,6 +709,18 @@ public final class SemanticResolver {
             }
         }
 
+        private void propagateStrictUnknownExemptions(List<AssignmentSymbolFlow> assignments) {
+            for (AssignmentSymbolFlow assignment : assignments) {
+                if (!strictUnknownExemptNodeIds.contains(assignment.expressionNodeId())) {
+                    continue;
+                }
+                for (AssignedSymbolSource target : assignment.targetSymbols()) {
+                    strictUnknownExemptNodeIds.add(target.nodeId());
+                    markBoundNodesStrictUnknownExempt(new InternalBinding(target.name()));
+                }
+            }
+        }
+
         private void addResidualOrStrictDiagnostic(
                 ExpressionEnvironment environment,
                 com.runestone.expeval_mk3.internal.source.SourceSpan sourceSpan,
@@ -578,6 +746,12 @@ public final class SemanticResolver {
                     continue;
                 }
                 if (emptyVectorExemptNodeIds.contains(entry.getKey())) {
+                    continue;
+                }
+                if (functionArgumentUnknownNodeIds.contains(entry.getKey())) {
+                    continue;
+                }
+                if (strictUnknownExemptNodeIds.contains(entry.getKey())) {
                     continue;
                 }
                 if (hasResidualUnknown(entry.getValue())) {
@@ -622,6 +796,14 @@ public final class SemanticResolver {
             for (Map.Entry<NodeId, SymbolBinding> entry : symbolBindings.entrySet()) {
                 if (entry.getValue().equals(binding)) {
                     resolvedTypes.put(entry.getKey(), type);
+                }
+            }
+        }
+
+        private void markBoundNodesStrictUnknownExempt(SymbolBinding binding) {
+            for (Map.Entry<NodeId, SymbolBinding> entry : symbolBindings.entrySet()) {
+                if (entry.getValue().equals(binding)) {
+                    strictUnknownExemptNodeIds.add(entry.getKey());
                 }
             }
         }
@@ -704,6 +886,7 @@ public final class SemanticResolver {
                     resolvedTypes,
                     numericKinds(symbolFlow.typeRestrictions().numericSources(), environment),
                     residualTypeChecks,
+                    functionBindings,
                     symbolByNodeId,
                     new ResolvedSymbolSets(internalSymbols, externalSymbols, currentItemSymbols),
                     new FrameLayout(slots));

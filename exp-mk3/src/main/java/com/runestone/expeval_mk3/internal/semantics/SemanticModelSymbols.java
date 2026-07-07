@@ -11,6 +11,7 @@ public record SemanticModelSymbols(
         Map<NodeId, ExpressionType> resolvedTypes,
         Map<NodeId, NumericKind> numericKinds,
         List<ResidualTypeCheck> residualTypeChecks,
+        Map<NodeId, ResolvedFunctionBinding> functionBindings,
         Map<NodeId, ResolvedSymbol> symbolByNodeId,
         ResolvedSymbolSets symbolSets,
         FrameLayout frameLayout) {
@@ -22,6 +23,8 @@ public record SemanticModelSymbols(
         numericKinds = Map.copyOf(numericKinds);
         Objects.requireNonNull(residualTypeChecks, "residualTypeChecks");
         residualTypeChecks = List.copyOf(residualTypeChecks);
+        Objects.requireNonNull(functionBindings, "functionBindings");
+        functionBindings = Map.copyOf(functionBindings);
         Objects.requireNonNull(symbolByNodeId, "symbolByNodeId");
         symbolByNodeId = Map.copyOf(symbolByNodeId);
         Objects.requireNonNull(symbolSets, "symbolSets");
@@ -33,6 +36,7 @@ public record SemanticModelSymbols(
                 Map.of(),
                 Map.of(),
                 List.of(),
+                Map.of(),
                 Map.of(),
                 ResolvedSymbolSets.empty(),
                 new FrameLayout(List.of()));

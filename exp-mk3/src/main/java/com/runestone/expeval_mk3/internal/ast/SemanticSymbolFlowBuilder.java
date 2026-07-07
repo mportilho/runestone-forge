@@ -20,6 +20,7 @@ final class SemanticSymbolFlowBuilder {
 
     private final Map<NodeId, ExpressionType> knownExpressionTypes = new LinkedHashMap<>();
     private final List<CurrentItemSource> currentItemSources = new ArrayList<>();
+    private final List<FunctionCallSource> functionCalls = new ArrayList<>();
     private final List<ConcreteTypeRestriction> concreteRestrictions = new ArrayList<>();
     private final List<SameTypeRestriction> sameTypeRestrictions = new ArrayList<>();
     private final List<VectorElementTypeRestriction> vectorElementTypeRestrictions = new ArrayList<>();
@@ -56,6 +57,7 @@ final class SemanticSymbolFlowBuilder {
         return new SemanticSymbolFlow(
                 assignments,
                 resultReads,
+                functionCalls,
                 knownExpressionTypes,
                 new CurrentItemFlow(currentItemSources, maxCurrentItemDepth),
                 new TypeRestrictionFlow(
@@ -80,9 +82,7 @@ final class SemanticSymbolFlowBuilder {
             case CurrentTemporalValueNode currentTemporalValue -> known(
                     currentTemporalValue.id(),
                     currentTemporalValueType(currentTemporalValue.kind()));
-            case FunctionCallNode functionCall -> combine(functionCall.arguments().stream()
-                    .map(argument -> collectExpression(argument, currentItemDepth))
-                    .toList());
+            case FunctionCallNode functionCall -> collectFunctionCall(functionCall, currentItemDepth);
             case GroupedExpressionNode grouped -> collectExpression(grouped.expression(), currentItemDepth);
             case IdentifierNode identifier -> read(identifier);
             case LiteralNode literal -> collectLiteral(literal);
@@ -183,6 +183,30 @@ final class SemanticSymbolFlowBuilder {
         currentItemSources.add(new CurrentItemSource(currentItem.id(), currentItemDepth, currentItem.sourceSpan()));
         maxCurrentItemDepth = Math.max(maxCurrentItemDepth, currentItemDepth);
         return known(currentItem.id(), UnknownType.INSTANCE);
+    }
+
+    private ExpressionSummary collectFunctionCall(FunctionCallNode functionCall, int currentItemDepth) {
+        List<ExpressionNode> argumentNodes = functionCall.arguments();
+        ArrayList<ExpressionSummary> arguments = new ArrayList<>(argumentNodes.size());
+        ArrayList<NodeId> argumentNodeIds = new ArrayList<>(argumentNodes.size());
+        for (ExpressionNode argument : argumentNodes) {
+            arguments.add(collectExpression(argument, currentItemDepth));
+            argumentNodeIds.add(functionArgumentTypeNodeId(argument));
+        }
+        functionCalls.add(new FunctionCallSource(
+                functionCall.id(),
+                functionCall.name().value(),
+                argumentNodeIds,
+                functionCall.sourceSpan()));
+        return combine(arguments);
+    }
+
+    private NodeId functionArgumentTypeNodeId(ExpressionNode argument) {
+        ExpressionNode current = argument;
+        while (current instanceof GroupedExpressionNode grouped) {
+            current = grouped.expression();
+        }
+        return current.id();
     }
 
     private ExpressionSummary collectLiteral(LiteralNode literal) {

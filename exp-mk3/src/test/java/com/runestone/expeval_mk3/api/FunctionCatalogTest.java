@@ -177,6 +177,54 @@ class FunctionCatalogTest {
         assertThat(resolution.ambiguousCandidates()).isEmpty();
     }
 
+    @Test
+    @DisplayName("semantic resolution treats unknown arguments as call-site checks without concrete coercion")
+    void semanticResolutionTreatsUnknownArgumentsAsCallSiteChecksWithoutConcreteCoercion() {
+        FunctionDescriptor onlyNumber = pureDescriptor("score", ScalarType.NUMBER, ScalarType.NUMBER);
+        FunctionCatalog catalog = FunctionCatalog.builder()
+                .register(onlyNumber)
+                .build();
+
+        FunctionResolution unknownResolution = catalog.resolveSemantic("score", List.of(UnknownType.INSTANCE));
+        FunctionResolution concreteMismatch = catalog.resolveSemantic("score", List.of(ScalarType.STRING));
+
+        assertThat(unknownResolution.kind()).isEqualTo(FunctionResolution.Kind.UNKNOWN_ARGUMENT_MATCH);
+        assertThat(unknownResolution.descriptor()).contains(onlyNumber);
+        assertThat(concreteMismatch.kind()).isEqualTo(FunctionResolution.Kind.NO_MATCH);
+    }
+
+    @Test
+    @DisplayName("semantic resolution prefers explicit unknown-accepting signatures over unknown overload ambiguity")
+    void semanticResolutionPrefersExplicitUnknownAcceptingSignaturesOverUnknownOverloadAmbiguity() {
+        FunctionDescriptor numberOverload = pureDescriptor("refine", ScalarType.NUMBER, ScalarType.NUMBER);
+        FunctionDescriptor textOverload = pureDescriptor("refine", ScalarType.STRING, ScalarType.STRING);
+        FunctionDescriptor unknownAccepting = pureDescriptor("refine", ScalarType.BOOLEAN, UnknownType.INSTANCE);
+        FunctionCatalog catalog = FunctionCatalog.builder()
+                .register(numberOverload)
+                .register(textOverload)
+                .register(unknownAccepting)
+                .build();
+
+        FunctionResolution resolution = catalog.resolveSemantic("refine", List.of(UnknownType.INSTANCE));
+
+        assertThat(resolution.kind()).isEqualTo(FunctionResolution.Kind.EXACT_MATCH);
+        assertThat(resolution.descriptor()).contains(unknownAccepting);
+    }
+
+    @Test
+    @DisplayName("semantic unknown overload ambiguity is not reported as boundary coercion")
+    void semanticUnknownOverloadAmbiguityIsNotReportedAsBoundaryCoercion() {
+        FunctionCatalog catalog = FunctionCatalog.builder()
+                .register(pureDescriptor("score", ScalarType.NUMBER, ScalarType.NUMBER))
+                .register(pureDescriptor("score", ScalarType.NUMBER, ScalarType.STRING))
+                .build();
+
+        FunctionResolution resolution = catalog.resolveSemantic("score", List.of(UnknownType.INSTANCE));
+
+        assertThat(resolution.kind()).isEqualTo(FunctionResolution.Kind.AMBIGUOUS);
+        assertThat(resolution.usesBoundaryCoercion()).isFalse();
+    }
+
     private static FunctionDescriptor pureDescriptor(
             String languageName,
             ExpressionType returnType,
