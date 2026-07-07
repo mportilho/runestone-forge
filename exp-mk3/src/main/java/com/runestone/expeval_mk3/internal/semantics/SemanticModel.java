@@ -55,6 +55,10 @@ public record SemanticModel(
         return symbols.functionBindings();
     }
 
+    public Map<NodeId, ResolvedNavigationBinding> navigationBindings() {
+        return symbols.navigationBindings();
+    }
+
     public Map<NodeId, ResolvedSymbol> symbolByNodeId() {
         return symbols.symbolByNodeId();
     }

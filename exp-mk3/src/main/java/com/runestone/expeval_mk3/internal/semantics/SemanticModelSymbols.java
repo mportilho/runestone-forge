@@ -13,6 +13,7 @@ public record SemanticModelSymbols(
         Map<NodeId, PreparedSemanticValue> preparedValues,
         List<ResidualTypeCheck> residualTypeChecks,
         Map<NodeId, ResolvedFunctionBinding> functionBindings,
+        Map<NodeId, ResolvedNavigationBinding> navigationBindings,
         Map<NodeId, ResolvedSymbol> symbolByNodeId,
         ResolvedSymbolSets symbolSets,
         FrameLayout frameLayout) {
@@ -28,6 +29,8 @@ public record SemanticModelSymbols(
         residualTypeChecks = List.copyOf(residualTypeChecks);
         Objects.requireNonNull(functionBindings, "functionBindings");
         functionBindings = Map.copyOf(functionBindings);
+        Objects.requireNonNull(navigationBindings, "navigationBindings");
+        navigationBindings = Map.copyOf(navigationBindings);
         Objects.requireNonNull(symbolByNodeId, "symbolByNodeId");
         symbolByNodeId = Map.copyOf(symbolByNodeId);
         Objects.requireNonNull(symbolSets, "symbolSets");
@@ -40,6 +43,7 @@ public record SemanticModelSymbols(
                 Map.of(),
                 Map.of(),
                 List.of(),
+                Map.of(),
                 Map.of(),
                 Map.of(),
                 ResolvedSymbolSets.empty(),

@@ -10,6 +10,7 @@ public record SemanticSymbolFlow(
         List<AssignmentSymbolFlow> assignments,
         List<SymbolReadSource> resultReads,
         List<FunctionCallSource> functionCalls,
+        List<NavigationChainSource> navigationChains,
         Map<NodeId, ExpressionType> knownExpressionTypes,
         CurrentItemFlow currentItems,
         TypeRestrictionFlow typeRestrictions) {
@@ -21,6 +22,8 @@ public record SemanticSymbolFlow(
         resultReads = List.copyOf(resultReads);
         Objects.requireNonNull(functionCalls, "functionCalls");
         functionCalls = List.copyOf(functionCalls);
+        Objects.requireNonNull(navigationChains, "navigationChains");
+        navigationChains = List.copyOf(navigationChains);
         Objects.requireNonNull(knownExpressionTypes, "knownExpressionTypes");
         knownExpressionTypes = Map.copyOf(knownExpressionTypes);
         Objects.requireNonNull(currentItems, "currentItems");

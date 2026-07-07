@@ -7,8 +7,12 @@ import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.FunctionResolution;
+import com.runestone.expeval_mk3.api.FunctionSignature;
+import com.runestone.expeval_mk3.api.JavaTypeCatalog;
+import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.NullType;
 import com.runestone.expeval_mk3.api.NumericMode;
+import com.runestone.expeval_mk3.api.ObjectType;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.api.StandardFunctionGroup;
 import com.runestone.expeval_mk3.api.UnknownType;
@@ -17,24 +21,42 @@ import com.runestone.expeval_mk3.internal.ast.AssignmentSourceShape;
 import com.runestone.expeval_mk3.internal.ast.AssignedSymbolSource;
 import com.runestone.expeval_mk3.internal.ast.AssignmentSymbolFlow;
 import com.runestone.expeval_mk3.internal.ast.ConcreteTypeRestriction;
+import com.runestone.expeval_mk3.internal.ast.CollectionOperationNavigationSource;
+import com.runestone.expeval_mk3.internal.ast.CollectionOperationArgumentKind;
+import com.runestone.expeval_mk3.internal.ast.CollectionOperationArgumentSource;
 import com.runestone.expeval_mk3.internal.ast.CurrentItemSource;
 import com.runestone.expeval_mk3.internal.ast.ExpressionSemanticTree;
+import com.runestone.expeval_mk3.internal.ast.FilterNavigationSource;
 import com.runestone.expeval_mk3.internal.ast.FunctionCallSource;
+import com.runestone.expeval_mk3.internal.ast.IndexSubscriptSource;
+import com.runestone.expeval_mk3.internal.ast.MethodNavigationSource;
 import com.runestone.expeval_mk3.internal.ast.MembershipTypeRestriction;
+import com.runestone.expeval_mk3.internal.ast.NavigationChainSource;
+import com.runestone.expeval_mk3.internal.ast.NavigationLinkSource;
+import com.runestone.expeval_mk3.internal.ast.NavigationSafety;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.NumericConstantRestriction;
 import com.runestone.expeval_mk3.internal.ast.NumericSource;
 import com.runestone.expeval_mk3.internal.ast.NumericSourceKind;
 import com.runestone.expeval_mk3.internal.ast.OffsetDateTimeLiteralSource;
+import com.runestone.expeval_mk3.internal.ast.PropertyNavigationSource;
 import com.runestone.expeval_mk3.internal.ast.RegexLeftOperandRestriction;
 import com.runestone.expeval_mk3.internal.ast.RegexPatternSource;
 import com.runestone.expeval_mk3.internal.ast.SameTypeRestriction;
 import com.runestone.expeval_mk3.internal.ast.SemanticSymbolFlow;
+import com.runestone.expeval_mk3.internal.ast.SliceSubscriptSource;
+import com.runestone.expeval_mk3.internal.ast.StringKeySubscriptSource;
+import com.runestone.expeval_mk3.internal.ast.SubscriptIntegerFormat;
+import com.runestone.expeval_mk3.internal.ast.SubscriptIntegerLiteral;
+import com.runestone.expeval_mk3.internal.ast.SubscriptNavigationSource;
+import com.runestone.expeval_mk3.internal.ast.SubscriptSource;
 import com.runestone.expeval_mk3.internal.ast.SymbolReadSource;
 import com.runestone.expeval_mk3.internal.ast.TypeJoinRestriction;
 import com.runestone.expeval_mk3.internal.ast.TypeRestrictionFlow;
 import com.runestone.expeval_mk3.internal.ast.TypeCompatibilityMode;
 import com.runestone.expeval_mk3.internal.ast.VectorElementTypeRestriction;
+import com.runestone.expeval_mk3.internal.ast.WildcardNavigationSource;
+import com.runestone.expeval_mk3.internal.ast.WildcardSubscriptSource;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCategory;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticSeverity;
@@ -79,8 +101,18 @@ public final class SemanticResolver {
         }
         SymbolResolutionState state = resolveSymbols(symbolFlow, environment, diagnostics);
 
+        state.resolveNavigationBindings(
+                symbolFlow.navigationChains(),
+                environment,
+                diagnostics,
+                NavigationBindingPass.INFER_RESULT_TYPES);
         state.resolveFunctionBindings(symbolFlow, environment, diagnostics, FunctionBindingPass.INFER_RESULT_TYPES);
         state.resolveTypeRestrictions(symbolFlow, environment, diagnostics);
+        state.resolveNavigationBindings(
+                symbolFlow.navigationChains(),
+                environment,
+                diagnostics,
+                NavigationBindingPass.REPORT_DIAGNOSTICS);
         state.resolveFunctionBindings(symbolFlow, environment, diagnostics, FunctionBindingPass.REPORT_DIAGNOSTICS);
         state.propagateStrictUnknownExemptions(symbolFlow.assignments());
         if (environment.strictMode()) {
@@ -107,6 +139,23 @@ public final class SemanticResolver {
     }
 
     private enum FunctionBindingPass {
+        INFER_RESULT_TYPES {
+            @Override
+            boolean reportsDiagnostics() {
+                return false;
+            }
+        },
+        REPORT_DIAGNOSTICS {
+            @Override
+            boolean reportsDiagnostics() {
+                return true;
+            }
+        };
+
+        abstract boolean reportsDiagnostics();
+    }
+
+    private enum NavigationBindingPass {
         INFER_RESULT_TYPES {
             @Override
             boolean reportsDiagnostics() {
@@ -200,10 +249,13 @@ public final class SemanticResolver {
 
         private final Map<String, InternalSymbolState> internalSymbolsByName = new LinkedHashMap<>();
         private final Map<String, ExpressionType> inferredExternalTypesByName = new LinkedHashMap<>();
+        private final Map<Integer, ExpressionType> currentItemTypesByDepth = new LinkedHashMap<>();
+        private final Map<NodeId, ExpressionType> currentItemTypesByNodeId = new LinkedHashMap<>();
         private final Map<NodeId, SymbolBinding> symbolBindings = new LinkedHashMap<>();
         private final Map<NodeId, ExpressionType> resolvedTypes = new LinkedHashMap<>();
         private final Map<NodeId, PreparedSemanticValue> preparedValues = new LinkedHashMap<>();
         private final Map<NodeId, ResolvedFunctionBinding> functionBindings = new LinkedHashMap<>();
+        private final Map<NodeId, ResolvedNavigationBinding> navigationBindings = new LinkedHashMap<>();
         private final List<ResidualTypeCheck> residualTypeChecks = new ArrayList<>();
         private final Set<NodeId> emptyVectorExemptNodeIds = new HashSet<>();
         private final Set<NodeId> functionArgumentUnknownNodeIds = new HashSet<>();
@@ -287,6 +339,628 @@ public final class SemanticResolver {
             }
             symbolBindings.put(currentItem.nodeId(), new CurrentItemBinding(currentItem.depth()));
             resolvedTypes.put(currentItem.nodeId(), UnknownType.INSTANCE);
+        }
+
+        private void resolveNavigationBindings(
+                List<NavigationChainSource> navigationChains,
+                ExpressionEnvironment environment,
+                List<ExpressionDiagnostic> diagnostics,
+                NavigationBindingPass pass) {
+            NavigationResolutionContext context = new NavigationResolutionContext(environment, diagnostics, pass);
+            if (pass.reportsDiagnostics()) {
+                navigationBindings.clear();
+            }
+            for (NavigationChainSource navigationChain : navigationChains) {
+                resolveNavigationChain(navigationChain, context);
+            }
+        }
+
+        private void resolveNavigationChain(
+                NavigationChainSource navigationChain,
+                NavigationResolutionContext context) {
+            ExpressionType receiverType = effectiveType(navigationChain.receiverNodeId());
+            for (NavigationLinkSource link : navigationChain.links()) {
+                receiverType = resolveNavigationLink(link, receiverType, context);
+                resolvedTypes.put(link.nodeId(), receiverType);
+            }
+            resolvedTypes.put(navigationChain.nodeId(), receiverType);
+        }
+
+        private ExpressionType resolveNavigationLink(
+                NavigationLinkSource link,
+                ExpressionType receiverType,
+                NavigationResolutionContext context) {
+            validateNavigationLink(link, context);
+            if (receiverType == NullType.INSTANCE && navigationSafety(link) == NavigationSafety.SAFE) {
+                bindNavigation(
+                        link,
+                        NavigationBindingKind.SAFE_NULL_RECEIVER,
+                        new NavigationBindingTarget(receiverType, NullType.INSTANCE),
+                        NavigationBindingDetail.empty());
+                return NullType.INSTANCE;
+            }
+            return switch (link) {
+                case PropertyNavigationSource property -> resolvePropertyNavigation(
+                        property,
+                        receiverType,
+                        context);
+                case MethodNavigationSource method -> resolveMethodNavigation(
+                        method,
+                        receiverType,
+                        context);
+                case SubscriptNavigationSource subscript -> resolveSubscriptNavigation(
+                        subscript,
+                        receiverType,
+                        context);
+                case FilterNavigationSource filter -> resolveFilterNavigation(
+                        filter,
+                        receiverType,
+                        context);
+                case WildcardNavigationSource wildcard -> resolveWildcardNavigation(
+                        wildcard,
+                        receiverType,
+                        context);
+                case CollectionOperationNavigationSource collectionOperation -> resolveCollectionOperationNavigation(
+                        collectionOperation,
+                        receiverType,
+                        context);
+            };
+        }
+
+        private ExpressionType resolvePropertyNavigation(
+                PropertyNavigationSource property,
+                ExpressionType receiverType,
+                NavigationResolutionContext context) {
+            if (receiverType == UnknownType.INSTANCE) {
+                return bindDeferredUnknownReceiver(property, receiverType, context);
+            }
+            if (receiverType instanceof ObjectType objectType) {
+                Optional<JavaTypeCatalog.RegisteredJavaType> registeredType = context.environment().javaTypeCatalog().find(objectType);
+                if (registeredType.isEmpty()) {
+                    addNavigationDiagnostic(
+                            context,
+                            DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_TYPE_MISMATCH,
+                            "Object type is not registered for navigation: " + objectType.name(),
+                            property.sourceSpan());
+                    return UnknownType.INSTANCE;
+                }
+                JavaTypeCatalog.PropertyMember member = registeredType.orElseThrow().properties().get(property.memberName());
+                if (member == null) {
+                    addNavigationDiagnostic(
+                            context,
+                            DiagnosticCode.SEMANTIC_NAVIGATION_MEMBER_NOT_FOUND,
+                            "Object type " + objectType.name() + " has no navigable property: " + property.memberName(),
+                            property.sourceSpan());
+                    return UnknownType.INSTANCE;
+                }
+                bindNavigation(
+                        property,
+                        NavigationBindingKind.OBJECT_PROPERTY,
+                        new NavigationBindingTarget(receiverType, member.returnType()),
+                        NavigationBindingDetail.named(property.memberName()));
+                return member.returnType();
+            }
+            addNavigationDiagnostic(
+                    context,
+                    DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_TYPE_MISMATCH,
+                    "Property navigation requires an object receiver but receiver is " + displayType(receiverType),
+                    property.sourceSpan());
+            return UnknownType.INSTANCE;
+        }
+
+        private ExpressionType resolveMethodNavigation(
+                MethodNavigationSource method,
+                ExpressionType receiverType,
+                NavigationResolutionContext context) {
+            if (receiverType == UnknownType.INSTANCE) {
+                return bindDeferredUnknownReceiver(method, receiverType, context);
+            }
+            if (!(receiverType instanceof ObjectType objectType)) {
+                addNavigationDiagnostic(
+                        context,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_TYPE_MISMATCH,
+                        "Method navigation requires an object receiver but receiver is " + displayType(receiverType),
+                        method.sourceSpan());
+                return UnknownType.INSTANCE;
+            }
+            Optional<JavaTypeCatalog.RegisteredJavaType> registeredType = context.environment().javaTypeCatalog().find(objectType);
+            if (registeredType.isEmpty()) {
+                addNavigationDiagnostic(
+                        context,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_TYPE_MISMATCH,
+                        "Object type is not registered for navigation: " + objectType.name(),
+                        method.sourceSpan());
+                return UnknownType.INSTANCE;
+            }
+            List<ExpressionType> argumentTypes = method.signature().argumentNodeIds().stream().map(this::effectiveType).toList();
+            List<JavaTypeCatalog.MethodMember> sameName = registeredType.orElseThrow().methods().values().stream()
+                    .filter(member -> member.signature().languageName().equals(method.signature().memberName()))
+                    .toList();
+            if (sameName.isEmpty()) {
+                addNavigationDiagnostic(
+                        context,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_MEMBER_NOT_FOUND,
+                        "Object type " + objectType.name()
+                                + " has no navigable method: " + method.signature().memberName(),
+                        method.sourceSpan());
+                return UnknownType.INSTANCE;
+            }
+            List<JavaTypeCatalog.MethodMember> matches = sameName.stream()
+                    .filter(member -> matchesMemberMethod(member, argumentTypes))
+                    .toList();
+            if (matches.size() != 1) {
+                addNavigationDiagnostic(
+                        context,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_ARGUMENT_TYPE_MISMATCH,
+                        "No unique navigable method signature matches " + method.signature().memberName()
+                                + '(' + displayTypes(argumentTypes) + ") on " + objectType.name(),
+                        method.sourceSpan());
+                return UnknownType.INSTANCE;
+            }
+            JavaTypeCatalog.MethodMember member = matches.getFirst();
+            bindNavigation(
+                    method,
+                    NavigationBindingKind.OBJECT_METHOD,
+                    new NavigationBindingTarget(receiverType, member.returnType()),
+                    NavigationBindingDetail.withArguments(method.signature().memberName(), argumentTypes));
+            return member.returnType();
+        }
+
+        private static boolean matchesMemberMethod(JavaTypeCatalog.MethodMember member, List<ExpressionType> argumentTypes) {
+            FunctionSignature signature = member.signature();
+            if (signature.arity() != argumentTypes.size()) {
+                return false;
+            }
+            for (int index = 0; index < argumentTypes.size(); index++) {
+                ExpressionType argumentType = argumentTypes.get(index);
+                if (argumentType == UnknownType.INSTANCE) {
+                    continue;
+                }
+                if (!signature.parameterTypes().get(index).equals(argumentType)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private ExpressionType resolveSubscriptNavigation(
+                SubscriptNavigationSource subscript,
+                ExpressionType receiverType,
+                NavigationResolutionContext context) {
+            if (receiverType == UnknownType.INSTANCE) {
+                return bindDeferredUnknownReceiver(subscript, receiverType, context);
+            }
+            return switch (subscript.subscript()) {
+                case StringKeySubscriptSource stringKey -> resolveStringKeySubscript(
+                        subscript,
+                        stringKey,
+                        receiverType,
+                        context);
+                case IndexSubscriptSource ignored -> resolveIndexSubscript(subscript, receiverType, context);
+                case SliceSubscriptSource ignored -> resolveSliceSubscript(subscript, receiverType, context);
+                case WildcardSubscriptSource ignored -> resolveWildcardNavigation(
+                        subscript,
+                        receiverType,
+                        context);
+            };
+        }
+
+        private ExpressionType resolveStringKeySubscript(
+                SubscriptNavigationSource link,
+                StringKeySubscriptSource stringKey,
+                ExpressionType receiverType,
+                NavigationResolutionContext context) {
+            if (receiverType instanceof MapType mapType) {
+                bindNavigation(
+                        link,
+                        NavigationBindingKind.MAP_KEY,
+                        new NavigationBindingTarget(receiverType, mapType.valueType()),
+                        NavigationBindingDetail.named(stringKey.key()));
+                return mapType.valueType();
+            }
+            addNavigationDiagnostic(
+                    context,
+                    DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_TYPE_MISMATCH,
+                    "Textual subscript navigation requires a map receiver but receiver is " + displayType(receiverType),
+                    link.sourceSpan());
+            return UnknownType.INSTANCE;
+        }
+
+        private ExpressionType resolveIndexSubscript(
+                NavigationLinkSource link,
+                ExpressionType receiverType,
+                NavigationResolutionContext context) {
+            if (receiverType == ScalarType.STRING) {
+                bindNavigation(
+                        link,
+                        NavigationBindingKind.STRING_INDEX,
+                        new NavigationBindingTarget(receiverType, ScalarType.STRING),
+                        NavigationBindingDetail.empty());
+                return ScalarType.STRING;
+            }
+            if (receiverType instanceof VectorType vectorType) {
+                bindNavigation(
+                        link,
+                        NavigationBindingKind.VECTOR_INDEX,
+                        new NavigationBindingTarget(receiverType, vectorType.elementType()),
+                        NavigationBindingDetail.empty());
+                return vectorType.elementType();
+            }
+            if (receiverType instanceof CollectionType collectionType) {
+                bindNavigation(
+                        link,
+                        NavigationBindingKind.COLLECTION_INDEX,
+                        new NavigationBindingTarget(receiverType, collectionType.elementType()),
+                        NavigationBindingDetail.empty());
+                return collectionType.elementType();
+            }
+            addNavigationDiagnostic(
+                    context,
+                    DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_TYPE_MISMATCH,
+                    "Index subscript navigation requires a string, vector, or collection receiver but receiver is "
+                            + displayType(receiverType),
+                    link.sourceSpan());
+            return UnknownType.INSTANCE;
+        }
+
+        private ExpressionType resolveSliceSubscript(
+                NavigationLinkSource link,
+                ExpressionType receiverType,
+                NavigationResolutionContext context) {
+            if (receiverType == ScalarType.STRING) {
+                bindNavigation(
+                        link,
+                        NavigationBindingKind.STRING_SLICE,
+                        new NavigationBindingTarget(receiverType, ScalarType.STRING),
+                        NavigationBindingDetail.empty());
+                return ScalarType.STRING;
+            }
+            if (receiverType instanceof VectorType) {
+                bindNavigation(
+                        link,
+                        NavigationBindingKind.VECTOR_SLICE,
+                        new NavigationBindingTarget(receiverType, receiverType),
+                        NavigationBindingDetail.empty());
+                return receiverType;
+            }
+            if (receiverType instanceof CollectionType) {
+                bindNavigation(
+                        link,
+                        NavigationBindingKind.COLLECTION_SLICE,
+                        new NavigationBindingTarget(receiverType, receiverType),
+                        NavigationBindingDetail.empty());
+                return receiverType;
+            }
+            addNavigationDiagnostic(
+                    context,
+                    DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_TYPE_MISMATCH,
+                    "Slice subscript navigation requires a string, vector, or collection receiver but receiver is "
+                            + displayType(receiverType),
+                    link.sourceSpan());
+            return UnknownType.INSTANCE;
+        }
+
+        private ExpressionType resolveWildcardNavigation(
+                NavigationLinkSource link,
+                ExpressionType receiverType,
+                NavigationResolutionContext context) {
+            if (receiverType == UnknownType.INSTANCE) {
+                return bindDeferredUnknownReceiver(link, receiverType, context);
+            }
+            Optional<ExpressionType> resultType = switch (receiverType) {
+                case VectorType vector -> Optional.of(new CollectionType(vector.elementType()));
+                case CollectionType collection -> Optional.of(new CollectionType(collection.elementType()));
+                case MapType map -> Optional.of(new CollectionType(map.valueType()));
+                case ObjectType ignored -> Optional.of(new CollectionType(UnknownType.INSTANCE));
+                default -> Optional.empty();
+            };
+            if (resultType.isPresent()) {
+                bindNavigation(
+                        link,
+                        NavigationBindingKind.WILDCARD,
+                        new NavigationBindingTarget(receiverType, resultType.orElseThrow()),
+                        NavigationBindingDetail.empty());
+                return resultType.orElseThrow();
+            }
+            addNavigationDiagnostic(
+                    context,
+                    DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_TYPE_MISMATCH,
+                    "Wildcard navigation requires an object, map, vector, or collection receiver but receiver is "
+                            + displayType(receiverType),
+                    link.sourceSpan());
+            return UnknownType.INSTANCE;
+        }
+
+        private ExpressionType resolveFilterNavigation(
+                FilterNavigationSource filter,
+                ExpressionType receiverType,
+                NavigationResolutionContext context) {
+            if (receiverType == UnknownType.INSTANCE) {
+                return bindDeferredUnknownReceiver(filter, receiverType, context);
+            }
+            if (receiverType instanceof VectorType || receiverType instanceof CollectionType) {
+                bindCurrentItemTypes(filter.predicate().currentItemDepth(), filter.predicate().currentItemNodeIds(), elementType(receiverType));
+                bindNavigation(
+                        filter,
+                        NavigationBindingKind.FILTER,
+                        new NavigationBindingTarget(receiverType, receiverType),
+                        NavigationBindingDetail.empty());
+                return receiverType;
+            }
+            addNavigationDiagnostic(
+                    context,
+                    DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_TYPE_MISMATCH,
+                    "Filter navigation requires a vector or collection receiver but receiver is " + displayType(receiverType),
+                    filter.sourceSpan());
+            return UnknownType.INSTANCE;
+        }
+
+        private ExpressionType resolveCollectionOperationNavigation(
+                CollectionOperationNavigationSource operation,
+                ExpressionType receiverType,
+                NavigationResolutionContext context) {
+            if (receiverType == UnknownType.INSTANCE) {
+                return bindDeferredUnknownReceiver(operation, receiverType, context);
+            }
+            operation.arguments().stream()
+                    .filter(argument -> argument.kind() == CollectionOperationArgumentKind.LAMBDA)
+                    .forEach(argument -> bindCurrentItemTypes(
+                            argument.currentItemDepth(),
+                            argument.currentItemNodeIds(),
+                            collectionItemType(receiverType)));
+            List<ExpressionType> argumentTypes = operation.arguments().stream()
+                    .map(argument -> effectiveType(argument.nodeId()))
+                    .toList();
+            Optional<ExpressionType> resultType = collectionOperationResultType(operation, receiverType, argumentTypes);
+            if (resultType.isPresent()) {
+                bindNavigation(
+                        operation,
+                        NavigationBindingKind.COLLECTION_OPERATION,
+                        new NavigationBindingTarget(receiverType, resultType.orElseThrow()),
+                        NavigationBindingDetail.withArguments(operation.operationName(), argumentTypes));
+                return resultType.orElseThrow();
+            }
+            addNavigationDiagnostic(
+                    context,
+                    collectionOperationDiagnosticCode(operation, receiverType),
+                    "Collection operation " + operation.operationName()
+                            + " is not compatible with receiver " + displayType(receiverType),
+                    operation.sourceSpan());
+            return UnknownType.INSTANCE;
+        }
+
+        private static DiagnosticCode collectionOperationDiagnosticCode(
+                CollectionOperationNavigationSource operation,
+                ExpressionType receiverType) {
+            if (isKnownCollectionOperation(operation.operationName()) && isCollectionOperationReceiver(receiverType)) {
+                return DiagnosticCode.SEMANTIC_NAVIGATION_ARGUMENT_TYPE_MISMATCH;
+            }
+            return DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_TYPE_MISMATCH;
+        }
+
+        private static boolean isKnownCollectionOperation(String operationName) {
+            return switch (operationName) {
+                case "sum", "map", "take", "count", "size", "keys", "values" -> true;
+                default -> false;
+            };
+        }
+
+        private static Optional<ExpressionType> collectionOperationResultType(
+                CollectionOperationNavigationSource operation,
+                ExpressionType receiverType,
+                List<ExpressionType> argumentTypes) {
+            return switch (operation.operationName()) {
+                case "sum" -> sumOperationResultType(operation.arguments(), receiverType, argumentTypes);
+                case "map" -> mapOperationResultType(operation.arguments(), receiverType, argumentTypes);
+                case "take" -> takeOperationResultType(operation.arguments(), receiverType, argumentTypes);
+                case "count", "size" -> operation.arguments().isEmpty() && isCollectionOperationReceiver(receiverType)
+                        ? Optional.of(ScalarType.NUMBER)
+                        : Optional.empty();
+                case "keys" -> operation.arguments().isEmpty() && receiverType instanceof MapType
+                        ? Optional.of(new CollectionType(ScalarType.STRING))
+                        : Optional.empty();
+                case "values" -> operation.arguments().isEmpty() && receiverType instanceof MapType map
+                        ? Optional.of(new CollectionType(map.valueType()))
+                        : Optional.empty();
+                default -> Optional.empty();
+            };
+        }
+
+        private static Optional<ExpressionType> sumOperationResultType(
+                List<CollectionOperationArgumentSource> arguments,
+                ExpressionType receiverType,
+                List<ExpressionType> argumentTypes) {
+            if (!numericCollectionElementType(receiverType)) {
+                return Optional.empty();
+            }
+            if (arguments.isEmpty()) {
+                return Optional.of(ScalarType.NUMBER);
+            }
+            if (arguments.size() == 1
+                    && arguments.getFirst().kind() == CollectionOperationArgumentKind.LAMBDA
+                    && argumentTypes.getFirst() == ScalarType.NUMBER) {
+                return Optional.of(ScalarType.NUMBER);
+            }
+            return Optional.empty();
+        }
+
+        private static Optional<ExpressionType> mapOperationResultType(
+                List<CollectionOperationArgumentSource> arguments,
+                ExpressionType receiverType,
+                List<ExpressionType> argumentTypes) {
+            if (!isCollectionOperationReceiver(receiverType)
+                    || arguments.size() != 1
+                    || arguments.getFirst().kind() != CollectionOperationArgumentKind.LAMBDA) {
+                return Optional.empty();
+            }
+            return Optional.of(new CollectionType(argumentTypes.getFirst()));
+        }
+
+        private static Optional<ExpressionType> takeOperationResultType(
+                List<CollectionOperationArgumentSource> arguments,
+                ExpressionType receiverType,
+                List<ExpressionType> argumentTypes) {
+            if (!isCollectionOperationReceiver(receiverType) || arguments.isEmpty() || arguments.size() > 2) {
+                return Optional.empty();
+            }
+            for (int index = 0; index < arguments.size(); index++) {
+                if (arguments.get(index).kind() != CollectionOperationArgumentKind.POSITIONAL
+                        || argumentTypes.get(index) != ScalarType.NUMBER) {
+                    return Optional.empty();
+                }
+            }
+            return Optional.of(receiverType);
+        }
+
+        private static boolean numericCollectionElementType(ExpressionType receiverType) {
+            return switch (receiverType) {
+                case VectorType vector -> vector.elementType() == ScalarType.NUMBER;
+                case CollectionType collection -> collection.elementType() == ScalarType.NUMBER;
+                default -> false;
+            };
+        }
+
+        private static boolean isCollectionOperationReceiver(ExpressionType receiverType) {
+            return receiverType instanceof VectorType
+                    || receiverType instanceof CollectionType
+                    || receiverType instanceof MapType;
+        }
+
+        private static ExpressionType collectionItemType(ExpressionType receiverType) {
+            return switch (receiverType) {
+                case VectorType vector -> vector.elementType();
+                case CollectionType collection -> collection.elementType();
+                case MapType map -> map.valueType();
+                default -> UnknownType.INSTANCE;
+            };
+        }
+
+        private void validateSubscriptIntegerFormats(
+                SubscriptSource subscript,
+                com.runestone.expeval_mk3.internal.source.SourceSpan sourceSpan,
+                List<ExpressionDiagnostic> diagnostics,
+                NavigationBindingPass pass) {
+            if (!pass.reportsDiagnostics()) {
+                return;
+            }
+            switch (subscript) {
+                case IndexSubscriptSource index -> validateSubscriptIntegerFormat(index.index(), sourceSpan, diagnostics);
+                case SliceSubscriptSource slice -> slice.indexes()
+                        .forEach(integer -> validateSubscriptIntegerFormat(integer, sourceSpan, diagnostics));
+                case StringKeySubscriptSource ignored -> {
+                }
+                case WildcardSubscriptSource ignored -> {
+                }
+            }
+        }
+
+        private void validateNavigationLink(NavigationLinkSource link, NavigationResolutionContext context) {
+            if (link instanceof SubscriptNavigationSource subscript) {
+                validateSubscriptIntegerFormats(
+                        subscript.subscript(),
+                        subscript.sourceSpan(),
+                        context.diagnostics(),
+                        context.pass());
+            }
+        }
+
+        private void validateSubscriptIntegerFormat(
+                SubscriptIntegerLiteral integer,
+                com.runestone.expeval_mk3.internal.source.SourceSpan sourceSpan,
+                List<ExpressionDiagnostic> diagnostics) {
+            if (integer.format() == SubscriptIntegerFormat.DECIMAL) {
+                return;
+            }
+            diagnostics.add(ExpressionDiagnostic.error(
+                    DiagnosticCategory.SEMANTIC,
+                    DiagnosticCode.SEMANTIC_INVALID_SUBSCRIPT_INDEX_FORMAT,
+                    "Subscript indexes and slices must use decimal integer literals; write "
+                            + integer.value() + " instead",
+                    sourceSpan));
+        }
+
+        private void addNavigationDiagnostic(
+                NavigationResolutionContext context,
+                DiagnosticCode code,
+                String message,
+                com.runestone.expeval_mk3.internal.source.SourceSpan sourceSpan) {
+            if (context.pass().reportsDiagnostics()) {
+                context.diagnostics().add(ExpressionDiagnostic.error(DiagnosticCategory.SEMANTIC, code, message, sourceSpan));
+            }
+        }
+
+        private ExpressionType bindDeferredUnknownReceiver(
+                NavigationLinkSource link,
+                ExpressionType receiverType,
+                NavigationResolutionContext context) {
+            bindNavigation(
+                    link,
+                    NavigationBindingKind.DEFERRED_UNKNOWN_RECEIVER,
+                    new NavigationBindingTarget(receiverType, UnknownType.INSTANCE),
+                    NavigationBindingDetail.empty());
+            if (context.pass().reportsDiagnostics()) {
+                addResidualOrStrictDiagnostic(
+                        context.environment(),
+                        link.sourceSpan(),
+                        "Navigation receiver type remains unknown",
+                        context.diagnostics());
+            }
+            return UnknownType.INSTANCE;
+        }
+
+        private void bindNavigation(
+                NavigationLinkSource link,
+                NavigationBindingKind kind,
+                NavigationBindingTarget target,
+                NavigationBindingDetail detail) {
+            navigationBindings.put(link.nodeId(), new ResolvedNavigationBinding(
+                    kind,
+                    target,
+                    navigationSafety(link),
+                    detail));
+        }
+
+        private static NavigationSafety navigationSafety(NavigationLinkSource link) {
+            return switch (link) {
+                case FilterNavigationSource filter -> filter.safety();
+                case MethodNavigationSource method -> method.safety();
+                case PropertyNavigationSource property -> property.safety();
+                case SubscriptNavigationSource subscript -> subscript.safety();
+                case CollectionOperationNavigationSource ignored -> NavigationSafety.REGULAR;
+                case WildcardNavigationSource ignored -> NavigationSafety.REGULAR;
+            };
+        }
+
+        private static ExpressionType elementType(ExpressionType receiverType) {
+            return switch (receiverType) {
+                case VectorType vector -> vector.elementType();
+                case CollectionType collection -> collection.elementType();
+                default -> UnknownType.INSTANCE;
+            };
+        }
+
+        private void bindCurrentItemTypes(int depth, List<NodeId> nodeIds, ExpressionType type) {
+            ExpressionType existingDepthType = currentItemTypesByDepth.get(depth);
+            if (existingDepthType == null) {
+                currentItemTypesByDepth.put(depth, type);
+            } else if (!existingDepthType.equals(type)) {
+                currentItemTypesByDepth.put(depth, UnknownType.INSTANCE);
+            }
+            for (NodeId nodeId : nodeIds) {
+                currentItemTypesByNodeId.put(nodeId, type);
+            }
+        }
+
+        private record NavigationResolutionContext(
+                ExpressionEnvironment environment,
+                List<ExpressionDiagnostic> diagnostics,
+                NavigationBindingPass pass) {
+
+            private NavigationResolutionContext {
+                Objects.requireNonNull(environment, "environment");
+                Objects.requireNonNull(diagnostics, "diagnostics");
+                Objects.requireNonNull(pass, "pass");
+            }
         }
 
         private Optional<ExpressionType> typeOfBoundRead(SymbolReadSource read) {
@@ -1010,6 +1684,11 @@ public final class SemanticResolver {
                     return inferredType;
                 }
             }
+            if (binding instanceof CurrentItemBinding currentItem) {
+                return currentItemTypesByNodeId.getOrDefault(
+                        nodeId,
+                        resolvedTypes.getOrDefault(nodeId, UnknownType.INSTANCE));
+            }
             return resolvedTypes.getOrDefault(nodeId, UnknownType.INSTANCE);
         }
 
@@ -1093,7 +1772,7 @@ public final class SemanticResolver {
             for (int depth = 1; depth <= symbolFlow.maxCurrentItemDepth(); depth++) {
                 currentItemSymbols.add(new CurrentItemResolvedSymbol(
                         depth,
-                        UnknownType.INSTANCE,
+                        currentItemTypesByDepth.getOrDefault(depth, UnknownType.INSTANCE),
                         currentItemSlotBase + depth - 1));
             }
 
@@ -1109,7 +1788,7 @@ public final class SemanticResolver {
                 };
                 if (symbol != null) {
                     symbolByNodeId.put(entry.getKey(), symbol);
-                    resolvedTypes.putIfAbsent(entry.getKey(), symbol.type());
+                    resolvedTypes.put(entry.getKey(), symbol.type());
                 }
             }
 
@@ -1124,6 +1803,7 @@ public final class SemanticResolver {
                     preparedValues,
                     residualTypeChecks,
                     functionBindings,
+                    navigationBindings,
                     symbolByNodeId,
                     new ResolvedSymbolSets(internalSymbols, externalSymbols, currentItemSymbols),
                     new FrameLayout(slots));

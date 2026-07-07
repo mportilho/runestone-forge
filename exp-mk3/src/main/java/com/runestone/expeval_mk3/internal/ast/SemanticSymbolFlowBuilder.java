@@ -21,6 +21,7 @@ final class SemanticSymbolFlowBuilder {
     private final Map<NodeId, ExpressionType> knownExpressionTypes = new LinkedHashMap<>();
     private final List<CurrentItemSource> currentItemSources = new ArrayList<>();
     private final List<FunctionCallSource> functionCalls = new ArrayList<>();
+    private final List<NavigationChainSource> navigationChains = new ArrayList<>();
     private final List<ConcreteTypeRestriction> concreteRestrictions = new ArrayList<>();
     private final List<SameTypeRestriction> sameTypeRestrictions = new ArrayList<>();
     private final List<VectorElementTypeRestriction> vectorElementTypeRestrictions = new ArrayList<>();
@@ -64,6 +65,7 @@ final class SemanticSymbolFlowBuilder {
                 assignments,
                 resultReads,
                 functionCalls,
+                navigationChains,
                 knownExpressionTypes,
                 new CurrentItemFlow(currentItemSources, maxCurrentItemDepth),
                 new TypeRestrictionFlow(
@@ -273,6 +275,14 @@ final class SemanticSymbolFlowBuilder {
 
     private ExpressionSummary collectNavigationChain(NavigationChainNode navigationChain, int currentItemDepth) {
         List<ExpressionSummary> summaries = new ArrayList<>(navigationChain.links().size() + 1);
+        List<NavigationLinkSource> linkSources = navigationChain.links().stream()
+                .map(link -> navigationLinkSource(link, currentItemDepth))
+                .toList();
+        navigationChains.add(new NavigationChainSource(
+                navigationChain.id(),
+                expressionTypeNodeId(navigationChain.receiver()),
+                linkSources,
+                navigationChain.sourceSpan()));
         summaries.add(collectExpression(navigationChain.receiver(), currentItemDepth));
         for (NavigationLink link : navigationChain.links()) {
             summaries.add(collectNavigationLink(link, currentItemDepth));
@@ -281,11 +291,16 @@ final class SemanticSymbolFlowBuilder {
     }
 
     private ExpressionSummary collectNavigationLink(NavigationLink link, int currentItemDepth) {
+        sourceSpans.put(link.id(), link.sourceSpan());
         return switch (link) {
             case CollectionOperationNavigationLink collectionOperation -> combine(collectionOperation.arguments().stream()
                     .map(argument -> collectCollectionOperationArgument(argument, currentItemDepth))
                     .toList());
-            case FilterNavigationLink filter -> collectCurrentItemContext(filter.predicate(), currentItemDepth + 1);
+            case FilterNavigationLink filter -> {
+                ExpressionSummary predicate = collectCurrentItemContext(filter.predicate(), currentItemDepth + 1);
+                requireConcrete(expressionTypeNodeId(filter.predicate()), ScalarType.BOOLEAN, filter.predicate().sourceSpan());
+                yield predicate;
+            }
             case MethodNavigationLink method -> combine(method.arguments().stream()
                     .map(argument -> collectExpression(argument, currentItemDepth))
                     .toList());
@@ -293,6 +308,167 @@ final class SemanticSymbolFlowBuilder {
             case SubscriptNavigationLink ignored -> ExpressionSummary.empty();
             case WildcardNavigationLink ignored -> ExpressionSummary.empty();
         };
+    }
+
+    private NavigationLinkSource navigationLinkSource(NavigationLink link, int currentItemDepth) {
+        return switch (link) {
+            case CollectionOperationNavigationLink collectionOperation -> new CollectionOperationNavigationSource(
+                    collectionOperation.id(),
+                    collectionOperation.sourceSpan(),
+                    collectionOperation.operationName().value(),
+                    collectionOperationArgumentSources(collectionOperation.arguments(), currentItemDepth));
+            case FilterNavigationLink filter -> new FilterNavigationSource(
+                    filter.id(),
+                    filter.sourceSpan(),
+                    new FilterNavigationPredicate(
+                            expressionTypeNodeId(filter.predicate()),
+                            currentItemDepth + 1,
+                            currentItemNodeIds(filter.predicate())),
+                    navigationSafety(filter.safeNavigation()));
+            case MethodNavigationLink method -> new MethodNavigationSource(
+                    method.id(),
+                    method.sourceSpan(),
+                    new MethodNavigationSignature(
+                            method.memberName().value(),
+                            method.arguments().stream().map(this::expressionTypeNodeId).toList()),
+                    navigationSafety(method.safeNavigation()));
+            case PropertyNavigationLink property -> new PropertyNavigationSource(
+                    property.id(),
+                    property.sourceSpan(),
+                    property.memberName().value(),
+                    navigationSafety(property.safeNavigation()));
+            case SubscriptNavigationLink subscript -> new SubscriptNavigationSource(
+                    subscript.id(),
+                    subscript.sourceSpan(),
+                    subscriptSource(subscript.subscript()),
+                    navigationSafety(subscript.safeNavigation()));
+            case WildcardNavigationLink wildcard -> new WildcardNavigationSource(wildcard.id(), wildcard.sourceSpan());
+        };
+    }
+
+    private static NavigationSafety navigationSafety(boolean safeNavigation) {
+        return safeNavigation ? NavigationSafety.SAFE : NavigationSafety.REGULAR;
+    }
+
+    private List<CollectionOperationArgumentSource> collectionOperationArgumentSources(
+            List<CollectionOperationArgument> arguments,
+            int currentItemDepth) {
+        ArrayList<CollectionOperationArgumentSource> sources = new ArrayList<>(arguments.size());
+        for (CollectionOperationArgument argument : arguments) {
+            switch (argument) {
+                case LambdaCollectionOperationArgument lambda -> sources.add(new CollectionOperationArgumentSource(
+                        expressionTypeNodeId(lambda.lambda().body()),
+                        CollectionOperationArgumentKind.LAMBDA,
+                        currentItemDepth + 1,
+                        currentItemNodeIds(lambda.lambda().body())));
+                case PositionalCollectionOperationArgument positional -> sources.add(new CollectionOperationArgumentSource(
+                        expressionTypeNodeId(positional.expression()),
+                        CollectionOperationArgumentKind.POSITIONAL,
+                        0,
+                        List.of()));
+            }
+        }
+        return sources;
+    }
+
+    private List<NodeId> currentItemNodeIds(ExpressionNode expression) {
+        ArrayList<NodeId> nodeIds = new ArrayList<>();
+        collectCurrentItemNodeIds(expression, nodeIds);
+        return nodeIds;
+    }
+
+    private void collectCurrentItemNodeIds(ExpressionNode expression, List<NodeId> nodeIds) {
+        switch (expression) {
+            case BetweenNode between -> {
+                collectCurrentItemNodeIds(between.value(), nodeIds);
+                collectCurrentItemNodeIds(between.lowerBound(), nodeIds);
+                collectCurrentItemNodeIds(between.upperBound(), nodeIds);
+            }
+            case BinaryOperationNode binary -> {
+                collectCurrentItemNodeIds(binary.left(), nodeIds);
+                collectCurrentItemNodeIds(binary.right(), nodeIds);
+            }
+            case ConditionalNode conditional -> {
+                for (ConditionalBranchNode branch : conditional.branches()) {
+                    collectCurrentItemNodeIds(branch.condition(), nodeIds);
+                    collectCurrentItemNodeIds(branch.resultExpression(), nodeIds);
+                }
+                collectCurrentItemNodeIds(conditional.elseExpression(), nodeIds);
+            }
+            case CurrentItemNode currentItem -> nodeIds.add(currentItem.id());
+            case FunctionCallNode functionCall -> functionCall.arguments()
+                    .forEach(argument -> collectCurrentItemNodeIds(argument, nodeIds));
+            case GroupedExpressionNode grouped -> collectCurrentItemNodeIds(grouped.expression(), nodeIds);
+            case MembershipNode membership -> {
+                collectCurrentItemNodeIds(membership.value(), nodeIds);
+                collectCurrentItemNodeIds(membership.candidates(), nodeIds);
+            }
+            case NavigationChainNode navigationChain -> {
+                collectCurrentItemNodeIds(navigationChain.receiver(), nodeIds);
+                for (NavigationLink link : navigationChain.links()) {
+                    collectCurrentItemNodeIds(link, nodeIds);
+                }
+            }
+            case NullCoalescenceNode nullCoalescence -> nullCoalescence.operands()
+                    .forEach(operand -> collectCurrentItemNodeIds(operand, nodeIds));
+            case PostfixOperationNode postfix -> collectCurrentItemNodeIds(postfix.operand(), nodeIds);
+            case UnaryOperationNode unary -> collectCurrentItemNodeIds(unary.operand(), nodeIds);
+            case VectorLiteralNode vectorLiteral -> vectorLiteral.elements()
+                    .forEach(element -> collectCurrentItemNodeIds(element, nodeIds));
+            case CurrentTemporalValueNode ignored -> {
+            }
+            case IdentifierNode ignored -> {
+            }
+            case LiteralNode ignored -> {
+            }
+        }
+    }
+
+    private void collectCurrentItemNodeIds(NavigationLink link, List<NodeId> nodeIds) {
+        switch (link) {
+            case CollectionOperationNavigationLink collectionOperation -> collectionOperation.arguments()
+                    .forEach(argument -> collectCurrentItemNodeIds(argument, nodeIds));
+            case FilterNavigationLink filter -> collectCurrentItemNodeIds(filter.predicate(), nodeIds);
+            case MethodNavigationLink method -> method.arguments()
+                    .forEach(argument -> collectCurrentItemNodeIds(argument, nodeIds));
+            case PropertyNavigationLink ignored -> {
+            }
+            case SubscriptNavigationLink ignored -> {
+            }
+            case WildcardNavigationLink ignored -> {
+            }
+        }
+    }
+
+    private void collectCurrentItemNodeIds(CollectionOperationArgument argument, List<NodeId> nodeIds) {
+        switch (argument) {
+            case LambdaCollectionOperationArgument lambda -> collectCurrentItemNodeIds(lambda.lambda().body(), nodeIds);
+            case PositionalCollectionOperationArgument positional -> collectCurrentItemNodeIds(positional.expression(), nodeIds);
+        }
+    }
+
+    private SubscriptSource subscriptSource(Subscript subscript) {
+        return switch (subscript) {
+            case IndexSubscript index -> new IndexSubscriptSource(subscriptInteger(index.index()));
+            case SliceSubscript slice -> new SliceSubscriptSource(sliceSubscriptIndexes(slice));
+            case StringKeySubscript stringKey -> new StringKeySubscriptSource(stringKey.key());
+            case WildcardSubscript ignored -> new WildcardSubscriptSource();
+        };
+    }
+
+    private List<SubscriptIntegerLiteral> sliceSubscriptIndexes(SliceSubscript slice) {
+        ArrayList<SubscriptIntegerLiteral> indexes = new ArrayList<>(2);
+        slice.start().map(this::subscriptInteger).ifPresent(indexes::add);
+        slice.end().map(this::subscriptInteger).ifPresent(indexes::add);
+        return indexes;
+    }
+
+    private SubscriptIntegerLiteral subscriptInteger(SignedIntegerLiteral integer) {
+        return new SubscriptIntegerLiteral(integer.value(), switch (integer.format()) {
+            case DECIMAL -> SubscriptIntegerFormat.DECIMAL;
+            case HEXADECIMAL -> SubscriptIntegerFormat.HEXADECIMAL;
+            case OCTAL -> SubscriptIntegerFormat.OCTAL;
+        });
     }
 
     private ExpressionSummary collectCollectionOperationArgument(
