@@ -9,6 +9,8 @@ import java.util.Objects;
 
 public record SemanticModelSymbols(
         Map<NodeId, ExpressionType> resolvedTypes,
+        Map<NodeId, NumericKind> numericKinds,
+        List<ResidualTypeCheck> residualTypeChecks,
         Map<NodeId, ResolvedSymbol> symbolByNodeId,
         ResolvedSymbolSets symbolSets,
         FrameLayout frameLayout) {
@@ -16,6 +18,10 @@ public record SemanticModelSymbols(
     public SemanticModelSymbols {
         Objects.requireNonNull(resolvedTypes, "resolvedTypes");
         resolvedTypes = Map.copyOf(resolvedTypes);
+        Objects.requireNonNull(numericKinds, "numericKinds");
+        numericKinds = Map.copyOf(numericKinds);
+        Objects.requireNonNull(residualTypeChecks, "residualTypeChecks");
+        residualTypeChecks = List.copyOf(residualTypeChecks);
         Objects.requireNonNull(symbolByNodeId, "symbolByNodeId");
         symbolByNodeId = Map.copyOf(symbolByNodeId);
         Objects.requireNonNull(symbolSets, "symbolSets");
@@ -25,6 +31,8 @@ public record SemanticModelSymbols(
     public static SemanticModelSymbols empty() {
         return new SemanticModelSymbols(
                 Map.of(),
+                Map.of(),
+                List.of(),
                 Map.of(),
                 ResolvedSymbolSets.empty(),
                 new FrameLayout(List.of()));

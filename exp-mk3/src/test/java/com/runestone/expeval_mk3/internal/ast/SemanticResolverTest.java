@@ -1,13 +1,17 @@
 package com.runestone.expeval_mk3.internal.ast;
 
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
+import com.runestone.expeval_mk3.api.NullType;
+import com.runestone.expeval_mk3.api.NumericMode;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.api.UnknownType;
+import com.runestone.expeval_mk3.api.VectorType;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCategory;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticSeverity;
 import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.internal.semantics.FrameSlotKind;
+import com.runestone.expeval_mk3.internal.semantics.NumericKind;
 import com.runestone.expeval_mk3.internal.semantics.ResolvedSymbol;
 import com.runestone.expeval_mk3.internal.semantics.ResolvedSymbolKind;
 import com.runestone.expeval_mk3.internal.semantics.SemanticModel;
@@ -73,7 +77,8 @@ class SemanticResolverTest {
     @Test
     @DisplayName("external symbols resolve by declared catalog name and preserve type information")
     void externalSymbolsResolveByNameAndPreserveTypeInformation() {
-        ExpressionFileNode ast = AstTestSupport.build("[enabled, amount, threshold, lateBound]");
+        ExpressionFileNode ast = AstTestSupport.build(
+                "enabledCopy := enabled; amountCopy := amount; thresholdCopy := threshold; lateBound");
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("enabled", ScalarType.BOOLEAN)
                 .externalSymbol("amount", ScalarType.NUMBER)
@@ -149,8 +154,8 @@ class SemanticResolverTest {
     }
 
     @Test
-    @DisplayName("reassignment with an unknown external symbol makes the unified internal type unknown")
-    void reassignmentWithUnknownExternalSymbolMakesUnifiedInternalTypeUnknown() {
+    @DisplayName("reassignment with an unknown external symbol keeps the concrete internal type")
+    void reassignmentWithUnknownExternalSymbolKeepsConcreteInternalType() {
         ExpressionFileNode ast = AstTestSupport.build("total := 1; total := lateBound; total");
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("lateBound")
@@ -160,10 +165,25 @@ class SemanticResolverTest {
 
         ResolvedSymbol total = model.internalSymbols().getFirst();
         assertThat(total.slot()).isZero();
-        assertThat(total.type()).isEqualTo(UnknownType.INSTANCE);
+        assertThat(total.type()).isEqualTo(ScalarType.NUMBER);
         assertThat(model.symbolByNodeId())
                 .containsEntry(identifier(ast, "lateBound", 0).id(), model.externalSymbols().getFirst())
                 .containsEntry(identifier(ast, "total", 0).id(), total);
+    }
+
+    @Test
+    @DisplayName("concrete restrictions propagate through alias assignments")
+    void concreteRestrictionsPropagateThroughAliasAssignments() {
+        ExpressionFileNode ast = AstTestSupport.build("value := lateBound; value + 1");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("lateBound")
+                .strictMode(true)
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        assertThat(model.internalSymbols().getFirst().type()).isEqualTo(ScalarType.NUMBER);
+        assertThat(model.externalSymbols().getFirst().type()).isEqualTo(ScalarType.NUMBER);
     }
 
     @Test
@@ -283,6 +303,293 @@ class SemanticResolverTest {
     }
 
     @Test
+    @DisplayName("literal and vector nodes resolve to expression types")
+    void literalAndVectorNodesResolveToExpressionTypes() {
+        ExpressionFileNode ast = AstTestSupport.build("flag := true; text := \"text\"; empty := []; [1, null, 2]");
+
+        SemanticModel model = resolveModel(ast, ExpressionEnvironment.standard());
+
+        assertThat(model.resolvedTypes())
+                .containsEntry(literal(ast, LongLiteralValue.class, 0).id(), ScalarType.NUMBER)
+                .containsEntry(literal(ast, BooleanLiteralValue.class, 0).id(), ScalarType.BOOLEAN)
+                .containsEntry(literal(ast, StringLiteralValue.class, 0).id(), ScalarType.STRING)
+                .containsEntry(literal(ast, NullLiteralValue.class, 0).id(), NullType.INSTANCE)
+                .containsEntry(vector(ast, 0).id(), new VectorType(UnknownType.INSTANCE))
+                .containsEntry(vector(ast, 1).id(), new VectorType(ScalarType.NUMBER));
+    }
+
+    @Test
+    @DisplayName("vector literals reject incompatible concrete element types")
+    void vectorLiteralsRejectIncompatibleConcreteElementTypes() {
+        ExpressionFileNode ast = AstTestSupport.build("[1, true]");
+
+        SemanticResolutionResult result = resolver.resolve(ast, ExpressionEnvironment.standard());
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_TYPE_RESTRICTION_CONFLICT);
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(0, 9, 1, 1));
+                });
+    }
+
+    @Test
+    @DisplayName("vector literals infer unknown elements from a concrete common element")
+    void vectorLiteralsInferUnknownElementsFromConcreteCommonElement() {
+        ExpressionFileNode ast = AstTestSupport.build("[1, lateBound]");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("lateBound")
+                .strictMode(true)
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        assertThat(model.resolvedTypes())
+                .containsEntry(identifier(ast, "lateBound", 0).id(), ScalarType.NUMBER)
+                .containsEntry(vector(ast, 0).id(), new VectorType(ScalarType.NUMBER));
+    }
+
+    @Test
+    @DisplayName("empty vector element unknown does not fail strict mode")
+    void emptyVectorElementUnknownDoesNotFailStrictMode() {
+        ExpressionFileNode ast = AstTestSupport.build("[]");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .strictMode(true)
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        assertThat(model.resolvedTypes()).containsEntry(vector(ast, 0).id(), new VectorType(UnknownType.INSTANCE));
+    }
+
+    @Test
+    @DisplayName("empty vector assigned to a symbol does not fail strict mode")
+    void emptyVectorAssignedToSymbolDoesNotFailStrictMode() {
+        ExpressionFileNode ast = AstTestSupport.build("values := []; values");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .strictMode(true)
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        assertThat(model.internalSymbols().getFirst().type()).isEqualTo(new VectorType(UnknownType.INSTANCE));
+        assertThat(model.resolvedTypes()).containsEntry(identifier(ast, "values", 0).id(), new VectorType(UnknownType.INSTANCE));
+    }
+
+    @Test
+    @DisplayName("external symbol concrete restrictions update resolved symbol metadata")
+    void externalSymbolConcreteRestrictionsUpdateResolvedSymbolMetadata() {
+        ExpressionFileNode ast = AstTestSupport.build("lateBound + 1");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("lateBound")
+                .strictMode(true)
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        ResolvedSymbol lateBound = model.externalSymbols().getFirst();
+        assertThat(lateBound.name()).isEqualTo("lateBound");
+        assertThat(lateBound.type()).isEqualTo(ScalarType.NUMBER);
+        assertThat(model.symbolByNodeId()).containsEntry(identifier(ast, "lateBound", 0).id(), lateBound);
+    }
+
+    @Test
+    @DisplayName("concrete symbol restrictions unify and reject incompatible reassignments")
+    void concreteSymbolRestrictionsRejectIncompatibleReassignments() {
+        ExpressionFileNode ast = AstTestSupport.build("total := 1; total := true; total");
+
+        SemanticResolutionResult result = resolver.resolve(ast, ExpressionEnvironment.standard());
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_TYPE_RESTRICTION_CONFLICT);
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(12, 26, 1, 13));
+                });
+    }
+
+    @Test
+    @DisplayName("operators reject incompatible concrete operand types without boundary coercion")
+    void operatorsRejectIncompatibleConcreteOperandTypesWithoutBoundaryCoercion() {
+        ExpressionFileNode ast = AstTestSupport.build("1 + \"2\"");
+
+        SemanticResolutionResult result = resolver.resolve(ast, ExpressionEnvironment.standard());
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH);
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(2, 3, 1, 3));
+                });
+    }
+
+    @Test
+    @DisplayName("membership operators reject incompatible concrete candidate element types")
+    void membershipOperatorsRejectIncompatibleConcreteCandidateElementTypes() {
+        ExpressionFileNode ast = AstTestSupport.build("1 in [true]");
+
+        SemanticResolutionResult result = resolver.resolve(ast, ExpressionEnvironment.standard());
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH);
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(2, 4, 1, 3));
+                });
+    }
+
+    @Test
+    @DisplayName("abstract orderable restrictions defer in non-strict mode and fail in strict mode")
+    void abstractOrderableRestrictionsDeferInNonStrictModeAndFailInStrictMode() {
+        ExpressionFileNode nonStrictAst = AstTestSupport.build("left < right");
+        ExpressionEnvironment nonStrictEnvironment = ExpressionEnvironment.builder()
+                .externalSymbol("left")
+                .externalSymbol("right")
+                .build();
+
+        SemanticModel model = resolveModel(nonStrictAst, nonStrictEnvironment);
+
+        assertThat(model.residualTypeChecks())
+                .singleElement()
+                .satisfies(check -> assertThat(check.code())
+                        .isEqualTo(DiagnosticCode.SEMANTIC_STRICT_UNKNOWN_TYPE_RESTRICTION));
+
+        ExpressionFileNode strictAst = AstTestSupport.build("left < right");
+        ExpressionEnvironment strictEnvironment = nonStrictEnvironment.toBuilder()
+                .strictMode(true)
+                .build();
+
+        SemanticResolutionResult result = resolver.resolve(strictAst, strictEnvironment);
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .anySatisfy(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_STRICT_UNKNOWN_TYPE_RESTRICTION);
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(5, 6, 1, 6));
+                });
+    }
+
+    @Test
+    @DisplayName("null coalescence joins null with a concrete non-null type")
+    void nullCoalescenceJoinsNullWithConcreteNonNullType() {
+        ExpressionFileNode ast = AstTestSupport.build("null ?? 1");
+
+        SemanticModel model = resolveModel(ast, ExpressionEnvironment.standard());
+
+        NullCoalescenceNode coalescence = node(ast, NullCoalescenceNode.class, 0);
+        assertThat(model.resolvedTypes()).containsEntry(coalescence.id(), ScalarType.NUMBER);
+    }
+
+    @Test
+    @DisplayName("joined assignment expressions update the internal symbol type")
+    void joinedAssignmentExpressionsUpdateInternalSymbolType() {
+        ExpressionFileNode ast = AstTestSupport.build("value := null ?? 1; value");
+
+        SemanticModel model = resolveModel(ast, ExpressionEnvironment.standard());
+
+        assertThat(model.internalSymbols().getFirst().type()).isEqualTo(ScalarType.NUMBER);
+        assertThat(model.resolvedTypes()).containsEntry(identifier(ast, "value", 0).id(), ScalarType.NUMBER);
+    }
+
+    @Test
+    @DisplayName("downstream concrete restrictions refine unknown null-join branches")
+    void downstreamConcreteRestrictionsRefineUnknownNullJoinBranches() {
+        ExpressionFileNode ast = AstTestSupport.build("value := null ?? lateBound; value + 1");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("lateBound")
+                .strictMode(true)
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        assertThat(model.externalSymbols().getFirst().type()).isEqualTo(ScalarType.NUMBER);
+        assertThat(model.internalSymbols().getFirst().type()).isEqualTo(ScalarType.NUMBER);
+    }
+
+    @Test
+    @DisplayName("later concrete assignment refines a symbol first assigned from unknown")
+    void laterConcreteAssignmentRefinesSymbolFirstAssignedFromUnknown() {
+        ExpressionFileNode ast = AstTestSupport.build("value := lateBound; value := 1; value");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("lateBound")
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        assertThat(model.internalSymbols().getFirst().type()).isEqualTo(ScalarType.NUMBER);
+    }
+
+    @Test
+    @DisplayName("empty vector strict exemption does not survive unrelated unknown reassignment")
+    void emptyVectorStrictExemptionDoesNotSurviveUnknownReassignment() {
+        ExpressionFileNode ast = AstTestSupport.build("values := []; values := lateBound; values");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("lateBound")
+                .strictMode(true)
+                .build();
+
+        SemanticResolutionResult result = resolver.resolve(ast, environment);
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.diagnostics())
+                .anySatisfy(diagnostic -> assertThat(diagnostic.code())
+                        .isEqualTo(DiagnosticCode.SEMANTIC_STRICT_UNKNOWN_TYPE_RESTRICTION));
+    }
+
+    @Test
+    @DisplayName("root and numeric operators validate numeric operands and provable constants")
+    void rootAndNumericOperatorsValidateNumericOperandsAndProvableConstants() {
+        ExpressionFileNode typeMismatch = AstTestSupport.build("2 root true");
+
+        SemanticResolutionResult mismatchResult = resolver.resolve(typeMismatch, ExpressionEnvironment.standard());
+
+        assertThat(mismatchResult.hasErrors()).isTrue();
+        assertThat(mismatchResult.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> assertThat(diagnostic.code())
+                        .isEqualTo(DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH));
+
+        ExpressionFileNode invalidConstant = AstTestSupport.build("0 root 9");
+
+        SemanticResolutionResult constantResult = resolver.resolve(invalidConstant, ExpressionEnvironment.standard());
+
+        assertThat(constantResult.hasErrors()).isTrue();
+        assertThat(constantResult.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> assertThat(diagnostic.code())
+                        .isEqualTo(DiagnosticCode.SEMANTIC_INVALID_NUMERIC_CONSTANT));
+    }
+
+    @Test
+    @DisplayName("numeric category is populated conservatively from numeric mode")
+    void numericCategoryIsPopulatedConservativelyFromNumericMode() {
+        ExpressionFileNode decimalAst = AstTestSupport.build("1 + 2.5");
+        SemanticModel decimalModel = resolveModel(decimalAst, ExpressionEnvironment.standard());
+
+        assertThat(decimalModel.numericKinds().values()).containsOnly(NumericKind.DECIMAL);
+
+        ExpressionFileNode fastAst = AstTestSupport.build("1 + 2.5");
+        ExpressionEnvironment fastEnvironment = ExpressionEnvironment.builder()
+                .numericMode(NumericMode.FAST)
+                .build();
+        SemanticModel fastModel = resolveModel(fastAst, fastEnvironment);
+
+        assertThat(fastModel.numericKinds())
+                .containsEntry(literal(fastAst, LongLiteralValue.class, 0).id(), NumericKind.INTEGRAL)
+                .containsEntry(literal(fastAst, DecimalLiteralValue.class, 0).id(), NumericKind.FLOATING)
+                .containsEntry(node(fastAst, BinaryOperationNode.class, 0).id(), NumericKind.FLOATING);
+    }
+
+    @Test
     @DisplayName("empty expression files resolve to a stable semantic error and no model")
     void emptyExpressionFilesResolveToStableSemanticErrorAndNoModel() {
         ExpressionFileNode ast = AstTestSupport.build("");
@@ -316,6 +623,29 @@ class SemanticResolverTest {
                 .skip(occurrence)
                 .findFirst()
                 .orElseThrow();
+    }
+
+    private static <T extends AstNode> T node(ExpressionFileNode ast, Class<T> type, int occurrence) {
+        return AstTestSupport.flatten(ast).stream()
+                .filter(type::isInstance)
+                .map(type::cast)
+                .skip(occurrence)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static <T extends LiteralValue> LiteralNode literal(ExpressionFileNode ast, Class<T> valueType, int occurrence) {
+        return AstTestSupport.flatten(ast).stream()
+                .filter(LiteralNode.class::isInstance)
+                .map(LiteralNode.class::cast)
+                .filter(literal -> valueType.isInstance(literal.value()))
+                .skip(occurrence)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static VectorLiteralNode vector(ExpressionFileNode ast, int occurrence) {
+        return node(ast, VectorLiteralNode.class, occurrence);
     }
 
     private static List<IdentifierAssignmentTargetNode> targets(ExpressionFileNode ast, String name) {

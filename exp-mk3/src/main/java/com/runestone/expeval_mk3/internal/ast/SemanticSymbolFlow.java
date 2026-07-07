@@ -10,7 +10,8 @@ public record SemanticSymbolFlow(
         List<AssignmentSymbolFlow> assignments,
         List<SymbolReadSource> resultReads,
         Map<NodeId, ExpressionType> knownExpressionTypes,
-        CurrentItemFlow currentItems) {
+        CurrentItemFlow currentItems,
+        TypeRestrictionFlow typeRestrictions) {
 
     public SemanticSymbolFlow {
         Objects.requireNonNull(assignments, "assignments");
@@ -20,6 +21,7 @@ public record SemanticSymbolFlow(
         Objects.requireNonNull(knownExpressionTypes, "knownExpressionTypes");
         knownExpressionTypes = Map.copyOf(knownExpressionTypes);
         Objects.requireNonNull(currentItems, "currentItems");
+        Objects.requireNonNull(typeRestrictions, "typeRestrictions");
     }
 
     public List<CurrentItemSource> currentItemSources() {

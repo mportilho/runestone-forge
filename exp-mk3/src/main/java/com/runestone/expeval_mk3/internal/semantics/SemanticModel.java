@@ -39,6 +39,14 @@ public record SemanticModel(
         return symbols.resolvedTypes();
     }
 
+    public Map<NodeId, NumericKind> numericKinds() {
+        return symbols.numericKinds();
+    }
+
+    public List<ResidualTypeCheck> residualTypeChecks() {
+        return symbols.residualTypeChecks();
+    }
+
     public Map<NodeId, ResolvedSymbol> symbolByNodeId() {
         return symbols.symbolByNodeId();
     }
