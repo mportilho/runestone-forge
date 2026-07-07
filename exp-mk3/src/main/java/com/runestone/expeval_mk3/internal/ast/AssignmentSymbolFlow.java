@@ -14,7 +14,7 @@ public final class AssignmentSymbolFlow {
     private final NodeId expressionNodeId;
     private final List<AssignedSymbolSource> targetSymbols;
     private final ExpressionType expressionType;
-    private final SourceSpan sourceSpan;
+    private final Metadata metadata;
 
     AssignmentSymbolFlow(
             List<SymbolReadSource> expressionReads,
@@ -22,7 +22,7 @@ public final class AssignmentSymbolFlow {
             NodeId expressionNodeId,
             List<AssignedSymbolSource> targetSymbols,
             ExpressionType expressionType,
-            SourceSpan sourceSpan) {
+            Metadata metadata) {
         Objects.requireNonNull(expressionReads, "expressionReads");
         this.expressionReads = List.copyOf(expressionReads);
         this.expressionRootRead = expressionRootRead;
@@ -30,7 +30,7 @@ public final class AssignmentSymbolFlow {
         Objects.requireNonNull(targetSymbols, "targetSymbols");
         this.targetSymbols = List.copyOf(targetSymbols);
         this.expressionType = expressionType;
-        this.sourceSpan = Objects.requireNonNull(sourceSpan, "sourceSpan");
+        this.metadata = Objects.requireNonNull(metadata, "metadata");
     }
 
     public List<SymbolReadSource> expressionReads() {
@@ -53,7 +53,32 @@ public final class AssignmentSymbolFlow {
         return Optional.ofNullable(expressionType);
     }
 
+    static Metadata metadata(
+            SourceSpan sourceSpan,
+            SourceSpan destructuringTargetSpan,
+            AssignmentSourceShape knownSourceShape) {
+        return new Metadata(sourceSpan, destructuringTargetSpan, knownSourceShape);
+    }
+
+    public Optional<SourceSpan> destructuringTargetSpan() {
+        return Optional.ofNullable(metadata.destructuringTargetSpan());
+    }
+
+    public Optional<AssignmentSourceShape> knownSourceShape() {
+        return Optional.ofNullable(metadata.knownSourceShape());
+    }
+
     public SourceSpan sourceSpan() {
-        return sourceSpan;
+        return metadata.sourceSpan();
+    }
+
+    record Metadata(
+            SourceSpan sourceSpan,
+            SourceSpan destructuringTargetSpan,
+            AssignmentSourceShape knownSourceShape) {
+
+        Metadata {
+            Objects.requireNonNull(sourceSpan, "sourceSpan");
+        }
     }
 }

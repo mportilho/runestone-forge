@@ -51,7 +51,10 @@ final class SemanticSymbolFlowBuilder {
                     assignment.expression().id(),
                     targetSymbols,
                     expression.typeOrNull(),
-                    assignment.sourceSpan()));
+                    AssignmentSymbolFlow.metadata(
+                            assignment.sourceSpan(),
+                            destructuringTargetSpan(assignment.target()).orElse(null),
+                            knownSourceShape(assignment.expression()).orElse(null))));
         }
 
         List<SymbolReadSource> resultReads = file.resultExpression()
@@ -423,7 +426,24 @@ final class SemanticSymbolFlowBuilder {
     }
 
     private boolean isEmptyVectorLiteral(ExpressionNode expression) {
-        return expression instanceof VectorLiteralNode vectorLiteral && vectorLiteral.elements().isEmpty();
+        return ungroup(expression) instanceof VectorLiteralNode vectorLiteral && vectorLiteral.elements().isEmpty();
+    }
+
+    private Optional<com.runestone.expeval_mk3.internal.source.SourceSpan> destructuringTargetSpan(
+            AssignmentTargetNode target) {
+        if (!(target instanceof DestructuringAssignmentTargetNode destructuring)) {
+            return Optional.empty();
+        }
+        return Optional.of(destructuring.sourceSpan());
+    }
+
+    private Optional<AssignmentSourceShape> knownSourceShape(ExpressionNode expression) {
+        ExpressionNode source = ungroup(expression);
+        if (source instanceof VectorLiteralNode vectorLiteral) {
+            return Optional.of(AssignmentSourceShape.vectorLiteral(
+                    vectorLiteral.elements().stream().map(ExpressionNode::id).toList()));
+        }
+        return Optional.empty();
     }
 
     private void collectNumericSource(NodeId nodeId, LiteralValue value) {

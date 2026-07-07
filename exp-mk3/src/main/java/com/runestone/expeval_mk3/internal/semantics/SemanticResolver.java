@@ -13,6 +13,7 @@ import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.api.StandardFunctionGroup;
 import com.runestone.expeval_mk3.api.UnknownType;
 import com.runestone.expeval_mk3.api.VectorType;
+import com.runestone.expeval_mk3.internal.ast.AssignmentSourceShape;
 import com.runestone.expeval_mk3.internal.ast.AssignedSymbolSource;
 import com.runestone.expeval_mk3.internal.ast.AssignmentSymbolFlow;
 import com.runestone.expeval_mk3.internal.ast.ConcreteTypeRestriction;
@@ -135,6 +136,12 @@ public final class SemanticResolver {
             ExpressionType assignmentType = assignment.expressionType()
                     .or(() -> assignment.expressionRootRead().flatMap(state::typeOfBoundRead))
                     .orElse(UnknownType.INSTANCE);
+            AssignmentSourceShape knownSourceShape = null;
+            if (assignment.destructuringTargetSpan().isEmpty()) {
+                knownSourceShape = assignment.knownSourceShape()
+                        .or(() -> assignment.expressionRootRead().flatMap(state::sourceShapeOfBoundRead))
+                        .orElse(null);
+            }
             for (AssignedSymbolSource target : assignment.targetSymbols()) {
                 if (CurrentTemporalValue.findBySimpleName(target.name()).isPresent()) {
                     diagnostics.add(ExpressionDiagnostic.error(
@@ -144,11 +151,13 @@ public final class SemanticResolver {
                             target.sourceSpan()));
                     continue;
                 }
+                ExpressionType targetType = assignmentTargetType(assignment, assignmentType);
                 boolean created = state.ensureInternal(
                         target.name(),
-                        assignmentType,
+                        targetType,
                         assignment.sourceSpan(),
                         symbolFlow.typeRestrictions().emptyVectorNodes().contains(target.nodeId()),
+                        knownSourceShape,
                         diagnostics);
                 if (created && environment.externalSymbols().contains(target.name())) {
                     diagnostics.add(ExpressionDiagnostic.warning(
@@ -168,6 +177,23 @@ public final class SemanticResolver {
             state.bindCurrentItem(currentItem, environment, diagnostics);
         }
         return state;
+    }
+
+    private ExpressionType assignmentTargetType(
+            AssignmentSymbolFlow assignment,
+            ExpressionType assignmentType) {
+        if (assignment.destructuringTargetSpan().isEmpty()) {
+            return assignmentType;
+        }
+        return destructuredElementType(assignmentType).orElse(UnknownType.INSTANCE);
+    }
+
+    private static Optional<ExpressionType> destructuredElementType(ExpressionType sourceType) {
+        return switch (sourceType) {
+            case VectorType vector -> Optional.of(vector.elementType());
+            case CollectionType collection -> Optional.of(collection.elementType());
+            default -> Optional.empty();
+        };
     }
 
     private static final class SymbolResolutionState {
@@ -220,17 +246,24 @@ public final class SemanticResolver {
                 ExpressionType assignmentType,
                 com.runestone.expeval_mk3.internal.source.SourceSpan sourceSpan,
                 boolean emptyVectorDerived,
+                AssignmentSourceShape knownSourceShape,
                 List<ExpressionDiagnostic> diagnostics) {
             InternalSymbolState existing = internalSymbolsByName.get(name);
             if (existing != null) {
-                existing.updateType(assignmentType, sourceSpan, emptyVectorDerived, diagnostics);
+                existing.updateType(
+                        assignmentType,
+                        sourceSpan,
+                        emptyVectorDerived,
+                        knownSourceShape,
+                        diagnostics);
                 return false;
             }
             internalSymbolsByName.put(name, new InternalSymbolState(
                     name,
                     internalSymbolsByName.size(),
                     assignmentType,
-                    emptyVectorDerived));
+                    emptyVectorDerived,
+                    knownSourceShape));
             return true;
         }
 
@@ -258,6 +291,15 @@ public final class SemanticResolver {
 
         private Optional<ExpressionType> typeOfBoundRead(SymbolReadSource read) {
             return Optional.ofNullable(resolvedTypes.get(read.nodeId()));
+        }
+
+        private Optional<AssignmentSourceShape> sourceShapeOfBoundRead(SymbolReadSource read) {
+            SymbolBinding binding = symbolBindings.get(read.nodeId());
+            if (!(binding instanceof InternalBinding internal)) {
+                return Optional.empty();
+            }
+            InternalSymbolState internalSymbol = internalSymbolsByName.get(internal.name());
+            return internalSymbol == null ? Optional.empty() : internalSymbol.knownSourceShape();
         }
 
         private void resolveFunctionBindings(
@@ -409,6 +451,7 @@ public final class SemanticResolver {
                 resolveJoinRestriction(restriction, environment, diagnostics);
             }
             applyAssignmentInferredTypes(symbolFlow.assignments(), diagnostics);
+            resolveDestructuringAssignments(symbolFlow.assignments(), environment, diagnostics);
             for (RegexLeftOperandRestriction restriction : typeRestrictions.regexLeftOperandRestrictions()) {
                 resolveRegexLeftOperandRestriction(restriction, environment, diagnostics);
             }
@@ -725,6 +768,9 @@ public final class SemanticResolver {
 
         private void propagateTargetTypesToAssignmentExpressions(List<AssignmentSymbolFlow> assignments) {
             for (AssignmentSymbolFlow assignment : assignments) {
+                if (assignment.destructuringTargetSpan().isPresent()) {
+                    continue;
+                }
                 Optional<SymbolReadSource> rootRead = assignment.expressionRootRead();
                 if (assignment.expressionType().isPresent()) {
                     continue;
@@ -748,6 +794,9 @@ public final class SemanticResolver {
                 List<AssignmentSymbolFlow> assignments,
                 List<ExpressionDiagnostic> diagnostics) {
             for (AssignmentSymbolFlow assignment : assignments) {
+                if (assignment.destructuringTargetSpan().isPresent()) {
+                    continue;
+                }
                 if (assignment.expressionType().isPresent()) {
                     continue;
                 }
@@ -758,6 +807,9 @@ public final class SemanticResolver {
                 if (expressionType == null || expressionType == UnknownType.INSTANCE) {
                     continue;
                 }
+                AssignmentSourceShape knownSourceShape = assignment.knownSourceShape()
+                        .or(() -> assignment.expressionRootRead().flatMap(this::sourceShapeOfBoundRead))
+                        .orElse(null);
                 for (AssignedSymbolSource target : assignment.targetSymbols()) {
                     InternalSymbolState internalSymbol = internalSymbolsByName.get(target.name());
                     if (internalSymbol == null) {
@@ -766,11 +818,131 @@ public final class SemanticResolver {
                     if (internalSymbol.type() == UnknownType.INSTANCE) {
                         internalSymbol.forceType(expressionType);
                     } else {
-                        internalSymbol.updateType(expressionType, assignment.sourceSpan(), false, diagnostics);
+                        internalSymbol.updateType(
+                                expressionType,
+                                assignment.sourceSpan(),
+                                false,
+                                knownSourceShape,
+                                diagnostics);
                     }
                     updateBoundNodes(new InternalBinding(target.name()), internalSymbol.type());
                 }
             }
+        }
+
+        private void resolveDestructuringAssignments(
+                List<AssignmentSymbolFlow> assignments,
+                ExpressionEnvironment environment,
+                List<ExpressionDiagnostic> diagnostics) {
+            for (AssignmentSymbolFlow assignment : assignments) {
+                Optional<com.runestone.expeval_mk3.internal.source.SourceSpan> targetSpan =
+                        assignment.destructuringTargetSpan();
+                if (targetSpan.isEmpty()) {
+                    continue;
+                }
+                resolveDestructuringAssignment(assignment, targetSpan.orElseThrow(), environment, diagnostics);
+            }
+        }
+
+        private void resolveDestructuringAssignment(
+                AssignmentSymbolFlow assignment,
+                com.runestone.expeval_mk3.internal.source.SourceSpan targetSpan,
+                ExpressionEnvironment environment,
+                List<ExpressionDiagnostic> diagnostics) {
+            Optional<AssignmentSourceShape> knownSourceShape = knownDestructuringSourceShape(assignment);
+            if (knownSourceShape.isPresent()) {
+                resolveKnownDestructuringSource(assignment, targetSpan, knownSourceShape.orElseThrow(), diagnostics);
+                return;
+            }
+
+            ExpressionType sourceType = assignmentSourceType(assignment);
+            Optional<ExpressionType> elementType = destructuredElementType(sourceType);
+            if (elementType.isPresent()) {
+                updateDestructuredTargets(assignment, elementType.orElseThrow(), diagnostics);
+                addResidualOrStrictDiagnostic(
+                        environment,
+                        targetSpan,
+                        "Destructuring source shape remains unknown",
+                        diagnostics);
+                return;
+            }
+            if (sourceType == UnknownType.INSTANCE) {
+                addResidualOrStrictDiagnostic(
+                        environment,
+                        targetSpan,
+                        "Destructuring source shape remains unknown",
+                        diagnostics);
+                return;
+            }
+            diagnostics.add(ExpressionDiagnostic.error(
+                    DiagnosticCategory.SEMANTIC,
+                    DiagnosticCode.SEMANTIC_DESTRUCTURING_SOURCE_TYPE_MISMATCH,
+                    "Destructuring source must be a vector or collection, but was " + displayType(sourceType),
+                    targetSpan));
+        }
+
+        private void resolveKnownDestructuringSource(
+                AssignmentSymbolFlow assignment,
+                com.runestone.expeval_mk3.internal.source.SourceSpan targetSpan,
+                AssignmentSourceShape sourceShape,
+                List<ExpressionDiagnostic> diagnostics) {
+            if (sourceShape.arity() != assignment.targetSymbols().size()) {
+                diagnostics.add(ExpressionDiagnostic.error(
+                        DiagnosticCategory.SEMANTIC,
+                        DiagnosticCode.SEMANTIC_DESTRUCTURING_ARITY_MISMATCH,
+                        "Destructuring target arity " + assignment.targetSymbols().size()
+                                + " does not match source arity " + sourceShape.arity(),
+                        targetSpan));
+                return;
+            }
+            if (!sourceShape.hasElementNodeIds()) {
+                destructuredElementType(assignmentSourceType(assignment))
+                        .ifPresent(elementType -> updateDestructuredTargets(assignment, elementType, diagnostics));
+                return;
+            }
+            for (int index = 0; index < assignment.targetSymbols().size(); index++) {
+                ExpressionType elementType = effectiveType(sourceShape.elementNodeIds().get(index));
+                updateDestructuredTarget(assignment.targetSymbols().get(index), elementType, diagnostics);
+            }
+        }
+
+        private Optional<AssignmentSourceShape> knownDestructuringSourceShape(AssignmentSymbolFlow assignment) {
+            return assignment.knownSourceShape()
+                    .or(() -> assignment.expressionRootRead().flatMap(this::sourceShapeOfBoundRead));
+        }
+
+        private ExpressionType assignmentSourceType(AssignmentSymbolFlow assignment) {
+            ExpressionType sourceType = effectiveType(assignment.expressionNodeId());
+            if (sourceType != UnknownType.INSTANCE) {
+                return sourceType;
+            }
+            return assignment.expressionRootRead()
+                    .map(read -> effectiveType(read.nodeId()))
+                    .orElse(UnknownType.INSTANCE);
+        }
+
+        private void updateDestructuredTargets(
+                AssignmentSymbolFlow assignment,
+                ExpressionType elementType,
+                List<ExpressionDiagnostic> diagnostics) {
+            for (AssignedSymbolSource target : assignment.targetSymbols()) {
+                updateDestructuredTarget(target, elementType, diagnostics);
+            }
+        }
+
+        private void updateDestructuredTarget(
+                AssignedSymbolSource target,
+                ExpressionType elementType,
+                List<ExpressionDiagnostic> diagnostics) {
+            if (elementType == UnknownType.INSTANCE) {
+                return;
+            }
+            InternalSymbolState internalSymbol = internalSymbolsByName.get(target.name());
+            if (internalSymbol == null) {
+                return;
+            }
+            internalSymbol.updateType(elementType, target.sourceSpan(), false, null, diagnostics);
+            updateBoundNodes(new InternalBinding(target.name()), internalSymbol.type());
         }
 
         private void propagateStrictUnknownExemptions(List<AssignmentSymbolFlow> assignments) {
@@ -1016,12 +1188,19 @@ public final class SemanticResolver {
         private final int slot;
         private ExpressionType type;
         private boolean emptyVectorDerived;
+        private AssignmentSourceShape knownSourceShape;
 
-        private InternalSymbolState(String name, int slot, ExpressionType type, boolean emptyVectorDerived) {
+        private InternalSymbolState(
+                String name,
+                int slot,
+                ExpressionType type,
+                boolean emptyVectorDerived,
+                AssignmentSourceShape knownSourceShape) {
             this.name = Objects.requireNonNull(name, "name");
             this.slot = slot;
             this.type = Objects.requireNonNull(type, "type");
             this.emptyVectorDerived = emptyVectorDerived;
+            this.knownSourceShape = knownSourceShape;
         }
 
         private String name() {
@@ -1040,10 +1219,15 @@ public final class SemanticResolver {
             return emptyVectorDerived;
         }
 
+        private Optional<AssignmentSourceShape> knownSourceShape() {
+            return Optional.ofNullable(knownSourceShape);
+        }
+
         private void updateType(
                 ExpressionType nextType,
                 com.runestone.expeval_mk3.internal.source.SourceSpan sourceSpan,
                 boolean nextEmptyVectorDerived,
+                AssignmentSourceShape nextKnownSourceShape,
                 List<ExpressionDiagnostic> diagnostics) {
             ExpressionType unifiedType = unify(type, nextType);
             if (unifiedType == null) {
@@ -1057,6 +1241,7 @@ public final class SemanticResolver {
             }
             type = unifiedType;
             emptyVectorDerived = nextEmptyVectorDerived;
+            knownSourceShape = nextKnownSourceShape;
         }
 
         private void forceType(ExpressionType nextType) {

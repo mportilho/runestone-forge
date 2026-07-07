@@ -184,6 +184,178 @@ class SemanticResolverTest {
     }
 
     @Test
+    @DisplayName("destructuring targets allocate and update internal slots from left to right")
+    void destructuringTargetsAllocateAndUpdateInternalSlotsFromLeftToRight() {
+        ExpressionFileNode ast = AstTestSupport.build("[b, a] := [1, 2]; [a, b] := [3, 4]; a");
+
+        SemanticModel model = resolveModel(ast, ExpressionEnvironment.standard());
+
+        ResolvedSymbol b = model.internalSymbols().get(0);
+        ResolvedSymbol a = model.internalSymbols().get(1);
+        assertThat(b.name()).isEqualTo("b");
+        assertThat(b.slot()).isZero();
+        assertThat(b.type()).isEqualTo(ScalarType.NUMBER);
+        assertThat(a.name()).isEqualTo("a");
+        assertThat(a.slot()).isEqualTo(1);
+        assertThat(a.type()).isEqualTo(ScalarType.NUMBER);
+        assertThat(targets(ast, "b"))
+                .extracting(target -> model.symbolByNodeId().get(target.id()))
+                .containsExactly(b, b);
+        assertThat(targets(ast, "a"))
+                .extracting(target -> model.symbolByNodeId().get(target.id()))
+                .containsExactly(a, a);
+        assertThat(model.frameLayout().slots())
+                .extracting(slot -> slot.kind() + ":" + slot.name() + ":" + slot.index())
+                .containsExactly(
+                        FrameSlotKind.INTERNAL_SYMBOL + ":b:0",
+                        FrameSlotKind.INTERNAL_SYMBOL + ":a:1");
+    }
+
+    @Test
+    @DisplayName("known vector literal source shapes validate destructuring arity")
+    void knownVectorLiteralSourceShapesValidateDestructuringArity() {
+        ExpressionFileNode ast = AstTestSupport.build("[a, b] := [1]; a");
+
+        SemanticResolutionResult result = resolver.resolve(ast, ExpressionEnvironment.standard());
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_DESTRUCTURING_ARITY_MISMATCH);
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(0, 6, 1, 1));
+                });
+    }
+
+    @Test
+    @DisplayName("known internal vector source shapes validate destructuring arity")
+    void knownInternalVectorSourceShapesValidateDestructuringArity() {
+        ExpressionFileNode ast = AstTestSupport.build("pair := [1, 2]; [a, b, c] := pair; a");
+
+        SemanticResolutionResult result = resolver.resolve(ast, ExpressionEnvironment.standard());
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_DESTRUCTURING_ARITY_MISMATCH);
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(16, 25, 1, 17));
+                });
+    }
+
+    @Test
+    @DisplayName("known vector source shapes propagate through internal aliases")
+    void knownVectorSourceShapesPropagateThroughInternalAliases() {
+        ExpressionFileNode ast = AstTestSupport.build("pair := [1, 2]; alias := pair; [a, b, c] := alias; a");
+
+        SemanticResolutionResult result = resolver.resolve(ast, ExpressionEnvironment.standard());
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_DESTRUCTURING_ARITY_MISMATCH);
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(31, 40, 1, 32));
+                });
+    }
+
+    @Test
+    @DisplayName("known non-destructurable concrete source types produce semantic diagnostics")
+    void knownNonDestructurableConcreteSourceTypesProduceSemanticDiagnostics() {
+        ExpressionFileNode ast = AstTestSupport.build("[a, b] := 1; a");
+
+        SemanticResolutionResult result = resolver.resolve(ast, ExpressionEnvironment.standard());
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_DESTRUCTURING_SOURCE_TYPE_MISMATCH);
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(0, 6, 1, 1));
+                });
+    }
+
+    @Test
+    @DisplayName("known element types propagate to destructured internal symbol restrictions")
+    void knownElementTypesPropagateToDestructuredInternalSymbolRestrictions() {
+        ExpressionFileNode ast = AstTestSupport.build("[first, second] := [lateBound, 1]; first + second");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("lateBound")
+                .strictMode(true)
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        assertThat(model.externalSymbols().getFirst().type()).isEqualTo(ScalarType.NUMBER);
+        assertThat(model.internalSymbols())
+                .extracting(ResolvedSymbol::type)
+                .containsExactly(ScalarType.NUMBER, ScalarType.NUMBER);
+        assertThat(model.resolvedTypes())
+                .containsEntry(identifier(ast, "first", 0).id(), ScalarType.NUMBER)
+                .containsEntry(identifier(ast, "second", 0).id(), ScalarType.NUMBER);
+    }
+
+    @Test
+    @DisplayName("unknown destructuring source shape defers in non-strict mode and fails in strict mode")
+    void unknownDestructuringSourceShapeDefersInNonStrictModeAndFailsInStrictMode() {
+        ExpressionFileNode nonStrictAst = AstTestSupport.build("[a, b] := pair; a");
+        ExpressionEnvironment nonStrictEnvironment = ExpressionEnvironment.builder()
+                .externalSymbol("pair", new VectorType(ScalarType.NUMBER))
+                .build();
+
+        SemanticModel model = resolveModel(nonStrictAst, nonStrictEnvironment);
+
+        assertThat(model.internalSymbols())
+                .extracting(ResolvedSymbol::type)
+                .containsExactly(ScalarType.NUMBER, ScalarType.NUMBER);
+        assertThat(model.residualTypeChecks())
+                .singleElement()
+                .satisfies(check -> assertThat(check.description())
+                        .contains("Destructuring source shape remains unknown"));
+
+        ExpressionFileNode strictAst = AstTestSupport.build("[a, b] := pair; a");
+        ExpressionEnvironment strictEnvironment = nonStrictEnvironment.toBuilder()
+                .strictMode(true)
+                .build();
+
+        SemanticResolutionResult result = resolver.resolve(strictAst, strictEnvironment);
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .anySatisfy(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_STRICT_UNKNOWN_TYPE_RESTRICTION);
+                    assertThat(diagnostic.message()).contains("Destructuring source shape remains unknown");
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(0, 6, 1, 1));
+                });
+    }
+
+    @Test
+    @DisplayName("destructuring target shadowing preserves warnings and a semantic model")
+    void destructuringTargetShadowingPreservesWarningsAndSemanticModel() {
+        ExpressionFileNode ast = AstTestSupport.build("[amount, other] := [1, 2]; amount");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("amount", ScalarType.NUMBER)
+                .build();
+
+        SemanticResolutionResult result = resolver.resolve(ast, environment);
+
+        assertThat(result.hasErrors()).isFalse();
+        assertThat(result.model()).isPresent();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_EXTERNAL_SYMBOL_SHADOWED);
+                    assertThat(diagnostic.severity()).isEqualTo(DiagnosticSeverity.WARNING);
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(1, 7, 1, 2));
+                });
+    }
+
+    @Test
     @DisplayName("concrete restrictions propagate through alias assignments")
     void concreteRestrictionsPropagateThroughAliasAssignments() {
         ExpressionFileNode ast = AstTestSupport.build("value := lateBound; value + 1");
