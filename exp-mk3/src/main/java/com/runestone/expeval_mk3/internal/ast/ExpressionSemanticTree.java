@@ -11,4 +11,6 @@ public interface ExpressionSemanticTree {
     boolean isEmptyFile();
 
     List<AssignedSymbolSource> assignedSymbols();
+
+    SemanticSymbolFlow symbolFlow();
 }

@@ -38,21 +38,13 @@ record ExpressionFileNode(
         }
         List<AssignedSymbolSource> symbols = new ArrayList<>();
         for (AssignmentNode assignment : assignments) {
-            collectAssignedSymbols(assignment.target(), symbols);
+            symbols.addAll(AssignedSymbolSource.from(assignment.target()));
         }
         return List.copyOf(symbols);
     }
 
-    private static void collectAssignedSymbols(AssignmentTargetNode target, List<AssignedSymbolSource> symbols) {
-        switch (target) {
-            case IdentifierAssignmentTargetNode identifier -> symbols.add(new AssignedSymbolSource(
-                    identifier.name(),
-                    identifier.sourceSpan()));
-            case DestructuringAssignmentTargetNode destructuring -> {
-                for (IdentifierAssignmentTargetNode element : destructuring.elements()) {
-                    symbols.add(new AssignedSymbolSource(element.name(), element.sourceSpan()));
-                }
-            }
-        }
+    @Override
+    public SemanticSymbolFlow symbolFlow() {
+        return new SemanticSymbolFlowBuilder().build(this);
     }
 }
