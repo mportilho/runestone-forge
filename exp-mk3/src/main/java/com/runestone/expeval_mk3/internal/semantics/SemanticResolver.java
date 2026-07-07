@@ -24,6 +24,9 @@ import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.NumericConstantRestriction;
 import com.runestone.expeval_mk3.internal.ast.NumericSource;
 import com.runestone.expeval_mk3.internal.ast.NumericSourceKind;
+import com.runestone.expeval_mk3.internal.ast.OffsetDateTimeLiteralSource;
+import com.runestone.expeval_mk3.internal.ast.RegexLeftOperandRestriction;
+import com.runestone.expeval_mk3.internal.ast.RegexPatternSource;
 import com.runestone.expeval_mk3.internal.ast.SameTypeRestriction;
 import com.runestone.expeval_mk3.internal.ast.SemanticSymbolFlow;
 import com.runestone.expeval_mk3.internal.ast.SymbolReadSource;
@@ -44,6 +47,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 public final class SemanticResolver {
 
@@ -171,6 +176,7 @@ public final class SemanticResolver {
         private final Map<String, ExpressionType> inferredExternalTypesByName = new LinkedHashMap<>();
         private final Map<NodeId, SymbolBinding> symbolBindings = new LinkedHashMap<>();
         private final Map<NodeId, ExpressionType> resolvedTypes = new LinkedHashMap<>();
+        private final Map<NodeId, PreparedSemanticValue> preparedValues = new LinkedHashMap<>();
         private final Map<NodeId, ResolvedFunctionBinding> functionBindings = new LinkedHashMap<>();
         private final List<ResidualTypeCheck> residualTypeChecks = new ArrayList<>();
         private final Set<NodeId> emptyVectorExemptNodeIds = new HashSet<>();
@@ -384,6 +390,8 @@ public final class SemanticResolver {
                 ExpressionEnvironment environment,
                 List<ExpressionDiagnostic> diagnostics) {
             TypeRestrictionFlow typeRestrictions = symbolFlow.typeRestrictions();
+            prepareOffsetDateTimeLiterals(typeRestrictions.offsetDateTimeLiteralSources(), environment);
+            prepareRegexPatternLiterals(typeRestrictions.regexPatternSources(), diagnostics);
             for (ConcreteTypeRestriction restriction : typeRestrictions.concreteRestrictions()) {
                 constrainNode(restriction.nodeId(), restriction.requiredType(), restriction.sourceSpan(), diagnostics);
             }
@@ -401,6 +409,9 @@ public final class SemanticResolver {
                 resolveJoinRestriction(restriction, environment, diagnostics);
             }
             applyAssignmentInferredTypes(symbolFlow.assignments(), diagnostics);
+            for (RegexLeftOperandRestriction restriction : typeRestrictions.regexLeftOperandRestrictions()) {
+                resolveRegexLeftOperandRestriction(restriction, environment, diagnostics);
+            }
             for (NumericConstantRestriction restriction : typeRestrictions.numericConstantRestrictions()) {
                 diagnostics.add(ExpressionDiagnostic.error(
                         DiagnosticCategory.SEMANTIC,
@@ -408,6 +419,59 @@ public final class SemanticResolver {
                         "Numeric operator has an invalid constant operand: " + restriction.kind(),
                         restriction.sourceSpan()));
             }
+        }
+
+        private void prepareOffsetDateTimeLiterals(
+                List<OffsetDateTimeLiteralSource> sources,
+                ExpressionEnvironment environment) {
+            for (OffsetDateTimeLiteralSource source : sources) {
+                preparedValues.put(
+                        source.nodeId(),
+                        new PreparedOffsetDateTimeLiteralValue(environment
+                                .normalizeOffsetDateTimeLiteral(source.value())
+                                .normalizedLocalDateTime()));
+            }
+        }
+
+        private void prepareRegexPatternLiterals(
+                List<RegexPatternSource> sources,
+                List<ExpressionDiagnostic> diagnostics) {
+            for (RegexPatternSource source : sources) {
+                try {
+                    preparedValues.put(source.nodeId(), new PreparedRegexPatternValue(Pattern.compile(source.pattern())));
+                } catch (PatternSyntaxException exception) {
+                    diagnostics.add(ExpressionDiagnostic.error(
+                            DiagnosticCategory.SEMANTIC,
+                            DiagnosticCode.SEMANTIC_INVALID_REGEX_PATTERN,
+                            "Invalid regex pattern: " + exception.getDescription(),
+                            source.sourceSpan()));
+                }
+            }
+        }
+
+        private void resolveRegexLeftOperandRestriction(
+                RegexLeftOperandRestriction restriction,
+                ExpressionEnvironment environment,
+                List<ExpressionDiagnostic> diagnostics) {
+            ExpressionType leftType = effectiveType(restriction.nodeId());
+            if (leftType == UnknownType.INSTANCE) {
+                addResidualOrStrictDiagnostic(
+                        environment,
+                        restriction.sourceSpan(),
+                        "Regex left operand type remains unknown",
+                        diagnostics);
+                return;
+            }
+            if (leftType == ScalarType.STRING) {
+                return;
+            }
+            diagnostics.add(ExpressionDiagnostic.error(
+                    DiagnosticCategory.SEMANTIC,
+                    DiagnosticCode.SEMANTIC_REGEX_LEFT_OPERAND_TYPE_MISMATCH,
+                    "Regex matching requires a string left operand. If this came from the documented residue "
+                            + "`5!~\"x\"`, it is parsed as a regex operation, not factorial followed by logical not; "
+                            + "add spacing or convert the left operand to text before regex matching.",
+                    restriction.sourceSpan()));
         }
 
         private void constrainNode(
@@ -885,6 +949,7 @@ public final class SemanticResolver {
             return new SemanticModelSymbols(
                     resolvedTypes,
                     numericKinds(symbolFlow.typeRestrictions().numericSources(), environment),
+                    preparedValues,
                     residualTypeChecks,
                     functionBindings,
                     symbolByNodeId,

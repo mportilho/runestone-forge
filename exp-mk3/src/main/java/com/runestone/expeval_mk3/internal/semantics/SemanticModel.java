@@ -43,6 +43,10 @@ public record SemanticModel(
         return symbols.numericKinds();
     }
 
+    public Map<NodeId, PreparedSemanticValue> preparedValues() {
+        return symbols.preparedValues();
+    }
+
     public List<ResidualTypeCheck> residualTypeChecks() {
         return symbols.residualTypeChecks();
     }

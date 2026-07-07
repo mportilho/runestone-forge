@@ -15,6 +15,8 @@ import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticSeverity;
 import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.internal.semantics.FrameSlotKind;
 import com.runestone.expeval_mk3.internal.semantics.NumericKind;
+import com.runestone.expeval_mk3.internal.semantics.PreparedOffsetDateTimeLiteralValue;
+import com.runestone.expeval_mk3.internal.semantics.PreparedRegexPatternValue;
 import com.runestone.expeval_mk3.internal.semantics.ResolvedFunctionBinding;
 import com.runestone.expeval_mk3.internal.semantics.ResolvedSymbol;
 import com.runestone.expeval_mk3.internal.semantics.ResolvedSymbolKind;
@@ -28,6 +30,9 @@ import org.junit.jupiter.api.Test;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -323,6 +328,131 @@ class SemanticResolverTest {
                 .containsEntry(literal(ast, NullLiteralValue.class, 0).id(), NullType.INSTANCE)
                 .containsEntry(vector(ast, 0).id(), new VectorType(UnknownType.INSTANCE))
                 .containsEntry(vector(ast, 1).id(), new VectorType(ScalarType.NUMBER));
+    }
+
+    @Test
+    @DisplayName("offset datetime literals keep AST source value and expose environment-normalized prepared value")
+    void offsetDateTimeLiteralsKeepAstSourceValueAndExposeEnvironmentNormalizedPreparedValue() {
+        ExpressionFileNode ast = AstTestSupport.build("dt\"2024-01-01T10:00:00+02:00\"");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .zoneId(ZoneId.of("UTC"))
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        LiteralNode literal = literal(ast, OffsetDateTimeLiteralValue.class, 0);
+        assertThat(((OffsetDateTimeLiteralValue) literal.value()).value())
+                .isEqualTo(OffsetDateTime.parse("2024-01-01T10:00:00+02:00"));
+        assertThat(model.preparedValues())
+                .containsEntry(
+                        literal.id(),
+                        new PreparedOffsetDateTimeLiteralValue(LocalDateTime.parse("2024-01-01T08:00:00")));
+    }
+
+    @Test
+    @DisplayName("regex pattern literals compile during semantic resolution")
+    void regexPatternLiteralsCompileDuringSemanticResolution() {
+        ExpressionFileNode ast = AstTestSupport.build("text =~ \"[a-z]+\"");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("text", ScalarType.STRING)
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        LiteralNode patternLiteral = literal(ast, StringLiteralValue.class, 0);
+        assertThat(model.preparedValues())
+                .extractingByKey(patternLiteral.id())
+                .satisfies(prepared -> {
+                    assertThat(prepared).isInstanceOf(PreparedRegexPatternValue.class);
+                    PreparedRegexPatternValue regex = (PreparedRegexPatternValue) prepared;
+                    assertThat(regex.pattern().pattern()).isEqualTo("[a-z]+");
+                    assertThat(regex.pattern().matcher("abc").matches()).isTrue();
+                });
+    }
+
+    @Test
+    @DisplayName("invalid regex patterns produce semantic diagnostics on the pattern literal span")
+    void invalidRegexPatternsProduceSemanticDiagnosticsOnPatternLiteralSpan() {
+        ExpressionFileNode ast = AstTestSupport.build("text =~ \"[\"");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("text", ScalarType.STRING)
+                .build();
+
+        SemanticResolutionResult result = resolver.resolve(ast, environment);
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_INVALID_REGEX_PATTERN);
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(8, 11, 1, 9));
+                });
+    }
+
+    @Test
+    @DisplayName("unknown regex left operands become non-strict residual checks instead of inferred strings")
+    void unknownRegexLeftOperandsBecomeNonStrictResidualChecksInsteadOfInferredStrings() {
+        ExpressionFileNode ast = AstTestSupport.build("lateBound =~ \"x\"");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("lateBound")
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        assertThat(model.externalSymbols().getFirst().type()).isEqualTo(UnknownType.INSTANCE);
+        assertThat(model.residualTypeChecks())
+                .singleElement()
+                .satisfies(check -> assertThat(check.description())
+                        .contains("Regex left operand type remains unknown"));
+    }
+
+    @Test
+    @DisplayName("regex left operand checks use grouped expression types")
+    void regexLeftOperandChecksUseGroupedExpressionTypes() {
+        ExpressionFileNode ast = AstTestSupport.build("(text) =~ \"x\"");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("text", ScalarType.STRING)
+                .strictMode(true)
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        assertThat(model.residualTypeChecks()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("regex left operand checks run after joins resolve concrete string types")
+    void regexLeftOperandChecksRunAfterJoinsResolveConcreteStringTypes() {
+        ExpressionFileNode ast = AstTestSupport.build("(null ?? \"text\") =~ \"x\"");
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .strictMode(true)
+                .build();
+
+        SemanticModel model = resolveModel(ast, environment);
+
+        assertThat(model.residualTypeChecks()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("regex operators produce a didactic diagnostic for incompatible left operands")
+    void regexOperatorsProduceDidacticDiagnosticForIncompatibleLeftOperands() {
+        ExpressionFileNode ast = AstTestSupport.build("5!~\"x\"");
+
+        SemanticResolutionResult result = resolver.resolve(ast, ExpressionEnvironment.standard());
+
+        assertThat(result.hasErrors()).isTrue();
+        assertThat(result.model()).isEmpty();
+        assertThat(result.diagnostics())
+                .singleElement()
+                .satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_REGEX_LEFT_OPERAND_TYPE_MISMATCH);
+                    assertThat(diagnostic.message())
+                            .contains("Regex matching")
+                            .contains("string left operand")
+                            .contains("5!~\"x\"");
+                    assertThat(diagnostic.span()).isEqualTo(new SourceSpan(0, 1, 1, 1));
+                });
     }
 
     @Test

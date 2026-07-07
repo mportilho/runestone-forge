@@ -25,9 +25,12 @@ final class SemanticSymbolFlowBuilder {
     private final List<SameTypeRestriction> sameTypeRestrictions = new ArrayList<>();
     private final List<VectorElementTypeRestriction> vectorElementTypeRestrictions = new ArrayList<>();
     private final List<MembershipTypeRestriction> membershipTypeRestrictions = new ArrayList<>();
+    private final List<RegexLeftOperandRestriction> regexLeftOperandRestrictions = new ArrayList<>();
+    private final List<RegexPatternSource> regexPatternSources = new ArrayList<>();
     private final List<TypeJoinRestriction> joinRestrictions = new ArrayList<>();
     private final List<NumericConstantRestriction> numericConstantRestrictions = new ArrayList<>();
     private final List<NumericSource> numericSources = new ArrayList<>();
+    private final List<OffsetDateTimeLiteralSource> offsetDateTimeLiteralSources = new ArrayList<>();
     private final Set<NodeId> emptyVectorNodes = new HashSet<>();
     private final Map<NodeId, com.runestone.expeval_mk3.internal.source.SourceSpan> sourceSpans = new LinkedHashMap<>();
     private int maxCurrentItemDepth;
@@ -65,9 +68,12 @@ final class SemanticSymbolFlowBuilder {
                         sameTypeRestrictions,
                         vectorElementTypeRestrictions,
                         membershipTypeRestrictions,
+                        regexLeftOperandRestrictions,
+                        regexPatternSources,
                         joinRestrictions,
                         numericConstantRestrictions,
                         numericSources,
+                        offsetDateTimeLiteralSources,
                         emptyVectorNodes,
                         sourceSpans));
     }
@@ -129,8 +135,11 @@ final class SemanticSymbolFlowBuilder {
                 yield withType(operands, binary.id(), ScalarType.BOOLEAN);
             }
             case REGEX_MATCH, REGEX_NOT_MATCH -> {
-                requireConcrete(leftId, ScalarType.STRING, binary.operatorSpan());
-                requireConcrete(rightId, ScalarType.STRING, binary.operatorSpan());
+                regexLeftOperandRestrictions.add(new RegexLeftOperandRestriction(
+                        expressionTypeNodeId(binary.left()),
+                        binary.left().sourceSpan()));
+                requireConcrete(expressionTypeNodeId(binary.right()), ScalarType.STRING, binary.operatorSpan());
+                collectRegexPatternSource(binary.right());
                 yield withType(operands, binary.id(), ScalarType.BOOLEAN);
             }
             case CONCAT -> {
@@ -202,16 +211,37 @@ final class SemanticSymbolFlowBuilder {
     }
 
     private NodeId functionArgumentTypeNodeId(ExpressionNode argument) {
-        ExpressionNode current = argument;
+        return expressionTypeNodeId(argument);
+    }
+
+    private NodeId expressionTypeNodeId(ExpressionNode expression) {
+        return ungroup(expression).id();
+    }
+
+    private ExpressionNode ungroup(ExpressionNode expression) {
+        ExpressionNode current = expression;
         while (current instanceof GroupedExpressionNode grouped) {
             current = grouped.expression();
         }
-        return current.id();
+        return current;
     }
 
     private ExpressionSummary collectLiteral(LiteralNode literal) {
         collectNumericSource(literal.id(), literal.value());
+        if (literal.value() instanceof OffsetDateTimeLiteralValue dateTimeValue) {
+            offsetDateTimeLiteralSources.add(new OffsetDateTimeLiteralSource(literal.id(), dateTimeValue.value()));
+        }
         return known(literal.id(), literalType(literal.value()));
+    }
+
+    private void collectRegexPatternSource(ExpressionNode expression) {
+        ExpressionNode patternExpression = ungroup(expression);
+        if (patternExpression instanceof LiteralNode literal && literal.value() instanceof StringLiteralValue stringValue) {
+            regexPatternSources.add(new RegexPatternSource(
+                    literal.id(),
+                    stringValue.value(),
+                    literal.sourceSpan()));
+        }
     }
 
     private ExpressionSummary collectUnaryOperation(UnaryOperationNode unary, int currentItemDepth) {

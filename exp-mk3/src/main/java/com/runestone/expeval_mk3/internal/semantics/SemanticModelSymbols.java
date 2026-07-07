@@ -10,6 +10,7 @@ import java.util.Objects;
 public record SemanticModelSymbols(
         Map<NodeId, ExpressionType> resolvedTypes,
         Map<NodeId, NumericKind> numericKinds,
+        Map<NodeId, PreparedSemanticValue> preparedValues,
         List<ResidualTypeCheck> residualTypeChecks,
         Map<NodeId, ResolvedFunctionBinding> functionBindings,
         Map<NodeId, ResolvedSymbol> symbolByNodeId,
@@ -21,6 +22,8 @@ public record SemanticModelSymbols(
         resolvedTypes = Map.copyOf(resolvedTypes);
         Objects.requireNonNull(numericKinds, "numericKinds");
         numericKinds = Map.copyOf(numericKinds);
+        Objects.requireNonNull(preparedValues, "preparedValues");
+        preparedValues = Map.copyOf(preparedValues);
         Objects.requireNonNull(residualTypeChecks, "residualTypeChecks");
         residualTypeChecks = List.copyOf(residualTypeChecks);
         Objects.requireNonNull(functionBindings, "functionBindings");
@@ -33,6 +36,7 @@ public record SemanticModelSymbols(
 
     public static SemanticModelSymbols empty() {
         return new SemanticModelSymbols(
+                Map.of(),
                 Map.of(),
                 Map.of(),
                 List.of(),
