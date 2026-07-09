@@ -255,6 +255,107 @@ class SemanticAstPipelineTest {
     }
 
     @Test
+    @DisplayName("classic and functional conditionals share one semantic AST shape with source syntax metadata")
+    void classicAndFunctionalConditionalsShareOneSemanticAstShapeWithSourceSyntaxMetadata() {
+        ExpressionFileNode classicAst = build(
+                "classic := if flag then [1] elsif fallback then [2] else [] endif; classic");
+        ExpressionFileNode functionalAst = build(
+                "functional := if(flag, [1], fallback, [2], []); functional");
+        ExpressionFileNode functionalSemicolonAst = build(
+                "functional := if(flag; [1]; fallback; [2]; []); functional");
+
+        ConditionalNode classic = (ConditionalNode) classicAst.assignments().getFirst().expression();
+        ConditionalNode functional = (ConditionalNode) functionalAst.assignments().getFirst().expression();
+        ConditionalNode functionalSemicolon = (ConditionalNode) functionalSemicolonAst.assignments().getFirst().expression();
+
+        assertThat(classic.syntax()).isEqualTo(ConditionalSyntax.CLASSIC);
+        assertThat(functional.syntax()).isEqualTo(ConditionalSyntax.FUNCTIONAL);
+        assertThat(classic.branches()).hasSize(2);
+        assertThat(functional.branches()).hasSize(2);
+        assertThat(identifierName(classic.branches().getFirst().condition())).isEqualTo("flag");
+        assertThat(identifierName(functional.branches().getFirst().condition())).isEqualTo("flag");
+        assertThat(identifierName(classic.branches().getLast().condition())).isEqualTo("fallback");
+        assertThat(identifierName(functional.branches().getLast().condition())).isEqualTo("fallback");
+        assertThat(classic.branches().getFirst().consequence()).isInstanceOf(VectorLiteralNode.class);
+        assertThat(functional.branches().getFirst().consequence()).isInstanceOf(VectorLiteralNode.class);
+        assertThat(classic.elseExpression()).isInstanceOf(VectorLiteralNode.class);
+        assertThat(functional.elseExpression()).isInstanceOf(VectorLiteralNode.class);
+        assertThat(functional.separators()).extracting(ConditionalSeparatorOccurrence::separator)
+                .containsExactly(
+                        ConditionalSeparator.COMMA,
+                        ConditionalSeparator.COMMA,
+                        ConditionalSeparator.COMMA,
+                        ConditionalSeparator.COMMA);
+        assertThat(functionalSemicolon.separators()).extracting(ConditionalSeparatorOccurrence::separator)
+                .containsExactly(
+                        ConditionalSeparator.SEMICOLON,
+                        ConditionalSeparator.SEMICOLON,
+                        ConditionalSeparator.SEMICOLON,
+                        ConditionalSeparator.SEMICOLON);
+
+        assertThat(AstPrettyPrinter.print(classicAst)).isEqualTo(
+                "classic := if flag then [1] elsif fallback then [2] else [] endif;\nclassic");
+        assertThat(AstPrettyPrinter.print(functionalAst)).isEqualTo(
+                "functional := if(flag, [1], fallback, [2], []);\nfunctional");
+        assertThat(AstPrettyPrinter.print(functionalSemicolonAst)).isEqualTo(
+                "functional := if(flag; [1]; fallback; [2]; []);\nfunctional");
+        assertThat(AstStructuralEquality.equals(classicAst, build(AstPrettyPrinter.print(classicAst)))).isTrue();
+        assertThat(AstStructuralEquality.equals(functionalAst, build(AstPrettyPrinter.print(functionalAst)))).isTrue();
+        assertThat(AstStructuralEquality.equals(
+                functionalSemicolonAst,
+                build(AstPrettyPrinter.print(functionalSemicolonAst)))).isTrue();
+    }
+
+    @Test
+    @DisplayName("conditional branches and else expressions carry node identities and source spans")
+    void conditionalBranchesAndElseExpressionsCarryNodeIdentitiesAndSourceSpans() {
+        String source = "decision := if flag then [1] elsif fallback then [2] else [] endif; decision";
+        ExpressionFileNode ast = build(source);
+
+        ConditionalNode conditional = (ConditionalNode) ast.assignments().getFirst().expression();
+        ConditionalBranchNode firstBranch = conditional.branches().getFirst();
+        ConditionalBranchNode secondBranch = conditional.branches().getLast();
+
+        assertThat(conditional.id()).isNotEqualTo(NodeId.UNASSIGNED);
+        assertThat(firstBranch.id()).isNotEqualTo(NodeId.UNASSIGNED);
+        assertThat(secondBranch.id()).isNotEqualTo(NodeId.UNASSIGNED);
+        assertThat(conditional.elseExpression().id()).isNotEqualTo(NodeId.UNASSIGNED);
+        assertThat(source.substring(conditional.sourceSpan().offset(), conditional.sourceSpan().endOffset()))
+                .isEqualTo("if flag then [1] elsif fallback then [2] else [] endif");
+        assertThat(source.substring(firstBranch.sourceSpan().offset(), firstBranch.sourceSpan().endOffset()))
+                .isEqualTo("flag then [1]");
+        assertThat(source.substring(secondBranch.sourceSpan().offset(), secondBranch.sourceSpan().endOffset()))
+                .isEqualTo("fallback then [2]");
+        assertThat(source.substring(
+                conditional.elseExpression().sourceSpan().offset(),
+                conditional.elseExpression().sourceSpan().endOffset()))
+                .isEqualTo("[]");
+    }
+
+    @Test
+    @DisplayName("vector literals are immutable full-span nodes and empty vectors share the empty element list")
+    void vectorLiteralsAreImmutableFullSpanNodesAndEmptyVectorsShareTheEmptyElementList() {
+        String source = "first := []; second := []; numbers := [1, 2]; numbers";
+        ExpressionFileNode ast = build(source);
+
+        VectorLiteralNode first = (VectorLiteralNode) ast.assignments().getFirst().expression();
+        VectorLiteralNode second = (VectorLiteralNode) ast.assignments().get(1).expression();
+        VectorLiteralNode numbers = (VectorLiteralNode) ast.assignments().get(2).expression();
+
+        assertThat(first).isNotSameAs(second);
+        assertThat(first.id()).isNotEqualTo(second.id());
+        assertThat(first.elements()).isSameAs(second.elements());
+        assertThatExceptionOfType(UnsupportedOperationException.class)
+                .isThrownBy(() -> first.elements().add(second));
+        assertThat(source.substring(first.sourceSpan().offset(), first.sourceSpan().endOffset())).isEqualTo("[]");
+        assertThat(source.substring(second.sourceSpan().offset(), second.sourceSpan().endOffset())).isEqualTo("[]");
+        assertThat(source.substring(numbers.sourceSpan().offset(), numbers.sourceSpan().endOffset())).isEqualTo("[1, 2]");
+        assertThat(numbers.elements()).hasSize(2);
+        assertThat(AstPrettyPrinter.print(ast)).isEqualTo("first := [];\nsecond := [];\nnumbers := [1, 2];\nnumbers");
+        assertThat(AstStructuralEquality.equals(ast, build(AstPrettyPrinter.print(ast)))).isTrue();
+    }
+
+    @Test
     @DisplayName("full scalar precedence tracer builds and round-trips")
     void fullScalarPrecedenceTracerBuildsAndRoundTrips() {
         ExpressionFileNode ast = build("a ?? b or c and d = e xor f || g + h * -i root j ^ k%");
@@ -361,6 +462,11 @@ class SemanticAstPipelineTest {
         return ((LiteralNode) expression).value();
     }
 
+    private static String identifierName(ExpressionNode expression) {
+        assertThat(expression).isInstanceOf(IdentifierNode.class);
+        return ((IdentifierNode) expression).name();
+    }
+
     private static ExpressionFileNode shiftNodeIds(ExpressionFileNode file, int offset) {
         return new ExpressionFileNode(
                 shift(file.id(), offset),
@@ -393,6 +499,13 @@ class SemanticAstPipelineTest {
                     shift(currentTemporalValue.id(), offset),
                     currentTemporalValue.sourceSpan(),
                     currentTemporalValue.kind());
+            case ConditionalNode conditional -> new ConditionalNode(
+                    shift(conditional.id(), offset),
+                    conditional.sourceSpan(),
+                    conditional.syntax(),
+                    conditional.branches().stream().map(branch -> shiftNodeIds(branch, offset)).toList(),
+                    conditional.separators(),
+                    shiftNodeIds(conditional.elseExpression(), offset));
             case GroupedExpressionNode grouped -> new GroupedExpressionNode(
                     shift(grouped.id(), offset),
                     grouped.sourceSpan(),
@@ -446,6 +559,14 @@ class SemanticAstPipelineTest {
                     vector.sourceSpan(),
                     vector.elements().stream().map(operand -> shiftNodeIds(operand, offset)).toList());
         };
+    }
+
+    private static ConditionalBranchNode shiftNodeIds(ConditionalBranchNode branch, int offset) {
+        return new ConditionalBranchNode(
+                shift(branch.id(), offset),
+                branch.sourceSpan(),
+                shiftNodeIds(branch.condition(), offset),
+                shiftNodeIds(branch.consequence(), offset));
     }
 
     private static NodeId shift(NodeId id, int offset) {

@@ -37,6 +37,7 @@ final class AstPrettyPrinter {
         return switch (expression) {
             case BetweenNode between -> printBetween(between);
             case BinaryOperationNode binary -> printBinary(binary);
+            case ConditionalNode conditional -> printConditional(conditional);
             case CurrentTemporalValueNode currentTemporalValue -> printCurrentTemporalValue(currentTemporalValue.kind());
             case GroupedExpressionNode grouped -> "(" + printExpression(grouped.expression()) + ")";
             case IdentifierNode identifier -> identifier.name();
@@ -47,6 +48,46 @@ final class AstPrettyPrinter {
             case UnaryOperationNode unary -> printUnary(unary);
             case VectorLiteralNode vector -> "[" + joinExpressions(vector.elements(), ", ") + "]";
         };
+    }
+
+    private static String printConditional(ConditionalNode conditional) {
+        return switch (conditional.syntax()) {
+            case CLASSIC -> printClassicConditional(conditional);
+            case FUNCTIONAL -> printFunctionalConditional(conditional);
+        };
+    }
+
+    private static String printClassicConditional(ConditionalNode conditional) {
+        StringBuilder builder = new StringBuilder("if ");
+        ConditionalBranchNode firstBranch = conditional.branches().getFirst();
+        builder.append(printExpression(firstBranch.condition()))
+                .append(" then ")
+                .append(printExpression(firstBranch.consequence()));
+        for (int index = 1; index < conditional.branches().size(); index++) {
+            ConditionalBranchNode branch = conditional.branches().get(index);
+            builder.append(" elsif ")
+                    .append(printExpression(branch.condition()))
+                    .append(" then ")
+                    .append(printExpression(branch.consequence()));
+        }
+        return builder.append(" else ")
+                .append(printExpression(conditional.elseExpression()))
+                .append(" endif")
+                .toString();
+    }
+
+    private static String printFunctionalConditional(ConditionalNode conditional) {
+        StringBuilder builder = new StringBuilder("if(");
+        int separatorIndex = 0;
+        for (ConditionalBranchNode branch : conditional.branches()) {
+            builder.append(printExpression(branch.condition()))
+                    .append(conditional.separators().get(separatorIndex++).separator().text())
+                    .append(' ')
+                    .append(printExpression(branch.consequence()))
+                    .append(conditional.separators().get(separatorIndex++).separator().text())
+                    .append(' ');
+        }
+        return builder.append(printExpression(conditional.elseExpression())).append(')').toString();
     }
 
     private static String printBetween(BetweenNode between) {

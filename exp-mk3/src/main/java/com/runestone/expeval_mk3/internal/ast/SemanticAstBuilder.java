@@ -295,7 +295,41 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
 
     @Override
     public ExpressionNode visitDecisionOperation(ExpressionEvaluatorParser.DecisionOperationContext context) {
-        throw unsupported(context, "conditional expression");
+        return visit(context.ifExpression());
+    }
+
+    @Override
+    public ExpressionNode visitIfThenElseOperation(ExpressionEvaluatorParser.IfThenElseOperationContext context) {
+        List<ExpressionNode> expressions = visitExpressions(context.expression());
+        List<ConditionalBranchNode> branches = new ArrayList<>(context.THEN().size());
+        branches.add(conditionalBranch(expressions.get(0), expressions.get(1)));
+        for (int elseifIndex = 0; elseifIndex < context.ELSEIF().size(); elseifIndex++) {
+            int expressionIndex = 2 + elseifIndex * 2;
+            branches.add(conditionalBranch(expressions.get(expressionIndex), expressions.get(expressionIndex + 1)));
+        }
+        return new ConditionalNode(
+                NodeId.UNASSIGNED,
+                span(context),
+                ConditionalSyntax.CLASSIC,
+                branches,
+                List.of(),
+                expressions.getLast());
+    }
+
+    @Override
+    public ExpressionNode visitFunctionalIfOperation(ExpressionEvaluatorParser.FunctionalIfOperationContext context) {
+        List<ExpressionNode> expressions = visitExpressions(context.expression());
+        List<ConditionalBranchNode> branches = new ArrayList<>(expressions.size() / 2);
+        for (int expressionIndex = 0; expressionIndex < expressions.size() - 1; expressionIndex += 2) {
+            branches.add(conditionalBranch(expressions.get(expressionIndex), expressions.get(expressionIndex + 1)));
+        }
+        return new ConditionalNode(
+                NodeId.UNASSIGNED,
+                span(context),
+                ConditionalSyntax.FUNCTIONAL,
+                branches,
+                functionalSeparators(context),
+                expressions.getLast());
     }
 
     @Override
@@ -428,6 +462,45 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
                     right);
         }
         return result;
+    }
+
+    private List<ExpressionNode> visitExpressions(List<ExpressionEvaluatorParser.ExpressionContext> expressionContexts) {
+        List<ExpressionNode> expressions = new ArrayList<>(expressionContexts.size());
+        for (ExpressionEvaluatorParser.ExpressionContext expressionContext : expressionContexts) {
+            expressions.add(visit(expressionContext));
+        }
+        return expressions;
+    }
+
+    private ConditionalBranchNode conditionalBranch(ExpressionNode condition, ExpressionNode consequence) {
+        return new ConditionalBranchNode(
+                NodeId.UNASSIGNED,
+                span(condition.sourceSpan(), consequence.sourceSpan()),
+                condition,
+                consequence);
+    }
+
+    private List<ConditionalSeparatorOccurrence> functionalSeparators(
+            ExpressionEvaluatorParser.FunctionalIfOperationContext context) {
+        List<ConditionalSeparatorOccurrence> separators = new ArrayList<>(context.expression().size() - 1);
+        for (int childIndex = 0; childIndex < context.getChildCount(); childIndex++) {
+            if (context.getChild(childIndex) instanceof TerminalNode terminal) {
+                Token token = terminal.getSymbol();
+                if (token.getType() == ExpressionEvaluatorParser.COMMA
+                        || token.getType() == ExpressionEvaluatorParser.SEMI) {
+                    separators.add(new ConditionalSeparatorOccurrence(conditionalSeparator(token), span(token)));
+                }
+            }
+        }
+        return separators;
+    }
+
+    private static ConditionalSeparator conditionalSeparator(Token token) {
+        return switch (token.getType()) {
+            case ExpressionEvaluatorParser.COMMA -> ConditionalSeparator.COMMA;
+            case ExpressionEvaluatorParser.SEMI -> ConditionalSeparator.SEMICOLON;
+            default -> throw new IllegalArgumentException("Unsupported conditional separator: " + token.getText());
+        };
     }
 
     private ExpressionNode stringLiteral(Token token) {

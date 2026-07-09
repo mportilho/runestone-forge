@@ -49,6 +49,11 @@ final class AstStructuralEquality {
                     leftBinary.operator() == rightBinary.operator()
                             && equals(leftBinary.left(), rightBinary.left())
                             && equals(leftBinary.right(), rightBinary.right());
+            case ConditionalNode leftConditional when right instanceof ConditionalNode rightConditional ->
+                    leftConditional.syntax() == rightConditional.syntax()
+                            && equalsSeparators(leftConditional.separators(), rightConditional.separators())
+                            && equalsBranches(leftConditional.branches(), rightConditional.branches())
+                            && equals(leftConditional.elseExpression(), rightConditional.elseExpression());
             case CurrentTemporalValueNode leftCurrentTemporalValue
                     when right instanceof CurrentTemporalValueNode rightCurrentTemporalValue ->
                     leftCurrentTemporalValue.kind() == rightCurrentTemporalValue.kind();
@@ -74,6 +79,35 @@ final class AstStructuralEquality {
                     equalsExpressions(leftVector.elements(), rightVector.elements());
             default -> false;
         };
+    }
+
+    private static boolean equalsSeparators(
+            List<ConditionalSeparatorOccurrence> left,
+            List<ConditionalSeparatorOccurrence> right) {
+        if (left.size() != right.size()) {
+            return false;
+        }
+        for (int index = 0; index < left.size(); index++) {
+            if (left.get(index).separator() != right.get(index).separator()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean equalsBranches(List<ConditionalBranchNode> left, List<ConditionalBranchNode> right) {
+        if (left.size() != right.size()) {
+            return false;
+        }
+        for (int index = 0; index < left.size(); index++) {
+            ConditionalBranchNode leftBranch = left.get(index);
+            ConditionalBranchNode rightBranch = right.get(index);
+            if (!equals(leftBranch.condition(), rightBranch.condition())
+                    || !equals(leftBranch.consequence(), rightBranch.consequence())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean equalsExpressions(List<ExpressionNode> left, List<ExpressionNode> right) {

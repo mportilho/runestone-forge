@@ -53,6 +53,13 @@ final class AstNodeIdAssigner {
                     binary.operator(),
                     binary.operatorSpan(),
                     assignExpression(binary.right()));
+            case ConditionalNode conditional -> new ConditionalNode(
+                    next(),
+                    conditional.sourceSpan(),
+                    conditional.syntax(),
+                    assignBranches(conditional.branches()),
+                    conditional.separators(),
+                    assignExpression(conditional.elseExpression()));
             case CurrentTemporalValueNode currentTemporalValue -> new CurrentTemporalValueNode(
                     next(),
                     currentTemporalValue.sourceSpan(),
@@ -91,6 +98,22 @@ final class AstNodeIdAssigner {
                     vector.sourceSpan(),
                     vector.elements().stream().map(this::assignExpression).toList());
         };
+    }
+
+    private ConditionalBranchNode assignBranch(ConditionalBranchNode branch) {
+        return new ConditionalBranchNode(
+                next(),
+                branch.sourceSpan(),
+                assignExpression(branch.condition()),
+                assignExpression(branch.consequence()));
+    }
+
+    private List<ConditionalBranchNode> assignBranches(List<ConditionalBranchNode> branches) {
+        List<ConditionalBranchNode> assigned = new ArrayList<>(branches.size());
+        for (ConditionalBranchNode branch : branches) {
+            assigned.add(assignBranch(branch));
+        }
+        return assigned;
     }
 
     private NodeId next() {
