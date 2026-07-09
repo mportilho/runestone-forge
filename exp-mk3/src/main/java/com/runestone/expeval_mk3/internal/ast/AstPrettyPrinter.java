@@ -35,8 +35,17 @@ final class AstPrettyPrinter {
 
     private static String printExpression(ExpressionNode expression) {
         return switch (expression) {
+            case CurrentTemporalValueNode currentTemporalValue -> printCurrentTemporalValue(currentTemporalValue.kind());
             case IdentifierNode identifier -> identifier.name();
             case LiteralNode literal -> printLiteral(literal.value());
+        };
+    }
+
+    private static String printCurrentTemporalValue(CurrentTemporalValueKind kind) {
+        return switch (kind) {
+            case DATE -> "currDate";
+            case DATE_TIME -> "currDateTime";
+            case TIME -> "currTime";
         };
     }
 
