@@ -352,8 +352,15 @@ memberChain
     ;
 
 collectionFunctionArguments
-    : AT ARROW expression                                                # lambdaCollectionFunctionArguments
-    | expression (COMMA expression)*                                     # positionalCollectionFunctionArguments
+    // Issue #10 exception to the Etapa 1 grammar freeze: collection-operation
+    // arguments are modeled per argument so lambda syntax can coexist with
+    // positional arguments without becoming an ordinary function call.
+    : collectionFunctionArgument (COMMA collectionFunctionArgument)*      # collectionFunctionArgumentList
+    ;
+
+collectionFunctionArgument
+    : AT ARROW expression                                                # lambdaCollectionFunctionArgument
+    | expression                                                         # positionalCollectionFunctionArgument
     ;
 
 // Com literais de hora prefixados (t"10:20"), [10:20] é sempre um slice comum:

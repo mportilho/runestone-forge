@@ -143,6 +143,31 @@ class SemanticAstNavigationTest {
     }
 
     @Test
+    @DisplayName("collection operation argument lists keep positional and lambda arguments distinct")
+    void collectionOperationArgumentListsKeepPositionalAndLambdaArgumentsDistinct() {
+        ExpressionFileNode ast = build("items..reduce(0, @ -> @.amount, limit)");
+
+        NavigationChainNode chain = resultAs(ast, NavigationChainNode.class);
+        CollectionOperationNavigationLink reduce = as(chain.links().getFirst(), CollectionOperationNavigationLink.class);
+        PositionalCollectionOperationArgument initial = as(
+                reduce.arguments().get(0),
+                PositionalCollectionOperationArgument.class);
+        LambdaCollectionOperationArgument lambda = as(
+                reduce.arguments().get(1),
+                LambdaCollectionOperationArgument.class);
+        PositionalCollectionOperationArgument limit = as(
+                reduce.arguments().get(2),
+                PositionalCollectionOperationArgument.class);
+
+        assertThat(reduce.operationName().value()).isEqualTo("reduce");
+        assertThat(initial.expression()).isInstanceOf(LiteralNode.class);
+        assertThat(lambda.lambda().body()).isInstanceOf(NavigationChainNode.class);
+        assertThat(limit.expression()).isEqualTo(new IdentifierNode(limit.expression().id(), limit.sourceSpan(), "limit"));
+        assertThat(AstPrettyPrinter.print(ast)).isEqualTo("items..reduce(0, @ -> @.amount, limit)");
+        assertRoundTrips(ast);
+    }
+
+    @Test
     @DisplayName("subscripts build source-faithful typed links and preserve integer literal formats")
     void subscriptsBuildSourceFaithfulTypedLinksAndPreserveIntegerLiteralFormats() {
         ExpressionFileNode ast = build("items[0x0A][-07:10][5:][:-0xF]?.[*]");

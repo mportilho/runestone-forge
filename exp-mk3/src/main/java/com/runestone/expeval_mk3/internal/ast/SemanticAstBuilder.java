@@ -677,16 +677,38 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
             return Optional.of(List.of());
         }
         return switch (context) {
-            case ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext lambda -> buildLambdaCollectionArgument(lambda)
-                    .map(List::of);
-            case ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext positional ->
-                    buildPositionalCollectionArguments(positional);
+            case ExpressionEvaluatorParser.CollectionFunctionArgumentListContext list ->
+                    buildCollectionOperationArgumentList(list);
             default -> throw unsupported(context, "collection function arguments");
         };
     }
 
+    private Optional<List<CollectionOperationArgument>> buildCollectionOperationArgumentList(
+            ExpressionEvaluatorParser.CollectionFunctionArgumentListContext context) {
+        List<CollectionOperationArgument> arguments = new ArrayList<>(context.collectionFunctionArgument().size());
+        for (ExpressionEvaluatorParser.CollectionFunctionArgumentContext argumentContext : context.collectionFunctionArgument()) {
+            Optional<CollectionOperationArgument> argument = buildCollectionOperationArgument(argumentContext);
+            if (argument.isEmpty()) {
+                return Optional.empty();
+            }
+            arguments.add(argument.orElseThrow());
+        }
+        return Optional.of(arguments);
+    }
+
+    private Optional<CollectionOperationArgument> buildCollectionOperationArgument(
+            ExpressionEvaluatorParser.CollectionFunctionArgumentContext context) {
+        return switch (context) {
+            case ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentContext lambda ->
+                    buildLambdaCollectionArgument(lambda);
+            case ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentContext positional ->
+                    buildPositionalCollectionArgument(positional);
+            default -> throw unsupported(context, "collection function argument");
+        };
+    }
+
     private Optional<CollectionOperationArgument> buildLambdaCollectionArgument(
-            ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext context) {
+            ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentContext context) {
         Optional<ExpressionNode> body = visit(context.expression());
         if (body.isEmpty()) {
             return Optional.empty();
@@ -704,21 +726,17 @@ final class SemanticAstBuilder extends ExpressionEvaluatorBaseVisitor<Optional<E
                 lambda));
     }
 
-    private Optional<List<CollectionOperationArgument>> buildPositionalCollectionArguments(
-            ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext context) {
-        List<CollectionOperationArgument> arguments = new ArrayList<>(context.expression().size());
-        for (ExpressionEvaluatorParser.ExpressionContext argumentContext : context.expression()) {
-            Optional<ExpressionNode> argument = visit(argumentContext);
-            if (argument.isEmpty()) {
-                return Optional.empty();
-            }
-            ExpressionNode expression = argument.orElseThrow();
-            arguments.add(new PositionalCollectionOperationArgument(
-                    NodeId.UNASSIGNED,
-                    expression.sourceSpan(),
-                    expression));
+    private Optional<CollectionOperationArgument> buildPositionalCollectionArgument(
+            ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentContext context) {
+        Optional<ExpressionNode> argument = visit(context.expression());
+        if (argument.isEmpty()) {
+            return Optional.empty();
         }
-        return Optional.of(arguments);
+        ExpressionNode expression = argument.orElseThrow();
+        return Optional.of(new PositionalCollectionOperationArgument(
+                NodeId.UNASSIGNED,
+                expression.sourceSpan(),
+                expression));
     }
 
     private Optional<List<ExpressionNode>> buildArguments(List<ExpressionEvaluatorParser.ExpressionContext> argumentContexts) {
