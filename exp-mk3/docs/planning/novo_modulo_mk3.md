@@ -105,8 +105,8 @@ Além do que a v1 já fazia (símbolos, tipos, overloads, propriedades, métodos
 2. **Contexto de `@`** — `@` só é válido dentro de `[?(...)]` e de lambdas `@ -> ...`. O resolver mantém uma pilha de contexto de filtro/lambda durante a travessia; `@` fora dela é erro.
 3. **Comparações não encadeáveis** — a gramática já garante (um operador por nível), mas o resolver produz mensagem didática quando detecta o padrão `(a < b) < c` com tipos incoerentes.
 4. **Resíduo documentado da gramática**, transformado em diagnóstico de qualidade:
-    - `5!~"x"` lexa como `5 !~ "x"` (maximal munch de `REGEX_NOT_MATCH`); se o operando esquerdo de regex não for `STRING`, a mensagem sugere: "para fatorial seguido de `~`, insira espaço: `5! ~ ...`".
-    - (A antiga colisão do type hint `a<bool>c` deixou de existir: com os hints fora da gramática, `<` volta a ser inequívoco — ver 5.1.)
+  - `5!~"x"` lexa como `5 !~ "x"` (maximal munch de `REGEX_NOT_MATCH`); se o operando esquerdo de regex não for `STRING`, a mensagem sugere: "para fatorial seguido de `~`, insira espaço: `5! ~ ...`".
+  - (A antiga colisão do type hint `a<bool>c` deixou de existir: com os hints fora da gramática, `<` volta a ser inequívoco — ver 5.1.)
 5. **Hex/octal em subscripts** — política única, aplicada aqui (recomendação: rejeitar com sugestão do decimal equivalente).
 6. **Regex sempre literal à direita** (garantido pela gramática) → o resolver valida a sintaxe do padrão **em compilação** e o `Pattern` compilado é anexado ao binding do nó. Regex inválida nunca chega ao runtime.
 7. **`ROOT` e `EXPONENTIATION`** — tipagem numérica estrita; define-se aqui a semântica de `n root x` = `x^(1/n)` com tratamento exato para raízes inteiras de potências perfeitas quando em modo `DECIMAL`.
@@ -115,13 +115,13 @@ Além do que a v1 já fazia (símbolos, tipos, overloads, propriedades, métodos
 
 ```java
 SemanticModel(
-    ExpressionFileNode ast,
-    Map<NodeId, ResolvedType> resolvedTypes,
-    Map<NodeId, SymbolRef> symbolByNodeId,
-    Map<String, SymbolRef> externalSymbolsByName,
-    Map<String, SymbolRef> internalSymbolsByName,
-    Map<NodeId, ResolvedFunctionBinding> functionBindings,
-    List<SemanticIssue> issues
+        ExpressionFileNode ast,
+        Map<NodeId, ResolvedType> resolvedTypes,
+        Map<NodeId, SymbolRef> symbolByNodeId,
+        Map<String, SymbolRef> externalSymbolsByName,
+        Map<String, SymbolRef> internalSymbolsByName,
+        Map<NodeId, ResolvedFunctionBinding> functionBindings,
+        List<SemanticIssue> issues
 )
 ```
 
@@ -203,13 +203,13 @@ Mantida a descoberta por reflexão → `FunctionDescriptor` com `MethodHandle`, 
 
 ```java
 ExecutionPlan(
-    List<ExecutableAssignment> assignments,
-    ExecutableNode resultExpression,        // pode ser null (script só de atribuições)
-    Object[] defaults,
-    ExternalBindingPlan[] externalBindings, // array ordenado, não Map
-    int frameSize,                          // internos + externos + slots de @
-    int maxFilterDepth,
-    AuditPlan auditPlan                     // lazy, ver seção 18
+        List<ExecutableAssignment> assignments,
+        ExecutableNode resultExpression,        // pode ser null (script só de atribuições)
+        Object[] defaults,
+        ExternalBindingPlan[] externalBindings, // array ordenado, não Map
+        int frameSize,                          // internos + externos + slots de @
+        int maxFilterDepth,
+        AuditPlan auditPlan                     // lazy, ver seção 18
 )
 ```
 
@@ -258,14 +258,14 @@ Toda otimização registra no plano os `foldedVariableReads`/eventos necessário
 `BigDecimal` é o maior custo do runtime da v1 (alocação + aritmética). Estratégia em dois modos, decidida por ambiente:
 
 - **`DECIMAL` (default)** — semântica idêntica à v1 (`BigDecimal` + `MathContext`). Otimizações mesmo aqui:
-    - cache de constantes pequenas (`ZERO`, `ONE`, `0.01`, inteiros −128..127 e potências de 10 comuns);
-    - reuso do `MathContext` sem revalidação;
-    - evitar `stripTrailingZeros`/`setScale` intermediários — normalização só na borda de saída.
+  - cache de constantes pequenas (`ZERO`, `ONE`, `0.01`, inteiros −128..127 e potências de 10 comuns);
+  - reuso do `MathContext` sem revalidação;
+  - evitar `stripTrailingZeros`/`setScale` intermediários — normalização só na borda de saída.
 - **`FAST` (opt-in)** — o `SemanticResolver` anota cada nó numérico com `NumericKind`:
-    - `LONG` quando todos os insumos são inteiros e as operações fecham em inteiros (`+ - * mod !`), com **checagem de overflow** (`Math.addExact` etc.) e promoção automática do nó para `DECIMAL` em overflow (fallback estrutural: o plano contém o nó lento como irmão);
-    - `DOUBLE` para `/ ^ root %` e funções transcendentais;
-    - `DECIMAL` quando o usuário passa `BigDecimal` externo ou exige precisão.
-      Em `FAST`, expressões numéricas puras executam **sem boxing** via caminho `computeAsLong/computeAsDouble` nos nós especializados; o boxing acontece apenas no retorno da API.
+  - `LONG` quando todos os insumos são inteiros e as operações fecham em inteiros (`+ - * mod !`), com **checagem de overflow** (`Math.addExact` etc.) e promoção automática do nó para `DECIMAL` em overflow (fallback estrutural: o plano contém o nó lento como irmão);
+  - `DOUBLE` para `/ ^ root %` e funções transcendentais;
+  - `DECIMAL` quando o usuário passa `BigDecimal` externo ou exige precisão.
+    Em `FAST`, expressões numéricas puras executam **sem boxing** via caminho `computeAsLong/computeAsDouble` nos nós especializados; o boxing acontece apenas no retorno da API.
 
 A conversão para o tipo de retorno público (`BigDecimal` em `MathExpression`) continua na borda, como na v1 ("coerção apenas nas bordas").
 
@@ -350,9 +350,9 @@ A v1 pagava (pouco, mas pagava) pela possibilidade de auditar. Na v2:
 ## 19. Erros e diagnósticos
 
 - Três classes de erro, cada uma com `SourceSpan`, código estável e sugestão quando aplicável:
-    - **léxico/sintático** (listener ANTLR + `ERROR_CHAR`);
-    - **semântico** (`SemanticIssue` acumulados — reportar todos, não só o primeiro);
-    - **runtime** (divisão por zero em `DECIMAL`, overflow em `FAST` sem fallback, propriedade inexistente sem metadados Java, `@` reentrante além de `maxFilterDepth`...).
+  - **léxico/sintático** (listener ANTLR + `ERROR_CHAR`);
+  - **semântico** (`SemanticIssue` acumulados — reportar todos, não só o primeiro);
+  - **runtime** (divisão por zero em `DECIMAL`, overflow em `FAST` sem fallback, propriedade inexistente sem metadados Java, `@` reentrante além de `maxFilterDepth`...).
 - Mensagens específicas para as armadilhas documentadas da gramática (seção 5, item 4) — transformar limitações do lexer em diagnósticos guiados é mais barato e mais robusto que predicados léxicos.
 
 ---
@@ -383,11 +383,11 @@ Ferramenta opcional: um **migrador de fonte** (regex + reparse) que converte exp
 - **Testes diferenciais** ANTLR × Pratt (quando fase 2 existir) e v1 × v2 sobre corpus real de expressões.
 - **Property-based testing** do parser (round-trip: pretty-print da AST re-parseia para AST igual) e do folding (plano otimizado ≡ plano ingênuo para entradas aleatórias).
 - **JMH** com metas explícitas:
-    - `a + b * 2` (`FAST`): ordem de dezenas de ns por compute, **zero alocação** em regime estacionário;
-    - `a + b * 2` (`DECIMAL`): alocação limitada aos `BigDecimal` de resultado;
-    - navegação com metadados Java: custo ≈ getter direto + indireção constante;
-    - compilação fria (cache miss) e quente (hit) medidas separadamente;
-    - filtro + agregação sobre lista de 10k elementos, com e sem fusão.
+  - `a + b * 2` (`FAST`): ordem de dezenas de ns por compute, **zero alocação** em regime estacionário;
+  - `a + b * 2` (`DECIMAL`): alocação limitada aos `BigDecimal` de resultado;
+  - navegação com metadados Java: custo ≈ getter direto + indireção constante;
+  - compilação fria (cache miss) e quente (hit) medidas separadamente;
+  - filtro + agregação sobre lista de 10k elementos, com e sem fusão.
 - Perfil de alocação (async-profiler/JFR) como gate de regressão em CI.
 
 ---
