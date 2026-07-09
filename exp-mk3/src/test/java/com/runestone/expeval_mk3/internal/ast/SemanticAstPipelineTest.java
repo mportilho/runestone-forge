@@ -131,6 +131,142 @@ class SemanticAstPipelineTest {
     }
 
     @Test
+    @DisplayName("explicit grouping and unary operators build source-faithful AST nodes")
+    void explicitGroupingAndUnaryOperatorsBuildSourceFaithfulAstNodes() {
+        ExpressionFileNode ast = build("grouped := (!!flag); synonym := \u00ACflag; grouped");
+
+        assertThat(ast.assignments().getFirst().expression()).isInstanceOf(GroupedExpressionNode.class);
+        GroupedExpressionNode grouped = (GroupedExpressionNode) ast.assignments().getFirst().expression();
+        assertThat(grouped.expression()).isInstanceOf(UnaryOperationNode.class);
+        UnaryOperationNode outerNot = (UnaryOperationNode) grouped.expression();
+        assertThat(outerNot.operator()).isEqualTo(UnaryOperator.LOGICAL_NOT);
+        assertThat(outerNot.operand()).isInstanceOf(UnaryOperationNode.class);
+        UnaryOperationNode innerNot = (UnaryOperationNode) outerNot.operand();
+        assertThat(innerNot.operator()).isEqualTo(UnaryOperator.LOGICAL_NOT);
+        assertThat(innerNot.operand()).isInstanceOf(IdentifierNode.class);
+        assertThat(ast.assignments().get(1).expression()).isInstanceOf(UnaryOperationNode.class);
+        assertThat(((UnaryOperationNode) ast.assignments().get(1).expression()).operator())
+                .isEqualTo(UnaryOperator.LOGICAL_NOT);
+
+        String printed = AstPrettyPrinter.print(ast);
+        assertThat(printed).isEqualTo("grouped := (~~flag);\nsynonym := ~flag;\ngrouped");
+        assertThat(AstStructuralEquality.equals(ast, build(printed))).isTrue();
+    }
+
+    @Test
+    @DisplayName("binary operators follow grammar associativity")
+    void binaryOperatorsFollowGrammarAssociativity() {
+        ExpressionFileNode ast = build("power := 2 ^ 3 ^ 4; subtract := a - b - c; rooted := 3 \u221A 27; rooted");
+
+        BinaryOperationNode power = (BinaryOperationNode) ast.assignments().getFirst().expression();
+        assertThat(power.operator()).isEqualTo(BinaryOperator.EXPONENTIATE);
+        assertThat(power.left()).isInstanceOf(LiteralNode.class);
+        assertThat(power.right()).isInstanceOf(BinaryOperationNode.class);
+        assertThat(((BinaryOperationNode) power.right()).operator()).isEqualTo(BinaryOperator.EXPONENTIATE);
+
+        BinaryOperationNode subtract = (BinaryOperationNode) ast.assignments().get(1).expression();
+        assertThat(subtract.operator()).isEqualTo(BinaryOperator.SUBTRACT);
+        assertThat(subtract.left()).isInstanceOf(BinaryOperationNode.class);
+        assertThat(((BinaryOperationNode) subtract.left()).operator()).isEqualTo(BinaryOperator.SUBTRACT);
+
+        BinaryOperationNode rooted = (BinaryOperationNode) ast.assignments().get(2).expression();
+        assertThat(rooted.operator()).isEqualTo(BinaryOperator.ROOT);
+
+        String printed = AstPrettyPrinter.print(ast);
+        assertThat(printed).isEqualTo("power := 2 ^ 3 ^ 4;\nsubtract := a - b - c;\nrooted := 3 root 27;\nrooted");
+        assertThat(AstStructuralEquality.equals(ast, build(printed))).isTrue();
+    }
+
+    @Test
+    @DisplayName("postfix chains preserve operation order and operator spans")
+    void postfixChainsPreserveOperationOrderAndOperatorSpans() {
+        String source = "value := n%!; value";
+        ExpressionFileNode ast = build(source);
+
+        PostfixOperationNode postfix = (PostfixOperationNode) ast.assignments().getFirst().expression();
+        assertThat(postfix.operand()).isInstanceOf(IdentifierNode.class);
+        assertThat(postfix.operations()).extracting(PostfixOperatorOccurrence::operator)
+                .containsExactly(PostfixOperator.PERCENT, PostfixOperator.FACTORIAL);
+        assertThat(source.substring(
+                postfix.operations().getFirst().sourceSpan().offset(),
+                postfix.operations().getFirst().sourceSpan().endOffset())).isEqualTo("%");
+        assertThat(source.substring(
+                postfix.operations().getLast().sourceSpan().offset(),
+                postfix.operations().getLast().sourceSpan().endOffset())).isEqualTo("!");
+
+        assertThat(AstPrettyPrinter.print(ast)).isEqualTo("value := n%!;\nvalue");
+        assertThat(AstStructuralEquality.equals(ast, build(AstPrettyPrinter.print(ast)))).isTrue();
+    }
+
+    @Test
+    @DisplayName("between and membership operators preserve negation metadata and canonical synonyms")
+    void betweenAndMembershipOperatorsPreserveNegationMetadataAndCanonicalSynonyms() {
+        ExpressionFileNode ast = build("range := x not between low and high; excluded := x nin [1, 2]; "
+                + "alsoExcluded := x not in [3, 4]; included := x in []; included");
+
+        BetweenNode range = (BetweenNode) ast.assignments().getFirst().expression();
+        assertThat(range.negated()).isTrue();
+        assertThat(range.value()).isInstanceOf(IdentifierNode.class);
+        assertThat(range.lowerBound()).isInstanceOf(IdentifierNode.class);
+        assertThat(range.upperBound()).isInstanceOf(IdentifierNode.class);
+
+        MembershipNode excluded = (MembershipNode) ast.assignments().get(1).expression();
+        MembershipNode alsoExcluded = (MembershipNode) ast.assignments().get(2).expression();
+        MembershipNode included = (MembershipNode) ast.assignments().get(3).expression();
+        assertThat(excluded.negated()).isTrue();
+        assertThat(alsoExcluded.negated()).isTrue();
+        assertThat(included.negated()).isFalse();
+        assertThat(excluded.collection()).isInstanceOf(VectorLiteralNode.class);
+        assertThat(((VectorLiteralNode) included.collection()).elements()).isEmpty();
+
+        String printed = AstPrettyPrinter.print(ast);
+        assertThat(printed).isEqualTo("range := x not between low and high;\n"
+                + "excluded := x not in [1, 2];\n"
+                + "alsoExcluded := x not in [3, 4];\n"
+                + "included := x in [];\n"
+                + "included");
+        assertThat(AstStructuralEquality.equals(ast, build(printed))).isTrue();
+    }
+
+    @Test
+    @DisplayName("direct null coalesce chains are variadic without flattening grouped operands")
+    void directNullCoalesceChainsAreVariadicWithoutFlatteningGroupedOperands() {
+        String source = "chain := a ?? b ?? c; grouped := a ?? (b ?? c); chain";
+        ExpressionFileNode ast = build(source);
+
+        NullCoalesceNode chain = (NullCoalesceNode) ast.assignments().getFirst().expression();
+        assertThat(chain.operands()).hasSize(3);
+        assertThat(chain.operatorSpans()).hasSize(2);
+        assertThat(source.substring(chain.operatorSpans().getFirst().offset(), chain.operatorSpans().getFirst().endOffset()))
+                .isEqualTo("??");
+        assertThat(source.substring(chain.operatorSpans().getLast().offset(), chain.operatorSpans().getLast().endOffset()))
+                .isEqualTo("??");
+
+        NullCoalesceNode groupedOuter = (NullCoalesceNode) ast.assignments().get(1).expression();
+        assertThat(groupedOuter.operands()).hasSize(2);
+        assertThat(groupedOuter.operands().getLast()).isInstanceOf(GroupedExpressionNode.class);
+        GroupedExpressionNode groupedOperand = (GroupedExpressionNode) groupedOuter.operands().getLast();
+        assertThat(groupedOperand.expression()).isInstanceOf(NullCoalesceNode.class);
+        assertThat(((NullCoalesceNode) groupedOperand.expression()).operands()).hasSize(2);
+
+        String printed = AstPrettyPrinter.print(ast);
+        assertThat(printed).isEqualTo("chain := a ?? b ?? c;\ngrouped := a ?? (b ?? c);\nchain");
+        assertThat(AstStructuralEquality.equals(ast, build(printed))).isTrue();
+    }
+
+    @Test
+    @DisplayName("full scalar precedence tracer builds and round-trips")
+    void fullScalarPrecedenceTracerBuildsAndRoundTrips() {
+        ExpressionFileNode ast = build("a ?? b or c and d = e xor f || g + h * -i root j ^ k%");
+
+        assertThat(ast.resultExpression()).hasValueSatisfying(result ->
+                assertThat(result).isInstanceOf(NullCoalesceNode.class));
+        assertThat(AstPrettyPrinter.print(ast))
+                .isEqualTo("a ?? b or c and d = e xor f || g + h * -i root j ^ k%");
+        assertThat(AstStructuralEquality.equals(ast, build(AstPrettyPrinter.print(ast)))).isTrue();
+    }
+
+    @Test
     @DisplayName("invalid local temporal materialization returns stable diagnostics")
     void invalidLocalTemporalMaterializationReturnsStableDiagnostics() {
         ParseResult parseResult = parser.parse("badDate := d\"2024-02-30\"; badDateTime := dt\"2024-02-30T10:15:30\";");
@@ -257,11 +393,58 @@ class SemanticAstPipelineTest {
                     shift(currentTemporalValue.id(), offset),
                     currentTemporalValue.sourceSpan(),
                     currentTemporalValue.kind());
+            case GroupedExpressionNode grouped -> new GroupedExpressionNode(
+                    shift(grouped.id(), offset),
+                    grouped.sourceSpan(),
+                    shiftNodeIds(grouped.expression(), offset));
             case IdentifierNode identifier -> new IdentifierNode(
                     shift(identifier.id(), offset),
                     identifier.sourceSpan(),
                     identifier.name());
             case LiteralNode literal -> new LiteralNode(shift(literal.id(), offset), literal.sourceSpan(), literal.value());
+            case UnaryOperationNode unary -> new UnaryOperationNode(
+                    shift(unary.id(), offset),
+                    unary.sourceSpan(),
+                    unary.operator(),
+                    unary.operatorSpan(),
+                    shiftNodeIds(unary.operand(), offset));
+            case BinaryOperationNode binary -> new BinaryOperationNode(
+                    shift(binary.id(), offset),
+                    binary.sourceSpan(),
+                    shiftNodeIds(binary.left(), offset),
+                    binary.operator(),
+                    binary.operatorSpan(),
+                    shiftNodeIds(binary.right(), offset));
+            case PostfixOperationNode postfix -> new PostfixOperationNode(
+                    shift(postfix.id(), offset),
+                    postfix.sourceSpan(),
+                    shiftNodeIds(postfix.operand(), offset),
+                    postfix.operations());
+            case BetweenNode between -> new BetweenNode(
+                    shift(between.id(), offset),
+                    between.sourceSpan(),
+                    shiftNodeIds(between.value(), offset),
+                    between.negated(),
+                    between.operatorSpan(),
+                    shiftNodeIds(between.lowerBound(), offset),
+                    between.lowerSeparatorSpan(),
+                    shiftNodeIds(between.upperBound(), offset));
+            case MembershipNode membership -> new MembershipNode(
+                    shift(membership.id(), offset),
+                    membership.sourceSpan(),
+                    shiftNodeIds(membership.element(), offset),
+                    membership.negated(),
+                    membership.operatorSpan(),
+                    shiftNodeIds(membership.collection(), offset));
+            case NullCoalesceNode coalesce -> new NullCoalesceNode(
+                    shift(coalesce.id(), offset),
+                    coalesce.sourceSpan(),
+                    coalesce.operands().stream().map(operand -> shiftNodeIds(operand, offset)).toList(),
+                    coalesce.operatorSpans());
+            case VectorLiteralNode vector -> new VectorLiteralNode(
+                    shift(vector.id(), offset),
+                    vector.sourceSpan(),
+                    vector.elements().stream().map(operand -> shiftNodeIds(operand, offset)).toList());
         };
     }
 

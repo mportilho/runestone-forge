@@ -35,10 +35,90 @@ final class AstPrettyPrinter {
 
     private static String printExpression(ExpressionNode expression) {
         return switch (expression) {
+            case BetweenNode between -> printBetween(between);
+            case BinaryOperationNode binary -> printBinary(binary);
             case CurrentTemporalValueNode currentTemporalValue -> printCurrentTemporalValue(currentTemporalValue.kind());
+            case GroupedExpressionNode grouped -> "(" + printExpression(grouped.expression()) + ")";
             case IdentifierNode identifier -> identifier.name();
             case LiteralNode literal -> printLiteral(literal.value());
+            case MembershipNode membership -> printMembership(membership);
+            case NullCoalesceNode coalesce -> joinExpressions(coalesce.operands(), " ?? ");
+            case PostfixOperationNode postfix -> printPostfix(postfix);
+            case UnaryOperationNode unary -> printUnary(unary);
+            case VectorLiteralNode vector -> "[" + joinExpressions(vector.elements(), ", ") + "]";
         };
+    }
+
+    private static String printBetween(BetweenNode between) {
+        return printExpression(between.value())
+                + (between.negated() ? " not between " : " between ")
+                + printExpression(between.lowerBound())
+                + " and "
+                + printExpression(between.upperBound());
+    }
+
+    private static String printBinary(BinaryOperationNode binary) {
+        return printExpression(binary.left()) + " " + printBinaryOperator(binary.operator()) + " " + printExpression(binary.right());
+    }
+
+    private static String printBinaryOperator(BinaryOperator operator) {
+        return switch (operator) {
+            case ADD -> "+";
+            case CONCATENATE -> "||";
+            case DIVIDE -> "/";
+            case EQUAL -> "=";
+            case EXPONENTIATE -> "^";
+            case GREATER_THAN -> ">";
+            case GREATER_THAN_OR_EQUAL -> ">=";
+            case LESS_THAN -> "<";
+            case LESS_THAN_OR_EQUAL -> "<=";
+            case LOGICAL_AND -> "and";
+            case LOGICAL_NAND -> "nand";
+            case LOGICAL_NOR -> "nor";
+            case LOGICAL_OR -> "or";
+            case LOGICAL_XNOR -> "xnor";
+            case LOGICAL_XOR -> "xor";
+            case MODULO -> "mod";
+            case MULTIPLY -> "*";
+            case NOT_EQUAL -> "<>";
+            case REGEX_MATCH -> "=~";
+            case REGEX_NOT_MATCH -> "!~";
+            case ROOT -> "root";
+            case SUBTRACT -> "-";
+        };
+    }
+
+    private static String printMembership(MembershipNode membership) {
+        return printExpression(membership.element())
+                + (membership.negated() ? " not in " : " in ")
+                + printExpression(membership.collection());
+    }
+
+    private static String printPostfix(PostfixOperationNode postfix) {
+        StringBuilder builder = new StringBuilder(printExpression(postfix.operand()));
+        for (PostfixOperatorOccurrence operation : postfix.operations()) {
+            builder.append(switch (operation.operator()) {
+                case FACTORIAL -> "!";
+                case PERCENT -> "%";
+            });
+        }
+        return builder.toString();
+    }
+
+    private static String printUnary(UnaryOperationNode unary) {
+        String operator = switch (unary.operator()) {
+            case LOGICAL_NOT -> "~";
+            case NEGATE -> "-";
+        };
+        return operator + printExpression(unary.operand());
+    }
+
+    private static String joinExpressions(List<ExpressionNode> expressions, String delimiter) {
+        List<String> printed = new ArrayList<>(expressions.size());
+        for (ExpressionNode expression : expressions) {
+            printed.add(printExpression(expression));
+        }
+        return String.join(delimiter, printed);
     }
 
     private static String printCurrentTemporalValue(CurrentTemporalValueKind kind) {

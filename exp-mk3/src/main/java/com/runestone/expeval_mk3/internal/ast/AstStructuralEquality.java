@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.internal.ast;
 
+import java.util.List;
 import java.util.Objects;
 
 final class AstStructuralEquality {
@@ -39,14 +40,51 @@ final class AstStructuralEquality {
 
     private static boolean equals(ExpressionNode left, ExpressionNode right) {
         return switch (left) {
+            case BetweenNode leftBetween when right instanceof BetweenNode rightBetween ->
+                    leftBetween.negated() == rightBetween.negated()
+                            && equals(leftBetween.value(), rightBetween.value())
+                            && equals(leftBetween.lowerBound(), rightBetween.lowerBound())
+                            && equals(leftBetween.upperBound(), rightBetween.upperBound());
+            case BinaryOperationNode leftBinary when right instanceof BinaryOperationNode rightBinary ->
+                    leftBinary.operator() == rightBinary.operator()
+                            && equals(leftBinary.left(), rightBinary.left())
+                            && equals(leftBinary.right(), rightBinary.right());
             case CurrentTemporalValueNode leftCurrentTemporalValue
                     when right instanceof CurrentTemporalValueNode rightCurrentTemporalValue ->
                     leftCurrentTemporalValue.kind() == rightCurrentTemporalValue.kind();
+            case GroupedExpressionNode leftGrouped when right instanceof GroupedExpressionNode rightGrouped ->
+                    equals(leftGrouped.expression(), rightGrouped.expression());
             case IdentifierNode leftIdentifier when right instanceof IdentifierNode rightIdentifier ->
                     leftIdentifier.name().equals(rightIdentifier.name());
             case LiteralNode leftLiteral when right instanceof LiteralNode rightLiteral ->
                     leftLiteral.value().equals(rightLiteral.value());
+            case MembershipNode leftMembership when right instanceof MembershipNode rightMembership ->
+                    leftMembership.negated() == rightMembership.negated()
+                            && equals(leftMembership.element(), rightMembership.element())
+                            && equals(leftMembership.collection(), rightMembership.collection());
+            case NullCoalesceNode leftCoalesce when right instanceof NullCoalesceNode rightCoalesce ->
+                    equalsExpressions(leftCoalesce.operands(), rightCoalesce.operands());
+            case PostfixOperationNode leftPostfix when right instanceof PostfixOperationNode rightPostfix ->
+                    leftPostfix.operations().stream().map(PostfixOperatorOccurrence::operator).toList()
+                            .equals(rightPostfix.operations().stream().map(PostfixOperatorOccurrence::operator).toList())
+                            && equals(leftPostfix.operand(), rightPostfix.operand());
+            case UnaryOperationNode leftUnary when right instanceof UnaryOperationNode rightUnary ->
+                    leftUnary.operator() == rightUnary.operator() && equals(leftUnary.operand(), rightUnary.operand());
+            case VectorLiteralNode leftVector when right instanceof VectorLiteralNode rightVector ->
+                    equalsExpressions(leftVector.elements(), rightVector.elements());
             default -> false;
         };
+    }
+
+    private static boolean equalsExpressions(List<ExpressionNode> left, List<ExpressionNode> right) {
+        if (left.size() != right.size()) {
+            return false;
+        }
+        for (int index = 0; index < left.size(); index++) {
+            if (!equals(left.get(index), right.get(index))) {
+                return false;
+            }
+        }
+        return true;
     }
 }

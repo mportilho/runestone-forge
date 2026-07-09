@@ -37,12 +37,59 @@ final class AstNodeIdAssigner {
 
     private ExpressionNode assignExpression(ExpressionNode expression) {
         return switch (expression) {
+            case BetweenNode between -> new BetweenNode(
+                    next(),
+                    between.sourceSpan(),
+                    assignExpression(between.value()),
+                    between.negated(),
+                    between.operatorSpan(),
+                    assignExpression(between.lowerBound()),
+                    between.lowerSeparatorSpan(),
+                    assignExpression(between.upperBound()));
+            case BinaryOperationNode binary -> new BinaryOperationNode(
+                    next(),
+                    binary.sourceSpan(),
+                    assignExpression(binary.left()),
+                    binary.operator(),
+                    binary.operatorSpan(),
+                    assignExpression(binary.right()));
             case CurrentTemporalValueNode currentTemporalValue -> new CurrentTemporalValueNode(
                     next(),
                     currentTemporalValue.sourceSpan(),
                     currentTemporalValue.kind());
+            case GroupedExpressionNode grouped -> new GroupedExpressionNode(
+                    next(),
+                    grouped.sourceSpan(),
+                    assignExpression(grouped.expression()));
             case IdentifierNode identifier -> new IdentifierNode(next(), identifier.sourceSpan(), identifier.name());
             case LiteralNode literal -> new LiteralNode(next(), literal.sourceSpan(), literal.value());
+            case MembershipNode membership -> new MembershipNode(
+                    next(),
+                    membership.sourceSpan(),
+                    assignExpression(membership.element()),
+                    membership.negated(),
+                    membership.operatorSpan(),
+                    assignExpression(membership.collection()));
+            case NullCoalesceNode coalesce -> new NullCoalesceNode(
+                    next(),
+                    coalesce.sourceSpan(),
+                    coalesce.operands().stream().map(this::assignExpression).toList(),
+                    coalesce.operatorSpans());
+            case PostfixOperationNode postfix -> new PostfixOperationNode(
+                    next(),
+                    postfix.sourceSpan(),
+                    assignExpression(postfix.operand()),
+                    postfix.operations());
+            case UnaryOperationNode unary -> new UnaryOperationNode(
+                    next(),
+                    unary.sourceSpan(),
+                    unary.operator(),
+                    unary.operatorSpan(),
+                    assignExpression(unary.operand()));
+            case VectorLiteralNode vector -> new VectorLiteralNode(
+                    next(),
+                    vector.sourceSpan(),
+                    vector.elements().stream().map(this::assignExpression).toList());
         };
     }
 
