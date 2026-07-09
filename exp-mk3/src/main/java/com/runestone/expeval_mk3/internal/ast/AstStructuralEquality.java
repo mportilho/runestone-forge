@@ -54,9 +54,13 @@ final class AstStructuralEquality {
                             && equalsSeparators(leftConditional.separators(), rightConditional.separators())
                             && equalsBranches(leftConditional.branches(), rightConditional.branches())
                             && equals(leftConditional.elseExpression(), rightConditional.elseExpression());
+            case CurrentItemNode ignored when right instanceof CurrentItemNode -> true;
             case CurrentTemporalValueNode leftCurrentTemporalValue
                     when right instanceof CurrentTemporalValueNode rightCurrentTemporalValue ->
                     leftCurrentTemporalValue.kind() == rightCurrentTemporalValue.kind();
+            case FunctionCallNode leftFunctionCall when right instanceof FunctionCallNode rightFunctionCall ->
+                    leftFunctionCall.name().equals(rightFunctionCall.name())
+                            && equalsExpressions(leftFunctionCall.arguments(), rightFunctionCall.arguments());
             case GroupedExpressionNode leftGrouped when right instanceof GroupedExpressionNode rightGrouped ->
                     equals(leftGrouped.expression(), rightGrouped.expression());
             case IdentifierNode leftIdentifier when right instanceof IdentifierNode rightIdentifier ->
@@ -67,6 +71,9 @@ final class AstStructuralEquality {
                     leftMembership.negated() == rightMembership.negated()
                             && equals(leftMembership.element(), rightMembership.element())
                             && equals(leftMembership.collection(), rightMembership.collection());
+            case NavigationChainNode leftNavigation when right instanceof NavigationChainNode rightNavigation ->
+                    equals(leftNavigation.receiver(), rightNavigation.receiver())
+                            && equalsNavigationLinks(leftNavigation.links(), rightNavigation.links());
             case NullCoalesceNode leftCoalesce when right instanceof NullCoalesceNode rightCoalesce ->
                     equalsExpressions(leftCoalesce.operands(), rightCoalesce.operands());
             case PostfixOperationNode leftPostfix when right instanceof PostfixOperationNode rightPostfix ->
@@ -77,6 +84,42 @@ final class AstStructuralEquality {
                     leftUnary.operator() == rightUnary.operator() && equals(leftUnary.operand(), rightUnary.operand());
             case VectorLiteralNode leftVector when right instanceof VectorLiteralNode rightVector ->
                     equalsExpressions(leftVector.elements(), rightVector.elements());
+            default -> false;
+        };
+    }
+
+    private static boolean equalsNavigationLinks(List<NavigationLink> left, List<NavigationLink> right) {
+        if (left.size() != right.size()) {
+            return false;
+        }
+        for (int index = 0; index < left.size(); index++) {
+            if (!equals(left.get(index), right.get(index))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean equals(NavigationLink left, NavigationLink right) {
+        return switch (left) {
+            case IndexSubscriptNavigationLink leftIndex when right instanceof IndexSubscriptNavigationLink rightIndex ->
+                    leftIndex.safe() == rightIndex.safe() && leftIndex.index().equals(rightIndex.index());
+            case MethodNavigationLink leftMethod when right instanceof MethodNavigationLink rightMethod ->
+                    leftMethod.safe() == rightMethod.safe()
+                            && leftMethod.memberName().equals(rightMethod.memberName())
+                            && equalsExpressions(leftMethod.arguments(), rightMethod.arguments());
+            case PropertyNavigationLink leftProperty when right instanceof PropertyNavigationLink rightProperty ->
+                    leftProperty.safe() == rightProperty.safe()
+                            && leftProperty.memberName().equals(rightProperty.memberName());
+            case SliceSubscriptNavigationLink leftSlice when right instanceof SliceSubscriptNavigationLink rightSlice ->
+                    leftSlice.safe() == rightSlice.safe()
+                            && leftSlice.start().equals(rightSlice.start())
+                            && leftSlice.end().equals(rightSlice.end());
+            case StringKeySubscriptNavigationLink leftStringKey
+                    when right instanceof StringKeySubscriptNavigationLink rightStringKey ->
+                    leftStringKey.safe() == rightStringKey.safe() && leftStringKey.key().equals(rightStringKey.key());
+            case WildcardNavigationLink leftWildcard when right instanceof WildcardNavigationLink rightWildcard ->
+                    leftWildcard.safe() == rightWildcard.safe() && leftWildcard.kind() == rightWildcard.kind();
             default -> false;
         };
     }

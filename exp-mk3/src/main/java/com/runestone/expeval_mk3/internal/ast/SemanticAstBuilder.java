@@ -358,20 +358,29 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
 
     @Override
     public ExpressionNode visitIdentifierReferenceTarget(ExpressionEvaluatorParser.IdentifierReferenceTargetContext context) {
+        ExpressionNode receiver = new IdentifierNode(NodeId.UNASSIGNED, span(context.IDENTIFIER().getSymbol()), context.IDENTIFIER().getText());
         if (context.memberChain().isEmpty()) {
-            return new IdentifierNode(NodeId.UNASSIGNED, span(context), context.IDENTIFIER().getText());
+            return receiver;
         }
-        throw unsupported(context, "member chain");
+        return buildNavigationChain(context, receiver, context.memberChain());
     }
 
     @Override
     public ExpressionNode visitFunctionReferenceTarget(ExpressionEvaluatorParser.FunctionReferenceTargetContext context) {
-        throw unsupported(context, "function call");
+        FunctionCallNode receiver = buildFunctionCall(context.function());
+        if (context.memberChain().isEmpty()) {
+            return receiver;
+        }
+        return buildNavigationChain(context, receiver, context.memberChain());
     }
 
     @Override
     public ExpressionNode visitAtReferenceTarget(ExpressionEvaluatorParser.AtReferenceTargetContext context) {
-        throw unsupported(context, "current item reference");
+        ExpressionNode receiver = new CurrentItemNode(NodeId.UNASSIGNED, span(context.AT().getSymbol()));
+        if (context.memberChain().isEmpty()) {
+            return receiver;
+        }
+        return buildNavigationChain(context, receiver, context.memberChain());
     }
 
     @Override
@@ -470,6 +479,143 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
             expressions.add(visit(expressionContext));
         }
         return expressions;
+    }
+
+    private NavigationChainNode buildNavigationChain(
+            ParserRuleContext context,
+            ExpressionNode receiver,
+            List<ExpressionEvaluatorParser.MemberChainContext> memberChains) {
+        List<NavigationLink> links = new ArrayList<>(memberChains.size());
+        for (ExpressionEvaluatorParser.MemberChainContext memberChain : memberChains) {
+            links.add(buildNavigationLink(memberChain));
+        }
+        return new NavigationChainNode(NodeId.UNASSIGNED, span(context), receiver, links);
+    }
+
+    private NavigationLink buildNavigationLink(ExpressionEvaluatorParser.MemberChainContext context) {
+        return switch (context) {
+            case ExpressionEvaluatorParser.ChildWildcardAccessContext childWildcard -> new WildcardNavigationLink(
+                    NodeId.UNASSIGNED,
+                    span(childWildcard),
+                    WildcardNavigationKind.CHILD,
+                    false);
+            case ExpressionEvaluatorParser.MethodCallAccessContext method -> new MethodNavigationLink(
+                    NodeId.UNASSIGNED,
+                    span(method),
+                    memberName(method.memberName()),
+                    false,
+                    visitExpressions(method.expression()));
+            case ExpressionEvaluatorParser.PropertyAccessContext property -> new PropertyNavigationLink(
+                    NodeId.UNASSIGNED,
+                    span(property),
+                    memberName(property.memberName()),
+                    false);
+            case ExpressionEvaluatorParser.SafeMethodCallAccessContext method -> new MethodNavigationLink(
+                    NodeId.UNASSIGNED,
+                    span(method),
+                    memberName(method.memberName()),
+                    true,
+                    visitExpressions(method.expression()));
+            case ExpressionEvaluatorParser.SafePropertyAccessContext property -> new PropertyNavigationLink(
+                    NodeId.UNASSIGNED,
+                    span(property),
+                    memberName(property.memberName()),
+                    true);
+            case ExpressionEvaluatorParser.SafeSubscriptAccessContext subscript -> buildSubscriptLink(
+                    subscript.subscript(),
+                    span(subscript),
+                    true);
+            case ExpressionEvaluatorParser.SubscriptAccessContext subscript -> buildSubscriptLink(
+                    subscript.subscript(),
+                    span(subscript),
+                    false);
+            case ExpressionEvaluatorParser.CollectionFunctionAccessContext collectionFunction -> throw unsupported(
+                    collectionFunction,
+                    "collection navigation link");
+            default -> throw unsupported(context, "navigation link");
+        };
+    }
+
+    private NavigationLink buildSubscriptLink(
+            ExpressionEvaluatorParser.SubscriptContext context,
+            SourceSpan linkSpan,
+            boolean safe) {
+        return switch (context) {
+            case ExpressionEvaluatorParser.WildcardSubscriptContext ignored -> new WildcardNavigationLink(
+                    NodeId.UNASSIGNED,
+                    linkSpan,
+                    WildcardNavigationKind.SUBSCRIPT,
+                    safe);
+            case ExpressionEvaluatorParser.StringKeySubscriptContext stringKey -> new StringKeySubscriptNavigationLink(
+                    NodeId.UNASSIGNED,
+                    linkSpan,
+                    unquote(stringKey.STRING().getText()),
+                    safe);
+            case ExpressionEvaluatorParser.IndexSubscriptContext index -> new IndexSubscriptNavigationLink(
+                    NodeId.UNASSIGNED,
+                    linkSpan,
+                    subscriptInteger(index.signedInteger()),
+                    safe);
+            case ExpressionEvaluatorParser.SliceWithStartSubscriptContext slice -> new SliceSubscriptNavigationLink(
+                    NodeId.UNASSIGNED,
+                    linkSpan,
+                    new IntegerSubscriptSliceBound(subscriptInteger(slice.signedInteger(0))),
+                    slice.signedInteger().size() == 1
+                            ? UnboundedSubscriptSliceBound.INSTANCE
+                            : new IntegerSubscriptSliceBound(subscriptInteger(slice.signedInteger(1))),
+                    safe);
+            case ExpressionEvaluatorParser.SliceToEndSubscriptContext slice -> new SliceSubscriptNavigationLink(
+                    NodeId.UNASSIGNED,
+                    linkSpan,
+                    UnboundedSubscriptSliceBound.INSTANCE,
+                    new IntegerSubscriptSliceBound(subscriptInteger(slice.signedInteger())),
+                    safe);
+            case ExpressionEvaluatorParser.FilterSubscriptContext filter -> throw unsupported(filter, "filter subscript");
+            default -> throw unsupported(context, "subscript navigation link");
+        };
+    }
+
+    private FunctionCallNode buildFunctionCall(ExpressionEvaluatorParser.FunctionContext context) {
+        if (context instanceof ExpressionEvaluatorParser.FunctionCallOperationContext function) {
+            return new FunctionCallNode(
+                    NodeId.UNASSIGNED,
+                    span(function),
+                    new FunctionName(function.IDENTIFIER().getText()),
+                    visitExpressions(function.expression()));
+        }
+        throw unsupported(context, "function call");
+    }
+
+    private static MemberName memberName(ExpressionEvaluatorParser.MemberNameContext context) {
+        return new MemberName(context.getText());
+    }
+
+    private static SubscriptIntegerLiteral subscriptInteger(ExpressionEvaluatorParser.SignedIntegerContext context) {
+        if (context instanceof ExpressionEvaluatorParser.SignedIntegerOperationContext signedInteger) {
+            Token token = signedInteger.INT().getSymbol();
+            String text = token.getText();
+            IntegerLiteralBase base = integerLiteralBase(text);
+            BigInteger value = switch (base) {
+                case DECIMAL -> new BigInteger(text);
+                case HEXADECIMAL -> new BigInteger(text.substring(2), 16);
+                case OCTAL -> new BigInteger(text.substring(1), 8);
+            };
+            if (signedInteger.MINUS() != null) {
+                value = value.negate();
+            }
+            return new SubscriptIntegerLiteral(value, base);
+        }
+        throw new IllegalArgumentException("Unsupported signed integer context: " + context.getClass().getName());
+    }
+
+    private static IntegerLiteralBase integerLiteralBase(String text) {
+        if (text.startsWith("0x") || text.startsWith("0X")) {
+            return IntegerLiteralBase.HEXADECIMAL;
+        }
+        if (isOctalLiteral(text)) {
+            return IntegerLiteralBase.OCTAL;
+        }
+        return IntegerLiteralBase.DECIMAL;
     }
 
     private ConditionalBranchNode conditionalBranch(ExpressionNode condition, ExpressionNode consequence) {

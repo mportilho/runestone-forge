@@ -255,6 +255,111 @@ class SemanticAstPipelineTest {
     }
 
     @Test
+    @DisplayName("navigation from identifiers, calls, and current item builds ordered typed links")
+    void navigationFromIdentifiersCallsAndCurrentItemBuildsOrderedTypedLinks() {
+        String source = "identifier := account.name?.if(total, @.value)[\"key\"]?.[2].*; "
+                + "call := load().items(1, @)?.size; current := @?.name; current";
+        ExpressionFileNode ast = build(source);
+
+        NavigationChainNode identifierChain = (NavigationChainNode) ast.assignments().getFirst().expression();
+        assertThat(identifierChain.receiver()).isInstanceOf(IdentifierNode.class);
+        assertThat(identifierName(identifierChain.receiver())).isEqualTo("account");
+        assertThat(identifierChain.links()).hasSize(5);
+        assertThat(identifierChain.links()).extracting(link -> link.getClass().getSimpleName()).containsExactly(
+                "PropertyNavigationLink",
+                "MethodNavigationLink",
+                "StringKeySubscriptNavigationLink",
+                "IndexSubscriptNavigationLink",
+                "WildcardNavigationLink");
+        assertThat(identifierChain.links()).allSatisfy(link -> {
+            assertThat(link.id()).isNotEqualTo(NodeId.UNASSIGNED);
+            assertThat(source.substring(link.sourceSpan().offset(), link.sourceSpan().endOffset())).isNotBlank();
+        });
+        PropertyNavigationLink property = (PropertyNavigationLink) identifierChain.links().getFirst();
+        assertThat(property.memberName().value()).isEqualTo("name");
+        assertThat(property.safe()).isFalse();
+        MethodNavigationLink method = (MethodNavigationLink) identifierChain.links().get(1);
+        assertThat(method.memberName().value()).isEqualTo("if");
+        assertThat(method.safe()).isTrue();
+        assertThat(method.arguments()).hasSize(2);
+        assertThat(method.arguments().getLast()).isInstanceOf(NavigationChainNode.class);
+        NavigationChainNode currentArgument = (NavigationChainNode) method.arguments().getLast();
+        assertThat(currentArgument.receiver()).isInstanceOf(CurrentItemNode.class);
+        assertThat(currentArgument.links()).singleElement().satisfies(link -> {
+            assertThat(link).isInstanceOf(PropertyNavigationLink.class);
+            assertThat(((PropertyNavigationLink) link).memberName().value()).isEqualTo("value");
+        });
+        StringKeySubscriptNavigationLink key = (StringKeySubscriptNavigationLink) identifierChain.links().get(2);
+        assertThat(key.key()).isEqualTo("key");
+        assertThat(key.safe()).isFalse();
+        IndexSubscriptNavigationLink index = (IndexSubscriptNavigationLink) identifierChain.links().get(3);
+        assertThat(index.index()).isEqualTo(new SubscriptIntegerLiteral(2, IntegerLiteralBase.DECIMAL));
+        assertThat(index.safe()).isTrue();
+        WildcardNavigationLink wildcard = (WildcardNavigationLink) identifierChain.links().getLast();
+        assertThat(wildcard.safe()).isFalse();
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> new WildcardNavigationLink(
+                        NodeId.UNASSIGNED,
+                        wildcard.sourceSpan(),
+                        WildcardNavigationKind.CHILD,
+                        true));
+
+        NavigationChainNode callChain = (NavigationChainNode) ast.assignments().get(1).expression();
+        assertThat(callChain.receiver()).isInstanceOf(FunctionCallNode.class);
+        FunctionCallNode receiverCall = (FunctionCallNode) callChain.receiver();
+        assertThat(receiverCall.name().value()).isEqualTo("load");
+        assertThat(callChain.links()).hasSize(2);
+        MethodNavigationLink items = (MethodNavigationLink) callChain.links().getFirst();
+        assertThat(items.memberName().value()).isEqualTo("items");
+        assertThat(items.arguments()).hasSize(2);
+        assertThat(callChain.links().getLast()).isInstanceOf(PropertyNavigationLink.class);
+        assertThat(((PropertyNavigationLink) callChain.links().getLast()).safe()).isTrue();
+
+        NavigationChainNode currentChain = (NavigationChainNode) ast.assignments().get(2).expression();
+        assertThat(currentChain.receiver()).isInstanceOf(CurrentItemNode.class);
+        assertThat(currentChain.links()).singleElement().satisfies(link -> {
+            assertThat(link).isInstanceOf(PropertyNavigationLink.class);
+            assertThat(((PropertyNavigationLink) link).safe()).isTrue();
+        });
+
+        String printed = AstPrettyPrinter.print(ast);
+        assertThat(printed).isEqualTo("identifier := account.name?.if(total, @.value)[\"key\"]?.[2].*;\n"
+                + "call := load().items(1, @)?.size;\n"
+                + "current := @?.name;\n"
+                + "current");
+        assertThat(AstStructuralEquality.equals(ast, build(printed))).isTrue();
+    }
+
+    @Test
+    @DisplayName("subscript links preserve source-faithful integer formats and slice bounds")
+    void subscriptLinksPreserveSourceFaithfulIntegerFormatsAndSliceBounds() {
+        String source = "value := data[0x10][077][-2:0x20][07:][:-010][*]; value";
+        ExpressionFileNode ast = build(source);
+
+        NavigationChainNode chain = (NavigationChainNode) ast.assignments().getFirst().expression();
+
+        assertThat(chain.links()).hasSize(6);
+        assertThat(((IndexSubscriptNavigationLink) chain.links().get(0)).index())
+                .isEqualTo(new SubscriptIntegerLiteral(16, IntegerLiteralBase.HEXADECIMAL));
+        assertThat(((IndexSubscriptNavigationLink) chain.links().get(1)).index())
+                .isEqualTo(new SubscriptIntegerLiteral(63, IntegerLiteralBase.OCTAL));
+        SliceSubscriptNavigationLink closedSlice = (SliceSubscriptNavigationLink) chain.links().get(2);
+        assertThat(closedSlice.start()).isEqualTo(integerBound(-2, IntegerLiteralBase.DECIMAL));
+        assertThat(closedSlice.end()).isEqualTo(integerBound(32, IntegerLiteralBase.HEXADECIMAL));
+        SliceSubscriptNavigationLink openEndSlice = (SliceSubscriptNavigationLink) chain.links().get(3);
+        assertThat(openEndSlice.start()).isEqualTo(integerBound(7, IntegerLiteralBase.OCTAL));
+        assertThat(openEndSlice.end()).isEqualTo(UnboundedSubscriptSliceBound.INSTANCE);
+        SliceSubscriptNavigationLink openStartSlice = (SliceSubscriptNavigationLink) chain.links().get(4);
+        assertThat(openStartSlice.start()).isEqualTo(UnboundedSubscriptSliceBound.INSTANCE);
+        assertThat(openStartSlice.end()).isEqualTo(integerBound(-8, IntegerLiteralBase.OCTAL));
+        assertThat(chain.links().get(5)).isInstanceOf(WildcardNavigationLink.class);
+
+        String printed = AstPrettyPrinter.print(ast);
+        assertThat(printed).isEqualTo("value := data[0x10][077][-2:0x20][07:][:-010][*];\nvalue");
+        assertThat(AstStructuralEquality.equals(ast, build(printed))).isTrue();
+    }
+
+    @Test
     @DisplayName("classic and functional conditionals share one semantic AST shape with source syntax metadata")
     void classicAndFunctionalConditionalsShareOneSemanticAstShapeWithSourceSyntaxMetadata() {
         ExpressionFileNode classicAst = build(
@@ -467,6 +572,10 @@ class SemanticAstPipelineTest {
         return ((IdentifierNode) expression).name();
     }
 
+    private static IntegerSubscriptSliceBound integerBound(long value, IntegerLiteralBase base) {
+        return new IntegerSubscriptSliceBound(new SubscriptIntegerLiteral(value, base));
+    }
+
     private static ExpressionFileNode shiftNodeIds(ExpressionFileNode file, int offset) {
         return new ExpressionFileNode(
                 shift(file.id(), offset),
@@ -499,6 +608,12 @@ class SemanticAstPipelineTest {
                     shift(currentTemporalValue.id(), offset),
                     currentTemporalValue.sourceSpan(),
                     currentTemporalValue.kind());
+            case CurrentItemNode currentItem -> new CurrentItemNode(shift(currentItem.id(), offset), currentItem.sourceSpan());
+            case FunctionCallNode functionCall -> new FunctionCallNode(
+                    shift(functionCall.id(), offset),
+                    functionCall.sourceSpan(),
+                    functionCall.name(),
+                    functionCall.arguments().stream().map(argument -> shiftNodeIds(argument, offset)).toList());
             case ConditionalNode conditional -> new ConditionalNode(
                     shift(conditional.id(), offset),
                     conditional.sourceSpan(),
@@ -549,6 +664,11 @@ class SemanticAstPipelineTest {
                     membership.negated(),
                     membership.operatorSpan(),
                     shiftNodeIds(membership.collection(), offset));
+            case NavigationChainNode navigation -> new NavigationChainNode(
+                    shift(navigation.id(), offset),
+                    navigation.sourceSpan(),
+                    shiftNodeIds(navigation.receiver(), offset),
+                    navigation.links().stream().map(link -> shiftNodeIds(link, offset)).toList());
             case NullCoalesceNode coalesce -> new NullCoalesceNode(
                     shift(coalesce.id(), offset),
                     coalesce.sourceSpan(),
@@ -558,6 +678,43 @@ class SemanticAstPipelineTest {
                     shift(vector.id(), offset),
                     vector.sourceSpan(),
                     vector.elements().stream().map(operand -> shiftNodeIds(operand, offset)).toList());
+        };
+    }
+
+    private static NavigationLink shiftNodeIds(NavigationLink link, int offset) {
+        return switch (link) {
+            case IndexSubscriptNavigationLink index -> new IndexSubscriptNavigationLink(
+                    shift(index.id(), offset),
+                    index.sourceSpan(),
+                    index.index(),
+                    index.safe());
+            case MethodNavigationLink method -> new MethodNavigationLink(
+                    shift(method.id(), offset),
+                    method.sourceSpan(),
+                    method.memberName(),
+                    method.safe(),
+                    method.arguments().stream().map(argument -> shiftNodeIds(argument, offset)).toList());
+            case PropertyNavigationLink property -> new PropertyNavigationLink(
+                    shift(property.id(), offset),
+                    property.sourceSpan(),
+                    property.memberName(),
+                    property.safe());
+            case SliceSubscriptNavigationLink slice -> new SliceSubscriptNavigationLink(
+                    shift(slice.id(), offset),
+                    slice.sourceSpan(),
+                    slice.start(),
+                    slice.end(),
+                    slice.safe());
+            case StringKeySubscriptNavigationLink stringKey -> new StringKeySubscriptNavigationLink(
+                    shift(stringKey.id(), offset),
+                    stringKey.sourceSpan(),
+                    stringKey.key(),
+                    stringKey.safe());
+            case WildcardNavigationLink wildcard -> new WildcardNavigationLink(
+                    shift(wildcard.id(), offset),
+                    wildcard.sourceSpan(),
+                    wildcard.kind(),
+                    wildcard.safe());
         };
     }
 

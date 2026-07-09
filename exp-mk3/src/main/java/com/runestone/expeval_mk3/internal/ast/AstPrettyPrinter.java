@@ -38,11 +38,14 @@ final class AstPrettyPrinter {
             case BetweenNode between -> printBetween(between);
             case BinaryOperationNode binary -> printBinary(binary);
             case ConditionalNode conditional -> printConditional(conditional);
+            case CurrentItemNode ignored -> "@";
             case CurrentTemporalValueNode currentTemporalValue -> printCurrentTemporalValue(currentTemporalValue.kind());
+            case FunctionCallNode functionCall -> printFunctionCall(functionCall);
             case GroupedExpressionNode grouped -> "(" + printExpression(grouped.expression()) + ")";
             case IdentifierNode identifier -> identifier.name();
             case LiteralNode literal -> printLiteral(literal.value());
             case MembershipNode membership -> printMembership(membership);
+            case NavigationChainNode navigation -> printNavigationChain(navigation);
             case NullCoalesceNode coalesce -> joinExpressions(coalesce.operands(), " ?? ");
             case PostfixOperationNode postfix -> printPostfix(postfix);
             case UnaryOperationNode unary -> printUnary(unary);
@@ -133,6 +136,61 @@ final class AstPrettyPrinter {
         return printExpression(membership.element())
                 + (membership.negated() ? " not in " : " in ")
                 + printExpression(membership.collection());
+    }
+
+    private static String printFunctionCall(FunctionCallNode functionCall) {
+        return functionCall.name().value() + "(" + joinExpressions(functionCall.arguments(), ", ") + ")";
+    }
+
+    private static String printNavigationChain(NavigationChainNode navigation) {
+        StringBuilder builder = new StringBuilder(printExpression(navigation.receiver()));
+        for (NavigationLink link : navigation.links()) {
+            builder.append(printNavigationLink(link));
+        }
+        return builder.toString();
+    }
+
+    private static String printNavigationLink(NavigationLink link) {
+        return switch (link) {
+            case IndexSubscriptNavigationLink index -> safePrefix(index.safe())
+                    + "[" + printSubscriptInteger(index.index()) + "]";
+            case MethodNavigationLink method -> (method.safe() ? "?." : ".")
+                    + method.memberName().value()
+                    + "(" + joinExpressions(method.arguments(), ", ") + ")";
+            case PropertyNavigationLink property -> (property.safe() ? "?." : ".") + property.memberName().value();
+            case SliceSubscriptNavigationLink slice -> safePrefix(slice.safe())
+                    + "[" + printSliceBound(slice.start()) + ":" + printSliceBound(slice.end()) + "]";
+            case StringKeySubscriptNavigationLink stringKey -> safePrefix(stringKey.safe()) + "[" + quote(stringKey.key()) + "]";
+            case WildcardNavigationLink wildcard -> switch (wildcard.kind()) {
+                case CHILD -> ".*";
+                case SUBSCRIPT -> safePrefix(wildcard.safe()) + "[*]";
+            };
+        };
+    }
+
+    private static String safePrefix(boolean safe) {
+        return safe ? "?." : "";
+    }
+
+    private static String printSliceBound(SubscriptSliceBound bound) {
+        return switch (bound) {
+            case IntegerSubscriptSliceBound integer -> printSubscriptInteger(integer.integer());
+            case UnboundedSubscriptSliceBound ignored -> "";
+        };
+    }
+
+    private static String printSubscriptInteger(SubscriptIntegerLiteral integer) {
+        String sign = integer.value().signum() < 0 ? "-" : "";
+        String absoluteValue = integer.value().abs().toString(switch (integer.base()) {
+            case DECIMAL -> 10;
+            case HEXADECIMAL -> 16;
+            case OCTAL -> 8;
+        });
+        return switch (integer.base()) {
+            case DECIMAL -> sign + absoluteValue;
+            case HEXADECIMAL -> sign + "0x" + absoluteValue;
+            case OCTAL -> sign + "0" + absoluteValue;
+        };
     }
 
     private static String printPostfix(PostfixOperationNode postfix) {

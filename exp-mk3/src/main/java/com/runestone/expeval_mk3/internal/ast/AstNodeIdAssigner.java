@@ -60,10 +60,16 @@ final class AstNodeIdAssigner {
                     assignBranches(conditional.branches()),
                     conditional.separators(),
                     assignExpression(conditional.elseExpression()));
+            case CurrentItemNode currentItem -> new CurrentItemNode(next(), currentItem.sourceSpan());
             case CurrentTemporalValueNode currentTemporalValue -> new CurrentTemporalValueNode(
                     next(),
                     currentTemporalValue.sourceSpan(),
                     currentTemporalValue.kind());
+            case FunctionCallNode functionCall -> new FunctionCallNode(
+                    next(),
+                    functionCall.sourceSpan(),
+                    functionCall.name(),
+                    functionCall.arguments().stream().map(this::assignExpression).toList());
             case GroupedExpressionNode grouped -> new GroupedExpressionNode(
                     next(),
                     grouped.sourceSpan(),
@@ -77,6 +83,11 @@ final class AstNodeIdAssigner {
                     membership.negated(),
                     membership.operatorSpan(),
                     assignExpression(membership.collection()));
+            case NavigationChainNode navigation -> new NavigationChainNode(
+                    next(),
+                    navigation.sourceSpan(),
+                    assignExpression(navigation.receiver()),
+                    navigation.links().stream().map(this::assignNavigationLink).toList());
             case NullCoalesceNode coalesce -> new NullCoalesceNode(
                     next(),
                     coalesce.sourceSpan(),
@@ -97,6 +108,43 @@ final class AstNodeIdAssigner {
                     next(),
                     vector.sourceSpan(),
                     vector.elements().stream().map(this::assignExpression).toList());
+        };
+    }
+
+    private NavigationLink assignNavigationLink(NavigationLink link) {
+        return switch (link) {
+            case IndexSubscriptNavigationLink index -> new IndexSubscriptNavigationLink(
+                    next(),
+                    index.sourceSpan(),
+                    index.index(),
+                    index.safe());
+            case MethodNavigationLink method -> new MethodNavigationLink(
+                    next(),
+                    method.sourceSpan(),
+                    method.memberName(),
+                    method.safe(),
+                    method.arguments().stream().map(this::assignExpression).toList());
+            case PropertyNavigationLink property -> new PropertyNavigationLink(
+                    next(),
+                    property.sourceSpan(),
+                    property.memberName(),
+                    property.safe());
+            case SliceSubscriptNavigationLink slice -> new SliceSubscriptNavigationLink(
+                    next(),
+                    slice.sourceSpan(),
+                    slice.start(),
+                    slice.end(),
+                    slice.safe());
+            case StringKeySubscriptNavigationLink stringKey -> new StringKeySubscriptNavigationLink(
+                    next(),
+                    stringKey.sourceSpan(),
+                    stringKey.key(),
+                    stringKey.safe());
+            case WildcardNavigationLink wildcard -> new WildcardNavigationLink(
+                    next(),
+                    wildcard.sourceSpan(),
+                    wildcard.kind(),
+                    wildcard.safe());
         };
     }
 
