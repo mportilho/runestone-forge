@@ -6,7 +6,7 @@
 - `runestone-toolkit` provides shared assertions, memoization, date utilities, and `DataConversionService`; converter implementations are discovered through `src/main/resources/META-INF/services/com.runestone.converters.DataConverter`, so add new converters there.
 - `dynamic-filter-resolver` depends on `runestone-toolkit`; Spring/JPA/WebMVC/Springdoc dependencies are `provided`, with H2/Spring Boot only in tests.
 - `expression-evaluator` depends on `runestone-toolkit`; public entrypoints are in `com.runestone.expeval.api` and compiler/runtime internals are under `com.runestone.expeval.internal`.
-- `exp-mk3` is a rebuild of `expression-evaluator` and is now under active development; when working on it, follow `exp-mk3/docs/planning/plano-implementacao-expression-evaluator-v2.md`, keep maximum performance as the implementation focus, and do not consult or read `expression-evaluator` under any circumstances. Build `exp-mk3` only from its own module contents and its dependencies.
+- `exp-mk3` is a rebuild of `expression-evaluator` and is now under active development; when working on it, follow `exp-mk3/docs/planning/plano-implementacao-expression-evaluator-v2.md`, keep maximum performance as the implementation focus, and do not consult or read `expression-evaluator` under any circumstances except when the user asks to do it by prompt or issue. Build `exp-mk3` only from its own module contents and its dependencies.
 
 ## Commands
 - Full verification: `mvn test`.

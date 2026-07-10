@@ -116,6 +116,14 @@ _Avoid_: Constant function, cached function
 An official function provided by the expression language through the Ambiente de Expressao; built-in function groups are expected to be registered as complete, validated sets.
 _Avoid_: Helper method, default Java function
 
+**Provedor de Funcoes**:
+A Java class or object instance whose directly declared public methods are intentionally exposed for import into an Ambiente de Expressao as callable functions.
+_Avoid_: Utility class, reflected class, function container
+
+**Importador de Funcoes Refletidas**:
+A setup-time tool that turns eligible methods from a Provedor de Funcoes into function descriptors by inferring expression types, adapting invocation handles, applying explicit renames, and validating duplicate signatures before catalog registration.
+_Avoid_: Runtime reflection, dependency injection container, automatic scanner
+
 **Funcao de Assercao**:
 A built-in `as*` function that locally asserts or converts a value to a requested expression type, consuming an unknown argument explicitly without enabling implicit conversion for surrounding operators or changing the argument symbol globally.
 _Avoid_: Global cast rule, type hint syntax
