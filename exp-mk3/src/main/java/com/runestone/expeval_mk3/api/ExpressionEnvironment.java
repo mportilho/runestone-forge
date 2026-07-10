@@ -37,6 +37,7 @@ public final class ExpressionEnvironment {
     private final BoundaryCoercion boundaryCoercion;
     private final ExternalSymbolCatalog externalSymbols;
     private final FunctionCatalog functions;
+    private final JavaTypeCatalog javaTypes;
     private final ExpressionEnvironmentId environmentId;
 
     private ExpressionEnvironment(Builder builder) {
@@ -51,6 +52,7 @@ public final class ExpressionEnvironment {
         conversionProfileIdentity = boundaryCoercion.profileIdentity();
         externalSymbols = builder.externalSymbols.build(boundaryCoercion);
         functions = buildFunctions(builder);
+        javaTypes = builder.javaTypes.build();
         environmentId = calculateEnvironmentId(this);
     }
 
@@ -116,6 +118,10 @@ public final class ExpressionEnvironment {
         return functions;
     }
 
+    public JavaTypeCatalog javaTypes() {
+        return javaTypes;
+    }
+
     private static FunctionCatalog buildFunctions(Builder builder) {
         FunctionCatalog.Builder functionBuilder = FunctionCatalog.builder();
         StandardBuiltInFunctions.registerAll(
@@ -145,7 +151,7 @@ public final class ExpressionEnvironment {
 
     private static String canonicalRepresentation(ExpressionEnvironment environment) {
         StringBuilder builder = new StringBuilder(256);
-        appendCanonicalField(builder, "schema", "3");
+        appendCanonicalField(builder, "schema", "4");
         appendCanonicalField(builder, "numericMode", environment.numericMode.name());
         appendCanonicalField(builder, "zoneId", environment.zoneId.getId());
         appendCanonicalField(builder, "mathContext", canonicalMathContext(environment.mathContext));
@@ -184,7 +190,40 @@ public final class ExpressionEnvironment {
             appendCanonicalField(builder, "function.implementation.memberName", implementationMetadata.memberName());
             appendCanonicalField(builder, "function.implementation.methodType", implementationMetadata.methodType());
         }
+        appendCanonicalField(builder, "javaTypes.count", Integer.toString(environment.javaTypes.size()));
+        for (JavaTypeDescriptor javaType : environment.javaTypes.values()) {
+            appendCanonicalField(builder, "javaType.class", javaType.javaType().getName());
+            appendCanonicalField(builder, "javaType.objectType", ExpressionTypes.canonical(javaType.objectType()));
+            appendCanonicalField(builder, "javaType.properties.count", Integer.toString(javaType.propertyCount()));
+            for (JavaPropertyDescriptor property : javaType.properties().values()) {
+                appendCanonicalField(builder, "javaType.property.name", property.name());
+                appendCanonicalField(builder, "javaType.property.type", ExpressionTypes.canonical(property.type()));
+                appendJavaMemberMetadata(builder, "javaType.property", property.implementationMetadata());
+            }
+            appendCanonicalField(builder, "javaType.methods.count", Integer.toString(javaType.methodCount()));
+            for (JavaMethodDescriptor method : javaType.methods()) {
+                appendCanonicalField(builder, "javaType.method.languageName", method.languageName());
+                appendCanonicalField(builder, "javaType.method.arity", Integer.toString(method.arity()));
+                appendCanonicalField(builder, "javaType.method.parameterTypes.count",
+                        Integer.toString(method.parameterTypes().size()));
+                for (ExpressionType parameterType : method.parameterTypes()) {
+                    appendCanonicalField(builder, "javaType.method.parameterType", ExpressionTypes.canonical(parameterType));
+                }
+                appendCanonicalField(builder, "javaType.method.returnType", ExpressionTypes.canonical(method.returnType()));
+                appendJavaMemberMetadata(builder, "javaType.method", method.implementationMetadata());
+            }
+        }
         return builder.toString();
+    }
+
+    private static void appendJavaMemberMetadata(
+            StringBuilder builder,
+            String prefix,
+            JavaMemberImplementationMetadata implementationMetadata) {
+        appendCanonicalField(builder, prefix + ".implementation.kind", implementationMetadata.kind());
+        appendCanonicalField(builder, prefix + ".implementation.owner", implementationMetadata.owner());
+        appendCanonicalField(builder, prefix + ".implementation.memberName", implementationMetadata.memberName());
+        appendCanonicalField(builder, prefix + ".implementation.methodType", implementationMetadata.methodType());
     }
 
     private static String canonicalMathContext(MathContext mathContext) {
@@ -215,6 +254,7 @@ public final class ExpressionEnvironment {
         private BoundaryCoercion boundaryCoercion = BoundaryCoercion.standard();
         private final ExternalSymbolCatalog.Builder externalSymbols = ExternalSymbolCatalog.builder();
         private final FunctionCatalog.Builder functions = FunctionCatalog.builder();
+        private final JavaTypeCatalog.Builder javaTypes = JavaTypeCatalog.builder();
 
         private Builder() {
         }
@@ -312,6 +352,21 @@ public final class ExpressionEnvironment {
 
         public Builder replaceFunction(FunctionDescriptor descriptor) {
             functions.replace(descriptor);
+            return this;
+        }
+
+        public Builder registerJavaType(Class<?> javaType) {
+            javaTypes.registerJavaType(javaType);
+            return this;
+        }
+
+        public Builder registerJavaTypeWithPublicMethods(Class<?> javaType) {
+            javaTypes.registerJavaTypeWithPublicMethods(javaType);
+            return this;
+        }
+
+        public Builder registerJavaTypeMethod(Class<?> javaType, String methodName, Class<?>... javaParameterTypes) {
+            javaTypes.registerJavaTypeMethod(javaType, methodName, javaParameterTypes);
             return this;
         }
 

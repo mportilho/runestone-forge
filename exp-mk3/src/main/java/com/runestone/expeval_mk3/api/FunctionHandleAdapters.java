@@ -44,13 +44,65 @@ final class FunctionHandleAdapters {
         return adapted.asType(canonicalMethodType(parameterTypes, returnType));
     }
 
+    static MethodHandle adaptInstance(
+            MethodHandle implementationHandle,
+            Class<?> receiverType,
+            List<ExpressionType> parameterTypes,
+            ExpressionType returnType) {
+        Objects.requireNonNull(implementationHandle, "implementationHandle");
+        Objects.requireNonNull(receiverType, "receiverType");
+        parameterTypes = ExpressionTypes.copyOf(parameterTypes, "parameterTypes");
+        Objects.requireNonNull(returnType, "returnType");
+        if (implementationHandle.type().parameterCount() != parameterTypes.size() + 1) {
+            throw new IllegalArgumentException("implementation handle arity must match receiver plus parameter types");
+        }
+
+        MethodHandle adapted = adaptNumericArguments(implementationHandle, parameterTypes, 1);
+        adapted = adaptNumericReturn(adapted, returnType);
+        return adapted.asType(canonicalInstanceMethodType(receiverType, parameterTypes, returnType));
+    }
+
+    static Object adaptNumericValue(BigDecimal value, Class<?> targetType) {
+        Objects.requireNonNull(value, "value");
+        Objects.requireNonNull(targetType, "targetType");
+        if (targetType == BigDecimal.class) {
+            return value;
+        }
+        if (targetType == byte.class || targetType == Byte.class) {
+            return toByte(value);
+        }
+        if (targetType == short.class || targetType == Short.class) {
+            return toShort(value);
+        }
+        if (targetType == int.class || targetType == Integer.class) {
+            return toInt(value);
+        }
+        if (targetType == long.class || targetType == Long.class) {
+            return toLong(value);
+        }
+        if (targetType == float.class || targetType == Float.class) {
+            return toFloat(value);
+        }
+        if (targetType == double.class || targetType == Double.class) {
+            return toDouble(value);
+        }
+        return value;
+    }
+
     private static MethodHandle adaptNumericArguments(MethodHandle implementationHandle, List<ExpressionType> parameterTypes) {
+        return adaptNumericArguments(implementationHandle, parameterTypes, 0);
+    }
+
+    private static MethodHandle adaptNumericArguments(
+            MethodHandle implementationHandle,
+            List<ExpressionType> parameterTypes,
+            int parameterOffset) {
         MethodHandle adapted = implementationHandle;
         for (int index = 0; index < parameterTypes.size(); index++) {
             if (parameterTypes.get(index) == ScalarType.NUMBER) {
-                Class<?> targetType = adapted.type().parameterType(index);
+                Class<?> targetType = adapted.type().parameterType(index + parameterOffset);
                 if (targetType != BigDecimal.class) {
-                    adapted = MethodHandles.filterArguments(adapted, index, bigDecimalToNumeric(targetType));
+                    adapted = MethodHandles.filterArguments(adapted, index + parameterOffset, bigDecimalToNumeric(targetType));
                 }
             }
         }
@@ -72,6 +124,18 @@ final class FunctionHandleAdapters {
         Class<?>[] canonicalParameterTypes = new Class<?>[parameterTypes.size()];
         for (int index = 0; index < parameterTypes.size(); index++) {
             canonicalParameterTypes[index] = ExpressionJavaTypes.valueType(parameterTypes.get(index));
+        }
+        return MethodType.methodType(ExpressionJavaTypes.valueType(returnType), canonicalParameterTypes);
+    }
+
+    private static MethodType canonicalInstanceMethodType(
+            Class<?> receiverType,
+            List<ExpressionType> parameterTypes,
+            ExpressionType returnType) {
+        Class<?>[] canonicalParameterTypes = new Class<?>[parameterTypes.size() + 1];
+        canonicalParameterTypes[0] = receiverType;
+        for (int index = 0; index < parameterTypes.size(); index++) {
+            canonicalParameterTypes[index + 1] = ExpressionJavaTypes.valueType(parameterTypes.get(index));
         }
         return MethodType.methodType(ExpressionJavaTypes.valueType(returnType), canonicalParameterTypes);
     }
