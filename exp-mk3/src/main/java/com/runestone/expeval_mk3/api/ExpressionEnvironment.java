@@ -31,6 +31,7 @@ public final class ExpressionEnvironment {
     private final int maxCurrentItemDepth;
     private final int materializationLimit;
     private final String conversionProfileIdentity;
+    private final ExternalSymbolCatalog externalSymbols;
     private final ExpressionEnvironmentId environmentId;
 
     private ExpressionEnvironment(Builder builder) {
@@ -42,6 +43,7 @@ public final class ExpressionEnvironment {
         maxCurrentItemDepth = builder.maxCurrentItemDepth;
         materializationLimit = builder.materializationLimit;
         conversionProfileIdentity = builder.conversionProfileIdentity;
+        externalSymbols = builder.externalSymbols.build();
         environmentId = calculateEnvironmentId(this);
     }
 
@@ -95,6 +97,10 @@ public final class ExpressionEnvironment {
         return environmentId;
     }
 
+    public ExternalSymbolCatalog externalSymbols() {
+        return externalSymbols;
+    }
+
     private static ExpressionEnvironmentId calculateEnvironmentId(ExpressionEnvironment environment) {
         String canonical = canonicalRepresentation(environment);
         try {
@@ -108,7 +114,7 @@ public final class ExpressionEnvironment {
 
     private static String canonicalRepresentation(ExpressionEnvironment environment) {
         StringBuilder builder = new StringBuilder(256);
-        appendCanonicalField(builder, "schema", "1");
+        appendCanonicalField(builder, "schema", "2");
         appendCanonicalField(builder, "numericMode", environment.numericMode.name());
         appendCanonicalField(builder, "zoneId", environment.zoneId.getId());
         appendCanonicalField(builder, "mathContext", canonicalMathContext(environment.mathContext));
@@ -118,6 +124,17 @@ public final class ExpressionEnvironment {
         appendCanonicalField(builder, "maxCurrentItemDepth", Integer.toString(environment.maxCurrentItemDepth));
         appendCanonicalField(builder, "materializationLimit", Integer.toString(environment.materializationLimit));
         appendCanonicalField(builder, "conversionProfileIdentity", environment.conversionProfileIdentity);
+        appendCanonicalField(builder, "externalSymbols.count", Integer.toString(environment.externalSymbols.size()));
+        for (ExternalSymbol externalSymbol : environment.externalSymbols.values()) {
+            appendCanonicalField(builder, "externalSymbol.name", externalSymbol.name());
+            appendCanonicalField(builder, "externalSymbol.type", ExpressionTypes.canonical(externalSymbol.type()));
+            appendCanonicalField(builder, "externalSymbol.hasDefaultValue",
+                    Boolean.toString(externalSymbol.hasDefaultValue()));
+            externalSymbol.defaultValue().ifPresent(defaultValue -> appendCanonicalField(
+                    builder,
+                    "externalSymbol.defaultValue",
+                    ExternalSymbolDefaults.canonicalValue(defaultValue.value())));
+        }
         return builder.toString();
     }
 
@@ -147,6 +164,7 @@ public final class ExpressionEnvironment {
         private int maxCurrentItemDepth = DEFAULT_MAX_CURRENT_ITEM_DEPTH;
         private int materializationLimit = DEFAULT_MATERIALIZATION_LIMIT;
         private String conversionProfileIdentity = DEFAULT_CONVERSION_PROFILE_IDENTITY;
+        private final ExternalSymbolCatalog.Builder externalSymbols = ExternalSymbolCatalog.builder();
 
         private Builder() {
         }
@@ -199,6 +217,26 @@ public final class ExpressionEnvironment {
                 throw new IllegalArgumentException("conversionProfileIdentity must not be blank");
             }
             this.conversionProfileIdentity = conversionProfileIdentity;
+            return this;
+        }
+
+        public Builder externalSymbol(String name) {
+            externalSymbols.externalSymbol(name);
+            return this;
+        }
+
+        public Builder externalSymbol(String name, ExpressionType type) {
+            externalSymbols.externalSymbol(name, type);
+            return this;
+        }
+
+        public Builder externalSymbolWithDefault(String name, Object defaultValue) {
+            externalSymbols.externalSymbolWithDefault(name, defaultValue);
+            return this;
+        }
+
+        public Builder externalSymbolWithDefault(String name, ExpressionType type, Object defaultValue) {
+            externalSymbols.externalSymbolWithDefault(name, type, defaultValue);
             return this;
         }
 
