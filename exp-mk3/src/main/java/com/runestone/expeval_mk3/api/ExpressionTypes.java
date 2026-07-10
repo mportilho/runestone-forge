@@ -1,5 +1,8 @@
 package com.runestone.expeval_mk3.api;
 
+import java.util.List;
+import java.util.Objects;
+
 final class ExpressionTypes {
 
     private ExpressionTypes() {
@@ -15,5 +18,15 @@ final class ExpressionTypes {
             case NullType ignored -> "NullType";
             case UnknownType ignored -> "UnknownType";
         };
+    }
+
+    static List<ExpressionType> copyOf(List<ExpressionType> types, String name) {
+        Objects.requireNonNull(types, name);
+        for (int index = 0; index < types.size(); index++) {
+            if (types.get(index) == null) {
+                throw new NullPointerException(name + "[" + index + "]");
+            }
+        }
+        return List.copyOf(types);
     }
 }

@@ -1,0 +1,226 @@
+package com.runestone.expeval_mk3.api;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class FunctionCatalogTest {
+
+    @Test
+    @DisplayName("function descriptors expose language signature and implementation metadata")
+    void functionDescriptorsExposeLanguageSignatureAndImplementationMetadata() throws NoSuchMethodException {
+        FunctionDescriptor descriptor = descriptor(
+                "identity",
+                "numberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.FOLDABLE,
+                BigDecimal.class);
+
+        assertThat(descriptor.languageName()).isEqualTo("identity");
+        assertThat(descriptor.arity()).isOne();
+        assertThat(descriptor.parameterTypes()).containsExactly(ScalarType.NUMBER);
+        assertThat(descriptor.returnType()).isEqualTo(ScalarType.NUMBER);
+        assertThat(descriptor.implementationHandle()).isNotNull();
+        assertThat(descriptor.implementationMetadata().owner()).endsWith("FunctionCatalogTest$TestFunctions");
+        assertThat(descriptor.implementationMetadata().memberName()).isEqualTo("numberIdentity");
+        assertThat(descriptor.pure()).isTrue();
+        assertThat(descriptor.foldable()).isTrue();
+        assertThat(descriptor.signature())
+                .isEqualTo(new FunctionSignature("identity", List.of(ScalarType.NUMBER)));
+    }
+
+    @Test
+    @DisplayName("foldable function purity is represented without an impure foldable state")
+    void foldableFunctionPurityIsRepresentedWithoutImpureFoldableState() {
+        assertThat(FunctionPurity.FOLDABLE.pure()).isTrue();
+        assertThat(FunctionPurity.FOLDABLE.foldable()).isTrue();
+        assertThat(FunctionPurity.PURE.pure()).isTrue();
+        assertThat(FunctionPurity.PURE.foldable()).isFalse();
+        assertThat(FunctionPurity.IMPURE.pure()).isFalse();
+        assertThat(FunctionPurity.IMPURE.foldable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("function identity ignores return type and reflection metadata")
+    void functionIdentityIgnoresReturnTypeAndReflectionMetadata() throws NoSuchMethodException {
+        FunctionDescriptor first = descriptor(
+                "same",
+                "numberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.FOLDABLE,
+                BigDecimal.class);
+        FunctionDescriptor sameSignatureDifferentReturnAndMethod = descriptor(
+                "same",
+                "numberAsText",
+                List.of(ScalarType.NUMBER),
+                ScalarType.STRING,
+                FunctionPurity.FOLDABLE,
+                BigDecimal.class);
+
+        assertThat(first.signature()).isEqualTo(sameSignatureDifferentReturnAndMethod.signature());
+        assertThatThrownBy(() -> FunctionCatalog.builder()
+                .register(first)
+                .register(sameSignatureDifferentReturnAndMethod))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already registered");
+
+        FunctionCatalog replaced = FunctionCatalog.builder()
+                .register(first)
+                .replace(sameSignatureDifferentReturnAndMethod)
+                .build();
+
+        FunctionLookupResult lookup = replaced.resolve(
+                "same",
+                List.of(ScalarType.NUMBER),
+                BoundaryCoercion.standard());
+        assertThat(lookup.status()).isEqualTo(FunctionLookupResult.Status.EXACT_MATCH);
+        assertThat(lookup.descriptor()).contains(sameSignatureDifferentReturnAndMethod);
+    }
+
+    @Test
+    @DisplayName("exact overload lookup is deterministic and wins before coercion fallback")
+    void exactOverloadLookupIsDeterministicAndWinsBeforeCoercionFallback() throws NoSuchMethodException {
+        FunctionDescriptor text = descriptor(
+                "value",
+                "textIdentity",
+                List.of(ScalarType.STRING),
+                ScalarType.STRING,
+                FunctionPurity.FOLDABLE,
+                String.class);
+        FunctionDescriptor number = descriptor(
+                "value",
+                "numberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.FOLDABLE,
+                BigDecimal.class);
+
+        FunctionCatalog firstOrder = FunctionCatalog.builder().register(text).register(number).build();
+        FunctionCatalog secondOrder = FunctionCatalog.builder().register(number).register(text).build();
+
+        FunctionLookupResult firstLookup = firstOrder.resolve(
+                "value",
+                List.of(ScalarType.STRING),
+                BoundaryCoercion.standard());
+        FunctionLookupResult secondLookup = secondOrder.resolve(
+                "value",
+                List.of(ScalarType.STRING),
+                BoundaryCoercion.standard());
+
+        assertThat(firstLookup.status()).isEqualTo(FunctionLookupResult.Status.EXACT_MATCH);
+        assertThat(firstLookup.descriptor()).contains(text);
+        assertThat(secondLookup.status()).isEqualTo(FunctionLookupResult.Status.EXACT_MATCH);
+        assertThat(secondLookup.descriptor()).contains(text);
+    }
+
+    @Test
+    @DisplayName("boundary coercion is used only as a unique final fallback")
+    void boundaryCoercionIsUsedOnlyAsUniqueFinalFallback() throws NoSuchMethodException {
+        FunctionDescriptor number = descriptor(
+                "parse",
+                "numberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.FOLDABLE,
+                BigDecimal.class);
+        FunctionDescriptor booleanValue = descriptor(
+                "parse",
+                "booleanIdentity",
+                List.of(ScalarType.BOOLEAN),
+                ScalarType.BOOLEAN,
+                FunctionPurity.FOLDABLE,
+                Boolean.class);
+
+        FunctionCatalog uniqueCatalog = FunctionCatalog.builder().register(number).build();
+        FunctionLookupResult uniqueFallback = uniqueCatalog.resolve(
+                "parse",
+                List.of(ScalarType.STRING),
+                BoundaryCoercion.standard());
+
+        assertThat(uniqueFallback.status()).isEqualTo(FunctionLookupResult.Status.BOUNDARY_COERCION_MATCH);
+        assertThat(uniqueFallback.descriptor()).contains(number);
+
+        FunctionCatalog ambiguousCatalog = FunctionCatalog.builder().register(number).register(booleanValue).build();
+        FunctionLookupResult ambiguous = ambiguousCatalog.resolve(
+                "parse",
+                List.of(UnknownType.INSTANCE),
+                BoundaryCoercion.standard());
+
+        assertThat(ambiguous.status()).isEqualTo(FunctionLookupResult.Status.AMBIGUOUS);
+        assertThat(ambiguous.descriptor()).isEmpty();
+        assertThat(ambiguous.candidates())
+                .extracting(FunctionDescriptor::signature)
+                .containsExactly(booleanValue.signature(), number.signature());
+    }
+
+    @Test
+    @DisplayName("function catalog participates in environment identity deterministically")
+    void functionCatalogParticipatesInEnvironmentIdentityDeterministically() throws NoSuchMethodException {
+        FunctionDescriptor text = descriptor(
+                "value",
+                "textIdentity",
+                List.of(ScalarType.STRING),
+                ScalarType.STRING,
+                FunctionPurity.FOLDABLE,
+                String.class);
+        FunctionDescriptor number = descriptor(
+                "value",
+                "numberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.FOLDABLE,
+                BigDecimal.class);
+
+        ExpressionEnvironment first = ExpressionEnvironment.builder()
+                .function(text)
+                .function(number)
+                .build();
+        ExpressionEnvironment sameContentDifferentOrder = ExpressionEnvironment.builder()
+                .function(number)
+                .function(text)
+                .build();
+        ExpressionEnvironment withoutFunctions = ExpressionEnvironment.standard();
+
+        assertThat(first.functions().size()).isEqualTo(2);
+        assertThat(first.environmentId()).isEqualTo(sameContentDifferentOrder.environmentId());
+        assertThat(first.environmentId()).isNotEqualTo(withoutFunctions.environmentId());
+    }
+
+    private static FunctionDescriptor descriptor(
+            String languageName,
+            String methodName,
+            List<ExpressionType> parameterTypes,
+            ExpressionType returnType,
+            FunctionPurity purity,
+            Class<?>... parameterClasses) throws NoSuchMethodException {
+        Method method = TestFunctions.class.getDeclaredMethod(methodName, parameterClasses);
+        return FunctionDescriptor.fromMethod(languageName, method, parameterTypes, returnType, purity);
+    }
+
+    static final class TestFunctions {
+
+        static BigDecimal numberIdentity(BigDecimal value) {
+            return value;
+        }
+
+        static String numberAsText(BigDecimal value) {
+            return value.toPlainString();
+        }
+
+        static String textIdentity(String value) {
+            return value;
+        }
+
+        static Boolean booleanIdentity(Boolean value) {
+            return value;
+        }
+    }
+}

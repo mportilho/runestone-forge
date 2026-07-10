@@ -5,9 +5,6 @@ import com.runestone.converters.impl.DefaultDataConversionService;
 
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -59,6 +56,23 @@ public final class BoundaryCoercion {
             case MapType mapType -> canConvertMapType(sourceType, mapType.valueType());
             case UnknownType ignored -> true;
             case NullType ignored -> false;
+            case ObjectType ignored -> false;
+        };
+    }
+
+    public boolean canConvert(ExpressionType sourceType, ExpressionType targetType) {
+        Objects.requireNonNull(sourceType, "sourceType");
+        Objects.requireNonNull(targetType, "targetType");
+        if (sourceType.equals(targetType) || sourceType == UnknownType.INSTANCE || targetType == UnknownType.INSTANCE) {
+            return true;
+        }
+        return switch (sourceType) {
+            case ScalarType scalarType -> canConvert(ExpressionJavaTypes.scalarValueType(scalarType), targetType);
+            case VectorType vectorType -> canConvertCollectionExpressionType(vectorType.elementType(), targetType);
+            case CollectionType collectionType -> canConvertCollectionExpressionType(collectionType.elementType(), targetType);
+            case MapType mapType -> canConvertMapExpressionType(mapType.valueType(), targetType);
+            case NullType ignored -> false;
+            case UnknownType ignored -> true;
             case ObjectType ignored -> false;
         };
     }
@@ -117,7 +131,7 @@ public final class BoundaryCoercion {
         if (sourceValue == null) {
             throw new IllegalArgumentException("scalar target requires a non-null value");
         }
-        Class<?> targetClass = scalarJavaType(scalarType);
+        Class<?> targetClass = ExpressionJavaTypes.scalarValueType(scalarType);
         if (targetClass.isInstance(sourceValue)) {
             return sourceValue;
         }
@@ -135,8 +149,8 @@ public final class BoundaryCoercion {
     }
 
     private boolean canConvertScalarType(Class<?> sourceType, ScalarType scalarType) {
-        Class<?> targetClass = scalarJavaType(scalarType);
-        Class<?> effectiveSourceType = boxedType(sourceType);
+        Class<?> targetClass = ExpressionJavaTypes.scalarValueType(scalarType);
+        Class<?> effectiveSourceType = ExpressionJavaTypes.boxed(sourceType);
         return targetClass.isAssignableFrom(effectiveSourceType)
                 || dataConversionService.canConvert(effectiveSourceType, targetClass);
     }
@@ -153,6 +167,30 @@ public final class BoundaryCoercion {
 
     private static boolean canConvertMapType(Class<?> sourceType, ExpressionType valueType) {
         return valueType == UnknownType.INSTANCE && Map.class.isAssignableFrom(sourceType);
+    }
+
+    private boolean canConvertCollectionExpressionType(ExpressionType sourceElementType, ExpressionType targetType) {
+        return switch (targetType) {
+            case VectorType vectorType -> canConvert(sourceElementType, vectorType.elementType());
+            case CollectionType collectionType -> canConvert(sourceElementType, collectionType.elementType());
+            case UnknownType ignored -> true;
+            case ScalarType ignored -> false;
+            case MapType ignored -> false;
+            case ObjectType ignored -> false;
+            case NullType ignored -> false;
+        };
+    }
+
+    private boolean canConvertMapExpressionType(ExpressionType sourceValueType, ExpressionType targetType) {
+        return switch (targetType) {
+            case MapType mapType -> canConvert(sourceValueType, mapType.valueType());
+            case UnknownType ignored -> true;
+            case ScalarType ignored -> false;
+            case VectorType ignored -> false;
+            case CollectionType ignored -> false;
+            case ObjectType ignored -> false;
+            case NullType ignored -> false;
+        };
     }
 
     private Object convertCollection(String valueName, Object sourceValue, ExpressionType elementType, String typeName) {
@@ -193,35 +231,6 @@ public final class BoundaryCoercion {
             sortedValues.put(key, convertElement(valueName, valueType, entry.getValue()));
         }
         return Collections.unmodifiableMap(new LinkedHashMap<>(sortedValues));
-    }
-
-    private static Class<?> scalarJavaType(ScalarType scalarType) {
-        return switch (scalarType) {
-            case NUMBER -> BigDecimal.class;
-            case BOOLEAN -> Boolean.class;
-            case STRING -> String.class;
-            case DATE -> LocalDate.class;
-            case TIME -> LocalTime.class;
-            case DATETIME -> LocalDateTime.class;
-        };
-    }
-
-    private static Class<?> boxedType(Class<?> sourceType) {
-        if (!sourceType.isPrimitive()) {
-            return sourceType;
-        }
-        return switch (sourceType.getName()) {
-            case "boolean" -> Boolean.class;
-            case "byte" -> Byte.class;
-            case "char" -> Character.class;
-            case "short" -> Short.class;
-            case "int" -> Integer.class;
-            case "long" -> Long.class;
-            case "float" -> Float.class;
-            case "double" -> Double.class;
-            case "void" -> Void.class;
-            default -> sourceType;
-        };
     }
 
     static String validateProfileIdentity(String profileIdentity) {

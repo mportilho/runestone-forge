@@ -36,6 +36,7 @@ public final class ExpressionEnvironment {
     private final String conversionProfileIdentity;
     private final BoundaryCoercion boundaryCoercion;
     private final ExternalSymbolCatalog externalSymbols;
+    private final FunctionCatalog functions;
     private final ExpressionEnvironmentId environmentId;
 
     private ExpressionEnvironment(Builder builder) {
@@ -49,6 +50,7 @@ public final class ExpressionEnvironment {
         boundaryCoercion = builder.boundaryCoercion;
         conversionProfileIdentity = boundaryCoercion.profileIdentity();
         externalSymbols = builder.externalSymbols.build(boundaryCoercion);
+        functions = builder.functions.build();
         environmentId = calculateEnvironmentId(this);
     }
 
@@ -110,6 +112,10 @@ public final class ExpressionEnvironment {
         return externalSymbols;
     }
 
+    public FunctionCatalog functions() {
+        return functions;
+    }
+
     private static ExpressionEnvironmentId calculateEnvironmentId(ExpressionEnvironment environment) {
         String canonical = canonicalRepresentation(environment);
         try {
@@ -123,7 +129,7 @@ public final class ExpressionEnvironment {
 
     private static String canonicalRepresentation(ExpressionEnvironment environment) {
         StringBuilder builder = new StringBuilder(256);
-        appendCanonicalField(builder, "schema", "2");
+        appendCanonicalField(builder, "schema", "3");
         appendCanonicalField(builder, "numericMode", environment.numericMode.name());
         appendCanonicalField(builder, "zoneId", environment.zoneId.getId());
         appendCanonicalField(builder, "mathContext", canonicalMathContext(environment.mathContext));
@@ -143,6 +149,24 @@ public final class ExpressionEnvironment {
                     builder,
                     "externalSymbol.defaultValue",
                     ExternalSymbolDefaults.canonicalValue(defaultValue.value())));
+        }
+        appendCanonicalField(builder, "functions.count", Integer.toString(environment.functions.size()));
+        for (FunctionDescriptor function : environment.functions.values()) {
+            appendCanonicalField(builder, "function.languageName", function.languageName());
+            appendCanonicalField(builder, "function.arity", Integer.toString(function.arity()));
+            appendCanonicalField(builder, "function.parameterTypes.count",
+                    Integer.toString(function.parameterTypes().size()));
+            for (ExpressionType parameterType : function.parameterTypes()) {
+                appendCanonicalField(builder, "function.parameterType", ExpressionTypes.canonical(parameterType));
+            }
+            appendCanonicalField(builder, "function.returnType", ExpressionTypes.canonical(function.returnType()));
+            appendCanonicalField(builder, "function.pure", Boolean.toString(function.pure()));
+            appendCanonicalField(builder, "function.foldable", Boolean.toString(function.foldable()));
+            FunctionImplementationMetadata implementationMetadata = function.implementationMetadata();
+            appendCanonicalField(builder, "function.implementation.kind", implementationMetadata.kind());
+            appendCanonicalField(builder, "function.implementation.owner", implementationMetadata.owner());
+            appendCanonicalField(builder, "function.implementation.memberName", implementationMetadata.memberName());
+            appendCanonicalField(builder, "function.implementation.methodType", implementationMetadata.methodType());
         }
         return builder.toString();
     }
@@ -174,6 +198,7 @@ public final class ExpressionEnvironment {
         private int materializationLimit = DEFAULT_MATERIALIZATION_LIMIT;
         private BoundaryCoercion boundaryCoercion = BoundaryCoercion.standard();
         private final ExternalSymbolCatalog.Builder externalSymbols = ExternalSymbolCatalog.builder();
+        private final FunctionCatalog.Builder functions = FunctionCatalog.builder();
 
         private Builder() {
         }
@@ -251,6 +276,16 @@ public final class ExpressionEnvironment {
 
         public Builder externalSymbolWithDefault(String name, ExpressionType type, Object defaultValue) {
             externalSymbols.externalSymbolWithDefault(name, type, defaultValue);
+            return this;
+        }
+
+        public Builder function(FunctionDescriptor descriptor) {
+            functions.register(descriptor);
+            return this;
+        }
+
+        public Builder replaceFunction(FunctionDescriptor descriptor) {
+            functions.replace(descriptor);
             return this;
         }
 
