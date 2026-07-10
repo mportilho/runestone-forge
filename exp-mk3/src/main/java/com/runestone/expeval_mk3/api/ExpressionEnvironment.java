@@ -50,7 +50,7 @@ public final class ExpressionEnvironment {
         boundaryCoercion = builder.boundaryCoercion;
         conversionProfileIdentity = boundaryCoercion.profileIdentity();
         externalSymbols = builder.externalSymbols.build(boundaryCoercion);
-        functions = builder.functions.build();
+        functions = buildFunctions(builder);
         environmentId = calculateEnvironmentId(this);
     }
 
@@ -114,6 +114,22 @@ public final class ExpressionEnvironment {
 
     public FunctionCatalog functions() {
         return functions;
+    }
+
+    private static FunctionCatalog buildFunctions(Builder builder) {
+        FunctionCatalog.Builder functionBuilder = FunctionCatalog.builder();
+        StandardBuiltInFunctions.registerAll(
+                functionBuilder,
+                builder.boundaryCoercion,
+                builder.mathContext,
+                builder.transcendentalMathContext,
+                builder.materializationLimit);
+        for (FunctionDescriptor descriptor : builder.functions.build().values()) {
+            functionBuilder.register(descriptor);
+        }
+        FunctionCatalog catalog = functionBuilder.build();
+        StandardBuiltInFunctions.validate(catalog);
+        return catalog;
     }
 
     private static ExpressionEnvironmentId calculateEnvironmentId(ExpressionEnvironment environment) {
@@ -256,6 +272,16 @@ public final class ExpressionEnvironment {
 
         public Builder boundaryCoercion(String conversionProfileIdentity, DataConversionService dataConversionService) {
             boundaryCoercion = BoundaryCoercion.of(conversionProfileIdentity, dataConversionService);
+            return this;
+        }
+
+        public Builder deterministicBoundaryCoercion(
+                String conversionProfileIdentity,
+                DataConversionService dataConversionService) {
+            boundaryCoercion = BoundaryCoercion.of(
+                    conversionProfileIdentity,
+                    dataConversionService,
+                    true);
             return this;
         }
 

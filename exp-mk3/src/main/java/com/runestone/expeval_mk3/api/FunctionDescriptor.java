@@ -69,6 +69,32 @@ public final class FunctionDescriptor {
         }
     }
 
+    static FunctionDescriptor fromHandle(
+            String languageName,
+            MethodHandle implementationHandle,
+            FunctionImplementationMetadata implementationMetadata,
+            List<ExpressionType> parameterTypes,
+            ExpressionType returnType,
+            FunctionPurity purity) {
+        Objects.requireNonNull(implementationHandle, "implementationHandle");
+        Objects.requireNonNull(implementationMetadata, "implementationMetadata");
+        Objects.requireNonNull(purity, "purity");
+        parameterTypes = ExpressionTypes.copyOf(parameterTypes, "parameterTypes");
+        Objects.requireNonNull(returnType, "returnType");
+        rejectNullType(parameterTypes, returnType);
+        if (implementationHandle.type().parameterCount() != parameterTypes.size()) {
+            throw new IllegalArgumentException("implementation handle arity must match parameter types");
+        }
+        validateHandleType(implementationHandle, parameterTypes, returnType);
+        return new FunctionDescriptor(
+                languageName,
+                parameterTypes,
+                returnType,
+                adapt(implementationHandle, parameterTypes.size()),
+                implementationMetadata,
+                purity);
+    }
+
     public String languageName() {
         return languageName;
     }
@@ -158,6 +184,30 @@ public final class FunctionDescriptor {
         }
         if (expectedReturnType != null && !expectedReturnType.isAssignableFrom(ExpressionJavaTypes.boxed(method.getReturnType()))) {
             throw new IllegalArgumentException("method return type does not produce " + returnType);
+        }
+    }
+
+    private static void validateHandleType(
+            MethodHandle implementationHandle,
+            List<ExpressionType> parameterTypes,
+            ExpressionType returnType) {
+        MethodType methodType = implementationHandle.type();
+        for (int index = 0; index < parameterTypes.size(); index++) {
+            Class<?> expectedValueType = ExpressionJavaTypes.valueType(parameterTypes.get(index));
+            if (expectedValueType != null
+                    && !ExpressionJavaTypes.boxed(methodType.parameterType(index)).isAssignableFrom(expectedValueType)) {
+                throw new IllegalArgumentException("handle parameter " + index + " does not accept "
+                        + parameterTypes.get(index));
+            }
+        }
+
+        Class<?> expectedReturnType = ExpressionJavaTypes.valueType(returnType);
+        if (methodType.returnType() == void.class) {
+            throw new IllegalArgumentException("handle return type must not be void");
+        }
+        if (expectedReturnType != null
+                && !expectedReturnType.isAssignableFrom(ExpressionJavaTypes.boxed(methodType.returnType()))) {
+            throw new IllegalArgumentException("handle return type does not produce " + returnType);
         }
     }
 

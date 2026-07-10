@@ -20,14 +20,20 @@ public final class BoundaryCoercion {
 
     private static final BoundaryCoercion STANDARD = new BoundaryCoercion(
             ExpressionEnvironment.STANDARD_CONVERSION_PROFILE_IDENTITY,
-            new DefaultDataConversionService());
+            new DefaultDataConversionService(),
+            true);
 
     private final String profileIdentity;
     private final DataConversionService dataConversionService;
+    private final boolean deterministicForConstants;
 
-    private BoundaryCoercion(String profileIdentity, DataConversionService dataConversionService) {
+    private BoundaryCoercion(
+            String profileIdentity,
+            DataConversionService dataConversionService,
+            boolean deterministicForConstants) {
         this.profileIdentity = validateProfileIdentity(profileIdentity);
         this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService");
+        this.deterministicForConstants = deterministicForConstants;
     }
 
     public static BoundaryCoercion standard() {
@@ -35,15 +41,26 @@ public final class BoundaryCoercion {
     }
 
     public static BoundaryCoercion of(String profileIdentity, DataConversionService dataConversionService) {
-        return new BoundaryCoercion(profileIdentity, dataConversionService);
+        return new BoundaryCoercion(profileIdentity, dataConversionService, false);
+    }
+
+    static BoundaryCoercion of(
+            String profileIdentity,
+            DataConversionService dataConversionService,
+            boolean deterministicForConstants) {
+        return new BoundaryCoercion(profileIdentity, dataConversionService, deterministicForConstants);
     }
 
     public BoundaryCoercion withProfileIdentity(String profileIdentity) {
-        return new BoundaryCoercion(profileIdentity, dataConversionService);
+        return new BoundaryCoercion(profileIdentity, dataConversionService, deterministicForConstants);
     }
 
     public String profileIdentity() {
         return profileIdentity;
+    }
+
+    boolean deterministicForConstants() {
+        return deterministicForConstants;
     }
 
     public boolean canConvert(Class<?> sourceType, ExpressionType targetType) {

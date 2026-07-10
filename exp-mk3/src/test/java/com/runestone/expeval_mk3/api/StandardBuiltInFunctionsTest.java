@@ -1,0 +1,223 @@
+package com.runestone.expeval_mk3.api;
+
+import com.runestone.converters.DataConversionService;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class StandardBuiltInFunctionsTest {
+
+    @Test
+    @DisplayName("standard environment includes official built-in function groups by default")
+    void standardEnvironmentIncludesOfficialBuiltInFunctionGroupsByDefault() {
+        FunctionCatalog functions = ExpressionEnvironment.standard().functions();
+
+        assertThat(functions.size()).isGreaterThan(0);
+        assertThat(functions.values())
+                .extracting(FunctionDescriptor::languageName)
+                .contains(
+                        "abs",
+                        "sqrt",
+                        "mean",
+                        "sin",
+                        "ln",
+                        "lnFast",
+                        "toUpper",
+                        "daysBetween",
+                        "max",
+                        "pmt",
+                        "asNumber",
+                        "asText",
+                        "asBool",
+                        "asDate",
+                        "asTime",
+                        "asDateTime",
+                        "asVector");
+    }
+
+    @Test
+    @DisplayName("built-in descriptors are pure foldable functions invokable without expression runtime")
+    void builtInDescriptorsArePureFoldableFunctionsInvokableWithoutExpressionRuntime() throws Throwable {
+        FunctionCatalog functions = ExpressionEnvironment.standard().functions();
+
+        assertThat((BigDecimal) invoke(functions, "abs", List.of(ScalarType.NUMBER), new BigDecimal("-12.50")))
+                .isEqualByComparingTo(new BigDecimal("12.50"));
+        assertThat((BigDecimal) invoke(functions, "sqrt", List.of(ScalarType.NUMBER), new BigDecimal("4")))
+                .isEqualByComparingTo(new BigDecimal("2"));
+        assertThat((BigDecimal) invoke(functions, "mean", List.of(new VectorType(ScalarType.NUMBER)),
+                List.of(BigDecimal.ONE, BigDecimal.valueOf(2), BigDecimal.valueOf(3))))
+                .isEqualByComparingTo(new BigDecimal("2"));
+
+        assertThat((BigDecimal) invoke(functions, "sin", List.of(ScalarType.NUMBER), BigDecimal.ZERO))
+                .isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat((BigDecimal) invoke(functions, "ln", List.of(ScalarType.NUMBER), BigDecimal.ONE))
+                .isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat((BigDecimal) invoke(functions, "lnFast", List.of(ScalarType.NUMBER), BigDecimal.ONE))
+                .isEqualByComparingTo(BigDecimal.ZERO);
+
+        assertThat(invoke(functions, "toUpper", List.of(ScalarType.STRING), "runestone"))
+                .isEqualTo("RUNESTONE");
+        assertThat((BigDecimal) invoke(functions, "daysBetween", List.of(ScalarType.DATE, ScalarType.DATE),
+                LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 9)))
+                .isEqualByComparingTo(new BigDecimal("8"));
+        assertThat(invoke(functions, "max", List.of(new VectorType(ScalarType.STRING)), List.of("b", "a", "c")))
+                .isEqualTo("c");
+        assertThat((BigDecimal) invoke(functions, "pmt", List.of(
+                ScalarType.NUMBER,
+                ScalarType.NUMBER,
+                ScalarType.NUMBER,
+                ScalarType.NUMBER,
+                ScalarType.BOOLEAN),
+                BigDecimal.ZERO, BigDecimal.ONE, BigDecimal.valueOf(-100), BigDecimal.ZERO, false))
+                .isEqualByComparingTo(new BigDecimal("100"));
+    }
+
+    @Test
+    @DisplayName("math built-in group requires abs and sqrt as declared members")
+    void mathBuiltInGroupRequiresAbsAndSqrtAsDeclaredMembers() throws NoSuchMethodException {
+        List<FunctionDescriptor> completeMathGroup = standardGroupDescriptors(BuiltInFunctionGroup.MATH);
+        List<FunctionDescriptor> missingSqrt = descriptorsExcept(completeMathGroup, "sqrt");
+        List<FunctionDescriptor> missingAbs = descriptorsExcept(completeMathGroup, "abs");
+
+        assertThatThrownBy(() -> StandardBuiltInFunctions.validateGroup(BuiltInFunctionGroup.MATH, missingSqrt))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("sqrt");
+        assertThatThrownBy(() -> StandardBuiltInFunctions.validateGroup(BuiltInFunctionGroup.MATH, missingAbs))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("abs");
+
+        StandardBuiltInFunctions.validateGroup(BuiltInFunctionGroup.MATH, completeMathGroup);
+    }
+
+    @Test
+    @DisplayName("custom deterministic boundary coercion keeps assertion conversions foldable")
+    void customDeterministicBoundaryCoercionKeepsAssertionConversionsFoldable() throws Throwable {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .deterministicBoundaryCoercion("prefixed-number:v1", new PrefixedNumberConversionService())
+                .build();
+        FunctionDescriptor asNumber = descriptor(environment.functions(), "asNumber", List.of(UnknownType.INSTANCE));
+
+        assertThat(asNumber.pure()).isTrue();
+        assertThat(asNumber.foldable()).isTrue();
+        assertThat(asNumber.implementationHandle().invoke("points:12"))
+                .isEqualTo(new BigDecimal("12"));
+    }
+
+    @Test
+    @DisplayName("custom boundary coercion defaults assertion conversions to non-foldable")
+    void customBoundaryCoercionDefaultsAssertionConversionsToNonFoldable() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .boundaryCoercion("prefixed-number:v1", new PrefixedNumberConversionService())
+                .build();
+        FunctionDescriptor asNumber = descriptor(environment.functions(), "asNumber", List.of(UnknownType.INSTANCE));
+
+        assertThat(asNumber.pure()).isTrue();
+        assertThat(asNumber.foldable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("assertion functions use configured boundary coercion and vector materialization limit")
+    void assertionFunctionsUseConfiguredBoundaryCoercionAndVectorMaterializationLimit() throws Throwable {
+        ExpressionEnvironment limitedEnvironment = ExpressionEnvironment.builder()
+                .materializationLimit(2)
+                .build();
+        FunctionCatalog functions = limitedEnvironment.functions();
+
+        assertAssertion(functions, "asNumber", ScalarType.NUMBER, "12.50", new BigDecimal("12.50"));
+        assertAssertion(functions, "asText", ScalarType.STRING, BigDecimal.valueOf(7), "7");
+        assertAssertion(functions, "asBool", ScalarType.BOOLEAN, "true", true);
+        assertAssertion(functions, "asDate", ScalarType.DATE, "2026-07-09", LocalDate.of(2026, 7, 9));
+        assertAssertion(functions, "asTime", ScalarType.TIME, "10:15:30", LocalTime.of(10, 15, 30));
+        assertAssertion(functions, "asDateTime", ScalarType.DATETIME, "2026-07-09T10:15:30",
+                LocalDateTime.of(2026, 7, 9, 10, 15, 30));
+
+        FunctionDescriptor asVector = descriptor(functions, "asVector", List.of(UnknownType.INSTANCE));
+        assertThat(asVector.pure()).isTrue();
+        assertThat(asVector.foldable()).isTrue();
+        assertThat(asVector.returnType()).isEqualTo(new VectorType(UnknownType.INSTANCE));
+        assertThat(asVector.implementationHandle().invoke(new String[]{"a", "b"}))
+                .isEqualTo(List.of("a", "b"));
+        assertThat(asVector.implementationHandle().invoke(List.of("a", "b")))
+                .isEqualTo(List.of("a", "b"));
+        assertThatThrownBy(() -> asVector.implementationHandle().invoke(Map.of("a", 1)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("map");
+        assertThatThrownBy(() -> asVector.implementationHandle().invoke(List.of(1, 2, 3)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("materialization limit");
+    }
+
+    private static Object invoke(
+            FunctionCatalog functions,
+            String languageName,
+            List<ExpressionType> parameterTypes,
+            Object... arguments) throws Throwable {
+        FunctionDescriptor descriptor = descriptor(functions, languageName, parameterTypes);
+        assertThat(descriptor.pure()).isTrue();
+        assertThat(descriptor.foldable()).isTrue();
+        return descriptor.implementationHandle().invokeWithArguments(arguments);
+    }
+
+    private static void assertAssertion(
+            FunctionCatalog functions,
+            String languageName,
+            ExpressionType returnType,
+            Object input,
+            Object expected) throws Throwable {
+        FunctionDescriptor descriptor = descriptor(functions, languageName, List.of(UnknownType.INSTANCE));
+
+        assertThat(descriptor.pure()).isTrue();
+        assertThat(descriptor.foldable()).isTrue();
+        assertThat(descriptor.returnType()).isEqualTo(returnType);
+        assertThat(descriptor.implementationHandle().invoke(input)).isEqualTo(expected);
+    }
+
+    private static FunctionDescriptor descriptor(
+            FunctionCatalog functions,
+            String languageName,
+            List<ExpressionType> parameterTypes) {
+        return functions.find(new FunctionSignature(languageName, parameterTypes)).orElseThrow();
+    }
+
+    private static List<FunctionDescriptor> standardGroupDescriptors(BuiltInFunctionGroup group) {
+        return ExpressionEnvironment.standard().functions().values().stream()
+                .filter(descriptor -> group.languageNames().contains(descriptor.languageName()))
+                .toList();
+    }
+
+    private static List<FunctionDescriptor> descriptorsExcept(
+            List<FunctionDescriptor> descriptors,
+            String... excludedNames) {
+        Set<String> excluded = Set.of(excludedNames);
+        return descriptors.stream()
+                .filter(descriptor -> !excluded.contains(descriptor.languageName()))
+                .toList();
+    }
+
+    private static final class PrefixedNumberConversionService implements DataConversionService {
+
+        @Override
+        public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
+            return sourceType == String.class && targetType == BigDecimal.class;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <S, T> T convert(S source, Class<T> targetType) {
+            if (source instanceof String text && targetType == BigDecimal.class && text.startsWith("points:")) {
+                return (T) new BigDecimal(text.substring("points:".length()));
+            }
+            throw new IllegalArgumentException("unsupported conversion");
+        }
+    }
+}

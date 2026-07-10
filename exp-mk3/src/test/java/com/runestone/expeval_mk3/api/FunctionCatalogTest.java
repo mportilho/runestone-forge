@@ -189,7 +189,7 @@ class FunctionCatalogTest {
                 .build();
         ExpressionEnvironment withoutFunctions = ExpressionEnvironment.standard();
 
-        assertThat(first.functions().size()).isEqualTo(2);
+        assertThat(first.functions().size()).isEqualTo(ExpressionEnvironment.standard().functions().size() + 2);
         assertThat(first.environmentId()).isEqualTo(sameContentDifferentOrder.environmentId());
         assertThat(first.environmentId()).isNotEqualTo(withoutFunctions.environmentId());
     }
