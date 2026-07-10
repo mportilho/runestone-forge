@@ -360,6 +360,70 @@ class SemanticAstPipelineTest {
     }
 
     @Test
+    @DisplayName("filters current item and collection operation arguments build source-faithful AST nodes")
+    void filtersCurrentItemAndCollectionOperationArgumentsBuildSourceFaithfulAstNodes() {
+        String source = "filtered := items[?(@.active and @.score > 10)]; "
+                + "mapped := filtered..map(@ -> @.score + bonus)..sum(); "
+                + "nested := groups..map(@ -> @.items[?(@.active)]); "
+                + "paged := mapped..window(0, 10); standalone := @; paged";
+        ExpressionFileNode ast = build(source);
+
+        NavigationChainNode filtered = (NavigationChainNode) ast.assignments().getFirst().expression();
+        assertThat(filtered.links()).singleElement().satisfies(link -> {
+            assertThat(link).isInstanceOf(FilterNavigationLink.class);
+            FilterNavigationLink filter = (FilterNavigationLink) link;
+            assertThat(filter.safe()).isFalse();
+            assertThat(source.substring(filter.sourceSpan().offset(), filter.sourceSpan().endOffset()))
+                    .isEqualTo("[?(@.active and @.score > 10)]");
+            assertThat(filter.predicate()).isInstanceOf(BinaryOperationNode.class);
+        });
+
+        NavigationChainNode mapped = (NavigationChainNode) ast.assignments().get(1).expression();
+        assertThat(mapped.links()).hasSize(2);
+        CollectionOperationNavigationLink map = (CollectionOperationNavigationLink) mapped.links().getFirst();
+        assertThat(map.memberName().value()).isEqualTo("map");
+        assertThat(map.arguments()).singleElement().satisfies(argument -> {
+            assertThat(argument).isInstanceOf(LambdaCollectionOperationArgument.class);
+            LambdaNode lambda = ((LambdaCollectionOperationArgument) argument).lambda();
+            assertThat(lambda.currentItem()).isInstanceOf(CurrentItemNode.class);
+            assertThat(source.substring(lambda.sourceSpan().offset(), lambda.sourceSpan().endOffset()))
+                    .isEqualTo("@ -> @.score + bonus");
+            assertThat(lambda.body()).isInstanceOf(BinaryOperationNode.class);
+        });
+        CollectionOperationNavigationLink sum = (CollectionOperationNavigationLink) mapped.links().getLast();
+        assertThat(sum.memberName().value()).isEqualTo("sum");
+        assertThat(sum.arguments()).isEmpty();
+
+        NavigationChainNode nested = (NavigationChainNode) ast.assignments().get(2).expression();
+        CollectionOperationNavigationLink nestedMap = (CollectionOperationNavigationLink) nested.links().getFirst();
+        LambdaNode nestedLambda = ((LambdaCollectionOperationArgument) nestedMap.arguments().getFirst()).lambda();
+        assertThat(nestedLambda.body()).isInstanceOf(NavigationChainNode.class);
+        NavigationChainNode nestedLambdaBody = (NavigationChainNode) nestedLambda.body();
+        assertThat(nestedLambdaBody.receiver()).isInstanceOf(CurrentItemNode.class);
+        assertThat(nestedLambdaBody.links()).hasSize(2);
+        assertThat(nestedLambdaBody.links().getLast()).isInstanceOf(FilterNavigationLink.class);
+
+        NavigationChainNode paged = (NavigationChainNode) ast.assignments().get(3).expression();
+        CollectionOperationNavigationLink window = (CollectionOperationNavigationLink) paged.links().getFirst();
+        assertThat(window.arguments()).hasSize(2);
+        assertThat(window.arguments()).allSatisfy(argument ->
+                assertThat(argument).isInstanceOf(PositionalCollectionOperationArgument.class));
+        PositionalCollectionOperationArgument firstArgument = (PositionalCollectionOperationArgument) window.arguments().getFirst();
+        assertThat(firstArgument.expression()).isInstanceOf(LiteralNode.class);
+
+        assertThat(ast.assignments().get(4).expression()).isInstanceOf(CurrentItemNode.class);
+
+        String printed = AstPrettyPrinter.print(ast);
+        assertThat(printed).isEqualTo("filtered := items[?(@.active and @.score > 10)];\n"
+                + "mapped := filtered..map(@ -> @.score + bonus)..sum();\n"
+                + "nested := groups..map(@ -> @.items[?(@.active)]);\n"
+                + "paged := mapped..window(0, 10);\n"
+                + "standalone := @;\n"
+                + "paged");
+        assertThat(AstStructuralEquality.equals(ast, build(printed))).isTrue();
+    }
+
+    @Test
     @DisplayName("classic and functional conditionals share one semantic AST shape with source syntax metadata")
     void classicAndFunctionalConditionalsShareOneSemanticAstShapeWithSourceSyntaxMetadata() {
         ExpressionFileNode classicAst = build(
@@ -683,6 +747,18 @@ class SemanticAstPipelineTest {
 
     private static NavigationLink shiftNodeIds(NavigationLink link, int offset) {
         return switch (link) {
+            case CollectionOperationNavigationLink collectionOperation -> new CollectionOperationNavigationLink(
+                    shift(collectionOperation.id(), offset),
+                    collectionOperation.sourceSpan(),
+                    collectionOperation.memberName(),
+                    collectionOperation.arguments().stream()
+                            .map(argument -> shiftCollectionOperationArgument(argument, offset))
+                            .toList());
+            case FilterNavigationLink filter -> new FilterNavigationLink(
+                    shift(filter.id(), offset),
+                    filter.sourceSpan(),
+                    shiftNodeIds(filter.predicate(), offset),
+                    filter.safe());
             case IndexSubscriptNavigationLink index -> new IndexSubscriptNavigationLink(
                     shift(index.id(), offset),
                     index.sourceSpan(),
@@ -716,6 +792,26 @@ class SemanticAstPipelineTest {
                     wildcard.kind(),
                     wildcard.safe());
         };
+    }
+
+    private static CollectionOperationArgument shiftCollectionOperationArgument(
+            CollectionOperationArgument argument,
+            int offset) {
+        return switch (argument) {
+            case LambdaCollectionOperationArgument lambda -> new LambdaCollectionOperationArgument(
+                    shiftNodeIds(lambda.lambda(), offset));
+            case PositionalCollectionOperationArgument positional -> new PositionalCollectionOperationArgument(
+                    shiftNodeIds(positional.expression(), offset));
+        };
+    }
+
+    private static LambdaNode shiftNodeIds(LambdaNode lambda, int offset) {
+        return new LambdaNode(
+                shift(lambda.id(), offset),
+                lambda.sourceSpan(),
+                new CurrentItemNode(shift(lambda.currentItem().id(), offset), lambda.currentItem().sourceSpan()),
+                lambda.arrowSpan(),
+                shiftNodeIds(lambda.body(), offset));
     }
 
     private static ConditionalBranchNode shiftNodeIds(ConditionalBranchNode branch, int offset) {

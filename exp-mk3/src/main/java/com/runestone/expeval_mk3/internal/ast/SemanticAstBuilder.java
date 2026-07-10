@@ -529,10 +529,36 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
                     subscript.subscript(),
                     span(subscript),
                     false);
-            case ExpressionEvaluatorParser.CollectionFunctionAccessContext collectionFunction -> throw unsupported(
-                    collectionFunction,
-                    "collection navigation link");
+            case ExpressionEvaluatorParser.CollectionFunctionAccessContext collectionFunction -> new CollectionOperationNavigationLink(
+                    NodeId.UNASSIGNED,
+                    span(collectionFunction),
+                    memberName(collectionFunction.memberName()),
+                    collectionOperationArguments(collectionFunction.collectionFunctionArguments()));
             default -> throw unsupported(context, "navigation link");
+        };
+    }
+
+    private List<CollectionOperationArgument> collectionOperationArguments(
+            ExpressionEvaluatorParser.CollectionFunctionArgumentsContext context) {
+        if (context == null) {
+            return List.of();
+        }
+        return switch (context) {
+            case ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext lambda -> List.of(
+                    new LambdaCollectionOperationArgument(new LambdaNode(
+                            NodeId.UNASSIGNED,
+                            span(lambda),
+                            new CurrentItemNode(NodeId.UNASSIGNED, span(lambda.AT().getSymbol())),
+                            span(lambda.ARROW().getSymbol()),
+                            visit(lambda.expression()))));
+            case ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext positional -> {
+                List<CollectionOperationArgument> arguments = new ArrayList<>(positional.expression().size());
+                for (ExpressionEvaluatorParser.ExpressionContext expression : positional.expression()) {
+                    arguments.add(new PositionalCollectionOperationArgument(visit(expression)));
+                }
+                yield arguments;
+            }
+            default -> throw unsupported(context, "collection operation arguments");
         };
     }
 
@@ -570,7 +596,11 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
                     UnboundedSubscriptSliceBound.INSTANCE,
                     new IntegerSubscriptSliceBound(subscriptInteger(slice.signedInteger())),
                     safe);
-            case ExpressionEvaluatorParser.FilterSubscriptContext filter -> throw unsupported(filter, "filter subscript");
+            case ExpressionEvaluatorParser.FilterSubscriptContext filter -> new FilterNavigationLink(
+                    NodeId.UNASSIGNED,
+                    linkSpan,
+                    visit(filter.expression()),
+                    safe);
             default -> throw unsupported(context, "subscript navigation link");
         };
     }

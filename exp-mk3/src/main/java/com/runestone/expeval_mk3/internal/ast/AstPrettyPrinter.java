@@ -152,6 +152,10 @@ final class AstPrettyPrinter {
 
     private static String printNavigationLink(NavigationLink link) {
         return switch (link) {
+            case CollectionOperationNavigationLink collectionOperation -> ".."
+                    + collectionOperation.memberName().value()
+                    + "(" + joinCollectionOperationArguments(collectionOperation.arguments()) + ")";
+            case FilterNavigationLink filter -> safePrefix(filter.safe()) + "[?(" + printExpression(filter.predicate()) + ")]";
             case IndexSubscriptNavigationLink index -> safePrefix(index.safe())
                     + "[" + printSubscriptInteger(index.index()) + "]";
             case MethodNavigationLink method -> (method.safe() ? "?." : ".")
@@ -166,6 +170,25 @@ final class AstPrettyPrinter {
                 case SUBSCRIPT -> safePrefix(wildcard.safe()) + "[*]";
             };
         };
+    }
+
+    private static String joinCollectionOperationArguments(List<CollectionOperationArgument> arguments) {
+        List<String> printed = new ArrayList<>(arguments.size());
+        for (CollectionOperationArgument argument : arguments) {
+            printed.add(printCollectionOperationArgument(argument));
+        }
+        return String.join(", ", printed);
+    }
+
+    private static String printCollectionOperationArgument(CollectionOperationArgument argument) {
+        return switch (argument) {
+            case LambdaCollectionOperationArgument lambda -> printLambda(lambda.lambda());
+            case PositionalCollectionOperationArgument positional -> printExpression(positional.expression());
+        };
+    }
+
+    private static String printLambda(LambdaNode lambda) {
+        return printExpression(lambda.currentItem()) + " -> " + printExpression(lambda.body());
     }
 
     private static String safePrefix(boolean safe) {

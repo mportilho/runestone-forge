@@ -113,6 +113,16 @@ final class AstNodeIdAssigner {
 
     private NavigationLink assignNavigationLink(NavigationLink link) {
         return switch (link) {
+            case CollectionOperationNavigationLink collectionOperation -> new CollectionOperationNavigationLink(
+                    next(),
+                    collectionOperation.sourceSpan(),
+                    collectionOperation.memberName(),
+                    collectionOperation.arguments().stream().map(this::assignCollectionOperationArgument).toList());
+            case FilterNavigationLink filter -> new FilterNavigationLink(
+                    next(),
+                    filter.sourceSpan(),
+                    assignExpression(filter.predicate()),
+                    filter.safe());
             case IndexSubscriptNavigationLink index -> new IndexSubscriptNavigationLink(
                     next(),
                     index.sourceSpan(),
@@ -146,6 +156,23 @@ final class AstNodeIdAssigner {
                     wildcard.kind(),
                     wildcard.safe());
         };
+    }
+
+    private CollectionOperationArgument assignCollectionOperationArgument(CollectionOperationArgument argument) {
+        return switch (argument) {
+            case LambdaCollectionOperationArgument lambda -> new LambdaCollectionOperationArgument(assignLambda(lambda.lambda()));
+            case PositionalCollectionOperationArgument positional -> new PositionalCollectionOperationArgument(
+                    assignExpression(positional.expression()));
+        };
+    }
+
+    private LambdaNode assignLambda(LambdaNode lambda) {
+        return new LambdaNode(
+                next(),
+                lambda.sourceSpan(),
+                new CurrentItemNode(next(), lambda.currentItem().sourceSpan()),
+                lambda.arrowSpan(),
+                assignExpression(lambda.body()));
     }
 
     private ConditionalBranchNode assignBranch(ConditionalBranchNode branch) {

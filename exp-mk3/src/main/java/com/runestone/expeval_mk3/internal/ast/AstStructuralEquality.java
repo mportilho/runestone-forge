@@ -102,6 +102,14 @@ final class AstStructuralEquality {
 
     private static boolean equals(NavigationLink left, NavigationLink right) {
         return switch (left) {
+            case CollectionOperationNavigationLink leftCollectionOperation
+                    when right instanceof CollectionOperationNavigationLink rightCollectionOperation ->
+                    leftCollectionOperation.memberName().equals(rightCollectionOperation.memberName())
+                            && equalsCollectionOperationArguments(
+                                    leftCollectionOperation.arguments(),
+                                    rightCollectionOperation.arguments());
+            case FilterNavigationLink leftFilter when right instanceof FilterNavigationLink rightFilter ->
+                    leftFilter.safe() == rightFilter.safe() && equals(leftFilter.predicate(), rightFilter.predicate());
             case IndexSubscriptNavigationLink leftIndex when right instanceof IndexSubscriptNavigationLink rightIndex ->
                     leftIndex.safe() == rightIndex.safe() && leftIndex.index().equals(rightIndex.index());
             case MethodNavigationLink leftMethod when right instanceof MethodNavigationLink rightMethod ->
@@ -122,6 +130,36 @@ final class AstStructuralEquality {
                     leftWildcard.safe() == rightWildcard.safe() && leftWildcard.kind() == rightWildcard.kind();
             default -> false;
         };
+    }
+
+    private static boolean equalsCollectionOperationArguments(
+            List<CollectionOperationArgument> left,
+            List<CollectionOperationArgument> right) {
+        if (left.size() != right.size()) {
+            return false;
+        }
+        for (int index = 0; index < left.size(); index++) {
+            if (!equals(left.get(index), right.get(index))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean equals(CollectionOperationArgument left, CollectionOperationArgument right) {
+        return switch (left) {
+            case LambdaCollectionOperationArgument leftLambda
+                    when right instanceof LambdaCollectionOperationArgument rightLambda ->
+                    equals(leftLambda.lambda(), rightLambda.lambda());
+            case PositionalCollectionOperationArgument leftPositional
+                    when right instanceof PositionalCollectionOperationArgument rightPositional ->
+                    equals(leftPositional.expression(), rightPositional.expression());
+            default -> false;
+        };
+    }
+
+    private static boolean equals(LambdaNode left, LambdaNode right) {
+        return equals(left.currentItem(), right.currentItem()) && equals(left.body(), right.body());
     }
 
     private static boolean equalsSeparators(
