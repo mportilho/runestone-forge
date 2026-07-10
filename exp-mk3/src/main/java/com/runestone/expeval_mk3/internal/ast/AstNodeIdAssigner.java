@@ -29,10 +29,22 @@ final class AstNodeIdAssigner {
     }
 
     private AssignmentTargetNode assignTarget(AssignmentTargetNode target) {
-        if (target instanceof IdentifierAssignmentTargetNode identifier) {
-            return new IdentifierAssignmentTargetNode(next(), identifier.sourceSpan(), identifier.name());
+        return switch (target) {
+            case DestructuringAssignmentTargetNode destructuring -> assignDestructuringTarget(destructuring);
+            case IdentifierAssignmentTargetNode identifier -> new IdentifierAssignmentTargetNode(
+                    next(),
+                    identifier.sourceSpan(),
+                    identifier.name());
+        };
+    }
+
+    private DestructuringAssignmentTargetNode assignDestructuringTarget(DestructuringAssignmentTargetNode destructuring) {
+        NodeId destructuringId = next();
+        List<IdentifierAssignmentTargetNode> elements = new ArrayList<>(destructuring.elements().size());
+        for (IdentifierAssignmentTargetNode element : destructuring.elements()) {
+            elements.add(new IdentifierAssignmentTargetNode(next(), element.sourceSpan(), element.name()));
         }
-        throw new IllegalArgumentException("Unsupported assignment target node: " + target.getClass().getName());
+        return new DestructuringAssignmentTargetNode(destructuringId, destructuring.sourceSpan(), elements);
     }
 
     private ExpressionNode assignExpression(ExpressionNode expression) {

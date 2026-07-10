@@ -31,11 +31,29 @@ final class AstStructuralEquality {
     }
 
     private static boolean equals(AssignmentTargetNode left, AssignmentTargetNode right) {
-        if (left instanceof IdentifierAssignmentTargetNode leftIdentifier
-                && right instanceof IdentifierAssignmentTargetNode rightIdentifier) {
-            return leftIdentifier.name().equals(rightIdentifier.name());
+        return switch (left) {
+            case DestructuringAssignmentTargetNode leftDestructuring
+                    when right instanceof DestructuringAssignmentTargetNode rightDestructuring ->
+                    equalsTargets(leftDestructuring.elements(), rightDestructuring.elements());
+            case IdentifierAssignmentTargetNode leftIdentifier
+                    when right instanceof IdentifierAssignmentTargetNode rightIdentifier ->
+                    leftIdentifier.name().equals(rightIdentifier.name());
+            default -> false;
+        };
+    }
+
+    private static boolean equalsTargets(
+            List<IdentifierAssignmentTargetNode> left,
+            List<IdentifierAssignmentTargetNode> right) {
+        if (left.size() != right.size()) {
+            return false;
         }
-        return false;
+        for (int index = 0; index < left.size(); index++) {
+            if (!left.get(index).name().equals(right.get(index).name())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean equals(ExpressionNode left, ExpressionNode right) {
