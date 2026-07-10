@@ -29,8 +29,8 @@ A canonical, stable identity derived from all compilation-relevant Ambiente de E
 _Avoid_: Object identity, cache tag, random environment id
 
 **Simbolo Externo**:
-A named value declared by an Ambiente de Expressao and supplied from outside the expression, optionally with a declared type or default value; absence is only invalid when the expression actually needs that value.
-_Avoid_: Input variable, parameter, free variable
+A named value declared by an Ambiente de Expressao with a required default value and an overwrite policy. Its type is either declared explicitly and validated against the default, or inferred from the default; runtime inputs may replace it only when the symbol is declared overridable.
+_Avoid_: Input variable, parameter, free variable, type-only declaration
 
 **Simbolo Interno**:
 A named value introduced or updated by expression assignments and stored in one stable expression-frame slot for later assignments, the result expression, or assignment views.
@@ -45,8 +45,12 @@ An assignment target that binds multiple internal symbols from an ordered expres
 _Avoid_: Tuple unpacking syntax, multiple assignment statement, array pattern
 
 **Valor Padrao de Simbolo**:
-The fallback value declared with a Simbolo Externo and validated as part of the Ambiente de Expressao when the symbol has a declared type.
-_Avoid_: Runtime fallback, missing input handler
+The required value declared with every Simbolo Externo and validated as part of the Ambiente de Expressao. It is the effective value for non-overridable symbols and the fallback value for overridable symbols when no runtime override is supplied.
+_Avoid_: Optional runtime fallback, missing input handler
+
+**Politica de Sobrescrita de Simbolo**:
+The Ambiente de Expressao declaration that says whether a Simbolo Externo default can be replaced by runtime input. Non-overridable external symbols are fixed environment values; overridable external symbols accept boundary-coerced runtime replacements.
+_Avoid_: Mutable parameter, assignment permission, runtime redeclaration
 
 **Modo Numerico**:
 The Ambiente de Expressao policy that determines numeric interpretation, planning, and execution behavior for numeric expressions; changing it changes the compiled expression identity.
@@ -72,6 +76,10 @@ _Avoid_: Parser size limit, input collection limit
 The type of a text-keyed value map understood by the expression language, preserving the type of values reachable by textual keys.
 _Avoid_: Generic Java map, object property bag
 
+**Entrada de Mapa**:
+The contextual item type exposed by filtering a Tipo Mapa, with `@.k` as the textual key and `@.v` as the map value. It is available only inside the map filter predicate and is not a general source-level value type.
+_Avoid_: Map object, structural pair, Java Map.Entry API
+
 **Tipo Objeto**:
 A nominal domain object type whose registered members can be used for navigation without making object compatibility structural.
 _Avoid_: Structural record type, map-like object
@@ -80,24 +88,40 @@ _Avoid_: Structural record type, map-like object
 A Java-backed Tipo Objeto whose navigable members are declared by the Ambiente de Expressao through a chosen exposure policy, from property accessors to optionally all public methods.
 _Avoid_: Reflected class, automatic object shape
 
-**Tipo Nulo**:
-The type of a value statically known to be null; it is distinct from unknown type information and behaves as a bottom type when a nullable expression branch is joined with a concrete non-null type.
-_Avoid_: Unknown null, missing value type
+**Valor Nulo de Runtime**:
+A runtime absence value that can come from Java data, external overrides, navigation results, or safe navigation. It is not a source literal and does not have a normal expression type; language constructs such as null coalescence and safe navigation are the explicit ways to protect against it.
+_Avoid_: Null literal, bottom type, unknown value
 
-**Tipo Desconhecido**:
-The type assigned when the expression compiler cannot prove a more specific type yet; strict mode rejects remaining unknowns in evaluated nodes or bindings where execution would otherwise defer validation, but not unused external declarations or unconstrained empty-vector element types.
-_Avoid_: Dynamic type, any type, untyped value
+**Nulidade de Runtime**:
+Non-blocking semantic metadata that records whether an expression or binding is proven never to produce a runtime null value or may produce one. It supports diagnostics, audit, and future warnings, but it is not a source-level type and does not participate in ordinary type compatibility.
+_Avoid_: Nullable type, optional type, bottom type
+
+**Tipagem Conhecida**:
+The semantic requirement that every accepted expression node, symbol, function binding, navigation binding, and collection operation has a known expression type at compilation time. Missing Java metadata, unconstrained empty containers, or ambiguous function contracts are semantic errors rather than unknown types deferred to runtime.
+_Avoid_: Dynamic type, any type, unknown semantic type
+
+**Variavel de Tipo Pendente**:
+An internal resolver-only placeholder used while inferring a known type from local context, such as an empty vector literal receiving its element type from a sibling branch, function parameter, or membership operand. Every pending type variable must resolve to a known type or produce a semantic diagnostic before a Modelo Semantico can succeed.
+_Avoid_: UnknownType, dynamic type, planner-visible placeholder
+
+**Tipo Invalido**:
+An internal semantic marker assigned to an expression node after a root semantic diagnostic has already been emitted, allowing resolution to continue and suppressing duplicate cascade diagnostics caused by the same invalid node.
+_Avoid_: Unknown type, runtime type error, partial exception
 
 **Restricao de Tipo**:
-A semantic requirement imposed by a source construct on an expression or symbol, either concrete such as arithmetic requiring a number or abstract such as ordering requiring both sides to share an orderable type, which must unify before planning or become an explicit non-strict deferred check.
+A semantic requirement imposed by a source construct on an expression or symbol, either concrete such as arithmetic requiring a number or abstract such as ordering requiring both sides to share an orderable type. Unknown symbols accumulate restrictions from their occurrences and only receive a refined type when the accumulated restrictions unify; conflicting restrictions produce a semantic diagnostic with the contributing source spans.
 _Avoid_: Runtime cast, parser type rule, hint
+
+**Inferencia Bidirecional Simples**:
+The semantic resolution pass where expected types from enclosing constructs and inferred types from child expressions constrain each other until operators, symbols, and function bindings become deterministic, without performing runtime trial resolution or speculative execution.
+_Avoid_: Runtime overload resolution, global type inference, parser hint recovery
 
 **Funcao Pura**:
 A function whose call has no observable side effects and returns the same result for the same arguments within the same Ambiente de Expressao.
 _Avoid_: Safe function, utility function
 
 **Assinatura de Funcao**:
-The language-level identity of a callable function, made from its name, arity, and parameter types; return type and Java reflection details do not disambiguate calls.
+The language-level identity of a callable function, made from its name, arity, and parameter types; return type, parameter nullability, and Java reflection details do not disambiguate calls. Function calls do not accept null arguments.
 _Avoid_: Java method signature, method handle identity
 
 **Vinculo de Funcao**:
@@ -105,7 +129,7 @@ The semantic choice of which registered function signature a function call means
 _Avoid_: Runtime overload resolution, method invocation, reflective call
 
 **Valor Semantico Preparado**:
-An environment-dependent value produced during semantic resolution for a source-faithful AST node, such as a normalized temporal literal or compiled regular expression, and consumed later without reinterpreting the source.
+A value produced during semantic resolution for a source-faithful AST node, such as a temporal literal normalized through the Ambiente de Expressao time zone or a compiled regular expression, and consumed later without reinterpreting the source. Temporal prepared values may retain whether an offset was explicit or inferred from the environment zone, the effective offset, and the normalized value used by execution.
 _Avoid_: Mutated literal, planner recomputation, runtime parse artifact
 
 **Funcao Dobravel**:
@@ -136,6 +160,10 @@ _Avoid_: Implicit cast, dynamic conversion, overload priority rule
 The semantic requirement that an operator's operands already have acceptable expression types without applying boundary coercion between concrete internal values.
 _Avoid_: Operator casting, parser precedence rule, runtime conversion
 
+**Pertencimento**:
+The typed meaning of `in` and `not in`: membership in a vector or collection by compatible element value, membership in a map by textual key, or a runtime-deferred membership check for an unknown right-hand side constrained as a membership container. Text containment is not part of this operator.
+_Avoid_: Substring search, generic contains call, dynamic inclusion
+
 **Arquivo de Expressao**:
 A complete expression source made of zero or more assignments followed by an optional result expression; syntactically valid empty files are represented and rejected later by semantic validation.
 _Avoid_: Program, script, parse result
@@ -148,6 +176,10 @@ _Avoid_: If function, separate conditional languages
 A lazy left-to-right expression that returns the first non-null operand from a `??` chain.
 _Avoid_: Default operator, null fallback function
 
+**Politica de Avaliacao**:
+The semantic evaluation contract attached to an operator or construct, such as short-circuit evaluation for `and`, `or`, and null coalescence, or eager evaluation for boolean operators that must evaluate both operands before producing a result.
+_Avoid_: Runtime optimization, parser associativity, incidental evaluation order
+
 **Cadeia de Navegacao**:
 A source-ordered access path from an expression receiver through property, method, subscript, filter, wildcard, or collection-operation links; safe navigation belongs to the individual link that declares it.
 _Avoid_: Nested getter calls, path string, reflection chain
@@ -157,8 +189,12 @@ The per-link navigation behavior that returns null only when that link's receive
 _Avoid_: Null-safe chain, error suppression, optional property access
 
 **Vinculo de Navegacao**:
-The semantic resolution of one navigation link against the receiver type, either to a known object member, map key access, collection operation, subscript behavior, or a runtime-deferred unknown receiver check.
+The semantic resolution of one navigation link against the receiver type, either to a known object member, explicit map key subscript, collection operation, subscript behavior, or a runtime-deferred unknown receiver check. Property navigation does not access map keys.
 _Avoid_: Reflection lookup, path segment, dynamic property access
+
+**Curinga de Navegacao**:
+The navigation link that expands child values from a receiver: `[*]` expands vector or collection elements, while `.*` expands map values or explicitly exposed object child values. It produces a collection of values and does not preserve map keys unless a collection operation explicitly requests keys.
+_Avoid_: Recursive search, implicit reflection over all members, map entry wildcard
 
 **Operacao de Colecao**:
 A navigation operation invoked with collection-operation syntax on a receiver value, with semantics for receiver type, arguments, optional Item Atual usage, materialization, and future pipeline optimization.
@@ -208,6 +244,10 @@ _Avoid_: Typed AST, partial resolver result, execution plan
 The outcome of resolving an Arvore Semantica de Expressao in one Ambiente de Expressao, containing all semantic diagnostics and a planejable Modelo Semantico only when no semantic errors were found.
 _Avoid_: Semantic exception, partial semantic model, planner input with errors
 
+**Checagem Diferida**:
+A runtime validation selected during semantic resolution when a source construct has known types but a value precondition cannot be proven at compilation time, such as dynamic factorial bounds, root degree constraints, subscript bounds, receiver null checks for non-safe navigation, or materialization limits. The execution plan consumes these checks without rediscovering semantic rules.
+_Avoid_: Late semantic resolution, runtime overload choice, generic cast, unknown type handling
+
 **Identificador de No**:
 A deterministic, compilation-local identity assigned to each node or navigation link of an Arvore Semantica de Expressao in stable pre-order traversal.
 _Avoid_: UUID, source span key, persistent node id
@@ -221,5 +261,5 @@ A half-open character range in an expression source, with zero-based offsets for
 _Avoid_: Token position, raw ANTLR location
 
 **Diagnostico de Expressao**:
-A stable, categorized explanation of why an expression source cannot be accepted or should be warned about in a compilation phase, always tied to a source span when it originates from source text and identified by a testable diagnostic code.
+A stable, categorized and severity-marked explanation of why an expression source cannot be accepted or should be warned about in a compilation phase, always tied to a primary source span when it originates from source text and identified by a testable diagnostic code. It may include related spans or notes for multi-cause diagnostics. Error diagnostics block a planejable semantic model; warning diagnostics do not.
 _Avoid_: Exception message, ANTLR error text

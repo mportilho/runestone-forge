@@ -16,9 +16,9 @@ The Ambiente de Expressao owns temporal policy through an explicit time zone. Th
 
 The standard Ambiente de Expressao uses the JVM default time zone as its default `ZoneId`. Callers that need reproducible temporal semantics and stable Identificadores de Ambiente across machines, containers, or deployments must configure the environment time zone explicitly.
 
-The Arvore Semantica de Expressao continues to preserve offset date-time literals as source-faithful values. The semantic resolver applies the Ambiente de Expressao time zone when assigning the single `DATETIME` type to offset date-time literals, producing the normalized local date-time value used by later semantic and execution phases.
+The Arvore Semantica de Expressao continues to preserve date-time literals as source-faithful values. The semantic resolver applies the Ambiente de Expressao time zone when assigning the single `DATETIME` type: date-time literals with an explicit offset are converted into the environment time zone, while date-time literals without an explicit offset are interpreted as local date-times in the environment time zone using that zone's effective offset for the local date-time.
 
-Semantic metadata may retain the original offset literal, the environment time zone, and the normalized value for diagnostics and audit. The hot execution plan only needs the normalized `DATETIME` value.
+Semantic metadata may retain the original literal, whether the offset was explicit or inferred, the environment time zone, the effective offset, and the normalized value for diagnostics and audit. The hot execution plan only needs the normalized `DATETIME` value.
 
 Current temporal values are derived from one execution instant per evaluation and use the same Ambiente de Expressao time zone. The execution clock is a runtime dependency and test seam, not part of the Identificador de Ambiente, unless a future compilation feature makes clock identity affect compilation.
 
