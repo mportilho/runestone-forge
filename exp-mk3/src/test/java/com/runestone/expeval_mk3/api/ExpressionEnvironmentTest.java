@@ -72,10 +72,10 @@ class ExpressionEnvironmentTest {
     @DisplayName("all compilation-relevant settings contribute to the environment ID")
     void allCompilationRelevantSettingsContributeToEnvironmentId() {
         ExpressionEnvironment baseline = ExpressionEnvironment.standard();
+        ZoneId changedZone = alternateZoneId();
 
-        assertThat(ExpressionEnvironment.builder().zoneId(ZoneId.of("America/Sao_Paulo")).build().environmentId())
-                .isNotEqualTo(baseline.environmentId());
-        assertThat(ExpressionEnvironment.builder().zoneId(alternateZoneId()).build().environmentId())
+        assertThat(changedZone).isNotEqualTo(ZoneId.systemDefault());
+        assertThat(ExpressionEnvironment.builder().zoneId(changedZone).build().environmentId())
                 .isNotEqualTo(baseline.environmentId());
         assertThat(ExpressionEnvironment.builder().numericMode(NumericMode.FAST).build().environmentId())
                 .isNotEqualTo(baseline.environmentId());

@@ -90,7 +90,7 @@ public final class FunctionDescriptor {
                 languageName,
                 parameterTypes,
                 returnType,
-                adapt(implementationHandle, parameterTypes.size()),
+                implementationHandle,
                 implementationMetadata,
                 purity);
     }

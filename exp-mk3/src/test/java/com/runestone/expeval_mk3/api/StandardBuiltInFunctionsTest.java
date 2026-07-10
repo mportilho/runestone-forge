@@ -120,9 +120,12 @@ class StandardBuiltInFunctionsTest {
                 .boundaryCoercion("prefixed-number:v1", new PrefixedNumberConversionService())
                 .build();
         FunctionDescriptor asNumber = descriptor(environment.functions(), "asNumber", List.of(UnknownType.INSTANCE));
+        FunctionDescriptor asVector = descriptor(environment.functions(), "asVector", List.of(UnknownType.INSTANCE));
 
         assertThat(asNumber.pure()).isTrue();
         assertThat(asNumber.foldable()).isFalse();
+        assertThat(asVector.pure()).isTrue();
+        assertThat(asVector.foldable()).isTrue();
     }
 
     @Test
