@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.api;
 
+import com.runestone.converters.DataConversionService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -11,6 +12,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -182,6 +184,76 @@ class ExpressionEnvironmentTest {
     }
 
     @Test
+    @DisplayName("typed external symbol defaults are coerced by the configured boundary profile")
+    void typedExternalSymbolDefaultsAreCoercedByConfiguredBoundaryProfile() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
+                .externalSymbolWithDefault("businessDate", ScalarType.DATE, "2026-07-06")
+                .externalSymbolWithDefault("scores", new VectorType(ScalarType.NUMBER), List.of("1.5", 2))
+                .build();
+
+        assertThat(environment.externalSymbols().asMap().get("amount").defaultValue())
+                .get()
+                .extracting(ExternalSymbolDefault::value)
+                .isEqualTo(new BigDecimal("12.50"));
+        assertThat(environment.externalSymbols().asMap().get("businessDate").defaultValue())
+                .get()
+                .extracting(ExternalSymbolDefault::value)
+                .isEqualTo(LocalDate.of(2026, 7, 6));
+        assertThat(environment.externalSymbols().asMap().get("scores").defaultValue())
+                .get()
+                .extracting(ExternalSymbolDefault::value)
+                .isEqualTo(List.of(new BigDecimal("1.5"), new BigDecimal("2")));
+    }
+
+    @Test
+    @DisplayName("custom conversion services are identified by an explicit stable profile")
+    void customConversionServicesAreIdentifiedByExplicitStableProfile() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .boundaryCoercion("prefixed-number:v1", new PrefixedNumberConversionService())
+                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "points:7")
+                .build();
+
+        assertThat(environment.conversionProfileIdentity()).isEqualTo("prefixed-number:v1");
+        assertThat(environment.externalSymbols().asMap().get("amount").defaultValue())
+                .get()
+                .extracting(ExternalSymbolDefault::value)
+                .isEqualTo(new BigDecimal("7"));
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .boundaryCoercion(" ", new PrefixedNumberConversionService()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("profile");
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .boundaryCoercion("prefixed-number:v1", null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("dataConversionService");
+    }
+
+    @Test
+    @DisplayName("boundary coercion answers expression type conversion support without expression runtime")
+    void boundaryCoercionAnswersExpressionTypeConversionSupportWithoutExpressionRuntime() {
+        BoundaryCoercion coercion = BoundaryCoercion.standard();
+
+        assertThat(coercion.profileIdentity()).isEqualTo("standard");
+        assertThat(coercion.canConvert(String.class, ScalarType.NUMBER)).isTrue();
+        assertThat(coercion.canConvert(String[].class, new VectorType(ScalarType.NUMBER))).isTrue();
+        assertThat(coercion.canConvert(int[].class, new CollectionType(ScalarType.NUMBER))).isTrue();
+        assertThat(coercion.canConvert(Map.class, new MapType(ScalarType.NUMBER))).isFalse();
+        assertThat(coercion.canConvert(Map.class, new MapType(UnknownType.INSTANCE))).isTrue();
+        assertThat(coercion.canConvert("12.50", ScalarType.NUMBER)).isTrue();
+        assertThat(coercion.canConvert("not-a-number", ScalarType.NUMBER)).isFalse();
+        assertThat(coercion.canConvert("2026-07-06", ScalarType.DATE)).isTrue();
+        assertThat(coercion.canConvert(Map.of("amount", "12.50"), new MapType(ScalarType.NUMBER))).isTrue();
+        assertThat(coercion.canConvert(Map.of(7, "seven"), new MapType(ScalarType.STRING))).isFalse();
+        assertThat(coercion.canConvert("customer", new ObjectType("Customer"))).isFalse();
+        assertThat(coercion.convertFunctionBindingFallback("12.50", ScalarType.NUMBER))
+                .isEqualTo(new BigDecimal("12.50"));
+        assertThatNullPointerException()
+                .isThrownBy(() -> coercion.convertFunctionBindingFallback("12.50", null))
+                .withMessage("targetType");
+    }
+
+    @Test
     @DisplayName("external symbols contribute deterministically to the environment ID")
     void externalSymbolsContributeDeterministicallyToEnvironmentId() {
         ExpressionEnvironment first = ExpressionEnvironment.builder()
@@ -214,6 +286,20 @@ class ExpressionEnvironmentTest {
         assertThat(first.environmentId()).isEqualTo(sameContentDifferentOrder.environmentId());
         assertThat(first.environmentId()).isNotEqualTo(differentDefault.environmentId());
         assertThat(firstMapDefault.environmentId()).isEqualTo(sameMapDefaultDifferentOrder.environmentId());
+    }
+
+    @Test
+    @DisplayName("conversion profile differences affect the environment ID")
+    void conversionProfileDifferencesAffectEnvironmentId() {
+        ExpressionEnvironment standardProfile = ExpressionEnvironment.builder()
+                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
+                .build();
+        ExpressionEnvironment alternateProfile = ExpressionEnvironment.builder()
+                .conversionProfileIdentity("standard-copy:v2")
+                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
+                .build();
+
+        assertThat(standardProfile.environmentId()).isNotEqualTo(alternateProfile.environmentId());
     }
 
     @Test
@@ -279,5 +365,22 @@ class ExpressionEnvironmentTest {
             return utc;
         }
         return ZoneId.of("America/Sao_Paulo");
+    }
+
+    private static final class PrefixedNumberConversionService implements DataConversionService {
+
+        @Override
+        public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
+            return sourceType == String.class && targetType == BigDecimal.class;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <S, T> T convert(S source, Class<T> targetType) {
+            if (source instanceof String text && targetType == BigDecimal.class && text.startsWith("points:")) {
+                return (T) new BigDecimal(text.substring("points:".length()));
+            }
+            throw new IllegalArgumentException("unsupported conversion");
+        }
     }
 }

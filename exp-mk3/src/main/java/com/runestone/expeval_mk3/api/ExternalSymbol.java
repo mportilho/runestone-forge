@@ -33,12 +33,20 @@ public final class ExternalSymbol {
     }
 
     public static ExternalSymbol withDefault(String name, ExpressionType type, Object value) {
+        return withDefault(name, type, value, BoundaryCoercion.standard());
+    }
+
+    static ExternalSymbol withDefault(String name, ExpressionType type, Object value, BoundaryCoercion boundaryCoercion) {
         String validatedName = ExternalSymbolNames.validate(name);
         ExpressionType requestedType = Objects.requireNonNull(type, "type");
         ExpressionType effectiveType = requestedType == UnknownType.INSTANCE
                 ? ExternalSymbolDefaults.inferType(validatedName, value)
                 : requestedType;
-        Object canonicalValue = ExternalSymbolDefaults.canonicalize(validatedName, effectiveType, value);
+        Object canonicalValue = ExternalSymbolDefaults.canonicalize(
+                validatedName,
+                effectiveType,
+                value,
+                boundaryCoercion);
         return new ExternalSymbol(validatedName, effectiveType, new ExternalSymbolDefault(effectiveType, canonicalValue));
     }
 
