@@ -1,7 +1,6 @@
 package com.runestone.expeval_mk3.api;
 
-import com.runestone.converters.ConversionContext;
-import com.runestone.converters.DataConversionService;
+import com.runestone.expeval_mk3.support.EnvironmentConfigurations;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -99,10 +98,10 @@ class StandardBuiltInFunctionsTest {
     }
 
     @Test
-    @DisplayName("custom deterministic boundary coercion keeps assertion conversions foldable")
-    void customDeterministicBoundaryCoercionKeepsAssertionConversionsFoldable() throws Throwable {
+    @DisplayName("custom boundary coercion keeps assertion conversions foldable")
+    void customBoundaryCoercionKeepsAssertionConversionsFoldable() throws Throwable {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .deterministicBoundaryCoercion("prefixed-number:v1", new PrefixedNumberConversionService())
+                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService())
                 .build();
         FunctionDescriptor asNumber = descriptor(environment.functions(), "asNumber", List.of(ScalarType.STRING));
 
@@ -113,15 +112,14 @@ class StandardBuiltInFunctionsTest {
     }
 
     @Test
-    @DisplayName("custom boundary coercion defaults assertion conversions to non-foldable")
-    void customBoundaryCoercionDefaultsAssertionConversionsToNonFoldable() {
+    @DisplayName("custom boundary coercion derives profile metadata from the service")
+    void customBoundaryCoercionDerivesProfileMetadataFromTheService() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .boundaryCoercion("prefixed-number:v1", new PrefixedNumberConversionService())
+                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService())
                 .build();
-        FunctionDescriptor asNumber = descriptor(environment.functions(), "asNumber", List.of(ScalarType.STRING));
 
-        assertThat(asNumber.pure()).isTrue();
-        assertThat(asNumber.foldable()).isFalse();
+        assertThat(environment.conversionProfileIdentity()).isEqualTo("test.prefixed-number");
+        assertThat(environment.boundaryCoercion().profileHash()).isEqualTo("test.prefixed-number-hash");
     }
 
     @Test
@@ -184,42 +182,5 @@ class StandardBuiltInFunctionsTest {
         return descriptors.stream()
                 .filter(descriptor -> !excluded.contains(descriptor.languageName()))
                 .toList();
-    }
-
-    private static final class PrefixedNumberConversionService implements DataConversionService {
-
-        @Override
-        public ConversionContext conversionContext() {
-            return ConversionContext.standard();
-        }
-
-        @Override
-        public String conversionProfileIdentity() {
-            return "test.prefixed-number";
-        }
-
-        @Override
-        public String conversionProfileHash() {
-            return "test.prefixed-number";
-        }
-
-        @Override
-        public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
-            return sourceType == String.class && targetType == BigDecimal.class;
-        }
-
-        @Override
-        @SuppressWarnings("unchecked")
-        public <S, T> T convert(S source, Class<T> targetType) {
-            if (source instanceof String text && targetType == BigDecimal.class && text.startsWith("points:")) {
-                return (T) new BigDecimal(text.substring("points:".length()));
-            }
-            throw new IllegalArgumentException("unsupported conversion");
-        }
-
-        @Override
-        public <T> T copyFoldableValue(T value) {
-            return value;
-        }
     }
 }

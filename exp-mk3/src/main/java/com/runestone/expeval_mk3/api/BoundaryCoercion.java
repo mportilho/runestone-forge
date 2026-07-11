@@ -19,48 +19,36 @@ import java.util.TreeMap;
 public final class BoundaryCoercion {
 
     private static final BoundaryCoercion STANDARD = new BoundaryCoercion(
-            ExpressionEnvironment.STANDARD_CONVERSION_PROFILE_IDENTITY,
-            DefaultDataConversionService.standard(),
-            true);
+            DefaultDataConversionService.standard());
 
     private final String profileIdentity;
+    private final String profileHash;
     private final DataConversionService dataConversionService;
-    private final boolean deterministicForConstants;
 
-    private BoundaryCoercion(
-            String profileIdentity,
-            DataConversionService dataConversionService,
-            boolean deterministicForConstants) {
-        this.profileIdentity = validateProfileIdentity(profileIdentity);
+    private BoundaryCoercion(DataConversionService dataConversionService) {
         this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService");
-        this.deterministicForConstants = deterministicForConstants;
+        profileIdentity = validateProfileIdentity(dataConversionService.conversionProfileIdentity());
+        profileHash = validateProfileHash(dataConversionService.conversionProfileHash());
     }
 
     public static BoundaryCoercion standard() {
         return STANDARD;
     }
 
-    public static BoundaryCoercion of(String profileIdentity, DataConversionService dataConversionService) {
-        return new BoundaryCoercion(profileIdentity, dataConversionService, false);
-    }
-
-    static BoundaryCoercion of(
-            String profileIdentity,
-            DataConversionService dataConversionService,
-            boolean deterministicForConstants) {
-        return new BoundaryCoercion(profileIdentity, dataConversionService, deterministicForConstants);
-    }
-
-    public BoundaryCoercion withProfileIdentity(String profileIdentity) {
-        return new BoundaryCoercion(profileIdentity, dataConversionService, deterministicForConstants);
+    public static BoundaryCoercion of(DataConversionService dataConversionService) {
+        return new BoundaryCoercion(dataConversionService);
     }
 
     public String profileIdentity() {
         return profileIdentity;
     }
 
+    public String profileHash() {
+        return profileHash;
+    }
+
     boolean deterministicForConstants() {
-        return deterministicForConstants;
+        return true;
     }
 
     public boolean canConvert(Class<?> sourceType, ExpressionType targetType) {
@@ -203,6 +191,14 @@ public final class BoundaryCoercion {
             throw new IllegalArgumentException("conversion profile identity must not be blank");
         }
         return profileIdentity;
+    }
+
+    static String validateProfileHash(String profileHash) {
+        Objects.requireNonNull(profileHash, "profileHash");
+        if (profileHash.isBlank()) {
+            throw new IllegalArgumentException("conversion profile hash must not be blank");
+        }
+        return profileHash;
     }
 
     private static final class BoundaryCoercionFailure extends IllegalArgumentException {

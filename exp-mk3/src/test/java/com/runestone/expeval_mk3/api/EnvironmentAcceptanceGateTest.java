@@ -32,9 +32,7 @@ final class EnvironmentAcceptanceGateTest {
                 .externalSymbol("customer", EnvironmentConfigurations.customerProfileObjectType())
                 .externalSymbolWithDefault("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 10))
                 .externalSymbol("amount", ScalarType.NUMBER)
-                .deterministicBoundaryCoercion(
-                        "acceptance-profile:v1",
-                        EnvironmentConfigurations.prefixedNumberConversionService())
+                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService())
                 .materializationLimit(256)
                 .maxCurrentItemDepth(3)
                 .strictMode(true)
@@ -161,9 +159,11 @@ final class EnvironmentAcceptanceGateTest {
                         .build());
         assertEnvironmentIdChanges("strict mode", baseline, EnvironmentConfigurations.completeBuilder().strictMode(false).build());
         assertEnvironmentIdChanges("conversion profile", baseline,
-                EnvironmentConfigurations.completeBuilder().deterministicBoundaryCoercion(
-                        "acceptance-profile:v2",
-                        EnvironmentConfigurations.prefixedNumberConversionService()).build());
+                EnvironmentConfigurations.completeBuilder()
+                        .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(
+                                "test.prefixed-number",
+                                "acceptance-profile-v2-hash"))
+                        .build());
     }
 
     @Test
@@ -302,8 +302,8 @@ final class EnvironmentAcceptanceGateTest {
     }
 
     @Test
-    @DisplayName("environment and catalog invariants fail at construction time with stable diagnostics")
-    void environmentAndCatalogInvariantsFailAtConstructionTimeWithStableDiagnostics() throws NoSuchMethodException {
+    @DisplayName("environment and catalog invariants fail at construction time with stable errors")
+    void environmentAndCatalogInvariantsFailAtConstructionTimeWithStableErrors() throws NoSuchMethodException {
         FunctionDescriptor discount = EnvironmentConfigurations.discountFunction();
 
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
@@ -317,11 +317,8 @@ final class EnvironmentAcceptanceGateTest {
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("amount");
-        assertThatThrownBy(() -> ExpressionEnvironment.builder().conversionProfileIdentity(" "))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("conversionProfileIdentity must not be blank");
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .boundaryCoercion("custom-profile:v1", null))
+                .boundaryCoercion(null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("dataConversionService");
         assertThatThrownBy(() -> ExpressionEnvironment.builder().maxCurrentItemDepth(-1))
@@ -385,7 +382,7 @@ final class EnvironmentAcceptanceGateTest {
                 "acceptanceDiscount",
                 List.of(ScalarType.NUMBER)))).isPresent();
 
-        assertThat(customCoercion.conversionProfileIdentity()).isEqualTo("custom-profile:v1");
+        assertThat(customCoercion.conversionProfileIdentity()).isEqualTo("test.prefixed-number");
         assertThat(customCoercion.externalSymbols().asMap().get("amount").defaultValue())
                 .get()
                 .extracting(ExternalSymbolDefault::value)

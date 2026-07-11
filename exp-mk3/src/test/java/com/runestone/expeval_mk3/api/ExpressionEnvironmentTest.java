@@ -1,7 +1,8 @@
 package com.runestone.expeval_mk3.api;
 
-import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
+import com.runestone.expeval_mk3.support.EnvironmentConfigurations;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -37,7 +38,8 @@ class ExpressionEnvironmentTest {
         assertThat(environment.strictMode()).isFalse();
         assertThat(environment.maxCurrentItemDepth()).isEqualTo(32);
         assertThat(environment.materializationLimit()).isEqualTo(10_000);
-        assertThat(environment.conversionProfileIdentity()).isEqualTo("standard");
+        assertThat(environment.conversionProfileIdentity())
+                .isEqualTo(DefaultDataConversionService.standard().conversionProfileIdentity());
         assertThat(environment.environmentId()).isEqualTo(ExpressionEnvironment.standard().environmentId());
     }
 
@@ -52,11 +54,11 @@ class ExpressionEnvironmentTest {
                 .strictMode(true)
                 .maxCurrentItemDepth(7)
                 .materializationLimit(512)
-                .conversionProfileIdentity("tenant-a:v2")
+                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService("tenant-a:v2", "tenant-a-hash"))
                 .build();
 
         ExpressionEnvironment second = ExpressionEnvironment.builder()
-                .conversionProfileIdentity("tenant-a:v2")
+                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService("tenant-a:v2", "tenant-a-hash"))
                 .materializationLimit(512)
                 .maxCurrentItemDepth(7)
                 .strictMode(true)
@@ -107,7 +109,10 @@ class ExpressionEnvironmentTest {
                 .isNotEqualTo(baseline.environmentId());
         assertThat(ExpressionEnvironment.builder().materializationLimit(10_001).build().environmentId())
                 .isNotEqualTo(baseline.environmentId());
-        assertThat(ExpressionEnvironment.builder().conversionProfileIdentity("custom").build().environmentId())
+        assertThat(ExpressionEnvironment.builder()
+                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService("custom", "custom-hash"))
+                .build()
+                .environmentId())
                 .isNotEqualTo(baseline.environmentId());
     }
 
@@ -235,24 +240,26 @@ class ExpressionEnvironmentTest {
     }
 
     @Test
-    @DisplayName("custom conversion services are identified by an explicit stable profile")
-    void customConversionServicesAreIdentifiedByExplicitStableProfile() {
+    @DisplayName("custom conversion services derive boundary profile metadata from the service")
+    void customConversionServicesDeriveBoundaryProfileMetadataFromTheService() {
+        DataConversionService conversionService = EnvironmentConfigurations.prefixedNumberConversionService(
+                "prefixed-number:v1",
+                "prefixed-number-hash:v1");
+
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .boundaryCoercion("prefixed-number:v1", new PrefixedNumberConversionService())
+                .boundaryCoercion(conversionService)
                 .externalSymbolWithDefault("amount", ScalarType.NUMBER, "points:7")
                 .build();
 
         assertThat(environment.conversionProfileIdentity()).isEqualTo("prefixed-number:v1");
+        assertThat(environment.conversionProfileHash()).isEqualTo("prefixed-number-hash:v1");
+        assertThat(environment.boundaryCoercion().profileHash()).isEqualTo("prefixed-number-hash:v1");
         assertThat(environment.externalSymbols().asMap().get("amount").defaultValue())
                 .get()
                 .extracting(ExternalSymbolDefault::value)
                 .isEqualTo(new BigDecimal("7"));
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .boundaryCoercion(" ", new PrefixedNumberConversionService()))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("profile");
-        assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .boundaryCoercion("prefixed-number:v1", null))
+                .boundaryCoercion(null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("dataConversionService");
     }
@@ -262,7 +269,10 @@ class ExpressionEnvironmentTest {
     void boundaryCoercionAnswersExpressionTypeConversionSupportWithoutExpressionRuntime() {
         BoundaryCoercion coercion = BoundaryCoercion.standard();
 
-        assertThat(coercion.profileIdentity()).isEqualTo("standard");
+        assertThat(coercion.profileIdentity())
+                .isEqualTo(DefaultDataConversionService.standard().conversionProfileIdentity());
+        assertThat(coercion.profileHash())
+                .isEqualTo(DefaultDataConversionService.standard().conversionProfileHash());
         assertThat(coercion.canConvert(String.class, ScalarType.NUMBER)).isTrue();
         assertThat(coercion.canConvert(String[].class, new VectorType(ScalarType.NUMBER))).isTrue();
         assertThat(coercion.canConvert(int[].class, new CollectionType(ScalarType.NUMBER))).isTrue();
@@ -319,14 +329,54 @@ class ExpressionEnvironmentTest {
     @DisplayName("conversion profile differences affect the environment ID")
     void conversionProfileDifferencesAffectEnvironmentId() {
         ExpressionEnvironment standardProfile = ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
                 .build();
         ExpressionEnvironment alternateProfile = ExpressionEnvironment.builder()
-                .conversionProfileIdentity("standard-copy:v2")
-                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
+                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(
+                        "test.prefixed-number",
+                        "different-profile-hash"))
                 .build();
 
         assertThat(standardProfile.environmentId()).isNotEqualTo(alternateProfile.environmentId());
+    }
+
+    @Test
+    @DisplayName("conversion profile hash differences affect the environment ID")
+    void conversionProfileHashDifferencesAffectEnvironmentId() {
+        ExpressionEnvironment first = ExpressionEnvironment.builder()
+                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(
+                        "same-audit-identity",
+                        "hash-a"))
+                .build();
+        ExpressionEnvironment second = ExpressionEnvironment.builder()
+                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(
+                        "same-audit-identity",
+                        "hash-b"))
+                .build();
+
+        assertThat(first.conversionProfileIdentity()).isEqualTo("same-audit-identity");
+        assertThat(second.conversionProfileIdentity()).isEqualTo("same-audit-identity");
+        assertThat(first.environmentId()).isNotEqualTo(second.environmentId());
+    }
+
+    @Test
+    @DisplayName("conversion profile audit identity does not affect the environment ID without a hash change")
+    void conversionProfileAuditIdentityDoesNotAffectEnvironmentIdWithoutAHashChange() {
+        ExpressionEnvironment first = ExpressionEnvironment.builder()
+                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(
+                        "audit-identity-a",
+                        "same-profile-hash"))
+                .build();
+        ExpressionEnvironment second = ExpressionEnvironment.builder()
+                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(
+                        "audit-identity-b",
+                        "same-profile-hash"))
+                .build();
+
+        assertThat(first.conversionProfileIdentity()).isEqualTo("audit-identity-a");
+        assertThat(second.conversionProfileIdentity()).isEqualTo("audit-identity-b");
+        assertThat(first.conversionProfileHash()).isEqualTo("same-profile-hash");
+        assertThat(second.conversionProfileHash()).isEqualTo("same-profile-hash");
+        assertThat(first.environmentId()).isEqualTo(second.environmentId());
     }
 
     @Test
@@ -399,18 +449,30 @@ class ExpressionEnvironmentTest {
                 .isThrownBy(() -> ExpressionEnvironment.builder().transcendentalMathContext(null))
                 .withMessage("transcendentalMathContext");
         assertThatNullPointerException()
-                .isThrownBy(() -> ExpressionEnvironment.builder().conversionProfileIdentity(null))
-                .withMessage("conversionProfileIdentity");
+                .isThrownBy(() -> ExpressionEnvironment.builder().boundaryCoercion(null))
+                .withMessage("dataConversionService");
+        assertThatNullPointerException()
+                .isThrownBy(() -> ExpressionEnvironment.builder()
+                        .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(null, "hash")))
+                .withMessage("profileIdentity");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> ExpressionEnvironment.builder()
+                        .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(" ", "hash")))
+                .withMessage("conversion profile identity must not be blank");
+        assertThatNullPointerException()
+                .isThrownBy(() -> ExpressionEnvironment.builder()
+                        .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService("identity", null)))
+                .withMessage("profileHash");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> ExpressionEnvironment.builder()
+                        .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService("identity", " ")))
+                .withMessage("conversion profile hash must not be blank");
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> ExpressionEnvironment.builder().maxCurrentItemDepth(-1))
                 .withMessage("maxCurrentItemDepth must not be negative");
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> ExpressionEnvironment.builder().materializationLimit(-1))
                 .withMessage("materializationLimit must not be negative");
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> ExpressionEnvironment.builder().conversionProfileIdentity("  "))
-                .withMessage("conversionProfileIdentity must not be blank");
-
         ExpressionEnvironment zeroLimits = ExpressionEnvironment.builder()
                 .maxCurrentItemDepth(0)
                 .materializationLimit(0)
@@ -428,40 +490,4 @@ class ExpressionEnvironmentTest {
         return ZoneId.of("America/Sao_Paulo");
     }
 
-    private static final class PrefixedNumberConversionService implements DataConversionService {
-
-        @Override
-        public ConversionContext conversionContext() {
-            return ConversionContext.standard();
-        }
-
-        @Override
-        public String conversionProfileIdentity() {
-            return "test.prefixed-number";
-        }
-
-        @Override
-        public String conversionProfileHash() {
-            return "test.prefixed-number";
-        }
-
-        @Override
-        public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
-            return sourceType == String.class && targetType == BigDecimal.class;
-        }
-
-        @Override
-        @SuppressWarnings("unchecked")
-        public <S, T> T convert(S source, Class<T> targetType) {
-            if (source instanceof String text && targetType == BigDecimal.class && text.startsWith("points:")) {
-                return (T) new BigDecimal(text.substring("points:".length()));
-            }
-            throw new IllegalArgumentException("unsupported conversion");
-        }
-
-        @Override
-        public <T> T copyFoldableValue(T value) {
-            return value;
-        }
-    }
 }

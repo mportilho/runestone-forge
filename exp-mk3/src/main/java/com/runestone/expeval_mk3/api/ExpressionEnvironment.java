@@ -16,8 +16,6 @@ import java.util.Objects;
  */
 public final class ExpressionEnvironment {
 
-    static final String STANDARD_CONVERSION_PROFILE_IDENTITY = "standard";
-
     private static final ZoneId DEFAULT_ZONE_ID = ZoneId.systemDefault();
     private static final NumericMode DEFAULT_NUMERIC_MODE = NumericMode.DECIMAL;
     private static final MathContext DEFAULT_MATH_CONTEXT = MathContext.DECIMAL128;
@@ -35,6 +33,7 @@ public final class ExpressionEnvironment {
     private final int maxCurrentItemDepth;
     private final int materializationLimit;
     private final String conversionProfileIdentity;
+    private final String conversionProfileHash;
     private final BoundaryCoercion boundaryCoercion;
     private final ExternalSymbolCatalog externalSymbols;
     private final FunctionCatalog functions;
@@ -51,6 +50,7 @@ public final class ExpressionEnvironment {
         materializationLimit = builder.materializationLimit;
         boundaryCoercion = builder.boundaryCoercion;
         conversionProfileIdentity = boundaryCoercion.profileIdentity();
+        conversionProfileHash = boundaryCoercion.profileHash();
         externalSymbols = builder.externalSymbols.build(boundaryCoercion);
         functions = buildFunctions(builder);
         javaTypes = builder.javaTypes.build();
@@ -101,6 +101,10 @@ public final class ExpressionEnvironment {
 
     public String conversionProfileIdentity() {
         return conversionProfileIdentity;
+    }
+
+    public String conversionProfileHash() {
+        return conversionProfileHash;
     }
 
     public BoundaryCoercion boundaryCoercion() {
@@ -165,7 +169,7 @@ public final class ExpressionEnvironment {
         appendCanonicalField(builder, "strictMode", Boolean.toString(environment.strictMode));
         appendCanonicalField(builder, "maxCurrentItemDepth", Integer.toString(environment.maxCurrentItemDepth));
         appendCanonicalField(builder, "materializationLimit", Integer.toString(environment.materializationLimit));
-        appendCanonicalField(builder, "conversionProfileIdentity", environment.conversionProfileIdentity);
+        appendCanonicalField(builder, "conversionProfileHash", environment.conversionProfileHash);
         appendCanonicalField(builder, "externalSymbols.count", Integer.toString(environment.externalSymbols.size()));
         for (ExternalSymbol externalSymbol : environment.externalSymbols.values()) {
             appendCanonicalField(builder, "externalSymbol.name", externalSymbol.name());
@@ -306,27 +310,8 @@ public final class ExpressionEnvironment {
             return this;
         }
 
-        public Builder conversionProfileIdentity(String conversionProfileIdentity) {
-            Objects.requireNonNull(conversionProfileIdentity, "conversionProfileIdentity");
-            if (conversionProfileIdentity.isBlank()) {
-                throw new IllegalArgumentException("conversionProfileIdentity must not be blank");
-            }
-            boundaryCoercion = boundaryCoercion.withProfileIdentity(conversionProfileIdentity);
-            return this;
-        }
-
-        public Builder boundaryCoercion(String conversionProfileIdentity, DataConversionService dataConversionService) {
-            boundaryCoercion = BoundaryCoercion.of(conversionProfileIdentity, dataConversionService);
-            return this;
-        }
-
-        public Builder deterministicBoundaryCoercion(
-                String conversionProfileIdentity,
-                DataConversionService dataConversionService) {
-            boundaryCoercion = BoundaryCoercion.of(
-                    conversionProfileIdentity,
-                    dataConversionService,
-                    true);
+        public Builder boundaryCoercion(DataConversionService dataConversionService) {
+            boundaryCoercion = BoundaryCoercion.of(dataConversionService);
             return this;
         }
 

@@ -65,7 +65,13 @@ public final class EnvironmentConfigurations {
     }
 
     public static DataConversionService prefixedNumberConversionService() {
-        return new PrefixedNumberConversionService();
+        return prefixedNumberConversionService("test.prefixed-number", "test.prefixed-number-hash");
+    }
+
+    public static DataConversionService prefixedNumberConversionService(
+            String conversionProfileIdentity,
+            String conversionProfileHash) {
+        return new PrefixedNumberConversionService(conversionProfileIdentity, conversionProfileHash);
     }
 
     private static ExpressionEnvironment.Builder completeBuilder(
@@ -87,7 +93,7 @@ public final class EnvironmentConfigurations {
                 .strictMode(true)
                 .maxCurrentItemDepth(3)
                 .materializationLimit(256)
-                .deterministicBoundaryCoercion("acceptance-profile:v1", prefixedNumberConversionService())
+                .boundaryCoercion(prefixedNumberConversionService())
                 .externalSymbol(amountSymbolName, amountType)
                 .externalSymbolWithDefault("businessDate", ScalarType.DATE, businessDate)
                 .externalSymbol("customer", customerProfileObjectType())
@@ -104,7 +110,7 @@ public final class EnvironmentConfigurations {
                 new RepresentativeEnvironmentConfiguration("standard", ExpressionEnvironment.standard()),
                 new RepresentativeEnvironmentConfiguration("strict fast tenant", complete()),
                 new RepresentativeEnvironmentConfiguration("custom coercion", ExpressionEnvironment.builder()
-                        .boundaryCoercion("custom-profile:v1", prefixedNumberConversionService())
+                        .boundaryCoercion(prefixedNumberConversionService())
                         .externalSymbolWithDefault("amount", ScalarType.NUMBER, "points:10")
                         .build()),
                 new RepresentativeEnvironmentConfiguration("Java type metadata", ExpressionEnvironment.builder()
@@ -213,6 +219,14 @@ public final class EnvironmentConfigurations {
 
     private static final class PrefixedNumberConversionService implements DataConversionService {
 
+        private final String conversionProfileIdentity;
+        private final String conversionProfileHash;
+
+        private PrefixedNumberConversionService(String conversionProfileIdentity, String conversionProfileHash) {
+            this.conversionProfileIdentity = conversionProfileIdentity;
+            this.conversionProfileHash = conversionProfileHash;
+        }
+
         @Override
         public ConversionContext conversionContext() {
             return ConversionContext.standard();
@@ -220,12 +234,12 @@ public final class EnvironmentConfigurations {
 
         @Override
         public String conversionProfileIdentity() {
-            return "test.prefixed-number";
+            return conversionProfileIdentity;
         }
 
         @Override
         public String conversionProfileHash() {
-            return "test.prefixed-number";
+            return conversionProfileHash;
         }
 
         @Override
