@@ -24,15 +24,19 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 import com.runestone.utils.DateUtils;
 
 import java.time.OffsetDateTime;
 
-public class StringToOffsetDateTimeConverter implements DataConverter<String, OffsetDateTime> {
+public class StringToOffsetDateTimeConverter extends SimpleStringConverter<OffsetDateTime> {
+
+    public StringToOffsetDateTimeConverter() {
+        super(OffsetDateTime.class, "string-to-offset-date-time");
+    }
 
     @Override
-    public OffsetDateTime convert(String data) {
+    public OffsetDateTime convert(String data, ConversionContext context) {
         return DateUtils.DATETIME_FORMATTER_PADDING_TIME.parse(data, OffsetDateTime::from);
     }
 }

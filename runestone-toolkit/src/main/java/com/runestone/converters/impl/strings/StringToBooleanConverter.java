@@ -24,16 +24,21 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
+import java.util.Locale;
 import java.util.Objects;
 
-public class StringToBooleanConverter implements DataConverter<String, Boolean> {
+public class StringToBooleanConverter extends SimpleStringConverter<Boolean> {
+
+    public StringToBooleanConverter() {
+        super(Boolean.class, "string-to-boolean");
+    }
 
     @Override
-    public Boolean convert(String data) {
+    public Boolean convert(String data, ConversionContext context) {
         Objects.requireNonNull(data);
-        return switch (data.trim().toLowerCase()) {
+        return switch (data.trim().toLowerCase(Locale.ROOT)) {
             case "true", "on", "yes", "1" -> Boolean.TRUE;
             default -> Boolean.FALSE;
         };

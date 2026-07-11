@@ -24,15 +24,19 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 import com.runestone.utils.DateUtils;
 
 import java.time.Instant;
 
-public class StringToInstantConverter implements DataConverter<String, Instant> {
+public class StringToInstantConverter extends SimpleStringConverter<Instant> {
+
+    public StringToInstantConverter() {
+        super(Instant.class, "string-to-instant");
+    }
 
     @Override
-    public Instant convert(String data) {
+    public Instant convert(String data, ConversionContext context) {
         return DateUtils.DATETIME_FORMATTER_PADDING_TIME.parse(data, Instant::from);
     }
 }

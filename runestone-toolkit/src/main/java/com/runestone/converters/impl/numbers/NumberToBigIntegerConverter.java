@@ -24,6 +24,7 @@
 
 package com.runestone.converters.impl.numbers;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConverter;
 
 import java.math.BigInteger;
@@ -31,7 +32,22 @@ import java.math.BigInteger;
 public class NumberToBigIntegerConverter implements DataConverter<Number, BigInteger> {
 
     @Override
-    public BigInteger convert(Number data) {
+    public Class<Number> sourceType() {
+        return Number.class;
+    }
+
+    @Override
+    public Class<BigInteger> targetType() {
+        return BigInteger.class;
+    }
+
+    @Override
+    public String ruleIdentity() {
+        return "number:biginteger";
+    }
+
+    @Override
+    public BigInteger convert(Number data, ConversionContext context) {
         return NumberConversionSupport.convert(data, BigInteger.class, number -> BigInteger.valueOf(number.longValue()));
     }
 }

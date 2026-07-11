@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.ResolverStyle;
 import java.time.temporal.ChronoField;
+import java.util.Locale;
 
 public class DateUtils {
 
@@ -41,13 +42,13 @@ public class DateUtils {
     static {
         YEAR_MONTH_FORMATTER = new DateTimeFormatterBuilder()
                 .appendPattern("[uuuuMM][MM/uuuu][MM-uuuu][uuuu/MM][uuuu-MM]")
-                .toFormatter()
+                .toFormatter(Locale.ROOT)
                 .withResolverStyle(ResolverStyle.STRICT);
 
         DATE_FORMATTER = new DateTimeFormatterBuilder()
                 .appendOptional(DateTimeFormatter.BASIC_ISO_DATE)
                 .appendPattern("[uuuu/MM/dd][uuuu-MM-dd][dd/MM/uuuu][dd-MM-uuuu]")
-                .toFormatter()
+                .toFormatter(Locale.ROOT)
                 .withResolverStyle(ResolverStyle.STRICT);
 
         TIME_FORMATTER = new DateTimeFormatterBuilder()
@@ -57,7 +58,7 @@ public class DateUtils {
                 .optionalStart().appendPattern("[ Z][Z][XXX]['Z']").optionalEnd()
                 .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)
                 .parseDefaulting(ChronoField.NANO_OF_SECOND, 0)
-                .toFormatter()
+                .toFormatter(Locale.ROOT)
                 .withResolverStyle(ResolverStyle.STRICT);
 
         DATETIME_FORMATTER = new DateTimeFormatterBuilder()
@@ -70,7 +71,7 @@ public class DateUtils {
                 .appendZoneRegionId()
                 .appendLiteral(']')
                 .optionalEnd()
-                .toFormatter()
+                .toFormatter(Locale.ROOT)
                 .withResolverStyle(ResolverStyle.STRICT);
 
         DATETIME_FORMATTER_PADDING_TIME = new DateTimeFormatterBuilder()
@@ -79,7 +80,7 @@ public class DateUtils {
                 .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)
                 .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)
                 .parseDefaulting(ChronoField.NANO_OF_SECOND, 0)
-                .toFormatter()
+                .toFormatter(Locale.ROOT)
                 .withResolverStyle(ResolverStyle.STRICT);
     }
 

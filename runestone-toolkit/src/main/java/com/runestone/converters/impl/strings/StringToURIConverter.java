@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.net.URI;
 
-public class StringToURIConverter implements DataConverter<String, URI> {
+public class StringToURIConverter extends SimpleStringConverter<URI> {
+
+    public StringToURIConverter() {
+        super(URI.class, "string-to-uri");
+    }
 
     @Override
-    public URI convert(String data) {
+    public URI convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, URI::create);
     }
 }

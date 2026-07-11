@@ -24,15 +24,19 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
-public class StringToInetAddressConverter implements DataConverter<String, InetAddress> {
+public class StringToInetAddressConverter extends SimpleStringConverter<InetAddress> {
+
+    public StringToInetAddressConverter() {
+        super(InetAddress.class, "string-to-inet-address");
+    }
 
     @Override
-    public InetAddress convert(String data) {
+    public InetAddress convert(String data, ConversionContext context) {
         if (data == null) {
             throw new IllegalArgumentException("Unknown host: null");
         }

@@ -24,6 +24,7 @@
 
 package com.runestone.converters.impl.dates;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConverter;
 
 import java.sql.Date;
@@ -32,7 +33,22 @@ import java.time.ZonedDateTime;
 public class SqlDateToZonedDateTimeConverter implements DataConverter<Date, ZonedDateTime> {
 
     @Override
-    public ZonedDateTime convert(Date data) {
-        return DateTemporalConversionSupport.toZonedDateTime(data);
+    public Class<Date> sourceType() {
+        return Date.class;
+    }
+
+    @Override
+    public Class<ZonedDateTime> targetType() {
+        return ZonedDateTime.class;
+    }
+
+    @Override
+    public String ruleIdentity() {
+        return "dates.sql-date-to-zoned-date-time";
+    }
+
+    @Override
+    public ZonedDateTime convert(Date source, ConversionContext context) {
+        return DateTemporalConversionSupport.toZonedDateTime(source, context.zoneId());
     }
 }

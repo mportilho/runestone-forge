@@ -1,5 +1,6 @@
 package com.runestone.converters.impl.dates;
 
+import com.runestone.converters.ConversionContext;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -9,66 +10,52 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.TimeZone;
+import java.util.Locale;
 
 public class DateConverterBoundaryTest {
 
     @Test
-    public void testUtilDateConvertersUseControlledDefaultTimezoneForEpochAndPreEpochInstants() {
-        withDefaultTimeZone("America/New_York", () -> {
-            ZoneId zoneId = ZoneId.systemDefault();
-            java.util.Date epoch = java.util.Date.from(Instant.EPOCH);
-            java.util.Date preEpoch = java.util.Date.from(Instant.parse("1960-01-01T03:30:00Z"));
+    public void testUtilDateConvertersUseContextTimezoneForEpochAndPreEpochInstants() {
+        ZoneId zoneId = ZoneId.of("America/New_York");
+        ConversionContext context = new ConversionContext(zoneId, Locale.ROOT);
+        java.util.Date epoch = java.util.Date.from(Instant.EPOCH);
+        java.util.Date preEpoch = java.util.Date.from(Instant.parse("1960-01-01T03:30:00Z"));
 
-            Assertions.assertThat(new UtilDateToLocalDateConverter().convert(epoch))
-                    .isEqualTo(LocalDateTime.ofInstant(Instant.EPOCH, zoneId).toLocalDate());
-            Assertions.assertThat(new UtilDateToLocalDateTimeConverter().convert(preEpoch))
-                    .isEqualTo(LocalDateTime.of(1959, 12, 31, 22, 30));
-            Assertions.assertThat(new UtilDateToLocalTimeConverter().convert(preEpoch))
-                    .isEqualTo(LocalTime.of(22, 30));
-            Assertions.assertThat(new UtilDateToZonedDateTimeConverter().convert(preEpoch))
-                    .isEqualTo(ZonedDateTime.of(LocalDateTime.of(1959, 12, 31, 22, 30), zoneId));
-        });
+        Assertions.assertThat(new UtilDateToLocalDateConverter().convert(epoch, context))
+                .isEqualTo(LocalDate.of(1969, 12, 31));
+        Assertions.assertThat(new UtilDateToLocalDateTimeConverter().convert(preEpoch, context))
+                .isEqualTo(LocalDateTime.of(1959, 12, 31, 22, 30));
+        Assertions.assertThat(new UtilDateToLocalTimeConverter().convert(preEpoch, context))
+                .isEqualTo(LocalTime.of(22, 30));
+        Assertions.assertThat(new UtilDateToZonedDateTimeConverter().convert(preEpoch, context))
+                .isEqualTo(ZonedDateTime.of(LocalDateTime.of(1959, 12, 31, 22, 30), zoneId));
     }
 
     @Test
     public void testUtilDateConvertersHandleDstGapInstant() {
-        withDefaultTimeZone("America/New_York", () -> {
-            ZoneId zoneId = ZoneId.systemDefault();
-            Instant instantDuringDstGap = Instant.parse("2021-03-14T07:30:00Z");
-            java.util.Date date = java.util.Date.from(instantDuringDstGap);
+        ZoneId zoneId = ZoneId.of("America/New_York");
+        ConversionContext context = new ConversionContext(zoneId, Locale.ROOT);
+        java.util.Date date = java.util.Date.from(Instant.parse("2021-03-14T07:30:00Z"));
 
-            Assertions.assertThat(new UtilDateToLocalDateTimeConverter().convert(date))
-                    .isEqualTo(LocalDateTime.of(2021, 3, 14, 3, 30));
-            Assertions.assertThat(new UtilDateToZonedDateTimeConverter().convert(date))
-                    .isEqualTo(ZonedDateTime.of(LocalDateTime.of(2021, 3, 14, 3, 30), zoneId));
-        });
+        Assertions.assertThat(new UtilDateToLocalDateTimeConverter().convert(date, context))
+                .isEqualTo(LocalDateTime.of(2021, 3, 14, 3, 30));
+        Assertions.assertThat(new UtilDateToZonedDateTimeConverter().convert(date, context))
+                .isEqualTo(ZonedDateTime.of(LocalDateTime.of(2021, 3, 14, 3, 30), zoneId));
     }
 
     @Test
-    public void testSqlDateConvertersDocumentNonMidnightMillisBehavior() {
-        withDefaultTimeZone("America/New_York", () -> {
-            ZoneId zoneId = ZoneId.systemDefault();
-            java.sql.Date sqlDate = new java.sql.Date(Instant.parse("2021-03-14T07:30:00Z").toEpochMilli());
+    public void testSqlDateConvertersUseContextTimezoneForNonMidnightMillis() {
+        ZoneId zoneId = ZoneId.of("America/New_York");
+        ConversionContext context = new ConversionContext(zoneId, Locale.ROOT);
+        java.sql.Date sqlDate = new java.sql.Date(Instant.parse("2021-03-14T07:30:00Z").toEpochMilli());
 
-            Assertions.assertThat(new SqlDateToLocalDateConverter().convert(sqlDate))
-                    .isEqualTo(LocalDate.of(2021, 3, 14));
-            Assertions.assertThat(new SqlDateToLocalDateTimeConverter().convert(sqlDate))
-                    .isEqualTo(LocalDateTime.of(2021, 3, 14, 3, 30));
-            Assertions.assertThat(new SqlDateToLocalTimeConverter().convert(sqlDate))
-                    .isEqualTo(LocalTime.of(3, 30));
-            Assertions.assertThat(new SqlDateToZonedDateTimeConverter().convert(sqlDate))
-                    .isEqualTo(ZonedDateTime.of(LocalDateTime.of(2021, 3, 14, 3, 30), zoneId));
-        });
-    }
-
-    private static void withDefaultTimeZone(String zoneId, Runnable assertions) {
-        TimeZone original = TimeZone.getDefault();
-        TimeZone.setDefault(TimeZone.getTimeZone(zoneId));
-        try {
-            assertions.run();
-        } finally {
-            TimeZone.setDefault(original);
-        }
+        Assertions.assertThat(new SqlDateToLocalDateConverter().convert(sqlDate, context))
+                .isEqualTo(LocalDate.of(2021, 3, 14));
+        Assertions.assertThat(new SqlDateToLocalDateTimeConverter().convert(sqlDate, context))
+                .isEqualTo(LocalDateTime.of(2021, 3, 14, 3, 30));
+        Assertions.assertThat(new SqlDateToLocalTimeConverter().convert(sqlDate, context))
+                .isEqualTo(LocalTime.of(3, 30));
+        Assertions.assertThat(new SqlDateToZonedDateTimeConverter().convert(sqlDate, context))
+                .isEqualTo(ZonedDateTime.of(LocalDateTime.of(2021, 3, 14, 3, 30), zoneId));
     }
 }

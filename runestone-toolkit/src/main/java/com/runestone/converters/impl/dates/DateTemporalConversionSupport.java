@@ -24,7 +24,7 @@
 
 package com.runestone.converters.impl.dates;
 
-import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -39,36 +39,38 @@ final class DateTemporalConversionSupport {
     private DateTemporalConversionSupport() {
     }
 
-    static LocalDate toLocalDate(java.util.Date value) {
-        return new java.sql.Date(Objects.requireNonNull(value).getTime()).toLocalDate();
+    static LocalDate toLocalDate(java.util.Date value, ZoneId zoneId) {
+        return toZonedDateTime(value, zoneId).toLocalDate();
     }
 
-    static LocalDateTime toLocalDateTime(java.util.Date value) {
-        return toTimestamp(value).toLocalDateTime();
+    static LocalDateTime toLocalDateTime(java.util.Date value, ZoneId zoneId) {
+        return toZonedDateTime(value, zoneId).toLocalDateTime();
     }
 
-    static LocalTime toLocalTime(java.util.Date value) {
-        return toLocalDateTime(value).toLocalTime();
+    static LocalTime toLocalTime(java.util.Date value, ZoneId zoneId) {
+        return toZonedDateTime(value, zoneId).toLocalTime();
     }
 
-    static ZonedDateTime toZonedDateTime(java.util.Date value) {
-        return ZonedDateTime.of(toLocalDateTime(value), ZoneId.systemDefault());
+    static ZonedDateTime toZonedDateTime(java.util.Date value, ZoneId zoneId) {
+        return Instant.ofEpochMilli(Objects.requireNonNull(value).getTime())
+                .atZone(Objects.requireNonNull(zoneId));
     }
 
-    static LocalDate toLocalDate(java.sql.Date value) {
-        return Objects.requireNonNull(value).toLocalDate();
+    static LocalDate toLocalDate(java.sql.Date value, ZoneId zoneId) {
+        return toZonedDateTime(value, zoneId).toLocalDate();
     }
 
-    static LocalDateTime toLocalDateTime(java.sql.Date value) {
-        return toTimestamp(value).toLocalDateTime();
+    static LocalDateTime toLocalDateTime(java.sql.Date value, ZoneId zoneId) {
+        return toZonedDateTime(value, zoneId).toLocalDateTime();
     }
 
-    static LocalTime toLocalTime(java.sql.Date value) {
-        return toLocalDateTime(value).toLocalTime();
+    static LocalTime toLocalTime(java.sql.Date value, ZoneId zoneId) {
+        return toZonedDateTime(value, zoneId).toLocalTime();
     }
 
-    static ZonedDateTime toZonedDateTime(java.sql.Date value) {
-        return ZonedDateTime.of(toLocalDateTime(value), ZoneId.systemDefault());
+    static ZonedDateTime toZonedDateTime(java.sql.Date value, ZoneId zoneId) {
+        return Instant.ofEpochMilli(Objects.requireNonNull(value).getTime())
+                .atZone(Objects.requireNonNull(zoneId));
     }
 
     static LocalDate temporalToLocalDate(Temporal value) {
@@ -104,19 +106,16 @@ final class DateTemporalConversionSupport {
         };
     }
 
-    static ZonedDateTime temporalToZonedDateTime(Temporal value) {
+    static ZonedDateTime temporalToZonedDateTime(Temporal value, ZoneId zoneId) {
         Temporal temporal = Objects.requireNonNull(value);
+        ZoneId targetZone = Objects.requireNonNull(zoneId);
         return switch (temporal) {
             case ZonedDateTime zonedDateTime -> zonedDateTime;
-            case LocalDateTime localDateTime -> ZonedDateTime.of(localDateTime, ZoneId.systemDefault());
-            case LocalDate localDate -> ZonedDateTime.of(localDate, LocalTime.MIDNIGHT, ZoneId.systemDefault());
-            case OffsetDateTime offsetDateTime -> offsetDateTime.atZoneSameInstant(ZoneId.systemDefault());
+            case LocalDateTime localDateTime -> localDateTime.atZone(targetZone);
+            case LocalDate localDate -> localDate.atStartOfDay(targetZone);
+            case OffsetDateTime offsetDateTime -> offsetDateTime.atZoneSameInstant(targetZone);
             default -> throw unsupported(temporal, ZonedDateTime.class);
         };
-    }
-
-    private static Timestamp toTimestamp(java.util.Date value) {
-        return new Timestamp(Objects.requireNonNull(value).getTime());
     }
 
     private static IllegalArgumentException unsupported(Temporal source, Class<?> targetType) {

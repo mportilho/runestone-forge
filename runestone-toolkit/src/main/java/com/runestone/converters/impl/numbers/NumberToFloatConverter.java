@@ -24,12 +24,28 @@
 
 package com.runestone.converters.impl.numbers;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConverter;
 
 public class NumberToFloatConverter implements DataConverter<Number, Float> {
 
     @Override
-    public Float convert(Number data) {
+    public Class<Number> sourceType() {
+        return Number.class;
+    }
+
+    @Override
+    public Class<Float> targetType() {
+        return Float.class;
+    }
+
+    @Override
+    public String ruleIdentity() {
+        return "number:float";
+    }
+
+    @Override
+    public Float convert(Number data, ConversionContext context) {
         return NumberConversionSupport.convert(data, Float.class, Number::floatValue);
     }
 

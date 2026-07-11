@@ -37,7 +37,7 @@ public class EnumConversionBenchmark {
 
     @Setup
     public void setup() {
-        service = new DefaultDataConversionService();
+        service = DefaultDataConversionService.standard();
         smallEnumNameUpper = "E";
         smallEnumNameLower = "e";
         largeEnumNameUpper = "V50";

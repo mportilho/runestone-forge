@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.time.Period;
 
-public class StringToPeriodConverter implements DataConverter<String, Period> {
+public class StringToPeriodConverter extends SimpleStringConverter<Period> {
+
+    public StringToPeriodConverter() {
+        super(Period.class, "string-to-period");
+    }
 
     @Override
-    public Period convert(String data) {
+    public Period convert(String data, ConversionContext context) {
         return Period.parse(data);
     }
 }

@@ -25,6 +25,7 @@
 package com.runestone.converters.impl.dates;
 
 import com.runestone.assertions.Certify;
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConverter;
 import com.runestone.utils.DateUtils;
 
@@ -36,14 +37,29 @@ import java.time.temporal.Temporal;
 public class StringToTemporalConverter implements DataConverter<String, Temporal> {
 
     @Override
-    public Temporal convert(String data) {
-        Certify.requireNonBlank(data, "Data must be provided");
-        if (data.length() <= 8) {
-            return DateUtils.DATETIME_FORMATTER.parse(data, LocalTime::from);
-        } else if (data.length() <= 10) {
-            return DateUtils.DATETIME_FORMATTER.parse(data, LocalDate::from);
+    public Class<String> sourceType() {
+        return String.class;
+    }
+
+    @Override
+    public Class<Temporal> targetType() {
+        return Temporal.class;
+    }
+
+    @Override
+    public String ruleIdentity() {
+        return "dates.string-to-temporal";
+    }
+
+    @Override
+    public Temporal convert(String source, ConversionContext context) {
+        Certify.requireNonBlank(source, "Data must be provided");
+        if (source.length() <= 8) {
+            return DateUtils.DATETIME_FORMATTER.parse(source, LocalTime::from);
+        } else if (source.length() <= 10) {
+            return DateUtils.DATETIME_FORMATTER.parse(source, LocalDate::from);
         } else {
-            return DateUtils.DATETIME_FORMATTER_PADDING_TIME.parse(data, LocalDateTime::from);
+            return DateUtils.DATETIME_FORMATTER_PADDING_TIME.parse(source, LocalDateTime::from);
         }
     }
 }

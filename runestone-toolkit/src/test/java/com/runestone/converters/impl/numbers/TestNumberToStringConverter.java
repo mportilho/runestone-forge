@@ -24,6 +24,7 @@
 
 package com.runestone.converters.impl.numbers;
 
+import com.runestone.converters.ConversionContext;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -36,20 +37,20 @@ public class TestNumberToStringConverter {
     @Test
     public void testNumbersConversions() {
         NumberToStringConverter converter = new NumberToStringConverter();
-        assertThat(converter.convert((byte) 1)).isEqualTo("1");
-        assertThat(converter.convert((short) 1)).isEqualTo("1");
-        assertThat(converter.convert(1)).isEqualTo("1");
-        assertThat(converter.convert(1L)).isEqualTo("1");
-        assertThat(converter.convert(1F)).isEqualTo("1.0");
-        assertThat(converter.convert(1D)).isEqualTo("1.0");
-        assertThat(converter.convert(BigDecimal.valueOf(1))).isEqualTo("1");
-        assertThat(converter.convert(new BigInteger("1"))).isEqualTo("1");
+        assertThat(converter.convert((byte) 1, ConversionContext.standard())).isEqualTo("1");
+        assertThat(converter.convert((short) 1, ConversionContext.standard())).isEqualTo("1");
+        assertThat(converter.convert(1, ConversionContext.standard())).isEqualTo("1");
+        assertThat(converter.convert(1L, ConversionContext.standard())).isEqualTo("1");
+        assertThat(converter.convert(1F, ConversionContext.standard())).isEqualTo("1.0");
+        assertThat(converter.convert(1D, ConversionContext.standard())).isEqualTo("1.0");
+        assertThat(converter.convert(BigDecimal.valueOf(1), ConversionContext.standard())).isEqualTo("1");
+        assertThat(converter.convert(new BigInteger("1"), ConversionContext.standard())).isEqualTo("1");
     }
 
     @Test
     public void testNullConversion() {
         var converter = new NumberToStringConverter();
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null, ConversionContext.standard()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Cannot convert null to String");
     }
@@ -57,17 +58,17 @@ public class TestNumberToStringConverter {
     @Test
     public void testEdgeCases() {
         var converter = new NumberToStringConverter();
-        assertThat(converter.convert(Double.MAX_VALUE)).isEqualTo(String.valueOf(Double.MAX_VALUE));
-        assertThat(converter.convert(Float.NaN)).isEqualTo("NaN");
-        assertThat(converter.convert(Double.POSITIVE_INFINITY)).isEqualTo("Infinity");
+        assertThat(converter.convert(Double.MAX_VALUE, ConversionContext.standard())).isEqualTo(String.valueOf(Double.MAX_VALUE));
+        assertThat(converter.convert(Float.NaN, ConversionContext.standard())).isEqualTo("NaN");
+        assertThat(converter.convert(Double.POSITIVE_INFINITY, ConversionContext.standard())).isEqualTo("Infinity");
     }
 
     @Test
     public void testFloatingPointConversions() {
         var converter = new NumberToStringConverter();
-        assertThat(converter.convert(0.1f)).isEqualTo("0.1");
-        assertThat(converter.convert(0.1d)).isEqualTo("0.1");
-        assertThat(converter.convert(new BigDecimal("0.1"))).isEqualTo("0.1");
+        assertThat(converter.convert(0.1f, ConversionContext.standard())).isEqualTo("0.1");
+        assertThat(converter.convert(0.1d, ConversionContext.standard())).isEqualTo("0.1");
+        assertThat(converter.convert(new BigDecimal("0.1"), ConversionContext.standard())).isEqualTo("0.1");
     }
 
 }

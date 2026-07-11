@@ -24,6 +24,7 @@
 
 package com.runestone.converters.impl.dates;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConverter;
 
 import java.time.LocalDateTime;
@@ -32,7 +33,22 @@ import java.time.temporal.Temporal;
 public class TemporalToLocalDateTimeConverter implements DataConverter<Temporal, LocalDateTime> {
 
     @Override
-    public LocalDateTime convert(Temporal data) {
-        return DateTemporalConversionSupport.temporalToLocalDateTime(data);
+    public Class<Temporal> sourceType() {
+        return Temporal.class;
+    }
+
+    @Override
+    public Class<LocalDateTime> targetType() {
+        return LocalDateTime.class;
+    }
+
+    @Override
+    public String ruleIdentity() {
+        return "dates.temporal-to-local-date-time";
+    }
+
+    @Override
+    public LocalDateTime convert(Temporal source, ConversionContext context) {
+        return DateTemporalConversionSupport.temporalToLocalDateTime(source);
     }
 }

@@ -24,12 +24,16 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
-public class StringToClassConverter implements DataConverter<String, Class<?>> {
+public class StringToClassConverter extends SimpleStringConverter<Class<?>> {
+
+    public StringToClassConverter() {
+        super(Class.class, "string-to-class");
+    }
 
     @Override
-    public Class<?> convert(String data) {
+    public Class<?> convert(String data, ConversionContext context) {
         try {
             return Class.forName(data);
         } catch (ClassNotFoundException e) {

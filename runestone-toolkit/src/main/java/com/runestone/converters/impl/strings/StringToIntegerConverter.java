@@ -24,12 +24,16 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
-public class StringToIntegerConverter implements DataConverter<String, Integer> {
+public class StringToIntegerConverter extends SimpleStringConverter<Integer> {
+
+    public StringToIntegerConverter() {
+        super(Integer.class, "string-to-integer");
+    }
 
     @Override
-    public Integer convert(String data) {
+    public Integer convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, Integer::valueOf);
     }
 }

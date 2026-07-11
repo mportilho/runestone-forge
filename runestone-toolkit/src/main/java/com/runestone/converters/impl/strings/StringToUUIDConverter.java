@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.util.UUID;
 
-public class StringToUUIDConverter implements DataConverter<String, UUID> {
+public class StringToUUIDConverter extends SimpleStringConverter<UUID> {
+
+    public StringToUUIDConverter() {
+        super(UUID.class, "string-to-uuid");
+    }
 
     @Override
-    public UUID convert(String data) {
+    public UUID convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, UUID::fromString);
     }
 }

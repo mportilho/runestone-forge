@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.time.ZoneId;
 
-public class StringToZoneIdConverter implements DataConverter<String, ZoneId> {
+public class StringToZoneIdConverter extends SimpleStringConverter<ZoneId> {
+
+    public StringToZoneIdConverter() {
+        super(ZoneId.class, "string-to-zone-id");
+    }
 
     @Override
-    public ZoneId convert(String data) {
+    public ZoneId convert(String data, ConversionContext context) {
         return ZoneId.of(data);
     }
 }

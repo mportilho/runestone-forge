@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.math.BigInteger;
 
-public class StringToBigIntegerConverter implements DataConverter<String, BigInteger> {
+public class StringToBigIntegerConverter extends SimpleStringConverter<BigInteger> {
+
+    public StringToBigIntegerConverter() {
+        super(BigInteger.class, "string-to-big-integer");
+    }
 
     @Override
-    public BigInteger convert(String data) {
+    public BigInteger convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, BigInteger::new);
     }
 }

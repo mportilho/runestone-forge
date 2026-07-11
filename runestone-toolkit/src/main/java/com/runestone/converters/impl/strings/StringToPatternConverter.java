@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.util.regex.Pattern;
 
-public class StringToPatternConverter implements DataConverter<String, Pattern> {
+public class StringToPatternConverter extends SimpleStringConverter<Pattern> {
+
+    public StringToPatternConverter() {
+        super(Pattern.class, "string-to-pattern");
+    }
 
     @Override
-    public Pattern convert(String data) {
+    public Pattern convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, Pattern::compile);
     }
 }

@@ -35,7 +35,7 @@ public class DataConversionServiceBenchmark {
 
     @Setup
     public void setup() {
-        service = new DefaultDataConversionService();
+        service = DefaultDataConversionService.standard();
         numericSource = new BigDecimal("123.45");
         integerSource = 123;
         localDateSource = LocalDate.of(2026, 3, 19);

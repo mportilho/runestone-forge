@@ -24,7 +24,7 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.sql.Date;
 import java.time.LocalDate;
@@ -32,16 +32,24 @@ import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.time.temporal.Temporal;
 
-public class StringToJavaSqlDateConverter implements DataConverter<String, Date> {
+public class StringToJavaSqlDateConverter extends SimpleStringConverter<Date> {
+
+    public StringToJavaSqlDateConverter() {
+        super(Date.class, "string-to-java-sql-date");
+    }
 
     @Override
-    public Date convert(String data) {
+    public Date convert(String data, ConversionContext context) {
         Temporal temporal = StringConversionUtils.convertTemporal(data);
         if (temporal instanceof LocalDate localDate) {
-            return Date.valueOf(localDate);
+            return dateAtStartOfDay(localDate, context);
         } else if (temporal instanceof LocalDateTime localDateTime) {
-            return Date.valueOf(localDateTime.toLocalDate());
+            return dateAtStartOfDay(localDateTime.toLocalDate(), context);
         }
-        return Date.valueOf(((ZonedDateTime) temporal).toLocalDate());
+        return dateAtStartOfDay(((ZonedDateTime) temporal).withZoneSameInstant(context.zoneId()).toLocalDate(), context);
+    }
+
+    private static Date dateAtStartOfDay(LocalDate date, ConversionContext context) {
+        return new Date(date.atStartOfDay(context.zoneId()).toInstant().toEpochMilli());
     }
 }

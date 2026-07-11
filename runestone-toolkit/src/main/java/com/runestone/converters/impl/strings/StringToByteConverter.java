@@ -24,12 +24,16 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
-public class StringToByteConverter implements DataConverter<String, Byte> {
+public class StringToByteConverter extends SimpleStringConverter<Byte> {
+
+    public StringToByteConverter() {
+        super(Byte.class, "string-to-byte");
+    }
 
     @Override
-    public Byte convert(String data) {
+    public Byte convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, Byte::valueOf);
     }
 }

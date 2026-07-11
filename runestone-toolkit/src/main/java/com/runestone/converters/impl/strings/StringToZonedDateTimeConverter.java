@@ -24,15 +24,27 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
-import com.runestone.utils.DateUtils;
+import com.runestone.converters.ConversionContext;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
+import java.time.temporal.Temporal;
 
-public class StringToZonedDateTimeConverter implements DataConverter<String, ZonedDateTime> {
+public class StringToZonedDateTimeConverter extends SimpleStringConverter<ZonedDateTime> {
+
+    public StringToZonedDateTimeConverter() {
+        super(ZonedDateTime.class, "string-to-zoned-date-time");
+    }
 
     @Override
-    public ZonedDateTime convert(String data) {
-        return DateUtils.DATETIME_FORMATTER.parse(data, ZonedDateTime::from);
+    public ZonedDateTime convert(String data, ConversionContext context) {
+        Temporal temporal = StringConversionUtils.convertTemporal(data);
+        if (temporal instanceof LocalDate localDate) {
+            return localDate.atStartOfDay(context.zoneId());
+        } else if (temporal instanceof LocalDateTime localDateTime) {
+            return localDateTime.atZone(context.zoneId());
+        }
+        return (ZonedDateTime) temporal;
     }
 }

@@ -26,6 +26,12 @@ package com.runestone.converters;
 
 public interface DataConversionService {
 
+    ConversionContext conversionContext();
+
+    String conversionProfileIdentity();
+
+    String conversionProfileHash();
+
     /**
      * Indicates if this conversion service can convert a sourceType to a targetType
      *
@@ -45,4 +51,6 @@ public interface DataConversionService {
      * @return the converted value
      */
     <S, T> T convert(S source, Class<T> targetType);
+
+    <T> T copyFoldableValue(T value);
 }

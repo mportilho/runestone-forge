@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.util.Base64;
 
-public class StringToByteArrayConverter implements DataConverter<String, byte[]> {
+public class StringToByteArrayConverter extends SimpleStringConverter<byte[]> {
+
+    public StringToByteArrayConverter() {
+        super(byte[].class, "string-to-byte-array");
+    }
 
     @Override
-    public byte[] convert(String data) {
+    public byte[] convert(String data, ConversionContext context) {
         return Base64.getDecoder().decode(data);
     }
 }

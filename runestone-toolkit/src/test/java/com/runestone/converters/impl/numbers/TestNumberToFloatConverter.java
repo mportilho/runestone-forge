@@ -24,6 +24,7 @@
 
 package com.runestone.converters.impl.numbers;
 
+import com.runestone.converters.ConversionContext;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -37,31 +38,31 @@ public class TestNumberToFloatConverter {
     @Test
     public void testNumbersConversions() {
         NumberToFloatConverter converter = new NumberToFloatConverter();
-        assertThat(converter.convert((byte) 1)).isEqualTo(1F);
-        assertThat(converter.convert((short) 1)).isEqualTo(1F);
-        assertThat(converter.convert(1)).isEqualTo(1F);
-        assertThat(converter.convert(1L)).isEqualTo(1F);
-        assertThat(converter.convert(1F)).isEqualTo(1F);
-        assertThat(converter.convert(1D)).isEqualTo(1F);
-        assertThat(converter.convert(BigDecimal.valueOf(1))).isEqualTo(1F);
-        assertThat(converter.convert(new BigInteger("1"))).isEqualTo(1F);
+        assertThat(converter.convert((byte) 1, ConversionContext.standard())).isEqualTo(1F);
+        assertThat(converter.convert((short) 1, ConversionContext.standard())).isEqualTo(1F);
+        assertThat(converter.convert(1, ConversionContext.standard())).isEqualTo(1F);
+        assertThat(converter.convert(1L, ConversionContext.standard())).isEqualTo(1F);
+        assertThat(converter.convert(1F, ConversionContext.standard())).isEqualTo(1F);
+        assertThat(converter.convert(1D, ConversionContext.standard())).isEqualTo(1F);
+        assertThat(converter.convert(BigDecimal.valueOf(1), ConversionContext.standard())).isEqualTo(1F);
+        assertThat(converter.convert(new BigInteger("1"), ConversionContext.standard())).isEqualTo(1F);
     }
 
     @Test
     public void testConcurrentNumbersConversions() {
         NumberToFloatConverter converter = new NumberToFloatConverter();
-        assertThat(converter.convert(new AtomicInteger(1))).isEqualTo(1F);
-        assertThat(converter.convert(new AtomicLong(1))).isEqualTo(1F);
-        assertThat(converter.convert(new DoubleAccumulator(Double::sum, 1))).isEqualTo(1F);
-        assertThat(converter.convert(new DoubleAdder())).isEqualTo(0F);
-        assertThat(converter.convert(new LongAccumulator(Long::sum, 1))).isEqualTo(1F);
-        assertThat(converter.convert(new LongAdder())).isEqualTo(0F);
+        assertThat(converter.convert(new AtomicInteger(1), ConversionContext.standard())).isEqualTo(1F);
+        assertThat(converter.convert(new AtomicLong(1), ConversionContext.standard())).isEqualTo(1F);
+        assertThat(converter.convert(new DoubleAccumulator(Double::sum, 1), ConversionContext.standard())).isEqualTo(1F);
+        assertThat(converter.convert(new DoubleAdder(), ConversionContext.standard())).isEqualTo(0F);
+        assertThat(converter.convert(new LongAccumulator(Long::sum, 1), ConversionContext.standard())).isEqualTo(1F);
+        assertThat(converter.convert(new LongAdder(), ConversionContext.standard())).isEqualTo(0F);
     }
 
     @Test
     public void testNullConversion() {
         var converter = new NumberToFloatConverter();
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null, ConversionContext.standard()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Cannot convert null to Float");
     }
@@ -69,17 +70,17 @@ public class TestNumberToFloatConverter {
     @Test
     public void testEdgeCases() {
         var converter = new NumberToFloatConverter();
-        assertThat(converter.convert(Double.MAX_VALUE)).isEqualTo(Double.valueOf(Double.MAX_VALUE).floatValue());
-        assertThat(converter.convert(Float.NaN)).isNaN();
-        assertThat(converter.convert(Double.POSITIVE_INFINITY)).isEqualTo(Float.POSITIVE_INFINITY);
+        assertThat(converter.convert(Double.MAX_VALUE, ConversionContext.standard())).isEqualTo(Double.valueOf(Double.MAX_VALUE).floatValue());
+        assertThat(converter.convert(Float.NaN, ConversionContext.standard())).isNaN();
+        assertThat(converter.convert(Double.POSITIVE_INFINITY, ConversionContext.standard())).isEqualTo(Float.POSITIVE_INFINITY);
     }
 
     @Test
     public void testFloatingPointConversions() {
         var converter = new NumberToFloatConverter();
-        assertThat(converter.convert(0.1d)).isEqualTo(0.1f);
-        assertThat(converter.convert(new BigDecimal("0.1"))).isEqualTo(0.1f);
-        assertThat(converter.convert(1.9d)).isEqualTo(1.9f);
+        assertThat(converter.convert(0.1d, ConversionContext.standard())).isEqualTo(0.1f);
+        assertThat(converter.convert(new BigDecimal("0.1"), ConversionContext.standard())).isEqualTo(0.1f);
+        assertThat(converter.convert(1.9d, ConversionContext.standard())).isEqualTo(1.9f);
     }
 
 }

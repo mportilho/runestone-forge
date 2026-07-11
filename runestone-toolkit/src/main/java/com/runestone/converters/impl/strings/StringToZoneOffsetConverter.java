@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.time.ZoneOffset;
 
-public class StringToZoneOffsetConverter implements DataConverter<String, ZoneOffset> {
+public class StringToZoneOffsetConverter extends SimpleStringConverter<ZoneOffset> {
+
+    public StringToZoneOffsetConverter() {
+        super(ZoneOffset.class, "string-to-zone-offset");
+    }
 
     @Override
-    public ZoneOffset convert(String data) {
+    public ZoneOffset convert(String data, ConversionContext context) {
         return ZoneOffset.of(data);
     }
 }

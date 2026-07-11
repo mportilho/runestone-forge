@@ -1,312 +1,286 @@
-/*
- * MIT License
- * <p>
- * Copyright (c) 2023-2023 Marcelo Silva Portilho
- * <p>
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * <p>
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- * <p>
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 package com.runestone.converters.impl;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConversionService;
+import com.runestone.converters.DataConverter;
+import com.runestone.converters.DataConverterConfigurationException;
 import com.runestone.converters.NoDataConverterFoundException;
-import org.assertj.core.api.Assertions;
-import org.assertj.core.api.Condition;
+import com.runestone.converters.NonFoldableValueException;
+import com.runestone.converters.StandardConverters;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.temporal.TemporalAccessor;
+import java.time.temporal.TemporalField;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 
-public class TestDataConversionService {
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-    public enum Status {
+class TestDataConversionService {
+
+    @Test
+    void standardServiceHasDeterministicContextAndProfile() throws Exception {
+        DataConversionService service = DefaultDataConversionService.standard();
+
+        assertThat(service.conversionContext().zoneId()).isEqualTo(ZoneId.of("UTC"));
+        assertThat(service.conversionContext().locale()).isEqualTo(Locale.ROOT);
+        assertThat(service.conversionProfileIdentity()).contains("zone=UTC\nlocale=und");
+        assertThat(service.conversionProfileHash()).isEqualTo(sha256(service.conversionProfileIdentity()));
+    }
+
+    @Test
+    void profileDoesNotDependOnConverterRegistrationOrder() {
+        DataConverter<String, Integer> stringToInteger = rule(String.class, Integer.class, "test.string.integer", (source, context) -> 1);
+        DataConverter<Number, String> numberToString = rule(Number.class, String.class, "test.number.string", (source, context) -> "number");
+
+        DataConversionService first = DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(stringToInteger, numberToString));
+        DataConversionService second = DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(numberToString, stringToInteger));
+
+        assertThat(first.conversionProfileIdentity()).isEqualTo(second.conversionProfileIdentity());
+        assertThat(first.conversionProfileHash()).isEqualTo(second.conversionProfileHash());
+    }
+
+    @Test
+    void rejectsInvalidAndDuplicateConverterDefinitions() {
+        DataConverter<String, Integer> valid = rule(String.class, Integer.class, "test.valid", (source, context) -> 1);
+
+        assertThatThrownBy(() -> DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
+                valid,
+                rule(String.class, Integer.class, "test.duplicate", (source, context) -> 2))))
+                .isInstanceOf(DataConverterConfigurationException.class);
+        assertThatThrownBy(() -> DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
+                rule(String.class, Integer.class, "Invalid identity", (source, context) -> 1))))
+                .isInstanceOf(DataConverterConfigurationException.class);
+        assertThatThrownBy(() -> DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
+                rule(null, Integer.class, "test.missing-source", (source, context) -> 1))))
+                .isInstanceOf(DataConverterConfigurationException.class);
+        assertThatThrownBy(() -> DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
+                rule(String.class, null, "test.missing-target", (source, context) -> 1))))
+                .isInstanceOf(DataConverterConfigurationException.class);
+    }
+
+    @Test
+    void exactConverterWinsAndNearestAssignableConverterIsSelected() {
+        DataConversionService service = DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
+                rule(Number.class, String.class, "test.number.string", (source, context) -> "number"),
+                rule(Integer.class, String.class, "test.integer.string", (source, context) -> "integer")));
+
+        assertThat(service.convert(1, String.class)).isEqualTo("integer");
+        assertThat(service.convert(1L, String.class)).isEqualTo("number");
+    }
+
+    @Test
+    void exactConvertersWinOverBuiltInCapabilities() {
+        DataConversionService service = DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
+                rule(String.class, String.class, "test.string.string", (source, context) -> "converted:" + source),
+                rule(String[].class, List.class, "test.string-array.list", (source, context) -> List.of("custom")),
+                rule(String.class, Status.class, "test.string.status", (source, context) -> Status.INACTIVE)));
+
+        assertThat(service.convert("value", String.class)).isEqualTo("converted:value");
+        List<?> convertedList = service.convert(new String[] { "value" }, List.class);
+        assertThat(convertedList).isEqualTo(List.of("custom"));
+        assertThat(service.convert("ACTIVE", Status.class)).isEqualTo(Status.INACTIVE);
+    }
+
+    @Test
+    void rejectsEquallySpecificAssignableConvertersInBothLookupOperations() {
+        DataConversionService service = DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
+                rule(Left.class, String.class, "test.left.string", (source, context) -> "left"),
+                rule(Right.class, String.class, "test.right.string", (source, context) -> "right")));
+
+        assertThatThrownBy(() -> service.canConvert(Both.class, String.class))
+                .isInstanceOf(DataConverterConfigurationException.class);
+        assertThatThrownBy(() -> service.convert(new Both(), String.class))
+                .isInstanceOf(DataConverterConfigurationException.class);
+    }
+
+    @Test
+    void standardConvertersUseExplicitTemporalContext() {
+        ConversionContext context = new ConversionContext(ZoneId.of("America/Sao_Paulo"), Locale.CANADA_FRENCH);
+        DataConversionService service = DefaultDataConversionService.withConverters(context, StandardConverters.all());
+
+        assertThat(service.convert(LocalDateTime.of(2024, 1, 2, 3, 4), ZonedDateTime.class))
+                .isEqualTo(ZonedDateTime.of(2024, 1, 2, 3, 4, 0, 0, context.zoneId()));
+        assertThat(service.convert(LocalDate.of(2024, 1, 2), ZonedDateTime.class))
+                .isEqualTo(ZonedDateTime.of(2024, 1, 2, 0, 0, 0, 0, context.zoneId()));
+        assertThat(service.convert("2024-01-02T03:04", ZonedDateTime.class))
+                .isEqualTo(ZonedDateTime.of(2024, 1, 2, 3, 4, 0, 0, context.zoneId()));
+    }
+
+    @Test
+    void nullSourcesAndFoldableCopiesFollowThePublicContract() {
+        DataConversionService service = DefaultDataConversionService.standard();
+        List<String> source = new ArrayList<>(List.of("one", "two"));
+        Map<String, List<String>> map = new LinkedHashMap<>();
+        map.put("values", source);
+
+        assertThat(service.convert(null, Integer.class)).isNull();
+        assertThat((Object) service.copyFoldableValue(null)).isNull();
+
+        List<String> copiedList = service.copyFoldableValue(source);
+        Map<String, List<String>> copiedMap = service.copyFoldableValue(map);
+        source.add("three");
+
+        assertThat(copiedList).containsExactly("one", "two");
+        assertThat(copiedMap).containsEntry("values", List.of("one", "two"));
+        copiedList.add("four");
+        assertThat(source).containsExactly("one", "two", "three");
+        assertThatThrownBy(() -> service.copyFoldableValue(new StringBuilder("mutable")))
+                .isInstanceOf(NonFoldableValueException.class);
+        assertThatThrownBy(() -> service.copyFoldableValue(new ArrayList<>(Arrays.asList("one", null))))
+                .isInstanceOf(NonFoldableValueException.class);
+    }
+
+    @Test
+    void mutableValuesAreCopiedRecursivelyWhileIterationOrderIsPreserved() {
+        DataConversionService service = DefaultDataConversionService.standard();
+        Timestamp timestamp = Timestamp.valueOf("2024-01-02 03:04:05.123456789");
+        LinkedHashSet<String> set = new LinkedHashSet<>(List.of("second", "first"));
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("timestamp", timestamp);
+        values.put("set", set);
+
+        Map<String, Object> copy = service.copyFoldableValue(values);
+        Timestamp copiedTimestamp = (Timestamp) copy.get("timestamp");
+
+        assertThat(copy.keySet()).containsExactly("timestamp", "set");
+        assertThat(((java.util.Set<?>) copy.get("set")).toArray()).containsExactly("second", "first");
+        assertThat(copiedTimestamp).isEqualTo(timestamp).isNotSameAs(timestamp);
+        assertThat(copiedTimestamp.getNanos()).isEqualTo(123456789);
+    }
+
+    @Test
+    void convertersMustReturnNonNullFoldableValues() {
+        DataConversionService nullService = DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
+                rule(String.class, Integer.class, "test.null-result", (source, context) -> null)));
+        DataConversionService mutableService = DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
+                rule(String.class, StringBuilder.class, "test.mutable-result", (source, context) -> new StringBuilder(source))));
+
+        assertThat(mutableService.canConvert(String.class, StringBuilder.class)).isFalse();
+        assertThatThrownBy(() -> nullService.convert("value", Integer.class))
+                .isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> mutableService.convert("value", StringBuilder.class))
+                .isInstanceOf(NonFoldableValueException.class);
+    }
+
+    @Test
+    void standardCapabilitiesIncludeEnumsAndArrayConversions() {
+        DataConversionService service = DefaultDataConversionService.standard();
+        String[] source = { "1", null, "3" };
+
+        assertThat(service.canConvert(String[].class, Integer[].class)).isTrue();
+        assertThat(service.canConvert(String[][].class, Integer[][].class)).isTrue();
+        assertThat(service.canConvert(int[].class, long[].class)).isTrue();
+        assertThat(service.canConvert(int[].class, String[].class)).isTrue();
+        assertThat(service.canConvert(String[].class, Thread[].class)).isFalse();
+        assertThat(service.canConvert(Thread[].class, Thread[].class)).isFalse();
+        assertThat(service.canConvert(ArrayList.class, List.class)).isTrue();
+        assertThat(service.canConvert(ArrayList.class, ArrayList.class)).isFalse();
+        assertThat(service.canConvert(AtomicInteger.class, AtomicInteger.class)).isFalse();
+        assertThat(service.canConvert(List.class, Thread[].class)).isFalse();
+        assertThat(service.convert("active", Status.class)).isEqualTo(Status.ACTIVE);
+        assertThat(service.convert(1, Status.class)).isEqualTo(Status.INACTIVE);
+        assertThat(service.convert(List.of("1", "2"), int[].class)).containsExactly(1, 2);
+        assertThat(service.convert(source, Integer[].class)).containsExactly(1, null, 3);
+        List<?> convertedList = service.convert(new String[] { "1", "3" }, List.class);
+        assertThat(convertedList).isEqualTo(List.of("1", "3"));
+        assertThatThrownBy(() -> service.convert(source, List.class))
+                .isInstanceOf(NonFoldableValueException.class);
+        assertThatThrownBy(() -> service.convert(new Thread[0], Thread[].class))
+                .isInstanceOf(NonFoldableValueException.class);
+        assertThatThrownBy(() -> service.convert(List.of(), Thread[].class))
+                .isInstanceOf(NonFoldableValueException.class);
+        assertThatThrownBy(() -> service.convert(new Thread[] { null }, Thread[].class))
+                .isInstanceOf(NonFoldableValueException.class);
+        assertThatThrownBy(() -> service.convert(new ArrayList<>(), ArrayList.class))
+                .isInstanceOf(NoDataConverterFoundException.class);
+    }
+
+    @Test
+    void arbitraryTemporalAccessorImplementationsAreNotFoldableByDefault() {
+        DataConversionService service = DefaultDataConversionService.standard();
+        TemporalAccessor mutableTemporal = new MutableTemporalAccessor();
+
+        assertThat(service.canConvert(MutableTemporalAccessor.class, TemporalAccessor.class)).isFalse();
+        assertThatThrownBy(() -> service.copyFoldableValue(mutableTemporal))
+                .isInstanceOf(NonFoldableValueException.class);
+    }
+
+    private static String sha256(String value) throws Exception {
+        byte[] hash = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+        StringBuilder result = new StringBuilder(hash.length * 2);
+        for (byte valueByte : hash) {
+            result.append(String.format("%02x", valueByte));
+        }
+        return result.toString();
+    }
+
+    private static <S, T> DataConverter<S, T> rule(
+            Class<S> sourceType,
+            Class<T> targetType,
+            String identity,
+            BiFunction<S, ConversionContext, T> conversion) {
+        return new DataConverter<>() {
+            @Override
+            public Class<S> sourceType() {
+                return sourceType;
+            }
+
+            @Override
+            public Class<T> targetType() {
+                return targetType;
+            }
+
+            @Override
+            public String ruleIdentity() {
+                return identity;
+            }
+
+            @Override
+            public T convert(S source, ConversionContext context) {
+                return conversion.apply(source, context);
+            }
+        };
+    }
+
+    private interface Left {
+    }
+
+    private interface Right {
+    }
+
+    private static final class Both implements Left, Right {
+    }
+
+    private static final class MutableTemporalAccessor implements TemporalAccessor {
+        @Override
+        public boolean isSupported(TemporalField field) {
+            return false;
+        }
+
+        @Override
+        public long getLong(TemporalField field) {
+            throw new UnsupportedOperationException("No temporal fields are supported");
+        }
+    }
+
+    private enum Status {
         ACTIVE,
         INACTIVE
     }
-
-    @Test
-    public void testDefaultDataConversionService() {
-        DataConversionService service = new DefaultDataConversionService();
-        Assertions.assertThat(service.canConvert(Integer.class, BigDecimal.class)).isTrue();
-        Assertions.assertThat(service.convert("123", Integer.class)).isEqualTo(Integer.valueOf("123"));
-        Assertions.assertThat(service.convert("123", int.class)).isEqualTo(123);
-        Assertions.assertThat(service.convert(123, BigDecimal.class)).isEqualByComparingTo("123");
-        Assertions.assertThat(service.convert(123, String.class)).isEqualTo("123");
-        Assertions.assertThat(service.convert("20200102", LocalDate.class)).isEqualTo(LocalDate.of(2020, 1, 2));
-    }
-
-    @Test
-    public void testNumericWrapperConversions() {
-        DataConversionService service = new DefaultDataConversionService();
-
-        Assertions.assertThat(service.convert(new BigDecimal("12.9"), Integer.class)).isEqualTo(12);
-        Assertions.assertThat(service.convert(new BigDecimal("12.9"), Long.class)).isEqualTo(12L);
-        Assertions.assertThat(service.convert(new BigDecimal("12.9"), Double.class)).isEqualTo(12.9d);
-    }
-
-    @Test
-    public void testAssignableTypeShortCircuit() {
-        DataConversionService service = new DefaultDataConversionService();
-
-        Integer source = 123;
-        Number converted = service.convert(source, Number.class);
-
-        Assertions.assertThat(converted).isSameAs(source);
-    }
-
-    @Test
-    public void testNullSourceAndTargetContracts() {
-        DataConversionService service = new DefaultDataConversionService();
-
-        Assertions.assertThat(service.convert(null, Integer.class)).isNull();
-        Assertions.assertThat(service.canConvert(null, Integer.class)).isFalse();
-        Assertions.assertThat(service.canConvert(String.class, null)).isFalse();
-        Assertions.assertThatThrownBy(() -> service.convert("1", null))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessage("Target Type must be provided");
-    }
-
-    @Test
-    public void testPrimitiveCanConvertOnlyForSupportedSources() {
-        DataConversionService service = new DefaultDataConversionService();
-
-        Assertions.assertThat(service.canConvert(Object.class, int.class)).isFalse();
-        Assertions.assertThat(service.canConvert(Integer.class, int.class)).isTrue();
-        Assertions.assertThat(service.canConvert(String.class, int.class)).isTrue();
-        Assertions.assertThat(service.canConvert(Boolean.class, boolean.class)).isTrue();
-        Assertions.assertThat(service.canConvert(Character.class, char.class)).isTrue();
-        Assertions.assertThat(service.canConvert(Integer.class, char.class)).isFalse();
-
-        Assertions.assertThat(service.convert('a', char.class)).isEqualTo('a');
-        Assertions.assertThatThrownBy(() -> service.convert(new Object(), int.class))
-                .isInstanceOf(NoDataConverterFoundException.class);
-    }
-
-    @Test
-    public void testListToPrimitiveArrayConversion() {
-        DataConversionService service = new DefaultDataConversionService();
-
-        Assertions.assertThat(service.canConvert(List.class, int[].class)).isTrue();
-        Assertions.assertThat(service.convert(List.of(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3")), int[].class))
-                .containsExactly(1, 2, 3);
-        Assertions.assertThat(service.convert(List.of(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3")), long[].class))
-                .containsExactly(1L, 2L, 3L);
-        Assertions.assertThat(service.convert(List.of(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3")), double[].class))
-                .containsExactly(1.0d, 2.0d, 3.0d);
-        Assertions.assertThat(service.convert(List.of("true", "false", "1"), boolean[].class))
-                .containsExactly(true, false, true);
-        Assertions.assertThat(service.convert(List.of("a", "b", "c"), char[].class))
-                .containsExactly('a', 'b', 'c');
-        Assertions.assertThat(service.convert(List.of("1.5", "2.5"), float[].class))
-                .containsExactly(1.5f, 2.5f);
-        Assertions.assertThat(service.convert(List.of("1", "2"), short[].class))
-                .containsExactly((short) 1, (short) 2);
-        Assertions.assertThat(service.convert(List.of("1", "2"), byte[].class))
-                .containsExactly((byte) 1, (byte) 2);
-    }
-
-    @Test
-    public void testNonRandomAccessCollectionToPrimitiveArrayConversion() {
-        DataConversionService service = new DefaultDataConversionService();
-
-        LinkedHashSet<String> orderedValues = new LinkedHashSet<>(List.of("1", "2", "3"));
-
-        Assertions.assertThat(service.convert(orderedValues, int[].class)).containsExactly(1, 2, 3);
-    }
-
-    @Test
-    public void testCollectionToReferenceArrayConversion() {
-        DataConversionService service = new DefaultDataConversionService();
-
-        Assertions.assertThat(service.canConvert(LinkedHashSet.class, Integer[].class)).isTrue();
-
-        LinkedHashSet<String> orderedValues = new LinkedHashSet<>(List.of("1", "2", "3"));
-        Assertions.assertThat(service.convert(orderedValues, Integer[].class)).containsExactly(1, 2, 3);
-        Assertions.assertThat(service.convert(List.of(1, 2, 3), Number[].class)).containsExactly(1, 2, 3);
-        Assertions.assertThat(service.convert(java.util.Arrays.asList("1", null, "3"), Integer[].class)).containsExactly(1, null, 3);
-        Assertions.assertThat(service.convert(List.of(new BigDecimal("1"), new BigDecimal("2")), BigDecimal[].class))
-                .containsExactly(new BigDecimal("1"), new BigDecimal("2"));
-    }
-
-    @Test
-    public void testEmptyCollectionsToArrays() {
-        DataConversionService service = new DefaultDataConversionService();
-
-        Assertions.assertThat(service.convert(List.of(), int[].class)).isEmpty();
-        Assertions.assertThat(service.convert(List.of(), Integer[].class)).isEmpty();
-    }
-
-    @Test
-    public void testInvalidCollectionElementsFailPredictably() {
-        DataConversionService service = new DefaultDataConversionService();
-
-        Assertions.assertThatThrownBy(() -> service.convert(Arrays.asList("1", null), int[].class))
-                .isInstanceOf(NoDataConverterFoundException.class);
-        Assertions.assertThatThrownBy(() -> service.convert(List.of("x"), int[].class))
-                .isInstanceOf(NumberFormatException.class);
-        Assertions.assertThatThrownBy(() -> service.convert(List.of("x"), Integer[].class))
-                .isInstanceOf(NumberFormatException.class);
-    }
-
-    @Test
-    public void testCollectionToArrayCanConvertNegativeCases() {
-        DataConversionService service = new DefaultDataConversionService();
-
-        Assertions.assertThat(service.canConvert(Object.class, int[].class)).isFalse();
-        Assertions.assertThat(service.canConvert(List.class, Integer.class)).isFalse();
-        Assertions.assertThat(service.canConvert(Set.class, int[].class)).isTrue();
-    }
-
-    @Test
-    public void testStringToEnumConversion() {
-        DataConversionService service = new DefaultDataConversionService();
-        Assertions.assertThat(service.convert("ACTIVE", Status.class)).isEqualTo(Status.ACTIVE);
-        Assertions.assertThat(service.convert("INACTIVE", Status.class)).isEqualTo(Status.INACTIVE);
-        Assertions.assertThat(service.convert("active", Status.class)).isEqualTo(Status.ACTIVE);
-        Assertions.assertThat(service.convert("InAcTiVe", Status.class)).isEqualTo(Status.INACTIVE);
-    }
-
-    @Test
-    public void testOrdinalToEnumConversion() {
-        DataConversionService service = new DefaultDataConversionService();
-        Assertions.assertThat(service.convert(0, Status.class)).isEqualTo(Status.ACTIVE);
-        Assertions.assertThat(service.convert(1, Status.class)).isEqualTo(Status.INACTIVE);
-
-        Assertions.assertThat(service.convert(0L, Status.class)).isEqualTo(Status.ACTIVE);
-        Assertions.assertThat(service.convert(0D, Status.class)).isEqualTo(Status.ACTIVE);
-        Assertions.assertThat(service.convert(BigDecimal.ZERO, Status.class)).isEqualTo(Status.ACTIVE);
-        Assertions.assertThat(service.convert(BigInteger.ZERO, Status.class)).isEqualTo(Status.ACTIVE);
-    }
-
-    @Test
-    public void testInvalidOrdinalToEnumConversion() {
-        DataConversionService service = new DefaultDataConversionService();
-
-        Assertions.assertThatThrownBy(() -> service.convert(-1, Status.class))
-                .isInstanceOf(NoDataConverterFoundException.class);
-        Assertions.assertThatThrownBy(() -> service.convert(2, Status.class))
-                .isInstanceOf(NoDataConverterFoundException.class);
-        Assertions.assertThatThrownBy(() -> service.convert(1.9D, Status.class))
-                .isInstanceOf(NoDataConverterFoundException.class);
-    }
-
-    @Test
-    public void testDelegateDataConversionService() {
-        DataConversionService delegate = Mockito.mock(DataConversionService.class);
-        Mockito.when(delegate.convert(delegate.getClass(), Integer.class)).thenReturn(123);
-        DataConversionService service = new DelegateDataConversionService(delegate);
-
-        // should not call delegate for known conversions
-        Assertions.assertThat(service.convert("123", Integer.class)).isEqualTo(123);
-
-        // there's no converter for this, so it should delegate
-        Assertions.assertThat(service.convert(delegate.getClass(), Integer.class)).isEqualTo(123);
-        Mockito.verify(delegate, Mockito.times(1)).convert(delegate.getClass(), Integer.class);
-    }
-
-    @Test
-    public void testDelegateCanConvertBehavior() {
-        DataConversionService delegate = Mockito.mock(DataConversionService.class);
-        Mockito.when(delegate.canConvert(Object.class, Integer.class)).thenReturn(true);
-        DataConversionService service = new DelegateDataConversionService(delegate);
-
-        Assertions.assertThat(service.canConvert(String.class, Integer.class)).isTrue();
-        Assertions.assertThat(service.canConvert(Object.class, Integer.class)).isTrue();
-        Assertions.assertThat(service.canConvert(Object.class, LocalDate.class)).isFalse();
-    }
-
-    @Test
-    public void testDelegateNullAndFailureBehavior() {
-        Assertions.assertThatThrownBy(() -> new DelegateDataConversionService(null))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessage("Delegate conversion service must be provided");
-
-        DataConversionService delegate = Mockito.mock(DataConversionService.class);
-        Object source = new Object();
-        Mockito.when(delegate.convert(source, Integer.class)).thenThrow(new IllegalStateException("delegate failed"));
-
-        DataConversionService service = new DelegateDataConversionService(delegate);
-
-        Assertions.assertThatThrownBy(() -> service.convert(source, Integer.class))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("delegate failed");
-    }
-
-    @Test
-    public void testDefaultDataConversionServiceWithoutNullThrowing() {
-        DataConversionService service = new DefaultDataConversionService(false);
-
-        Assertions.assertThat(service.convert(new Object(), Integer.class)).isNull();
-    }
-
-    @Test
-    public void testConcurrentAssignableConverterLookup() throws Exception {
-        DataConversionService service = new DefaultDataConversionService();
-        List<Future<BigDecimal>> conversions = new ArrayList<>();
-
-        try (ExecutorService executorService = Executors.newFixedThreadPool(4)) {
-            for (int value = 0; value < 50; value++) {
-                int sourceValue = value;
-                conversions.add(executorService.submit(() -> service.convert(new AtomicInteger(sourceValue), BigDecimal.class)));
-            }
-        }
-
-        for (int value = 0; value < conversions.size(); value++) {
-            Assertions.assertThat(conversions.get(value).get()).isEqualByComparingTo(BigDecimal.valueOf(value));
-        }
-    }
-
-    @Test
-    public void testPrimitiveAliasesForStringConverters() {
-        DataConversionService service = new DefaultDataConversionService();
-
-        Assertions.assertThat(service.convert("true", boolean.class)).isTrue();
-        Assertions.assertThat(service.convert("7", byte.class)).isEqualTo((byte) 7);
-        Assertions.assertThat(service.convert("a", char.class)).isEqualTo('a');
-        Assertions.assertThat(service.convert("8", short.class)).isEqualTo((short) 8);
-        Assertions.assertThat(service.convert("9", int.class)).isEqualTo(9);
-        Assertions.assertThat(service.convert("10", long.class)).isEqualTo(10L);
-        Assertions.assertThat(service.convert("1.5", float.class)).isEqualTo(1.5f);
-        Assertions.assertThat(service.convert("2.5", double.class)).isEqualTo(2.5d);
-    }
-
-    @Test
-    public void testDataServiceException() {
-        DataConversionService service = new DefaultDataConversionService();
-        Assertions.assertThatThrownBy(() -> service.convert("123", Status.class))
-                .isInstanceOf(NoDataConverterFoundException.class)
-                .hasMessageStartingWith("No converter found for source")
-                .is(new Condition<>(e -> {
-                    NoDataConverterFoundException exception = (NoDataConverterFoundException) e;
-                    return exception.getSourceType().equals(String.class) && exception.getTargetType().equals(Status.class);
-                }, "NoDataConverterFoundException with correct source and target types"));
-    }
-
 }

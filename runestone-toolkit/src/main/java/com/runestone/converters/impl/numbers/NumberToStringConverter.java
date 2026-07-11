@@ -24,6 +24,7 @@
 
 package com.runestone.converters.impl.numbers;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConverter;
 
 import java.math.BigDecimal;
@@ -31,7 +32,22 @@ import java.math.BigDecimal;
 public class NumberToStringConverter implements DataConverter<Number, String> {
 
     @Override
-    public String convert(Number data) {
+    public Class<Number> sourceType() {
+        return Number.class;
+    }
+
+    @Override
+    public Class<String> targetType() {
+        return String.class;
+    }
+
+    @Override
+    public String ruleIdentity() {
+        return "number:string";
+    }
+
+    @Override
+    public String convert(Number data, ConversionContext context) {
         return NumberConversionSupport.convert(data, String.class, number -> switch (number) {
             case BigDecimal bigDecimal -> bigDecimal.toPlainString();
             default -> number.toString();

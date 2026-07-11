@@ -24,11 +24,34 @@
 
 package com.runestone.converters.impl.strings;
 
+import com.runestone.converters.DataConverter;
+
 import java.util.function.Function;
 
-final class SimpleStringConverter {
+abstract class SimpleStringConverter<T> implements DataConverter<String, T> {
 
-    private SimpleStringConverter() {
+    private final Class<T> targetType;
+    private final String ruleIdentity;
+
+    @SuppressWarnings("unchecked")
+    protected SimpleStringConverter(Class<?> targetType, String ruleIdentity) {
+        this.targetType = (Class<T>) targetType;
+        this.ruleIdentity = ruleIdentity;
+    }
+
+    @Override
+    public final Class<String> sourceType() {
+        return String.class;
+    }
+
+    @Override
+    public final Class<T> targetType() {
+        return targetType;
+    }
+
+    @Override
+    public final String ruleIdentity() {
+        return ruleIdentity;
     }
 
     static <T> T convert(String source, Function<String, T> parser) {

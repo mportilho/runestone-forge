@@ -24,12 +24,28 @@
 
 package com.runestone.converters.impl.numbers;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConverter;
 
 public class NumberToShortConverter implements DataConverter<Number, Short> {
 
     @Override
-    public Short convert(Number data) {
+    public Class<Number> sourceType() {
+        return Number.class;
+    }
+
+    @Override
+    public Class<Short> targetType() {
+        return Short.class;
+    }
+
+    @Override
+    public String ruleIdentity() {
+        return "number:short";
+    }
+
+    @Override
+    public Short convert(Number data, ConversionContext context) {
         return NumberConversionSupport.convert(data, Short.class, Number::shortValue);
     }
 

@@ -24,12 +24,16 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
-public class StringToFloatConverter implements DataConverter<String, Float> {
+public class StringToFloatConverter extends SimpleStringConverter<Float> {
+
+    public StringToFloatConverter() {
+        super(Float.class, "string-to-float");
+    }
 
     @Override
-    public Float convert(String data) {
+    public Float convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, Float::valueOf);
     }
 }

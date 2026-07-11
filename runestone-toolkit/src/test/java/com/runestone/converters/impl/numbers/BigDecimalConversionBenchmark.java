@@ -1,5 +1,6 @@
 package com.runestone.converters.impl.numbers;
 
+import com.runestone.converters.ConversionContext;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
@@ -20,6 +21,7 @@ import java.util.concurrent.atomic.DoubleAdder;
 public class BigDecimalConversionBenchmark {
 
     private NumberToBigDecimalConverter converter;
+    private ConversionContext context;
     private Float floatValue;
     private Double doubleValue;
     private DoubleAccumulator accumulator;
@@ -28,6 +30,7 @@ public class BigDecimalConversionBenchmark {
     @Setup
     public void setup() {
         converter = new NumberToBigDecimalConverter();
+        context = ConversionContext.standard();
         floatValue = 0.1f;
         doubleValue = 0.1d;
         accumulator = new DoubleAccumulator(Double::sum, 0.1);
@@ -37,22 +40,22 @@ public class BigDecimalConversionBenchmark {
 
     @Benchmark
     public BigDecimal convertFloat() {
-        return converter.convert(floatValue);
+        return converter.convert(floatValue, context);
     }
 
     @Benchmark
     public BigDecimal convertDouble() {
-        return converter.convert(doubleValue);
+        return converter.convert(doubleValue, context);
     }
 
     @Benchmark
     public BigDecimal convertDoubleAccumulator() {
-        return converter.convert(accumulator);
+        return converter.convert(accumulator, context);
     }
 
     @Benchmark
     public BigDecimal convertDoubleAdder() {
-        return converter.convert(adder);
+        return converter.convert(adder, context);
     }
 
     public static void main(String[] args) throws RunnerException {

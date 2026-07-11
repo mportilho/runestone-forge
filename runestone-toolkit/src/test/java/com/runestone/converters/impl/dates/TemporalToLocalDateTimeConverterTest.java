@@ -1,50 +1,54 @@
 package com.runestone.converters.impl.dates;
 
+import com.runestone.converters.ConversionContext;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
 public class TemporalToLocalDateTimeConverterTest {
 
     private final TemporalToLocalDateTimeConverter converter = new TemporalToLocalDateTimeConverter();
+    private final ConversionContext context = ConversionContext.standard();
 
     @Test
     public void testConvertFromZonedDateTime() {
-        ZonedDateTime zdt = ZonedDateTime.now();
-        Assertions.assertThat(converter.convert(zdt)).isEqualTo(zdt.toLocalDateTime());
+        ZonedDateTime zdt = ZonedDateTime.of(2023, 1, 1, 12, 30, 0, 0, ZoneId.of("Europe/Paris"));
+        Assertions.assertThat(converter.convert(zdt, context)).isEqualTo(zdt.toLocalDateTime());
     }
 
     @Test
     public void testConvertFromLocalDateTime() {
-        LocalDateTime ldt = LocalDateTime.now();
-        Assertions.assertThat(converter.convert(ldt)).isEqualTo(ldt);
+        LocalDateTime ldt = LocalDateTime.of(2023, 1, 1, 12, 30);
+        Assertions.assertThat(converter.convert(ldt, context)).isEqualTo(ldt);
     }
 
     @Test
     public void testConvertFromOffsetDateTime() {
-        OffsetDateTime odt = OffsetDateTime.now();
-        Assertions.assertThat(converter.convert(odt)).isEqualTo(odt.toLocalDateTime());
+        OffsetDateTime odt = OffsetDateTime.parse("2023-01-01T12:30:00+02:00");
+        Assertions.assertThat(converter.convert(odt, context)).isEqualTo(odt.toLocalDateTime());
     }
 
     @Test
     public void testConvertFromLocalDate() {
-        LocalDate ld = LocalDate.now();
-        Assertions.assertThat(converter.convert(ld)).isEqualTo(ld.atStartOfDay());
+        LocalDate ld = LocalDate.of(2023, 1, 1);
+        Assertions.assertThat(converter.convert(ld, context)).isEqualTo(ld.atStartOfDay());
     }
 
     @Test
     public void testNull() {
-        Assertions.assertThatThrownBy(() -> converter.convert(null))
+        Assertions.assertThatThrownBy(() -> converter.convert(null, context))
                 .isInstanceOf(NullPointerException.class);
     }
 
     @Test
     public void testUnsupportedTemporal() {
-        Assertions.assertThatThrownBy(() -> converter.convert(java.time.LocalTime.now()))
+        Assertions.assertThatThrownBy(() -> converter.convert(LocalTime.NOON, context))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

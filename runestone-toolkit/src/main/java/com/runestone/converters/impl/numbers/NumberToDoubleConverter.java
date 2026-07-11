@@ -24,12 +24,28 @@
 
 package com.runestone.converters.impl.numbers;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConverter;
 
 public class NumberToDoubleConverter implements DataConverter<Number, Double> {
 
     @Override
-    public Double convert(Number data) {
+    public Class<Number> sourceType() {
+        return Number.class;
+    }
+
+    @Override
+    public Class<Double> targetType() {
+        return Double.class;
+    }
+
+    @Override
+    public String ruleIdentity() {
+        return "number:double";
+    }
+
+    @Override
+    public Double convert(Number data, ConversionContext context) {
         return NumberConversionSupport.convert(data, Double.class, Number::doubleValue);
     }
 }

@@ -24,16 +24,20 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 
-public class StringToURLConverter implements DataConverter<String, URL> {
+public class StringToURLConverter extends SimpleStringConverter<URL> {
+
+    public StringToURLConverter() {
+        super(URL.class, "string-to-url");
+    }
 
     @Override
-    public URL convert(String data) {
+    public URL convert(String data, ConversionContext context) {
         try {
             return URI.create(data).toURL();
         } catch (MalformedURLException e) {

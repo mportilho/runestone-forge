@@ -24,15 +24,19 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 import com.runestone.utils.DateUtils;
 
 import java.time.LocalTime;
 
-public class StringToLocalTimeConverter implements DataConverter<String, LocalTime> {
+public class StringToLocalTimeConverter extends SimpleStringConverter<LocalTime> {
+
+    public StringToLocalTimeConverter() {
+        super(LocalTime.class, "string-to-local-time");
+    }
 
     @Override
-    public LocalTime convert(String data) {
+    public LocalTime convert(String data, ConversionContext context) {
         return DateUtils.DATETIME_FORMATTER.parse(data, LocalTime::from);
     }
 }

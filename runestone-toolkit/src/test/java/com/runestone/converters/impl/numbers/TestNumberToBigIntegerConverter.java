@@ -24,6 +24,7 @@
 
 package com.runestone.converters.impl.numbers;
 
+import com.runestone.converters.ConversionContext;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -37,31 +38,31 @@ public class TestNumberToBigIntegerConverter {
     @Test
     public void testNumbersConversions() {
         NumberToBigIntegerConverter converter = new NumberToBigIntegerConverter();
-        assertThat(converter.convert((byte) 1)).isEqualTo(BigInteger.valueOf(1));
-        assertThat(converter.convert((short) 1)).isEqualTo(BigInteger.valueOf(1));
-        assertThat(converter.convert(1)).isEqualTo(BigInteger.valueOf(1));
-        assertThat(converter.convert(1L)).isEqualTo(BigInteger.valueOf(1));
-        assertThat(converter.convert(1F)).isEqualTo(BigInteger.valueOf(1));
-        assertThat(converter.convert(1D)).isEqualTo(BigInteger.valueOf(1));
-        assertThat(converter.convert(BigDecimal.valueOf(1))).isEqualTo(BigInteger.valueOf(1));
-        assertThat(converter.convert(new BigInteger("1"))).isEqualTo(BigInteger.valueOf(1));
+        assertThat(converter.convert((byte) 1, ConversionContext.standard())).isEqualTo(BigInteger.valueOf(1));
+        assertThat(converter.convert((short) 1, ConversionContext.standard())).isEqualTo(BigInteger.valueOf(1));
+        assertThat(converter.convert(1, ConversionContext.standard())).isEqualTo(BigInteger.valueOf(1));
+        assertThat(converter.convert(1L, ConversionContext.standard())).isEqualTo(BigInteger.valueOf(1));
+        assertThat(converter.convert(1F, ConversionContext.standard())).isEqualTo(BigInteger.valueOf(1));
+        assertThat(converter.convert(1D, ConversionContext.standard())).isEqualTo(BigInteger.valueOf(1));
+        assertThat(converter.convert(BigDecimal.valueOf(1), ConversionContext.standard())).isEqualTo(BigInteger.valueOf(1));
+        assertThat(converter.convert(new BigInteger("1"), ConversionContext.standard())).isEqualTo(BigInteger.valueOf(1));
     }
 
     @Test
     public void testConcurrentNumbersConversions() {
         NumberToBigIntegerConverter converter = new NumberToBigIntegerConverter();
-        assertThat(converter.convert(new AtomicInteger(1))).isEqualTo(BigInteger.valueOf(1));
-        assertThat(converter.convert(new AtomicLong(1))).isEqualTo(BigInteger.valueOf(1));
-        assertThat(converter.convert(new DoubleAccumulator(Double::sum, 1))).isEqualTo(BigInteger.valueOf(1));
-        assertThat(converter.convert(new DoubleAdder())).isEqualTo(BigInteger.valueOf(0));
-        assertThat(converter.convert(new LongAccumulator(Long::sum, 1))).isEqualTo(BigInteger.valueOf(1));
-        assertThat(converter.convert(new LongAdder())).isEqualTo(BigInteger.valueOf(0));
+        assertThat(converter.convert(new AtomicInteger(1), ConversionContext.standard())).isEqualTo(BigInteger.valueOf(1));
+        assertThat(converter.convert(new AtomicLong(1), ConversionContext.standard())).isEqualTo(BigInteger.valueOf(1));
+        assertThat(converter.convert(new DoubleAccumulator(Double::sum, 1), ConversionContext.standard())).isEqualTo(BigInteger.valueOf(1));
+        assertThat(converter.convert(new DoubleAdder(), ConversionContext.standard())).isEqualTo(BigInteger.valueOf(0));
+        assertThat(converter.convert(new LongAccumulator(Long::sum, 1), ConversionContext.standard())).isEqualTo(BigInteger.valueOf(1));
+        assertThat(converter.convert(new LongAdder(), ConversionContext.standard())).isEqualTo(BigInteger.valueOf(0));
     }
 
     @Test
     public void testNullConversion() {
         var converter = new NumberToBigIntegerConverter();
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> converter.convert((Number) null, ConversionContext.standard()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Cannot convert null to BigInteger");
     }
@@ -69,20 +70,20 @@ public class TestNumberToBigIntegerConverter {
     @Test
     public void testEdgeCases() {
         var converter = new NumberToBigIntegerConverter();
-        assertThat(converter.convert(Double.MAX_VALUE)).isEqualTo(BigInteger.valueOf(Double.valueOf(Double.MAX_VALUE).longValue()));
-        assertThat(converter.convert(Float.NaN)).isEqualTo(BigInteger.valueOf(Float.valueOf(Float.NaN).longValue()));
-        assertThat(converter.convert(Double.POSITIVE_INFINITY)).isEqualTo(BigInteger.valueOf(Double.valueOf(Double.POSITIVE_INFINITY).longValue()));
+        assertThat(converter.convert(Double.MAX_VALUE, ConversionContext.standard())).isEqualTo(BigInteger.valueOf(Double.valueOf(Double.MAX_VALUE).longValue()));
+        assertThat(converter.convert(Float.NaN, ConversionContext.standard())).isEqualTo(BigInteger.valueOf(Float.valueOf(Float.NaN).longValue()));
+        assertThat(converter.convert(Double.POSITIVE_INFINITY, ConversionContext.standard())).isEqualTo(BigInteger.valueOf(Double.valueOf(Double.POSITIVE_INFINITY).longValue()));
     }
 
     @Test
     public void testFloatingPointConversions() {
         var converter = new NumberToBigIntegerConverter();
-        assertThat(converter.convert(0.1f)).isEqualTo(BigInteger.ZERO);
-        assertThat(converter.convert(0.9d)).isEqualTo(BigInteger.ZERO);
-        assertThat(converter.convert(1.5f)).isEqualTo(BigInteger.ONE);
-        assertThat(converter.convert(1.9d)).isEqualTo(BigInteger.ONE);
-        assertThat(converter.convert(new BigDecimal("1.9"))).isEqualTo(BigInteger.ONE);
-        assertThat(converter.convert(-1.9d)).isEqualTo(BigInteger.valueOf(-1));
+        assertThat(converter.convert(0.1f, ConversionContext.standard())).isEqualTo(BigInteger.ZERO);
+        assertThat(converter.convert(0.9d, ConversionContext.standard())).isEqualTo(BigInteger.ZERO);
+        assertThat(converter.convert(1.5f, ConversionContext.standard())).isEqualTo(BigInteger.ONE);
+        assertThat(converter.convert(1.9d, ConversionContext.standard())).isEqualTo(BigInteger.ONE);
+        assertThat(converter.convert(new BigDecimal("1.9"), ConversionContext.standard())).isEqualTo(BigInteger.ONE);
+        assertThat(converter.convert(-1.9d, ConversionContext.standard())).isEqualTo(BigInteger.valueOf(-1));
     }
 
 }

@@ -24,15 +24,19 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 import com.runestone.utils.DateUtils;
 
 import java.time.YearMonth;
 
-public class StringToYearMonthConverter implements DataConverter<String, YearMonth> {
+public class StringToYearMonthConverter extends SimpleStringConverter<YearMonth> {
+
+    public StringToYearMonthConverter() {
+        super(YearMonth.class, "string-to-year-month");
+    }
 
     @Override
-    public YearMonth convert(String data) {
+    public YearMonth convert(String data, ConversionContext context) {
         return DateUtils.YEAR_MONTH_FORMATTER.parse(data, YearMonth::from);
     }
 }

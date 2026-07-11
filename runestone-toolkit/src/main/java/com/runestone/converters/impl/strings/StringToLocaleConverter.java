@@ -24,15 +24,19 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.util.Locale;
 import java.util.Objects;
 
-public class StringToLocaleConverter implements DataConverter<String, Locale> {
+public class StringToLocaleConverter extends SimpleStringConverter<Locale> {
+
+    public StringToLocaleConverter() {
+        super(Locale.class, "string-to-locale");
+    }
 
     @Override
-    public Locale convert(String data) {
+    public Locale convert(String data, ConversionContext context) {
         Objects.requireNonNull(data);
         String languageTag = data.trim().replace('_', '-');
         if (languageTag.isEmpty()) {

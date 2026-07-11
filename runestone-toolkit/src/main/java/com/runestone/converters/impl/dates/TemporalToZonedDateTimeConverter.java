@@ -24,6 +24,7 @@
 
 package com.runestone.converters.impl.dates;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConverter;
 
 import java.time.ZonedDateTime;
@@ -32,8 +33,23 @@ import java.time.temporal.Temporal;
 public class TemporalToZonedDateTimeConverter implements DataConverter<Temporal, ZonedDateTime> {
 
     @Override
-    public ZonedDateTime convert(Temporal data) {
-        return DateTemporalConversionSupport.temporalToZonedDateTime(data);
+    public Class<Temporal> sourceType() {
+        return Temporal.class;
+    }
+
+    @Override
+    public Class<ZonedDateTime> targetType() {
+        return ZonedDateTime.class;
+    }
+
+    @Override
+    public String ruleIdentity() {
+        return "dates.temporal-to-zoned-date-time";
+    }
+
+    @Override
+    public ZonedDateTime convert(Temporal source, ConversionContext context) {
+        return DateTemporalConversionSupport.temporalToZonedDateTime(source, context.zoneId());
     }
 
 }

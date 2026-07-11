@@ -24,6 +24,7 @@
 
 package com.runestone.converters.impl.numbers;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConverter;
 
 import java.math.BigDecimal;
@@ -31,7 +32,22 @@ import java.math.BigDecimal;
 public class NumberToBigDecimalConverter implements DataConverter<Number, BigDecimal> {
 
     @Override
-    public BigDecimal convert(Number data) {
+    public Class<Number> sourceType() {
+        return Number.class;
+    }
+
+    @Override
+    public Class<BigDecimal> targetType() {
+        return BigDecimal.class;
+    }
+
+    @Override
+    public String ruleIdentity() {
+        return "number:bigdecimal";
+    }
+
+    @Override
+    public BigDecimal convert(Number data, ConversionContext context) {
         return NumberConversionSupport.toBigDecimal(data);
     }
 }

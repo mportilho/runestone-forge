@@ -24,15 +24,19 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-public class StringToPathConverter implements DataConverter<String, Path> {
+public class StringToPathConverter extends SimpleStringConverter<Path> {
+
+    public StringToPathConverter() {
+        super(Path.class, "string-to-path");
+    }
 
     @Override
-    public Path convert(String data) {
+    public Path convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, Paths::get);
     }
 }

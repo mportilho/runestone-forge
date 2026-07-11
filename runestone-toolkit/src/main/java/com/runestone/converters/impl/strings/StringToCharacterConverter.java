@@ -24,12 +24,16 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
-public class StringToCharacterConverter implements DataConverter<String, Character> {
+public class StringToCharacterConverter extends SimpleStringConverter<Character> {
+
+    public StringToCharacterConverter() {
+        super(Character.class, "string-to-character");
+    }
 
     @Override
-    public Character convert(String data) {
+    public Character convert(String data, ConversionContext context) {
         if (data == null || data.isEmpty()) {
             throw new IllegalArgumentException("String must not be empty or null to convert to Character");
         }

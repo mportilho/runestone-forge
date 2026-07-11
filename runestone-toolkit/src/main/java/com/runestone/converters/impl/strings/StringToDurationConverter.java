@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.time.Duration;
 
-public class StringToDurationConverter implements DataConverter<String, Duration> {
+public class StringToDurationConverter extends SimpleStringConverter<Duration> {
+
+    public StringToDurationConverter() {
+        super(Duration.class, "string-to-duration");
+    }
 
     @Override
-    public Duration convert(String data) {
+    public Duration convert(String data, ConversionContext context) {
         return Duration.parse(data);
     }
 }

@@ -91,7 +91,7 @@ public class CollectionArrayConversionBenchmark {
     }
 
     private static final class ReflectiveCollectionArrayConversionService implements MeasuredCollectionArrayConversionService {
-        private final DataConversionService delegate = new DefaultDataConversionService();
+        private final DataConversionService delegate = DefaultDataConversionService.standard();
 
         @Override
         public Object convert(Collection<?> source, Class<?> targetType) {
@@ -106,7 +106,7 @@ public class CollectionArrayConversionBenchmark {
     }
 
     private static final class ProductionCollectionArrayConversionService implements MeasuredCollectionArrayConversionService {
-        private final DataConversionService delegate = new DefaultDataConversionService();
+        private final DataConversionService delegate = DefaultDataConversionService.standard();
 
         @Override
         public Object convert(Collection<?> source, Class<?> targetType) {

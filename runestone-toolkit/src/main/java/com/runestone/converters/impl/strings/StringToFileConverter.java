@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.io.File;
 
-public class StringToFileConverter implements DataConverter<String, File> {
+public class StringToFileConverter extends SimpleStringConverter<File> {
+
+    public StringToFileConverter() {
+        super(File.class, "string-to-file");
+    }
 
     @Override
-    public File convert(String data) {
+    public File convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, File::new);
     }
 }

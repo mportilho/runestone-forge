@@ -24,12 +24,16 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
-public class StringToLongConverter implements DataConverter<String, Long> {
+public class StringToLongConverter extends SimpleStringConverter<Long> {
+
+    public StringToLongConverter() {
+        super(Long.class, "string-to-long");
+    }
 
     @Override
-    public Long convert(String data) {
+    public Long convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, Long::valueOf);
     }
 }

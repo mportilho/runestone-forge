@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.time.Year;
 
-public class StringToYearConverter implements DataConverter<String, Year> {
+public class StringToYearConverter extends SimpleStringConverter<Year> {
+
+    public StringToYearConverter() {
+        super(Year.class, "string-to-year");
+    }
 
     @Override
-    public Year convert(String data) {
+    public Year convert(String data, ConversionContext context) {
         return Year.parse(data);
     }
 }

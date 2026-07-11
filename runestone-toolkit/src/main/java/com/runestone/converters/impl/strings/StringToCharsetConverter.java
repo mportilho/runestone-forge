@@ -24,16 +24,20 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.UnsupportedCharsetException;
 
-public class StringToCharsetConverter implements DataConverter<String, Charset> {
+public class StringToCharsetConverter extends SimpleStringConverter<Charset> {
+
+    public StringToCharsetConverter() {
+        super(Charset.class, "string-to-charset");
+    }
 
     @Override
-    public Charset convert(String data) {
+    public Charset convert(String data, ConversionContext context) {
         try {
             return Charset.forName(data);
         } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {

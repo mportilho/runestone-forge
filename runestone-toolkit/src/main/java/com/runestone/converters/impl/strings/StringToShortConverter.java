@@ -24,12 +24,16 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
-public class StringToShortConverter implements DataConverter<String, Short> {
+public class StringToShortConverter extends SimpleStringConverter<Short> {
+
+    public StringToShortConverter() {
+        super(Short.class, "string-to-short");
+    }
 
     @Override
-    public Short convert(String data) {
+    public Short convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, Short::parseShort);
     }
 }

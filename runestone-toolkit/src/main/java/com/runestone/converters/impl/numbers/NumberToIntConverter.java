@@ -24,12 +24,28 @@
 
 package com.runestone.converters.impl.numbers;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConverter;
 
 public class NumberToIntConverter implements DataConverter<Number, Integer> {
 
     @Override
-    public Integer convert(Number data) {
+    public Class<Number> sourceType() {
+        return Number.class;
+    }
+
+    @Override
+    public Class<Integer> targetType() {
+        return Integer.class;
+    }
+
+    @Override
+    public String ruleIdentity() {
+        return "number:integer";
+    }
+
+    @Override
+    public Integer convert(Number data, ConversionContext context) {
         return NumberConversionSupport.convert(data, Integer.class, Number::intValue);
     }
 

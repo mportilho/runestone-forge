@@ -24,12 +24,16 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
-public class StringToDoubleConverter implements DataConverter<String, Double> {
+public class StringToDoubleConverter extends SimpleStringConverter<Double> {
+
+    public StringToDoubleConverter() {
+        super(Double.class, "string-to-double");
+    }
 
     @Override
-    public Double convert(String data) {
+    public Double convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, Double::valueOf);
     }
 }

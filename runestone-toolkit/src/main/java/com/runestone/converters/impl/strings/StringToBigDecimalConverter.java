@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.math.BigDecimal;
 
-public class StringToBigDecimalConverter implements DataConverter<String, BigDecimal> {
+public class StringToBigDecimalConverter extends SimpleStringConverter<BigDecimal> {
+
+    public StringToBigDecimalConverter() {
+        super(BigDecimal.class, "string-to-big-decimal");
+    }
 
     @Override
-    public BigDecimal convert(String data) {
+    public BigDecimal convert(String data, ConversionContext context) {
         return SimpleStringConverter.convert(data, BigDecimal::new);
     }
 }

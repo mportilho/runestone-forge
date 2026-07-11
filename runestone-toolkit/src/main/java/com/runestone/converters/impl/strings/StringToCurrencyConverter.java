@@ -24,14 +24,18 @@
 
 package com.runestone.converters.impl.strings;
 
-import com.runestone.converters.DataConverter;
+import com.runestone.converters.ConversionContext;
 
 import java.util.Currency;
 
-public class StringToCurrencyConverter implements DataConverter<String, Currency> {
+public class StringToCurrencyConverter extends SimpleStringConverter<Currency> {
+
+    public StringToCurrencyConverter() {
+        super(Currency.class, "string-to-currency");
+    }
 
     @Override
-    public Currency convert(String data) {
+    public Currency convert(String data, ConversionContext context) {
         return Currency.getInstance(data);
     }
 }
