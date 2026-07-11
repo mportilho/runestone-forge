@@ -179,7 +179,7 @@ class SemanticAstVerificationGateTest {
         ExpressionNode coalesce = new NullCoalesceNode(
                 GENERATED_ID,
                 GENERATED_SPAN,
-                List.of(grouped(literal(new NullLiteralValue())), grouped(identifier("fallback" + seed)), grouped(text)),
+                List.of(grouped(identifier("primary" + seed)), grouped(identifier("fallback" + seed)), grouped(text)),
                 List.of(GENERATED_SPAN, GENERATED_SPAN));
         ExpressionNode vector = new VectorLiteralNode(GENERATED_ID, GENERATED_SPAN, List.of(one, grouped(sum), text));
         ExpressionNode functionCall = new FunctionCallNode(
@@ -196,7 +196,7 @@ class SemanticAstVerificationGateTest {
                         new IndexSubscriptNavigationLink(
                                 GENERATED_ID,
                                 GENERATED_SPAN,
-                                new SubscriptIntegerLiteral(seed % 10L, IntegerLiteralBase.DECIMAL),
+                                new SubscriptIntegerLiteral(seed % 10L),
                                 false)));
         ExpressionNode conditional = new ConditionalNode(
                 GENERATED_ID,

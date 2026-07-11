@@ -4,6 +4,8 @@
 
 Accepted
 
+Partially superseded by ADR 0013 for `NumericMode`/`FAST`. Literal AST remains environment-independent; numeric execution mode is no longer a public v2 concept.
+
 ## Context
 
 Etapa 2 originally said `FLOAT` literals should become the type of the numeric mode, and Etapa 3 normalizes offset date-time literals using the environment time zone. The Arvore Semantica de Expressao is the source-faithful contract between parsing and later semantic/runtime phases, so making it depend on numeric mode or time zone would make the same source produce different trees for different Ambientes de Expressao.

@@ -12,7 +12,6 @@ enum CoverageTag {
     DATE_LITERAL("date-literal"),
     TIME_LITERAL("time-literal"),
     DATETIME_LITERAL("datetime-literal"),
-    NULL_LITERAL("null-literal"),
     VECTOR_LITERAL("vector-literal"),
     EMPTY_VECTOR("empty-vector"),
     COALESCE("coalesce"),

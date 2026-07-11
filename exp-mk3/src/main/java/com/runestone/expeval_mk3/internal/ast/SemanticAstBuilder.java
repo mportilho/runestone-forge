@@ -34,6 +34,10 @@ final class SemanticAstBuilder {
 
 final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<ExpressionNode> {
 
+    private static final DateLiteralValue INVALID_DATE_LITERAL_PLACEHOLDER = new DateLiteralValue(LocalDate.EPOCH);
+    private static final LocalDateTimeLiteralValue INVALID_DATE_TIME_LITERAL_PLACEHOLDER = new LocalDateTimeLiteralValue(
+            LocalDateTime.of(LocalDate.EPOCH, LocalTime.MIDNIGHT));
+
     private final List<ExpressionDiagnostic> diagnostics = new ArrayList<>();
 
     SemanticAstBuildResult build(ParseSuccess parseSuccess) {
@@ -435,11 +439,6 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     }
 
     @Override
-    public ExpressionNode visitNullConstantOperation(ExpressionEvaluatorParser.NullConstantOperationContext context) {
-        return new LiteralNode(NodeId.UNASSIGNED, span(context), new NullLiteralValue());
-    }
-
-    @Override
     public ExpressionNode visitDateConstantOperation(ExpressionEvaluatorParser.DateConstantOperationContext context) {
         return new LiteralNode(
                 NodeId.UNASSIGNED,
@@ -644,30 +643,13 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
 
     private static SubscriptIntegerLiteral subscriptInteger(ExpressionEvaluatorParser.SignedIntegerContext context) {
         if (context instanceof ExpressionEvaluatorParser.SignedIntegerOperationContext signedInteger) {
-            Token token = signedInteger.INT().getSymbol();
-            String text = token.getText();
-            IntegerLiteralBase base = integerLiteralBase(text);
-            BigInteger value = switch (base) {
-                case DECIMAL -> new BigInteger(text);
-                case HEXADECIMAL -> new BigInteger(text.substring(2), 16);
-                case OCTAL -> new BigInteger(text.substring(1), 8);
-            };
+            BigInteger value = new BigInteger(signedInteger.INT().getText());
             if (signedInteger.MINUS() != null) {
                 value = value.negate();
             }
-            return new SubscriptIntegerLiteral(value, base);
+            return new SubscriptIntegerLiteral(value);
         }
         throw new IllegalArgumentException("Unsupported signed integer context: " + context.getClass().getName());
-    }
-
-    private static IntegerLiteralBase integerLiteralBase(String text) {
-        if (text.startsWith("0x") || text.startsWith("0X")) {
-            return IntegerLiteralBase.HEXADECIMAL;
-        }
-        if (isOctalLiteral(text)) {
-            return IntegerLiteralBase.OCTAL;
-        }
-        return IntegerLiteralBase.DECIMAL;
     }
 
     private ConditionalBranchNode conditionalBranch(ExpressionNode condition, ExpressionNode consequence) {
@@ -753,38 +735,18 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     }
 
     private static LiteralValue parseInteger(String text) {
-        BigInteger value;
-        if (text.startsWith("0x") || text.startsWith("0X")) {
-            value = new BigInteger(text.substring(2), 16);
-        } else if (isOctalLiteral(text)) {
-            value = new BigInteger(text.substring(1), 8);
-        } else {
-            value = new BigInteger(text);
-        }
+        BigInteger value = new BigInteger(text);
         if (value.bitLength() < Long.SIZE) {
             return new LongLiteralValue(value.longValue());
         }
         return new BigIntegerLiteralValue(value);
     }
 
-    private static boolean isOctalLiteral(String text) {
-        if (text.length() <= 1 || text.charAt(0) != '0') {
-            return false;
-        }
-        for (int index = 1; index < text.length(); index++) {
-            char digit = text.charAt(index);
-            if (digit < '0' || digit > '7') {
-                return false;
-            }
-        }
-        return true;
-    }
-
     private LiteralValue materializeDate(ExpressionEvaluatorParser.DateConstantOperationContext context) {
         Optional<LocalDate> date = parseDate(unquoteTemporal(context.DATE().getText(), 2));
         if (date.isEmpty()) {
             addDiagnostic(DiagnosticCode.AST_INVALID_DATE_LITERAL, "Invalid date literal", span(context));
-            return new NullLiteralValue();
+            return INVALID_DATE_LITERAL_PLACEHOLDER;
         }
         return new DateLiteralValue(date.orElseThrow());
     }
@@ -805,7 +767,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
                 : parseOffset(value.substring(offsetIndex));
         if (date.isEmpty() || (offsetIndex != -1 && offset.isEmpty())) {
             addDiagnostic(DiagnosticCode.AST_INVALID_DATE_TIME_LITERAL, "Invalid date-time literal", span(context));
-            return new NullLiteralValue();
+            return INVALID_DATE_TIME_LITERAL_PLACEHOLDER;
         }
         LocalDateTime localDateTime = LocalDateTime.of(date.orElseThrow(), time);
         if (offsetIndex == -1) {

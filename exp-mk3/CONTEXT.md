@@ -41,7 +41,7 @@ The case where an assignment introduces a Simbolo Interno with the same name as 
 _Avoid_: Redeclaration error, parameter mutation, aliasing
 
 **Desestruturacao de Atribuicao**:
-An assignment target that binds multiple internal symbols from an ordered expression value, with compile-time validation when shape is known and runtime shape checking only when the source shape is unknowable in non-strict mode.
+An assignment target that binds multiple internal symbols from an ordered expression value, with compile-time validation when shape is known and runtime shape checking only when the source shape is known only at execution time.
 _Avoid_: Tuple unpacking syntax, multiple assignment statement, array pattern
 
 **Valor Padrao de Simbolo**:
@@ -52,24 +52,20 @@ _Avoid_: Optional runtime fallback, missing input handler
 The Ambiente de Expressao declaration that says whether a Simbolo Externo default can be replaced by runtime input. Non-overridable external symbols are fixed environment values; overridable external symbols accept boundary-coerced runtime replacements.
 _Avoid_: Mutable parameter, assignment permission, runtime redeclaration
 
-**Modo Numerico**:
-The Ambiente de Expressao policy that determines numeric interpretation, planning, and execution behavior for numeric expressions; changing it changes the compiled expression identity.
-_Avoid_: Performance flag, math optimization
-
-**Categoria Numerica**:
-The semantic classification of a numeric expression as decimal, integral, or floating for a given Modo Numerico, used by later planning without changing the public expression type.
-_Avoid_: Public number type, Java primitive type, optimization hint
+**Fato Numerico**:
+Semantic facts about a numeric expression under the language's decimal numeric semantics, such as whether a value is provably integral or provably fractional, used by validation and later planning without changing the public expression type.
+_Avoid_: Numeric mode, public number type, Java primitive type, optimization hint
 
 **Tipo Vetor**:
 The type of a vector value created by the expression language, preserving ordered elements and one common element type resolved from the vector literal.
 _Avoid_: Java list type, generic collection
 
 **Tipo Colecao**:
-The type of an ordered or iterable group of values supplied externally or produced by navigation and collection operations, preserving an element type without implying vector-literal semantics.
+The type of an iterable group of values supplied externally or produced by navigation and collection operations, preserving an element type without implying vector-literal semantics, indexability, or sliceability.
 _Avoid_: Vector alias, raw iterable
 
 **Limite de Materializacao**:
-An Ambiente de Expressao guard rail that bounds values created by the expression language, such as vector literals or materialized collection-operation results, without necessarily rejecting large external collections at entry.
+An Ambiente de Expressao guard rail that bounds materialized container values created or exposed by the expression language, such as vector literals, materialized collection-operation results, map entries, or public-boundary collection materialization, without necessarily rejecting large external collections at entry.
 _Avoid_: Parser size limit, input collection limit
 
 **Tipo Mapa**:
@@ -89,11 +85,11 @@ A Java-backed Tipo Objeto whose navigable members are declared by the Ambiente d
 _Avoid_: Reflected class, automatic object shape
 
 **Valor Nulo de Runtime**:
-A runtime absence value that can come from Java data, external overrides, navigation results, or safe navigation. It is not a source literal and does not have a normal expression type; language constructs such as null coalescence and safe navigation are the explicit ways to protect against it.
+A runtime absence value introduced by safe navigation. It is not a source literal, cannot be supplied as an external symbol override, and does not have a normal expression type; Java nulls from external data, members, maps, or collections are boundary/runtime contract violations rather than normal expression values. Null coalescence is the explicit way to discharge possible runtime null before a value reaches a non-null context.
 _Avoid_: Null literal, bottom type, unknown value
 
 **Nulidade de Runtime**:
-Non-blocking semantic metadata that records whether an expression or binding is proven never to produce a runtime null value or may produce one. It supports diagnostics, audit, and future warnings, but it is not a source-level type and does not participate in ordinary type compatibility.
+Semantic metadata that records whether an expression or binding is proven never to produce a runtime null value or may produce one. It is not a source-level type and does not participate in ordinary type unification, but constructs whose contract rejects runtime null may use it to issue semantic diagnostics.
 _Avoid_: Nullable type, optional type, bottom type
 
 **Tipagem Conhecida**:
@@ -109,7 +105,7 @@ An internal semantic marker assigned to an expression node after a root semantic
 _Avoid_: Unknown type, runtime type error, partial exception
 
 **Restricao de Tipo**:
-A semantic requirement imposed by a source construct on an expression or symbol, either concrete such as arithmetic requiring a number or abstract such as ordering requiring both sides to share an orderable type. Unknown symbols accumulate restrictions from their occurrences and only receive a refined type when the accumulated restrictions unify; conflicting restrictions produce a semantic diagnostic with the contributing source spans.
+A semantic requirement imposed by a source construct on an expression, declared symbol, or resolver-local pending type variable, either concrete such as arithmetic requiring a number or abstract such as ordering requiring both sides to share an orderable type. Conflicting restrictions produce a semantic diagnostic with the contributing source spans.
 _Avoid_: Runtime cast, parser type rule, hint
 
 **Inferencia Bidirecional Simples**:

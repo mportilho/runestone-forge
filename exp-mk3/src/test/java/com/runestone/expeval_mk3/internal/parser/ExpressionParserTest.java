@@ -5,6 +5,8 @@ import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.source.SourceSpan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
@@ -45,6 +47,17 @@ class ExpressionParserTest {
         assertThatNullPointerException()
                 .isThrownBy(() -> parser.parse(null))
                 .withMessage("source");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"null", "[null]", "asNumber(null)", "0x10", "077"})
+    @DisplayName("obsolete source literals fail before semantic resolution")
+    void obsoleteSourceLiteralsFailBeforeSemanticResolution(String source) {
+        ParseResult result = parser.parse(source);
+
+        assertThat(result)
+                .as(source)
+                .isInstanceOf(ParseFailure.class);
     }
 
     @Test

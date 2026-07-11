@@ -1,7 +1,0 @@
-id: parser.semantics.hex-subscript.001
-phase: semantics
-kind: invalid
-source: 'items[0x1F]'
-coverage: [subscript-index, diagnostic]
-expected:
-  diagnostic: {category: SEMANTIC, code: TBD}

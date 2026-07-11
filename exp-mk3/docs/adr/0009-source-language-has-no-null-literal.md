@@ -4,6 +4,8 @@
 
 Accepted
 
+Partially superseded by ADR 0012 for external overrides and normal runtime-null origins. Source `null` remains absent; safe navigation is the normal language construct that introduces possible runtime null into the semantic model.
+
 ## Context
 
 The current grammar accepts `null` as a source literal and the original semantic plan included a `NullType`. During Etapa 4 planning, null-as-bottom and nullable branch/vector behavior proved unstable because the language has no explicit nullable type and function calls should not accept null arguments.

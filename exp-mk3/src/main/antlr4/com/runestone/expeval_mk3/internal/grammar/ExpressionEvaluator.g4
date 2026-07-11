@@ -46,7 +46,7 @@
  *
  * 7. OPERADORES DE PERTINÊNCIA UNIFORMIZADOS
  *    'in', 'not in' e 'nin' (sinônimo de 'not in') valem em qualquer contexto,
- *    inclusive filtros. 'null in v' funciona porque null é um primário comum.
+ *    inclusive filtros.
  *
  * 8. '??' VIRA OPERADOR BINÁRIO GERAL
  *    De menor precedência, encadeável (a ?? b ?? c), em vez de sufixo repetido
@@ -82,7 +82,8 @@ ELSE   : 'else' ;
 ELSEIF : 'elsif' ;
 ENDIF  : 'endif' ;
 
-NULL   : 'null' ;
+// Reserved only so obsolete source null cannot be parsed as an identifier.
+OBSOLETE_NULL : 'null' ;
 
 AND    : 'and' ;
 OR     : 'or' ;
@@ -150,11 +151,9 @@ DATETIME : 'dt"' DateFragment 'T' TimeFragment TimeOffsetFragment? '"' ;
 IDENTIFIER : [a-zA-Z_][a-zA-Z_0-9]* ;
 STRING     : '"' ( '\\' [btnfr"'\\] | ~[\r\n\\"] )* '"' ;
 FLOAT      : [0-9]+ '.' [0-9]+ ;
-INT        : HexDigits | OctalDigits | [0-9]+ ;
+INT        : '0' | [1-9] [0-9]* ;
 
 // Fragments
-fragment OctalDigits          : '0' [0-7]+ ;
-fragment HexDigits            : '0x' [0-9a-fA-F]+ ;
 fragment DayFragment          : '0' [1-9] | [1-2] [0-9] | '3' [0-1] ;
 fragment MonthFragment        : '0' [1-9] | '1' [0-2] ;
 fragment HourFragment         : [0-1] [0-9] | '2' [0-3] ;
@@ -289,7 +288,6 @@ literal
     | NOW_DATE                                                           # dateCurrentValueOperation
     | NOW_TIME                                                           # timeCurrentValueOperation
     | NOW_DATETIME                                                       # dateTimeCurrentValueOperation
-    | NULL                                                               # nullConstantOperation
     ;
 
 vectorLiteral
@@ -307,7 +305,6 @@ memberName
     | ELSE
     | ELSEIF
     | ENDIF
-    | NULL
     | AND
     | OR
     | XOR
@@ -368,8 +365,7 @@ subscript
     | LBRACKET QUESTION LPAREN expression RPAREN RBRACKET                # filterSubscript
     ;
 
-// INT em vez de NUMBER: [1.5] e [0x1F:2] deixam de parsear como índices válidos
-// (hex/octal em INT ainda passam; rejeite-os no visitor se indesejado).
+// INT em vez de NUMBER: [1.5], [0x1F] e [077] deixam de parsear como índices válidos.
 signedInteger
     : MINUS? INT                                                         # signedIntegerOperation
     ;

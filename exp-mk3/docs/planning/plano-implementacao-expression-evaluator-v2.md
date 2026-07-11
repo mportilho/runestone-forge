@@ -10,9 +10,9 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 
 | Marco | Conteúdo | Etapas |
 |---|---|---|
-| **M1 — Walking skeleton** | `compile → compute` funcionando para aritmética/lógica em modo `DECIMAL`, sem otimizações | 0–5 |
+| **M1 — Walking skeleton** | `compile → compute` funcionando para aritmética/lógica decimal, sem otimizações | 0–5 |
 | **M2 — Feature-complete** | Toda a linguagem da gramática coberta: navegação, filtros, coleções, `?.`, `@` | 6 |
-| **M3 — Desempenho** | Folding/CSE, nós especializados, modo `FAST`, cache dois níveis, metas JMH atingidas | 7–9 |
+| **M3 — Desempenho** | Folding/CSE, nós especializados preservando semântica decimal, cache dois níveis, metas JMH atingidas | 7–9 |
 | **M4 — GA** | Auditoria, diagnósticos de migração v1→v2, endurecimento e verificação diferencial | 10–12 |
 | **Fase 2 (pós-GA)** | Parser Pratt, Tier 1 de compilação, fusão de pipelines de coleção | 13 |
 
@@ -67,16 +67,33 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 **Objetivo:** o vocabulário de tipos (§6) e o `ExpressionEnvironment` com seus catálogos (§8, §9), antes do resolver que os consome.
 
 **Entregas**
-- Tipos: `ScalarType` (`NUMBER`, `BOOLEAN`, `STRING`, `DATE`, `TIME`, `DATETIME`), `VectorType`/`CollectionType` (distintos, ambos com tipo de elemento), `MapType` (chave textual), `ObjectType` (nominal), `UnknownType`, `NullType`. Decisão implementada da §6 e da ADR 0004: a AST preserva `OffsetDateTime`; o resolver normaliza para `LocalDateTime` no fuso do ambiente, mantendo um único `DATETIME`.
-- `ExpressionEnvironment` + builder imutável após construção: `MathContext`, `transcendentalMathContext`, `NumericMode` (`DECIMAL` default / `FAST`), `ZoneId` (default = fuso padrão da JVM; configurar explicitamente quando a identidade precisar ser reprodutível entre ambientes), modo estrito, `maxCurrentItemDepth`, `maxVectorSize` como limite de materialização, perfil de coerção, `ExpressionEnvironmentId` (hash canônico e estável de todo o conteúdo relevante do ambiente completo — insumo do cache da Etapa 9).
-- `ExternalSymbolCatalog` com as três formas: nome + default, nome + tipo declarado **sem default** (substituto principal dos type hints, §5.1), nome puro (`UnknownType`).
+- Tipos: `ScalarType` (`NUMBER`, `BOOLEAN`, `STRING`, `DATE`, `TIME`, `DATETIME`), `VectorType`/`CollectionType` (distintos, ambos com tipo de elemento), `MapType` (chave textual), `ObjectType` (nominal). Decisão implementada da §6 e da ADR 0004: a AST preserva `OffsetDateTime`; o resolver normaliza para `LocalDateTime` no fuso do ambiente, mantendo um único `DATETIME`.
+- `ExpressionEnvironment` + builder imutável após construção: `MathContext`, `transcendentalMathContext`, `ZoneId` (default = fuso padrão da JVM; configurar explicitamente quando a identidade precisar ser reprodutível entre ambientes), `maxCurrentItemDepth`, `maxMaterializedSize`, `maxFactorialInput`, perfil de coerção, `ExpressionEnvironmentId` (hash canônico e estável de todo o conteúdo relevante do ambiente completo — insumo do cache da Etapa 9).
+- `ExternalSymbolCatalog`: todo símbolo externo exige default não nulo e política de sobrescrita; o tipo é declarado e validado contra o default, ou inferido do default. Declarações sem default, sem política, ou com tipo desconhecido não fazem parte da v2.
 - `FunctionCatalog`: descoberta por reflexão → `FunctionDescriptor` (`MethodHandle` adaptado em registro, tipos, retorno, flags `foldable`/`pure`); despacho por aridade+tipos como estrutura de consulta para o resolver. **Nesta etapa a invocação pode ser `invokeExact` simples**; `LambdaMetafactory` e inline caches ficam para a Etapa 8.
-- Built-ins completos desde já no escopo de catálogo (§9): matemática **incluindo `abs` e `sqrt`** (obrigatórios — saíram da gramática), transcendentais, strings, datas/horas, comparáveis, financeiras, e as funções de asserção `asNumber/asText/asBool/asDate/asTime/asDateTime/asVector` (`pure`, `foldable`). Validação no builder: `addMathFunctions()` sem `abs`/`sqrt` presentes é erro de construção.
-- `JavaTypeCatalog` (`registerJavaType`) e `DataConversionService`/`RuntimeCoercionService` com a matriz de coerções de borda.
+- Built-ins completos desde já no escopo de catálogo (§9): matemática **incluindo `abs` e `sqrt`** (obrigatórios — saíram da gramática), transcendentais, strings, datas/horas, comparáveis, financeiras, e as funções de asserção `asNumber/asText/asBool/asDate/asTime/asDateTime` (`pure`, `foldable`). Asserções vetoriais devem declarar elemento conhecido, como `asVectorOfNumber`, em vez de `asVector` genérico. Validação no builder: `addMathFunctions()` sem `abs`/`sqrt` presentes é erro de construção.
+- `JavaTypeCatalog` (`registerJavaType`), `CollectionOperationCatalog` com operações oficiais mínimas (`map`, `sum`, `count`, `keys`, `values`, `any`, `all`) e `DataConversionService`/`RuntimeCoercionService` com a matriz de coerções de borda.
 
 **Critérios de aceite:** dois ambientes com o mesmo conteúdo produzem o mesmo `environmentId`; catálogo resolve overloads deterministicamente; todas as funções built-in com testes unitários próprios (independentes do runtime de expressões).
 
 **Depende de:** Etapa 0 (paralelizável com 1–2).
+
+---
+
+## Etapa 3.5 — Saneamento para o resolver semântico
+
+**Objetivo:** alinhar gramática, AST, tipos, ambiente, catálogos, corpus e testes aos ADRs 0007–0013 antes de implementar o resolver.
+
+**Entregas**
+- Remoção de `UnknownType`, `NullType`, `strictMode`, `NumericMode`/`FAST`, literal fonte `null`, inteiros hexadecimais/octais e declarações de símbolo externo sem default/política do contrato público e do caminho planejável.
+- Ajuste de `ExpressionEnvironmentId`: inclui símbolos, catálogos, coerção, `ZoneId`, math contexts, limites, funções e tipos Java; não inclui `strictMode` nem `NumericMode`.
+- Validações de builder: defaults/overrides sem null validável; mapas sem chave/valor null validável; funções sem tipo desconhecido; função dobrável sempre pura; Java member exposto sempre com tipo mapeável; descriptors de operação de coleção válidos.
+- `CollectionOperationCatalog` preparado com descriptors oficiais e seam interno para extensão futura, sem API pública de operações custom na v2 inicial.
+- Atualização do corpus para `phase: semantic`, ADRs 0007–0013, `maxMaterializedSize` e nulidade estrita.
+
+**Critérios de aceite:** `mvn -pl exp-mk3 -am test` verde; gramática rejeita `null`, `0x10` e `077`; ambiente não expõe `strictMode`/`NumericMode`; catálogos e corpus alinhados aos ADRs 0007–0013.
+
+**Depende de:** Etapas 2 e 3.
 
 ---
 
@@ -85,15 +102,17 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 **Objetivo:** a mudança conceitual central da v2 — 100% da tipagem sai da gramática e entra aqui (§5).
 
 **Entregas**
-- `SemanticResolver` produzindo o `SemanticModel` completo (AST, `resolvedTypes`, `symbolByNodeId`, símbolos externos/internos, `functionBindings`, `numericKinds`, `issues` — acumulando **todos** os problemas, não só o primeiro).
-- Inferência: tipos de literais → propagação; inferência bidirecional simples (§5.1 item 3: `x + 1` fixa `NUMBER`, `if x then` fixa `BOOLEAN`, `x || "s"` fixa `STRING`); refino a jusante pelas funções `as*`; `UnknownType` residual permitido (ou erro, em modo estrito).
-- Checagens contextuais da §5: compatibilidade de tipos por operador; pilha de contexto de filtro/lambda para validar `@`; política de hex/octal em subscripts (rejeitar com sugestão do decimal); validação e **pré-compilação de `Pattern`** anexada ao binding do nó de regex; semântica de `root` (`n root x = x^(1/n)`) tipada; programa vazio como erro semântico com mensagem clara (§2).
-- Resolução de símbolos e **layout de frame** (§7): índice estável por símbolo, slots de `@` por profundidade máxima de filtros calculada aqui, resolução de destructuring para slots, política de sombreamento externo→interno (permitir com warning).
-- Diagnósticos didáticos para os resíduos da gramática (§5 item 4) e primeiros diagnósticos de migração que são naturais aqui (ex.: `<` + nome de tipo + `>` → mensagem sobre remoção dos hints).
+- `SemanticResolver` produzindo `SemanticResolutionSuccess` ou `SemanticResolutionFailure`; o `SemanticModel` só existe em sucesso e inclui AST, `resolvedTypes`, bindings de símbolos/funções/navegação/operações de coleção, fatos numéricos, nulidade de runtime, formas conhecidas, valores semânticos preparados, checagens diferidas, layout de frame e warnings.
+- Inferência contextual local para literais, vetores vazios, condicionais, `??`, funções e operações de coleção, sem criar símbolos fonte implícitos e sem permitir tipo desconhecido em sucesso.
+- Nulidade estrita: `?.` produz `MAY_BE_NULL`; `??` descarrega nulidade; resultado final, atribuições, operadores, funções, predicados e navegação não segura exigem `NEVER_NULL`.
+- Checagens contextuais: compatibilidade de tipos por operador; `ObjectType` apenas como intermediário navegável/passável para função; regex com lado direito literal e `Pattern` pré-compilado; `root` e fatorial com fatos numéricos e checagens diferidas; programa vazio como erro semântico claro.
+- Resolução de símbolos e **layout de frame** (§7): índice estável por símbolo usado, slots de `@` por profundidade simultânea máxima, resolução de destructuring para slots, política de sombreamento externo→interno (permitir com warning).
+- Resolução completa de navegação, filtros, lambdas e operações de coleção; Etapa 6 apenas executa os bindings.
+- Diagnósticos semânticos didáticos, incluindo família específica para `MAY_BE_NULL` escapando para contexto que exige `NEVER_NULL`.
 
-**Critérios de aceite:** suíte cobrindo cada regra de tipagem com caso positivo e negativo (com asserção do span e do código do diagnóstico); `@` fora de filtro/lambda é erro; regex inválida nunca passa da compilação; corpus inteiro resolve sem `issues` inesperados.
+**Critérios de aceite:** suíte cobrindo cada regra de tipagem/nulidade com caso positivo e negativo (com asserção do span e do código do diagnóstico); `@` fora de filtro/lambda é erro; regex inválida ou não literal nunca passa da compilação; `SemanticModel` de sucesso não contém placeholder/tipo inválido/binding ausente; corpus inteiro resolve sem `issues` inesperados.
 
-**Depende de:** Etapas 2 e 3.
+**Depende de:** Etapas 2, 3 e 3.5.
 
 ---
 
@@ -150,19 +169,18 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 
 ---
 
-## Etapa 8 — Especialização de nós, invocação sem reflexão e modo `FAST`
+## Etapa 8 — Especialização de nós e invocação sem reflexão
 
-**Objetivo:** o coração do desempenho de runtime (§10, §12, §15): call-sites monomórficos e caminho numérico sem boxing.
+**Objetivo:** o coração do desempenho de runtime (§10, §12, §15): nós especializados, call-sites monomórficos e execução eficiente preservando a semântica decimal única da v2.
 
 **Entregas**
-- Substituição dos nós genéricos por famílias especializadas operador × tipo (`AddDecimal/AddLong/AddDouble`, `CompareStringEQ`, `ConcatStrings2/N` com capacidade estimada, `FactorialPostfix` com tabela ≤ 20 + `BigInteger`, `NullCoalesceN`, `Between` especializado, etc.), guiadas por `resolvedTypes` + `numericKinds`.
-- `NumericKind` no resolver (`LONG`/`DOUBLE`/`DECIMAL` por nó) e modo `FAST`: caminhos `computeAsLong/computeAsDouble`, arrays primitivos paralelos no frame, `Math.*Exact` com **fallback estrutural** para o nó `DECIMAL` irmão em overflow; boxing apenas na borda da API.
-- Otimizações `DECIMAL` da §12: cache de constantes pequenas, sem `stripTrailingZeros`/`setScale` intermediários.
-- Invocação de funções sem reflexão: `LambdaMetafactory` para aridades 1–4, `invokeExact` com handle pré-adaptado no resto; pré-alocação de arrays de varargs por call-site; inline cache por call-site quando tipos são `Unknown`.
-- Navegação: acessores via `LambdaMetafactory`/`VarHandle` com metadados; inline cache polimórfico completo (mono→bi→megamórfico) sem metadados; `?.` como checagem de null, sem try/catch.
+- Substituição dos nós genéricos por famílias especializadas operador × tipo (`AddDecimal`, `CompareStringEQ`, `ConcatStrings2/N` com capacidade estimada, `FactorialPostfix`, `NullCoalesceN`, `Between` especializado, etc.), guiadas por `resolvedTypes`, fatos numéricos e nulidade.
+- Otimizações decimais da §12: cache de constantes pequenas, evitar `stripTrailingZeros`/`setScale` intermediários, reduzir boxing/alocação onde isso não mudar o contrato público.
+- Invocação de funções sem reflexão: `LambdaMetafactory` para aridades 1–4, `invokeExact` com handle pré-adaptado no resto; pré-alocação de arrays de varargs por call-site quando justificado por perfil.
+- Navegação: acessores via `LambdaMetafactory`/`VarHandle` com metadados registrados; `?.` como checagem de null, sem try/catch e sem fallback reflexivo por tipo desconhecido.
 - Pool opcional de `ExecutionScope` por thread — **implementar somente se o perfil de alocação justificar** (§13).
 
-**Critérios de aceite (gates JMH da §21):** `a + b * 2` em `FAST` na ordem de dezenas de ns com **zero alocação** em regime estacionário (verificado por perfil de alocação em CI); `DECIMAL` alocando apenas os `BigDecimal` de resultado; navegação com metadados ≈ getter direto + indireção constante; overflow em `FAST` degradando para `DECIMAL` com resultado correto; equivalência com o plano ingênuo mantida.
+**Critérios de aceite (gates JMH da §21):** expressões decimais comuns com ganho mensurável sobre o baseline da Etapa 5; alocação decimal limitada aos valores necessários de resultado/intermediários inevitáveis; navegação com metadados ≈ getter direto + indireção constante; equivalência com o plano ingênuo mantida.
 
 **Depende de:** Etapa 7.
 
@@ -220,7 +238,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 
 **Entregas**
 - Revisão de exaustividade dos diagnósticos: todo erro com `SourceSpan`, código estável e sugestão quando aplicável; erros semânticos sempre acumulados.
-- Guard-rails multi-tenant sob teste de estresse: `maxFilterDepth`, `maxVectorSize`, limite de fatorial, expressões patológicas (aninhamento profundo, vetores enormes, regex custosas) sem degradar o processo.
+- Guard-rails multi-tenant sob teste de estresse: `maxCurrentItemDepth`, `maxMaterializedSize`, `maxFactorialInput`, expressões patológicas (aninhamento profundo, vetores enormes, regex custosas) sem degradar o processo.
 - Testes de concorrência: plano compartilhado entre threads com escopos isolados; pool de parser sob contenção.
 - Consolidação dos gates de CI: JMH com limiares, perfil de alocação como gate, property-based e diferenciais no pipeline.
 - Documentação: referência da linguagem (derivada do `.g4` + semântica do resolver), guia de API, guia de migração, tabela de precedência, resíduos documentados.
@@ -245,14 +263,14 @@ Três trilhas já previstas na estratégia, cada uma ativável por demanda medid
 
 ```text
 E0 ─┬─ E1 ── E2 ─┐
-    └─ E3 ───────┴─ E4 ── E5 (M1) ── E6 (M2) ── E7 ── E8 ── E9 (M3)
+    └─ E3 ───────┴─ E3.5 ── E4 ── E5 (M1) ── E6 (M2) ── E7 ── E8 ── E9 (M3)
                                                   │            │
                                      E11 ◄────────┘      E10 ◄─┘
                                                   │
                                             E12 (M4) ── E13 (fase 2)
 ```
 
-Paralelismos úteis: E3 corre em paralelo com E1–E2; os built-ins do catálogo (E3) e o corpus (E0) podem ser expandidos continuamente por uma pessoa dedicada; os diagnósticos de migração (E11) podem começar assim que parser e resolver estabilizarem, sem esperar o desempenho.
+Paralelismos úteis: E3 corre em paralelo com E1–E2; os built-ins do catálogo (E3) e o corpus (E0) podem ser expandidos continuamente por uma pessoa dedicada; E3.5 bloqueia E4 porque remove conceitos obsoletos do contrato planejável; os diagnósticos de migração (E11) podem começar assim que parser e resolver estabilizarem, sem esperar o desempenho.
 
 ## Riscos principais e mitigações embutidas no plano
 

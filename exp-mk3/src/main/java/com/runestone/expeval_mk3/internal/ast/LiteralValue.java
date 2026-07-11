@@ -7,7 +7,6 @@ sealed interface LiteralValue permits
         DecimalLiteralValue,
         LocalDateTimeLiteralValue,
         LongLiteralValue,
-        NullLiteralValue,
         OffsetDateTimeLiteralValue,
         StringLiteralValue,
         TimeLiteralValue {

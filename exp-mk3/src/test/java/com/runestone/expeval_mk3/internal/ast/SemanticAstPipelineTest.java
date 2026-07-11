@@ -46,12 +46,12 @@ class SemanticAstPipelineTest {
     @Test
     @DisplayName("assignments-only source builds an expression file with an empty result expression")
     void assignmentsOnlySourceBuildsExpressionFileWithEmptyResultExpression() {
-        ExpressionFileNode ast = build("first := null;\nsecond := first;");
+        ExpressionFileNode ast = build("first := 1;\nsecond := first;");
         ExpressionFileNode reparsed = build(AstPrettyPrinter.print(ast));
 
         assertThat(ast.assignments()).hasSize(2);
         assertThat(ast.resultExpression()).isEmpty();
-        assertThat(AstPrettyPrinter.print(ast)).isEqualTo("first := null;\nsecond := first;");
+        assertThat(AstPrettyPrinter.print(ast)).isEqualTo("first := 1;\nsecond := first;");
         assertThat(reparsed.resultExpression()).isEmpty();
         assertThat(AstStructuralEquality.equals(ast, reparsed)).isTrue();
     }
@@ -59,30 +59,28 @@ class SemanticAstPipelineTest {
     @Test
     @DisplayName("literal AST values are materialized independently from the environment")
     void literalAstValuesAreMaterializedIndependentlyFromEnvironment() {
-        ExpressionFileNode ast = build("nothing := null; truth := true; text := \"line\\n\\\"quoted\\\"\\\\path\"; "
+        ExpressionFileNode ast = build("truth := true; text := \"line\\n\\\"quoted\\\"\\\\path\"; "
                 + "small := 9223372036854775807; big := 9223372036854775808; "
                 + "amount := 001.2300; day := d\"2024-01-02\"; time := t\"10:30\"; "
                 + "local := dt\"2024-01-02T10:30:00\"; instant := dt\"2024-01-02T10:30:00+02:00\"; instant");
 
         assertThat(literalValue(ast.assignments().get(0).expression()))
-                .isEqualTo(new NullLiteralValue());
-        assertThat(literalValue(ast.assignments().get(1).expression()))
                 .isEqualTo(new BooleanLiteralValue(true));
-        assertThat(literalValue(ast.assignments().get(2).expression()))
+        assertThat(literalValue(ast.assignments().get(1).expression()))
                 .isEqualTo(new StringLiteralValue("line\n\"quoted\"\\path"));
-        assertThat(literalValue(ast.assignments().get(3).expression()))
+        assertThat(literalValue(ast.assignments().get(2).expression()))
                 .isEqualTo(new LongLiteralValue(Long.MAX_VALUE));
-        assertThat(literalValue(ast.assignments().get(4).expression()))
+        assertThat(literalValue(ast.assignments().get(3).expression()))
                 .isEqualTo(new BigIntegerLiteralValue(new BigInteger("9223372036854775808")));
-        assertThat(literalValue(ast.assignments().get(5).expression()))
+        assertThat(literalValue(ast.assignments().get(4).expression()))
                 .isEqualTo(new DecimalLiteralValue(new BigDecimal("001.2300")));
-        assertThat(literalValue(ast.assignments().get(6).expression()))
+        assertThat(literalValue(ast.assignments().get(5).expression()))
                 .isEqualTo(new DateLiteralValue(LocalDate.of(2024, 1, 2)));
-        assertThat(literalValue(ast.assignments().get(7).expression()))
+        assertThat(literalValue(ast.assignments().get(6).expression()))
                 .isEqualTo(new TimeLiteralValue(LocalTime.of(10, 30)));
-        assertThat(literalValue(ast.assignments().get(8).expression()))
+        assertThat(literalValue(ast.assignments().get(7).expression()))
                 .isEqualTo(new LocalDateTimeLiteralValue(LocalDateTime.of(2024, 1, 2, 10, 30)));
-        assertThat(literalValue(ast.assignments().get(9).expression()))
+        assertThat(literalValue(ast.assignments().get(8).expression()))
                 .isEqualTo(new OffsetDateTimeLiteralValue(OffsetDateTime.parse("2024-01-02T10:30:00+02:00")));
         assertThat(ast.resultExpression()).hasValueSatisfying(result ->
                 assertThat(result).isInstanceOf(IdentifierNode.class));
@@ -100,9 +98,9 @@ class SemanticAstPipelineTest {
         ExpressionFileNode sameInstantUtcOffset = build("instant := dt\"2024-01-02T08:30:00+00:00\"; instant");
         assertThat(AstStructuralEquality.equals(plusTwoOffset, sameInstantUtcOffset)).isFalse();
 
-        ExpressionFileNode decimalWithLeadingZero = build("leading := 018; leading");
-        assertThat(literalValue(decimalWithLeadingZero.assignments().getFirst().expression()))
-                .isEqualTo(new LongLiteralValue(18));
+        ExpressionFileNode zero = build("zero := 0; zero");
+        assertThat(literalValue(zero.assignments().getFirst().expression()))
+                .isEqualTo(new LongLiteralValue(0));
     }
 
     @Test
@@ -293,7 +291,7 @@ class SemanticAstPipelineTest {
         assertThat(key.key()).isEqualTo("key");
         assertThat(key.safe()).isFalse();
         IndexSubscriptNavigationLink index = (IndexSubscriptNavigationLink) identifierChain.links().get(3);
-        assertThat(index.index()).isEqualTo(new SubscriptIntegerLiteral(2, IntegerLiteralBase.DECIMAL));
+        assertThat(index.index()).isEqualTo(new SubscriptIntegerLiteral(2));
         assertThat(index.safe()).isTrue();
         WildcardNavigationLink wildcard = (WildcardNavigationLink) identifierChain.links().getLast();
         assertThat(wildcard.safe()).isFalse();
@@ -331,31 +329,31 @@ class SemanticAstPipelineTest {
     }
 
     @Test
-    @DisplayName("subscript links preserve source-faithful integer formats and slice bounds")
-    void subscriptLinksPreserveSourceFaithfulIntegerFormatsAndSliceBounds() {
-        String source = "value := data[0x10][077][-2:0x20][07:][:-010][*]; value";
+    @DisplayName("subscript links preserve decimal integer values and slice bounds")
+    void subscriptLinksPreserveDecimalIntegerValuesAndSliceBounds() {
+        String source = "value := data[16][77][-2:20][7:][:-10][*]; value";
         ExpressionFileNode ast = build(source);
 
         NavigationChainNode chain = (NavigationChainNode) ast.assignments().getFirst().expression();
 
         assertThat(chain.links()).hasSize(6);
         assertThat(((IndexSubscriptNavigationLink) chain.links().get(0)).index())
-                .isEqualTo(new SubscriptIntegerLiteral(16, IntegerLiteralBase.HEXADECIMAL));
+                .isEqualTo(new SubscriptIntegerLiteral(16));
         assertThat(((IndexSubscriptNavigationLink) chain.links().get(1)).index())
-                .isEqualTo(new SubscriptIntegerLiteral(63, IntegerLiteralBase.OCTAL));
+                .isEqualTo(new SubscriptIntegerLiteral(77));
         SliceSubscriptNavigationLink closedSlice = (SliceSubscriptNavigationLink) chain.links().get(2);
-        assertThat(closedSlice.start()).isEqualTo(integerBound(-2, IntegerLiteralBase.DECIMAL));
-        assertThat(closedSlice.end()).isEqualTo(integerBound(32, IntegerLiteralBase.HEXADECIMAL));
+        assertThat(closedSlice.start()).isEqualTo(integerBound(-2));
+        assertThat(closedSlice.end()).isEqualTo(integerBound(20));
         SliceSubscriptNavigationLink openEndSlice = (SliceSubscriptNavigationLink) chain.links().get(3);
-        assertThat(openEndSlice.start()).isEqualTo(integerBound(7, IntegerLiteralBase.OCTAL));
+        assertThat(openEndSlice.start()).isEqualTo(integerBound(7));
         assertThat(openEndSlice.end()).isEqualTo(UnboundedSubscriptSliceBound.INSTANCE);
         SliceSubscriptNavigationLink openStartSlice = (SliceSubscriptNavigationLink) chain.links().get(4);
         assertThat(openStartSlice.start()).isEqualTo(UnboundedSubscriptSliceBound.INSTANCE);
-        assertThat(openStartSlice.end()).isEqualTo(integerBound(-8, IntegerLiteralBase.OCTAL));
+        assertThat(openStartSlice.end()).isEqualTo(integerBound(-10));
         assertThat(chain.links().get(5)).isInstanceOf(WildcardNavigationLink.class);
 
         String printed = AstPrettyPrinter.print(ast);
-        assertThat(printed).isEqualTo("value := data[0x10][077][-2:0x20][07:][:-010][*];\nvalue");
+        assertThat(printed).isEqualTo("value := data[16][77][-2:20][7:][:-10][*];\nvalue");
         assertThat(AstStructuralEquality.equals(ast, build(printed))).isTrue();
     }
 
@@ -636,8 +634,8 @@ class SemanticAstPipelineTest {
         return ((IdentifierNode) expression).name();
     }
 
-    private static IntegerSubscriptSliceBound integerBound(long value, IntegerLiteralBase base) {
-        return new IntegerSubscriptSliceBound(new SubscriptIntegerLiteral(value, base));
+    private static IntegerSubscriptSliceBound integerBound(long value) {
+        return new IntegerSubscriptSliceBound(new SubscriptIntegerLiteral(value));
     }
 
     private static ExpressionFileNode shiftNodeIds(ExpressionFileNode file, int offset) {

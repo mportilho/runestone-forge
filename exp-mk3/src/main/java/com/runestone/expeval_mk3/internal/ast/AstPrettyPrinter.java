@@ -211,17 +211,7 @@ final class AstPrettyPrinter {
     }
 
     private static String printSubscriptInteger(SubscriptIntegerLiteral integer) {
-        String sign = integer.value().signum() < 0 ? "-" : "";
-        String absoluteValue = integer.value().abs().toString(switch (integer.base()) {
-            case DECIMAL -> 10;
-            case HEXADECIMAL -> 16;
-            case OCTAL -> 8;
-        });
-        return switch (integer.base()) {
-            case DECIMAL -> sign + absoluteValue;
-            case HEXADECIMAL -> sign + "0x" + absoluteValue;
-            case OCTAL -> sign + "0" + absoluteValue;
-        };
+        return integer.value().toString();
     }
 
     private static String printPostfix(PostfixOperationNode postfix) {
@@ -267,7 +257,6 @@ final class AstPrettyPrinter {
             case DecimalLiteralValue decimalValue -> decimalValue.value().toPlainString();
             case LocalDateTimeLiteralValue dateTimeValue -> "dt\"" + dateTimeValue.value() + "\"";
             case LongLiteralValue longValue -> Long.toString(longValue.value());
-            case NullLiteralValue ignored -> "null";
             case OffsetDateTimeLiteralValue dateTimeValue -> "dt\"" + dateTimeValue.value().toLocalDateTime()
                     + formatOffset(dateTimeValue.value().getOffset()) + "\"";
             case StringLiteralValue stringValue -> quote(stringValue.value());
