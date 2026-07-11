@@ -2,7 +2,7 @@ package com.runestone.expeval.environment;
 
 import ch.obermuhlner.math.big.BigDecimalMath;
 import com.runestone.converters.DataConversionService;
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import com.runestone.expeval.catalog.*;
 import com.runestone.expeval.catalog.functions.*;
 import com.runestone.expeval.internal.navigation.TypeIntrospectionSupport;
@@ -26,7 +26,7 @@ import java.util.*;
 
 public final class ExpressionEnvironmentBuilder {
 
-    private static final DataConversionService DEFAULT_DATA_CONVERSION_SERVICE = new DefaultDataConversionService();
+    private static final DataConversionService DEFAULT_DATA_CONVERSION_SERVICE = DefaultDataConversionService.standard();
     private static final ExpressionEnvironment EMPTY_ENVIRONMENT = new ExpressionEnvironmentBuilder().build();
 
     private DataConversionService conversionService;

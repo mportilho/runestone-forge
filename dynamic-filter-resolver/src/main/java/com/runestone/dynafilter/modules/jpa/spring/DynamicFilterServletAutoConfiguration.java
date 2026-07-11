@@ -25,7 +25,7 @@
 package com.runestone.dynafilter.modules.jpa.spring;
 
 import com.runestone.converters.DataConversionService;
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
@@ -61,7 +61,7 @@ public class DynamicFilterServletAutoConfiguration implements EmbeddedValueResol
     @Bean
     @ConditionalOnMissingBean
     public DataConversionService dataConversionService() {
-        return new DefaultDataConversionService();
+        return DefaultDataConversionService.standard();
     }
 
     @Bean

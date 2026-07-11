@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
 import com.runestone.dynafilter.core.operation.FilterOperation;
@@ -55,7 +55,7 @@ import java.util.TimeZone;
 @ContextConfiguration(classes = InMemoryDatabaseApplication.class)
 public class TestSpecificationExtensionOperationsIntegration {
 
-    private static final DefaultDataConversionService CONVERSION_SERVICE = new DefaultDataConversionService();
+    private static final DefaultDataConversionService CONVERSION_SERVICE = DefaultDataConversionService.standard();
     private static final ZoneId SAO_PAULO = ZoneId.of("America/Sao_Paulo");
 
     @Autowired

@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.spring;
 
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.statement.LogicalStatement;
@@ -64,7 +64,7 @@ public class TestDynamicFilterServletAutoConfiguration {
         DynamicFilterServletAutoConfiguration servletConfig = new DynamicFilterServletAutoConfiguration();
 
         FilterOperationService<Specification<?>> operationService = servletConfig.specificationFilterOperationService(
-                new DefaultDataConversionService(),
+                DefaultDataConversionService.standard(),
                 emptyContributors()
         );
         DynamicFilterResolver<Specification<?>> resolver = servletConfig.dynamicFilterResolver(operationService);
@@ -85,7 +85,7 @@ public class TestDynamicFilterServletAutoConfiguration {
                 registry.register(CustomOperation.class, FilterOperationMetadata.targetField(), context -> customSpecification);
 
         FilterOperationService<Specification<?>> operationService = servletConfig.specificationFilterOperationService(
-                new DefaultDataConversionService(),
+                DefaultDataConversionService.standard(),
                 contributors(contributor)
         );
         FilterData filterData = FilterData.of("name", new String[]{"name"}, String.class, CustomOperation.class, new Object[]{"John"});

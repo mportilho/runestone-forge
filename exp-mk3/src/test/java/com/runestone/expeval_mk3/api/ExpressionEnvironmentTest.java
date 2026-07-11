@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.api;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConversionService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -430,6 +431,21 @@ class ExpressionEnvironmentTest {
     private static final class PrefixedNumberConversionService implements DataConversionService {
 
         @Override
+        public ConversionContext conversionContext() {
+            return ConversionContext.standard();
+        }
+
+        @Override
+        public String conversionProfileIdentity() {
+            return "test.prefixed-number";
+        }
+
+        @Override
+        public String conversionProfileHash() {
+            return "test.prefixed-number";
+        }
+
+        @Override
         public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
             return sourceType == String.class && targetType == BigDecimal.class;
         }
@@ -441,6 +457,11 @@ class ExpressionEnvironmentTest {
                 return (T) new BigDecimal(text.substring("points:".length()));
             }
             throw new IllegalArgumentException("unsupported conversion");
+        }
+
+        @Override
+        public <T> T copyFoldableValue(T value) {
+            return value;
         }
     }
 }

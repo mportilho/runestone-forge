@@ -1,7 +1,7 @@
 package com.runestone.expeval_mk3.api;
 
 import com.runestone.converters.DataConversionService;
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
@@ -20,7 +20,7 @@ public final class BoundaryCoercion {
 
     private static final BoundaryCoercion STANDARD = new BoundaryCoercion(
             ExpressionEnvironment.STANDARD_CONVERSION_PROFILE_IDENTITY,
-            new DefaultDataConversionService(),
+            DefaultDataConversionService.standard(),
             true);
 
     private final String profileIdentity;

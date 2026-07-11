@@ -1,6 +1,6 @@
 package com.runestone.expeval.internal.runtime;
 
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -13,7 +13,7 @@ public final class ArrayCoercionBenchmarkSupport {
     private final List<Object> doubleVector;
 
     public ArrayCoercionBenchmarkSupport() {
-        coercionService = new RuntimeCoercionService(new DefaultDataConversionService());
+        coercionService = new RuntimeCoercionService(DefaultDataConversionService.standard());
         bigDecimalVector = newVector();
         doubleVector = newVector();
     }

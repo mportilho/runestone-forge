@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.resolver;
 
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.statement.CompoundStatement;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
@@ -54,7 +54,7 @@ public class TestSpecificationStatementAnalyser {
 
     @BeforeEach
     public void setup() {
-        filterOperationService = Mockito.spy(new JpaFilterOperationService(new DefaultDataConversionService()));
+        filterOperationService = Mockito.spy(new JpaFilterOperationService(DefaultDataConversionService.standard()));
     }
 
     @Test

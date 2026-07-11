@@ -25,7 +25,7 @@
 package com.runestone.dynafilter.modules.jpa.operation.specification;
 
 import com.runestone.converters.DataConversionService;
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
@@ -65,7 +65,7 @@ import static org.mockito.Mockito.when;
 public class TestCustomSpecificationIsVigenteEmExample {
 
     private static final LocalDate DATA_VIGENTE = LocalDate.of(2026, 5, 30);
-    private static final DataConversionService CONVERSION_SERVICE = new DefaultDataConversionService();
+    private static final DataConversionService CONVERSION_SERVICE = DefaultDataConversionService.standard();
 
     @Mock
     private CriteriaBuilder builder;

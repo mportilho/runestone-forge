@@ -1,6 +1,6 @@
 package com.runestone.expeval.internal.runtime;
 
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RuntimeCoercionServiceTest {
 
     private final RuntimeCoercionService coercionService =
-            new RuntimeCoercionService(new DefaultDataConversionService());
+            new RuntimeCoercionService(DefaultDataConversionService.standard());
 
     @Test
     @DisplayName("coerces numeric list to Comparable array")

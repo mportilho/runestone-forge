@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.resolver;
 
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.repository.DynamicFilterJpaRepositoryImpl;
@@ -66,7 +66,7 @@ public class TestFetchingFilterDecorator {
 
     private SpecificationDynamicFilterArgumentResolver createSpecificationDynaFilterArgumentResolver() {
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null);
-        JpaFilterOperationService service = new JpaFilterOperationService(new DefaultDataConversionService());
+        JpaFilterOperationService service = new JpaFilterOperationService(DefaultDataConversionService.standard());
         resolver = Mockito.spy(new SpecificationDynamicFilterResolver(service));
         filterDecoratorFactory = Mockito.spy(new SpringFilterDecoratorFactory(applicationContext));
         return new SpecificationDynamicFilterArgumentResolver(generator, resolver, filterDecoratorFactory);

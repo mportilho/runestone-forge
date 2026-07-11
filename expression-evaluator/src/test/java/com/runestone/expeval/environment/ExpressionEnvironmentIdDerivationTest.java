@@ -1,5 +1,6 @@
 package com.runestone.expeval.environment;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConversionService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -28,6 +29,23 @@ class ExpressionEnvironmentIdDerivationTest {
 
     static final class FixtureConversionService implements DataConversionService {
 
+        private final String profileIdentity = "test-fixture-" + System.identityHashCode(this);
+
+        @Override
+        public ConversionContext conversionContext() {
+            return ConversionContext.standard();
+        }
+
+        @Override
+        public String conversionProfileIdentity() {
+            return profileIdentity;
+        }
+
+        @Override
+        public String conversionProfileHash() {
+            return profileIdentity;
+        }
+
         @Override
         public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
             return false;
@@ -36,6 +54,11 @@ class ExpressionEnvironmentIdDerivationTest {
         @Override
         public <S, T> T convert(S source, Class<T> targetType) {
             throw new UnsupportedOperationException("test fixture");
+        }
+
+        @Override
+        public <T> T copyFoldableValue(T value) {
+            return value;
         }
     }
 

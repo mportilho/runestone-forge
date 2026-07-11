@@ -1,5 +1,6 @@
 package com.runestone.expeval.internal.runtime;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConversionService;
 import com.runestone.expeval.api.CacheConfig;
 import com.runestone.expeval.environment.ExpressionEnvironment;
@@ -108,6 +109,23 @@ class ExpressionRuntimeSupportCacheTest {
 
     private static final class FixtureConversionService implements DataConversionService {
 
+        private final String profileIdentity = "test-fixture-" + System.identityHashCode(this);
+
+        @Override
+        public ConversionContext conversionContext() {
+            return ConversionContext.standard();
+        }
+
+        @Override
+        public String conversionProfileIdentity() {
+            return profileIdentity;
+        }
+
+        @Override
+        public String conversionProfileHash() {
+            return profileIdentity;
+        }
+
         @Override
         public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
             return false;
@@ -116,6 +134,11 @@ class ExpressionRuntimeSupportCacheTest {
         @Override
         public <S, T> T convert(S source, Class<T> targetType) {
             throw new UnsupportedOperationException("test fixture");
+        }
+
+        @Override
+        public <T> T copyFoldableValue(T value) {
+            return value;
         }
     }
 }

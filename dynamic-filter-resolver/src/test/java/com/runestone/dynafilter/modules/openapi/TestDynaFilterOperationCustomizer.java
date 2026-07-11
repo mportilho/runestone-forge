@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.openapi;
 
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
@@ -203,7 +203,7 @@ public class TestDynaFilterOperationCustomizer {
     }
 
     private static JpaFilterOperationService operationService(List<JpaFilterOperationContributor> contributors) {
-        return new JpaFilterOperationService(new DefaultDataConversionService(), contributors);
+        return new JpaFilterOperationService(DefaultDataConversionService.standard(), contributors);
     }
 
     private static JpaFilterOperationContributor customOperationContributor(FilterOperationMetadata metadata) {

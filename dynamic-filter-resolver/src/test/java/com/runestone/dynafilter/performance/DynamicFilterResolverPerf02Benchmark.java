@@ -1,6 +1,6 @@
 package com.runestone.dynafilter.performance;
 
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
 import com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils;
 import com.runestone.dynafilter.core.model.FilterData;
@@ -141,7 +141,7 @@ public class DynamicFilterResolverPerf02Benchmark {
             EntityManagerFactory emf = applicationContext.getBean(EntityManagerFactory.class);
             this.entityManager = emf.createEntityManager();
 
-            JpaFilterOperationService operationService = new JpaFilterOperationService(new DefaultDataConversionService());
+            JpaFilterOperationService operationService = new JpaFilterOperationService(DefaultDataConversionService.standard());
             SpecificationStatementAnalyser analyser = new SpecificationStatementAnalyser(operationService);
 
             AbstractStatement statement = createHeavyConjunction(50);

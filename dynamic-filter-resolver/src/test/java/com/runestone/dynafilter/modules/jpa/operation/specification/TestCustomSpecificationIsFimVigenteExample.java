@@ -25,7 +25,7 @@
 package com.runestone.dynafilter.modules.jpa.operation.specification;
 
 import com.runestone.converters.DataConversionService;
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.FilterOperation;
@@ -68,7 +68,7 @@ import static org.mockito.Mockito.when;
 public class TestCustomSpecificationIsFimVigenteExample {
 
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-05-30T10:15:30Z"), ZoneId.of("UTC"));
-    private static final DataConversionService CONVERSION_SERVICE = new DefaultDataConversionService();
+    private static final DataConversionService CONVERSION_SERVICE = DefaultDataConversionService.standard();
 
     @Mock
     private CriteriaBuilder builder;

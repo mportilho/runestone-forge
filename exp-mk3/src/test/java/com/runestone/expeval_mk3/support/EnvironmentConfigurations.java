@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.support;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConversionService;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
@@ -213,6 +214,21 @@ public final class EnvironmentConfigurations {
     private static final class PrefixedNumberConversionService implements DataConversionService {
 
         @Override
+        public ConversionContext conversionContext() {
+            return ConversionContext.standard();
+        }
+
+        @Override
+        public String conversionProfileIdentity() {
+            return "test.prefixed-number";
+        }
+
+        @Override
+        public String conversionProfileHash() {
+            return "test.prefixed-number";
+        }
+
+        @Override
         public boolean canConvert(Class<?> sourceType, Class<?> targetType) {
             return sourceType == String.class && targetType == BigDecimal.class;
         }
@@ -224,6 +240,11 @@ public final class EnvironmentConfigurations {
                 return (T) new BigDecimal(text.substring("points:".length()));
             }
             throw new IllegalArgumentException("unsupported conversion");
+        }
+
+        @Override
+        public <T> T copyFoldableValue(T value) {
+            return value;
         }
     }
 
