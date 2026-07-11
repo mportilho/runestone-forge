@@ -24,8 +24,8 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification;
 
-import com.runestone.converters.DataConversionService;
-import com.runestone.converters.impl.stable.DefaultDataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
 import com.runestone.dynafilter.core.operation.types.Between;
@@ -50,7 +50,7 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class TestSpecificationBetween {
 
-    private static final DataConversionService dataConversionService = DefaultDataConversionService.standard();
+    private static final RuntimeDataConversionService dataConversionService = DefaultRuntimeDataConversionService.standard();
 
     @Mock
     private CriteriaBuilder builder;

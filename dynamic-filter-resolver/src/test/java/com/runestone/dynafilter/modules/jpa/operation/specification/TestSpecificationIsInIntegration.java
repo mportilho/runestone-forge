@@ -24,7 +24,8 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification;
 
-import com.runestone.converters.impl.stable.DefaultDataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.types.IsIn;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.InMemoryDatabaseApplication;
@@ -54,7 +55,7 @@ public class TestSpecificationIsInIntegration {
     @Autowired
     private EntityManager entityManager;
 
-    private static final DefaultDataConversionService conversionService = DefaultDataConversionService.standard();
+    private static final RuntimeDataConversionService conversionService = DefaultRuntimeDataConversionService.standard();
 
     @BeforeEach
     public void setup() {

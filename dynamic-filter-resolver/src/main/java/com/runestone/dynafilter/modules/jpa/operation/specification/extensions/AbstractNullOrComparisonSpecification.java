@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.support.FilterDataRequirements;
 import com.runestone.dynafilter.modules.jpa.support.ComparisonOperator;
@@ -42,10 +42,10 @@ import java.util.Objects;
 abstract class AbstractNullOrComparisonSpecification<T> implements Specification<T> {
 
     private final FilterData filterData;
-    private final DataConversionService dataConversionService;
+    private final RuntimeDataConversionService dataConversionService;
     private final ComparisonOperator operator;
 
-    AbstractNullOrComparisonSpecification(FilterData filterData, DataConversionService dataConversionService, ComparisonOperator operator) {
+    AbstractNullOrComparisonSpecification(FilterData filterData, RuntimeDataConversionService dataConversionService, ComparisonOperator operator) {
         this.filterData = Objects.requireNonNull(filterData, "filterData cannot be null");
         this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService cannot be null");
         this.operator = Objects.requireNonNull(operator, "operator cannot be null");

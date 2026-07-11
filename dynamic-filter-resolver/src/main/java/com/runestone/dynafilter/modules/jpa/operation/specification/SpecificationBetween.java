@@ -24,21 +24,23 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
 import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
 import jakarta.persistence.criteria.*;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.util.Objects;
+
 public class SpecificationBetween<T> implements Specification<T> {
 
     private final FilterData filterData;
-    private final DataConversionService dataConversionService;
+    private final RuntimeDataConversionService dataConversionService;
 
-    public SpecificationBetween(FilterData filterData, DataConversionService dataConversionService) {
-        this.filterData = filterData;
-        this.dataConversionService = dataConversionService;
+    public SpecificationBetween(FilterData filterData, RuntimeDataConversionService dataConversionService) {
+        this.filterData = Objects.requireNonNull(filterData, "filterData cannot be null");
+        this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService cannot be null");
     }
 
     @Override

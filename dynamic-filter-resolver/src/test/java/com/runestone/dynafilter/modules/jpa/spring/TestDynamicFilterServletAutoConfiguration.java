@@ -24,7 +24,8 @@
 
 package com.runestone.dynafilter.modules.jpa.spring;
 
-import com.runestone.converters.impl.stable.DefaultDataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.statement.LogicalStatement;
@@ -59,12 +60,22 @@ public class TestDynamicFilterServletAutoConfiguration {
     }
 
     @Test
+    @DisplayName("Auto-configuration exposes the default runtime conversion service")
+    public void testRuntimeDataConversionServiceCreation() {
+        DynamicFilterServletAutoConfiguration servletConfig = new DynamicFilterServletAutoConfiguration();
+
+        RuntimeDataConversionService conversionService = servletConfig.runtimeDataConversionService();
+
+        Assertions.assertThat(conversionService).isInstanceOf(DefaultRuntimeDataConversionService.class);
+    }
+
+    @Test
     @DisplayName("Auto-configuration creates a resolver backed by the default JPA operation service")
     public void testDynamicFilterResolverCreation() {
         DynamicFilterServletAutoConfiguration servletConfig = new DynamicFilterServletAutoConfiguration();
 
         FilterOperationService<Specification<?>> operationService = servletConfig.specificationFilterOperationService(
-                DefaultDataConversionService.standard(),
+                DefaultRuntimeDataConversionService.standard(),
                 emptyContributors()
         );
         DynamicFilterResolver<Specification<?>> resolver = servletConfig.dynamicFilterResolver(operationService);
@@ -85,7 +96,7 @@ public class TestDynamicFilterServletAutoConfiguration {
                 registry.register(CustomOperation.class, FilterOperationMetadata.targetField(), context -> customSpecification);
 
         FilterOperationService<Specification<?>> operationService = servletConfig.specificationFilterOperationService(
-                DefaultDataConversionService.standard(),
+                DefaultRuntimeDataConversionService.standard(),
                 contributors(contributor)
         );
         FilterData filterData = FilterData.of("name", new String[]{"name"}, String.class, CustomOperation.class, new Object[]{"John"});

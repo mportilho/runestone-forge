@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.support.FilterDataRequirements;
 import com.runestone.dynafilter.modules.jpa.support.JpaPaths;
@@ -40,9 +40,9 @@ import java.util.Objects;
 public class SpecificationIsBlank<T> implements Specification<T> {
 
     private final FilterData filterData;
-    private final DataConversionService dataConversionService;
+    private final RuntimeDataConversionService dataConversionService;
 
-    public SpecificationIsBlank(FilterData filterData, DataConversionService dataConversionService) {
+    public SpecificationIsBlank(FilterData filterData, RuntimeDataConversionService dataConversionService) {
         this.filterData = Objects.requireNonNull(filterData, "filterData cannot be null");
         this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService cannot be null");
     }

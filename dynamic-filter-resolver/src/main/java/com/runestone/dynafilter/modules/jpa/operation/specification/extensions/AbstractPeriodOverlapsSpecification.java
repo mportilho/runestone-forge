@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.support.FilterDataRequirements;
 import com.runestone.dynafilter.modules.jpa.support.IntervalBounds;
@@ -42,10 +42,10 @@ import java.util.Objects;
 abstract class AbstractPeriodOverlapsSpecification<T> implements Specification<T> {
 
     private final FilterData filterData;
-    private final DataConversionService dataConversionService;
+    private final RuntimeDataConversionService dataConversionService;
     private final IntervalBounds bounds;
 
-    AbstractPeriodOverlapsSpecification(FilterData filterData, DataConversionService dataConversionService, IntervalBounds bounds) {
+    AbstractPeriodOverlapsSpecification(FilterData filterData, RuntimeDataConversionService dataConversionService, IntervalBounds bounds) {
         this.filterData = Objects.requireNonNull(filterData, "filterData cannot be null");
         this.dataConversionService = Objects.requireNonNull(dataConversionService, "dataConversionService cannot be null");
         this.bounds = Objects.requireNonNull(bounds, "bounds cannot be null");

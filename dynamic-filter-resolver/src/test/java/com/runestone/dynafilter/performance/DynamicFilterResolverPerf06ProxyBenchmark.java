@@ -1,6 +1,6 @@
 package com.runestone.dynafilter.performance;
 
-import com.runestone.converters.impl.stable.DefaultDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
@@ -92,7 +92,7 @@ public class DynamicFilterResolverPerf06ProxyBenchmark {
 
     private static SpecificationDynamicFilterArgumentResolver createArgumentResolver() {
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null);
-        JpaFilterOperationService operationService = new JpaFilterOperationService(DefaultDataConversionService.standard());
+        JpaFilterOperationService operationService = new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard());
         SpecificationDynamicFilterResolver resolver = new SpecificationDynamicFilterResolver(operationService);
         GenericApplicationContext applicationContext = new GenericApplicationContext();
         applicationContext.refresh();

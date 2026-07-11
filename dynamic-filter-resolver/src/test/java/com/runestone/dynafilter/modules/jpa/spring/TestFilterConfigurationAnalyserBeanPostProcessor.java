@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.spring;
 
-import com.runestone.converters.impl.stable.DefaultDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
@@ -96,7 +96,7 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
         JpaFilterOperationContributor contributor = registry ->
                 registry.register(CustomOperation.class, FilterOperationMetadata.targetField(), context -> (root, query, builder) -> null);
         FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor(
-                new JpaFilterOperationService(DefaultDataConversionService.standard(), List.of(contributor))
+                new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard(), List.of(contributor))
         );
 
         Assertions.assertThatCode(() -> postProcessor.postProcessAfterInitialization(new UnregisteredOperationController(), "registeredOperationController"))
@@ -295,7 +295,7 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
     }
 
     private static FilterConfigurationAnalyserBeanPostProcessor newPostProcessor() {
-        return newPostProcessor(new JpaFilterOperationService(DefaultDataConversionService.standard()));
+        return newPostProcessor(new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard()));
     }
 
     private static FilterConfigurationAnalyserBeanPostProcessor newPostProcessor(FilterOperationService<Specification<?>> filterOperationService) {

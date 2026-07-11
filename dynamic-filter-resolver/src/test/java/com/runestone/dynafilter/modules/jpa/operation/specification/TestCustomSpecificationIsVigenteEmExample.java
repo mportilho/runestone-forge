@@ -24,8 +24,8 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification;
 
-import com.runestone.converters.DataConversionService;
-import com.runestone.converters.impl.stable.DefaultDataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
@@ -65,7 +65,7 @@ import static org.mockito.Mockito.when;
 public class TestCustomSpecificationIsVigenteEmExample {
 
     private static final LocalDate DATA_VIGENTE = LocalDate.of(2026, 5, 30);
-    private static final DataConversionService CONVERSION_SERVICE = DefaultDataConversionService.standard();
+    private static final RuntimeDataConversionService CONVERSION_SERVICE = DefaultRuntimeDataConversionService.standard();
 
     @Mock
     private CriteriaBuilder builder;
@@ -168,9 +168,9 @@ public class TestCustomSpecificationIsVigenteEmExample {
     private static final class SpecificationIsVigenteEm<T> implements Specification<T> {
 
         private final FilterData filterData;
-        private final DataConversionService conversionService;
+        private final RuntimeDataConversionService conversionService;
 
-        private SpecificationIsVigenteEm(FilterData filterData, DataConversionService conversionService) {
+        private SpecificationIsVigenteEm(FilterData filterData, RuntimeDataConversionService conversionService) {
             this.filterData = Objects.requireNonNull(filterData, "filterData cannot be null");
             this.conversionService = Objects.requireNonNull(conversionService, "conversionService cannot be null");
         }

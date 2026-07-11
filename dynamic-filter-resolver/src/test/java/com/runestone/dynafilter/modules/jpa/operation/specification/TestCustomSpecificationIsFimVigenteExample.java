@@ -24,8 +24,8 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification;
 
-import com.runestone.converters.DataConversionService;
-import com.runestone.converters.impl.stable.DefaultDataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.FilterOperation;
@@ -68,7 +68,7 @@ import static org.mockito.Mockito.when;
 public class TestCustomSpecificationIsFimVigenteExample {
 
     private static final Clock FIXED_CLOCK = Clock.fixed(Instant.parse("2026-05-30T10:15:30Z"), ZoneId.of("UTC"));
-    private static final DataConversionService CONVERSION_SERVICE = DefaultDataConversionService.standard();
+    private static final RuntimeDataConversionService CONVERSION_SERVICE = DefaultRuntimeDataConversionService.standard();
 
     @Mock
     private CriteriaBuilder builder;
@@ -147,10 +147,10 @@ public class TestCustomSpecificationIsFimVigenteExample {
     private static final class SpecificationIsFimVigente<T> implements Specification<T> {
 
         private final FilterData filterData;
-        private final DataConversionService conversionService;
+        private final RuntimeDataConversionService conversionService;
         private final Clock clock;
 
-        private SpecificationIsFimVigente(FilterData filterData, DataConversionService conversionService, Clock clock) {
+        private SpecificationIsFimVigente(FilterData filterData, RuntimeDataConversionService conversionService, Clock clock) {
             this.filterData = Objects.requireNonNull(filterData, "filterData cannot be null");
             this.conversionService = Objects.requireNonNull(conversionService, "conversionService cannot be null");
             this.clock = Objects.requireNonNull(clock, "clock cannot be null");

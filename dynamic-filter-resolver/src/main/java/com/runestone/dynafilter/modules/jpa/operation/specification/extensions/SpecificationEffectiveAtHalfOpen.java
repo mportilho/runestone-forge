@@ -24,13 +24,13 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.modules.jpa.support.IntervalBounds;
 
 public class SpecificationEffectiveAtHalfOpen<T> extends AbstractEffectiveAtSpecification<T> {
 
-    public SpecificationEffectiveAtHalfOpen(FilterData filterData, DataConversionService dataConversionService) {
+    public SpecificationEffectiveAtHalfOpen(FilterData filterData, RuntimeDataConversionService dataConversionService) {
         super(filterData, dataConversionService, IntervalBounds.START_INCLUSIVE_END_EXCLUSIVE);
     }
 

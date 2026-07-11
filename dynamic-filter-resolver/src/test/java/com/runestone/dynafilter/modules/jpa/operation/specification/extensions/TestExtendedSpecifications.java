@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.types.Equals;
@@ -55,7 +55,7 @@ import static org.mockito.Mockito.when;
 class TestExtendedSpecifications {
 
     @Mock
-    private DataConversionService conversionService;
+    private RuntimeDataConversionService conversionService;
 
     @Mock
     private CriteriaBuilder criteriaBuilder;

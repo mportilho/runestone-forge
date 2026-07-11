@@ -24,7 +24,8 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification;
 
-import com.runestone.converters.impl.stable.DefaultDataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.core.operation.types.IsIn;
@@ -61,7 +62,7 @@ import java.util.Set;
 @ContextConfiguration(classes = InMemoryDatabaseApplication.class)
 public class TestSpecificationPluralAssociationDistinctIntegration {
 
-    private static final DefaultDataConversionService CONVERSION_SERVICE = DefaultDataConversionService.standard();
+    private static final RuntimeDataConversionService CONVERSION_SERVICE = DefaultRuntimeDataConversionService.standard();
 
     @Autowired
     private PersonRepository personRepository;

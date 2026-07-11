@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.spring;
 
-import com.runestone.converters.impl.stable.DefaultDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
@@ -47,7 +47,7 @@ public class TestSpecDynaFilterArgumentResolver {
     private SpecificationDynamicFilterArgumentResolver createSpecificationDynaFilterArgumentResolver() {
         GenericApplicationContext applicationContext = Mockito.mock(GenericApplicationContext.class);
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null);
-        JpaFilterOperationService service = new JpaFilterOperationService(DefaultDataConversionService.standard());
+        JpaFilterOperationService service = new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard());
         SpecificationDynamicFilterResolver resolver = new SpecificationDynamicFilterResolver(service);
         SpringFilterDecoratorFactory filterDecoratorFactory = new SpringFilterDecoratorFactory(applicationContext);
         return new SpecificationDynamicFilterArgumentResolver(generator, resolver, filterDecoratorFactory);
@@ -64,7 +64,7 @@ public class TestSpecDynaFilterArgumentResolver {
                 .isExactlyInstanceOf(NullPointerException.class)
                 .hasMessageContaining("Dynamic filter resolver");
 
-        JpaFilterOperationService service = new JpaFilterOperationService(DefaultDataConversionService.standard());
+        JpaFilterOperationService service = new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard());
         SpecificationDynamicFilterResolver resolver = new SpecificationDynamicFilterResolver(service);
         Assertions.assertThatThrownBy(() -> new SpecificationDynamicFilterArgumentResolver(generator, resolver, null))
                 .isExactlyInstanceOf(NullPointerException.class)

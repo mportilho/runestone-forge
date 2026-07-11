@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.support;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.operation.support.FilterDataRequirements;
 import jakarta.persistence.criteria.Expression;
@@ -33,6 +33,7 @@ import jakarta.persistence.metamodel.Bindable;
 import jakarta.persistence.metamodel.PluralAttribute;
 
 import java.util.Collection;
+import java.util.Objects;
 
 public final class JpaCollections {
 
@@ -68,10 +69,11 @@ public final class JpaCollections {
 
     public static int requireNonNegativeSize(
             Object value,
-            DataConversionService conversionService,
+            RuntimeDataConversionService conversionService,
             String operationName,
             String valueName
     ) {
+        Objects.requireNonNull(conversionService, "conversionService cannot be null");
         Object nonNullValue = FilterDataRequirements.requireValue(value, operationName, valueName);
         Integer converted = conversionService.convert(nonNullValue, Integer.class);
         if (converted == null || converted < 0) {
