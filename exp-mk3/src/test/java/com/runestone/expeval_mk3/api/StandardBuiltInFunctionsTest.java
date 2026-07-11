@@ -9,7 +9,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,8 +40,7 @@ class StandardBuiltInFunctionsTest {
                         "asBool",
                         "asDate",
                         "asTime",
-                        "asDateTime",
-                        "asVector");
+                        "asDateTime");
     }
 
     @Test
@@ -105,7 +103,7 @@ class StandardBuiltInFunctionsTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .deterministicBoundaryCoercion("prefixed-number:v1", new PrefixedNumberConversionService())
                 .build();
-        FunctionDescriptor asNumber = descriptor(environment.functions(), "asNumber", List.of(UnknownType.INSTANCE));
+        FunctionDescriptor asNumber = descriptor(environment.functions(), "asNumber", List.of(ScalarType.STRING));
 
         assertThat(asNumber.pure()).isTrue();
         assertThat(asNumber.foldable()).isTrue();
@@ -119,45 +117,24 @@ class StandardBuiltInFunctionsTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .boundaryCoercion("prefixed-number:v1", new PrefixedNumberConversionService())
                 .build();
-        FunctionDescriptor asNumber = descriptor(environment.functions(), "asNumber", List.of(UnknownType.INSTANCE));
-        FunctionDescriptor asVector = descriptor(environment.functions(), "asVector", List.of(UnknownType.INSTANCE));
+        FunctionDescriptor asNumber = descriptor(environment.functions(), "asNumber", List.of(ScalarType.STRING));
 
         assertThat(asNumber.pure()).isTrue();
         assertThat(asNumber.foldable()).isFalse();
-        assertThat(asVector.pure()).isTrue();
-        assertThat(asVector.foldable()).isTrue();
     }
 
     @Test
-    @DisplayName("assertion functions use configured boundary coercion and vector materialization limit")
-    void assertionFunctionsUseConfiguredBoundaryCoercionAndVectorMaterializationLimit() throws Throwable {
-        ExpressionEnvironment limitedEnvironment = ExpressionEnvironment.builder()
-                .materializationLimit(2)
-                .build();
-        FunctionCatalog functions = limitedEnvironment.functions();
+    @DisplayName("assertion functions use configured boundary coercion")
+    void assertionFunctionsUseConfiguredBoundaryCoercion() throws Throwable {
+        FunctionCatalog functions = ExpressionEnvironment.standard().functions();
 
-        assertAssertion(functions, "asNumber", ScalarType.NUMBER, "12.50", new BigDecimal("12.50"));
-        assertAssertion(functions, "asText", ScalarType.STRING, BigDecimal.valueOf(7), "7");
-        assertAssertion(functions, "asBool", ScalarType.BOOLEAN, "true", true);
-        assertAssertion(functions, "asDate", ScalarType.DATE, "2026-07-09", LocalDate.of(2026, 7, 9));
-        assertAssertion(functions, "asTime", ScalarType.TIME, "10:15:30", LocalTime.of(10, 15, 30));
-        assertAssertion(functions, "asDateTime", ScalarType.DATETIME, "2026-07-09T10:15:30",
+        assertAssertion(functions, "asNumber", ScalarType.STRING, ScalarType.NUMBER, "12.50", new BigDecimal("12.50"));
+        assertAssertion(functions, "asText", ScalarType.NUMBER, ScalarType.STRING, BigDecimal.valueOf(7), "7");
+        assertAssertion(functions, "asBool", ScalarType.STRING, ScalarType.BOOLEAN, "true", true);
+        assertAssertion(functions, "asDate", ScalarType.STRING, ScalarType.DATE, "2026-07-09", LocalDate.of(2026, 7, 9));
+        assertAssertion(functions, "asTime", ScalarType.STRING, ScalarType.TIME, "10:15:30", LocalTime.of(10, 15, 30));
+        assertAssertion(functions, "asDateTime", ScalarType.STRING, ScalarType.DATETIME, "2026-07-09T10:15:30",
                 LocalDateTime.of(2026, 7, 9, 10, 15, 30));
-
-        FunctionDescriptor asVector = descriptor(functions, "asVector", List.of(UnknownType.INSTANCE));
-        assertThat(asVector.pure()).isTrue();
-        assertThat(asVector.foldable()).isTrue();
-        assertThat(asVector.returnType()).isEqualTo(new VectorType(UnknownType.INSTANCE));
-        assertThat(asVector.implementationHandle().invoke(new String[]{"a", "b"}))
-                .isEqualTo(List.of("a", "b"));
-        assertThat(asVector.implementationHandle().invoke(List.of("a", "b")))
-                .isEqualTo(List.of("a", "b"));
-        assertThatThrownBy(() -> asVector.implementationHandle().invoke(Map.of("a", 1)))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("map");
-        assertThatThrownBy(() -> asVector.implementationHandle().invoke(List.of(1, 2, 3)))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("materialization limit");
     }
 
     private static Object invoke(
@@ -174,10 +151,11 @@ class StandardBuiltInFunctionsTest {
     private static void assertAssertion(
             FunctionCatalog functions,
             String languageName,
+            ExpressionType parameterType,
             ExpressionType returnType,
             Object input,
             Object expected) throws Throwable {
-        FunctionDescriptor descriptor = descriptor(functions, languageName, List.of(UnknownType.INSTANCE));
+        FunctionDescriptor descriptor = descriptor(functions, languageName, List.of(parameterType));
 
         assertThat(descriptor.pure()).isTrue();
         assertThat(descriptor.foldable()).isTrue();

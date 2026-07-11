@@ -15,8 +15,6 @@ final class ExpressionTypes {
             case CollectionType collectionType -> "CollectionType:" + canonical(collectionType.elementType());
             case MapType mapType -> "MapType:text:" + canonical(mapType.valueType());
             case ObjectType objectType -> "ObjectType:" + objectType.name();
-            case NullType ignored -> "NullType";
-            case UnknownType ignored -> "UnknownType";
         };
     }
 

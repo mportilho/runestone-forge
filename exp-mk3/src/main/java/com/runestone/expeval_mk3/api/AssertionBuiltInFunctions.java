@@ -1,9 +1,13 @@
 package com.runestone.expeval_mk3.api;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -16,32 +20,48 @@ import static com.runestone.expeval_mk3.api.ScalarType.TIME;
 
 final class AssertionBuiltInFunctions {
 
-    private final BoundaryCoercion boundaryCoercion;
-    private final int materializationLimit;
+    private static final List<ScalarType> ASSERTION_SOURCE_TYPES = List.of(
+            NUMBER,
+            BOOLEAN,
+            STRING,
+            DATE,
+            TIME,
+            DATETIME);
+    private static final int ASSERTION_FUNCTION_COUNT = 6;
+    private static final int ASSERTION_DESCRIPTOR_COUNT = ASSERTION_FUNCTION_COUNT * ASSERTION_SOURCE_TYPES.size();
 
-    AssertionBuiltInFunctions(BoundaryCoercion boundaryCoercion, int materializationLimit) {
+    private final BoundaryCoercion boundaryCoercion;
+
+    AssertionBuiltInFunctions(BoundaryCoercion boundaryCoercion) {
         this.boundaryCoercion = Objects.requireNonNull(boundaryCoercion, "boundaryCoercion");
-        if (materializationLimit < 0) {
-            throw new IllegalArgumentException("materializationLimit must not be negative");
-        }
-        this.materializationLimit = materializationLimit;
     }
 
-    static List<FunctionDescriptor> descriptors(BoundaryCoercion boundaryCoercion, int materializationLimit) {
+    static List<FunctionDescriptor> descriptors(BoundaryCoercion boundaryCoercion) {
         FunctionPurity assertionPurity = boundaryCoercion.deterministicForConstants()
                 ? FunctionPurity.FOLDABLE
                 : FunctionPurity.PURE;
-        AssertionBuiltInFunctions assertions = new AssertionBuiltInFunctions(boundaryCoercion, materializationLimit);
-        List<FunctionDescriptor> descriptors = new java.util.ArrayList<>();
-        descriptors.addAll(ReflectedFunctionImporter
-                .importSelected(assertions, assertionPurity)
-                .methods("asNumber", "asText", "asBool", "asDate", "asTime", "asDateTime")
-                .toList());
-        descriptors.addAll(ReflectedFunctionImporter
-                .importSelected(assertions, FunctionPurity.FOLDABLE)
-                .methods("asVector")
-                .toList());
-        return descriptors;
+        AssertionBuiltInFunctions assertions = new AssertionBuiltInFunctions(boundaryCoercion);
+        List<FunctionDescriptor> descriptors = new ArrayList<>(ASSERTION_DESCRIPTOR_COUNT);
+        addDescriptors(descriptors, assertions, "asNumber", NUMBER, assertionPurity);
+        addDescriptors(descriptors, assertions, "asText", STRING, assertionPurity);
+        addDescriptors(descriptors, assertions, "asBool", BOOLEAN, assertionPurity);
+        addDescriptors(descriptors, assertions, "asDate", DATE, assertionPurity);
+        addDescriptors(descriptors, assertions, "asTime", TIME, assertionPurity);
+        addDescriptors(descriptors, assertions, "asDateTime", DATETIME, assertionPurity);
+        return List.copyOf(descriptors);
+    }
+
+    private static void addDescriptors(
+            List<FunctionDescriptor> descriptors,
+            AssertionBuiltInFunctions assertions,
+            String methodName,
+            ExpressionType returnType,
+            FunctionPurity purity) {
+        Method method = assertionMethod(methodName);
+        MethodHandle handle = assertionHandle(assertions, method);
+        for (ScalarType sourceType : ASSERTION_SOURCE_TYPES) {
+            descriptors.add(descriptor(methodName, method, handle, sourceType, returnType, purity));
+        }
     }
 
     public BigDecimal asNumber(Object value) {
@@ -68,7 +88,35 @@ final class AssertionBuiltInFunctions {
         return (LocalDateTime) boundaryCoercion.convertFunctionBindingFallback(value, DATETIME);
     }
 
-    public List<Object> asVector(Object value) {
-        return BuiltInFunctionSupport.materializeVector(materializationLimit, value);
+    private static FunctionDescriptor descriptor(
+            String methodName,
+            Method method,
+            MethodHandle handle,
+            ExpressionType parameterType,
+            ExpressionType returnType,
+            FunctionPurity purity) {
+        return FunctionDescriptor.fromHandle(
+                methodName,
+                handle,
+                FunctionImplementationMetadata.forMethod(method),
+                List.of(parameterType),
+                returnType,
+                purity);
+    }
+
+    private static Method assertionMethod(String methodName) {
+        try {
+            return AssertionBuiltInFunctions.class.getDeclaredMethod(methodName, Object.class);
+        } catch (NoSuchMethodException exception) {
+            throw new IllegalStateException("failed to register assertion function: " + methodName, exception);
+        }
+    }
+
+    private static MethodHandle assertionHandle(AssertionBuiltInFunctions assertions, Method method) {
+        try {
+            return MethodHandles.lookup().unreflect(method).bindTo(assertions);
+        } catch (IllegalAccessException exception) {
+            throw new IllegalStateException("failed to access assertion function: " + method.getName(), exception);
+        }
     }
 }

@@ -24,18 +24,6 @@ public final class FunctionLookupResult {
         return new FunctionLookupResult(Status.EXACT_MATCH, descriptor, List.of(descriptor));
     }
 
-    static FunctionLookupResult boundaryCoercionMatch(FunctionDescriptor descriptor) {
-        Objects.requireNonNull(descriptor, "descriptor");
-        return new FunctionLookupResult(Status.BOUNDARY_COERCION_MATCH, descriptor, List.of(descriptor));
-    }
-
-    static FunctionLookupResult ambiguous(List<FunctionDescriptor> candidates) {
-        if (candidates.size() < 2) {
-            throw new IllegalArgumentException("ambiguous lookup requires at least two candidates");
-        }
-        return new FunctionLookupResult(Status.AMBIGUOUS, null, candidates);
-    }
-
     static FunctionLookupResult notFound() {
         return new FunctionLookupResult(Status.NOT_FOUND, null, List.of());
     }
@@ -54,8 +42,6 @@ public final class FunctionLookupResult {
 
     public enum Status {
         EXACT_MATCH,
-        BOUNDARY_COERCION_MATCH,
-        AMBIGUOUS,
         NOT_FOUND
     }
 }

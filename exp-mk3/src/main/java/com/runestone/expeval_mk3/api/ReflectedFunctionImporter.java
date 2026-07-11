@@ -252,7 +252,7 @@ final class ReflectedFunctionImporter {
             return ScalarType.DATETIME;
         }
         if (rawType == Object.class) {
-            return UnknownType.INSTANCE;
+            throw new IllegalArgumentException("Object provider method types are not supported");
         }
         if (List.class.isAssignableFrom(rawType)) {
             return vectorType(genericType, "raw List");
@@ -275,7 +275,7 @@ final class ReflectedFunctionImporter {
             if (wildcardType.getLowerBounds().length == 0
                     && wildcardType.getUpperBounds().length == 1
                     && wildcardType.getUpperBounds()[0] == Object.class) {
-                return new VectorType(UnknownType.INSTANCE);
+                throw new IllegalArgumentException("wildcard vector element types are not supported");
             }
             throw new IllegalArgumentException("bounded wildcard vector element types are not supported");
         }

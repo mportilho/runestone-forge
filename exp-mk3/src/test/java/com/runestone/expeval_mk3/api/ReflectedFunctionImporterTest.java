@@ -106,7 +106,6 @@ class ReflectedFunctionImporterTest {
         assertThat(descriptors)
                 .extracting(FunctionDescriptor::signature)
                 .containsExactly(
-                        signature("any", UnknownType.INSTANCE),
                         signature("booleans", ScalarType.BOOLEAN, ScalarType.BOOLEAN),
                         signature("dates", ScalarType.DATE, ScalarType.TIME, ScalarType.DATETIME),
                         signature("number", ScalarType.NUMBER, ScalarType.NUMBER, ScalarType.NUMBER),
@@ -125,10 +124,12 @@ class ReflectedFunctionImporterTest {
         assertUnsupported(CollectionReturnProvider.class, "Collection return");
         assertUnsupported(ArrayProvider.class, "array");
         assertUnsupported(MapProvider.class, "Map");
+        assertUnsupported(ObjectProvider.class, "Object");
         assertUnsupported(OptionalProvider.class, "Optional");
         assertUnsupported(VoidProvider.class, "void");
         assertUnsupported(VarargsProvider.class, "varargs");
         assertUnsupported(UnsupportedObjectProvider.class, "unsupported");
+        assertUnsupported(WildcardVectorProvider.class, "wildcard");
     }
 
     @Test
@@ -339,10 +340,6 @@ class ReflectedFunctionImporterTest {
     }
 
     static final class TypeInferenceProvider {
-        public static Object any(Object value) {
-            return value;
-        }
-
         public static Boolean booleans(boolean first, Boolean second) {
             return first && second;
         }
@@ -396,6 +393,12 @@ class ReflectedFunctionImporterTest {
         }
     }
 
+    static final class ObjectProvider {
+        public static Object object(Object value) {
+            return value;
+        }
+    }
+
     static final class OptionalProvider {
         public static Optional<BigDecimal> optional(BigDecimal value) {
             return Optional.of(value);
@@ -416,6 +419,12 @@ class ReflectedFunctionImporterTest {
     static final class UnsupportedObjectProvider {
         public static CustomObject custom(CustomObject value) {
             return value;
+        }
+    }
+
+    static final class WildcardVectorProvider {
+        public static String join(List<?> values) {
+            return values.toString();
         }
     }
 

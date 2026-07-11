@@ -47,7 +47,6 @@ public final class FunctionDescriptor {
         Objects.requireNonNull(method, "method");
         parameterTypes = ExpressionTypes.copyOf(parameterTypes, "parameterTypes");
         Objects.requireNonNull(returnType, "returnType");
-        rejectNullType(parameterTypes, returnType);
         if (!Modifier.isStatic(method.getModifiers())) {
             throw new IllegalArgumentException("function implementation method must be static");
         }
@@ -81,7 +80,6 @@ public final class FunctionDescriptor {
         Objects.requireNonNull(purity, "purity");
         parameterTypes = ExpressionTypes.copyOf(parameterTypes, "parameterTypes");
         Objects.requireNonNull(returnType, "returnType");
-        rejectNullType(parameterTypes, returnType);
         if (implementationHandle.type().parameterCount() != parameterTypes.size()) {
             throw new IllegalArgumentException("implementation handle arity must match parameter types");
         }
@@ -211,14 +209,4 @@ public final class FunctionDescriptor {
         }
     }
 
-    private static void rejectNullType(List<ExpressionType> parameterTypes, ExpressionType returnType) {
-        for (ExpressionType parameterType : parameterTypes) {
-            if (parameterType == NullType.INSTANCE) {
-                throw new IllegalArgumentException("function parameter type must not be NullType");
-            }
-        }
-        if (returnType == NullType.INSTANCE) {
-            throw new IllegalArgumentException("function return type must not be NullType");
-        }
-    }
 }

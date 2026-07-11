@@ -83,12 +83,6 @@ final class EnvironmentAcceptanceGateTest {
                         new MapType(ScalarType.NUMBER),
                         EnvironmentConfigurations.discountFunction(),
                         LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("unknown symbol type", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        UnknownType.INSTANCE,
-                        EnvironmentConfigurations.discountFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
         assertEnvironmentIdChanges("object symbol type", baseline,
                 EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
                         "amount",
@@ -173,8 +167,8 @@ final class EnvironmentAcceptanceGateTest {
     }
 
     @Test
-    @DisplayName("function overload resolution is deterministic for matches and ambiguous cases")
-    void functionOverloadResolutionIsDeterministicForMatchesAndAmbiguousCases() throws NoSuchMethodException {
+    @DisplayName("function overload resolution is deterministic for exact matches")
+    void functionOverloadResolutionIsDeterministicForExactMatches() throws NoSuchMethodException {
         FunctionDescriptor text = descriptor(
                 "coerce",
                 "textIdentity",
@@ -203,49 +197,22 @@ final class EnvironmentAcceptanceGateTest {
                 .register(number)
                 .register(text)
                 .build();
-        FunctionCatalog uniqueCoercionFallback = FunctionCatalog.builder()
-                .register(number)
-                .build();
-        FunctionCatalog concreteAmbiguous = FunctionCatalog.builder()
+        FunctionCatalog mismatchedOverloads = FunctionCatalog.builder()
                 .register(number)
                 .register(bool)
                 .build();
 
-        assertThat(firstOrder.resolve("coerce", List.of(ScalarType.STRING), BoundaryCoercion.standard()).descriptor())
+        assertThat(firstOrder.resolve("coerce", List.of(ScalarType.STRING)).descriptor())
                 .contains(text);
-        assertThat(secondOrder.resolve("coerce", List.of(ScalarType.STRING), BoundaryCoercion.standard()).descriptor())
+        assertThat(secondOrder.resolve("coerce", List.of(ScalarType.STRING)).descriptor())
                 .contains(text);
 
-        FunctionLookupResult firstAmbiguous = firstOrder.resolve(
+        FunctionLookupResult notFound = mismatchedOverloads.resolve(
                 "coerce",
-                List.of(UnknownType.INSTANCE),
-                BoundaryCoercion.standard());
-        FunctionLookupResult secondAmbiguous = secondOrder.resolve(
-                "coerce",
-                List.of(UnknownType.INSTANCE),
-                BoundaryCoercion.standard());
+                List.of(ScalarType.STRING));
 
-        assertThat(firstAmbiguous.status()).isEqualTo(FunctionLookupResult.Status.AMBIGUOUS);
-        assertThat(secondAmbiguous.status()).isEqualTo(FunctionLookupResult.Status.AMBIGUOUS);
-        assertThat(firstAmbiguous.candidates()).extracting(FunctionDescriptor::signature)
-                .containsExactly(bool.signature(), number.signature(), text.signature());
-        assertThat(secondAmbiguous.candidates()).extracting(FunctionDescriptor::signature)
-                .containsExactly(bool.signature(), number.signature(), text.signature());
-
-        FunctionLookupResult coercionFallback = uniqueCoercionFallback.resolve(
-                "coerce",
-                List.of(ScalarType.STRING),
-                BoundaryCoercion.standard());
-        FunctionLookupResult concreteCoercionAmbiguous = concreteAmbiguous.resolve(
-                "coerce",
-                List.of(ScalarType.STRING),
-                BoundaryCoercion.standard());
-
-        assertThat(coercionFallback.status()).isEqualTo(FunctionLookupResult.Status.BOUNDARY_COERCION_MATCH);
-        assertThat(coercionFallback.descriptor()).contains(number);
-        assertThat(concreteCoercionAmbiguous.status()).isEqualTo(FunctionLookupResult.Status.AMBIGUOUS);
-        assertThat(concreteCoercionAmbiguous.candidates()).extracting(FunctionDescriptor::signature)
-                .containsExactly(bool.signature(), number.signature());
+        assertThat(notFound.status()).isEqualTo(FunctionLookupResult.Status.NOT_FOUND);
+        assertThat(notFound.candidates()).isEmpty();
     }
 
     @Test
@@ -314,14 +281,23 @@ final class EnvironmentAcceptanceGateTest {
         }
         assertThat(StandardBuiltInFunctions.expectedSignatures(BuiltInFunctionGroup.ASSERTION))
                 .extracting(FunctionSignature::languageName)
-                .containsExactlyInAnyOrder(
+                .containsOnly(
                         "asNumber",
                         "asText",
                         "asBool",
                         "asDate",
                         "asTime",
-                        "asDateTime",
-                        "asVector");
+                        "asDateTime");
+        assertThat(StandardBuiltInFunctions.expectedSignatures(BuiltInFunctionGroup.ASSERTION))
+                .hasSize(36)
+                .extracting(FunctionSignature::languageName)
+                .contains(
+                        "asNumber",
+                        "asText",
+                        "asBool",
+                        "asDate",
+                        "asTime",
+                        "asDateTime");
         StandardBuiltInFunctions.validate(functions);
     }
 
@@ -331,8 +307,8 @@ final class EnvironmentAcceptanceGateTest {
         FunctionDescriptor discount = EnvironmentConfigurations.discountFunction();
 
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .externalSymbol("amount")
-                .externalSymbol("amount")
+                .externalSymbol("amount", ScalarType.NUMBER)
+                .externalSymbol("amount", ScalarType.NUMBER)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("external symbol already declared: amount");
@@ -355,7 +331,7 @@ final class EnvironmentAcceptanceGateTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("materializationLimit must not be negative");
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .externalSymbol(CurrentTemporalValue.DATE.simpleName())
+                .externalSymbol(CurrentTemporalValue.DATE.simpleName(), ScalarType.DATE)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("reserved");
@@ -519,7 +495,7 @@ final class EnvironmentAcceptanceGateTest {
                         "subSeconds"),
                 "comparable", Set.of("max", "min"),
                 "financial", Set.of("fv", "pv", "npv", "pmt", "nper", "ipmt", "ppmt"),
-                "assertion", Set.of("asNumber", "asText", "asBool", "asDate", "asTime", "asDateTime", "asVector"));
+                "assertion", Set.of("asNumber", "asText", "asBool", "asDate", "asTime", "asDateTime"));
     }
 
     private static FunctionDescriptor descriptor(

@@ -1,12 +1,8 @@
 package com.runestone.expeval_mk3.api;
 
-import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 import static java.math.BigDecimal.ZERO;
@@ -96,33 +92,6 @@ final class BuiltInFunctionSupport {
         }
         String filler = repeatToLength(padding, size - value.length());
         return leftAlignedPadding ? filler + value : value + filler;
-    }
-
-    static List<Object> materializeVector(int materializationLimit, Object value) {
-        if (value instanceof Map<?, ?>) {
-            throw new IllegalArgumentException("asVector rejects map values as ambiguous");
-        }
-        ArrayList<Object> values;
-        if (value instanceof Collection<?> collection) {
-            if (collection.size() > materializationLimit) {
-                throw new IllegalArgumentException("asVector materialization limit exceeded");
-            }
-            values = new ArrayList<>(collection.size());
-            values.addAll(collection);
-            return Collections.unmodifiableList(values);
-        }
-        if (value != null && value.getClass().isArray()) {
-            int length = Array.getLength(value);
-            if (length > materializationLimit) {
-                throw new IllegalArgumentException("asVector materialization limit exceeded");
-            }
-            values = new ArrayList<>(length);
-            for (int index = 0; index < length; index++) {
-                values.add(Array.get(value, index));
-            }
-            return Collections.unmodifiableList(values);
-        }
-        throw new IllegalArgumentException("asVector requires a vector, collection, or array value");
     }
 
     static double kahanSum(BigDecimal[] values) {

@@ -85,16 +85,16 @@ public final class ExternalSymbolCatalog {
         private Builder() {
         }
 
-        public Builder externalSymbol(String name) {
-            return addDeclaration(ExternalSymbolDeclaration.unknown(name));
-        }
-
         public Builder externalSymbol(String name, ExpressionType type) {
             return addDeclaration(ExternalSymbolDeclaration.declared(name, type));
         }
 
         public Builder externalSymbolWithDefault(String name, Object defaultValue) {
-            return addDeclaration(ExternalSymbolDeclaration.withDefault(name, UnknownType.INSTANCE, defaultValue));
+            String validatedName = ExternalSymbolNames.validate(name);
+            return addDeclaration(ExternalSymbolDeclaration.withDefault(
+                    validatedName,
+                    ExternalSymbolDefaults.inferType(validatedName, defaultValue),
+                    defaultValue));
         }
 
         public Builder externalSymbolWithDefault(String name, ExpressionType type, Object defaultValue) {
@@ -133,10 +133,6 @@ public final class ExternalSymbolCatalog {
                 type = Objects.requireNonNull(type, "type");
             }
 
-            private static ExternalSymbolDeclaration unknown(String name) {
-                return new ExternalSymbolDeclaration(name, UnknownType.INSTANCE, false, null);
-            }
-
             private static ExternalSymbolDeclaration declared(String name, ExpressionType type) {
                 return new ExternalSymbolDeclaration(name, type, false, null);
             }
@@ -148,9 +144,6 @@ public final class ExternalSymbolCatalog {
             private ExternalSymbol toExternalSymbol(BoundaryCoercion boundaryCoercion) {
                 if (hasDefaultValue) {
                     return ExternalSymbol.withDefault(name, type, defaultValue, boundaryCoercion);
-                }
-                if (type == UnknownType.INSTANCE) {
-                    return ExternalSymbol.unknown(name);
                 }
                 return ExternalSymbol.declared(name, type);
             }

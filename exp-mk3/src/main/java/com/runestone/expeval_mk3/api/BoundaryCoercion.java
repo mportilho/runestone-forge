@@ -71,25 +71,6 @@ public final class BoundaryCoercion {
             case VectorType vectorType -> canConvertCollectionType(sourceType, vectorType.elementType());
             case CollectionType collectionType -> canConvertCollectionType(sourceType, collectionType.elementType());
             case MapType mapType -> canConvertMapType(sourceType, mapType.valueType());
-            case UnknownType ignored -> true;
-            case NullType ignored -> false;
-            case ObjectType ignored -> false;
-        };
-    }
-
-    public boolean canConvert(ExpressionType sourceType, ExpressionType targetType) {
-        Objects.requireNonNull(sourceType, "sourceType");
-        Objects.requireNonNull(targetType, "targetType");
-        if (sourceType.equals(targetType) || sourceType == UnknownType.INSTANCE || targetType == UnknownType.INSTANCE) {
-            return true;
-        }
-        return switch (sourceType) {
-            case ScalarType scalarType -> canConvert(ExpressionJavaTypes.scalarValueType(scalarType), targetType);
-            case VectorType vectorType -> canConvertCollectionExpressionType(vectorType.elementType(), targetType);
-            case CollectionType collectionType -> canConvertCollectionExpressionType(collectionType.elementType(), targetType);
-            case MapType mapType -> canConvertMapExpressionType(mapType.valueType(), targetType);
-            case NullType ignored -> false;
-            case UnknownType ignored -> true;
             case ObjectType ignored -> false;
         };
     }
@@ -133,14 +114,6 @@ public final class BoundaryCoercion {
                     "CollectionType");
             case MapType mapType -> convertMap(valueName, sourceValue, mapType.valueType());
             case ObjectType ignored -> throw new IllegalArgumentException("object boundary coercion is not available");
-            case NullType ignored -> {
-                if (sourceValue != null) {
-                    throw new IllegalArgumentException("null target requires a null value");
-                }
-                yield null;
-            }
-            case UnknownType ignored -> convertValue(valueName, sourceValue,
-                    ExternalSymbolDefaults.inferType(valueName, sourceValue));
         };
     }
 
@@ -174,40 +147,17 @@ public final class BoundaryCoercion {
 
     private boolean canConvertCollectionType(Class<?> sourceType, ExpressionType elementType) {
         if (Collection.class.isAssignableFrom(sourceType)) {
-            return elementType == UnknownType.INSTANCE;
+            return false;
         }
         if (!sourceType.isArray()) {
             return false;
         }
-        return elementType == UnknownType.INSTANCE || canConvert(sourceType.getComponentType(), elementType);
+        return canConvert(sourceType.getComponentType(), elementType);
     }
 
     private static boolean canConvertMapType(Class<?> sourceType, ExpressionType valueType) {
-        return valueType == UnknownType.INSTANCE && Map.class.isAssignableFrom(sourceType);
-    }
-
-    private boolean canConvertCollectionExpressionType(ExpressionType sourceElementType, ExpressionType targetType) {
-        return switch (targetType) {
-            case VectorType vectorType -> canConvert(sourceElementType, vectorType.elementType());
-            case CollectionType collectionType -> canConvert(sourceElementType, collectionType.elementType());
-            case UnknownType ignored -> true;
-            case ScalarType ignored -> false;
-            case MapType ignored -> false;
-            case ObjectType ignored -> false;
-            case NullType ignored -> false;
-        };
-    }
-
-    private boolean canConvertMapExpressionType(ExpressionType sourceValueType, ExpressionType targetType) {
-        return switch (targetType) {
-            case MapType mapType -> canConvert(sourceValueType, mapType.valueType());
-            case UnknownType ignored -> true;
-            case ScalarType ignored -> false;
-            case VectorType ignored -> false;
-            case CollectionType ignored -> false;
-            case ObjectType ignored -> false;
-            case NullType ignored -> false;
-        };
+        Objects.requireNonNull(valueType, "valueType");
+        return false;
     }
 
     private Object convertCollection(String valueName, Object sourceValue, ExpressionType elementType, String typeName) {
@@ -230,9 +180,6 @@ public final class BoundaryCoercion {
     }
 
     private Object convertElement(String valueName, ExpressionType elementType, Object element) {
-        if (elementType == UnknownType.INSTANCE) {
-            return convertValue(valueName, element, ExternalSymbolDefaults.inferType(valueName, element));
-        }
         return convertValue(valueName, element, elementType);
     }
 

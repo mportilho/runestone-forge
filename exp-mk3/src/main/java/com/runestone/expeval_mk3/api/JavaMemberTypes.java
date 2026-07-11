@@ -71,7 +71,7 @@ final class JavaMemberTypes {
             return Optional.of(ScalarType.DATETIME);
         }
         if (rawType == Object.class) {
-            return Optional.of(UnknownType.INSTANCE);
+            return Optional.empty();
         }
         if (Map.class.isAssignableFrom(rawType)) {
             return mapType(genericType);
@@ -110,7 +110,7 @@ final class JavaMemberTypes {
             if (wildcardType.getLowerBounds().length == 0
                     && wildcardType.getUpperBounds().length == 1
                     && wildcardType.getUpperBounds()[0] == Object.class) {
-                return Optional.of(new CollectionType(UnknownType.INSTANCE));
+                return Optional.empty();
             }
             return Optional.empty();
         }

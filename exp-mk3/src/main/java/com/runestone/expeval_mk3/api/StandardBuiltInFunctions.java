@@ -17,7 +17,6 @@ final class StandardBuiltInFunctions {
 
     private static final ExpressionType NUMBER_VECTOR = new VectorType(NUMBER);
     private static final ExpressionType STRING_VECTOR = new VectorType(STRING);
-    private static final ExpressionType UNKNOWN_VECTOR = new VectorType(UnknownType.INSTANCE);
 
     private StandardBuiltInFunctions() {
     }
@@ -26,15 +25,11 @@ final class StandardBuiltInFunctions {
             FunctionCatalog.Builder functions,
             BoundaryCoercion boundaryCoercion,
             MathContext mathContext,
-            MathContext transcendentalMathContext,
-            int materializationLimit) {
+            MathContext transcendentalMathContext) {
         Objects.requireNonNull(functions, "functions");
         Objects.requireNonNull(boundaryCoercion, "boundaryCoercion");
         Objects.requireNonNull(mathContext, "mathContext");
         Objects.requireNonNull(transcendentalMathContext, "transcendentalMathContext");
-        if (materializationLimit < 0) {
-            throw new IllegalArgumentException("materializationLimit must not be negative");
-        }
 
         register(functions, BuiltInFunctionGroup.MATH, MathBuiltInFunctions.descriptors(mathContext));
         register(functions, BuiltInFunctionGroup.TRANSCENDENTAL,
@@ -43,8 +38,7 @@ final class StandardBuiltInFunctions {
         register(functions, BuiltInFunctionGroup.DATE_TIME, DateTimeBuiltInFunctions.descriptors());
         register(functions, BuiltInFunctionGroup.COMPARABLE, ComparableBuiltInFunctions.descriptors());
         register(functions, BuiltInFunctionGroup.FINANCIAL, FinancialBuiltInFunctions.descriptors(mathContext));
-        register(functions, BuiltInFunctionGroup.ASSERTION,
-                AssertionBuiltInFunctions.descriptors(boundaryCoercion, materializationLimit));
+        register(functions, BuiltInFunctionGroup.ASSERTION, AssertionBuiltInFunctions.descriptors(boundaryCoercion));
     }
 
     private static void register(
@@ -152,7 +146,7 @@ final class StandardBuiltInFunctions {
                     signature("isBlank", STRING),
                     signature("length", STRING),
                     signature("split", STRING, STRING),
-                    signature("join", UNKNOWN_VECTOR, STRING));
+                    signature("join", STRING_VECTOR, STRING));
             case DATE_TIME -> dateTimeExpectedSignatures();
             case COMPARABLE -> signatures(
                     signature("max", new VectorType(NUMBER)),
@@ -182,15 +176,28 @@ final class StandardBuiltInFunctions {
                     signature("ppmt", NUMBER, NUMBER, NUMBER, NUMBER),
                     signature("fv", NUMBER, NUMBER, NUMBER, NUMBER, NUMBER),
                     signature("fv", NUMBER, NUMBER, NUMBER, NUMBER));
-            case ASSERTION -> signatures(
-                    signature("asNumber", UnknownType.INSTANCE),
-                    signature("asText", UnknownType.INSTANCE),
-                    signature("asBool", UnknownType.INSTANCE),
-                    signature("asDate", UnknownType.INSTANCE),
-                    signature("asTime", UnknownType.INSTANCE),
-                    signature("asDateTime", UnknownType.INSTANCE),
-                    signature("asVector", UnknownType.INSTANCE));
+            case ASSERTION -> assertionExpectedSignatures();
         };
+    }
+
+    private static Set<FunctionSignature> assertionExpectedSignatures() {
+        java.util.LinkedHashSet<FunctionSignature> signatures = new java.util.LinkedHashSet<>();
+        addAssertionSignatures(signatures, "asNumber");
+        addAssertionSignatures(signatures, "asText");
+        addAssertionSignatures(signatures, "asBool");
+        addAssertionSignatures(signatures, "asDate");
+        addAssertionSignatures(signatures, "asTime");
+        addAssertionSignatures(signatures, "asDateTime");
+        return Set.copyOf(signatures);
+    }
+
+    private static void addAssertionSignatures(java.util.Set<FunctionSignature> signatures, String languageName) {
+        add(signatures, languageName, NUMBER);
+        add(signatures, languageName, BOOLEAN);
+        add(signatures, languageName, STRING);
+        add(signatures, languageName, DATE);
+        add(signatures, languageName, TIME);
+        add(signatures, languageName, DATETIME);
     }
 
     private static Set<FunctionSignature> dateTimeExpectedSignatures() {
@@ -363,7 +370,7 @@ enum BuiltInFunctionGroup {
             "subSeconds")),
     COMPARABLE(Set.of("max", "min")),
     FINANCIAL(Set.of("fv", "pv", "npv", "pmt", "nper", "ipmt", "ppmt")),
-    ASSERTION(Set.of("asNumber", "asText", "asBool", "asDate", "asTime", "asDateTime", "asVector"));
+    ASSERTION(Set.of("asNumber", "asText", "asBool", "asDate", "asTime", "asDateTime"));
 
     private final Set<String> languageNames;
 

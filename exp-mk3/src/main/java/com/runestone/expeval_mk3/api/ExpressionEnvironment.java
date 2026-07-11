@@ -134,8 +134,7 @@ public final class ExpressionEnvironment {
                 functionBuilder,
                 builder.boundaryCoercion,
                 builder.mathContext,
-                builder.transcendentalMathContext,
-                builder.materializationLimit);
+                builder.transcendentalMathContext);
         for (FunctionDescriptor descriptor : builder.functions.build().values()) {
             functionBuilder.register(descriptor);
         }
@@ -328,11 +327,6 @@ public final class ExpressionEnvironment {
                     conversionProfileIdentity,
                     dataConversionService,
                     true);
-            return this;
-        }
-
-        public Builder externalSymbol(String name) {
-            externalSymbols.externalSymbol(name);
             return this;
         }
 

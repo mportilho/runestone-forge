@@ -144,38 +144,33 @@ class ExpressionEnvironmentTest {
         assertThat(stringMap.valueType()).isEqualTo(ScalarType.STRING);
         assertThat(new ObjectType("Customer")).isEqualTo(new ObjectType("Customer"));
         assertThat(new ObjectType("Customer")).isNotEqualTo(new ObjectType("Order"));
-        assertThat(NullType.INSTANCE).isNotEqualTo(UnknownType.INSTANCE);
     }
 
     @Test
-    @DisplayName("external symbols support defaults, declared types, and unknown declarations")
-    void externalSymbolsSupportDefaultsDeclaredTypesAndUnknownDeclarations() {
+    @DisplayName("external symbols support defaults and declared known types")
+    void externalSymbolsSupportDefaultsAndDeclaredKnownTypes() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbolWithDefault("threshold", new BigDecimal("12.50"))
                 .externalSymbol("enabled", ScalarType.BOOLEAN)
-                .externalSymbolWithDefault("inferred", UnknownType.INSTANCE, "text")
-                .externalSymbol("lateBound")
+                .externalSymbolWithDefault("inferred", "text")
                 .build();
 
         assertThat(environment.externalSymbols().asMap())
-                .containsOnlyKeys("enabled", "inferred", "lateBound", "threshold");
+                .containsOnlyKeys("enabled", "inferred", "threshold");
         assertThat(environment.externalSymbols().asMap().get("threshold"))
                 .isEqualTo(ExternalSymbol.withDefault("threshold", ScalarType.NUMBER, new BigDecimal("12.50")));
         assertThat(environment.externalSymbols().asMap().get("enabled"))
                 .isEqualTo(ExternalSymbol.declared("enabled", ScalarType.BOOLEAN));
         assertThat(environment.externalSymbols().asMap().get("inferred"))
                 .isEqualTo(ExternalSymbol.withDefault("inferred", ScalarType.STRING, "text"));
-        assertThat(environment.externalSymbols().asMap().get("lateBound"))
-                .isEqualTo(ExternalSymbol.unknown("lateBound"));
 
         ExternalSymbolCatalog catalog = ExternalSymbolCatalog.builder()
                 .externalSymbolWithDefault("catalogThreshold", BigDecimal.ONE)
                 .externalSymbol("catalogEnabled", ScalarType.BOOLEAN)
-                .externalSymbol("catalogLateBound")
                 .build();
 
         assertThat(catalog.asMap())
-                .containsOnlyKeys("catalogEnabled", "catalogLateBound", "catalogThreshold");
+                .containsOnlyKeys("catalogEnabled", "catalogThreshold");
     }
 
     @Test
@@ -198,6 +193,21 @@ class ExpressionEnvironmentTest {
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("text-keyed");
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .externalSymbolWithDefault("missing", null)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must not be null");
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .externalSymbolWithDefault("empty", List.of())
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cannot infer");
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .externalSymbolWithDefault("mixed", List.of("one", BigDecimal.ONE))
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("heterogeneous");
     }
 
     @Test
@@ -256,7 +266,6 @@ class ExpressionEnvironmentTest {
         assertThat(coercion.canConvert(String[].class, new VectorType(ScalarType.NUMBER))).isTrue();
         assertThat(coercion.canConvert(int[].class, new CollectionType(ScalarType.NUMBER))).isTrue();
         assertThat(coercion.canConvert(Map.class, new MapType(ScalarType.NUMBER))).isFalse();
-        assertThat(coercion.canConvert(Map.class, new MapType(UnknownType.INSTANCE))).isTrue();
         assertThat(coercion.canConvert("12.50", ScalarType.NUMBER)).isTrue();
         assertThat(coercion.canConvert("not-a-number", ScalarType.NUMBER)).isFalse();
         assertThat(coercion.canConvert("2026-07-06", ScalarType.DATE)).isTrue();
@@ -325,13 +334,13 @@ class ExpressionEnvironmentTest {
         for (CurrentTemporalValue currentTemporalValue : CurrentTemporalValue.values()) {
             String simpleName = currentTemporalValue.simpleName();
 
-            assertThatThrownBy(() -> ExpressionEnvironment.builder().externalSymbol(simpleName))
+            assertThatThrownBy(() -> ExpressionEnvironment.builder().externalSymbol(simpleName, ScalarType.STRING))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("reserved");
-            assertThatThrownBy(() -> ExternalSymbol.unknown(simpleName))
+            assertThatThrownBy(() -> ExternalSymbol.declared(simpleName, ScalarType.STRING))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("reserved");
-            assertThatThrownBy(() -> ExternalSymbolCatalog.builder().externalSymbol(simpleName))
+            assertThatThrownBy(() -> ExternalSymbolCatalog.builder().externalSymbol(simpleName, ScalarType.STRING))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("reserved");
         }

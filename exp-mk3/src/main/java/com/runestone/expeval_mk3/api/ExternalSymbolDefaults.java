@@ -17,7 +17,7 @@ final class ExternalSymbolDefaults {
 
     static ExpressionType inferType(String name, Object value) {
         return switch (value) {
-            case null -> NullType.INSTANCE;
+            case null -> throw new IllegalArgumentException("external symbol '" + name + "' default must not be null");
             case BigDecimal ignored -> ScalarType.NUMBER;
             case BigInteger ignored -> ScalarType.NUMBER;
             case Byte ignored -> ScalarType.NUMBER;
@@ -75,10 +75,15 @@ final class ExternalSymbolDefaults {
             if (elementType == null) {
                 elementType = currentType;
             } else if (!elementType.equals(currentType)) {
-                elementType = UnknownType.INSTANCE;
+                throw new IllegalArgumentException(
+                        "external symbol '" + name + "' has a heterogeneous collection default");
             }
         }
-        return elementType == null ? UnknownType.INSTANCE : elementType;
+        if (elementType == null) {
+            throw new IllegalArgumentException(
+                    "external symbol '" + name + "' cannot infer a type from an empty collection default");
+        }
+        return elementType;
     }
 
     private static ExpressionType inferMapValueType(String name, Map<?, ?> values) {
@@ -92,15 +97,19 @@ final class ExternalSymbolDefaults {
             if (valueType == null) {
                 valueType = currentType;
             } else if (!valueType.equals(currentType)) {
-                valueType = UnknownType.INSTANCE;
+                throw new IllegalArgumentException("external symbol '" + name + "' has a heterogeneous map default");
             }
         }
-        return valueType == null ? UnknownType.INSTANCE : valueType;
+        if (valueType == null) {
+            throw new IllegalArgumentException(
+                    "external symbol '" + name + "' cannot infer a type from an empty map default");
+        }
+        return valueType;
     }
 
     private static void appendCanonicalDefaultValue(StringBuilder canonical, Object value) {
         switch (value) {
-            case null -> canonical.append("null");
+            case null -> throw new IllegalArgumentException("external symbol default value must not be null");
             case BigDecimal number -> appendCanonicalValue(canonical, "number", number.toPlainString());
             case Boolean bool -> appendCanonicalValue(canonical, "boolean", Boolean.toString(bool));
             case String text -> appendCanonicalValue(canonical, "string", text);

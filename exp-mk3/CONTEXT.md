@@ -121,7 +121,7 @@ The language-level identity of a callable function, made from its name, arity, a
 _Avoid_: Java method signature, method handle identity
 
 **Vinculo de Funcao**:
-The semantic choice of which registered function signature a function call means in one Ambiente de Expressao, including whether an unknown-value boundary check remains for a single non-ambiguous signature.
+The semantic choice of which registered function signature a function call means in one Ambiente de Expressao. Function binding matches known argument types to explicit registered signatures and does not apply boundary coercion between ordinary expression values.
 _Avoid_: Runtime overload resolution, method invocation, reflective call
 
 **Valor Semantico Preparado**:
@@ -145,11 +145,11 @@ A setup-time tool that turns eligible methods from a Provedor de Funcoes into fu
 _Avoid_: Runtime reflection, dependency injection container, automatic scanner
 
 **Funcao de Assercao**:
-A built-in `as*` function that locally asserts or converts a value to a requested expression type, consuming an unknown argument explicitly without enabling implicit conversion for surrounding operators or changing the argument symbol globally.
-_Avoid_: Global cast rule, type hint syntax
+A built-in `as*` function that locally validates or converts a value from an explicit known source contract to a known target expression type, without enabling implicit conversion for surrounding operators or changing the argument symbol globally.
+_Avoid_: Global cast rule, type hint syntax, unknown argument type
 
 **Coercao de Borda**:
-A type conversion allowed only at explicit boundaries, such as external values, declared defaults, explicit assertion functions, unknown-value function binding, or API result conversion, without silently changing the meaning of concrete internal expression operations; its configured profile is part of the Ambiente de Expressao identity.
+A type conversion allowed only at explicit boundaries, such as external values, declared defaults, explicit assertion functions, or API result conversion, without silently changing the meaning of concrete internal expression operations; its configured profile is part of the Ambiente de Expressao identity.
 _Avoid_: Implicit cast, dynamic conversion, overload priority rule
 
 **Compatibilidade de Operador**:

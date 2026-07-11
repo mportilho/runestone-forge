@@ -18,10 +18,6 @@ public final class ExternalSymbol {
         this.defaultValue = defaultValue;
     }
 
-    public static ExternalSymbol unknown(String name) {
-        return new ExternalSymbol(name, UnknownType.INSTANCE, null);
-    }
-
     public static ExternalSymbol declared(String name, ExpressionType type) {
         return new ExternalSymbol(name, type, null);
     }
@@ -38,10 +34,7 @@ public final class ExternalSymbol {
 
     static ExternalSymbol withDefault(String name, ExpressionType type, Object value, BoundaryCoercion boundaryCoercion) {
         String validatedName = ExternalSymbolNames.validate(name);
-        ExpressionType requestedType = Objects.requireNonNull(type, "type");
-        ExpressionType effectiveType = requestedType == UnknownType.INSTANCE
-                ? ExternalSymbolDefaults.inferType(validatedName, value)
-                : requestedType;
+        ExpressionType effectiveType = Objects.requireNonNull(type, "type");
         Object canonicalValue = ExternalSymbolDefaults.canonicalize(
                 validatedName,
                 effectiveType,

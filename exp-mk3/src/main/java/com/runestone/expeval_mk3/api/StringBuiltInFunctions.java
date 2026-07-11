@@ -196,11 +196,11 @@ final class StringBuiltInFunctions {
                 .split(BuiltInFunctionSupport.requireText(value), -1));
     }
 
-    public static String join(List<?> values, String delimiter) {
+    public static String join(List<String> values, String delimiter) {
         Objects.requireNonNull(values, "values");
         StringJoiner joiner = new StringJoiner(BuiltInFunctionSupport.requireString(delimiter, "delimiter"));
-        for (Object value : values) {
-            joiner.add(String.valueOf(value));
+        for (String value : values) {
+            joiner.add(BuiltInFunctionSupport.requireString(value, "value"));
         }
         return joiner.toString();
     }

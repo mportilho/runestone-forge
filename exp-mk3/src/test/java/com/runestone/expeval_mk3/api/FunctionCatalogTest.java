@@ -79,8 +79,7 @@ class FunctionCatalogTest {
 
         FunctionLookupResult lookup = replaced.resolve(
                 "same",
-                List.of(ScalarType.NUMBER),
-                BoundaryCoercion.standard());
+                List.of(ScalarType.NUMBER));
         assertThat(lookup.status()).isEqualTo(FunctionLookupResult.Status.EXACT_MATCH);
         assertThat(lookup.descriptor()).contains(sameSignatureDifferentReturnAndMethod);
     }
@@ -108,12 +107,10 @@ class FunctionCatalogTest {
 
         FunctionLookupResult firstLookup = firstOrder.resolve(
                 "value",
-                List.of(ScalarType.STRING),
-                BoundaryCoercion.standard());
+                List.of(ScalarType.STRING));
         FunctionLookupResult secondLookup = secondOrder.resolve(
                 "value",
-                List.of(ScalarType.STRING),
-                BoundaryCoercion.standard());
+                List.of(ScalarType.STRING));
 
         assertThat(firstLookup.status()).isEqualTo(FunctionLookupResult.Status.EXACT_MATCH);
         assertThat(firstLookup.descriptor()).contains(text);
@@ -122,8 +119,8 @@ class FunctionCatalogTest {
     }
 
     @Test
-    @DisplayName("boundary coercion is used only as a unique final fallback")
-    void boundaryCoercionIsUsedOnlyAsUniqueFinalFallback() throws NoSuchMethodException {
+    @DisplayName("function lookup does not coerce known expression argument types")
+    void functionLookupDoesNotCoerceKnownExpressionArgumentTypes() throws NoSuchMethodException {
         FunctionDescriptor number = descriptor(
                 "parse",
                 "numberIdentity",
@@ -140,25 +137,21 @@ class FunctionCatalogTest {
                 Boolean.class);
 
         FunctionCatalog uniqueCatalog = FunctionCatalog.builder().register(number).build();
-        FunctionLookupResult uniqueFallback = uniqueCatalog.resolve(
+        FunctionLookupResult mismatched = uniqueCatalog.resolve(
                 "parse",
-                List.of(ScalarType.STRING),
-                BoundaryCoercion.standard());
+                List.of(ScalarType.STRING));
 
-        assertThat(uniqueFallback.status()).isEqualTo(FunctionLookupResult.Status.BOUNDARY_COERCION_MATCH);
-        assertThat(uniqueFallback.descriptor()).contains(number);
+        assertThat(mismatched.status()).isEqualTo(FunctionLookupResult.Status.NOT_FOUND);
+        assertThat(mismatched.descriptor()).isEmpty();
 
         FunctionCatalog ambiguousCatalog = FunctionCatalog.builder().register(number).register(booleanValue).build();
-        FunctionLookupResult ambiguous = ambiguousCatalog.resolve(
+        FunctionLookupResult mismatchedOverloads = ambiguousCatalog.resolve(
                 "parse",
-                List.of(UnknownType.INSTANCE),
-                BoundaryCoercion.standard());
+                List.of(ScalarType.STRING));
 
-        assertThat(ambiguous.status()).isEqualTo(FunctionLookupResult.Status.AMBIGUOUS);
-        assertThat(ambiguous.descriptor()).isEmpty();
-        assertThat(ambiguous.candidates())
-                .extracting(FunctionDescriptor::signature)
-                .containsExactly(booleanValue.signature(), number.signature());
+        assertThat(mismatchedOverloads.status()).isEqualTo(FunctionLookupResult.Status.NOT_FOUND);
+        assertThat(mismatchedOverloads.descriptor()).isEmpty();
+        assertThat(mismatchedOverloads.candidates()).isEmpty();
     }
 
     @Test
