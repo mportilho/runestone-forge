@@ -4,4 +4,5 @@ This repository has one domain glossary per module. Use this file only as an ind
 
 ## Module Contexts
 
+- [`runestone-toolkit`](./runestone-toolkit/CONTEXT.md): shared toolkit infrastructure.
 - [`exp-mk3`](./exp-mk3/CONTEXT.md): expression evaluator v2 rebuild.
