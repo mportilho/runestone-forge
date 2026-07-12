@@ -10,18 +10,55 @@ import com.runestone.converters.impl.runtime.numbers.NumberToStringRuntimeConver
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.net.URI;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Currency;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TestRuntimeDataConversionService {
+
+    private static final String RUNTIME_IMPLEMENTATION_PACKAGE = "com.runestone.converters.impl.runtime";
+
+    private static final List<Class<?>> NUMBER_TARGET_TYPES = List.of(
+            BigDecimal.class,
+            BigInteger.class,
+            Byte.class,
+            Double.class,
+            Float.class,
+            Integer.class,
+            Long.class,
+            Short.class,
+            String.class);
+
+    private static final List<Class<?>> SCALAR_STRING_TARGET_TYPES = List.of(
+            BigDecimal.class,
+            BigInteger.class,
+            Boolean.class,
+            Byte.class,
+            Character.class,
+            Currency.class,
+            Double.class,
+            Float.class,
+            Integer.class,
+            Locale.class,
+            Long.class,
+            Pattern.class,
+            Short.class,
+            URI.class,
+            UUID.class);
 
     @Test
     void standardServiceUsesOperationalSystemContextAndRuntimeConverters() {
@@ -42,6 +79,33 @@ class TestRuntimeDataConversionService {
         assertThat(service.canConvert(String.class, Integer.class)).isTrue();
         assertThat(service.convert("123", Integer.class)).isEqualTo(123);
         assertThat(service.convert(123, String.class)).isEqualTo("123");
+    }
+
+    @Test
+    void numericAndScalarStringStandardRuntimeConvertersAreNativeRules() {
+        NUMBER_TARGET_TYPES.forEach(targetType -> assertNativeRuntimeRule(Number.class, targetType));
+        SCALAR_STRING_TARGET_TYPES.forEach(targetType -> assertNativeRuntimeRule(String.class, targetType));
+    }
+
+    @Test
+    void standardRuntimeNumericAndScalarStringConversionsMatchExistingBehavior() {
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
+        UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+
+        assertThat(service.convert("123.45", BigDecimal.class)).isEqualByComparingTo("123.45");
+        assertThat(service.convert("12345678901234567890", BigInteger.class))
+                .isEqualTo(new BigInteger("12345678901234567890"));
+        assertThat(service.convert(" yes ", Boolean.class)).isTrue();
+        assertThat(service.convert("anything-else", Boolean.class)).isFalse();
+        assertThat(service.convert("abc", Character.class)).isEqualTo('a');
+        assertThat(service.convert("en_US", Locale.class)).isEqualTo(Locale.US);
+        assertThat(service.convert("https://runestone.local/path", URI.class))
+                .isEqualTo(URI.create("https://runestone.local/path"));
+        assertThat(service.convert(uuid.toString(), UUID.class)).isEqualTo(uuid);
+
+        assertThat(service.convert(new AtomicInteger(7), BigDecimal.class)).isEqualByComparingTo("7");
+        assertThat(service.convert(new BigDecimal("12.9"), Long.class)).isEqualTo(12L);
+        assertThat(service.convert(257, Byte.class)).isEqualTo((byte) 1);
     }
 
     @Test
@@ -175,6 +239,27 @@ class TestRuntimeDataConversionService {
                 return conversion.apply(source, context);
             }
         };
+    }
+
+    private static void assertNativeRuntimeRule(Class<?> sourceType, Class<?> targetType) {
+        RuntimeDataConverter<?, ?> converter = runtimeConverter(sourceType, targetType);
+
+        assertThat(converter).isNotInstanceOf(DataConverter.class);
+        assertThat(converter.getClass().getPackageName()).startsWith(RUNTIME_IMPLEMENTATION_PACKAGE);
+        assertThat(converter.getClass().getMethods())
+                .extracting(Method::getName)
+                .doesNotContain("ruleIdentity");
+    }
+
+    private static RuntimeDataConverter<?, ?> runtimeConverter(Class<?> sourceType, Class<?> targetType) {
+        return RuntimeStandardConverters.all().stream()
+                .filter(converter -> converter.sourceType() == sourceType && converter.targetType() == targetType)
+                .reduce((first, second) -> {
+                    throw new AssertionError("Duplicate runtime converter for "
+                            + sourceType.getName() + " -> " + targetType.getName());
+                })
+                .orElseThrow(() -> new AssertionError("Missing runtime converter for "
+                        + sourceType.getName() + " -> " + targetType.getName()));
     }
 
     private interface Left {

@@ -13,42 +13,42 @@ import com.runestone.converters.impl.stable.dates.UtilDateToLocalDateConverter;
 import com.runestone.converters.impl.stable.dates.UtilDateToLocalDateTimeConverter;
 import com.runestone.converters.impl.stable.dates.UtilDateToLocalTimeConverter;
 import com.runestone.converters.impl.stable.dates.UtilDateToZonedDateTimeConverter;
+import com.runestone.converters.impl.runtime.numbers.NumberToBigDecimalRuntimeConverter;
+import com.runestone.converters.impl.runtime.numbers.NumberToBigIntegerRuntimeConverter;
+import com.runestone.converters.impl.runtime.numbers.NumberToByteRuntimeConverter;
+import com.runestone.converters.impl.runtime.numbers.NumberToDoubleRuntimeConverter;
+import com.runestone.converters.impl.runtime.numbers.NumberToFloatRuntimeConverter;
+import com.runestone.converters.impl.runtime.numbers.NumberToIntegerRuntimeConverter;
+import com.runestone.converters.impl.runtime.numbers.NumberToLongRuntimeConverter;
+import com.runestone.converters.impl.runtime.numbers.NumberToShortRuntimeConverter;
 import com.runestone.converters.impl.runtime.numbers.NumberToStringRuntimeConverter;
-import com.runestone.converters.impl.stable.numbers.NumberToBigDecimalConverter;
-import com.runestone.converters.impl.stable.numbers.NumberToBigIntegerConverter;
-import com.runestone.converters.impl.stable.numbers.NumberToByteConverter;
-import com.runestone.converters.impl.stable.numbers.NumberToDoubleConverter;
-import com.runestone.converters.impl.stable.numbers.NumberToFloatConverter;
-import com.runestone.converters.impl.stable.numbers.NumberToIntConverter;
-import com.runestone.converters.impl.stable.numbers.NumberToLongConverter;
-import com.runestone.converters.impl.stable.numbers.NumberToShortConverter;
-import com.runestone.converters.impl.stable.strings.StringToBigDecimalConverter;
-import com.runestone.converters.impl.stable.strings.StringToBigIntegerConverter;
-import com.runestone.converters.impl.stable.strings.StringToBooleanConverter;
+import com.runestone.converters.impl.runtime.strings.StringToBigDecimalRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToBigIntegerRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToBooleanRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToByteRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToCharacterRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToCurrencyRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToDoubleRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToFloatRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToIntegerRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToLocaleRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToLongRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToPatternRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToShortRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToURIRuntimeConverter;
+import com.runestone.converters.impl.runtime.strings.StringToUUIDRuntimeConverter;
 import com.runestone.converters.impl.stable.strings.StringToByteArrayConverter;
-import com.runestone.converters.impl.stable.strings.StringToByteConverter;
-import com.runestone.converters.impl.stable.strings.StringToCharacterConverter;
-import com.runestone.converters.impl.stable.strings.StringToCurrencyConverter;
-import com.runestone.converters.impl.stable.strings.StringToDoubleConverter;
 import com.runestone.converters.impl.stable.strings.StringToDurationConverter;
-import com.runestone.converters.impl.stable.strings.StringToFloatConverter;
 import com.runestone.converters.impl.stable.strings.StringToInstantConverter;
-import com.runestone.converters.impl.stable.strings.StringToIntegerConverter;
 import com.runestone.converters.impl.stable.strings.StringToJavaSqlDateConverter;
 import com.runestone.converters.impl.stable.strings.StringToJavaUtilDateConverter;
 import com.runestone.converters.impl.stable.strings.StringToLocalDateConverter;
 import com.runestone.converters.impl.stable.strings.StringToLocalDateTimeConverter;
 import com.runestone.converters.impl.stable.strings.StringToLocalTimeConverter;
-import com.runestone.converters.impl.stable.strings.StringToLocaleConverter;
-import com.runestone.converters.impl.stable.strings.StringToLongConverter;
 import com.runestone.converters.impl.stable.strings.StringToOffsetDateTimeConverter;
 import com.runestone.converters.impl.stable.strings.StringToOffsetTimeConverter;
-import com.runestone.converters.impl.stable.strings.StringToPatternConverter;
 import com.runestone.converters.impl.stable.strings.StringToPeriodConverter;
-import com.runestone.converters.impl.stable.strings.StringToShortConverter;
 import com.runestone.converters.impl.stable.strings.StringToTimestampConverter;
-import com.runestone.converters.impl.stable.strings.StringToURIConverter;
-import com.runestone.converters.impl.stable.strings.StringToUUIDConverter;
 import com.runestone.converters.impl.stable.strings.StringToYearConverter;
 import com.runestone.converters.impl.stable.strings.StringToYearMonthConverter;
 import com.runestone.converters.impl.stable.strings.StringToZoneIdConverter;
@@ -73,42 +73,42 @@ public final class RuntimeStandardConverters {
             runtime(new UtilDateToLocalDateTimeConverter()),
             runtime(new UtilDateToLocalTimeConverter()),
             runtime(new UtilDateToZonedDateTimeConverter()),
-            runtime(new NumberToBigDecimalConverter()),
-            runtime(new NumberToBigIntegerConverter()),
-            runtime(new NumberToByteConverter()),
-            runtime(new NumberToDoubleConverter()),
-            runtime(new NumberToFloatConverter()),
-            runtime(new NumberToIntConverter()),
-            runtime(new NumberToLongConverter()),
-            runtime(new NumberToShortConverter()),
+            new NumberToBigDecimalRuntimeConverter(),
+            new NumberToBigIntegerRuntimeConverter(),
+            new NumberToByteRuntimeConverter(),
+            new NumberToDoubleRuntimeConverter(),
+            new NumberToFloatRuntimeConverter(),
+            new NumberToIntegerRuntimeConverter(),
+            new NumberToLongRuntimeConverter(),
+            new NumberToShortRuntimeConverter(),
             new NumberToStringRuntimeConverter(),
-            runtime(new StringToBigDecimalConverter()),
-            runtime(new StringToBigIntegerConverter()),
-            runtime(new StringToBooleanConverter()),
+            new StringToBigDecimalRuntimeConverter(),
+            new StringToBigIntegerRuntimeConverter(),
+            new StringToBooleanRuntimeConverter(),
             runtime(new StringToByteArrayConverter()),
-            runtime(new StringToByteConverter()),
-            runtime(new StringToCharacterConverter()),
-            runtime(new StringToCurrencyConverter()),
-            runtime(new StringToDoubleConverter()),
+            new StringToByteRuntimeConverter(),
+            new StringToCharacterRuntimeConverter(),
+            new StringToCurrencyRuntimeConverter(),
+            new StringToDoubleRuntimeConverter(),
             runtime(new StringToDurationConverter()),
-            runtime(new StringToFloatConverter()),
+            new StringToFloatRuntimeConverter(),
             runtime(new StringToInstantConverter()),
-            runtime(new StringToIntegerConverter()),
+            new StringToIntegerRuntimeConverter(),
             runtime(new StringToJavaSqlDateConverter()),
             runtime(new StringToJavaUtilDateConverter()),
             runtime(new StringToLocalDateConverter()),
             runtime(new StringToLocalDateTimeConverter()),
             runtime(new StringToLocalTimeConverter()),
-            runtime(new StringToLocaleConverter()),
-            runtime(new StringToLongConverter()),
+            new StringToLocaleRuntimeConverter(),
+            new StringToLongRuntimeConverter(),
             runtime(new StringToOffsetDateTimeConverter()),
             runtime(new StringToOffsetTimeConverter()),
-            runtime(new StringToPatternConverter()),
+            new StringToPatternRuntimeConverter(),
             runtime(new StringToPeriodConverter()),
-            runtime(new StringToShortConverter()),
+            new StringToShortRuntimeConverter(),
             runtime(new StringToTimestampConverter()),
-            runtime(new StringToURIConverter()),
-            runtime(new StringToUUIDConverter()),
+            new StringToURIRuntimeConverter(),
+            new StringToUUIDRuntimeConverter(),
             runtime(new StringToYearConverter()),
             runtime(new StringToYearMonthConverter()),
             runtime(new StringToZoneIdConverter()),
