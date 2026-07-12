@@ -142,6 +142,13 @@ class TestRuntimeDataConversionService {
     }
 
     @Test
+    void standardRuntimeCatalogDoesNotContainFoldableConvertersOrAdapters() {
+        assertThat(RuntimeStandardConverters.all())
+                .isNotEmpty()
+                .allSatisfy(TestRuntimeDataConversionService::assertNativeRuntimeCatalogEntry);
+    }
+
+    @Test
     void numericAndScalarStringStandardRuntimeConvertersAreNativeRules() {
         NUMBER_TARGET_TYPES.forEach(targetType -> assertNativeRuntimeRule(Number.class, targetType));
         SCALAR_STRING_TARGET_TYPES.forEach(targetType -> assertNativeRuntimeRule(String.class, targetType));
@@ -380,6 +387,10 @@ class TestRuntimeDataConversionService {
     private static void assertNativeRuntimeRule(Class<?> sourceType, Class<?> targetType) {
         RuntimeDataConverter<?, ?> converter = runtimeConverter(sourceType, targetType);
 
+        assertNativeRuntimeCatalogEntry(converter);
+    }
+
+    private static void assertNativeRuntimeCatalogEntry(RuntimeDataConverter<?, ?> converter) {
         assertThat(converter).isNotInstanceOf(DataConverter.class);
         assertThat(converter.getClass().getPackageName()).startsWith(RUNTIME_IMPLEMENTATION_PACKAGE);
         assertThat(converter.getClass().getMethods())
