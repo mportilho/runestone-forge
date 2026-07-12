@@ -9,7 +9,7 @@ A pure conversion that can be computed during compilation when all inputs are co
 _Avoid_: Runtime conversion, operational conversion
 
 **Foldable Converter**:
-A conversion rule with a stable identity and explicit context whose result is safe to embed in a compiled plan.
+A conversion rule with a stable identity and explicit context whose result is safe to embed in a compiled plan. Its source type, target type, and rule identity are stable once the conversion service is built.
 _Avoid_: Runtime converter, shared conversion rule
 
 **Foldable Value**:
