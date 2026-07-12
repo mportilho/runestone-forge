@@ -9,7 +9,10 @@ import com.runestone.converters.RuntimeStandardConverters;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.BiFunction;
@@ -23,7 +26,8 @@ class TestRuntimeDataConversionService {
     void standardServiceUsesOperationalSystemContextAndRuntimeConverters() {
         RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
 
-        assertThat(service.conversionContext()).isEqualTo(ConversionContext.system());
+        assertThat(service.conversionContext().zoneId()).isEqualTo(ZoneId.systemDefault());
+        assertThat(service.conversionContext().locale()).isEqualTo(Locale.getDefault());
         assertThat(RuntimeDataConversionService.class.getMethods())
                 .extracting(Method::getName)
                 .doesNotContain("conversionProfileIdentity", "conversionProfileHash", "copyFoldableValue");
@@ -37,13 +41,41 @@ class TestRuntimeDataConversionService {
     @Test
     void customRuntimeServiceUsesProvidedContextAndNearestConverter() {
         ConversionContext context = new ConversionContext(ZoneId.of("America/Sao_Paulo"), Locale.CANADA_FRENCH);
+        RuntimeDataConverter<Number, String> numberToString = rule(
+                Number.class,
+                String.class,
+                (source, conversionContext) -> conversionContext.locale().toLanguageTag() + ":number");
+        RuntimeDataConverter<Integer, String> integerToString = rule(
+                Integer.class,
+                String.class,
+                (source, conversionContext) -> conversionContext.locale().toLanguageTag() + ":integer");
         RuntimeDataConversionService service = DefaultRuntimeDataConversionService.withConverters(context, List.of(
-                rule(Number.class, String.class, (source, conversionContext) -> conversionContext.locale().toLanguageTag() + ":number"),
-                rule(Integer.class, String.class, (source, conversionContext) -> conversionContext.locale().toLanguageTag() + ":integer")));
+                numberToString,
+                integerToString));
+        RuntimeDataConversionService reversedService = DefaultRuntimeDataConversionService.withConverters(context, List.of(
+                integerToString,
+                numberToString));
 
         assertThat(service.conversionContext()).isEqualTo(context);
         assertThat(service.convert(10, String.class)).isEqualTo("fr-CA:integer");
         assertThat(service.convert(10L, String.class)).isEqualTo("fr-CA:number");
+        assertThat(reversedService.convert(10, String.class)).isEqualTo("fr-CA:integer");
+        assertThat(reversedService.convert(10L, String.class)).isEqualTo("fr-CA:number");
+    }
+
+    @Test
+    void standardRuntimeConvertersUseExplicitTemporalContext() {
+        ConversionContext context = new ConversionContext(ZoneId.of("America/Sao_Paulo"), Locale.CANADA_FRENCH);
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.withConverters(
+                context,
+                RuntimeStandardConverters.all());
+
+        assertThat(service.convert(LocalDateTime.of(2024, 1, 2, 3, 4), ZonedDateTime.class))
+                .isEqualTo(ZonedDateTime.of(2024, 1, 2, 3, 4, 0, 0, context.zoneId()));
+        assertThat(service.convert(LocalDate.of(2024, 1, 2), ZonedDateTime.class))
+                .isEqualTo(ZonedDateTime.of(2024, 1, 2, 0, 0, 0, 0, context.zoneId()));
+        assertThat(service.convert("2024-01-02T03:04", ZonedDateTime.class))
+                .isEqualTo(ZonedDateTime.of(2024, 1, 2, 3, 4, 0, 0, context.zoneId()));
     }
 
     @Test
@@ -84,14 +116,28 @@ class TestRuntimeDataConversionService {
 
     @Test
     void ambiguousRuntimeConvertersFailLookupAndConversion() {
-        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.withConverters(ConversionContext.standard(), List.of(
-                rule(Left.class, String.class, (source, context) -> "left"),
-                rule(Right.class, String.class, (source, context) -> "right")));
+        RuntimeDataConverter<Left, String> leftRule = rule(Left.class, String.class, (source, context) -> "left");
+        RuntimeDataConverter<Right, String> rightRule = rule(Right.class, String.class, (source, context) -> "right");
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.withConverters(
+                ConversionContext.standard(),
+                List.of(leftRule, rightRule));
+        RuntimeDataConversionService reversedService = DefaultRuntimeDataConversionService.withConverters(
+                ConversionContext.standard(),
+                List.of(rightRule, leftRule));
+        String expectedMessage = "Ambiguous runtime converters for " + Both.class.getName() + " -> java.lang.String";
 
         assertThatThrownBy(() -> service.canConvert(Both.class, String.class))
-                .isInstanceOf(DataConverterConfigurationException.class);
+                .isInstanceOf(DataConverterConfigurationException.class)
+                .hasMessageContaining(expectedMessage);
         assertThatThrownBy(() -> service.convert(new Both(), String.class))
-                .isInstanceOf(DataConverterConfigurationException.class);
+                .isInstanceOf(DataConverterConfigurationException.class)
+                .hasMessageContaining(expectedMessage);
+        assertThatThrownBy(() -> reversedService.canConvert(Both.class, String.class))
+                .isInstanceOf(DataConverterConfigurationException.class)
+                .hasMessageContaining(expectedMessage);
+        assertThatThrownBy(() -> reversedService.convert(new Both(), String.class))
+                .isInstanceOf(DataConverterConfigurationException.class)
+                .hasMessageContaining(expectedMessage);
     }
 
     @Test

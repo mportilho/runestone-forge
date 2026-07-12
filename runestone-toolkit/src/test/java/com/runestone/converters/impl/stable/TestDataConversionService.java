@@ -41,6 +41,9 @@ class TestDataConversionService {
         assertThat(service.conversionContext().locale()).isEqualTo(Locale.ROOT);
         assertThat(service.conversionProfileIdentity()).contains("zone=UTC\nlocale=und");
         assertThat(service.conversionProfileHash()).isEqualTo(sha256(service.conversionProfileIdentity()));
+        assertThat(service.conversionProfileHash())
+                .hasSize(64)
+                .matches("[0-9a-f]{64}");
     }
 
     @Test
@@ -64,6 +67,11 @@ class TestDataConversionService {
                 rule(String.class, Integer.class, "test.duplicate", (source, context) -> 2))))
                 .isInstanceOf(DataConverterConfigurationException.class);
         assertThatThrownBy(() -> DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
+                valid,
+                rule(String.class, Integer.class, "test.valid", (source, context) -> 2))))
+                .isInstanceOf(DataConverterConfigurationException.class)
+                .hasMessageContaining("java.lang.String -> java.lang.Integer");
+        assertThatThrownBy(() -> DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
                 rule(String.class, Integer.class, "Invalid identity", (source, context) -> 1))))
                 .isInstanceOf(DataConverterConfigurationException.class);
         assertThatThrownBy(() -> DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
@@ -76,12 +84,19 @@ class TestDataConversionService {
 
     @Test
     void exactConverterWinsAndNearestAssignableConverterIsSelected() {
+        DataConverter<Number, String> numberToString = rule(Number.class, String.class, "test.number.string", (source, context) -> "number");
+        DataConverter<Integer, String> integerToString = rule(Integer.class, String.class, "test.integer.string", (source, context) -> "integer");
         DataConversionService service = DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
-                rule(Number.class, String.class, "test.number.string", (source, context) -> "number"),
-                rule(Integer.class, String.class, "test.integer.string", (source, context) -> "integer")));
+                numberToString,
+                integerToString));
+        DataConversionService reversedService = DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
+                integerToString,
+                numberToString));
 
         assertThat(service.convert(1, String.class)).isEqualTo("integer");
         assertThat(service.convert(1L, String.class)).isEqualTo("number");
+        assertThat(reversedService.convert(1, String.class)).isEqualTo("integer");
+        assertThat(reversedService.convert(1L, String.class)).isEqualTo("number");
     }
 
     @Test
@@ -99,14 +114,28 @@ class TestDataConversionService {
 
     @Test
     void rejectsEquallySpecificAssignableConvertersInBothLookupOperations() {
-        DataConversionService service = DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
-                rule(Left.class, String.class, "test.left.string", (source, context) -> "left"),
-                rule(Right.class, String.class, "test.right.string", (source, context) -> "right")));
+        DataConverter<Left, String> leftRule = rule(Left.class, String.class, "test.left.string", (source, context) -> "left");
+        DataConverter<Right, String> rightRule = rule(Right.class, String.class, "test.right.string", (source, context) -> "right");
+        DataConversionService service = DefaultDataConversionService.withConverters(
+                ConversionContext.standard(),
+                List.of(leftRule, rightRule));
+        DataConversionService reversedService = DefaultDataConversionService.withConverters(
+                ConversionContext.standard(),
+                List.of(rightRule, leftRule));
+        String expectedMessage = "Ambiguous converters for " + Both.class.getName() + " -> java.lang.String";
 
         assertThatThrownBy(() -> service.canConvert(Both.class, String.class))
-                .isInstanceOf(DataConverterConfigurationException.class);
+                .isInstanceOf(DataConverterConfigurationException.class)
+                .hasMessageContaining(expectedMessage);
         assertThatThrownBy(() -> service.convert(new Both(), String.class))
-                .isInstanceOf(DataConverterConfigurationException.class);
+                .isInstanceOf(DataConverterConfigurationException.class)
+                .hasMessageContaining(expectedMessage);
+        assertThatThrownBy(() -> reversedService.canConvert(Both.class, String.class))
+                .isInstanceOf(DataConverterConfigurationException.class)
+                .hasMessageContaining(expectedMessage);
+        assertThatThrownBy(() -> reversedService.convert(new Both(), String.class))
+                .isInstanceOf(DataConverterConfigurationException.class)
+                .hasMessageContaining(expectedMessage);
     }
 
     @Test
@@ -142,26 +171,80 @@ class TestDataConversionService {
         assertThat(source).containsExactly("one", "two", "three");
         assertThatThrownBy(() -> service.copyFoldableValue(new StringBuilder("mutable")))
                 .isInstanceOf(NonFoldableValueException.class);
-        assertThatThrownBy(() -> service.copyFoldableValue(new ArrayList<>(Arrays.asList("one", null))))
-                .isInstanceOf(NonFoldableValueException.class);
     }
 
     @Test
     void mutableValuesAreCopiedRecursivelyWhileIterationOrderIsPreserved() {
         DataConversionService service = DefaultDataConversionService.standard();
+        java.util.Date utilDate = new java.util.Date(1_234_567L);
+        java.sql.Date sqlDate = java.sql.Date.valueOf("2024-01-02");
         Timestamp timestamp = Timestamp.valueOf("2024-01-02 03:04:05.123456789");
+        int[] primitiveArray = { 1, 2 };
+        Object[] referenceArray = { "one", null, new String[] { "nested" } };
+        List<String> nestedCollection = List.of("nested");
+        List<Object> collection = new ArrayList<>(List.of("first", nestedCollection));
         LinkedHashSet<String> set = new LinkedHashSet<>(List.of("second", "first"));
         Map<String, Object> values = new LinkedHashMap<>();
+        values.put("utilDate", utilDate);
+        values.put("sqlDate", sqlDate);
         values.put("timestamp", timestamp);
+        values.put("primitiveArray", primitiveArray);
+        values.put("referenceArray", referenceArray);
+        values.put("collection", collection);
         values.put("set", set);
 
         Map<String, Object> copy = service.copyFoldableValue(values);
+        java.util.Date copiedUtilDate = (java.util.Date) copy.get("utilDate");
+        java.sql.Date copiedSqlDate = (java.sql.Date) copy.get("sqlDate");
         Timestamp copiedTimestamp = (Timestamp) copy.get("timestamp");
+        values.put("addedAfterCopy", "ignored");
 
-        assertThat(copy.keySet()).containsExactly("timestamp", "set");
-        assertThat(((java.util.Set<?>) copy.get("set")).toArray()).containsExactly("second", "first");
+        assertThat(copy).isNotSameAs(values);
+        assertThat(copy.keySet()).containsExactly(
+                "utilDate",
+                "sqlDate",
+                "timestamp",
+                "primitiveArray",
+                "referenceArray",
+                "collection",
+                "set");
+        assertThat(copiedUtilDate).isEqualTo(utilDate).isNotSameAs(utilDate);
+        assertThat(copiedSqlDate).isEqualTo(sqlDate).isNotSameAs(sqlDate);
+        java.util.Set<?> copiedSet = (java.util.Set<?>) copy.get("set");
+        assertThat(copiedSet).isNotSameAs(set);
+        assertThat(copiedSet.toArray()).containsExactly("second", "first");
         assertThat(copiedTimestamp).isEqualTo(timestamp).isNotSameAs(timestamp);
         assertThat(copiedTimestamp.getNanos()).isEqualTo(123456789);
+        assertThat((int[]) copy.get("primitiveArray")).containsExactly(1, 2).isNotSameAs(primitiveArray);
+        Object[] copiedReferenceArray = (Object[]) copy.get("referenceArray");
+        assertThat(copiedReferenceArray).isNotSameAs(referenceArray);
+        assertThat(copiedReferenceArray[0]).isEqualTo("one");
+        assertThat(copiedReferenceArray[1]).isNull();
+        assertThat((Object[]) copiedReferenceArray[2]).containsExactly("nested").isNotSameAs(referenceArray[2]);
+        List<?> copiedCollection = (List<?>) copy.get("collection");
+        assertThat(copiedCollection).isEqualTo(List.of("first", List.of("nested"))).isNotSameAs(collection);
+        assertThat(copiedCollection.get(1)).isNotSameAs(nestedCollection);
+    }
+
+    @Test
+    void nullPoliciesRejectCollectionSetAndMapNullsButPreserveReferenceArrayNulls() {
+        DataConversionService service = DefaultDataConversionService.standard();
+        Map<String, Object> nullValueMap = new LinkedHashMap<>();
+        nullValueMap.put("key", null);
+        Map<String, Object> nullKeyMap = new LinkedHashMap<>();
+        nullKeyMap.put(null, "value");
+
+        assertThatThrownBy(() -> service.copyFoldableValue(new ArrayList<>(Arrays.asList("one", null))))
+                .isInstanceOf(NonFoldableValueException.class);
+        assertThatThrownBy(() -> service.copyFoldableValue(new LinkedHashSet<>(Arrays.asList("one", null))))
+                .isInstanceOf(NonFoldableValueException.class);
+        assertThatThrownBy(() -> service.copyFoldableValue(nullValueMap))
+                .isInstanceOf(NonFoldableValueException.class);
+        assertThatThrownBy(() -> service.copyFoldableValue(nullKeyMap))
+                .isInstanceOf(NonFoldableValueException.class);
+        assertThat(service.copyFoldableValue(new String[] { "one", null })).containsExactly("one", null);
+        assertThatThrownBy(() -> service.convert(new String[] { "1", null }, int[].class))
+                .isInstanceOf(NonFoldableValueException.class);
     }
 
     @Test

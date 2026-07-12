@@ -1,6 +1,8 @@
 package com.runestone.expeval_mk3.api;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConversionService;
+import com.runestone.converters.DataConverter;
 import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import com.runestone.expeval_mk3.support.EnvironmentConfigurations;
 import org.junit.jupiter.api.DisplayName;
@@ -18,6 +20,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,6 +43,8 @@ class ExpressionEnvironmentTest {
         assertThat(environment.materializationLimit()).isEqualTo(10_000);
         assertThat(environment.conversionProfileIdentity())
                 .isEqualTo(DefaultDataConversionService.standard().conversionProfileIdentity());
+        assertThat(environment.conversionProfileHash())
+                .isEqualTo(DefaultDataConversionService.standard().conversionProfileHash());
         assertThat(environment.environmentId()).isEqualTo(ExpressionEnvironment.standard().environmentId());
     }
 
@@ -359,6 +364,41 @@ class ExpressionEnvironmentTest {
     }
 
     @Test
+    @DisplayName("equivalent foldable conversion services produce the same environment ID")
+    void equivalentFoldableConversionServicesProduceTheSameEnvironmentId() {
+        DataConverter<String, BigDecimal> stringToNumber = rule(
+                String.class,
+                BigDecimal.class,
+                "test.string.bigdecimal",
+                (source, context) -> new BigDecimal(source));
+        DataConverter<Integer, String> integerToString = rule(
+                Integer.class,
+                String.class,
+                "test.integer.string",
+                (source, context) -> source.toString());
+        DataConversionService firstService = DefaultDataConversionService.withConverters(
+                ConversionContext.standard(),
+                List.of(stringToNumber, integerToString));
+        DataConversionService secondService = DefaultDataConversionService.withConverters(
+                ConversionContext.standard(),
+                List.of(integerToString, stringToNumber));
+
+        ExpressionEnvironment first = ExpressionEnvironment.builder()
+                .boundaryCoercion(firstService)
+                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
+                .build();
+        ExpressionEnvironment second = ExpressionEnvironment.builder()
+                .boundaryCoercion(secondService)
+                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
+                .build();
+
+        assertThat(firstService.conversionProfileIdentity()).isEqualTo(secondService.conversionProfileIdentity());
+        assertThat(firstService.conversionProfileHash()).isEqualTo(secondService.conversionProfileHash());
+        assertThat(first.conversionProfileHash()).isEqualTo(firstService.conversionProfileHash());
+        assertThat(first.environmentId()).isEqualTo(second.environmentId());
+    }
+
+    @Test
     @DisplayName("conversion profile audit identity does not affect the environment ID without a hash change")
     void conversionProfileAuditIdentityDoesNotAffectEnvironmentIdWithoutAHashChange() {
         ExpressionEnvironment first = ExpressionEnvironment.builder()
@@ -488,6 +528,34 @@ class ExpressionEnvironmentTest {
             return utc;
         }
         return ZoneId.of("America/Sao_Paulo");
+    }
+
+    private static <S, T> DataConverter<S, T> rule(
+            Class<S> sourceType,
+            Class<T> targetType,
+            String identity,
+            BiFunction<S, ConversionContext, T> conversion) {
+        return new DataConverter<>() {
+            @Override
+            public Class<S> sourceType() {
+                return sourceType;
+            }
+
+            @Override
+            public Class<T> targetType() {
+                return targetType;
+            }
+
+            @Override
+            public String ruleIdentity() {
+                return identity;
+            }
+
+            @Override
+            public T convert(S source, ConversionContext context) {
+                return conversion.apply(source, context);
+            }
+        };
     }
 
 }
