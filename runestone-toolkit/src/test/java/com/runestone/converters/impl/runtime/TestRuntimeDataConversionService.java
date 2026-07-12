@@ -13,11 +13,23 @@ import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.time.Period;
+import java.time.Year;
+import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.temporal.Temporal;
 import java.util.Currency;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -60,6 +72,37 @@ class TestRuntimeDataConversionService {
             URI.class,
             UUID.class);
 
+    private static final List<ConversionTypes> TEMPORAL_STANDARD_CONVERSION_TYPES = List.of(
+            conversionTypes(java.sql.Date.class, LocalDate.class),
+            conversionTypes(java.sql.Date.class, LocalDateTime.class),
+            conversionTypes(java.sql.Date.class, LocalTime.class),
+            conversionTypes(java.sql.Date.class, ZonedDateTime.class),
+            conversionTypes(Date.class, LocalDate.class),
+            conversionTypes(Date.class, LocalDateTime.class),
+            conversionTypes(Date.class, LocalTime.class),
+            conversionTypes(Date.class, ZonedDateTime.class),
+            conversionTypes(String.class, Duration.class),
+            conversionTypes(String.class, Instant.class),
+            conversionTypes(String.class, java.sql.Date.class),
+            conversionTypes(String.class, Date.class),
+            conversionTypes(String.class, LocalDate.class),
+            conversionTypes(String.class, LocalDateTime.class),
+            conversionTypes(String.class, LocalTime.class),
+            conversionTypes(String.class, OffsetDateTime.class),
+            conversionTypes(String.class, OffsetTime.class),
+            conversionTypes(String.class, Period.class),
+            conversionTypes(String.class, Temporal.class),
+            conversionTypes(String.class, Timestamp.class),
+            conversionTypes(String.class, Year.class),
+            conversionTypes(String.class, YearMonth.class),
+            conversionTypes(String.class, ZoneId.class),
+            conversionTypes(String.class, ZoneOffset.class),
+            conversionTypes(String.class, ZonedDateTime.class),
+            conversionTypes(Temporal.class, LocalDate.class),
+            conversionTypes(Temporal.class, LocalDateTime.class),
+            conversionTypes(Temporal.class, LocalTime.class),
+            conversionTypes(Temporal.class, ZonedDateTime.class));
+
     @Test
     void standardServiceUsesOperationalSystemContextAndRuntimeConverters() {
         RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
@@ -88,6 +131,11 @@ class TestRuntimeDataConversionService {
     }
 
     @Test
+    void temporalStandardRuntimeConvertersAreNativeRules() {
+        TEMPORAL_STANDARD_CONVERSION_TYPES.forEach(types -> assertNativeRuntimeRule(types.sourceType(), types.targetType()));
+    }
+
+    @Test
     void standardRuntimeNumericAndScalarStringConversionsMatchExistingBehavior() {
         RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
         UUID uuid = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
@@ -106,6 +154,29 @@ class TestRuntimeDataConversionService {
         assertThat(service.convert(new AtomicInteger(7), BigDecimal.class)).isEqualByComparingTo("7");
         assertThat(service.convert(new BigDecimal("12.9"), Long.class)).isEqualTo(12L);
         assertThat(service.convert(257, Byte.class)).isEqualTo((byte) 1);
+    }
+
+    @Test
+    void standardRuntimeTemporalConversionsMatchExistingBehavior() {
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
+
+        assertThat(service.convert("2024-01-02", LocalDate.class)).isEqualTo(LocalDate.of(2024, 1, 2));
+        assertThat(service.convert("2024-01-02T03:04", LocalDateTime.class))
+                .isEqualTo(LocalDateTime.of(2024, 1, 2, 3, 4));
+        assertThat(service.convert("03:04:05", LocalTime.class)).isEqualTo(LocalTime.of(3, 4, 5));
+        assertThat(service.convert("PT15M", Duration.class)).isEqualTo(Duration.ofMinutes(15));
+        assertThat(service.convert("P2D", Period.class)).isEqualTo(Period.ofDays(2));
+        assertThat(service.convert("2024", Year.class)).isEqualTo(Year.of(2024));
+        assertThat(service.convert("2024-01", YearMonth.class)).isEqualTo(YearMonth.of(2024, 1));
+        assertThat(service.convert("America/Sao_Paulo", ZoneId.class)).isEqualTo(ZoneId.of("America/Sao_Paulo"));
+        assertThat(service.convert("-03:00", ZoneOffset.class)).isEqualTo(ZoneOffset.of("-03:00"));
+        assertThat(service.convert("2024-01-02T03:04:05Z", Instant.class))
+                .isEqualTo(Instant.parse("2024-01-02T03:04:05Z"));
+        assertThat(service.convert("2024-01-02T03:04:05Z", OffsetDateTime.class))
+                .isEqualTo(OffsetDateTime.parse("2024-01-02T03:04:05Z"));
+        assertThat(service.convert("03:04:05Z", OffsetTime.class)).isEqualTo(OffsetTime.parse("03:04:05Z"));
+        assertThat(service.convert("2024-01-02T03:04:05Z", Temporal.class))
+                .isEqualTo(LocalDateTime.of(2024, 1, 2, 3, 4, 5));
     }
 
     @Test
@@ -146,6 +217,19 @@ class TestRuntimeDataConversionService {
                 .isEqualTo(ZonedDateTime.of(2024, 1, 2, 0, 0, 0, 0, context.zoneId()));
         assertThat(service.convert("2024-01-02T03:04", ZonedDateTime.class))
                 .isEqualTo(ZonedDateTime.of(2024, 1, 2, 3, 4, 0, 0, context.zoneId()));
+
+        Instant instant = Instant.parse("2024-01-02T02:30:00Z");
+        Date utilDate = Date.from(instant);
+        assertThat(service.convert(utilDate, LocalDateTime.class))
+                .isEqualTo(LocalDateTime.of(2024, 1, 1, 23, 30));
+        assertThat(service.convert(utilDate, ZonedDateTime.class))
+                .isEqualTo(instant.atZone(context.zoneId()));
+        assertThat(service.convert("2024-01-02T03:04", Date.class))
+                .isEqualTo(Date.from(LocalDateTime.of(2024, 1, 2, 3, 4).atZone(context.zoneId()).toInstant()));
+        assertThat(service.convert("2024-01-02T03:04", Timestamp.class))
+                .isEqualTo(Timestamp.from(LocalDateTime.of(2024, 1, 2, 3, 4).atZone(context.zoneId()).toInstant()));
+        assertThat(service.convert("2024-01-02T03:04", java.sql.Date.class))
+                .isEqualTo(new java.sql.Date(LocalDate.of(2024, 1, 2).atStartOfDay(context.zoneId()).toInstant().toEpochMilli()));
     }
 
     @Test
@@ -260,6 +344,13 @@ class TestRuntimeDataConversionService {
                 })
                 .orElseThrow(() -> new AssertionError("Missing runtime converter for "
                         + sourceType.getName() + " -> " + targetType.getName()));
+    }
+
+    private static ConversionTypes conversionTypes(Class<?> sourceType, Class<?> targetType) {
+        return new ConversionTypes(sourceType, targetType);
+    }
+
+    private record ConversionTypes(Class<?> sourceType, Class<?> targetType) {
     }
 
     private interface Left {
