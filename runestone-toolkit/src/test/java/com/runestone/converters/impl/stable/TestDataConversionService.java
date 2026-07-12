@@ -124,12 +124,15 @@ class TestDataConversionService {
                 List.of(rightRule, leftRule));
         String expectedMessage = "Ambiguous converters for " + Both.class.getName() + " -> java.lang.String";
 
-        assertThatThrownBy(() -> service.canConvert(Both.class, String.class))
-                .isInstanceOf(DataConverterConfigurationException.class)
-                .hasMessageContaining(expectedMessage);
-        assertThatThrownBy(() -> service.convert(new Both(), String.class))
-                .isInstanceOf(DataConverterConfigurationException.class)
-                .hasMessageContaining(expectedMessage);
+        // Repeat the same lookup to cover cached ambiguous resolutions.
+        for (int attempt = 0; attempt < 2; attempt++) {
+            assertThatThrownBy(() -> service.canConvert(Both.class, String.class))
+                    .isInstanceOf(DataConverterConfigurationException.class)
+                    .hasMessageContaining(expectedMessage);
+            assertThatThrownBy(() -> service.convert(new Both(), String.class))
+                    .isInstanceOf(DataConverterConfigurationException.class)
+                    .hasMessageContaining(expectedMessage);
+        }
         assertThatThrownBy(() -> reversedService.canConvert(Both.class, String.class))
                 .isInstanceOf(DataConverterConfigurationException.class)
                 .hasMessageContaining(expectedMessage);

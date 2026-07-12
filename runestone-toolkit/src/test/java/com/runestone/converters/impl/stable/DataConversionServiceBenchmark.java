@@ -18,6 +18,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.Temporal;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @BenchmarkMode(Mode.AverageTime)
@@ -29,16 +30,40 @@ import java.util.concurrent.TimeUnit;
 public class DataConversionServiceBenchmark {
 
     private DefaultDataConversionService service;
+    private String numericText;
     private BigDecimal numericSource;
     private Integer integerSource;
     private LocalDate localDateSource;
+    private List<String> stringList;
 
     @Setup
     public void setup() {
         service = DefaultDataConversionService.standard();
+        numericText = "12345";
         numericSource = new BigDecimal("123.45");
         integerSource = 123;
         localDateSource = LocalDate.of(2026, 3, 19);
+        stringList = List.of("1", "2", "3", "4", "5", "6", "7", "8");
+    }
+
+    @Benchmark
+    public boolean canConvertExactStringToInteger() {
+        return service.canConvert(String.class, Integer.class);
+    }
+
+    @Benchmark
+    public Integer convertExactStringToInteger() {
+        return service.convert(numericText, Integer.class);
+    }
+
+    @Benchmark
+    public boolean canConvertAssignableNumberToLong() {
+        return service.canConvert(BigDecimal.class, Long.class);
+    }
+
+    @Benchmark
+    public Long convertAssignableNumberToLong() {
+        return service.convert(numericSource, Long.class);
     }
 
     @Benchmark
@@ -79,6 +104,11 @@ public class DataConversionServiceBenchmark {
     @Benchmark
     public Temporal convertAssignableTemporal() {
         return service.convert(localDateSource, Temporal.class);
+    }
+
+    @Benchmark
+    public Integer[] convertContainerStringListToIntegerArray() {
+        return service.convert(stringList, Integer[].class);
     }
 
     public static void main(String[] args) throws RunnerException {

@@ -66,3 +66,30 @@
 **Decision:** ACCEPT
 **Reason:** Six of seven measured scenarios improved, with the exact lookup and assignable lookup benchmarks eliminating lookup allocation and the assignable conversion paths improving by roughly one order of magnitude. The neutral `LocalDate -> Temporal` case is an identity conversion that bypasses converter lookup and stayed within noise.
 **Notes:** JMH ran on OpenJDK 26.0.1 with JMH 1.37. Raw result files were captured at `/tmp/performance-benchmark/issue-50-before.json`, `/tmp/performance-benchmark/issue-50-after.json`, and `/tmp/performance-benchmark/issue-50-comparison.md`.
+
+## PERF-004: Exact and assignable foldable converter lookup caches
+
+**Date:** 2026-07-12
+
+**Scenario:** Reduce lookup overhead in `DefaultDataConversionService` for exact foldable converters and assignable foldable converters without changing `Foldable Conversion` semantics.
+**Hypothesis:** Replacing per-call exact pair-key allocation with an immutable `Class<?>` index and caching assignable converter selection by runtime source type would remove avoidable allocation and repeated type-distance scans.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | B/op (B->A) |
+|-----------|---------------:|--------------:|----------------:|-----------:|
+| `canConvertAssignableNumberToLong` | 603.400 | 36.727 | +93.91% | 443 -> ≈ 0 |
+| `canConvertExactStringToInteger` | 12.181 | 8.867 | +27.21% | 24 -> ≈ 0 |
+| `convertAssignableNumber` | 10.098 | 3.358 | +66.74% | 24 -> ≈ 0 |
+| `convertAssignableNumberToLong` | 663.397 | 50.471 | +92.39% | 440 -> ≈ 0 |
+| `convertAssignableTemporal` | 11.310 | 7.598 | +32.82% | 24 -> ≈ 0 |
+| `convertContainerStringListToIntegerArray` | 1486.237 | 1428.779 | +3.87% | 312 -> 96 |
+| `convertExactStringToInteger` | 24.650 | 20.716 | +15.96% | 40 -> 16 |
+| `convertNumberToDoublePrimitive` | 631.016 | 38.629 | +93.88% | 440 -> 24 |
+| `convertNumberToDoubleWrapper` | 625.864 | 37.884 | +93.95% | 459 -> 24 |
+| `convertNumberToIntegerPrimitive` | 708.652 | 48.446 | +93.16% | 451 -> ≈ 0 |
+| `convertNumberToIntegerWrapper` | 681.322 | 47.829 | +92.98% | 451 -> ≈ 0 |
+| `convertNumberToLongPrimitive` | 648.009 | 50.855 | +92.15% | 403 -> ≈ 0 |
+| `convertNumberToLongWrapper` | 674.265 | 50.682 | +92.48% | 440 -> ≈ 0 |
+
+**Decision:** ACCEPT
+**Reason:** All measured scenarios improved. Exact `canConvert(...)` eliminated its previous lookup allocation, assignable `canConvert(...)` and `convert(...)` improved by roughly one order of magnitude, and container conversion did not regress.
+**Notes:** JMH ran on OpenJDK 26.0.1 with JMH 1.37. Raw result files were captured at `/tmp/performance-benchmark/issue-51-before.json`, `/tmp/performance-benchmark/issue-51-after.json`, and `/tmp/performance-benchmark/issue-51-comparison.md`.

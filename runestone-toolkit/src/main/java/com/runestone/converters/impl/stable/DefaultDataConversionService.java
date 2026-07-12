@@ -32,9 +32,11 @@ import java.time.ZonedDateTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Currency;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -66,15 +68,21 @@ public final class DefaultDataConversionService implements DataConversionService
     };
 
     private final ConversionContext context;
-    private final Map<ConverterPairKey, DataConverter<?, ?>> exactConverters;
-    private final List<DataConverter<?, ?>> converters;
+    private final Map<Class<?>, Map<Class<?>, DataConverter<?, ?>>> exactConverters;
+    private final List<ConverterEntry> converters;
     private final String profileIdentity;
     private final String profileHash;
+    private final ClassValue<Map<Class<?>, ConverterLookup>> assignableConverters = new ClassValue<>() {
+        @Override
+        protected Map<Class<?>, ConverterLookup> computeValue(Class<?> sourceType) {
+            return findAssignableConverters(sourceType);
+        }
+    };
 
     private DefaultDataConversionService(
             ConversionContext context,
-            Map<ConverterPairKey, DataConverter<?, ?>> exactConverters,
-            List<DataConverter<?, ?>> converters) {
+            Map<Class<?>, Map<Class<?>, DataConverter<?, ?>>> exactConverters,
+            List<ConverterEntry> converters) {
         this.context = context;
         this.exactConverters = exactConverters;
         this.converters = converters;
@@ -92,22 +100,26 @@ public final class DefaultDataConversionService implements DataConversionService
         Objects.requireNonNull(context, "Conversion context must be provided");
         Objects.requireNonNull(converters, "Converters must be provided");
 
-        Map<ConverterPairKey, DataConverter<?, ?>> exactConverters = new HashMap<>();
-        List<DataConverter<?, ?>> validatedConverters = new ArrayList<>(converters.size());
+        Map<Class<?>, Map<Class<?>, DataConverter<?, ?>>> exactConverters = new IdentityHashMap<>();
+        List<ConverterEntry> validatedConverters = new ArrayList<>(converters.size());
         for (DataConverter<?, ?> converter : converters) {
             validateConverter(converter);
-            ConverterPairKey key = new ConverterPairKey(converter.sourceType(), boxedType(converter.targetType()));
-            DataConverter<?, ?> duplicate = exactConverters.putIfAbsent(key, converter);
+            Class<?> sourceType = converter.sourceType();
+            Class<?> targetType = boxedType(converter.targetType());
+            String ruleIdentity = converter.ruleIdentity();
+            DataConverter<?, ?> duplicate = exactConverters
+                    .computeIfAbsent(targetType, ignored -> new IdentityHashMap<>())
+                    .putIfAbsent(sourceType, converter);
             if (duplicate != null) {
                 throw new DataConverterConfigurationException("Duplicate converter for "
-                        + key.sourceType().getName() + " -> " + key.targetType().getName());
+                        + sourceType.getName() + " -> " + targetType.getName());
             }
-            validatedConverters.add(converter);
+            validatedConverters.add(new ConverterEntry(sourceType, targetType, ruleIdentity, converter));
         }
         validatedConverters.sort(DefaultDataConversionService::compareConverters);
         return new DefaultDataConversionService(
                 context,
-                Map.copyOf(exactConverters),
+                immutableExactConverters(exactConverters),
                 List.copyOf(validatedConverters));
     }
 
@@ -131,7 +143,8 @@ public final class DefaultDataConversionService implements DataConversionService
         if (sourceType == null || targetType == null) {
             return false;
         }
-        if (exactConverters.containsKey(new ConverterPairKey(sourceType, boxedType(targetType)))) {
+        Class<?> boxedTargetType = boxedType(targetType);
+        if (findExactConverter(sourceType, boxedTargetType) != null) {
             return isFoldableTargetType(targetType);
         }
         if (isContainerConversion(sourceType, targetType) || isEnumConversion(sourceType, targetType)) {
@@ -140,7 +153,7 @@ public final class DefaultDataConversionService implements DataConversionService
         if (targetType.isAssignableFrom(sourceType) && canCopyIdentityResult(sourceType, targetType)) {
             return true;
         }
-        return findConverter(sourceType, boxedType(targetType)) != null;
+        return findConverter(sourceType, boxedTargetType) != null;
     }
 
     @Override
@@ -152,8 +165,8 @@ public final class DefaultDataConversionService implements DataConversionService
         }
 
         Object converted;
-        DataConverter<S, ?> exactConverter = (DataConverter<S, ?>) exactConverters.get(
-                new ConverterPairKey(source.getClass(), boxedType(targetType)));
+        Class<?> boxedTargetType = boxedType(targetType);
+        DataConverter<S, ?> exactConverter = (DataConverter<S, ?>) findExactConverter(source.getClass(), boxedTargetType);
         if (exactConverter != null) {
             converted = exactConverter.convert(source, context);
         } else if (source instanceof Collection<?> collection && targetType.isArray()) {
@@ -167,7 +180,7 @@ public final class DefaultDataConversionService implements DataConversionService
         } else if (targetType.isInstance(source) && canCopyIdentityResult(source.getClass(), targetType)) {
             converted = source;
         } else {
-            DataConverter<S, ?> converter = (DataConverter<S, ?>) findConverter(source.getClass(), boxedType(targetType));
+            DataConverter<S, ?> converter = (DataConverter<S, ?>) findConverter(source.getClass(), boxedTargetType);
             if (converter == null) {
                 throw new NoDataConverterFoundException(source.getClass(), targetType);
             }
@@ -245,27 +258,41 @@ public final class DefaultDataConversionService implements DataConversionService
     }
 
     private DataConverter<?, ?> findConverter(Class<?> sourceType, Class<?> targetType) {
-        DataConverter<?, ?> exact = exactConverters.get(new ConverterPairKey(sourceType, targetType));
+        DataConverter<?, ?> exact = findExactConverter(sourceType, targetType);
         if (exact != null) {
             return exact;
         }
 
-        DataConverter<?, ?> selected = null;
-        int selectedDistance = Integer.MAX_VALUE;
-        for (DataConverter<?, ?> converter : converters) {
-            if (boxedType(converter.targetType()) != targetType || !converter.sourceType().isAssignableFrom(sourceType)) {
+        ConverterLookup lookup = assignableConverters.get(sourceType).get(targetType);
+        return lookup == null ? null : lookup.resolve(sourceType, targetType);
+    }
+
+    private DataConverter<?, ?> findExactConverter(Class<?> sourceType, Class<?> targetType) {
+        Map<Class<?>, DataConverter<?, ?>> sourceConverters = exactConverters.get(targetType);
+        return sourceConverters == null ? null : sourceConverters.get(sourceType);
+    }
+
+    private Map<Class<?>, ConverterLookup> findAssignableConverters(Class<?> sourceType) {
+        Map<Class<?>, ConverterCandidate> selectedConverters = new IdentityHashMap<>();
+        for (ConverterEntry converter : converters) {
+            if (!converter.sourceType().isAssignableFrom(sourceType)) {
                 continue;
             }
             int distance = typeDistance(sourceType, converter.sourceType());
-            if (distance < selectedDistance) {
-                selected = converter;
-                selectedDistance = distance;
-            } else if (distance == selectedDistance) {
-                throw new DataConverterConfigurationException("Ambiguous converters for "
-                        + sourceType.getName() + " -> " + targetType.getName());
+            ConverterCandidate selected = selectedConverters.get(converter.targetType());
+            if (selected == null || distance < selected.distance()) {
+                selectedConverters.put(converter.targetType(), new ConverterCandidate(new ConverterFound(converter.converter()), distance));
+            } else if (distance == selected.distance()) {
+                selectedConverters.put(converter.targetType(), new ConverterCandidate(AmbiguousConverter.INSTANCE, distance));
             }
         }
-        return selected;
+
+        Map<Class<?>, ConverterLookup> resolvedConverters = new IdentityHashMap<>(selectedConverters.size());
+        for (Map.Entry<Class<?>, ConverterCandidate> entry : selectedConverters.entrySet()) {
+            ConverterCandidate candidate = entry.getValue();
+            resolvedConverters.put(entry.getKey(), candidate.lookup());
+        }
+        return Map.copyOf(resolvedConverters);
     }
 
     private static int typeDistance(Class<?> sourceType, Class<?> declaredSourceType) {
@@ -571,7 +598,7 @@ public final class DefaultDataConversionService implements DataConversionService
         }
     }
 
-    private static int compareConverters(DataConverter<?, ?> first, DataConverter<?, ?> second) {
+    private static int compareConverters(ConverterEntry first, ConverterEntry second) {
         int sourceComparison = first.sourceType().getName().compareTo(second.sourceType().getName());
         if (sourceComparison != 0) {
             return sourceComparison;
@@ -583,14 +610,14 @@ public final class DefaultDataConversionService implements DataConversionService
         return first.ruleIdentity().compareTo(second.ruleIdentity());
     }
 
-    private static String createProfileIdentity(ConversionContext context, List<DataConverter<?, ?>> converters) {
+    private static String createProfileIdentity(ConversionContext context, List<ConverterEntry> converters) {
         StringBuilder identity = new StringBuilder("foldable-conversion-v1\n")
                 .append("zone=").append(context.zoneId().getId()).append('\n')
                 .append("locale=").append(context.locale().toLanguageTag()).append('\n');
         for (String capability : BUILT_IN_CAPABILITIES) {
             identity.append("capability=").append(capability).append('\n');
         }
-        for (DataConverter<?, ?> converter : converters) {
+        for (ConverterEntry converter : converters) {
             identity.append("rule=")
                     .append(converter.sourceType().getName())
                     .append("->")
@@ -600,6 +627,15 @@ public final class DefaultDataConversionService implements DataConversionService
                     .append('\n');
         }
         return identity.toString();
+    }
+
+    private static Map<Class<?>, Map<Class<?>, DataConverter<?, ?>>> immutableExactConverters(
+            Map<Class<?>, Map<Class<?>, DataConverter<?, ?>>> converters) {
+        Map<Class<?>, Map<Class<?>, DataConverter<?, ?>>> copiedConverters = new IdentityHashMap<>(converters.size());
+        for (Map.Entry<Class<?>, Map<Class<?>, DataConverter<?, ?>>> entry : converters.entrySet()) {
+            copiedConverters.put(entry.getKey(), Collections.unmodifiableMap(new IdentityHashMap<>(entry.getValue())));
+        }
+        return Collections.unmodifiableMap(copiedConverters);
     }
 
     private static String sha256(String value) {
@@ -656,6 +692,47 @@ public final class DefaultDataConversionService implements DataConversionService
     }
 
     private record TypeNode(Class<?> type, int distance) {
+    }
+
+    private record ConverterEntry(
+            Class<?> sourceType,
+            Class<?> targetType,
+            String ruleIdentity,
+            DataConverter<?, ?> converter) {
+    }
+
+    private record ConverterCandidate(ConverterLookup lookup, int distance) {
+
+        private ConverterCandidate {
+            Objects.requireNonNull(lookup, "Converter lookup must be provided");
+        }
+    }
+
+    private sealed interface ConverterLookup permits ConverterFound, AmbiguousConverter {
+
+        DataConverter<?, ?> resolve(Class<?> sourceType, Class<?> targetType);
+    }
+
+    private record ConverterFound(DataConverter<?, ?> converter) implements ConverterLookup {
+
+        private ConverterFound {
+            Objects.requireNonNull(converter, "Converter must be provided");
+        }
+
+        @Override
+        public DataConverter<?, ?> resolve(Class<?> sourceType, Class<?> targetType) {
+            return converter;
+        }
+    }
+
+    private enum AmbiguousConverter implements ConverterLookup {
+        INSTANCE;
+
+        @Override
+        public DataConverter<?, ?> resolve(Class<?> sourceType, Class<?> targetType) {
+            throw new DataConverterConfigurationException("Ambiguous converters for "
+                    + sourceType.getName() + " -> " + targetType.getName());
+        }
     }
 
     private static final class EnumMetadata<T> {
