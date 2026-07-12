@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -156,6 +157,9 @@ public final class DefaultRuntimeDataConversionService implements RuntimeDataCon
     }
 
     private static List<?> arrayToList(Object source) {
+        if (source instanceof Object[] values) {
+            return Arrays.asList(values);
+        }
         int length = Array.getLength(source);
         List<Object> values = new ArrayList<>(length);
         for (int index = 0; index < length; index++) {

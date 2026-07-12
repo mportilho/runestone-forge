@@ -302,6 +302,42 @@ class TestRuntimeDataConversionService {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void runtimeObjectArrayToListReturnsArrayBackedNoIsolationView() {
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
+        Object[] source = { "one", "two" };
+
+        List<Object> converted = service.convert(source, List.class);
+        source[0] = "array-change";
+        converted.set(1, "list-change");
+
+        assertThat(converted).containsExactly("array-change", "list-change");
+        assertThat(source).containsExactly("array-change", "list-change");
+    }
+
+    @Test
+    void runtimePrimitiveArrayToListBoxesElementsInsteadOfUsingObjectArrayView() {
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
+        int[] source = { 1, 2 };
+
+        List<?> converted = service.convert(source, List.class);
+        source[0] = 9;
+
+        assertThat(converted).isEqualTo(List.of(1, 2));
+    }
+
+    @Test
+    void runtimeArrayToArrayWithElementConversionStillProducesIndependentConvertedArray() {
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
+        String[] source = { "1", "2" };
+
+        Integer[] converted = service.convert(source, Integer[].class);
+        source[0] = "9";
+
+        assertThat(converted).containsExactly(1, 2);
+    }
+
+    @Test
     void runtimeConvertersMustReturnNonNullResultsForNonNullSources() {
         RuntimeDataConversionService service = DefaultRuntimeDataConversionService.withConverters(ConversionContext.standard(), List.of(
                 rule(String.class, Integer.class, (source, context) -> null)));

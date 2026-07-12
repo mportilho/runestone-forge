@@ -248,6 +248,20 @@ class TestDataConversionService {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void arrayToListConversionCopiesFoldableValueInsteadOfSharingArray() {
+        DataConversionService service = DefaultDataConversionService.standard();
+        String[] source = { "one", "two" };
+
+        List<Object> converted = service.convert(source, List.class);
+        source[0] = "array-change";
+        converted.set(1, "list-change");
+
+        assertThat(converted).containsExactly("one", "list-change");
+        assertThat(source).containsExactly("array-change", "two");
+    }
+
+    @Test
     void convertersMustReturnNonNullFoldableValues() {
         DataConversionService nullService = DefaultDataConversionService.withConverters(ConversionContext.standard(), List.of(
                 rule(String.class, Integer.class, "test.null-result", (source, context) -> null)));
