@@ -3,16 +3,24 @@ package com.runestone.converters.impl.runtime;
 import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConverter;
 import com.runestone.converters.DataConverterConfigurationException;
+import com.runestone.converters.NoDataConverterFoundException;
 import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.converters.RuntimeDataConverter;
+import com.runestone.converters.RuntimeOptInConverters;
 import com.runestone.converters.RuntimeStandardConverters;
 import com.runestone.converters.impl.runtime.numbers.NumberToStringRuntimeConverter;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.URL;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,6 +44,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -71,6 +80,14 @@ class TestRuntimeDataConversionService {
             Short.class,
             URI.class,
             UUID.class);
+
+    private static final List<Class<?>> ENVIRONMENT_DEPENDENT_OPT_IN_TARGET_TYPES = List.of(
+            Charset.class,
+            Class.class,
+            File.class,
+            InetAddress.class,
+            Path.class,
+            URL.class);
 
     private static final List<ConversionTypes> TEMPORAL_STANDARD_CONVERSION_TYPES = List.of(
             conversionTypes(java.sql.Date.class, LocalDate.class),
@@ -177,6 +194,41 @@ class TestRuntimeDataConversionService {
         assertThat(service.convert("03:04:05Z", OffsetTime.class)).isEqualTo(OffsetTime.parse("03:04:05Z"));
         assertThat(service.convert("2024-01-02T03:04:05Z", Temporal.class))
                 .isEqualTo(LocalDateTime.of(2024, 1, 2, 3, 4, 5));
+    }
+
+    @Test
+    void environmentDependentRuntimeConvertersAreOptIn() throws Exception {
+        RuntimeDataConversionService standardService = DefaultRuntimeDataConversionService.standard();
+
+        for (Class<?> targetType : ENVIRONMENT_DEPENDENT_OPT_IN_TARGET_TYPES) {
+            assertThat(RuntimeStandardConverters.all())
+                    .noneMatch(converter -> converter.sourceType() == String.class && converter.targetType() == targetType);
+            assertThat(RuntimeOptInConverters.all())
+                    .filteredOn(converter -> converter.sourceType() == String.class && converter.targetType() == targetType)
+                    .singleElement()
+                    .satisfies(converter -> {
+                        assertThat(converter).isNotInstanceOf(DataConverter.class);
+                        assertThat(converter.getClass().getPackageName()).startsWith(RUNTIME_IMPLEMENTATION_PACKAGE);
+                    });
+            assertThat(standardService.canConvert(String.class, targetType)).isFalse();
+        }
+        assertThatThrownBy(() -> standardService.convert("127.0.0.1", InetAddress.class))
+                .isInstanceOf(NoDataConverterFoundException.class);
+
+        RuntimeDataConversionService serviceWithOptInConverters = DefaultRuntimeDataConversionService.withConverters(
+                ConversionContext.standard(),
+                Stream.concat(RuntimeStandardConverters.all().stream(), RuntimeOptInConverters.all().stream()).toList());
+
+        ENVIRONMENT_DEPENDENT_OPT_IN_TARGET_TYPES.forEach(
+                targetType -> assertThat(serviceWithOptInConverters.canConvert(String.class, targetType)).isTrue());
+        assertThat(serviceWithOptInConverters.convert("UTF-8", Charset.class)).isEqualTo(StandardCharsets.UTF_8);
+        assertThat(serviceWithOptInConverters.convert("java.lang.String", Class.class)).isEqualTo(String.class);
+        assertThat(serviceWithOptInConverters.convert("/var/log/syslog", File.class)).isEqualTo(new File("/var/log/syslog"));
+        assertThat(serviceWithOptInConverters.convert("127.0.0.1", InetAddress.class))
+                .isEqualTo(InetAddress.getByName("127.0.0.1"));
+        assertThat(serviceWithOptInConverters.convert("/var/log/syslog", Path.class)).isEqualTo(Path.of("/var/log/syslog"));
+        assertThat(serviceWithOptInConverters.convert("https://example.com", URL.class).toExternalForm())
+                .isEqualTo("https://example.com");
     }
 
     @Test
