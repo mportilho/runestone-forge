@@ -14,8 +14,10 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -34,13 +36,19 @@ public final class DefaultRuntimeDataConversionService implements RuntimeDataCon
     };
 
     private final ConversionContext context;
-    private final Map<ConverterPairKey, RuntimeDataConverter<?, ?>> exactConverters;
-    private final List<RuntimeDataConverter<?, ?>> converters;
+    private final Map<Class<?>, Map<Class<?>, RuntimeDataConverter<?, ?>>> exactConverters;
+    private final List<ConverterEntry> converters;
+    private final ClassValue<Map<Class<?>, ConverterLookup>> assignableConverters = new ClassValue<>() {
+        @Override
+        protected Map<Class<?>, ConverterLookup> computeValue(Class<?> sourceType) {
+            return findAssignableConverters(sourceType);
+        }
+    };
 
     private DefaultRuntimeDataConversionService(
             ConversionContext context,
-            Map<ConverterPairKey, RuntimeDataConverter<?, ?>> exactConverters,
-            List<RuntimeDataConverter<?, ?>> converters) {
+            Map<Class<?>, Map<Class<?>, RuntimeDataConverter<?, ?>>> exactConverters,
+            List<ConverterEntry> converters) {
         this.context = context;
         this.exactConverters = exactConverters;
         this.converters = converters;
@@ -56,22 +64,25 @@ public final class DefaultRuntimeDataConversionService implements RuntimeDataCon
         Objects.requireNonNull(context, "Conversion context must be provided");
         Objects.requireNonNull(converters, "Converters must be provided");
 
-        Map<ConverterPairKey, RuntimeDataConverter<?, ?>> exactConverters = new HashMap<>();
-        List<RuntimeDataConverter<?, ?>> validatedConverters = new ArrayList<>(converters.size());
+        Map<Class<?>, Map<Class<?>, RuntimeDataConverter<?, ?>>> exactConverters = new IdentityHashMap<>();
+        List<ConverterEntry> validatedConverters = new ArrayList<>(converters.size());
         for (RuntimeDataConverter<?, ?> converter : converters) {
             validateConverter(converter);
-            ConverterPairKey key = new ConverterPairKey(boxedType(converter.sourceType()), boxedType(converter.targetType()));
-            RuntimeDataConverter<?, ?> duplicate = exactConverters.putIfAbsent(key, converter);
+            Class<?> sourceType = boxedType(converter.sourceType());
+            Class<?> targetType = boxedType(converter.targetType());
+            RuntimeDataConverter<?, ?> duplicate = exactConverters
+                    .computeIfAbsent(targetType, ignored -> new IdentityHashMap<>())
+                    .putIfAbsent(sourceType, converter);
             if (duplicate != null) {
                 throw new DataConverterConfigurationException("Duplicate runtime converter for "
-                        + key.sourceType().getName() + " -> " + key.targetType().getName());
+                        + sourceType.getName() + " -> " + targetType.getName());
             }
-            validatedConverters.add(converter);
+            validatedConverters.add(new ConverterEntry(sourceType, targetType, converter));
         }
 
         return new DefaultRuntimeDataConversionService(
                 context,
-                Map.copyOf(exactConverters),
+                immutableExactConverters(exactConverters),
                 List.copyOf(validatedConverters));
     }
 
@@ -186,28 +197,42 @@ public final class DefaultRuntimeDataConversionService implements RuntimeDataCon
 
     private RuntimeDataConverter<?, ?> findConverter(Class<?> sourceType, Class<?> targetType) {
         Class<?> boxedSourceType = boxedType(sourceType);
-        RuntimeDataConverter<?, ?> exact = exactConverters.get(new ConverterPairKey(boxedSourceType, targetType));
+        Class<?> boxedTargetType = boxedType(targetType);
+        RuntimeDataConverter<?, ?> exact = findExactConverter(boxedSourceType, boxedTargetType);
         if (exact != null) {
             return exact;
         }
 
-        RuntimeDataConverter<?, ?> selected = null;
-        int selectedDistance = Integer.MAX_VALUE;
-        for (RuntimeDataConverter<?, ?> converter : converters) {
-            Class<?> converterSourceType = boxedType(converter.sourceType());
-            if (boxedType(converter.targetType()) != targetType || !converterSourceType.isAssignableFrom(boxedSourceType)) {
+        ConverterLookup lookup = assignableConverters.get(boxedSourceType).get(boxedTargetType);
+        return lookup == null ? null : lookup.resolve(boxedSourceType, boxedTargetType);
+    }
+
+    private RuntimeDataConverter<?, ?> findExactConverter(Class<?> sourceType, Class<?> targetType) {
+        Map<Class<?>, RuntimeDataConverter<?, ?>> sourceConverters = exactConverters.get(targetType);
+        return sourceConverters == null ? null : sourceConverters.get(sourceType);
+    }
+
+    private Map<Class<?>, ConverterLookup> findAssignableConverters(Class<?> sourceType) {
+        Map<Class<?>, ConverterCandidate> selectedConverters = new HashMap<>();
+        for (ConverterEntry converter : converters) {
+            if (!converter.sourceType().isAssignableFrom(sourceType)) {
                 continue;
             }
-            int distance = typeDistance(boxedSourceType, converterSourceType);
-            if (distance < selectedDistance) {
-                selected = converter;
-                selectedDistance = distance;
-            } else if (distance == selectedDistance) {
-                throw new DataConverterConfigurationException("Ambiguous runtime converters for "
-                        + boxedSourceType.getName() + " -> " + targetType.getName());
+            int distance = typeDistance(sourceType, converter.sourceType());
+            ConverterCandidate selected = selectedConverters.get(converter.targetType());
+            if (selected == null || distance < selected.distance()) {
+                selectedConverters.put(converter.targetType(), new ConverterCandidate(converter.converter(), distance, false));
+            } else if (distance == selected.distance()) {
+                selectedConverters.put(converter.targetType(), new ConverterCandidate(null, distance, true));
             }
         }
-        return selected;
+
+        Map<Class<?>, ConverterLookup> resolvedConverters = new HashMap<>(selectedConverters.size());
+        for (Map.Entry<Class<?>, ConverterCandidate> entry : selectedConverters.entrySet()) {
+            ConverterCandidate candidate = entry.getValue();
+            resolvedConverters.put(entry.getKey(), new ConverterLookup(candidate.converter(), candidate.ambiguous()));
+        }
+        return Map.copyOf(resolvedConverters);
     }
 
     private boolean canConvertContainer(Class<?> sourceType, Class<?> targetType) {
@@ -279,6 +304,15 @@ public final class DefaultRuntimeDataConversionService implements RuntimeDataCon
         }
     }
 
+    private static Map<Class<?>, Map<Class<?>, RuntimeDataConverter<?, ?>>> immutableExactConverters(
+            Map<Class<?>, Map<Class<?>, RuntimeDataConverter<?, ?>>> converters) {
+        Map<Class<?>, Map<Class<?>, RuntimeDataConverter<?, ?>>> copiedConverters = new IdentityHashMap<>(converters.size());
+        for (Map.Entry<Class<?>, Map<Class<?>, RuntimeDataConverter<?, ?>>> entry : converters.entrySet()) {
+            copiedConverters.put(entry.getKey(), Collections.unmodifiableMap(new IdentityHashMap<>(entry.getValue())));
+        }
+        return Collections.unmodifiableMap(copiedConverters);
+    }
+
     @SuppressWarnings("unchecked")
     private static <T> Class<T> boxedType(Class<T> type) {
         if (!type.isPrimitive()) {
@@ -324,6 +358,26 @@ public final class DefaultRuntimeDataConversionService implements RuntimeDataCon
     }
 
     private record TypeNode(Class<?> type, int distance) {
+    }
+
+    private record ConverterEntry(
+            Class<?> sourceType,
+            Class<?> targetType,
+            RuntimeDataConverter<?, ?> converter) {
+    }
+
+    private record ConverterCandidate(RuntimeDataConverter<?, ?> converter, int distance, boolean ambiguous) {
+    }
+
+    private record ConverterLookup(RuntimeDataConverter<?, ?> converter, boolean ambiguous) {
+
+        private RuntimeDataConverter<?, ?> resolve(Class<?> sourceType, Class<?> targetType) {
+            if (ambiguous) {
+                throw new DataConverterConfigurationException("Ambiguous runtime converters for "
+                        + sourceType.getName() + " -> " + targetType.getName());
+            }
+            return converter;
+        }
     }
 
     private static final class EnumMetadata<T> {

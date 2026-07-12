@@ -45,3 +45,24 @@
 **Decision:** ACCEPT
 **Reason:** All measured scenarios cleared the acceptance threshold by a wide margin, and the primitive-array cases also cut allocation substantially by removing reflective store overhead.
 **Notes:** The `String -> Integer[]` case still allocates about `1808 B/op`, which is consistent with the actual conversion and boxed-array result rather than reflection.
+
+## PERF-003: Exact and assignable runtime converter lookup caches
+
+**Date:** 2026-07-12
+
+**Scenario:** Measure and reduce lookup overhead in `DefaultRuntimeDataConversionService` for exact runtime converters and assignable runtime converters.
+**Hypothesis:** Replacing per-call exact pair-key allocation with an immutable `Class<?>` identity index and caching assignable converter selection by runtime source type would remove avoidable allocation and repeated type-distance scans.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | B/op (B→A) |
+|-----------|---------------:|--------------:|----------------:|-----------:|
+| `canConvertAssignableNumberToLong` | 814.018 | 25.036 | +96.92% | 426.678 → ≈ 0 |
+| `canConvertExactStringToInteger` | 13.657 | 7.968 | +41.66% | 8.000 → ≈ 0 |
+| `convertAssignableNumberToLong` | 831.068 | 40.017 | +95.18% | 464.012 → 24.001 |
+| `convertAssignableNumberToString` | 843.796 | 39.736 | +95.29% | 488.012 → 48.001 |
+| `convertContainerStringListToIntegerArray` | 576.018 | 554.350 | +3.76% | 48.008 → 48.008 |
+| `convertExactLocalDateToTemporal` | 0.998 | 1.004 | -0.65% | ≈ 0 → ≈ 0 |
+| `convertExactStringToInteger` | 27.073 | 23.299 | +13.94% | 16.000 → 16.000 |
+
+**Decision:** ACCEPT
+**Reason:** Six of seven measured scenarios improved, with the exact lookup and assignable lookup benchmarks eliminating lookup allocation and the assignable conversion paths improving by roughly one order of magnitude. The neutral `LocalDate -> Temporal` case is an identity conversion that bypasses converter lookup and stayed within noise.
+**Notes:** JMH ran on OpenJDK 26.0.1 with JMH 1.37. Raw result files were captured at `/tmp/performance-benchmark/issue-50-before.json`, `/tmp/performance-benchmark/issue-50-after.json`, and `/tmp/performance-benchmark/issue-50-comparison.md`.
