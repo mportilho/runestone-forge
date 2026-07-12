@@ -6,6 +6,7 @@ import com.runestone.converters.DataConverterConfigurationException;
 import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.converters.RuntimeDataConverter;
 import com.runestone.converters.RuntimeStandardConverters;
+import com.runestone.converters.impl.runtime.numbers.NumberToStringRuntimeConverter;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -34,8 +35,13 @@ class TestRuntimeDataConversionService {
         assertThat(RuntimeStandardConverters.all())
                 .isNotEmpty()
                 .allSatisfy(converter -> assertThat(converter).isNotInstanceOf(DataConverter.class));
+        assertThat(RuntimeStandardConverters.all())
+                .filteredOn(converter -> converter.sourceType() == Number.class && converter.targetType() == String.class)
+                .singleElement()
+                .isInstanceOf(NumberToStringRuntimeConverter.class);
         assertThat(service.canConvert(String.class, Integer.class)).isTrue();
         assertThat(service.convert("123", Integer.class)).isEqualTo(123);
+        assertThat(service.convert(123, String.class)).isEqualTo("123");
     }
 
     @Test

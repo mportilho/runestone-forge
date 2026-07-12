@@ -4,6 +4,7 @@
 - Java 21 Maven reactor; there is no Maven wrapper, so use local `mvn`.
 - Root modules are `runestone-toolkit`, `dynamic-filter-resolver`, `expression-evaluator`, and `exp-mk3`.
 - `runestone-toolkit` provides shared assertions, memoization, date utilities, and `DataConversionService`; converter implementations are discovered through `src/main/resources/META-INF/services/com.runestone.converters.DataConverter`, so add new converters there.
+- Keep `DataConverter` and `RuntimeDataConverter` implementations in their related implementation packages, such as `com.runestone.converters.impl.stable` for foldable converters and `com.runestone.converters.impl.runtime` for runtime converters; do not move concrete converter implementations into the public `com.runestone.converters` package.
 - `dynamic-filter-resolver` depends on `runestone-toolkit`; Spring/JPA/WebMVC/Springdoc dependencies are `provided`, with H2/Spring Boot only in tests.
 - `expression-evaluator` depends on `runestone-toolkit`; public entrypoints are in `com.runestone.expeval.api` and compiler/runtime internals are under `com.runestone.expeval.internal`.
 - `exp-mk3` is a rebuild of `expression-evaluator` and is now under active development; when working on it, follow `exp-mk3/docs/planning/plano-implementacao-expression-evaluator-v2.md`, keep maximum performance as the implementation focus, and do not consult or read `expression-evaluator` under any circumstances except when the user asks to do it by prompt or issue. Build `exp-mk3` only from its own module contents and its dependencies.

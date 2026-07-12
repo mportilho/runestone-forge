@@ -13,6 +13,7 @@ import com.runestone.converters.impl.stable.dates.UtilDateToLocalDateConverter;
 import com.runestone.converters.impl.stable.dates.UtilDateToLocalDateTimeConverter;
 import com.runestone.converters.impl.stable.dates.UtilDateToLocalTimeConverter;
 import com.runestone.converters.impl.stable.dates.UtilDateToZonedDateTimeConverter;
+import com.runestone.converters.impl.runtime.numbers.NumberToStringRuntimeConverter;
 import com.runestone.converters.impl.stable.numbers.NumberToBigDecimalConverter;
 import com.runestone.converters.impl.stable.numbers.NumberToBigIntegerConverter;
 import com.runestone.converters.impl.stable.numbers.NumberToByteConverter;
@@ -21,7 +22,6 @@ import com.runestone.converters.impl.stable.numbers.NumberToFloatConverter;
 import com.runestone.converters.impl.stable.numbers.NumberToIntConverter;
 import com.runestone.converters.impl.stable.numbers.NumberToLongConverter;
 import com.runestone.converters.impl.stable.numbers.NumberToShortConverter;
-import com.runestone.converters.impl.stable.numbers.NumberToStringConverter;
 import com.runestone.converters.impl.stable.strings.StringToBigDecimalConverter;
 import com.runestone.converters.impl.stable.strings.StringToBigIntegerConverter;
 import com.runestone.converters.impl.stable.strings.StringToBooleanConverter;
@@ -81,7 +81,7 @@ public final class RuntimeStandardConverters {
             runtime(new NumberToIntConverter()),
             runtime(new NumberToLongConverter()),
             runtime(new NumberToShortConverter()),
-            runtime(new NumberToStringConverter()),
+            new NumberToStringRuntimeConverter(),
             runtime(new StringToBigDecimalConverter()),
             runtime(new StringToBigIntegerConverter()),
             runtime(new StringToBooleanConverter()),
