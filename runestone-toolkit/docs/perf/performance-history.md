@@ -135,3 +135,22 @@
 **Decision:** ACCEPT
 **Reason:** Exact-name enum conversion improved by 15-30% with no allocation increase. Lowercase and mixed-case fallback string inputs were neutral to improved. The ordinal path reported small percentage regressions, but the absolute changes were sub-nanosecond, the confidence intervals overlapped, allocation stayed at approximately zero, and the ordinal lookup path was not changed by the refactor.
 **Notes:** JMH ran on OpenJDK 26.0.1 with JMH 1.37. Raw result files were captured at `/tmp/performance-benchmark/issue-54-before.json`, `/tmp/performance-benchmark/issue-54-after.json`, and `/tmp/performance-benchmark/issue-54-comparison.md`. The comparison script reported `DISCARD` because the ordinal percentage deltas crossed its generic regression threshold; this was overridden as non-material run noise for the untouched ordinal path.
+
+## PERF-007: Runtime temporal converter dispatch overhead
+
+**Date:** 2026-07-12
+
+**Scenario:** Measure whether the `BiFunction`-backed wrapper used by `RuntimeTemporalConverters` is material for hot runtime temporal conversions.
+**Hypothesis:** Replacing the compact wrapper with smaller per-conversion dispatch paths would materially improve `String -> LocalDate`, `String -> LocalDateTime`, `String -> Temporal`, `Date -> LocalDateTime`, and the `LocalDate -> Temporal` identity baseline.
+
+| Benchmark | Service (ns/op) | Runtime converter (ns/op) | Direct baseline (ns/op) | B/op |
+|-----------|----------------:|--------------------------:|------------------------:|-----:|
+| `String -> LocalDate` | 1839.429 | 1819.456 | 1813.459 | 3608 |
+| `String -> LocalDateTime` | 3941.449 | 3953.170 | 3889.778 | 7560 |
+| `String -> Temporal` | 3956.315 | 3938.240 | 4049.669 | 7560 |
+| `Date -> LocalDateTime` | 45.903 | 36.502 | 37.541 | 72 service/converter; 96 direct |
+| `LocalDate -> Temporal` | 0.986 | n/a | 0.666 | ≈ 0 |
+
+**Decision:** DISCARD production optimization
+**Reason:** The string temporal conversions are dominated by formatter parsing and allocation; the runtime converter path is within noise of the direct baselines. `Date -> LocalDateTime` is cheap enough that the service boundary accounts for most of the visible delta, while the direct runtime converter is already comparable to the direct baseline without changing the `BiFunction` wrapper. The identity baseline is sub-nanosecond and has no catalog converter to optimize.
+**Notes:** JMH ran on OpenJDK 26.0.1 with JMH 1.37. Raw result files were captured at `/tmp/performance-benchmark/issue-56-quick-baseline.json`, `/tmp/performance-benchmark/issue-56-baseline.json`, and `/tmp/performance-benchmark/issue-56-dispatch-baseline.json`. No production converter rewrite was accepted.

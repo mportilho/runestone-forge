@@ -1,6 +1,10 @@
 package com.runestone.converters.impl.runtime;
 
+import com.runestone.converters.ConversionContext;
 import com.runestone.converters.RuntimeDataConversionService;
+import com.runestone.converters.RuntimeDataConverter;
+import com.runestone.converters.impl.runtime.dates.RuntimeTemporalConverters;
+import com.runestone.utils.DateUtils;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -17,8 +21,13 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.temporal.Temporal;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -31,10 +40,20 @@ import java.util.concurrent.TimeUnit;
 public class RuntimeDataConversionServiceBenchmark {
 
     private RuntimeDataConversionService service;
+    private ConversionContext context;
+    private RuntimeDataConverter<String, LocalDate> stringToLocalDateConverter;
+    private RuntimeDataConverter<String, LocalDateTime> stringToLocalDateTimeConverter;
+    private RuntimeDataConverter<String, Temporal> stringToTemporalConverter;
+    private RuntimeDataConverter<Date, LocalDateTime> dateToLocalDateTimeConverter;
     private String numericText;
     private BigDecimal decimalSource;
     private Integer integerSource;
     private LocalDate localDateSource;
+    private String localDateText;
+    private String localDateTimeText;
+    private String temporalText;
+    private Date dateSource;
+    private ZoneId zoneId;
     private String smallEnumExactName;
     private String smallEnumLowercaseName;
     private String smallEnumMixedCaseName;
@@ -51,10 +70,20 @@ public class RuntimeDataConversionServiceBenchmark {
     @Setup
     public void setup() {
         service = DefaultRuntimeDataConversionService.standard();
+        context = service.conversionContext();
+        stringToLocalDateConverter = temporalConverter(String.class, LocalDate.class);
+        stringToLocalDateTimeConverter = temporalConverter(String.class, LocalDateTime.class);
+        stringToTemporalConverter = temporalConverter(String.class, Temporal.class);
+        dateToLocalDateTimeConverter = temporalConverter(Date.class, LocalDateTime.class);
         numericText = "12345";
         decimalSource = new BigDecimal("12345.67");
         integerSource = 12345;
         localDateSource = LocalDate.of(2026, 7, 12);
+        localDateText = "2026-07-12";
+        localDateTimeText = "2026-07-12T13:14:15";
+        temporalText = localDateTimeText;
+        zoneId = context.zoneId();
+        dateSource = Date.from(LocalDateTime.of(2026, 7, 12, 13, 14, 15).atZone(zoneId).toInstant());
         smallEnumExactName = "ACTIVE";
         smallEnumLowercaseName = "active";
         smallEnumMixedCaseName = "AcTiVe";
@@ -105,6 +134,71 @@ public class RuntimeDataConversionServiceBenchmark {
     @Benchmark
     public Temporal convertExactLocalDateToTemporal() {
         return service.convert(localDateSource, Temporal.class);
+    }
+
+    @Benchmark
+    public Temporal directLocalDateToTemporal() {
+        return localDateSource;
+    }
+
+    @Benchmark
+    public LocalDate convertStringToLocalDate() {
+        return service.convert(localDateText, LocalDate.class);
+    }
+
+    @Benchmark
+    public LocalDate runtimeConverterStringToLocalDate() {
+        return stringToLocalDateConverter.convert(localDateText, context);
+    }
+
+    @Benchmark
+    public LocalDate directStringToLocalDate() {
+        return DateUtils.DATETIME_FORMATTER.parse(localDateText, LocalDate::from);
+    }
+
+    @Benchmark
+    public LocalDateTime convertStringToLocalDateTime() {
+        return service.convert(localDateTimeText, LocalDateTime.class);
+    }
+
+    @Benchmark
+    public LocalDateTime runtimeConverterStringToLocalDateTime() {
+        return stringToLocalDateTimeConverter.convert(localDateTimeText, context);
+    }
+
+    @Benchmark
+    public LocalDateTime directStringToLocalDateTime() {
+        return DateUtils.DATETIME_FORMATTER.parse(localDateTimeText, LocalDateTime::from);
+    }
+
+    @Benchmark
+    public Temporal convertStringToTemporal() {
+        return service.convert(temporalText, Temporal.class);
+    }
+
+    @Benchmark
+    public Temporal runtimeConverterStringToTemporal() {
+        return stringToTemporalConverter.convert(temporalText, context);
+    }
+
+    @Benchmark
+    public Temporal directStringToTemporal() {
+        return directToTemporal(temporalText);
+    }
+
+    @Benchmark
+    public LocalDateTime convertDateToLocalDateTime() {
+        return service.convert(dateSource, LocalDateTime.class);
+    }
+
+    @Benchmark
+    public LocalDateTime runtimeConverterDateToLocalDateTime() {
+        return dateToLocalDateTimeConverter.convert(dateSource, context);
+    }
+
+    @Benchmark
+    public LocalDateTime directDateToLocalDateTime() {
+        return Instant.ofEpochMilli(dateSource.getTime()).atZone(zoneId).toLocalDateTime();
     }
 
     @Benchmark
@@ -182,6 +276,23 @@ public class RuntimeDataConversionServiceBenchmark {
                 .include(RuntimeDataConversionServiceBenchmark.class.getSimpleName())
                 .build();
         new Runner(options).run();
+    }
+
+    private static Temporal directToTemporal(String source) {
+        if (source.length() <= 8) {
+            return DateUtils.DATETIME_FORMATTER.parse(source, LocalTime::from);
+        } else if (source.length() <= 10) {
+            return DateUtils.DATETIME_FORMATTER.parse(source, LocalDate::from);
+        }
+        return DateUtils.DATETIME_FORMATTER_PADDING_TIME.parse(source, LocalDateTime::from);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <S, T> RuntimeDataConverter<S, T> temporalConverter(Class<S> sourceType, Class<T> targetType) {
+        return (RuntimeDataConverter<S, T>) RuntimeTemporalConverters.all().stream()
+                .filter(converter -> converter.sourceType() == sourceType && converter.targetType() == targetType)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Missing temporal runtime converter"));
     }
 
     private enum SmallStatus {
