@@ -112,8 +112,18 @@ public class RuntimeDataConversionServiceBenchmark {
     }
 
     @Benchmark
+    public boolean canConvertExactStringToIntPrimitive() {
+        return service.canConvert(String.class, int.class);
+    }
+
+    @Benchmark
     public Integer convertExactStringToInteger() {
         return service.convert(numericText, Integer.class);
+    }
+
+    @Benchmark
+    public int convertExactStringToIntPrimitive() {
+        return service.convert(numericText, int.class);
     }
 
     @Benchmark
@@ -122,8 +132,18 @@ public class RuntimeDataConversionServiceBenchmark {
     }
 
     @Benchmark
+    public boolean canConvertAssignableNumberToLongPrimitive() {
+        return service.canConvert(BigDecimal.class, long.class);
+    }
+
+    @Benchmark
     public Long convertAssignableNumberToLong() {
         return service.convert(decimalSource, Long.class);
+    }
+
+    @Benchmark
+    public long convertAssignableNumberToLongPrimitive() {
+        return service.convert(decimalSource, long.class);
     }
 
     @Benchmark

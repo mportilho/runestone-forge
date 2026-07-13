@@ -182,6 +182,16 @@ class TestRuntimeDataConversionService {
     }
 
     @Test
+    void standardRuntimePrimitiveTargetAliasesMatchBoxedTargetBehavior() {
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
+
+        assertThat(service.canConvert(String.class, int.class)).isTrue();
+        assertThat(service.canConvert(BigDecimal.class, long.class)).isTrue();
+        assertThat(service.convert("123", int.class)).isEqualTo(123);
+        assertThat(service.convert(new BigDecimal("12.9"), long.class)).isEqualTo(12L);
+    }
+
+    @Test
     void standardRuntimeTemporalConversionsMatchExistingBehavior() {
         RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
 

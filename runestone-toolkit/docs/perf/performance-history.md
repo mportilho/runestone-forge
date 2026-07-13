@@ -154,3 +154,27 @@
 **Decision:** DISCARD production optimization
 **Reason:** The string temporal conversions are dominated by formatter parsing and allocation; the runtime converter path is within noise of the direct baselines. `Date -> LocalDateTime` is cheap enough that the service boundary accounts for most of the visible delta, while the direct runtime converter is already comparable to the direct baseline without changing the `BiFunction` wrapper. The identity baseline is sub-nanosecond and has no catalog converter to optimize.
 **Notes:** JMH ran on OpenJDK 26.0.1 with JMH 1.37. Raw result files were captured at `/tmp/performance-benchmark/issue-56-quick-baseline.json`, `/tmp/performance-benchmark/issue-56-baseline.json`, and `/tmp/performance-benchmark/issue-56-dispatch-baseline.json`. No production converter rewrite was accepted.
+
+## PERF-008: Runtime boxed-type normalization in conversion hot paths
+
+**Date:** 2026-07-12
+
+**Scenario:** Measure whether repeated `boxedType(...)` and already-normalized type lookup work in `DefaultRuntimeDataConversionService` is material for exact conversion, assignable conversion, primitive target aliases, and container element conversion.
+**Hypothesis:** Reusing already-boxed types inside internal runtime conversion helpers would improve primitive target aliases and container element conversion without changing public `RuntimeDataConversionService` semantics.
+
+| Benchmark | Before (ns/op) | Attempted After (ns/op) | Improvement (%) | B/op (B->A) |
+|-----------|---------------:|------------------------:|----------------:|-----------:|
+| `canConvertAssignableNumberToLong` | 25.642 | 24.336 | +5.09% | ≈ 0 -> ≈ 0 |
+| `canConvertAssignableNumberToLongPrimitive` | 29.325 | 27.907 | +4.83% | ≈ 0 -> ≈ 0 |
+| `canConvertExactStringToIntPrimitive` | 16.078 | 15.083 | +6.19% | ≈ 0 -> ≈ 0 |
+| `canConvertExactStringToInteger` | 8.083 | 8.147 | -0.80% | ≈ 0 -> ≈ 0 |
+| `convertAssignableNumberToLong` | 40.143 | 48.723 | -21.37% | 24 -> 24 |
+| `convertAssignableNumberToLongPrimitive` | 48.308 | 54.201 | -12.20% | 24 -> 24 |
+| `convertContainerBigDecimalListToIntArray` | 226.735 | 302.983 | -33.63% | 48 -> 48 |
+| `convertContainerStringListToIntegerArray` | 174.735 | 157.459 | +9.89% | 48 -> 48 |
+| `convertExactStringToIntPrimitive` | 28.672 | 24.186 | +15.65% | 16 -> 16 |
+| `convertExactStringToInteger` | 22.715 | 19.542 | +13.97% | 16 -> 16 |
+
+**Decision:** DISCARD production optimization
+**Reason:** Exact conversion and reference-array container conversion improved, but the attempted helper split regressed assignable conversion and primitive-array container conversion by more than the accepted threshold. The regressions were in issue-targeted hot paths, so the production refactor was removed instead of accepting a mixed result.
+**Notes:** JMH ran on OpenJDK 26.0.1 with JMH 1.37. Raw result files were captured at `/tmp/performance-benchmark/issue-57-before.json`, `/tmp/performance-benchmark/issue-57-after.json`, and `/tmp/performance-benchmark/issue-57-comparison.md`. Benchmark coverage and primitive-alias semantic tests were kept; no production runtime conversion change was accepted.
