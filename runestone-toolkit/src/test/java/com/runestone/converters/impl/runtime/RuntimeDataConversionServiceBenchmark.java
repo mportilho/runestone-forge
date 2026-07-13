@@ -35,6 +35,14 @@ public class RuntimeDataConversionServiceBenchmark {
     private BigDecimal decimalSource;
     private Integer integerSource;
     private LocalDate localDateSource;
+    private String smallEnumExactName;
+    private String smallEnumLowercaseName;
+    private String smallEnumMixedCaseName;
+    private Integer smallEnumOrdinal;
+    private String largeEnumExactName;
+    private String largeEnumLowercaseName;
+    private String largeEnumMixedCaseName;
+    private Integer largeEnumOrdinal;
     private List<BigDecimal> decimalList;
     private List<String> stringList;
     private int[] primitiveIntArray;
@@ -47,6 +55,14 @@ public class RuntimeDataConversionServiceBenchmark {
         decimalSource = new BigDecimal("12345.67");
         integerSource = 12345;
         localDateSource = LocalDate.of(2026, 7, 12);
+        smallEnumExactName = "ACTIVE";
+        smallEnumLowercaseName = "active";
+        smallEnumMixedCaseName = "AcTiVe";
+        smallEnumOrdinal = 1;
+        largeEnumExactName = "VALUE_31";
+        largeEnumLowercaseName = "value_31";
+        largeEnumMixedCaseName = "VaLuE_31";
+        largeEnumOrdinal = 31;
         decimalList = List.of(
                 BigDecimal.ONE,
                 BigDecimal.TWO,
@@ -92,6 +108,46 @@ public class RuntimeDataConversionServiceBenchmark {
     }
 
     @Benchmark
+    public SmallStatus convertSmallEnumExactName() {
+        return service.convert(smallEnumExactName, SmallStatus.class);
+    }
+
+    @Benchmark
+    public SmallStatus convertSmallEnumLowercaseName() {
+        return service.convert(smallEnumLowercaseName, SmallStatus.class);
+    }
+
+    @Benchmark
+    public SmallStatus convertSmallEnumMixedCaseName() {
+        return service.convert(smallEnumMixedCaseName, SmallStatus.class);
+    }
+
+    @Benchmark
+    public SmallStatus convertSmallEnumOrdinal() {
+        return service.convert(smallEnumOrdinal, SmallStatus.class);
+    }
+
+    @Benchmark
+    public LargeStatus convertLargeEnumExactName() {
+        return service.convert(largeEnumExactName, LargeStatus.class);
+    }
+
+    @Benchmark
+    public LargeStatus convertLargeEnumLowercaseName() {
+        return service.convert(largeEnumLowercaseName, LargeStatus.class);
+    }
+
+    @Benchmark
+    public LargeStatus convertLargeEnumMixedCaseName() {
+        return service.convert(largeEnumMixedCaseName, LargeStatus.class);
+    }
+
+    @Benchmark
+    public LargeStatus convertLargeEnumOrdinal() {
+        return service.convert(largeEnumOrdinal, LargeStatus.class);
+    }
+
+    @Benchmark
     public Integer[] convertContainerStringListToIntegerArray() {
         return service.convert(stringList, Integer[].class);
     }
@@ -126,5 +182,45 @@ public class RuntimeDataConversionServiceBenchmark {
                 .include(RuntimeDataConversionServiceBenchmark.class.getSimpleName())
                 .build();
         new Runner(options).run();
+    }
+
+    private enum SmallStatus {
+        ACTIVE,
+        INACTIVE
+    }
+
+    private enum LargeStatus {
+        VALUE_00,
+        VALUE_01,
+        VALUE_02,
+        VALUE_03,
+        VALUE_04,
+        VALUE_05,
+        VALUE_06,
+        VALUE_07,
+        VALUE_08,
+        VALUE_09,
+        VALUE_10,
+        VALUE_11,
+        VALUE_12,
+        VALUE_13,
+        VALUE_14,
+        VALUE_15,
+        VALUE_16,
+        VALUE_17,
+        VALUE_18,
+        VALUE_19,
+        VALUE_20,
+        VALUE_21,
+        VALUE_22,
+        VALUE_23,
+        VALUE_24,
+        VALUE_25,
+        VALUE_26,
+        VALUE_27,
+        VALUE_28,
+        VALUE_29,
+        VALUE_30,
+        VALUE_31
     }
 }

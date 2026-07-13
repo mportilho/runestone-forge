@@ -400,6 +400,29 @@ class TestRuntimeDataConversionService {
     }
 
     @Test
+    void runtimeEnumConversionPreservesStringOrdinalAndInvalidValueBehavior() {
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
+
+        assertThat(service.convert("ACTIVE", Status.class)).isEqualTo(Status.ACTIVE);
+        assertThat(service.convert("active", Status.class)).isEqualTo(Status.ACTIVE);
+        assertThat(service.convert("AcTiVe", Status.class)).isEqualTo(Status.ACTIVE);
+        assertThat(service.convert(1, Status.class)).isEqualTo(Status.INACTIVE);
+        assertThatThrownBy(() -> service.convert("unknown", Status.class))
+                .isInstanceOf(NoDataConverterFoundException.class);
+        assertThatThrownBy(() -> service.convert(9, Status.class))
+                .isInstanceOf(NoDataConverterFoundException.class);
+    }
+
+    @Test
+    void runtimeEnumExactNameFastPathPreservesCaseInsensitiveCollisionBehavior() {
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
+
+        assertThat(service.convert("ALPHA", CaseCollision.class)).isEqualTo(CaseCollision.alpha);
+        assertThat(service.convert("alpha", CaseCollision.class)).isEqualTo(CaseCollision.alpha);
+        assertThat(service.convert("AlPhA", CaseCollision.class)).isEqualTo(CaseCollision.alpha);
+    }
+
+    @Test
     void ambiguousRuntimeConvertersFailLookupAndConversion() {
         RuntimeDataConverter<Left, String> leftRule = rule(Left.class, String.class, (source, context) -> "left");
         RuntimeDataConverter<Right, String> rightRule = rule(Right.class, String.class, (source, context) -> "right");
@@ -500,5 +523,10 @@ class TestRuntimeDataConversionService {
     private enum Status {
         ACTIVE,
         INACTIVE
+    }
+
+    private enum CaseCollision {
+        ALPHA,
+        alpha
     }
 }

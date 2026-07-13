@@ -496,18 +496,24 @@ public final class DefaultRuntimeDataConversionService implements RuntimeDataCon
 
     private static final class EnumMetadata<T> {
         private final T[] constants;
-        private final Map<String, T> byName;
+        private final Map<String, T> byLookupName;
 
         private EnumMetadata(Class<T> enumType) {
             this.constants = enumType.getEnumConstants();
-            this.byName = new HashMap<>(constants.length);
+            this.byLookupName = new HashMap<>(constants.length);
             for (T constant : constants) {
-                byName.put(((Enum<?>) constant).name().toUpperCase(Locale.ROOT), constant);
+                String name = ((Enum<?>) constant).name();
+                byLookupName.put(name.toUpperCase(Locale.ROOT), constant);
+            }
+            for (T constant : constants) {
+                String name = ((Enum<?>) constant).name();
+                byLookupName.put(name, byLookupName.get(name.toUpperCase(Locale.ROOT)));
             }
         }
 
         private T byName(String name) {
-            return byName.get(name.toUpperCase(Locale.ROOT));
+            T exact = byLookupName.get(name);
+            return exact == null ? byLookupName.get(name.toUpperCase(Locale.ROOT)) : exact;
         }
 
         private T byOrdinal(int ordinal) {

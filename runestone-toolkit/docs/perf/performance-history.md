@@ -113,3 +113,25 @@
 **Decision:** ACCEPT
 **Reason:** All issue-targeted container and array scenarios improved well above the 10% acceptance threshold. `int[] -> long[]` also reduced allocation by removing `Array.get(...)` boxing for the measured primitive source path.
 **Notes:** JMH ran on OpenJDK 26.0.1 with JMH 1.37. Raw result files were captured at `/tmp/performance-benchmark/issue-52-before.json`, `/tmp/performance-benchmark/issue-52-after.json`, and `/tmp/performance-benchmark/issue-52-comparison.md`. The comparison script reported small regressions in unrelated scalar conversion benchmarks (`convertAssignableNumberToLong` and `convertExactStringToInteger`), but those paths are not touched by this change and their confidence intervals overlapped; they were treated as run noise rather than a blocker for the targeted container/array change.
+
+## PERF-006: Runtime enum exact-name lookup fast path
+
+**Date:** 2026-07-12
+
+**Scenario:** Reduce runtime enum conversion overhead for string inputs that already match exact enum constant names while preserving case-insensitive string lookup and ordinal conversion behavior.
+**Hypothesis:** Trying an exact enum-name map lookup before normalizing the input with `toUpperCase(Locale.ROOT)` would reduce exact-name conversion time without materially regressing lowercase, mixed-case, or ordinal inputs.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | B/op (B->A) |
+|-----------|---------------:|--------------:|----------------:|-----------:|
+| `convertLargeEnumExactName` | 17.752 | 12.393 | +30.19% | ≈ 0 -> ≈ 0 |
+| `convertLargeEnumLowercaseName` | 49.427 | 42.683 | +13.64% | 48 -> 48 |
+| `convertLargeEnumMixedCaseName` | 51.675 | 49.740 | +3.74% | 48 -> 48 |
+| `convertLargeEnumOrdinal` | 5.382 | 5.467 | -1.59% | ≈ 0 -> ≈ 0 |
+| `convertSmallEnumExactName` | 15.178 | 12.823 | +15.51% | ≈ 0 -> ≈ 0 |
+| `convertSmallEnumLowercaseName` | 40.561 | 40.216 | +0.85% | 48 -> 48 |
+| `convertSmallEnumMixedCaseName` | 53.049 | 49.230 | +7.20% | 48 -> 48 |
+| `convertSmallEnumOrdinal` | 5.329 | 5.546 | -4.06% | ≈ 0 -> ≈ 0 |
+
+**Decision:** ACCEPT
+**Reason:** Exact-name enum conversion improved by 15-30% with no allocation increase. Lowercase and mixed-case fallback string inputs were neutral to improved. The ordinal path reported small percentage regressions, but the absolute changes were sub-nanosecond, the confidence intervals overlapped, allocation stayed at approximately zero, and the ordinal lookup path was not changed by the refactor.
+**Notes:** JMH ran on OpenJDK 26.0.1 with JMH 1.37. Raw result files were captured at `/tmp/performance-benchmark/issue-54-before.json`, `/tmp/performance-benchmark/issue-54-after.json`, and `/tmp/performance-benchmark/issue-54-comparison.md`. The comparison script reported `DISCARD` because the ordinal percentage deltas crossed its generic regression threshold; this was overridden as non-material run noise for the untouched ordinal path.
