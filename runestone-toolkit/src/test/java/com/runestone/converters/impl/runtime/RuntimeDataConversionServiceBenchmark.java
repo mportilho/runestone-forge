@@ -35,7 +35,10 @@ public class RuntimeDataConversionServiceBenchmark {
     private BigDecimal decimalSource;
     private Integer integerSource;
     private LocalDate localDateSource;
+    private List<BigDecimal> decimalList;
     private List<String> stringList;
+    private int[] primitiveIntArray;
+    private String[] stringArray;
 
     @Setup
     public void setup() {
@@ -44,7 +47,18 @@ public class RuntimeDataConversionServiceBenchmark {
         decimalSource = new BigDecimal("12345.67");
         integerSource = 12345;
         localDateSource = LocalDate.of(2026, 7, 12);
+        decimalList = List.of(
+                BigDecimal.ONE,
+                BigDecimal.TWO,
+                BigDecimal.valueOf(3),
+                BigDecimal.valueOf(4),
+                BigDecimal.valueOf(5),
+                BigDecimal.valueOf(6),
+                BigDecimal.valueOf(7),
+                BigDecimal.valueOf(8));
         stringList = List.of("1", "2", "3", "4", "5", "6", "7", "8");
+        primitiveIntArray = new int[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+        stringArray = new String[] { "1", "2", "3", "4", "5", "6", "7", "8" };
     }
 
     @Benchmark
@@ -80,6 +94,31 @@ public class RuntimeDataConversionServiceBenchmark {
     @Benchmark
     public Integer[] convertContainerStringListToIntegerArray() {
         return service.convert(stringList, Integer[].class);
+    }
+
+    @Benchmark
+    public int[] convertContainerBigDecimalListToIntArray() {
+        return service.convert(decimalList, int[].class);
+    }
+
+    @Benchmark
+    public long[] convertContainerBigDecimalListToLongArray() {
+        return service.convert(decimalList, long[].class);
+    }
+
+    @Benchmark
+    public double[] convertContainerBigDecimalListToDoubleArray() {
+        return service.convert(decimalList, double[].class);
+    }
+
+    @Benchmark
+    public long[] convertArrayIntToLongArray() {
+        return service.convert(primitiveIntArray, long[].class);
+    }
+
+    @Benchmark
+    public Integer[] convertArrayStringToIntegerArray() {
+        return service.convert(stringArray, Integer[].class);
     }
 
     public static void main(String[] args) throws RunnerException {

@@ -93,3 +93,23 @@
 **Decision:** ACCEPT
 **Reason:** All measured scenarios improved. Exact `canConvert(...)` eliminated its previous lookup allocation, assignable `canConvert(...)` and `convert(...)` improved by roughly one order of magnitude, and container conversion did not regress.
 **Notes:** JMH ran on OpenJDK 26.0.1 with JMH 1.37. Raw result files were captured at `/tmp/performance-benchmark/issue-51-before.json`, `/tmp/performance-benchmark/issue-51-after.json`, and `/tmp/performance-benchmark/issue-51-comparison.md`.
+
+## PERF-005: Specialized runtime container and array conversion paths
+
+**Date:** 2026-07-12
+
+**Scenario:** Reduce reflective per-element overhead in `DefaultRuntimeDataConversionService` for runtime `Collection -> array` and `array -> array` conversions.
+**Hypothesis:** Replacing `Array.set(...)` on array targets with direct reference-array writes and primitive-array loops, plus a targeted `int[] -> long[]` source fast path, would reduce reflective dispatch and primitive boxing while preserving runtime element conversion semantics.
+
+| Benchmark | Before (ns/op) | After (ns/op) | Improvement (%) | B/op (B->A) |
+|-----------|---------------:|--------------:|----------------:|-----------:|
+| `convertArrayIntToLongArray` | 1544.821 | 209.370 | +86.45% | 208 -> 80 |
+| `convertArrayStringToIntegerArray` | 989.420 | 145.621 | +85.28% | 48 -> 48 |
+| `convertContainerBigDecimalListToDoubleArray` | 765.187 | 243.954 | +68.12% | 272 -> 272 |
+| `convertContainerBigDecimalListToIntArray` | 881.183 | 242.045 | +72.53% | 48 -> 48 |
+| `convertContainerBigDecimalListToLongArray` | 818.355 | 256.639 | +68.64% | 80 -> 80 |
+| `convertContainerStringListToIntegerArray` | 564.692 | 183.425 | +67.52% | 48 -> 48 |
+
+**Decision:** ACCEPT
+**Reason:** All issue-targeted container and array scenarios improved well above the 10% acceptance threshold. `int[] -> long[]` also reduced allocation by removing `Array.get(...)` boxing for the measured primitive source path.
+**Notes:** JMH ran on OpenJDK 26.0.1 with JMH 1.37. Raw result files were captured at `/tmp/performance-benchmark/issue-52-before.json`, `/tmp/performance-benchmark/issue-52-after.json`, and `/tmp/performance-benchmark/issue-52-comparison.md`. The comparison script reported small regressions in unrelated scalar conversion benchmarks (`convertAssignableNumberToLong` and `convertExactStringToInteger`), but those paths are not touched by this change and their confidence intervals overlapped; they were treated as run noise rather than a blocker for the targeted container/array change.

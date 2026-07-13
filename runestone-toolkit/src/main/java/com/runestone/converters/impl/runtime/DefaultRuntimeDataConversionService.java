@@ -143,26 +143,140 @@ public final class DefaultRuntimeDataConversionService implements RuntimeDataCon
     }
 
     private Object collectionToArray(Collection<?> source, Class<?> componentType) {
-        Object target = Array.newInstance(componentType, source.size());
+        if (componentType.isPrimitive()) {
+            return collectionToPrimitiveArray(source, componentType);
+        }
+        Object[] target = (Object[]) Array.newInstance(componentType, source.size());
         int index = 0;
         for (Object element : source) {
-            if (element == null && componentType.isPrimitive()) {
-                throw new DataConverterConfigurationException("Null cannot be stored in an array of " + componentType.getName());
-            }
-            Array.set(target, index++, convert(element, boxedType(componentType)));
+            target[index++] = convert(element, componentType);
         }
         return target;
     }
 
     private Object arrayToArray(Object source, Class<?> componentType) {
+        if (componentType.isPrimitive()) {
+            return arrayToPrimitiveArray(source, componentType);
+        }
+        int length = Array.getLength(source);
+        Object[] target = (Object[]) Array.newInstance(componentType, length);
+        if (source instanceof Object[] values) {
+            for (int index = 0; index < values.length; index++) {
+                target[index] = convert(values[index], componentType);
+            }
+            return target;
+        }
+        for (int index = 0; index < length; index++) {
+            target[index] = convert(Array.get(source, index), componentType);
+        }
+        return target;
+    }
+
+    private Object collectionToPrimitiveArray(Collection<?> source, Class<?> componentType) {
+        if (componentType == int.class) {
+            return collectionToIntArray(source);
+        }
+        if (componentType == long.class) {
+            return collectionToLongArray(source);
+        }
+        if (componentType == double.class) {
+            return collectionToDoubleArray(source);
+        }
+        return collectionToArrayReflective(source, componentType);
+    }
+
+    private Object arrayToPrimitiveArray(Object source, Class<?> componentType) {
+        if (componentType == long.class) {
+            return arrayToLongArray(source);
+        }
+        return arrayToArrayReflective(source, componentType);
+    }
+
+    private int[] collectionToIntArray(Collection<?> source) {
+        int[] target = new int[source.size()];
+        int index = 0;
+        for (Object element : source) {
+            requirePrimitiveArrayElement(element, int.class);
+            target[index++] = convert(element, Integer.class);
+        }
+        return target;
+    }
+
+    private long[] collectionToLongArray(Collection<?> source) {
+        long[] target = new long[source.size()];
+        int index = 0;
+        for (Object element : source) {
+            requirePrimitiveArrayElement(element, long.class);
+            target[index++] = convert(element, Long.class);
+        }
+        return target;
+    }
+
+    private double[] collectionToDoubleArray(Collection<?> source) {
+        double[] target = new double[source.size()];
+        int index = 0;
+        for (Object element : source) {
+            requirePrimitiveArrayElement(element, double.class);
+            target[index++] = convert(element, Double.class);
+        }
+        return target;
+    }
+
+    private long[] arrayToLongArray(Object source) {
+        if (source instanceof int[] values) {
+            long[] target = new long[values.length];
+            for (int index = 0; index < values.length; index++) {
+                target[index] = convert(values[index], Long.class);
+            }
+            return target;
+        }
+        int length = Array.getLength(source);
+        long[] target = new long[length];
+        if (source instanceof Object[] values) {
+            for (int index = 0; index < values.length; index++) {
+                Object element = values[index];
+                requirePrimitiveArrayElement(element, long.class);
+                target[index] = convert(element, Long.class);
+            }
+            return target;
+        }
+        for (int index = 0; index < length; index++) {
+            Object element = Array.get(source, index);
+            requirePrimitiveArrayElement(element, long.class);
+            target[index] = convert(element, Long.class);
+        }
+        return target;
+    }
+
+    private static void requirePrimitiveArrayElement(Object element, Class<?> componentType) {
+        if (element == null) {
+            throw new DataConverterConfigurationException("Null cannot be stored in an array of " + componentType.getName());
+        }
+    }
+
+    private Object collectionToArrayReflective(Collection<?> source, Class<?> componentType) {
+        Object target = Array.newInstance(componentType, source.size());
+        Class<?> boxedComponentType = boxedType(componentType);
+        int index = 0;
+        for (Object element : source) {
+            if (element == null && componentType.isPrimitive()) {
+                requirePrimitiveArrayElement(element, componentType);
+            }
+            Array.set(target, index++, convert(element, boxedComponentType));
+        }
+        return target;
+    }
+
+    private Object arrayToArrayReflective(Object source, Class<?> componentType) {
         int length = Array.getLength(source);
         Object target = Array.newInstance(componentType, length);
+        Class<?> boxedComponentType = boxedType(componentType);
         for (int index = 0; index < length; index++) {
             Object element = Array.get(source, index);
             if (element == null && componentType.isPrimitive()) {
-                throw new DataConverterConfigurationException("Null cannot be stored in an array of " + componentType.getName());
+                requirePrimitiveArrayElement(element, componentType);
             }
-            Array.set(target, index, convert(element, boxedType(componentType)));
+            Array.set(target, index, convert(element, boxedComponentType));
         }
         return target;
     }

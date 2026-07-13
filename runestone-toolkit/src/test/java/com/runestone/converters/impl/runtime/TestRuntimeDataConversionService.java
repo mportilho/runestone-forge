@@ -36,6 +36,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.temporal.Temporal;
+import java.util.Arrays;
 import java.util.Currency;
 import java.util.Date;
 import java.util.List;
@@ -335,6 +336,41 @@ class TestRuntimeDataConversionService {
         source[0] = "9";
 
         assertThat(converted).containsExactly(1, 2);
+    }
+
+    @Test
+    void runtimeCollectionToPrimitiveArrayRejectsNullElement() {
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
+        List<String> source = Arrays.asList("1", null);
+
+        assertThatThrownBy(() -> service.convert(source, int[].class))
+                .isInstanceOf(DataConverterConfigurationException.class)
+                .hasMessageContaining("Null cannot be stored in an array of int");
+    }
+
+    @Test
+    void runtimeArrayToPrimitiveArrayRejectsNullElement() {
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.standard();
+        String[] source = { "1", null };
+
+        assertThatThrownBy(() -> service.convert(source, int[].class))
+                .isInstanceOf(DataConverterConfigurationException.class)
+                .hasMessageContaining("Null cannot be stored in an array of int");
+    }
+
+    @Test
+    void runtimePrimitiveArrayToPrimitiveArrayUsesRegisteredElementConverter() {
+        RuntimeDataConverter<Integer, Long> converter = rule(
+                Integer.class,
+                Long.class,
+                (source, context) -> source.longValue() + 100L);
+        RuntimeDataConversionService service = DefaultRuntimeDataConversionService.withConverters(
+                ConversionContext.standard(),
+                List.of(converter));
+
+        long[] converted = service.convert(new int[] { 1, 2 }, long[].class);
+
+        assertThat(converted).containsExactly(101L, 102L);
     }
 
     @Test
