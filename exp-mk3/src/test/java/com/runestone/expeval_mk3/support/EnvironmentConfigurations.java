@@ -4,12 +4,14 @@ import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConversionService;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
+import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.FunctionPurity;
 import com.runestone.expeval_mk3.api.MapType;
-import com.runestone.expeval_mk3.api.NumericMode;
 import com.runestone.expeval_mk3.api.ObjectType;
 import com.runestone.expeval_mk3.api.ScalarType;
+import com.runestone.expeval_mk3.api.VectorType;
+import com.runestone.expeval_mk3.api.CollectionType;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -87,17 +89,19 @@ public final class EnvironmentConfigurations {
         Objects.requireNonNull(businessDate, "businessDate");
         ExpressionEnvironment.Builder builder = ExpressionEnvironment.builder()
                 .zoneId(ZoneId.of("UTC"))
-                .numericMode(NumericMode.FAST)
                 .mathContext(new MathContext(18, RoundingMode.HALF_EVEN))
                 .transcendentalMathContext(new MathContext(30, RoundingMode.HALF_UP))
-                .strictMode(true)
                 .maxCurrentItemDepth(3)
-                .materializationLimit(256)
+                .maxMaterializedSize(256)
+                .maxFactorialInput(32)
                 .boundaryCoercion(prefixedNumberConversionService())
-                .externalSymbol(amountSymbolName, amountType)
-                .externalSymbolWithDefault("businessDate", ScalarType.DATE, businessDate)
-                .externalSymbol("customer", customerProfileObjectType())
-                .externalSymbolWithDefault("labels", new MapType(ScalarType.STRING), Map.of("tier", "gold"))
+                .externalSymbol(amountSymbolName, amountType, defaultValueFor(amountType),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("businessDate", ScalarType.DATE, businessDate, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("customer", customerProfileObjectType(), new CustomerProfile("Ana", BigDecimal.TEN),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("labels", new MapType(ScalarType.STRING), Map.of("tier", "gold"),
+                        ExternalSymbolOverwritePolicy.FIXED)
                 .function(function);
         return switch (javaTypeExposure) {
             case PROPERTIES -> builder.registerJavaType(CustomerProfile.class);
@@ -108,13 +112,14 @@ public final class EnvironmentConfigurations {
     public static List<RepresentativeEnvironmentConfiguration> representativeConfigurations() throws NoSuchMethodException {
         return List.of(
                 new RepresentativeEnvironmentConfiguration("standard", ExpressionEnvironment.standard()),
-                new RepresentativeEnvironmentConfiguration("strict fast tenant", complete()),
+                new RepresentativeEnvironmentConfiguration("tenant guarded", complete()),
                 new RepresentativeEnvironmentConfiguration("custom coercion", ExpressionEnvironment.builder()
                         .boundaryCoercion(prefixedNumberConversionService())
-                        .externalSymbolWithDefault("amount", ScalarType.NUMBER, "points:10")
+                        .externalSymbol("amount", ScalarType.NUMBER, "points:10", ExternalSymbolOverwritePolicy.OVERRIDABLE)
                         .build()),
                 new RepresentativeEnvironmentConfiguration("Java type metadata", ExpressionEnvironment.builder()
-                        .externalSymbol("customer", customerProfileObjectType())
+                        .externalSymbol("customer", customerProfileObjectType(), new CustomerProfile("Ana", BigDecimal.TEN),
+                                ExternalSymbolOverwritePolicy.OVERRIDABLE)
                         .registerJavaTypeWithPublicMethods(CustomerProfile.class)
                         .build()),
                 new RepresentativeEnvironmentConfiguration("overloaded functions", ExpressionEnvironment.builder()
@@ -210,11 +215,31 @@ public final class EnvironmentConfigurations {
         PUBLIC_METHODS
     }
 
+    private static Object defaultValueFor(ExpressionType type) {
+        return switch (type) {
+            case ScalarType.NUMBER -> BigDecimal.ONE;
+            case ScalarType.BOOLEAN -> true;
+            case ScalarType.STRING -> "value";
+            case ScalarType.DATE -> BUSINESS_DATE;
+            case ScalarType.TIME -> java.time.LocalTime.NOON;
+            case ScalarType.DATETIME -> java.time.LocalDateTime.of(BUSINESS_DATE, java.time.LocalTime.NOON);
+            case VectorType vectorType -> List.of(defaultValueFor(vectorType.elementType()));
+            case CollectionType collectionType -> List.of(defaultValueFor(collectionType.elementType()));
+            case MapType mapType -> Map.of("value", defaultValueFor(mapType.valueType()));
+            case ObjectType objectType when objectType.name().equals(CustomerProfile.class.getName()) ->
+                    new CustomerProfile("Ana", BigDecimal.ONE);
+            case ObjectType ignored -> new AcceptanceObject("value");
+        };
+    }
+
     public record CustomerProfile(String name, BigDecimal score) {
 
         public BigDecimal scorePlus(BigDecimal increment) {
             return score.add(increment);
         }
+    }
+
+    public record AcceptanceObject(String value) {
     }
 
     private static final class PrefixedNumberConversionService implements DataConversionService {

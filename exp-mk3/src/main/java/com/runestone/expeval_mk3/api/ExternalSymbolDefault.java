@@ -3,7 +3,7 @@ package com.runestone.expeval_mk3.api;
 import java.util.Objects;
 
 /**
- * Present default value for a Simbolo Externo. The value may be {@code null} for Tipo Nulo.
+ * Present non-null default value for a Simbolo Externo.
  */
 public final class ExternalSymbolDefault {
 
@@ -12,7 +12,7 @@ public final class ExternalSymbolDefault {
 
     ExternalSymbolDefault(ExpressionType type, Object value) {
         this.type = Objects.requireNonNull(type, "type");
-        this.value = value;
+        this.value = Objects.requireNonNull(value, "value");
     }
 
     public ExpressionType type() {

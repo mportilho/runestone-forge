@@ -59,7 +59,7 @@ public final class BoundaryCoercion {
             case VectorType vectorType -> canConvertCollectionType(sourceType, vectorType.elementType());
             case CollectionType collectionType -> canConvertCollectionType(sourceType, collectionType.elementType());
             case MapType mapType -> canConvertMapType(sourceType, mapType.valueType());
-            case ObjectType ignored -> false;
+            case ObjectType objectType -> sourceType.getName().equals(objectType.name());
         };
     }
 
@@ -82,11 +82,17 @@ public final class BoundaryCoercion {
         return convertBoundaryValue("external symbol '" + symbolName + "' default", sourceValue, targetType);
     }
 
+    Object convertOverride(String symbolName, Object sourceValue, ExpressionType targetType) {
+        return convertBoundaryValue("external symbol '" + symbolName + "' override", sourceValue, targetType);
+    }
+
     private Object convertBoundaryValue(String boundaryName, Object sourceValue, ExpressionType targetType) {
         try {
             return convertValue(boundaryName, sourceValue, targetType);
         } catch (RuntimeException exception) {
-            throw new BoundaryCoercionFailure(boundaryName + " cannot be converted to " + targetType, exception);
+            throw new BoundaryCoercionFailure(
+                    boundaryName + " cannot be converted to " + targetType + ": " + exception.getMessage(),
+                    exception);
         }
     }
 
@@ -101,7 +107,7 @@ public final class BoundaryCoercion {
                     collectionType.elementType(),
                     "CollectionType");
             case MapType mapType -> convertMap(valueName, sourceValue, mapType.valueType());
-            case ObjectType ignored -> throw new IllegalArgumentException("object boundary coercion is not available");
+            case ObjectType objectType -> convertObject(valueName, sourceValue, objectType);
         };
     }
 
@@ -183,6 +189,16 @@ public final class BoundaryCoercion {
             sortedValues.put(key, convertElement(valueName, valueType, entry.getValue()));
         }
         return Collections.unmodifiableMap(new LinkedHashMap<>(sortedValues));
+    }
+
+    private Object convertObject(String valueName, Object sourceValue, ObjectType objectType) {
+        if (sourceValue == null) {
+            throw new IllegalArgumentException("object target requires a non-null value");
+        }
+        if (!sourceValue.getClass().getName().equals(objectType.name())) {
+            throw new IllegalArgumentException(valueName + " must be an instance of " + objectType.name());
+        }
+        return sourceValue;
     }
 
     static String validateProfileIdentity(String profileIdentity) {

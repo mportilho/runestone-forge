@@ -28,17 +28,20 @@ final class EnvironmentAcceptanceGateTest {
         ExpressionEnvironment sameContentDifferentOrder = ExpressionEnvironment.builder()
                 .registerJavaType(EnvironmentConfigurations.customerProfileClass())
                 .function(EnvironmentConfigurations.discountFunction())
-                .externalSymbolWithDefault("labels", new MapType(ScalarType.STRING), Map.of("tier", "gold"))
-                .externalSymbol("customer", EnvironmentConfigurations.customerProfileObjectType())
-                .externalSymbolWithDefault("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 10))
-                .externalSymbol("amount", ScalarType.NUMBER)
+                .externalSymbol("labels", new MapType(ScalarType.STRING), Map.of("tier", "gold"),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("customer", EnvironmentConfigurations.customerProfileObjectType(),
+                        new EnvironmentConfigurations.CustomerProfile("Ana", BigDecimal.TEN),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 10),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService())
-                .materializationLimit(256)
+                .maxMaterializedSize(256)
+                .maxFactorialInput(32)
                 .maxCurrentItemDepth(3)
-                .strictMode(true)
                 .transcendentalMathContext(new MathContext(30, RoundingMode.HALF_UP))
                 .mathContext(new MathContext(18, RoundingMode.HALF_EVEN))
-                .numericMode(NumericMode.FAST)
                 .zoneId(ZoneId.of("UTC"))
                 .build();
 
@@ -84,7 +87,7 @@ final class EnvironmentAcceptanceGateTest {
         assertEnvironmentIdChanges("object symbol type", baseline,
                 EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
                         "amount",
-                        new ObjectType("AcceptanceObject"),
+                        new ObjectType(EnvironmentConfigurations.AcceptanceObject.class.getName()),
                         EnvironmentConfigurations.discountFunction(),
                         LocalDate.of(2026, 7, 10)).build());
         assertEnvironmentIdChanges("symbol default", baseline,
@@ -143,12 +146,12 @@ final class EnvironmentAcceptanceGateTest {
                 EnvironmentConfigurations.completeBuilder()
                         .registerJavaType(SecondaryProfile.class)
                         .build());
-        assertEnvironmentIdChanges("numeric mode", baseline,
-                EnvironmentConfigurations.completeBuilder().numericMode(NumericMode.DECIMAL).build());
         assertEnvironmentIdChanges("time zone", baseline,
                 EnvironmentConfigurations.completeBuilder().zoneId(ZoneId.of("America/Sao_Paulo")).build());
-        assertEnvironmentIdChanges("materialization limit", baseline,
-                EnvironmentConfigurations.completeBuilder().materializationLimit(257).build());
+        assertEnvironmentIdChanges("materialized size limit", baseline,
+                EnvironmentConfigurations.completeBuilder().maxMaterializedSize(257).build());
+        assertEnvironmentIdChanges("factorial input limit", baseline,
+                EnvironmentConfigurations.completeBuilder().maxFactorialInput(33).build());
         assertEnvironmentIdChanges("current item limit", baseline,
                 EnvironmentConfigurations.completeBuilder().maxCurrentItemDepth(4).build());
         assertEnvironmentIdChanges("math context", baseline,
@@ -157,7 +160,6 @@ final class EnvironmentAcceptanceGateTest {
                 EnvironmentConfigurations.completeBuilder()
                         .transcendentalMathContext(new MathContext(31, RoundingMode.HALF_UP))
                         .build());
-        assertEnvironmentIdChanges("strict mode", baseline, EnvironmentConfigurations.completeBuilder().strictMode(false).build());
         assertEnvironmentIdChanges("conversion profile", baseline,
                 EnvironmentConfigurations.completeBuilder()
                         .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(
@@ -219,16 +221,16 @@ final class EnvironmentAcceptanceGateTest {
     @DisplayName("environment catalogs expose deterministic ordering independent of registration order")
     void environmentCatalogsExposeDeterministicOrderingIndependentOfRegistrationOrder() throws NoSuchMethodException {
         ExpressionEnvironment first = ExpressionEnvironment.builder()
-                .externalSymbol("zeta", ScalarType.STRING)
-                .externalSymbol("alpha", ScalarType.NUMBER)
+                .externalSymbol("zeta", ScalarType.STRING, "z", ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("alpha", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .registerJavaType(SecondaryProfile.class)
                 .registerJavaType(EnvironmentConfigurations.customerProfileClass())
                 .build();
         ExpressionEnvironment second = ExpressionEnvironment.builder()
                 .registerJavaType(EnvironmentConfigurations.customerProfileClass())
                 .registerJavaType(SecondaryProfile.class)
-                .externalSymbol("alpha", ScalarType.NUMBER)
-                .externalSymbol("zeta", ScalarType.STRING)
+                .externalSymbol("alpha", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("zeta", ScalarType.STRING, "z", ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
         assertThat(first.environmentId()).isEqualTo(second.environmentId());
@@ -261,9 +263,10 @@ final class EnvironmentAcceptanceGateTest {
     }
 
     @Test
-    @DisplayName("standard environment contains every standard built-in group and assertion function")
-    void standardEnvironmentContainsEveryStandardBuiltInGroupAndAssertionFunction() {
-        FunctionCatalog functions = ExpressionEnvironment.standard().functions();
+    @DisplayName("standard environment contains every standard catalog")
+    void standardEnvironmentContainsEveryStandardCatalog() {
+        ExpressionEnvironment environment = ExpressionEnvironment.standard();
+        FunctionCatalog functions = environment.functions();
         Set<String> standardFunctionNames = functions.values().stream()
                 .map(FunctionDescriptor::languageName)
                 .collect(Collectors.toUnmodifiableSet());
@@ -299,6 +302,8 @@ final class EnvironmentAcceptanceGateTest {
                         "asTime",
                         "asDateTime");
         StandardBuiltInFunctions.validate(functions);
+        assertThat(environment.collectionOperations().operationNames())
+                .containsExactly("all", "any", "count", "keys", "map", "sum", "values");
     }
 
     @Test
@@ -307,13 +312,13 @@ final class EnvironmentAcceptanceGateTest {
         FunctionDescriptor discount = EnvironmentConfigurations.discountFunction();
 
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .externalSymbol("amount", ScalarType.NUMBER)
-                .externalSymbol("amount", ScalarType.NUMBER)
+                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("external symbol already declared: amount");
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "not-a-number")
+                .externalSymbol("amount", ScalarType.NUMBER, "not-a-number", ExternalSymbolOverwritePolicy.FIXED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("amount");
@@ -324,11 +329,15 @@ final class EnvironmentAcceptanceGateTest {
         assertThatThrownBy(() -> ExpressionEnvironment.builder().maxCurrentItemDepth(-1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("maxCurrentItemDepth must not be negative");
-        assertThatThrownBy(() -> ExpressionEnvironment.builder().materializationLimit(-1))
+        assertThatThrownBy(() -> ExpressionEnvironment.builder().maxMaterializedSize(-1))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("materializationLimit must not be negative");
+                .hasMessage("maxMaterializedSize must not be negative");
+        assertThatThrownBy(() -> ExpressionEnvironment.builder().maxFactorialInput(-1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("maxFactorialInput must not be negative");
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .externalSymbol(CurrentTemporalValue.DATE.simpleName(), ScalarType.DATE)
+                .externalSymbol(CurrentTemporalValue.DATE.simpleName(), ScalarType.DATE, LocalDate.of(2026, 7, 10),
+                        ExternalSymbolOverwritePolicy.FIXED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("reserved");
@@ -358,7 +367,7 @@ final class EnvironmentAcceptanceGateTest {
         assertThat(configurations).extracting(RepresentativeEnvironmentConfiguration::name)
                 .containsExactly(
                         "standard",
-                        "strict fast tenant",
+                        "tenant guarded",
                         "custom coercion",
                         "Java type metadata",
                         "overloaded functions");
@@ -369,22 +378,21 @@ final class EnvironmentAcceptanceGateTest {
                 .collect(Collectors.toUnmodifiableMap(
                         RepresentativeEnvironmentConfiguration::name,
                         RepresentativeEnvironmentConfiguration::environment));
-        ExpressionEnvironment strictFastTenant = byName.get("strict fast tenant");
+        ExpressionEnvironment tenantGuarded = byName.get("tenant guarded");
         ExpressionEnvironment customCoercion = byName.get("custom coercion");
         ExpressionEnvironment javaTypeMetadata = byName.get("Java type metadata");
         ExpressionEnvironment overloadedFunctions = byName.get("overloaded functions");
 
-        assertThat(strictFastTenant.numericMode()).isEqualTo(NumericMode.FAST);
-        assertThat(strictFastTenant.strictMode()).isTrue();
-        assertThat(strictFastTenant.externalSymbols().asMap()).containsKeys("amount", "businessDate", "customer", "labels");
-        assertThat(strictFastTenant.javaTypes().find(EnvironmentConfigurations.customerProfileClass())).isPresent();
-        assertThat(strictFastTenant.functions().find(new FunctionSignature(
+        assertThat(tenantGuarded.maxMaterializedSize()).isEqualTo(256);
+        assertThat(tenantGuarded.maxFactorialInput()).isEqualTo(32);
+        assertThat(tenantGuarded.externalSymbols().asMap()).containsKeys("amount", "businessDate", "customer", "labels");
+        assertThat(tenantGuarded.javaTypes().find(EnvironmentConfigurations.customerProfileClass())).isPresent();
+        assertThat(tenantGuarded.functions().find(new FunctionSignature(
                 "acceptanceDiscount",
                 List.of(ScalarType.NUMBER)))).isPresent();
 
         assertThat(customCoercion.conversionProfileIdentity()).isEqualTo("test.prefixed-number");
         assertThat(customCoercion.externalSymbols().asMap().get("amount").defaultValue())
-                .get()
                 .extracting(ExternalSymbolDefault::value)
                 .isEqualTo(new BigDecimal("10"));
 

@@ -139,20 +139,15 @@ class JavaTypeCatalogTest {
     @DisplayName("registered Java type metadata contributes stably to environment identity")
     void registeredJavaTypeMetadataContributesStablyToEnvironmentIdentity() {
         ExpressionEnvironment first = ExpressionEnvironment.builder()
-                .externalSymbol("customer", new ObjectType(CustomerBean.class.getName()))
                 .registerJavaTypeMethod(MethodProvider.class, "privatePrice", BigDecimal.class)
                 .registerJavaType(CustomerBean.class)
                 .build();
         ExpressionEnvironment sameContentDifferentOrder = ExpressionEnvironment.builder()
                 .registerJavaType(CustomerBean.class)
                 .registerJavaTypeMethod(MethodProvider.class, "privatePrice", BigDecimal.class)
-                .externalSymbol("customer", new ObjectType(CustomerBean.class.getName()))
                 .build();
-        ExpressionEnvironment withoutJavaTypes = ExpressionEnvironment.builder()
-                .externalSymbol("customer", new ObjectType(CustomerBean.class.getName()))
-                .build();
+        ExpressionEnvironment withoutJavaTypes = ExpressionEnvironment.builder().build();
         ExpressionEnvironment withPublicMethods = ExpressionEnvironment.builder()
-                .externalSymbol("customer", new ObjectType(CustomerBean.class.getName()))
                 .registerJavaType(CustomerBean.class)
                 .registerJavaTypeWithPublicMethods(MethodProvider.class)
                 .build();

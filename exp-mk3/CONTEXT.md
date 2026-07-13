@@ -21,7 +21,7 @@ The value or diagnostic that an expression case declares as the correct behavior
 _Avoid_: Assertion payload, expected output
 
 **Ambiente de Expressao**:
-The compilation configuration that declares external symbols, functions, Java types, numeric mode, time zone, and limits used to interpret an expression case.
+The compilation configuration that declares external symbols, functions, Java types, decimal numeric semantics, time zone, and limits used to interpret an expression case.
 _Avoid_: Test context, evaluation setup
 
 **Identificador de Ambiente**:
@@ -197,7 +197,7 @@ A navigation operation invoked with collection-operation syntax on a receiver va
 _Avoid_: Global function, Java collection method, stream operation
 
 **Catalogo de Operacoes de Colecao**:
-The Ambiente de Expressao catalog that declares built-in and user-provided Operacao de Colecao descriptors separately from global functions.
+The Ambiente de Expressao catalog that declares built-in Operacao de Colecao descriptors separately from global functions, with a future extension seam for user-provided operations.
 _Avoid_: FunctionCatalog convention, method registry, stream extension list
 
 **Item Atual**:

@@ -85,20 +85,25 @@ public final class ExternalSymbolCatalog {
         private Builder() {
         }
 
-        public Builder externalSymbol(String name, ExpressionType type) {
-            return addDeclaration(ExternalSymbolDeclaration.declared(name, type));
-        }
-
-        public Builder externalSymbolWithDefault(String name, Object defaultValue) {
+        public Builder externalSymbol(
+                String name,
+                Object defaultValue,
+                ExternalSymbolOverwritePolicy overwritePolicy) {
             String validatedName = ExternalSymbolNames.validate(name);
             return addDeclaration(ExternalSymbolDeclaration.withDefault(
                     validatedName,
                     ExternalSymbolDefaults.inferType(validatedName, defaultValue),
-                    defaultValue));
+                    defaultValue,
+                    overwritePolicy));
         }
 
-        public Builder externalSymbolWithDefault(String name, ExpressionType type, Object defaultValue) {
-            return addDeclaration(ExternalSymbolDeclaration.withDefault(name, type, defaultValue));
+        public Builder externalSymbol(
+                String name,
+                ExpressionType type,
+                Object defaultValue,
+                ExternalSymbolOverwritePolicy overwritePolicy) {
+            Objects.requireNonNull(defaultValue, "defaultValue");
+            return addDeclaration(ExternalSymbolDeclaration.withDefault(name, type, defaultValue, overwritePolicy));
         }
 
         public ExternalSymbolCatalog build() {
@@ -125,27 +130,26 @@ public final class ExternalSymbolCatalog {
         private record ExternalSymbolDeclaration(
                 String name,
                 ExpressionType type,
-                boolean hasDefaultValue,
-                Object defaultValue) {
+                Object defaultValue,
+                ExternalSymbolOverwritePolicy overwritePolicy) {
 
             private ExternalSymbolDeclaration {
                 name = ExternalSymbolNames.validate(name);
                 type = Objects.requireNonNull(type, "type");
+                Objects.requireNonNull(defaultValue, "defaultValue");
+                Objects.requireNonNull(overwritePolicy, "overwritePolicy");
             }
 
-            private static ExternalSymbolDeclaration declared(String name, ExpressionType type) {
-                return new ExternalSymbolDeclaration(name, type, false, null);
-            }
-
-            private static ExternalSymbolDeclaration withDefault(String name, ExpressionType type, Object defaultValue) {
-                return new ExternalSymbolDeclaration(name, type, true, defaultValue);
+            private static ExternalSymbolDeclaration withDefault(
+                    String name,
+                    ExpressionType type,
+                    Object defaultValue,
+                    ExternalSymbolOverwritePolicy overwritePolicy) {
+                return new ExternalSymbolDeclaration(name, type, defaultValue, overwritePolicy);
             }
 
             private ExternalSymbol toExternalSymbol(BoundaryCoercion boundaryCoercion) {
-                if (hasDefaultValue) {
-                    return ExternalSymbol.withDefault(name, type, defaultValue, boundaryCoercion);
-                }
-                return ExternalSymbol.declared(name, type);
+                return ExternalSymbol.withDefault(name, type, defaultValue, overwritePolicy, boundaryCoercion);
             }
         }
     }

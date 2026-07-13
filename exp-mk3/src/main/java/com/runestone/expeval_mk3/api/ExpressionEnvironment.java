@@ -17,43 +17,42 @@ import java.util.Objects;
 public final class ExpressionEnvironment {
 
     private static final ZoneId DEFAULT_ZONE_ID = ZoneId.systemDefault();
-    private static final NumericMode DEFAULT_NUMERIC_MODE = NumericMode.DECIMAL;
     private static final MathContext DEFAULT_MATH_CONTEXT = MathContext.DECIMAL128;
     private static final MathContext DEFAULT_TRANSCENDENTAL_MATH_CONTEXT = MathContext.DECIMAL128;
-    private static final boolean DEFAULT_STRICT_MODE = false;
     private static final int DEFAULT_MAX_CURRENT_ITEM_DEPTH = 32;
-    private static final int DEFAULT_MATERIALIZATION_LIMIT = 10_000;
+    private static final int DEFAULT_MAX_MATERIALIZED_SIZE = 10_000;
+    private static final int DEFAULT_MAX_FACTORIAL_INPUT = 1_000;
     private static final ExpressionEnvironment STANDARD = builder().build();
 
-    private final NumericMode numericMode;
     private final ZoneId zoneId;
     private final MathContext mathContext;
     private final MathContext transcendentalMathContext;
-    private final boolean strictMode;
     private final int maxCurrentItemDepth;
-    private final int materializationLimit;
+    private final int maxMaterializedSize;
+    private final int maxFactorialInput;
     private final String conversionProfileIdentity;
     private final String conversionProfileHash;
     private final BoundaryCoercion boundaryCoercion;
     private final ExternalSymbolCatalog externalSymbols;
     private final FunctionCatalog functions;
     private final JavaTypeCatalog javaTypes;
+    private final CollectionOperationCatalog collectionOperations;
     private final ExpressionEnvironmentId environmentId;
 
     private ExpressionEnvironment(Builder builder) {
-        numericMode = builder.numericMode;
         zoneId = builder.zoneId;
         mathContext = builder.mathContext;
         transcendentalMathContext = builder.transcendentalMathContext;
-        strictMode = builder.strictMode;
         maxCurrentItemDepth = builder.maxCurrentItemDepth;
-        materializationLimit = builder.materializationLimit;
+        maxMaterializedSize = builder.maxMaterializedSize;
+        maxFactorialInput = builder.maxFactorialInput;
         boundaryCoercion = builder.boundaryCoercion;
         conversionProfileIdentity = boundaryCoercion.profileIdentity();
         conversionProfileHash = boundaryCoercion.profileHash();
         externalSymbols = builder.externalSymbols.build(boundaryCoercion);
         functions = buildFunctions(builder);
         javaTypes = builder.javaTypes.build();
+        collectionOperations = CollectionOperationCatalog.standard();
         environmentId = calculateEnvironmentId(this);
     }
 
@@ -71,10 +70,6 @@ public final class ExpressionEnvironment {
         return new Builder();
     }
 
-    public NumericMode numericMode() {
-        return numericMode;
-    }
-
     public ZoneId zoneId() {
         return zoneId;
     }
@@ -87,16 +82,16 @@ public final class ExpressionEnvironment {
         return transcendentalMathContext;
     }
 
-    public boolean strictMode() {
-        return strictMode;
-    }
-
     public int maxCurrentItemDepth() {
         return maxCurrentItemDepth;
     }
 
-    public int materializationLimit() {
-        return materializationLimit;
+    public int maxMaterializedSize() {
+        return maxMaterializedSize;
+    }
+
+    public int maxFactorialInput() {
+        return maxFactorialInput;
     }
 
     public String conversionProfileIdentity() {
@@ -125,6 +120,10 @@ public final class ExpressionEnvironment {
 
     public JavaTypeCatalog javaTypes() {
         return javaTypes;
+    }
+
+    public CollectionOperationCatalog collectionOperations() {
+        return collectionOperations;
     }
 
     public OffsetDateTimeLiteralNormalization normalizeOffsetDateTimeLiteral(OffsetDateTime originalLiteral) {
@@ -160,26 +159,27 @@ public final class ExpressionEnvironment {
 
     private static String canonicalRepresentation(ExpressionEnvironment environment) {
         StringBuilder builder = new StringBuilder(256);
-        appendCanonicalField(builder, "schema", "4");
-        appendCanonicalField(builder, "numericMode", environment.numericMode.name());
+        appendCanonicalField(builder, "schema", "5");
         appendCanonicalField(builder, "zoneId", environment.zoneId.getId());
         appendCanonicalField(builder, "mathContext", canonicalMathContext(environment.mathContext));
         appendCanonicalField(builder, "transcendentalMathContext",
                 canonicalMathContext(environment.transcendentalMathContext));
-        appendCanonicalField(builder, "strictMode", Boolean.toString(environment.strictMode));
         appendCanonicalField(builder, "maxCurrentItemDepth", Integer.toString(environment.maxCurrentItemDepth));
-        appendCanonicalField(builder, "materializationLimit", Integer.toString(environment.materializationLimit));
+        appendCanonicalField(builder, "maxMaterializedSize", Integer.toString(environment.maxMaterializedSize));
+        appendCanonicalField(builder, "maxFactorialInput", Integer.toString(environment.maxFactorialInput));
         appendCanonicalField(builder, "conversionProfileHash", environment.conversionProfileHash);
         appendCanonicalField(builder, "externalSymbols.count", Integer.toString(environment.externalSymbols.size()));
         for (ExternalSymbol externalSymbol : environment.externalSymbols.values()) {
             appendCanonicalField(builder, "externalSymbol.name", externalSymbol.name());
             appendCanonicalField(builder, "externalSymbol.type", ExpressionTypes.canonical(externalSymbol.type()));
-            appendCanonicalField(builder, "externalSymbol.hasDefaultValue",
-                    Boolean.toString(externalSymbol.hasDefaultValue()));
-            externalSymbol.defaultValue().ifPresent(defaultValue -> appendCanonicalField(
+            appendCanonicalField(builder, "externalSymbol.overwritePolicy", externalSymbol.overwritePolicy().name());
+            appendCanonicalField(
                     builder,
                     "externalSymbol.defaultValue",
-                    ExternalSymbolDefaults.canonicalValue(defaultValue.value())));
+                    ExternalSymbolDefaults.canonicalValue(
+                            externalSymbol.name(),
+                            externalSymbol.type(),
+                            externalSymbol.defaultValue().value()));
         }
         appendCanonicalField(builder, "functions.count", Integer.toString(environment.functions.size()));
         for (FunctionDescriptor function : environment.functions.values()) {
@@ -222,6 +222,21 @@ public final class ExpressionEnvironment {
                 appendJavaMemberMetadata(builder, "javaType.method", method.implementationMetadata());
             }
         }
+        appendCanonicalField(
+                builder,
+                "collectionOperations.count",
+                Integer.toString(environment.collectionOperations.size()));
+        for (CollectionOperationCatalog.Descriptor descriptor : environment.collectionOperations.descriptors()) {
+            appendCanonicalField(builder, "collectionOperation.name", descriptor.name());
+            appendCanonicalField(builder, "collectionOperation.receivers", descriptor.receivers().toString());
+            appendCanonicalField(builder, "collectionOperation.currentItem", descriptor.currentItemContract().name());
+            appendCanonicalField(builder, "collectionOperation.resultShape", descriptor.resultShape().name());
+            appendCanonicalField(builder, "collectionOperation.evaluationPolicy", descriptor.evaluationPolicy().name());
+            appendCanonicalField(
+                    builder,
+                    "collectionOperation.materializationPolicy",
+                    descriptor.materializationPolicy().name());
+        }
         return builder.toString();
     }
 
@@ -253,24 +268,18 @@ public final class ExpressionEnvironment {
      */
     public static final class Builder {
 
-        private NumericMode numericMode = DEFAULT_NUMERIC_MODE;
         private ZoneId zoneId = DEFAULT_ZONE_ID;
         private MathContext mathContext = DEFAULT_MATH_CONTEXT;
         private MathContext transcendentalMathContext = DEFAULT_TRANSCENDENTAL_MATH_CONTEXT;
-        private boolean strictMode = DEFAULT_STRICT_MODE;
         private int maxCurrentItemDepth = DEFAULT_MAX_CURRENT_ITEM_DEPTH;
-        private int materializationLimit = DEFAULT_MATERIALIZATION_LIMIT;
+        private int maxMaterializedSize = DEFAULT_MAX_MATERIALIZED_SIZE;
+        private int maxFactorialInput = DEFAULT_MAX_FACTORIAL_INPUT;
         private BoundaryCoercion boundaryCoercion = BoundaryCoercion.standard();
         private final ExternalSymbolCatalog.Builder externalSymbols = ExternalSymbolCatalog.builder();
         private final FunctionCatalog.Builder functions = FunctionCatalog.builder();
         private final JavaTypeCatalog.Builder javaTypes = JavaTypeCatalog.builder();
 
         private Builder() {
-        }
-
-        public Builder numericMode(NumericMode numericMode) {
-            this.numericMode = Objects.requireNonNull(numericMode, "numericMode");
-            return this;
         }
 
         public Builder zoneId(ZoneId zoneId) {
@@ -289,11 +298,6 @@ public final class ExpressionEnvironment {
             return this;
         }
 
-        public Builder strictMode(boolean strictMode) {
-            this.strictMode = strictMode;
-            return this;
-        }
-
         public Builder maxCurrentItemDepth(int maxCurrentItemDepth) {
             if (maxCurrentItemDepth < 0) {
                 throw new IllegalArgumentException("maxCurrentItemDepth must not be negative");
@@ -302,11 +306,19 @@ public final class ExpressionEnvironment {
             return this;
         }
 
-        public Builder materializationLimit(int materializationLimit) {
-            if (materializationLimit < 0) {
-                throw new IllegalArgumentException("materializationLimit must not be negative");
+        public Builder maxMaterializedSize(int maxMaterializedSize) {
+            if (maxMaterializedSize < 0) {
+                throw new IllegalArgumentException("maxMaterializedSize must not be negative");
             }
-            this.materializationLimit = materializationLimit;
+            this.maxMaterializedSize = maxMaterializedSize;
+            return this;
+        }
+
+        public Builder maxFactorialInput(int maxFactorialInput) {
+            if (maxFactorialInput < 0) {
+                throw new IllegalArgumentException("maxFactorialInput must not be negative");
+            }
+            this.maxFactorialInput = maxFactorialInput;
             return this;
         }
 
@@ -315,18 +327,17 @@ public final class ExpressionEnvironment {
             return this;
         }
 
-        public Builder externalSymbol(String name, ExpressionType type) {
-            externalSymbols.externalSymbol(name, type);
+        public Builder externalSymbol(String name, Object defaultValue, ExternalSymbolOverwritePolicy overwritePolicy) {
+            externalSymbols.externalSymbol(name, defaultValue, overwritePolicy);
             return this;
         }
 
-        public Builder externalSymbolWithDefault(String name, Object defaultValue) {
-            externalSymbols.externalSymbolWithDefault(name, defaultValue);
-            return this;
-        }
-
-        public Builder externalSymbolWithDefault(String name, ExpressionType type, Object defaultValue) {
-            externalSymbols.externalSymbolWithDefault(name, type, defaultValue);
+        public Builder externalSymbol(
+                String name,
+                ExpressionType type,
+                Object defaultValue,
+                ExternalSymbolOverwritePolicy overwritePolicy) {
+            externalSymbols.externalSymbol(name, type, defaultValue, overwritePolicy);
             return this;
         }
 

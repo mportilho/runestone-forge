@@ -34,13 +34,12 @@ class ExpressionEnvironmentTest {
     void standardEnvironmentExposesStableDefaultsThroughPublicApi() {
         ExpressionEnvironment environment = ExpressionEnvironment.standard();
 
-        assertThat(environment.numericMode()).isEqualTo(NumericMode.DECIMAL);
         assertThat(environment.zoneId()).isEqualTo(ZoneId.systemDefault());
         assertThat(environment.mathContext()).isEqualTo(MathContext.DECIMAL128);
         assertThat(environment.transcendentalMathContext()).isEqualTo(MathContext.DECIMAL128);
-        assertThat(environment.strictMode()).isFalse();
         assertThat(environment.maxCurrentItemDepth()).isEqualTo(32);
-        assertThat(environment.materializationLimit()).isEqualTo(10_000);
+        assertThat(environment.maxMaterializedSize()).isEqualTo(10_000);
+        assertThat(environment.maxFactorialInput()).isEqualTo(1_000);
         assertThat(environment.conversionProfileIdentity())
                 .isEqualTo(DefaultDataConversionService.standard().conversionProfileIdentity());
         assertThat(environment.conversionProfileHash())
@@ -53,23 +52,21 @@ class ExpressionEnvironmentTest {
     void equivalentBuilderContentProducesSameCanonicalEnvironmentId() {
         ExpressionEnvironment first = ExpressionEnvironment.builder()
                 .zoneId(ZoneId.of("America/Sao_Paulo"))
-                .numericMode(NumericMode.FAST)
                 .mathContext(new MathContext(20, RoundingMode.HALF_UP))
                 .transcendentalMathContext(new MathContext(34, RoundingMode.HALF_EVEN))
-                .strictMode(true)
                 .maxCurrentItemDepth(7)
-                .materializationLimit(512)
+                .maxMaterializedSize(512)
+                .maxFactorialInput(32)
                 .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService("tenant-a:v2", "tenant-a-hash"))
                 .build();
 
         ExpressionEnvironment second = ExpressionEnvironment.builder()
                 .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService("tenant-a:v2", "tenant-a-hash"))
-                .materializationLimit(512)
+                .maxFactorialInput(32)
+                .maxMaterializedSize(512)
                 .maxCurrentItemDepth(7)
-                .strictMode(true)
                 .transcendentalMathContext(new MathContext(34, RoundingMode.HALF_EVEN))
                 .mathContext(new MathContext(20, RoundingMode.HALF_UP))
-                .numericMode(NumericMode.FAST)
                 .zoneId(ZoneId.of("America/Sao_Paulo"))
                 .build();
 
@@ -83,11 +80,11 @@ class ExpressionEnvironmentTest {
     void otherwiseEqualEnvironmentsWithDifferentTimeZonesHaveDifferentEnvironmentIds() {
         ExpressionEnvironment utc = ExpressionEnvironment.builder()
                 .zoneId(ZoneId.of("UTC"))
-                .externalSymbol("amount", ScalarType.NUMBER)
+                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
         ExpressionEnvironment saoPaulo = ExpressionEnvironment.builder()
                 .zoneId(ZoneId.of("America/Sao_Paulo"))
-                .externalSymbol("amount", ScalarType.NUMBER)
+                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
 
         assertThat(utc.environmentId()).isNotEqualTo(saoPaulo.environmentId());
@@ -102,17 +99,15 @@ class ExpressionEnvironmentTest {
         assertThat(changedZone).isNotEqualTo(ZoneId.systemDefault());
         assertThat(ExpressionEnvironment.builder().zoneId(changedZone).build().environmentId())
                 .isNotEqualTo(baseline.environmentId());
-        assertThat(ExpressionEnvironment.builder().numericMode(NumericMode.FAST).build().environmentId())
-                .isNotEqualTo(baseline.environmentId());
         assertThat(ExpressionEnvironment.builder().mathContext(new MathContext(16, RoundingMode.HALF_EVEN)).build()
                 .environmentId()).isNotEqualTo(baseline.environmentId());
         assertThat(ExpressionEnvironment.builder().transcendentalMathContext(new MathContext(16, RoundingMode.HALF_EVEN))
                 .build().environmentId()).isNotEqualTo(baseline.environmentId());
-        assertThat(ExpressionEnvironment.builder().strictMode(true).build().environmentId())
-                .isNotEqualTo(baseline.environmentId());
         assertThat(ExpressionEnvironment.builder().maxCurrentItemDepth(33).build().environmentId())
                 .isNotEqualTo(baseline.environmentId());
-        assertThat(ExpressionEnvironment.builder().materializationLimit(10_001).build().environmentId())
+        assertThat(ExpressionEnvironment.builder().maxMaterializedSize(10_001).build().environmentId())
+                .isNotEqualTo(baseline.environmentId());
+        assertThat(ExpressionEnvironment.builder().maxFactorialInput(1_001).build().environmentId())
                 .isNotEqualTo(baseline.environmentId());
         assertThat(ExpressionEnvironment.builder()
                 .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService("custom", "custom-hash"))
@@ -127,10 +122,10 @@ class ExpressionEnvironmentTest {
         ExpressionEnvironment.Builder builder = ExpressionEnvironment.builder();
         ExpressionEnvironment first = builder.build();
 
-        ExpressionEnvironment second = builder.numericMode(NumericMode.FAST).build();
+        ExpressionEnvironment second = builder.maxFactorialInput(42).build();
 
-        assertThat(first.numericMode()).isEqualTo(NumericMode.DECIMAL);
-        assertThat(second.numericMode()).isEqualTo(NumericMode.FAST);
+        assertThat(first.maxFactorialInput()).isEqualTo(1_000);
+        assertThat(second.maxFactorialInput()).isEqualTo(42);
         assertThat(first.environmentId()).isNotEqualTo(second.environmentId());
     }
 
@@ -161,23 +156,37 @@ class ExpressionEnvironmentTest {
     @DisplayName("external symbols support defaults and declared known types")
     void externalSymbolsSupportDefaultsAndDeclaredKnownTypes() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("threshold", new BigDecimal("12.50"))
-                .externalSymbol("enabled", ScalarType.BOOLEAN)
-                .externalSymbolWithDefault("inferred", "text")
+                .externalSymbol("threshold", new BigDecimal("12.50"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("enabled", ScalarType.BOOLEAN, true, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("inferred", "text", ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
         assertThat(environment.externalSymbols().asMap())
                 .containsOnlyKeys("enabled", "inferred", "threshold");
         assertThat(environment.externalSymbols().asMap().get("threshold"))
-                .isEqualTo(ExternalSymbol.withDefault("threshold", ScalarType.NUMBER, new BigDecimal("12.50")));
+                .isEqualTo(ExternalSymbol.withDefault(
+                        "threshold",
+                        ScalarType.NUMBER,
+                        new BigDecimal("12.50"),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE));
         assertThat(environment.externalSymbols().asMap().get("enabled"))
-                .isEqualTo(ExternalSymbol.declared("enabled", ScalarType.BOOLEAN));
+                .isEqualTo(ExternalSymbol.withDefault(
+                        "enabled",
+                        ScalarType.BOOLEAN,
+                        true,
+                        ExternalSymbolOverwritePolicy.FIXED));
         assertThat(environment.externalSymbols().asMap().get("inferred"))
-                .isEqualTo(ExternalSymbol.withDefault("inferred", ScalarType.STRING, "text"));
+                .isEqualTo(ExternalSymbol.withDefault(
+                        "inferred",
+                        ScalarType.STRING,
+                        "text",
+                        ExternalSymbolOverwritePolicy.FIXED));
+        assertThat(environment.externalSymbols().asMap().get("threshold").overwritePolicy())
+                .isEqualTo(ExternalSymbolOverwritePolicy.OVERRIDABLE);
 
         ExternalSymbolCatalog catalog = ExternalSymbolCatalog.builder()
-                .externalSymbolWithDefault("catalogThreshold", BigDecimal.ONE)
-                .externalSymbol("catalogEnabled", ScalarType.BOOLEAN)
+                .externalSymbol("catalogThreshold", BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("catalogEnabled", ScalarType.BOOLEAN, true, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
 
         assertThat(catalog.asMap())
@@ -188,11 +197,15 @@ class ExpressionEnvironmentTest {
     @DisplayName("external symbol defaults are validated when the environment is built")
     void externalSymbolDefaultsAreValidatedWhenEnvironmentIsBuilt() {
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "not-a-number")
+                .externalSymbol("amount", ScalarType.NUMBER, "not-a-number", ExternalSymbolOverwritePolicy.FIXED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("amount");
-        assertThatThrownBy(() -> ExternalSymbol.withDefault("amount", ScalarType.NUMBER, "not-a-number"))
+        assertThatThrownBy(() -> ExternalSymbol.withDefault(
+                "amount",
+                ScalarType.NUMBER,
+                "not-a-number",
+                ExternalSymbolOverwritePolicy.FIXED))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("amount");
 
@@ -200,46 +213,62 @@ class ExpressionEnvironmentTest {
         nonTextKeyedMap.put(7, "seven");
 
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("labels", nonTextKeyedMap)
+                .externalSymbol("labels", nonTextKeyedMap, ExternalSymbolOverwritePolicy.FIXED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("text-keyed");
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("missing", null)
-                .build())
+                .externalSymbol("missing", null, ExternalSymbolOverwritePolicy.FIXED))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("must not be null");
+        assertThatNullPointerException()
+                .isThrownBy(() -> ExpressionEnvironment.builder()
+                        .externalSymbol("typedMissing", ScalarType.STRING, null, ExternalSymbolOverwritePolicy.FIXED))
+                .withMessage("defaultValue");
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("empty", List.of())
+                .externalSymbol("empty", List.of(), ExternalSymbolOverwritePolicy.FIXED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("cannot infer");
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("mixed", List.of("one", BigDecimal.ONE))
+                .externalSymbol("mixed", List.of("one", BigDecimal.ONE), ExternalSymbolOverwritePolicy.FIXED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("heterogeneous");
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .externalSymbol("items", new VectorType(ScalarType.STRING), listWithNull(), ExternalSymbolOverwritePolicy.FIXED)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("items");
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .externalSymbol("labels", new MapType(ScalarType.STRING), mapWithNullKey(), ExternalSymbolOverwritePolicy.FIXED)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("text-keyed");
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .externalSymbol("labels", new MapType(ScalarType.STRING), mapWithNullValue(), ExternalSymbolOverwritePolicy.FIXED)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("labels");
     }
 
     @Test
     @DisplayName("typed external symbol defaults are coerced by the configured boundary profile")
     void typedExternalSymbolDefaultsAreCoercedByConfiguredBoundaryProfile() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
-                .externalSymbolWithDefault("businessDate", ScalarType.DATE, "2026-07-06")
-                .externalSymbolWithDefault("scores", new VectorType(ScalarType.NUMBER), List.of("1.5", 2))
+                .externalSymbol("amount", ScalarType.NUMBER, "12.50", ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("businessDate", ScalarType.DATE, "2026-07-06", ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("scores", new VectorType(ScalarType.NUMBER), List.of("1.5", 2),
+                        ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
         assertThat(environment.externalSymbols().asMap().get("amount").defaultValue())
-                .get()
                 .extracting(ExternalSymbolDefault::value)
                 .isEqualTo(new BigDecimal("12.50"));
         assertThat(environment.externalSymbols().asMap().get("businessDate").defaultValue())
-                .get()
                 .extracting(ExternalSymbolDefault::value)
                 .isEqualTo(LocalDate.of(2026, 7, 6));
         assertThat(environment.externalSymbols().asMap().get("scores").defaultValue())
-                .get()
                 .extracting(ExternalSymbolDefault::value)
                 .isEqualTo(List.of(new BigDecimal("1.5"), new BigDecimal("2")));
     }
@@ -253,14 +282,13 @@ class ExpressionEnvironmentTest {
 
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .boundaryCoercion(conversionService)
-                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "points:7")
+                .externalSymbol("amount", ScalarType.NUMBER, "points:7", ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
         assertThat(environment.conversionProfileIdentity()).isEqualTo("prefixed-number:v1");
         assertThat(environment.conversionProfileHash()).isEqualTo("prefixed-number-hash:v1");
         assertThat(environment.boundaryCoercion().profileHash()).isEqualTo("prefixed-number-hash:v1");
         assertThat(environment.externalSymbols().asMap().get("amount").defaultValue())
-                .get()
                 .extracting(ExternalSymbolDefault::value)
                 .isEqualTo(new BigDecimal("7"));
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
@@ -299,16 +327,24 @@ class ExpressionEnvironmentTest {
     @DisplayName("external symbols contribute deterministically to the environment ID")
     void externalSymbolsContributeDeterministicallyToEnvironmentId() {
         ExpressionEnvironment first = ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 6))
-                .externalSymbol("amount", ScalarType.NUMBER)
+                .externalSymbol("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 6),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
         ExpressionEnvironment sameContentDifferentOrder = ExpressionEnvironment.builder()
-                .externalSymbol("amount", ScalarType.NUMBER)
-                .externalSymbolWithDefault("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 6))
+                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 6),
+                        ExternalSymbolOverwritePolicy.FIXED)
                 .build();
         ExpressionEnvironment differentDefault = ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 7))
-                .externalSymbol("amount", ScalarType.NUMBER)
+                .externalSymbol("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 7),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        ExpressionEnvironment differentOverwritePolicy = ExpressionEnvironment.builder()
+                .externalSymbol("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 6),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
 
         Map<String, Object> firstMap = new LinkedHashMap<>();
@@ -319,14 +355,16 @@ class ExpressionEnvironmentTest {
         sameMapDifferentOrder.put("b", BigDecimal.valueOf(2));
 
         ExpressionEnvironment firstMapDefault = ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("labels", new MapType(ScalarType.NUMBER), firstMap)
+                .externalSymbol("labels", new MapType(ScalarType.NUMBER), firstMap, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
         ExpressionEnvironment sameMapDefaultDifferentOrder = ExpressionEnvironment.builder()
-                .externalSymbolWithDefault("labels", new MapType(ScalarType.NUMBER), sameMapDifferentOrder)
+                .externalSymbol("labels", new MapType(ScalarType.NUMBER), sameMapDifferentOrder,
+                        ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
         assertThat(first.environmentId()).isEqualTo(sameContentDifferentOrder.environmentId());
         assertThat(first.environmentId()).isNotEqualTo(differentDefault.environmentId());
+        assertThat(first.environmentId()).isNotEqualTo(differentOverwritePolicy.environmentId());
         assertThat(firstMapDefault.environmentId()).isEqualTo(sameMapDefaultDifferentOrder.environmentId());
     }
 
@@ -385,11 +423,11 @@ class ExpressionEnvironmentTest {
 
         ExpressionEnvironment first = ExpressionEnvironment.builder()
                 .boundaryCoercion(firstService)
-                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
+                .externalSymbol("amount", ScalarType.NUMBER, "12.50", ExternalSymbolOverwritePolicy.FIXED)
                 .build();
         ExpressionEnvironment second = ExpressionEnvironment.builder()
                 .boundaryCoercion(secondService)
-                .externalSymbolWithDefault("amount", ScalarType.NUMBER, "12.50")
+                .externalSymbol("amount", ScalarType.NUMBER, "12.50", ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
         assertThat(firstService.conversionProfileIdentity()).isEqualTo(secondService.conversionProfileIdentity());
@@ -425,13 +463,19 @@ class ExpressionEnvironmentTest {
         for (CurrentTemporalValue currentTemporalValue : CurrentTemporalValue.values()) {
             String simpleName = currentTemporalValue.simpleName();
 
-            assertThatThrownBy(() -> ExpressionEnvironment.builder().externalSymbol(simpleName, ScalarType.STRING))
+            assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                    .externalSymbol(simpleName, ScalarType.STRING, "value", ExternalSymbolOverwritePolicy.FIXED))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("reserved");
-            assertThatThrownBy(() -> ExternalSymbol.declared(simpleName, ScalarType.STRING))
+            assertThatThrownBy(() -> ExternalSymbol.withDefault(
+                    simpleName,
+                    ScalarType.STRING,
+                    "value",
+                    ExternalSymbolOverwritePolicy.FIXED))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("reserved");
-            assertThatThrownBy(() -> ExternalSymbolCatalog.builder().externalSymbol(simpleName, ScalarType.STRING))
+            assertThatThrownBy(() -> ExternalSymbolCatalog.builder()
+                    .externalSymbol(simpleName, ScalarType.STRING, "value", ExternalSymbolOverwritePolicy.FIXED))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("reserved");
         }
@@ -477,9 +521,6 @@ class ExpressionEnvironmentTest {
     @DisplayName("invalid builder values fail at the public boundary")
     void invalidBuilderValuesFailAtPublicBoundary() {
         assertThatNullPointerException()
-                .isThrownBy(() -> ExpressionEnvironment.builder().numericMode(null))
-                .withMessage("numericMode");
-        assertThatNullPointerException()
                 .isThrownBy(() -> ExpressionEnvironment.builder().zoneId(null))
                 .withMessage("zoneId");
         assertThatNullPointerException()
@@ -511,14 +552,62 @@ class ExpressionEnvironmentTest {
                 .isThrownBy(() -> ExpressionEnvironment.builder().maxCurrentItemDepth(-1))
                 .withMessage("maxCurrentItemDepth must not be negative");
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> ExpressionEnvironment.builder().materializationLimit(-1))
-                .withMessage("materializationLimit must not be negative");
+                .isThrownBy(() -> ExpressionEnvironment.builder().maxMaterializedSize(-1))
+                .withMessage("maxMaterializedSize must not be negative");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> ExpressionEnvironment.builder().maxFactorialInput(-1))
+                .withMessage("maxFactorialInput must not be negative");
         ExpressionEnvironment zeroLimits = ExpressionEnvironment.builder()
                 .maxCurrentItemDepth(0)
-                .materializationLimit(0)
+                .maxMaterializedSize(0)
+                .maxFactorialInput(0)
                 .build();
         assertThat(zeroLimits.maxCurrentItemDepth()).isZero();
-        assertThat(zeroLimits.materializationLimit()).isZero();
+        assertThat(zeroLimits.maxMaterializedSize()).isZero();
+        assertThat(zeroLimits.maxFactorialInput()).isZero();
+    }
+
+    @Test
+    @DisplayName("runtime overrides reject nulls and fixed external symbols")
+    void runtimeOverridesRejectNullsAndFixedExternalSymbols() {
+        ExternalSymbol amount = ExternalSymbol.withDefault(
+                "amount",
+                ScalarType.NUMBER,
+                BigDecimal.ONE,
+                ExternalSymbolOverwritePolicy.OVERRIDABLE);
+        ExternalSymbol fixed = ExternalSymbol.withDefault(
+                "fixed",
+                ScalarType.NUMBER,
+                BigDecimal.ONE,
+                ExternalSymbolOverwritePolicy.FIXED);
+
+        assertThat(amount.coerceOverride("2.50", BoundaryCoercion.standard()))
+                .isEqualTo(new BigDecimal("2.50"));
+        assertThatThrownBy(() -> amount.coerceOverride(null, BoundaryCoercion.standard()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("external symbol 'amount' override must not be null");
+        assertThatThrownBy(() -> fixed.coerceOverride(BigDecimal.TEN, BoundaryCoercion.standard()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("external symbol 'fixed' is not overridable");
+    }
+
+    private static List<Object> listWithNull() {
+        List<Object> values = new java.util.ArrayList<>();
+        values.add("a");
+        values.add(null);
+        return values;
+    }
+
+    private static Map<Object, Object> mapWithNullKey() {
+        Map<Object, Object> values = new HashMap<>();
+        values.put(null, "value");
+        return values;
+    }
+
+    private static Map<Object, Object> mapWithNullValue() {
+        Map<Object, Object> values = new HashMap<>();
+        values.put("key", null);
+        return values;
     }
 
     private static ZoneId alternateZoneId() {
