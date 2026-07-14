@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -30,10 +31,22 @@ class FunctionCatalogTest {
         assertThat(descriptor.implementationHandle()).isNotNull();
         assertThat(descriptor.implementationMetadata().owner()).endsWith("FunctionCatalogTest$TestFunctions");
         assertThat(descriptor.implementationMetadata().memberName()).isEqualTo("numberIdentity");
+        assertThat(descriptor.implementationMetadata().stableImplementationId())
+                .isEqualTo("static-method:"
+                        + TestFunctions.class.getName()
+                        + "#numberIdentity(Ljava/math/BigDecimal;)Ljava/math/BigDecimal;");
         assertThat(descriptor.pure()).isTrue();
         assertThat(descriptor.foldable()).isTrue();
         assertThat(descriptor.signature())
                 .isEqualTo(new FunctionSignature("identity", List.of(ScalarType.NUMBER)));
+    }
+
+    @Test
+    @DisplayName("reflected function importer is a public extension API")
+    void reflectedFunctionImporterIsAPublicExtensionApi() {
+        assertThat(Modifier.isPublic(ReflectedFunctionImporter.class.getModifiers())).isTrue();
+        assertThat(Modifier.isPublic(ReflectedFunctionImporter.ImportPlan.class.getModifiers())).isTrue();
+        assertThat(Modifier.isPublic(ReflectedFunctionImporter.Selection.class.getModifiers())).isTrue();
     }
 
     @Test
@@ -187,6 +200,53 @@ class FunctionCatalogTest {
         assertThat(first.environmentId()).isNotEqualTo(withoutFunctions.environmentId());
     }
 
+    @Test
+    @DisplayName("environment identity includes the complete canonical function contract")
+    void environmentIdentityIncludesTheCompleteCanonicalFunctionContract() throws NoSuchMethodException {
+        FunctionDescriptor baseline = descriptor(
+                "canonicalValue",
+                "numberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.FOLDABLE,
+                BigDecimal.class);
+        FunctionDescriptor differentReturn = descriptor(
+                "canonicalValue",
+                "numberAsText",
+                List.of(ScalarType.NUMBER),
+                ScalarType.STRING,
+                FunctionPurity.FOLDABLE,
+                BigDecimal.class);
+        FunctionDescriptor differentPurity = descriptor(
+                "canonicalValue",
+                "numberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.IMPURE,
+                BigDecimal.class);
+        FunctionDescriptor differentFoldability = descriptor(
+                "canonicalValue",
+                "numberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.PURE,
+                BigDecimal.class);
+        FunctionDescriptor differentImplementation = descriptor(
+                "canonicalValue",
+                "alternateNumberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.FOLDABLE,
+                BigDecimal.class);
+
+        ExpressionEnvironmentId baselineId = environmentId(baseline);
+
+        assertThat(environmentId(differentReturn)).isNotEqualTo(baselineId);
+        assertThat(environmentId(differentPurity)).isNotEqualTo(baselineId);
+        assertThat(environmentId(differentFoldability)).isNotEqualTo(baselineId);
+        assertThat(environmentId(differentImplementation)).isNotEqualTo(baselineId);
+    }
+
     private static FunctionDescriptor descriptor(
             String languageName,
             String methodName,
@@ -198,9 +258,17 @@ class FunctionCatalogTest {
         return FunctionDescriptor.fromMethod(languageName, method, parameterTypes, returnType, purity);
     }
 
+    private static ExpressionEnvironmentId environmentId(FunctionDescriptor descriptor) {
+        return ExpressionEnvironment.builder().function(descriptor).build().environmentId();
+    }
+
     static final class TestFunctions {
 
         static BigDecimal numberIdentity(BigDecimal value) {
+            return value;
+        }
+
+        static BigDecimal alternateNumberIdentity(BigDecimal value) {
             return value;
         }
 

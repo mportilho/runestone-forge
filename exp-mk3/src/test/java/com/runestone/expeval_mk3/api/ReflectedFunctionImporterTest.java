@@ -39,7 +39,7 @@ class ReflectedFunctionImporterTest {
         InstanceProvider provider = new InstanceProvider(BigDecimal.TEN);
 
         List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
-                .importAll(provider, FunctionPurity.PURE)
+                .importAll(provider, "tenant-10", FunctionPurity.PURE)
                 .toList();
 
         FunctionDescriptor descriptor = only(descriptors);
@@ -48,15 +48,43 @@ class ReflectedFunctionImporterTest {
                 .isEqualTo(MethodType.methodType(BigDecimal.class, BigDecimal.class));
         assertThat(descriptor.pure()).isTrue();
         assertThat(descriptor.foldable()).isFalse();
+        assertThat(descriptor.implementationMetadata().stableImplementationId())
+                .isEqualTo("instance-method:"
+                        + InstanceProvider.class.getName()
+                        + "#addBase(Ljava/math/BigDecimal;)Ljava/math/BigDecimal;@provider:9:tenant-10");
         assertThat(descriptor.implementationHandle().invoke(new BigDecimal("5")))
                 .isEqualTo(new BigDecimal("15"));
+    }
+
+    @Test
+    @DisplayName("provider ID makes instance function identity stable and cache safe")
+    void providerIdMakesInstanceFunctionIdentityStableAndCacheSafe() {
+        FunctionDescriptor first = only(ReflectedFunctionImporter
+                .importAll(new InstanceProvider(BigDecimal.TEN), "tenant-10", FunctionPurity.PURE)
+                .toList());
+        FunctionDescriptor equivalent = only(ReflectedFunctionImporter
+                .importAll(new InstanceProvider(BigDecimal.TEN), "tenant-10", FunctionPurity.PURE)
+                .toList());
+        FunctionDescriptor differentProvider = only(ReflectedFunctionImporter
+                .importAll(new InstanceProvider(BigDecimal.ONE), "tenant-1", FunctionPurity.PURE)
+                .toList());
+
+        ExpressionEnvironment firstEnvironment = ExpressionEnvironment.builder().function(first).build();
+        ExpressionEnvironment equivalentEnvironment = ExpressionEnvironment.builder().function(equivalent).build();
+        ExpressionEnvironment differentProviderEnvironment = ExpressionEnvironment.builder()
+                .function(differentProvider)
+                .build();
+
+        assertThat(first.implementationMetadata()).isEqualTo(equivalent.implementationMetadata());
+        assertThat(firstEnvironment.environmentId()).isEqualTo(equivalentEnvironment.environmentId());
+        assertThat(firstEnvironment.environmentId()).isNotEqualTo(differentProviderEnvironment.environmentId());
     }
 
     @Test
     @DisplayName("explicit exposure type imports declared interface methods bound to instance")
     void explicitExposureTypeImportsDeclaredInterfaceMethodsBoundToInstance() throws Throwable {
         List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
-                .importAll(ExposedContract.class, new ContractProvider(), FunctionPurity.FOLDABLE)
+                .importAll(ExposedContract.class, new ContractProvider(), "contract-v1", FunctionPurity.FOLDABLE)
                 .toList();
 
         assertThat(descriptors)
@@ -73,27 +101,40 @@ class ReflectedFunctionImporterTest {
     @Test
     @DisplayName("rejects invalid exposure instance and requires purity")
     void rejectsInvalidExposureInstanceAndRequiresPurity() {
-        assertThatThrownBy(() -> ReflectedFunctionImporter.importAll(ExposedContract.class, new Object(), FunctionPurity.PURE))
+        assertThatThrownBy(() -> ReflectedFunctionImporter
+                .importAll(ExposedContract.class, new Object(), "invalid", FunctionPurity.PURE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("exposureType");
         assertThatThrownBy(() -> ReflectedFunctionImporter.importAll(StaticProvider.class, null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("purity");
-        assertThatThrownBy(() -> ReflectedFunctionImporter.importAll(new InstanceProvider(BigDecimal.ONE), null))
+        assertThatThrownBy(() -> ReflectedFunctionImporter
+                .importAll(new InstanceProvider(BigDecimal.ONE), "instance-1", null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("purity");
-        assertThatThrownBy(() -> ReflectedFunctionImporter.importAll(ExposedContract.class, new ContractProvider(), null))
+        assertThatThrownBy(() -> ReflectedFunctionImporter
+                .importAll(ExposedContract.class, new ContractProvider(), "contract-v1", null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("purity");
         assertThatThrownBy(() -> ReflectedFunctionImporter.importSelected(StaticProvider.class, null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("purity");
-        assertThatThrownBy(() -> ReflectedFunctionImporter.importSelected(new InstanceProvider(BigDecimal.ONE), null))
+        assertThatThrownBy(() -> ReflectedFunctionImporter
+                .importSelected(new InstanceProvider(BigDecimal.ONE), "instance-1", null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("purity");
-        assertThatThrownBy(() -> ReflectedFunctionImporter.importSelected(ExposedContract.class, new ContractProvider(), null))
+        assertThatThrownBy(() -> ReflectedFunctionImporter
+                .importSelected(ExposedContract.class, new ContractProvider(), "contract-v1", null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("purity");
+        assertThatThrownBy(() -> ReflectedFunctionImporter
+                .importAll(new InstanceProvider(BigDecimal.ONE), null, FunctionPurity.PURE))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("providerId");
+        assertThatThrownBy(() -> ReflectedFunctionImporter
+                .importAll(new InstanceProvider(BigDecimal.ONE), " ", FunctionPurity.PURE))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("providerId");
     }
 
     @Test
@@ -464,8 +505,8 @@ class ReflectedFunctionImporterTest {
             return value;
         }
 
-        public static BigDecimal sameTwo(BigDecimal value) {
-            return value;
+        public static String sameTwo(BigDecimal value) {
+            return value.toPlainString();
         }
     }
 

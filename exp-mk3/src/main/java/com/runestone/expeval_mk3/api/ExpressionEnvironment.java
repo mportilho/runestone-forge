@@ -159,7 +159,7 @@ public final class ExpressionEnvironment {
 
     private static String canonicalRepresentation(ExpressionEnvironment environment) {
         StringBuilder builder = new StringBuilder(256);
-        appendCanonicalField(builder, "schema", "5");
+        appendCanonicalField(builder, "schema", "6");
         appendCanonicalField(builder, "zoneId", environment.zoneId.getId());
         appendCanonicalField(builder, "mathContext", canonicalMathContext(environment.mathContext));
         appendCanonicalField(builder, "transcendentalMathContext",
@@ -193,11 +193,10 @@ public final class ExpressionEnvironment {
             appendCanonicalField(builder, "function.returnType", ExpressionTypes.canonical(function.returnType()));
             appendCanonicalField(builder, "function.pure", Boolean.toString(function.pure()));
             appendCanonicalField(builder, "function.foldable", Boolean.toString(function.foldable()));
-            FunctionImplementationMetadata implementationMetadata = function.implementationMetadata();
-            appendCanonicalField(builder, "function.implementation.kind", implementationMetadata.kind());
-            appendCanonicalField(builder, "function.implementation.owner", implementationMetadata.owner());
-            appendCanonicalField(builder, "function.implementation.memberName", implementationMetadata.memberName());
-            appendCanonicalField(builder, "function.implementation.methodType", implementationMetadata.methodType());
+            appendCanonicalField(
+                    builder,
+                    "function.stableImplementationId",
+                    function.implementationMetadata().stableImplementationId());
         }
         appendCanonicalField(builder, "javaTypes.count", Integer.toString(environment.javaTypes.size()));
         for (JavaTypeDescriptor javaType : environment.javaTypes.values()) {

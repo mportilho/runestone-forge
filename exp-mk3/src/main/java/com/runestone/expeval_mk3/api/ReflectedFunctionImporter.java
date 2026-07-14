@@ -22,7 +22,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-final class ReflectedFunctionImporter {
+/**
+ * Imports explicitly supplied Java function providers into expression function descriptors.
+ */
+public final class ReflectedFunctionImporter {
 
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
     private static final Set<Class<?>> NUMERIC_TYPES = Set.of(
@@ -43,39 +46,71 @@ final class ReflectedFunctionImporter {
     private ReflectedFunctionImporter() {
     }
 
-    static ImportPlan importAll(Class<?> providerClass, FunctionPurity purity) {
+    public static ImportPlan importAll(Class<?> providerClass, FunctionPurity purity) {
         return new ImportPlanImpl(Source.staticProvider(providerClass, purity), SelectionMode.allMode());
     }
 
-    static ImportPlan importAll(Object providerInstance, FunctionPurity purity) {
+    /**
+     * Imports all eligible instance methods. The provider ID must identify the provider's behavior and must change
+     * whenever state or implementation changes can affect a result.
+     */
+    public static ImportPlan importAll(Object providerInstance, String providerId, FunctionPurity purity) {
         Objects.requireNonNull(providerInstance, "providerInstance");
-        return new ImportPlanImpl(Source.instanceProvider(providerInstance.getClass(), providerInstance, purity), SelectionMode.allMode());
+        return new ImportPlanImpl(
+                Source.instanceProvider(providerInstance.getClass(), providerInstance, providerId, purity),
+                SelectionMode.allMode());
     }
 
-    static ImportPlan importAll(Class<?> exposureType, Object providerInstance, FunctionPurity purity) {
-        return new ImportPlanImpl(Source.exposedInstanceProvider(exposureType, providerInstance, purity), SelectionMode.allMode());
+    /**
+     * Imports all eligible methods declared by an exposure type and binds them to the supplied provider. The provider
+     * ID follows the same cache-safety contract as {@link #importAll(Object, String, FunctionPurity)}.
+     */
+    public static ImportPlan importAll(
+            Class<?> exposureType,
+            Object providerInstance,
+            String providerId,
+            FunctionPurity purity) {
+        return new ImportPlanImpl(
+                Source.exposedInstanceProvider(exposureType, providerInstance, providerId, purity),
+                SelectionMode.allMode());
     }
 
-    static Selection importSelected(Class<?> providerClass, FunctionPurity purity) {
+    public static Selection importSelected(Class<?> providerClass, FunctionPurity purity) {
         return new ImportPlanImpl(Source.staticProvider(providerClass, purity), SelectionMode.selectedMode());
     }
 
-    static Selection importSelected(Object providerInstance, FunctionPurity purity) {
+    /**
+     * Selectively imports eligible instance methods. The provider ID follows the same cache-safety contract as
+     * {@link #importAll(Object, String, FunctionPurity)}.
+     */
+    public static Selection importSelected(Object providerInstance, String providerId, FunctionPurity purity) {
         Objects.requireNonNull(providerInstance, "providerInstance");
-        return new ImportPlanImpl(Source.instanceProvider(providerInstance.getClass(), providerInstance, purity), SelectionMode.selectedMode());
+        return new ImportPlanImpl(
+                Source.instanceProvider(providerInstance.getClass(), providerInstance, providerId, purity),
+                SelectionMode.selectedMode());
     }
 
-    static Selection importSelected(Class<?> exposureType, Object providerInstance, FunctionPurity purity) {
-        return new ImportPlanImpl(Source.exposedInstanceProvider(exposureType, providerInstance, purity), SelectionMode.selectedMode());
+    /**
+     * Selectively imports methods declared by an exposure type and binds them to the supplied provider. The provider
+     * ID follows the same cache-safety contract as {@link #importAll(Object, String, FunctionPurity)}.
+     */
+    public static Selection importSelected(
+            Class<?> exposureType,
+            Object providerInstance,
+            String providerId,
+            FunctionPurity purity) {
+        return new ImportPlanImpl(
+                Source.exposedInstanceProvider(exposureType, providerInstance, providerId, purity),
+                SelectionMode.selectedMode());
     }
 
-    interface ImportPlan {
+    public interface ImportPlan {
         ImportPlan rename(String javaMethodName, String languageName);
 
         List<FunctionDescriptor> toList();
     }
 
-    interface Selection extends ImportPlan {
+    public interface Selection extends ImportPlan {
         Selection methods(String... javaMethodNames);
 
         Selection method(String javaMethodName, Class<?>... javaParameterTypes);
@@ -178,7 +213,9 @@ final class ReflectedFunctionImporter {
             return FunctionDescriptor.fromHandle(
                     languageName,
                     handle,
-                    FunctionImplementationMetadata.forMethod(method),
+                    source.importStatic()
+                            ? FunctionImplementationMetadata.forStaticMethod(method)
+                            : FunctionImplementationMetadata.forInstanceMethod(method, source.providerId()),
                     importedMethod.parameterTypes(),
                     importedMethod.returnType(),
                     source.purity());
@@ -320,6 +357,7 @@ final class ReflectedFunctionImporter {
     private record Source(
             Class<?> exposureType,
             Object providerInstance,
+            String providerId,
             FunctionPurity purity,
             boolean importStatic) {
 
@@ -328,6 +366,7 @@ final class ReflectedFunctionImporter {
             purity = Objects.requireNonNull(purity, "purity");
             if (!importStatic) {
                 Objects.requireNonNull(providerInstance, "providerInstance");
+                providerId = requireProviderId(providerId);
                 if (!exposureType.isInstance(providerInstance)) {
                     throw new IllegalArgumentException("providerInstance must be an instance of exposureType");
                 }
@@ -335,15 +374,31 @@ final class ReflectedFunctionImporter {
         }
 
         private static Source staticProvider(Class<?> providerClass, FunctionPurity purity) {
-            return new Source(Objects.requireNonNull(providerClass, "providerClass"), null, purity, true);
+            return new Source(Objects.requireNonNull(providerClass, "providerClass"), null, "static", purity, true);
         }
 
-        private static Source instanceProvider(Class<?> exposureType, Object providerInstance, FunctionPurity purity) {
-            return new Source(exposureType, providerInstance, purity, false);
+        private static Source instanceProvider(
+                Class<?> exposureType,
+                Object providerInstance,
+                String providerId,
+                FunctionPurity purity) {
+            return new Source(exposureType, providerInstance, providerId, purity, false);
         }
 
-        private static Source exposedInstanceProvider(Class<?> exposureType, Object providerInstance, FunctionPurity purity) {
-            return new Source(exposureType, providerInstance, purity, false);
+        private static Source exposedInstanceProvider(
+                Class<?> exposureType,
+                Object providerInstance,
+                String providerId,
+                FunctionPurity purity) {
+            return new Source(exposureType, providerInstance, providerId, purity, false);
+        }
+
+        private static String requireProviderId(String providerId) {
+            Objects.requireNonNull(providerId, "providerId");
+            if (providerId.isBlank()) {
+                throw new IllegalArgumentException("providerId must not be blank");
+            }
+            return providerId;
         }
     }
 

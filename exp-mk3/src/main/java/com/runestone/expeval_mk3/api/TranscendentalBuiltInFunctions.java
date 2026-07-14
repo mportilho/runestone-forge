@@ -18,7 +18,10 @@ final class TranscendentalBuiltInFunctions {
 
     static List<FunctionDescriptor> descriptors(MathContext mathContext) {
         return ReflectedFunctionImporter
-                .importAll(new TranscendentalBuiltInFunctions(mathContext), FunctionPurity.FOLDABLE)
+                .importAll(
+                        new TranscendentalBuiltInFunctions(mathContext),
+                        BuiltInFunctionSupport.mathContextProviderId("built-in.transcendental", mathContext),
+                        FunctionPurity.FOLDABLE)
                 .toList();
     }
 

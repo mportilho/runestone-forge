@@ -24,7 +24,10 @@ final class MathBuiltInFunctions {
 
     static List<FunctionDescriptor> descriptors(MathContext mathContext) {
         return ReflectedFunctionImporter
-                .importAll(new MathBuiltInFunctions(mathContext), FunctionPurity.FOLDABLE)
+                .importAll(
+                        new MathBuiltInFunctions(mathContext),
+                        BuiltInFunctionSupport.mathContextProviderId("built-in.math", mathContext),
+                        FunctionPurity.FOLDABLE)
                 .toList();
     }
 

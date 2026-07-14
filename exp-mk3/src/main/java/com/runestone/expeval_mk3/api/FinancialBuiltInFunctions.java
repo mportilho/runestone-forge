@@ -20,7 +20,10 @@ final class FinancialBuiltInFunctions {
 
     static List<FunctionDescriptor> descriptors(MathContext mathContext) {
         return ReflectedFunctionImporter
-                .importAll(new FinancialBuiltInFunctions(mathContext), FunctionPurity.FOLDABLE)
+                .importAll(
+                        new FinancialBuiltInFunctions(mathContext),
+                        BuiltInFunctionSupport.mathContextProviderId("built-in.financial", mathContext),
+                        FunctionPurity.FOLDABLE)
                 .rename("fvRegular", "fv")
                 .rename("fvTyped", "fv")
                 .rename("fvNoType", "fv")

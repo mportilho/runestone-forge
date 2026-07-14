@@ -136,6 +136,32 @@ class StandardBuiltInFunctionsTest {
                 LocalDateTime.of(2026, 7, 9, 10, 15, 30));
     }
 
+    @Test
+    @DisplayName("assertion functions expose only known scalar source contracts")
+    void assertionFunctionsExposeOnlyKnownScalarSourceContracts() {
+        FunctionCatalog functions = ExpressionEnvironment.standard().functions();
+        Set<ExpressionType> knownScalarTypes = Set.of(
+                ScalarType.NUMBER,
+                ScalarType.BOOLEAN,
+                ScalarType.STRING,
+                ScalarType.DATE,
+                ScalarType.TIME,
+                ScalarType.DATETIME);
+        Set<String> assertionNames = Set.of(
+                "asNumber", "asText", "asBool", "asDate", "asTime", "asDateTime");
+
+        assertThat(functions.values().stream()
+                .filter(descriptor -> assertionNames.contains(descriptor.languageName())))
+                .allSatisfy(descriptor -> {
+                    assertThat(descriptor.parameterTypes()).hasSize(1);
+                    assertThat(descriptor.parameterTypes().getFirst()).isIn(knownScalarTypes);
+                    assertThat(descriptor.returnType()).isIn(knownScalarTypes);
+                });
+        assertThat(functions.values())
+                .extracting(FunctionDescriptor::languageName)
+                .doesNotContain("asVector");
+    }
+
     private static Object invoke(
             FunctionCatalog functions,
             String languageName,

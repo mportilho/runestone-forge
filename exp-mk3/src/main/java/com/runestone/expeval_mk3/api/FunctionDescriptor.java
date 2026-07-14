@@ -61,7 +61,7 @@ public final class FunctionDescriptor {
                     parameterTypes,
                     returnType,
                     adapt(methodHandle, parameterTypes.size()),
-                    FunctionImplementationMetadata.forMethod(method),
+                    FunctionImplementationMetadata.forStaticMethod(method),
                     purity);
         } catch (IllegalAccessException exception) {
             throw new IllegalArgumentException("function implementation method is not accessible: " + method, exception);
