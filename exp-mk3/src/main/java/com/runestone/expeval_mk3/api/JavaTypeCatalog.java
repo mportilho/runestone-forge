@@ -54,6 +54,13 @@ public final class JavaTypeCatalog {
         return new Builder();
     }
 
+    /**
+     * Returns the fixed non-null contract for all registered Java member results.
+     */
+    public static RuntimeNullability registeredMemberReturnNullability() {
+        return JavaMemberTypes.returnNullability();
+    }
+
     public Optional<JavaTypeDescriptor> find(Class<?> javaType) {
         return Optional.ofNullable(descriptorsByClass.get(Objects.requireNonNull(javaType, "javaType")));
     }

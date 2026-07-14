@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -357,6 +358,11 @@ final class EnvironmentAcceptanceGateTest {
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("duplicate Java member method signature");
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .registerJavaType(UnmappablePropertyProvider.class)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("unsupported Java member type: java.util.Optional");
     }
 
     @Test
@@ -398,7 +404,11 @@ final class EnvironmentAcceptanceGateTest {
 
         assertThat(javaTypeMetadata.javaTypes().find(EnvironmentConfigurations.customerProfileClass()))
                 .get()
-                .satisfies(descriptor -> assertThat(descriptor.methodCount()).isPositive());
+                .satisfies(descriptor -> {
+                    assertThat(descriptor.methodCount()).isPositive();
+                    assertThat(JavaTypeCatalog.registeredMemberReturnNullability())
+                            .isEqualTo(RuntimeNullability.NEVER_NULL);
+                });
 
         assertThat(overloadedFunctions.functions().find(new FunctionSignature(
                 "acceptanceDiscount",
@@ -541,6 +551,13 @@ final class EnvironmentAcceptanceGateTest {
 
         public int same(int value) {
             return value;
+        }
+    }
+
+    static final class UnmappablePropertyProvider {
+
+        public Optional<String> getValue() {
+            return Optional.empty();
         }
     }
 

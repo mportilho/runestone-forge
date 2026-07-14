@@ -32,6 +32,10 @@ final class JavaMemberTypes {
     private JavaMemberTypes() {
     }
 
+    static RuntimeNullability returnNullability() {
+        return RuntimeNullability.NEVER_NULL;
+    }
+
     static ExpressionType expressionType(Type genericType, Class<?> rawType, boolean arrayAsCollection) {
         return tryExpressionType(genericType, rawType, arrayAsCollection)
                 .orElseThrow(() -> new IllegalArgumentException("unsupported Java member type: " + rawType.getName()));

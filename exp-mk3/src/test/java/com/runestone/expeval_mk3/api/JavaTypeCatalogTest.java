@@ -116,6 +116,48 @@ class JavaTypeCatalogTest {
     }
 
     @Test
+    @DisplayName("registered Java member returns are never null by contract")
+    void registeredJavaMemberReturnsAreNeverNullByContract() {
+        assertThat(JavaTypeCatalog.registeredMemberReturnNullability()).isEqualTo(RuntimeNullability.NEVER_NULL);
+    }
+
+    @Test
+    @DisplayName("unmappable properties fail catalog construction")
+    void unmappablePropertiesFailCatalogConstruction() {
+        assertThatThrownBy(() -> JavaTypeCatalog.builder()
+                .registerJavaType(UnmappablePropertyProvider.class)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("unsupported Java member type: java.util.Optional");
+    }
+
+    @Test
+    @DisplayName("explicit methods with unmappable returns fail catalog construction")
+    void explicitMethodsWithUnmappableReturnsFailCatalogConstruction() {
+        assertThatThrownBy(() -> JavaTypeCatalog.builder()
+                .registerJavaTypeMethod(MethodProvider.class, "unsupportedReturn")
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("unsupported Java member type: java.util.Optional");
+    }
+
+    @Test
+    @DisplayName("object member types require their own catalog registration for navigation")
+    void objectMemberTypesRequireTheirOwnCatalogRegistrationForNavigation() {
+        JavaTypeCatalog catalog = JavaTypeCatalog.builder()
+                .registerJavaType(ObjectMemberProvider.class)
+                .build();
+
+        JavaPropertyDescriptor child = catalog.find(ObjectMemberProvider.class)
+                .orElseThrow()
+                .findProperty("child")
+                .orElseThrow();
+
+        assertThat(child.type()).isEqualTo(new ObjectType(UnregisteredChild.class.getName()));
+        assertThat(catalog.find((ObjectType) child.type())).isEmpty();
+    }
+
+    @Test
     @DisplayName("duplicate property names fail catalog construction deterministically")
     void duplicatePropertyNamesFailCatalogConstructionDeterministically() {
         assertThatThrownBy(() -> JavaTypeCatalog.builder()
@@ -226,6 +268,10 @@ class JavaTypeCatalogTest {
             return value.orElse("");
         }
 
+        public Optional<String> unsupportedReturn() {
+            return Optional.empty();
+        }
+
         public String character(char value) {
             return Character.toString(value);
         }
@@ -252,6 +298,23 @@ class JavaTypeCatalogTest {
         public boolean isActive() {
             return true;
         }
+    }
+
+    static final class UnmappablePropertyProvider {
+
+        public Optional<String> getValue() {
+            return Optional.empty();
+        }
+    }
+
+    static final class ObjectMemberProvider {
+
+        public UnregisteredChild getChild() {
+            return new UnregisteredChild();
+        }
+    }
+
+    static final class UnregisteredChild {
     }
 
     static final class DuplicateMethodProvider {
