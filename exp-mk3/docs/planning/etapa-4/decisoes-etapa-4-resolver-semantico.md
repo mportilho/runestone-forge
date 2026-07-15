@@ -25,15 +25,15 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - ADR 0009 define que a linguagem fonte nao tem literal `null`.
 - ADR 0010 define que o modelo semantico aceito exige tipos conhecidos.
 - ADR 0011 remove `strict mode` do `Ambiente de Expressao`.
-- As ADRs 0007, 0008, 0009, 0010 e 0011 sao pre-trabalho bloqueante para implementar a Etapa 4.
+- As ADRs 0007-0014 sao pre-trabalho bloqueante para implementar a Etapa 4.
 - O plano macro deve ser ajustado para remover referencias obsoletas a `UnknownType`, `NullType`, simbolos externos sem default, `strict mode`, e politica de hex/octal em subscripts.
 - A Etapa 4 deve ter um documento detalhado proprio em `exp-mk3/docs/planning/etapa-4-resolver-semantico.md` quando a sessao de planejamento for encerrada.
 
 ## Etapa 3.5 - Saneamento antes do Resolver
 
-- A Etapa 3.5 existe para alinhar gramatica, AST, tipos, ambiente, catalogos, testes, corpus e vocabulario aos ADRs 0007-0011 antes da implementacao do `SemanticResolver`.
+- A Etapa 3.5 existe para alinhar gramatica, AST, tipos, ambiente, catalogos, testes, corpus e vocabulario aos ADRs 0007-0014 antes da implementacao do `SemanticResolver`.
 - A Etapa 3.5 deve remover conceitos obsoletos do contrato publico e do caminho interno planejavel, nao apenas impedir que aparecam em um `Modelo Semantico` de sucesso.
-- `strictMode` deve ser removido de `ExpressionEnvironment`, builder, `ExpressionEnvironmentId`, testes e configuracoes representativas.
+- `strictMode` deve ser removido de `ExpressionEnvironment`, builder, testes e configuracoes representativas.
 - Declaracoes de `Simbolo Externo` sem default ou sem `Politica de Sobrescrita de Simbolo` devem ser removidas.
 - `NullType` deixa de ser tipo normal de expressao.
 - Literal fonte `null` deve ser removido da gramatica, AST, pretty-printer e corpus.
@@ -47,7 +47,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Descriptors minimos de operacao de colecao: `map`, `sum`, `count`, `keys`, `values`, `any` e `all`.
 - Descriptors de operacao de colecao devem declarar receiver aceito, tipo de `Item Atual`, tipo de retorno, preservacao de forma, pureza, politica de avaliacao e materializacao.
 - O builder do ambiente deve validar descriptors invalidos de operacao de colecao.
-- O `Catalogo de Operacoes de Colecao` deve participar do `ExpressionEnvironmentId`.
+- O `Catalogo de Operacoes de Colecao` pertence ao ambiente que o declara; isolamento de cache ocorre pelo UUID da instancia, sem fingerprint canonico do catalogo.
 - O catalogo deve ser arquitetado com seam interno para extensao futura, mas a API publica de registro de operacoes de colecao customizadas fica fora da v2 inicial.
 - A v2 inicial registra apenas operacoes oficiais por helper de ambiente, por exemplo `addStandardCollectionOperations()`.
 - O resolver nao deve depender de hardcode dos built-ins; ele consome descriptors do catalogo.
@@ -61,8 +61,8 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - `FunctionCatalog` nao aceita tipo desconhecido em parametro/retorno, funcao dobravel impura, nem overload duplicado apenas por retorno.
 - `JavaTypeCatalog` rejeita membro exposto sem tipo de retorno mapeavel.
 - `CollectionOperationCatalog` existe com built-ins oficiais minimos.
-- `ExpressionEnvironmentId` muda com catalogos, simbolos, coercao, zone, math contexts, limites, funcoes e tipos Java; nao inclui `strictMode` nem `NumericMode`.
-- Corpus e testes sao atualizados para ADRs 0007-0013.
+- Cada `ExpressionEnvironment` construido recebe um UUID textual opaco; ambientes construidos separadamente nao compartilham ID, ainda que tenham conteudo equivalente.
+- Corpus e testes sao atualizados para ADRs 0007-0014.
 
 ## Contratos de Parametro sem UnknownType
 
@@ -87,7 +87,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Literais `DATETIME` com e sem offset sao interpretados pela politica temporal do ambiente.
 - Literais `DATETIME` sem offset sao horarios locais no `ZoneId` do ambiente, com offset efetivo inferido pelas `ZoneRules`.
 - Literais `DATETIME` com offset explicito sao convertidos para o `ZoneId` do ambiente antes de virar valor semantico preparado.
-- `ZoneId` participa do `ExpressionEnvironmentId`.
+- `ZoneId` permanece parte da semantica do ambiente, mas nao e codificado no identificador de instancia.
 
 ## Tipagem Conhecida
 
@@ -178,8 +178,8 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Etapa 7 pode elidir leitura de simbolo fixo dobrado e registrar `foldedVariableReads`.
 - Simbolo externo declarado mas nao usado nao cria slot no frame.
 - Simbolo externo declarado mas nao usado nao gera warning por padrao.
-- `ExpressionEnvironmentId` deve incluir nome, tipo declarado ou inferido, default canonico e `overridable` de cada simbolo externo.
-- Ambientes que diferem apenas em `overridable` nao podem compartilhar plano.
+- Nome, tipo, default e `overridable` continuam parte do contrato de cada simbolo externo, sem serializacao exclusiva para identidade do ambiente.
+- Ambientes construidos separadamente nao compartilham plano, independentemente de diferirem ou nao em `overridable`.
 - Defaults externos heterogeneos de mapa ou colecao sem tipo declarado devem ser rejeitados.
 - Default externo de colecao/mapa vazio exige tipo declarado.
 - Default externo Java `List`, array ou `Iterable` entra como `Tipo Colecao<T>` por padrao, nao `Tipo Vetor<T>`.
@@ -300,7 +300,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - A v2 nao tera modo numerico `FAST`.
 - A semantica numerica aceita na Etapa 4 e no produto planejado e decimal.
 - `Modo Numerico`/`NumericMode` deve ser removido do contrato publico do `Ambiente de Expressao` enquanto existir apenas semantica decimal.
-- `ExpressionEnvironmentId` nao deve incluir modo numerico apos essa remocao.
+- O identificador de instancia nao codifica modo numerico nem qualquer outro conteudo de configuracao.
 - Referencias existentes a `NumericMode`, `NumericMode.FAST`, caminhos `LONG`/`DOUBLE` como modo publico e gates especificos de FAST devem ser removidas do plano macro em saneamento posterior.
 - O ambiente mantem `MathContext` e `transcendentalMathContext`.
 - Operadores aritmeticos comuns exigem `NUMBER` e retornam `NUMBER`.
@@ -320,7 +320,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Fatorial constante negativa/fracionaria e erro semantico.
 - Fatorial dinamico gera checagem diferida.
 - Limite maximo de fatorial deve ser guard-rail do ambiente, por exemplo `maxFactorialInput`.
-- `maxFactorialInput` deve participar do `ExpressionEnvironmentId` se altera aceitacao semantica ou plano.
+- `maxFactorialInput` pertence ao ambiente e afeta aceitacao semantica, sem ser serializado no identificador de instancia.
 - Fatorial constante acima de `maxFactorialInput` e erro semantico.
 - Fatorial dinamico gera checagem diferida de integralidade, nao-negatividade e limite maximo.
 - `%` pos-fixado exige `NUMBER` e retorna `NUMBER`.
@@ -445,12 +445,11 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 
 - Funcoes globais customizadas continuam permitidas publicamente por `FunctionCatalog` e `ReflectedFunctionImporter`.
 - Essa extensibilidade nao implica liberar operacoes de colecao customizadas publicamente na v2 inicial.
-- `ExpressionEnvironmentId` de funcoes deve usar identidade canonica declarativa, nao identidade de objeto nem `MethodHandle`.
-- Identidade canonica minima de funcao: nome de linguagem, assinatura de parametros, tipo de retorno, flags `pure`/`foldable` e identificador estavel de implementacao.
-- Para metodo estatico refletido, identificador de implementacao inclui classe, nome e descriptor JVM.
-- Para metodo de instancia refletido, identificador de implementacao inclui classe, nome, descriptor JVM e `providerId` explicito quando estado do provedor influencia resultado.
-- Provedor de instancia stateful sem `providerId` explicito deve ser rejeitado pelo ambiente para evitar cache inseguro.
-- Provedor pode expor versao/id adicional para invalidar cache quando a implementacao mudar.
+- Funcoes pertencem a uma instancia de ambiente e nao exigem identidade canonica para compartilhamento entre ambientes.
+- Descriptors de funcao preservam nome de linguagem, assinatura de parametros, tipo de retorno, flags `pure`/`foldable`, handle e metadados descritivos da implementacao.
+- Metadados refletidos preservam classe, nome e descriptor JVM para diagnostico e auditoria, sem `stableImplementationId` separado.
+- Metodos de instancia sao vinculados diretamente ao provider fornecido, sem exigir `providerId`.
+- Alteracoes de provider exigem construir outro ambiente, que recebe outro identificador de instancia.
 - Chamada global resolve por `FunctionCatalog`.
 - `Vinculo de Funcao` deve carregar descriptor, assinatura escolhida, pureza, dobrabilidade e metadados necessarios.
 - Overload deve ser deterministico em compile-time.
@@ -694,7 +693,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - `maxMaterializedSize` deve ser validado na Etapa 4 apenas para materializacoes estaticamente conhecidas.
 - Vetor literal maior que `maxMaterializedSize` e erro semantico.
 - `maxMaterializedSize` limita vetor literal, resultados materializados de operacoes de colecao, entradas de mapa materializado e materializacao de colecao na borda publica.
-- `maxMaterializedSize` deve participar do `ExpressionEnvironmentId`.
+- `maxMaterializedSize` pertence ao ambiente e afeta aceitacao/execucao, sem ser serializado no identificador de instancia.
 - Filtros, `map`, `values`, wildcard e operacoes com tamanho runtime carregam metadata de materializacao.
 - Etapa 6 aplica limites em runtime para materializacoes dinamicas.
 - Grandes colecoes externas nao devem ser rejeitadas semanticamente apenas por tamanho.

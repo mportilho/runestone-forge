@@ -1,6 +1,6 @@
 # Plano Detalhado - Etapa 3.5 e Etapa 4 - Resolver Semantico
 
-Este plano detalha o saneamento necessario antes do resolver semantico e a implementacao da Etapa 4 do `exp-mk3`. Ele consolida as decisoes registradas em `exp-mk3/docs/decisoes-etapa-4-resolver-semantico.md` e nos ADRs 0007-0013.
+Este plano detalha o saneamento necessario antes do resolver semantico e a implementacao da Etapa 4 do `exp-mk3`. Ele consolida as decisoes registradas em `exp-mk3/docs/decisoes-etapa-4-resolver-semantico.md` e nos ADRs 0007-0014.
 
 ## Objetivo
 
@@ -29,7 +29,7 @@ Remover conceitos obsoletos do contrato publico e do caminho interno planejavel 
 
 ### Entregas
 
-- Remover `strictMode` de `ExpressionEnvironment`, builder, `ExpressionEnvironmentId`, configuracoes representativas e testes.
+- Remover `strictMode` de `ExpressionEnvironment`, builder, configuracoes representativas e testes.
 - Remover `NumericMode` e todas as referencias a `FAST` do contrato publico e dos testes atuais.
 - Remover `UnknownType` e `NullType` do sistema de tipos planejavel.
 - Remover literal fonte `null` da gramatica, AST, pretty-printer, corpus e testes.
@@ -39,7 +39,7 @@ Remover conceitos obsoletos do contrato publico e do caminho interno planejavel 
 - Rejeitar defaults externos heterogeneos de mapa/colecao sem tipo declarado.
 - Renomear `maxVectorSize` para `maxMaterializedSize` como limite geral de materializacao.
 - Adicionar `maxFactorialInput` como guard-rail de ambiente.
-- Ajustar `ExpressionEnvironmentId` para incluir todo conteudo relevante: simbolos, coercao, `ZoneId`, math contexts, limites, funcoes, tipos Java e catalogo de operacoes de colecao; nao incluir `strictMode` ou `NumericMode`.
+- Substituir `ExpressionEnvironmentId` e sua canonicalizacao de conteudo por um UUID textual opaco, gerado internamente para cada ambiente construido e estavel apenas durante a reutilizacao dessa instancia.
 
 ### Catalogos
 
@@ -47,8 +47,8 @@ Remover conceitos obsoletos do contrato publico e do caminho interno planejavel 
 - `ReflectedFunctionImporter` deve rejeitar tipo Java sem mapeamento conhecido.
 - Funcoes dobraveis devem ser puras.
 - Overload duplicado apenas por retorno deve ser rejeitado no builder/importador.
-- Identidade canonica de funcao no ambiente deve usar nome, parametros, retorno, flags e identificador estavel de implementacao; nunca identidade de objeto ou `MethodHandle`.
-- Provider de instancia stateful exige `providerId` explicito.
+- Metadados de funcao preservam classe, metodo e descriptor JVM para diagnostico/auditoria, sem identidade estavel exclusiva para cache.
+- Provider de instancia e vinculado diretamente ao descriptor e nao exige `providerId`.
 - `JavaTypeCatalog` deve rejeitar membro exposto sem tipo de retorno mapeavel.
 - Propriedades/metodos Java registrados sao tratados como `NEVER_NULL` por contrato de exposicao.
 - `CollectionOperationCatalog` deve existir com seam interno para extensao futura, mas sem API publica de registro custom na v2 inicial.
@@ -61,7 +61,7 @@ Remover conceitos obsoletos do contrato publico e do caminho interno planejavel 
 - `ExpressionEnvironment` nao expoe `strictMode` nem `NumericMode`.
 - `ExternalSymbolCatalog` exige default nao nulo e politica de sobrescrita.
 - `FunctionCatalog`, `JavaTypeCatalog` e `CollectionOperationCatalog` validam contratos invalidos no builder/importador.
-- Corpus e testes estao alinhados aos ADRs 0007-0013.
+- Corpus e testes estao alinhados aos ADRs 0007-0014.
 
 ## Etapa 4 - Resolver Semantico
 

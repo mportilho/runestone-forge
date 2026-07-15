@@ -172,7 +172,7 @@ Mantido e endurecido:
 
 ## 8. Ambiente
 
-`ExpressionEnvironment` mantido: `FunctionCatalog`, `ExternalSymbolCatalog`, `JavaTypeCatalog` (ex-`TypeHintCatalog`, renomeado: são **metadados de classes Java para navegação em objetos**, via `registerJavaType(Customer.class)` — nada a ver com os hints sintáticos removidos), `DataConversionService`, `MathContext`, `transcendentalMathContext`, `ExpressionEnvironmentId` (hash determinístico para o cache).
+`ExpressionEnvironment` mantido: `FunctionCatalog`, `ExternalSymbolCatalog`, `JavaTypeCatalog` (ex-`TypeHintCatalog`, renomeado: são **metadados de classes Java para navegação em objetos**, via `registerJavaType(Customer.class)` — nada a ver com os hints sintáticos removidos), `DataConversionService`, `MathContext`, `transcendentalMathContext` e `environmentId` como UUID textual opaco por instância para o cache.
 
 Acréscimos:
 
@@ -329,7 +329,7 @@ cria ExecutionScope
 
 Com a compilação unificada, o cache melhora estruturalmente:
 
-- **Chave**: `(source, environmentId)` — `resultType` sai da chave (era necessário na v1 porque cada tipo tinha um parse diferente). Mesmo texto usado como `MathExpression` e como `LogicalExpression` compartilha **um único plano**; as visões só validam.
+- **Chave**: `(source, environmentId)` — `resultType` sai da chave (era necessário na v1 porque cada tipo tinha um parse diferente). O compartilhamento ocorre apenas ao reutilizar a mesma instância de ambiente; dentro dela, o mesmo texto usado como `MathExpression` e como `LogicalExpression` compartilha **um único plano** e as visões só validam.
 - **Valor**: `CompiledExpression` (plano + metadados semânticos mínimos para as validações de visão e para auditoria). AST e parse tree **não** são retidas.
 - Caffeine mantido: engine default singleton + engines isolados; `CacheConfig` com tamanho máximo, TTL opcional e *weigher* por número de nós do plano (planos grandes pesam mais).
 - Contador de execuções por entrada alimenta a decisão de promover ao Tier 1 (seção 10), quando habilitado.

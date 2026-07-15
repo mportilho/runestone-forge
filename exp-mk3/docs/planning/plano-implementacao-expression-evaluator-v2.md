@@ -68,13 +68,13 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 
 **Entregas**
 - Tipos: `ScalarType` (`NUMBER`, `BOOLEAN`, `STRING`, `DATE`, `TIME`, `DATETIME`), `VectorType`/`CollectionType` (distintos, ambos com tipo de elemento), `MapType` (chave textual), `ObjectType` (nominal). Decisão implementada da §6 e da ADR 0004: a AST preserva `OffsetDateTime`; o resolver normaliza para `LocalDateTime` no fuso do ambiente, mantendo um único `DATETIME`.
-- `ExpressionEnvironment` + builder imutável após construção: `MathContext`, `transcendentalMathContext`, `ZoneId` (default = fuso padrão da JVM; configurar explicitamente quando a identidade precisar ser reprodutível entre ambientes), `maxCurrentItemDepth`, `maxMaterializedSize`, `maxFactorialInput`, perfil de coerção, `ExpressionEnvironmentId` (hash canônico e estável de todo o conteúdo relevante do ambiente completo — insumo do cache da Etapa 9).
+- `ExpressionEnvironment` + builder imutável após construção: `MathContext`, `transcendentalMathContext`, `ZoneId` (default = fuso padrão da JVM), `maxCurrentItemDepth`, `maxMaterializedSize`, `maxFactorialInput`, perfil de coerção e `environmentId` como UUID textual opaco gerado por instância — insumo do cache da Etapa 9.
 - `ExternalSymbolCatalog`: todo símbolo externo exige default não nulo e política de sobrescrita; o tipo é declarado e validado contra o default, ou inferido do default. Declarações sem default, sem política, ou com tipo desconhecido não fazem parte da v2.
 - `FunctionCatalog`: descoberta por reflexão → `FunctionDescriptor` (`MethodHandle` adaptado em registro, tipos, retorno, flags `foldable`/`pure`); despacho por aridade+tipos como estrutura de consulta para o resolver. **Nesta etapa a invocação pode ser `invokeExact` simples**; `LambdaMetafactory` e inline caches ficam para a Etapa 8.
 - Built-ins completos desde já no escopo de catálogo (§9): matemática **incluindo `abs` e `sqrt`** (obrigatórios — saíram da gramática), transcendentais, strings, datas/horas, comparáveis, financeiras, e as funções de asserção `asNumber/asText/asBool/asDate/asTime/asDateTime` (`pure`, `foldable`). Asserções vetoriais devem declarar elemento conhecido, como `asVectorOfNumber`, em vez de `asVector` genérico. Validação no builder: `addMathFunctions()` sem `abs`/`sqrt` presentes é erro de construção.
 - `JavaTypeCatalog` (`registerJavaType`), `CollectionOperationCatalog` com operações oficiais mínimas (`map`, `sum`, `count`, `keys`, `values`, `any`, `all`) e `DataConversionService`/`RuntimeCoercionService` com a matriz de coerções de borda.
 
-**Critérios de aceite:** dois ambientes com o mesmo conteúdo produzem o mesmo `environmentId`; catálogo resolve overloads deterministicamente; todas as funções built-in com testes unitários próprios (independentes do runtime de expressões).
+**Critérios de aceite:** o mesmo ambiente preserva seu `environmentId` e builds separados recebem IDs diferentes; catálogo resolve overloads deterministicamente; todas as funções built-in com testes unitários próprios (independentes do runtime de expressões).
 
 **Depende de:** Etapa 0 (paralelizável com 1–2).
 
@@ -82,16 +82,16 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 
 ## Etapa 3.5 — Saneamento para o resolver semântico
 
-**Objetivo:** alinhar gramática, AST, tipos, ambiente, catálogos, corpus e testes aos ADRs 0007–0013 antes de implementar o resolver.
+**Objetivo:** alinhar gramática, AST, tipos, ambiente, catálogos, corpus e testes aos ADRs 0007–0014 antes de implementar o resolver.
 
 **Entregas**
 - Remoção de `UnknownType`, `NullType`, `strictMode`, `NumericMode`/`FAST`, literal fonte `null`, inteiros hexadecimais/octais e declarações de símbolo externo sem default/política do contrato público e do caminho planejável.
-- Ajuste de `ExpressionEnvironmentId`: inclui símbolos, catálogos, coerção, `ZoneId`, math contexts, limites, funções e tipos Java; não inclui `strictMode` nem `NumericMode`.
+- Simplificação da identidade do ambiente: remover `ExpressionEnvironmentId`, fingerprint de conteúdo, serialização canônica exclusiva do ID, identificadores estáveis de implementação e `providerId`; cada build recebe um UUID textual opaco.
 - Validações de builder: defaults/overrides sem null validável; mapas sem chave/valor null validável; funções sem tipo desconhecido; função dobrável sempre pura; Java member exposto sempre com tipo mapeável; descriptors de operação de coleção válidos.
 - `CollectionOperationCatalog` preparado com descriptors oficiais e seam interno para extensão futura, sem API pública de operações custom na v2 inicial.
-- Atualização do corpus para `phase: semantic`, ADRs 0007–0013, `maxMaterializedSize` e nulidade estrita.
+- Atualização do corpus para `phase: semantic`, ADRs 0007–0014, `maxMaterializedSize` e nulidade estrita.
 
-**Critérios de aceite:** `mvn -pl exp-mk3 -am test` verde; gramática rejeita `null`, `0x10` e `077`; ambiente não expõe `strictMode`/`NumericMode`; catálogos e corpus alinhados aos ADRs 0007–0013.
+**Critérios de aceite:** `mvn -pl exp-mk3 -am test` verde; gramática rejeita `null`, `0x10` e `077`; ambiente não expõe `strictMode`/`NumericMode`; catálogos e corpus alinhados aos ADRs 0007–0014.
 
 **Depende de:** Etapas 2 e 3.
 
@@ -191,7 +191,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 **Objetivo:** amortização da compilação (§17) e fechamento do marco de desempenho.
 
 **Entregas**
-- Cache Caffeine com chave `(source, environmentId)` — sem `resultType`; valor `CompiledExpression` (plano + metadados mínimos de visão/auditoria; AST e parse tree não retidas — verificar por teste de heap).
+- Cache Caffeine com chave `(source, environmentId)` — sem `resultType` e com compartilhamento limitado à reutilização da mesma instância de ambiente; valor `CompiledExpression` (plano + metadados mínimos de visão/auditoria; AST e parse tree não retidas — verificar por teste de heap).
 - Engine default singleton + engines isolados; `CacheConfig` (tamanho máximo, TTL opcional, weigher por número de nós).
 - Contador de execuções por entrada (insumo do Tier 1 futuro).
 - Medição separada de compilação fria × quente no JMH; warm-up de ATN da Etapa 1 revisitado com o corpus final.

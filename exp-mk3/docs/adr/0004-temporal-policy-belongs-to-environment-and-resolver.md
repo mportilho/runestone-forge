@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted; environment-identity clauses amended by ADR 0014
 
 ## Context
 
@@ -12,7 +12,7 @@ The evaluator also has dynamic current temporal values such as `currDate`, `curr
 
 ## Decision
 
-The Ambiente de Expressao owns temporal policy through an explicit time zone. That time zone is part of the Identificador de Ambiente because it affects compilation semantics and cache safety.
+The Ambiente de Expressao owns temporal policy through an explicit time zone. Cache isolation now follows the per-instance identity defined by ADR 0014 rather than including the time zone in a content fingerprint.
 
 The standard Ambiente de Expressao uses the JVM default time zone as its default `ZoneId`. Callers that need reproducible temporal semantics and stable Identificadores de Ambiente across machines, containers, or deployments must configure the environment time zone explicitly.
 
@@ -20,13 +20,13 @@ The Arvore Semantica de Expressao continues to preserve date-time literals as so
 
 Semantic metadata may retain the original literal, whether the offset was explicit or inferred, the environment time zone, the effective offset, and the normalized value for diagnostics and audit. The hot execution plan only needs the normalized `DATETIME` value.
 
-Current temporal values are derived from one execution instant per evaluation and use the same Ambiente de Expressao time zone. The execution clock is a runtime dependency and test seam, not part of the Identificador de Ambiente, unless a future compilation feature makes clock identity affect compilation.
+Current temporal values are derived from one execution instant per evaluation and use the same Ambiente de Expressao time zone. The execution clock is a runtime dependency and test seam, not part of environment instance identity.
 
 ## Consequences
 
 The same source can compile to different temporal semantics under different environment time zones, and those environments will not share the same compiled-plan cache key.
 
-The standard environment is convenient for local or host-relative evaluation, but its Identificador de Ambiente can differ across JVMs with different default time zones.
+The standard environment is convenient for local or host-relative evaluation. Its instance identifier is process-local regardless of whether JVM default time zones agree.
 
 The semantic tree remains deterministic for a given source and does not leak environment policy into parsing or AST construction.
 

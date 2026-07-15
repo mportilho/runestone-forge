@@ -24,9 +24,9 @@ _Avoid_: Assertion payload, expected output
 The compilation configuration that declares external symbols, functions, Java types, decimal numeric semantics, time zone, and limits used to interpret an expression case.
 _Avoid_: Test context, evaluation setup
 
-**Identificador de Ambiente**:
-A canonical, stable identity derived from all compilation-relevant Ambiente de Expressao content so equivalent environments can share compiled plans safely.
-_Avoid_: Object identity, cache tag, random environment id
+**Identificador de Instancia do Ambiente**:
+An opaque UUID string generated when an Ambiente de Expressao is built and used to share compiled plans only while that same environment instance is reused. Separately built environments have different identifiers even when their configurations are equal.
+_Avoid_: Environment content hash, deterministic environment ID, semantic fingerprint, persistent environment ID
 
 **Simbolo Externo**:
 A named value declared by an Ambiente de Expressao with a required default value and an overwrite policy. Its type is either declared explicitly and validated against the default, or inferred from the default; runtime inputs may replace it only when the symbol is declared overridable.
@@ -199,6 +199,10 @@ _Avoid_: Global function, Java collection method, stream operation
 **Catalogo de Operacoes de Colecao**:
 The Ambiente de Expressao catalog that declares built-in Operacao de Colecao descriptors separately from global functions, with a future extension seam for user-provided operations.
 _Avoid_: FunctionCatalog convention, method registry, stream extension list
+
+**Descritor de Operacao de Colecao**:
+The declarative catalog contract that defines accepted receivers, argument shape, Item Atual type derivation, result rule, shape preservation, intrinsic purity, evaluation policy, and materialization policy for an Operacao de Colecao. It contains no runtime execution and is not the semantic binding of a source occurrence.
+_Avoid_: Collection function, operation handler, runtime implementation, collection-operation binding
 
 **Item Atual**:
 The contextual value referenced by `@` inside filters and lambdas, typed from the current collection element when that element type is known; parsing can recognize it anywhere, but semantic validation decides whether a current item context exists.

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted; environment-identity clauses amended by ADR 0014
 
 ## Context
 
@@ -10,8 +10,8 @@ Collection-operation syntax such as `..sum()`, `..map(@ -> e)`, `..keys()`, and 
 
 ## Decision
 
-Collection operations are resolved through a dedicated, extensible collection-operation catalog owned by the Ambiente de Expressao. Built-in and user-provided operations declare their receiver requirements, argument shape, return type, purity/materialization flags, and Item Atual policy separately from global functions. The catalog is part of the Identificador de Ambiente because it changes semantic resolution and compiled-plan cache safety.
+Collection operations are resolved through a dedicated, extensible collection-operation catalog owned by the Ambiente de Expressao. Built-in and user-provided operations declare their receiver requirements, argument shape, return type, purity/materialization flags, and Item Atual policy separately from global functions. Cache safety follows the owning environment instance identity defined by ADR 0014 rather than a canonical catalog fingerprint.
 
 ## Consequences
 
-The semantic resolver produces navigation bindings for collection operations instead of function bindings. User extensions can still delegate internally to registered functions, but `..op()` remains navigation over a receiver rather than a global function call. Environment identity canonicalization must include the collection-operation catalog before cache sharing is safe.
+The semantic resolver produces navigation bindings for collection operations instead of function bindings. User extensions can still delegate internally to registered functions, but `..op()` remains navigation over a receiver rather than a global function call. Separately built environments do not share compiled plans, even when their catalogs are equivalent.
