@@ -51,6 +51,10 @@ public record FunctionImplementationMetadata(
                 descriptor);
     }
 
+    String describeImplementation() {
+        return owner + '#' + memberName + methodType;
+    }
+
     private static String requireNonBlank(String value, String name) {
         Objects.requireNonNull(value, name);
         if (value.isBlank()) {

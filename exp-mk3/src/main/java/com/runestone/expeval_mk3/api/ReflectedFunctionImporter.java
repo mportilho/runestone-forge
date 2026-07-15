@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -49,14 +48,15 @@ public final class ReflectedFunctionImporter {
     }
 
     public static ImportPlan importAll(Class<?> providerClass, FunctionPurity purity) {
-        return new ImportPlanImpl(Source.staticProvider(providerClass, purity), SelectionMode.allMode());
+        return new ImportPlanImpl(Source.staticProvider(providerClass, purity), SelectionMode.allMode(), List.of());
     }
 
     public static ImportPlan importAll(Object providerInstance, FunctionPurity purity) {
         Objects.requireNonNull(providerInstance, "providerInstance");
         return new ImportPlanImpl(
                 Source.instanceProvider(providerInstance.getClass(), providerInstance, purity),
-                SelectionMode.allMode());
+                SelectionMode.allMode(),
+                List.of());
     }
 
     public static ImportPlan importAll(
@@ -65,31 +65,62 @@ public final class ReflectedFunctionImporter {
             FunctionPurity purity) {
         return new ImportPlanImpl(
                 Source.exposedInstanceProvider(exposureType, providerInstance, purity),
-                SelectionMode.allMode());
+                SelectionMode.allMode(),
+                List.of());
     }
 
     public static Selection importSelected(Class<?> providerClass, FunctionPurity purity) {
-        return new ImportPlanImpl(Source.staticProvider(providerClass, purity), SelectionMode.selectedMode());
+        return new SelectionPlanImpl(
+                Source.staticProvider(providerClass, purity), SelectionMode.selectedMode(), List.of());
     }
 
     public static Selection importSelected(Object providerInstance, FunctionPurity purity) {
         Objects.requireNonNull(providerInstance, "providerInstance");
-        return new ImportPlanImpl(
+        return new SelectionPlanImpl(
                 Source.instanceProvider(providerInstance.getClass(), providerInstance, purity),
-                SelectionMode.selectedMode());
+                SelectionMode.selectedMode(),
+                List.of());
     }
 
     public static Selection importSelected(
             Class<?> exposureType,
             Object providerInstance,
             FunctionPurity purity) {
-        return new ImportPlanImpl(
+        return new SelectionPlanImpl(
                 Source.exposedInstanceProvider(exposureType, providerInstance, purity),
-                SelectionMode.selectedMode());
+                SelectionMode.selectedMode(),
+                List.of());
+    }
+
+    static ImportPlan importCanonicalAll(Class<?> providerClass, FunctionPurity purity) {
+        return new ImportPlanImpl(
+                Source.canonicalStaticProvider(providerClass, purity), SelectionMode.allMode(), List.of());
+    }
+
+    static ImportPlan importCanonicalAll(Object providerInstance, FunctionPurity purity) {
+        Objects.requireNonNull(providerInstance, "providerInstance");
+        return new ImportPlanImpl(
+                Source.canonicalInstanceProvider(providerInstance.getClass(), providerInstance, purity),
+                SelectionMode.allMode(),
+                List.of());
+    }
+
+    static ImportPlan importCanonicalAll(
+            Class<?> exposureType,
+            Object providerInstance,
+            FunctionPurity purity) {
+        return new ImportPlanImpl(
+                Source.canonicalInstanceProvider(exposureType, providerInstance, purity),
+                SelectionMode.allMode(),
+                List.of());
     }
 
     public interface ImportPlan {
         ImportPlan rename(String javaMethodName, String languageName);
+
+        ImportPlan rename(String javaMethodName, Class<?> javaParameterType, String languageName);
+
+        ImportPlan rename(String javaMethodName, String languageName, Class<?>... javaParameterTypes);
 
         List<FunctionDescriptor> toList();
     }
@@ -101,23 +132,143 @@ public final class ReflectedFunctionImporter {
 
         @Override
         Selection rename(String javaMethodName, String languageName);
+
+        @Override
+        Selection rename(String javaMethodName, Class<?> javaParameterType, String languageName);
+
+        @Override
+        Selection rename(String javaMethodName, String languageName, Class<?>... javaParameterTypes);
     }
 
-    private static final class ImportPlanImpl implements ImportPlan, Selection {
+    private static class ImportPlanImpl implements ImportPlan {
 
         private final Source source;
         private final SelectionMode selectionMode;
-        private final Map<String, String> renames = new LinkedHashMap<>();
+        private final List<Rename> renames;
 
-        private ImportPlanImpl(Source source, SelectionMode selectionMode) {
+        private ImportPlanImpl(Source source, SelectionMode selectionMode, List<Rename> renames) {
             this.source = source;
             this.selectionMode = selectionMode;
+            this.renames = List.copyOf(renames);
+        }
+
+        @Override
+        public ImportPlan rename(String javaMethodName, String languageName) {
+            return withRename(Rename.byName(javaMethodName, languageName));
+        }
+
+        @Override
+        public ImportPlan rename(String javaMethodName, Class<?> javaParameterType, String languageName) {
+            Objects.requireNonNull(javaParameterType, "javaParameterType");
+            return rename(javaMethodName, languageName, javaParameterType);
+        }
+
+        @Override
+        public ImportPlan rename(String javaMethodName, String languageName, Class<?>... javaParameterTypes) {
+            return withRename(Rename.exact(javaMethodName, javaParameterTypes, languageName));
+        }
+
+        @Override
+        public List<FunctionDescriptor> toList() {
+            ImportResolution resolution = resolve(LOOKUP, false, JavaTypeCatalog.empty());
+            if (!resolution.failures().isEmpty()) {
+                throw combinedFailure(resolution.failures());
+            }
+            validateUniqueSignatures(resolution.descriptors());
+            return sortedDescriptors(resolution.descriptors());
+        }
+
+        private ImportResolution resolve(
+                MethodHandles.Lookup lookup,
+                boolean guardNulls,
+                JavaTypeCatalog javaTypes) {
+            List<Method> eligibleMethods = eligibleMethods(source);
+            List<IllegalArgumentException> failures = new ArrayList<>();
+            if (eligibleMethods.isEmpty()) {
+                failures.add(new IllegalArgumentException(
+                        "function provider declares no eligible methods: " + source.exposureType().getName()));
+            }
+
+            List<Method> selectedMethods = eligibleMethods.stream()
+                    .filter(selectionMode::matches)
+                    .toList();
+            validateSelectionTargets(selectionMode, selectedMethods, failures);
+            validateRenames(selectedMethods, failures);
+
+            List<FunctionDescriptor> descriptors = new ArrayList<>(selectedMethods.size());
+            for (Method method : selectedMethods) {
+                try {
+                    ImportedMethod importedMethod = source.canonicalScalarsOnly()
+                            ? importCanonicalScalarMethod(method)
+                            : importMethod(method, javaTypes);
+                    descriptors.add(descriptor(
+                            languageName(method), source, importedMethod, lookup, guardNulls));
+                } catch (IllegalArgumentException exception) {
+                    failures.add(providerFailure(method.toGenericString() + ": " + exception.getMessage(), exception));
+                }
+            }
+            failures.sort(Comparator.comparing(Throwable::getMessage));
+            return new ImportResolution(descriptors, failures);
+        }
+
+        private ImportPlanImpl withRename(Rename rename) {
+            ArrayList<Rename> updated = new ArrayList<>(renames.size() + 1);
+            updated.addAll(renames);
+            updated.add(rename);
+            return copy(selectionMode, updated);
+        }
+
+        ImportPlanImpl copy(SelectionMode updatedSelectionMode, List<Rename> updatedRenames) {
+            return new ImportPlanImpl(source, updatedSelectionMode, updatedRenames);
+        }
+
+        private String languageName(Method method) {
+            List<String> languageNames = renames.stream()
+                    .filter(rename -> rename.matches(method))
+                    .map(Rename::languageName)
+                    .distinct()
+                    .sorted()
+                    .toList();
+            if (languageNames.size() > 1) {
+                throw new IllegalArgumentException("Java method has conflicting renames: " + method.toGenericString());
+            }
+            String languageName = languageNames.isEmpty() ? method.getName() : languageNames.getFirst();
+            return FunctionSignature.validateLanguageName(languageName);
+        }
+
+        private void validateRenames(List<Method> selectedMethods, List<IllegalArgumentException> failures) {
+            for (Rename rename : renames) {
+                if (selectedMethods.stream().noneMatch(rename::matches)) {
+                    failures.add(providerFailure("rename has no imported target: " + rename.target(), null));
+                }
+            }
+        }
+
+        private IllegalArgumentException providerFailure(String detail, IllegalArgumentException cause) {
+            return new IllegalArgumentException(
+                    "invalid function provider " + source.exposureType().getName() + ": " + detail, cause);
+        }
+    }
+
+    private static final class SelectionPlanImpl extends ImportPlanImpl implements Selection {
+
+        private SelectionPlanImpl(Source source, SelectionMode selectionMode, List<Rename> renames) {
+            super(source, selectionMode, renames);
         }
 
         @Override
         public Selection rename(String javaMethodName, String languageName) {
-            addRename(javaMethodName, languageName);
-            return this;
+            return (Selection) super.rename(javaMethodName, languageName);
+        }
+
+        @Override
+        public Selection rename(String javaMethodName, Class<?> javaParameterType, String languageName) {
+            return (Selection) super.rename(javaMethodName, javaParameterType, languageName);
+        }
+
+        @Override
+        public Selection rename(String javaMethodName, String languageName, Class<?>... javaParameterTypes) {
+            return (Selection) super.rename(javaMethodName, languageName, javaParameterTypes);
         }
 
         @Override
@@ -126,63 +277,34 @@ public final class ReflectedFunctionImporter {
             if (javaMethodNames.length == 0) {
                 throw new IllegalArgumentException("javaMethodNames must not be empty");
             }
+            SelectionMode updated = selectionMode();
             for (String javaMethodName : javaMethodNames) {
-                selectionMode.addName(javaMethodName);
+                updated = updated.withName(javaMethodName);
             }
-            return this;
+            return (Selection) copy(updated, renames());
         }
 
         @Override
         public Selection method(String javaMethodName, Class<?>... javaParameterTypes) {
-            selectionMode.addExact(javaMethodName, javaParameterTypes);
-            return this;
+            return (Selection) copy(
+                    selectionMode().withExact(javaMethodName, javaParameterTypes), renames());
         }
 
         @Override
-        public List<FunctionDescriptor> toList() {
-            List<ImportedMethod> importedMethods = discover(source, selectionMode);
-            validateSelectionTargets(selectionMode, importedMethods);
-            validateRenames(importedMethods);
-
-            List<ImportedDescriptor> importedDescriptors = new ArrayList<>(importedMethods.size());
-            Set<FunctionSignature> signatures = new LinkedHashSet<>();
-            for (ImportedMethod importedMethod : importedMethods) {
-                String languageName = renames.getOrDefault(importedMethod.method().getName(), importedMethod.method().getName());
-                FunctionDescriptor descriptor = descriptor(languageName, source, importedMethod);
-                if (!signatures.add(descriptor.signature())) {
-                    throw new IllegalArgumentException("duplicate function signature imported: "
-                            + descriptor.signature().canonical());
-                }
-                importedDescriptors.add(new ImportedDescriptor(descriptor, importedMethod.method().getName()));
-            }
-
-            importedDescriptors.sort(Comparator
-                    .comparing((ImportedDescriptor imported) -> imported.descriptor().signature())
-                    .thenComparing(ImportedDescriptor::javaMethodName));
-            return importedDescriptors.stream()
-                    .map(ImportedDescriptor::descriptor)
-                    .toList();
+        ImportPlanImpl copy(SelectionMode updatedSelectionMode, List<Rename> updatedRenames) {
+            return new SelectionPlanImpl(source(), updatedSelectionMode, updatedRenames);
         }
 
-        private void addRename(String javaMethodName, String languageName) {
-            javaMethodName = requireMethodName(javaMethodName);
-            languageName = FunctionSignature.validateLanguageName(languageName);
-            String previous = renames.putIfAbsent(javaMethodName, languageName);
-            if (previous != null && !previous.equals(languageName)) {
-                throw new IllegalArgumentException("java method already renamed differently: " + javaMethodName);
-            }
+        private Source source() {
+            return super.source;
         }
 
-        private void validateRenames(List<ImportedMethod> importedMethods) {
-            Set<String> importedNames = new LinkedHashSet<>();
-            for (ImportedMethod importedMethod : importedMethods) {
-                importedNames.add(importedMethod.method().getName());
-            }
-            for (String renamedMethod : renames.keySet()) {
-                if (!importedNames.contains(renamedMethod)) {
-                    throw new IllegalArgumentException("rename has no imported target: " + renamedMethod);
-                }
-            }
+        private SelectionMode selectionMode() {
+            return super.selectionMode;
+        }
+
+        private List<Rename> renames() {
+            return super.renames;
         }
     }
 
@@ -220,15 +342,11 @@ public final class ReflectedFunctionImporter {
         }
     }
 
-    private static List<ImportedMethod> discover(Source source, SelectionMode selectionMode) {
-        List<ImportedMethod> importedMethods = new ArrayList<>();
-        for (Method method : source.exposureType().getDeclaredMethods()) {
-            if (!isEligible(method, source) || !selectionMode.matches(method)) {
-                continue;
-            }
-            importedMethods.add(importMethod(method));
-        }
-        return importedMethods;
+    private static List<Method> eligibleMethods(Source source) {
+        return Arrays.stream(source.exposureType().getDeclaredMethods())
+                .sorted(Comparator.comparing(Method::toGenericString))
+                .filter(method -> isEligible(method, source))
+                .toList();
     }
 
     private static boolean isEligible(Method method, Source source) {
@@ -239,7 +357,7 @@ public final class ReflectedFunctionImporter {
         return source.importStatic() == Modifier.isStatic(modifiers);
     }
 
-    private static ImportedMethod importMethod(Method method) {
+    private static ImportedMethod importMethod(Method method, JavaTypeCatalog javaTypes) {
         if (method.isVarArgs()) {
             throw new IllegalArgumentException("varargs provider methods are not supported: " + method);
         }
@@ -247,9 +365,11 @@ public final class ReflectedFunctionImporter {
         Type[] genericParameterTypes = method.getGenericParameterTypes();
         Class<?>[] rawParameterTypes = method.getParameterTypes();
         for (int index = 0; index < genericParameterTypes.length; index++) {
-            parameterTypes.add(expressionType(genericParameterTypes[index], rawParameterTypes[index], TypePosition.PARAMETER));
+            parameterTypes.add(expressionType(
+                    genericParameterTypes[index], rawParameterTypes[index], TypePosition.PARAMETER, javaTypes));
         }
-        ExpressionType returnType = expressionType(method.getGenericReturnType(), method.getReturnType(), TypePosition.RETURN);
+        ExpressionType returnType = expressionType(
+                method.getGenericReturnType(), method.getReturnType(), TypePosition.RETURN, javaTypes);
         return new ImportedMethod(method, List.copyOf(parameterTypes), returnType);
     }
 
@@ -286,7 +406,11 @@ public final class ReflectedFunctionImporter {
         throw new IllegalArgumentException("unsupported canonical scalar provider method type: " + rawType.getName());
     }
 
-    private static ExpressionType expressionType(Type genericType, Class<?> rawType, TypePosition position) {
+    private static ExpressionType expressionType(
+            Type genericType,
+            Class<?> rawType,
+            TypePosition position,
+            JavaTypeCatalog javaTypes) {
         if (rawType == void.class) {
             throw new IllegalArgumentException("void provider method returns are not supported");
         }
@@ -321,18 +445,24 @@ public final class ReflectedFunctionImporter {
             throw new IllegalArgumentException("Object provider method types are not supported");
         }
         if (List.class.isAssignableFrom(rawType)) {
-            return vectorType(genericType, "raw List");
+            return vectorType(genericType, "raw List", javaTypes);
         }
         if (Collection.class.isAssignableFrom(rawType)) {
             if (position == TypePosition.RETURN) {
                 throw new IllegalArgumentException("Collection return types are not supported");
             }
-            return vectorType(genericType, "raw Collection");
+            return vectorType(genericType, "raw Collection", javaTypes);
         }
-        throw new IllegalArgumentException("unsupported provider method type: " + rawType.getName());
+        return javaTypes.find(rawType)
+                .map(JavaTypeDescriptor::objectType)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "unsupported provider method type; not a registered Java type: " + rawType.getName()));
     }
 
-    private static ExpressionType vectorType(Type genericType, String rawMessage) {
+    private static ExpressionType vectorType(
+            Type genericType,
+            String rawMessage,
+            JavaTypeCatalog javaTypes) {
         if (!(genericType instanceof ParameterizedType parameterizedType)) {
             throw new IllegalArgumentException(rawMessage + " provider method types are not supported");
         }
@@ -348,24 +478,31 @@ public final class ReflectedFunctionImporter {
         if (!(elementType instanceof Class<?> elementClass)) {
             throw new IllegalArgumentException("unresolvable vector element type is not supported");
         }
-        return new VectorType(expressionType(elementClass, elementClass, TypePosition.VECTOR_ELEMENT));
+        return new VectorType(expressionType(
+                elementClass, elementClass, TypePosition.VECTOR_ELEMENT, javaTypes));
     }
 
-    private static void validateSelectionTargets(SelectionMode selectionMode, List<ImportedMethod> importedMethods) {
+    private static void validateSelectionTargets(
+            SelectionMode selectionMode,
+            List<Method> selectedMethods,
+            List<IllegalArgumentException> failures) {
         if (selectionMode.isAll()) {
             return;
         }
         for (String selectedName : selectionMode.names()) {
-            boolean found = importedMethods.stream().anyMatch(imported -> imported.method().getName().equals(selectedName));
+            boolean found = selectedMethods.stream().anyMatch(method -> method.getName().equals(selectedName));
             if (!found) {
-                throw new IllegalArgumentException("selected method has no imported target: " + selectedName);
+                failures.add(new IllegalArgumentException("selected method has no imported target: " + selectedName));
             }
         }
         for (MethodKey selectedMethod : selectionMode.exactMethods()) {
-            boolean found = importedMethods.stream().anyMatch(imported -> selectedMethod.matches(imported.method()));
+            boolean found = selectedMethods.stream().anyMatch(selectedMethod::matches);
             if (!found) {
-                throw new IllegalArgumentException("selected method has no imported target: " + selectedMethod);
+                failures.add(new IllegalArgumentException("selected method has no imported target: " + selectedMethod));
             }
+        }
+        if (selectionMode.names().isEmpty() && selectionMode.exactMethods().isEmpty()) {
+            failures.add(new IllegalArgumentException("selective function import declares no methods"));
         }
     }
 
@@ -387,7 +524,8 @@ public final class ReflectedFunctionImporter {
             Class<?> exposureType,
             Object providerInstance,
             FunctionPurity purity,
-            boolean importStatic) {
+            boolean importStatic,
+            boolean canonicalScalarsOnly) {
 
         private Source {
             exposureType = Objects.requireNonNull(exposureType, "exposureType");
@@ -401,40 +539,53 @@ public final class ReflectedFunctionImporter {
         }
 
         private static Source staticProvider(Class<?> providerClass, FunctionPurity purity) {
-            return new Source(Objects.requireNonNull(providerClass, "providerClass"), null, purity, true);
+            return new Source(Objects.requireNonNull(providerClass, "providerClass"), null, purity, true, false);
         }
 
         private static Source instanceProvider(
                 Class<?> exposureType,
                 Object providerInstance,
                 FunctionPurity purity) {
-            return new Source(exposureType, providerInstance, purity, false);
+            return new Source(exposureType, providerInstance, purity, false, false);
         }
 
         private static Source exposedInstanceProvider(
                 Class<?> exposureType,
                 Object providerInstance,
                 FunctionPurity purity) {
-            return new Source(exposureType, providerInstance, purity, false);
+            return new Source(exposureType, providerInstance, purity, false, false);
+        }
+
+        private static Source canonicalStaticProvider(Class<?> providerClass, FunctionPurity purity) {
+            return new Source(Objects.requireNonNull(providerClass, "providerClass"), null, purity, true, true);
+        }
+
+        private static Source canonicalInstanceProvider(
+                Class<?> exposureType,
+                Object providerInstance,
+                FunctionPurity purity) {
+            return new Source(exposureType, providerInstance, purity, false, true);
         }
     }
 
     private static final class SelectionMode {
 
         private final boolean all;
-        private final Set<String> names = new LinkedHashSet<>();
-        private final Set<MethodKey> exactMethods = new LinkedHashSet<>();
+        private final Set<String> names;
+        private final Set<MethodKey> exactMethods;
 
-        private SelectionMode(boolean all) {
+        private SelectionMode(boolean all, Set<String> names, Set<MethodKey> exactMethods) {
             this.all = all;
+            this.names = Set.copyOf(names);
+            this.exactMethods = Set.copyOf(exactMethods);
         }
 
         private static SelectionMode allMode() {
-            return new SelectionMode(true);
+            return new SelectionMode(true, Set.of(), Set.of());
         }
 
         private static SelectionMode selectedMode() {
-            return new SelectionMode(false);
+            return new SelectionMode(false, Set.of(), Set.of());
         }
 
         private boolean isAll() {
@@ -449,14 +600,18 @@ public final class ReflectedFunctionImporter {
             return exactMethods;
         }
 
-        private void addName(String javaMethodName) {
+        private SelectionMode withName(String javaMethodName) {
             ensureSelectedMode();
-            names.add(requireMethodName(javaMethodName));
+            LinkedHashSet<String> updated = new LinkedHashSet<>(names);
+            updated.add(requireMethodName(javaMethodName));
+            return new SelectionMode(false, updated, exactMethods);
         }
 
-        private void addExact(String javaMethodName, Class<?>... javaParameterTypes) {
+        private SelectionMode withExact(String javaMethodName, Class<?>... javaParameterTypes) {
             ensureSelectedMode();
-            exactMethods.add(new MethodKey(javaMethodName, javaParameterTypes));
+            LinkedHashSet<MethodKey> updated = new LinkedHashSet<>(exactMethods);
+            updated.add(new MethodKey(javaMethodName, javaParameterTypes));
+            return new SelectionMode(false, names, updated);
         }
 
         private boolean matches(Method method) {
@@ -509,92 +664,91 @@ public final class ReflectedFunctionImporter {
     private record ImportedMethod(Method method, List<ExpressionType> parameterTypes, ExpressionType returnType) {
     }
 
-    private record ImportedDescriptor(FunctionDescriptor descriptor, String javaMethodName) {
-    }
+    private record Rename(MethodKey exactMethod, String javaMethodName, String languageName) {
 
-    static final class EnvironmentImport {
-
-        private final Source source;
-
-        private EnvironmentImport(Source source) {
-            this.source = source;
-        }
-
-        static EnvironmentImport staticProvider(Class<?> providerClass, FunctionPurity purity) {
-            return new EnvironmentImport(Source.staticProvider(providerClass, purity));
-        }
-
-        static EnvironmentImport instanceProvider(Object providerInstance, FunctionPurity purity) {
-            Objects.requireNonNull(providerInstance, "providerInstance");
-            return new EnvironmentImport(Source.instanceProvider(
-                    providerInstance.getClass(), providerInstance, purity));
-        }
-
-        static EnvironmentImport exposedInstanceProvider(
-                Class<?> exposureType,
-                Object providerInstance,
-                FunctionPurity purity) {
-            return new EnvironmentImport(Source.exposedInstanceProvider(exposureType, providerInstance, purity));
-        }
-
-        EnvironmentImportResolution resolve() {
-            List<ImportedMethod> importedMethods = new ArrayList<>();
-            List<IllegalArgumentException> failures = new ArrayList<>();
-            List<Method> declaredMethods = Arrays.stream(source.exposureType().getDeclaredMethods())
-                    .sorted(Comparator.comparing(Method::toGenericString))
-                    .toList();
-            int eligibleMethodCount = 0;
-            for (Method method : declaredMethods) {
-                if (isEligible(method, source)) {
-                    eligibleMethodCount++;
-                    try {
-                        importedMethods.add(importCanonicalScalarMethod(method));
-                    } catch (IllegalArgumentException exception) {
-                        failures.add(providerFailure(method.toGenericString() + ": " + exception.getMessage(), exception));
-                    }
-                }
+        private Rename {
+            if (exactMethod == null) {
+                javaMethodName = requireMethodName(javaMethodName);
             }
-            if (eligibleMethodCount == 0) {
-                failures.add(new IllegalArgumentException(
-                        "function provider declares no eligible methods: " + source.exposureType().getName()));
-            }
-
-            List<FunctionDescriptor> descriptors = new ArrayList<>(importedMethods.size());
-            Set<FunctionSignature> signatures = new LinkedHashSet<>();
-            for (ImportedMethod importedMethod : importedMethods) {
-                try {
-                    FunctionDescriptor descriptor = descriptor(
-                            importedMethod.method().getName(), source, importedMethod, PUBLIC_LOOKUP, true);
-                    if (!signatures.add(descriptor.signature())) {
-                        IllegalArgumentException exception = new IllegalArgumentException(
-                                "duplicate function signature imported: " + descriptor.signature().canonical());
-                        failures.add(providerFailure(exception.getMessage(), exception));
-                    } else {
-                        descriptors.add(descriptor);
-                    }
-                } catch (IllegalArgumentException exception) {
-                    failures.add(providerFailure(
-                            importedMethod.method().toGenericString() + ": " + exception.getMessage(), exception));
-                }
-            }
-            descriptors.sort(Comparator.comparing(FunctionDescriptor::signature));
-            failures.sort(Comparator.comparing(Throwable::getMessage));
-            return new EnvironmentImportResolution(descriptors, failures);
+            Objects.requireNonNull(languageName, "languageName");
         }
 
-        private IllegalArgumentException providerFailure(String detail, IllegalArgumentException cause) {
-            return new IllegalArgumentException(
-                    "invalid function provider " + source.exposureType().getName() + ": " + detail, cause);
+        private static Rename byName(String javaMethodName, String languageName) {
+            return new Rename(null, javaMethodName, languageName);
+        }
+
+        private static Rename exact(String javaMethodName, Class<?>[] parameterTypes, String languageName) {
+            return new Rename(new MethodKey(javaMethodName, parameterTypes), null, languageName);
+        }
+
+        private boolean matches(Method method) {
+            return exactMethod == null
+                    ? javaMethodName.equals(method.getName())
+                    : exactMethod.matches(method);
+        }
+
+        private String target() {
+            return exactMethod == null ? javaMethodName : exactMethod.toString();
         }
     }
 
-    record EnvironmentImportResolution(
+    static ImportResolution resolveForEnvironment(ImportPlan plan, JavaTypeCatalog javaTypes) {
+        Objects.requireNonNull(plan, "plan");
+        Objects.requireNonNull(javaTypes, "javaTypes");
+        if (!(plan instanceof ImportPlanImpl implementation)) {
+            throw new IllegalArgumentException("unsupported reflected function import plan implementation");
+        }
+        return implementation.resolve(PUBLIC_LOOKUP, true, javaTypes);
+    }
+
+    record ImportResolution(
             List<FunctionDescriptor> descriptors,
             List<IllegalArgumentException> failures) {
 
-        EnvironmentImportResolution {
+        ImportResolution {
             descriptors = List.copyOf(descriptors);
             failures = List.copyOf(failures);
         }
     }
+
+    private static List<FunctionDescriptor> sortedDescriptors(List<FunctionDescriptor> descriptors) {
+        return descriptors.stream()
+                .sorted(Comparator
+                        .comparing(FunctionDescriptor::signature)
+                        .thenComparing(descriptor -> descriptor.implementationMetadata().owner())
+                        .thenComparing(descriptor -> descriptor.implementationMetadata().methodType()))
+                .toList();
+    }
+
+    private static void validateUniqueSignatures(List<FunctionDescriptor> descriptors) {
+        Map<FunctionSignature, List<FunctionDescriptor>> bySignature = descriptors.stream()
+                .collect(java.util.stream.Collectors.groupingBy(FunctionDescriptor::signature));
+        bySignature.entrySet().stream()
+                .filter(entry -> entry.getValue().size() > 1)
+                .sorted(Map.Entry.comparingByKey())
+                .findFirst()
+                .ifPresent(entry -> {
+                    List<String> methods = entry.getValue().stream()
+                            .map(FunctionDescriptor::implementationMetadata)
+                            .map(FunctionImplementationMetadata::describeImplementation)
+                            .sorted()
+                            .toList();
+                    throw new IllegalArgumentException("duplicate function signature imported: "
+                            + entry.getKey().canonical() + " from " + String.join(" and ", methods));
+                });
+    }
+
+    private static IllegalArgumentException combinedFailure(List<IllegalArgumentException> failures) {
+        IllegalArgumentException failure = new IllegalArgumentException(failures.stream()
+                .map(Throwable::getMessage)
+                .distinct()
+                .sorted()
+                .reduce((first, second) -> first + "; " + second)
+                .orElseThrow(), failures.getFirst());
+        for (int index = 1; index < failures.size(); index++) {
+            failure.addSuppressed(failures.get(index));
+        }
+        return failure;
+    }
+
 }

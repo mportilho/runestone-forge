@@ -191,6 +191,42 @@ class FunctionCatalogTest {
                 .containsExactlyElementsOf(second.values().stream().map(FunctionDescriptor::signature).toList());
     }
 
+    @Test
+    @DisplayName("duplicate diagnostics report both origins independently of registration order")
+    void duplicateDiagnosticsReportBothOriginsIndependentlyOfRegistrationOrder() throws NoSuchMethodException {
+        FunctionDescriptor first = descriptor(
+                "same",
+                "numberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.FOLDABLE,
+                BigDecimal.class);
+        FunctionDescriptor second = descriptor(
+                "same",
+                "numberAsText",
+                List.of(ScalarType.NUMBER),
+                ScalarType.STRING,
+                FunctionPurity.FOLDABLE,
+                BigDecimal.class);
+
+        String firstOrder = duplicateMessage(first, second);
+        String secondOrder = duplicateMessage(second, first);
+
+        assertThat(firstOrder)
+                .isEqualTo(secondOrder)
+                .contains("numberIdentity")
+                .contains("numberAsText");
+    }
+
+    private static String duplicateMessage(FunctionDescriptor first, FunctionDescriptor second) {
+        try {
+            FunctionCatalog.builder().register(first).register(second);
+            throw new AssertionError("duplicate registration should fail");
+        } catch (IllegalArgumentException exception) {
+            return exception.getMessage();
+        }
+    }
+
     private static FunctionDescriptor descriptor(
             String languageName,
             String methodName,

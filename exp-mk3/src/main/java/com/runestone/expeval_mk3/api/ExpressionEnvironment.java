@@ -7,8 +7,10 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -51,7 +53,7 @@ public final class ExpressionEnvironment {
         conversionProfileHash = boundaryCoercion.profileHash();
         externalSymbols = builder.externalSymbols.build(boundaryCoercion);
         javaTypes = builder.javaTypes.build();
-        functions = buildFunctions(builder);
+        functions = buildFunctions(builder, javaTypes);
         CollectionOperationCatalog.validateOfficial(collectionOperations);
         this.collectionOperations = collectionOperations;
         environmentId = UUID.randomUUID().toString();
@@ -132,32 +134,67 @@ public final class ExpressionEnvironment {
         return OffsetDateTimeLiteralNormalization.of(originalLiteral, zoneId);
     }
 
-    private static FunctionCatalog buildFunctions(Builder builder) {
+    private static FunctionCatalog buildFunctions(Builder builder, JavaTypeCatalog javaTypes) {
         FunctionCatalog.Builder functionBuilder = FunctionCatalog.builder();
         List<ProviderConfigurationProblem> problems = new ArrayList<>();
-        List<FunctionDescriptor> importedDescriptors = new ArrayList<>();
         StandardBuiltInFunctions.registerAll(
                 functionBuilder,
                 builder.boundaryCoercion,
                 builder.mathContext,
                 builder.transcendentalMathContext);
-        for (FunctionDescriptor descriptor : builder.functions.build().values()) {
-            functionBuilder.register(descriptor);
+
+        List<FunctionDeclaration> registrations = new ArrayList<>();
+        for (FunctionDescriptor descriptor : builder.functions) {
+            registrations.add(FunctionDeclaration.custom(descriptor));
         }
-        for (ReflectedFunctionImporter.EnvironmentImport providerImport : builder.functionProviders) {
-            ReflectedFunctionImporter.EnvironmentImportResolution resolution = providerImport.resolve();
-            importedDescriptors.addAll(resolution.descriptors());
+        for (ReflectedFunctionImporter.ImportPlan providerImport : builder.functionProviders) {
+            ReflectedFunctionImporter.ImportResolution resolution =
+                    ReflectedFunctionImporter.resolveForEnvironment(providerImport, javaTypes);
+            for (FunctionDescriptor descriptor : resolution.descriptors()) {
+                registrations.add(FunctionDeclaration.imported(descriptor));
+            }
             for (IllegalArgumentException exception : resolution.failures()) {
                 problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
             }
         }
-        importedDescriptors.sort(Comparator
-                .comparing(FunctionDescriptor::signature)
-                .thenComparing(descriptor -> descriptor.implementationMetadata().owner())
-                .thenComparing(descriptor -> descriptor.implementationMetadata().methodType()));
-        for (FunctionDescriptor descriptor : importedDescriptors) {
+        registrations.sort(FunctionDeclaration.ORDER);
+        for (FunctionDeclaration registration : registrations) {
             try {
-                functionBuilder.register(descriptor);
+                registration.register(functionBuilder);
+            } catch (IllegalArgumentException exception) {
+                problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
+            }
+        }
+
+        List<FunctionDeclaration> replacements = new ArrayList<>();
+        for (FunctionDescriptor descriptor : builder.functionReplacements) {
+            replacements.add(FunctionDeclaration.custom(descriptor));
+        }
+        for (ReflectedFunctionImporter.ImportPlan replacementImport : builder.functionReplacementProviders) {
+            ReflectedFunctionImporter.ImportResolution resolution =
+                    ReflectedFunctionImporter.resolveForEnvironment(replacementImport, javaTypes);
+            for (IllegalArgumentException exception : resolution.failures()) {
+                problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
+            }
+            if (resolution.descriptors().size() == 1) {
+                replacements.add(FunctionDeclaration.imported(resolution.descriptors().getFirst()));
+            } else if (resolution.descriptors().size() > 1) {
+                IllegalArgumentException exception = invalidReplacementCardinality(resolution.descriptors());
+                problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
+            }
+        }
+        replacements.sort(FunctionDeclaration.ORDER);
+        Set<FunctionSignature> replacedSignatures = new HashSet<>();
+        for (FunctionDeclaration replacement : replacements) {
+            if (!replacedSignatures.add(replacement.descriptor().signature())) {
+                IllegalArgumentException exception = new IllegalArgumentException(
+                        "more than one replacement declared for function signature: "
+                                + replacement.descriptor().signature().canonical());
+                problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
+                continue;
+            }
+            try {
+                replacement.replace(functionBuilder);
             } catch (IllegalArgumentException exception) {
                 problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
             }
@@ -168,6 +205,20 @@ public final class ExpressionEnvironment {
         FunctionCatalog catalog = functionBuilder.build();
         StandardBuiltInFunctions.validate(catalog);
         return catalog;
+    }
+
+    private static IllegalArgumentException invalidReplacementCardinality(List<FunctionDescriptor> descriptors) {
+        List<FunctionSignature> signatures = descriptors.stream()
+                .map(FunctionDescriptor::signature)
+                .distinct()
+                .sorted()
+                .toList();
+        if (signatures.size() == 1) {
+            return new IllegalArgumentException("more than one imported method converges on replacement target: "
+                    + signatures.getFirst().canonical());
+        }
+        return new IllegalArgumentException("function replacement plan must import exactly one method; imported signatures: "
+                + signatures.stream().map(FunctionSignature::canonical).toList());
     }
 
     private static IllegalArgumentException providerConfigurationException(
@@ -189,6 +240,43 @@ public final class ExpressionEnvironment {
     private record ProviderConfigurationProblem(String message, IllegalArgumentException failure) {
     }
 
+    private record FunctionDeclaration(FunctionDescriptor descriptor, boolean imported) {
+
+        private static final Comparator<FunctionDeclaration> ORDER = Comparator
+                .comparing((FunctionDeclaration declaration) -> declaration.descriptor().signature())
+                .thenComparing(declaration -> declaration.descriptor().implementationMetadata().owner())
+                .thenComparing(declaration -> declaration.descriptor().implementationMetadata().memberName())
+                .thenComparing(declaration -> declaration.descriptor().implementationMetadata().methodType());
+
+        private FunctionDeclaration {
+            Objects.requireNonNull(descriptor, "descriptor");
+        }
+
+        private static FunctionDeclaration custom(FunctionDescriptor descriptor) {
+            return new FunctionDeclaration(descriptor, false);
+        }
+
+        private static FunctionDeclaration imported(FunctionDescriptor descriptor) {
+            return new FunctionDeclaration(descriptor, true);
+        }
+
+        private void register(FunctionCatalog.Builder builder) {
+            if (imported) {
+                builder.registerImported(descriptor);
+            } else {
+                builder.register(descriptor);
+            }
+        }
+
+        private void replace(FunctionCatalog.Builder builder) {
+            if (imported) {
+                builder.replaceImported(descriptor);
+            } else {
+                builder.replace(descriptor);
+            }
+        }
+    }
+
     /**
      * Mutable builder that produces immutable Ambiente de Expressao snapshots.
      */
@@ -202,9 +290,11 @@ public final class ExpressionEnvironment {
         private int maxFactorialInput = DEFAULT_MAX_FACTORIAL_INPUT;
         private BoundaryCoercion boundaryCoercion = BoundaryCoercion.standard();
         private final ExternalSymbolCatalog.Builder externalSymbols = ExternalSymbolCatalog.builder();
-        private final FunctionCatalog.Builder functions = FunctionCatalog.builder();
+        private final List<FunctionDescriptor> functions = new ArrayList<>();
+        private final List<FunctionDescriptor> functionReplacements = new ArrayList<>();
         private final JavaTypeCatalog.Builder javaTypes = JavaTypeCatalog.builder();
-        private final List<ReflectedFunctionImporter.EnvironmentImport> functionProviders = new ArrayList<>();
+        private final List<ReflectedFunctionImporter.ImportPlan> functionProviders = new ArrayList<>();
+        private final List<ReflectedFunctionImporter.ImportPlan> functionReplacementProviders = new ArrayList<>();
 
         private Builder() {
         }
@@ -269,32 +359,38 @@ public final class ExpressionEnvironment {
         }
 
         public Builder function(FunctionDescriptor descriptor) {
-            functions.register(descriptor);
+            functions.add(Objects.requireNonNull(descriptor, "descriptor"));
             return this;
         }
 
         public Builder replaceFunction(FunctionDescriptor descriptor) {
-            functions.replace(descriptor);
+            functionReplacements.add(Objects.requireNonNull(descriptor, "descriptor"));
+            return this;
+        }
+
+        public Builder functions(ReflectedFunctionImporter.ImportPlan importPlan) {
+            functionProviders.add(Objects.requireNonNull(importPlan, "importPlan"));
+            return this;
+        }
+
+        public Builder replaceFunctions(ReflectedFunctionImporter.ImportPlan importPlan) {
+            functionReplacementProviders.add(Objects.requireNonNull(importPlan, "importPlan"));
             return this;
         }
 
         public Builder functionsFrom(Class<?> providerClass, FunctionPurity purity) {
-            functionProviders.add(ReflectedFunctionImporter.EnvironmentImport.staticProvider(providerClass, purity));
-            return this;
+            return functions(ReflectedFunctionImporter.importCanonicalAll(providerClass, purity));
         }
 
         public Builder functionsFrom(Object providerInstance, FunctionPurity purity) {
-            functionProviders.add(ReflectedFunctionImporter.EnvironmentImport.instanceProvider(providerInstance, purity));
-            return this;
+            return functions(ReflectedFunctionImporter.importCanonicalAll(providerInstance, purity));
         }
 
         public Builder functionsFrom(
                 Class<?> exposureType,
                 Object providerInstance,
                 FunctionPurity purity) {
-            functionProviders.add(ReflectedFunctionImporter.EnvironmentImport.exposedInstanceProvider(
-                    exposureType, providerInstance, purity));
-            return this;
+            return functions(ReflectedFunctionImporter.importCanonicalAll(exposureType, providerInstance, purity));
         }
 
         public Builder registerJavaType(Class<?> javaType) {

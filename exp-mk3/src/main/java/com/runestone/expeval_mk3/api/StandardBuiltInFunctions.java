@@ -54,7 +54,7 @@ final class StandardBuiltInFunctions {
             throw new IllegalStateException(group + " built-in function group contains unexpected signatures");
         }
         for (FunctionDescriptor descriptor : descriptors) {
-            functions.register(descriptor);
+            functions.registerOfficial(descriptor);
         }
     }
 

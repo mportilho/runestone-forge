@@ -227,7 +227,8 @@ final class EnvironmentAcceptanceGateTest {
                 .register(discount)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("function signature already registered: " + discount.signature().canonical());
+                .hasMessageStartingWith("function signature already registered: " + discount.signature().canonical())
+                .hasMessageContaining("origins: custom function");
         assertThatThrownBy(() -> JavaTypeCatalog.builder()
                 .registerJavaType(DuplicatePropertyProvider.class)
                 .build())

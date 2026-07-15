@@ -236,6 +236,71 @@ class ReflectedFunctionImporterTest {
     }
 
     @Test
+    @DisplayName("exact overload renames disambiguate Java numeric methods that collapse to one language signature")
+    void exactOverloadRenamesDisambiguateCollapsedNumericSignatures() {
+        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
+                .importSelected(CollapsedNumericProvider.class, FunctionPurity.FOLDABLE)
+                .methods("score")
+                .rename("score", int.class, "integerScore")
+                .rename("score", "longScore", long.class)
+                .toList();
+
+        assertThat(descriptors)
+                .extracting(FunctionDescriptor::signature)
+                .containsExactly(
+                        signature("integerScore", ScalarType.NUMBER),
+                        signature("longScore", ScalarType.NUMBER));
+    }
+
+    @Test
+    @DisplayName("import plan operations return immutable snapshots")
+    void importPlanOperationsReturnImmutableSnapshots() {
+        ReflectedFunctionImporter.Selection selected = ReflectedFunctionImporter
+                .importSelected(SelectiveProvider.class, FunctionPurity.FOLDABLE)
+                .method("value", String.class);
+
+        ReflectedFunctionImporter.Selection renamed = selected.rename("value", String.class, "textValue");
+
+        assertThat(selected.toList())
+                .extracting(FunctionDescriptor::signature)
+                .containsExactly(signature("value", ScalarType.STRING));
+        assertThat(renamed.toList())
+                .extracting(FunctionDescriptor::signature)
+                .containsExactly(signature("textValue", ScalarType.STRING));
+    }
+
+    @Test
+    @DisplayName("name selection imports every overload and reports collapsed signatures deterministically")
+    void nameSelectionReportsCollapsedSignaturesDeterministically() {
+        assertThatThrownBy(() -> ReflectedFunctionImporter
+                .importSelected(CollapsedNumericProvider.class, FunctionPurity.FOLDABLE)
+                .methods("score")
+                .toList())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("duplicate")
+                .hasMessageContaining("score")
+                .hasMessageContaining("(I)I")
+                .hasMessageContaining("(J)J");
+    }
+
+    @Test
+    @DisplayName("exact selection and rename support zero and multiple Java parameters")
+    void exactSelectionAndRenameSupportZeroAndMultipleParameters() {
+        ReflectedFunctionImporter.Selection plan = ReflectedFunctionImporter
+                .importSelected(ExactArityProvider.class, FunctionPurity.FOLDABLE)
+                .method("zero")
+                .method("pair", String.class, BigDecimal.class)
+                .rename("zero", "renamedZero", new Class<?>[0])
+                .rename("pair", "renamedPair", String.class, BigDecimal.class);
+
+        assertThat(plan.toList())
+                .extracting(FunctionDescriptor::signature)
+                .containsExactly(
+                        signature("renamedPair", ScalarType.STRING, ScalarType.NUMBER),
+                        signature("renamedZero"));
+    }
+
+    @Test
     @DisplayName("descriptor order is deterministic by language signature and Java method name")
     void descriptorOrderIsDeterministicByLanguageSignatureAndJavaMethodName() {
         List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
@@ -491,6 +556,26 @@ class ReflectedFunctionImporterTest {
 
         public static Boolean other(Boolean value) {
             return value;
+        }
+    }
+
+    public static final class CollapsedNumericProvider {
+        public static int score(int value) {
+            return value;
+        }
+
+        public static long score(long value) {
+            return value;
+        }
+    }
+
+    public static final class ExactArityProvider {
+        public static String zero() {
+            return "zero";
+        }
+
+        public static String pair(String text, BigDecimal number) {
+            return text + number;
         }
     }
 

@@ -170,6 +170,35 @@ public class ExpressionEnvironmentFunctionProviderTest {
     }
 
     @Test
+    @DisplayName("selective plans resolve exact overloads against Java types registered in either builder order")
+    void selectivePlansResolveRegisteredJavaTypesIndependentlyOfBuilderOrder() throws Throwable {
+        RegisteredCustomer customer = new RegisteredCustomer("stone");
+        ReflectedFunctionImporter.Selection plan = ReflectedFunctionImporter
+                .importSelected(RegisteredTypeProvider.class, FunctionPurity.PURE)
+                .method("calculate", RegisteredCustomer.class)
+                .rename("calculate", RegisteredCustomer.class, "customerScore");
+
+        ExpressionEnvironment first = ExpressionEnvironment.builder()
+                .functions(plan)
+                .registerJavaType(RegisteredCustomer.class)
+                .build();
+        ExpressionEnvironment second = ExpressionEnvironment.builder()
+                .registerJavaType(RegisteredCustomer.class)
+                .functions(plan)
+                .build();
+
+        ObjectType customerType = new ObjectType(RegisteredCustomer.class.getName());
+        assertThat(resolve(first, "customerScore", customerType).implementationHandle().invoke(customer))
+                .isEqualTo("score:stone");
+        assertThat(resolve(second, "customerScore", customerType).implementationHandle().invoke(customer))
+                .isEqualTo("score:stone");
+        assertThatThrownBy(() -> ExpressionEnvironment.builder().functions(plan).build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("registered Java type")
+                .hasMessageContaining(RegisteredCustomer.class.getName());
+    }
+
+    @Test
     @DisplayName("prepared provider handles reject null arguments and results")
     void preparedProviderHandlesRejectNullArgumentsAndResults() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
@@ -207,7 +236,9 @@ public class ExpressionEnvironmentFunctionProviderTest {
         assertThatThrownBy(builder::build)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("function signature already registered")
-                .hasMessageContaining("abs");
+                .hasMessageContaining("abs")
+                .hasMessageContaining("official built-in")
+                .hasMessageContaining(BuiltInCollisionProvider.class.getName());
     }
 
     @Test
@@ -238,6 +269,187 @@ public class ExpressionEnvironmentFunctionProviderTest {
         assertThat(failureMessage(builder))
                 .contains("unsupported canonical scalar")
                 .contains("abs");
+    }
+
+    @Test
+    @DisplayName("environment resolves attached selective plans only during build")
+    void environmentResolvesAttachedSelectivePlansOnlyDuringBuild() {
+        ReflectedFunctionImporter.Selection plan = ReflectedFunctionImporter
+                .importSelected(SelectiveEnvironmentProvider.class, FunctionPurity.PURE)
+                .method("value", String.class)
+                .rename("value", String.class, "textValue");
+
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functions(plan)
+                .build();
+
+        assertThat(resolve(environment, "textValue", ScalarType.STRING).returnType())
+                .isEqualTo(ScalarType.STRING);
+        assertThat(environment.functions().find(new FunctionSignature("value", List.of(ScalarType.NUMBER))))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("attached plans are snapshots and later operations cannot mutate builder configuration")
+    void attachedPlansCannotBeMutatedAfterBuilderConfiguration() {
+        ReflectedFunctionImporter.Selection plan = ReflectedFunctionImporter
+                .importSelected(SelectiveEnvironmentProvider.class, FunctionPurity.PURE)
+                .method("value", String.class);
+        ExpressionEnvironment.Builder builder = ExpressionEnvironment.builder().functions(plan);
+
+        plan.rename("value", String.class, "changedAfterAttachment");
+
+        ExpressionEnvironment environment = builder.build();
+        assertThat(environment.functions().find(new FunctionSignature("value", List.of(ScalarType.STRING))))
+                .isPresent();
+        assertThat(environment.functions().find(new FunctionSignature(
+                "changedAfterAttachment", List.of(ScalarType.STRING))))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("missing selections renames and invalid language names fail during environment build")
+    void invalidSelectiveConfigurationFailsDuringEnvironmentBuild() {
+        ExpressionEnvironment.Builder missingSelection = ExpressionEnvironment.builder().functions(
+                ReflectedFunctionImporter
+                        .importSelected(SelectiveEnvironmentProvider.class, FunctionPurity.PURE)
+                        .method("missing", String.class));
+        ExpressionEnvironment.Builder missingRename = ExpressionEnvironment.builder().functions(
+                ReflectedFunctionImporter
+                        .importSelected(SelectiveEnvironmentProvider.class, FunctionPurity.PURE)
+                        .method("value", String.class)
+                        .rename("missing", String.class, "renamed"));
+        ExpressionEnvironment.Builder invalidName = ExpressionEnvironment.builder().functions(
+                ReflectedFunctionImporter
+                        .importSelected(SelectiveEnvironmentProvider.class, FunctionPurity.PURE)
+                        .method("value", String.class)
+                        .rename("value", String.class, "not-valid"));
+        ExpressionEnvironment.Builder conflictingRename = ExpressionEnvironment.builder().functions(
+                ReflectedFunctionImporter
+                        .importSelected(SelectiveEnvironmentProvider.class, FunctionPurity.PURE)
+                        .method("value", String.class)
+                        .rename("value", "allValues")
+                        .rename("value", String.class, "textValue"));
+
+        assertThatThrownBy(missingSelection::build)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("selected method has no imported target")
+                .hasMessageContaining("missing");
+        assertThatThrownBy(missingRename::build)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("rename has no imported target")
+                .hasMessageContaining("missing");
+        assertThatThrownBy(invalidName::build)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("valid identifier");
+        assertThatThrownBy(conflictingRename::build)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("conflicting renames")
+                .hasMessageContaining("value");
+    }
+
+    @Test
+    @DisplayName("ordinary collisions report both origins independently of declaration order")
+    void ordinaryCollisionsReportBothOriginsIndependentlyOfDeclarationOrder() {
+        ExpressionEnvironment.Builder firstOrder = ExpressionEnvironment.builder()
+                .functions(ReflectedFunctionImporter.importAll(CollidingProviderOne.class, FunctionPurity.PURE))
+                .functions(ReflectedFunctionImporter.importAll(CollidingProviderTwo.class, FunctionPurity.PURE));
+        ExpressionEnvironment.Builder secondOrder = ExpressionEnvironment.builder()
+                .functions(ReflectedFunctionImporter.importAll(CollidingProviderTwo.class, FunctionPurity.PURE))
+                .functions(ReflectedFunctionImporter.importAll(CollidingProviderOne.class, FunctionPurity.PURE));
+
+        assertThat(failureMessage(firstOrder))
+                .isEqualTo(failureMessage(secondOrder))
+                .contains(CollidingProviderOne.class.getName())
+                .contains(CollidingProviderTwo.class.getName());
+    }
+
+    @Test
+    @DisplayName("same language name may extend built-ins and custom functions with different signatures")
+    void sameLanguageNameMayHaveDifferentSignatures() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functions(ReflectedFunctionImporter.importAll(DifferentSignatureProvider.class, FunctionPurity.PURE))
+                .build();
+
+        assertThat(environment.functions().find(new FunctionSignature("abs", List.of(ScalarType.NUMBER))))
+                .isPresent();
+        assertThat(environment.functions().find(new FunctionSignature("abs", List.of(ScalarType.STRING))))
+                .isPresent();
+        assertThat(environment.functions().find(new FunctionSignature("value", List.of(ScalarType.NUMBER))))
+                .isPresent();
+        assertThat(environment.functions().find(new FunctionSignature("value", List.of(ScalarType.STRING))))
+                .isPresent();
+    }
+
+    @Test
+    @DisplayName("explicit reflected replacement replaces one custom signature independently of declaration order")
+    void reflectedReplacementReplacesOneCustomSignatureIndependentlyOfDeclarationOrder() throws Throwable {
+        ReflectedFunctionImporter.ImportPlan original = ReflectedFunctionImporter
+                .importAll(OriginalCustomProvider.class, FunctionPurity.PURE);
+        ReflectedFunctionImporter.ImportPlan replacement = ReflectedFunctionImporter
+                .importSelected(ReplacementCustomProvider.class, FunctionPurity.PURE)
+                .method("custom", String.class);
+
+        ExpressionEnvironment first = ExpressionEnvironment.builder()
+                .functions(original)
+                .replaceFunctions(replacement)
+                .build();
+        ExpressionEnvironment second = ExpressionEnvironment.builder()
+                .replaceFunctions(replacement)
+                .functions(original)
+                .build();
+
+        assertThat(resolve(first, "custom", ScalarType.STRING).implementationHandle().invoke("stone"))
+                .isEqualTo("replacement:stone");
+        assertThat(resolve(second, "custom", ScalarType.STRING).implementationHandle().invoke("stone"))
+                .isEqualTo("replacement:stone");
+    }
+
+    @Test
+    @DisplayName("reflected replacement rejects absent and official built-in targets")
+    void reflectedReplacementRejectsAbsentAndBuiltInTargets() {
+        ReflectedFunctionImporter.ImportPlan absentReplacement = ReflectedFunctionImporter
+                .importSelected(ReplacementCustomProvider.class, FunctionPurity.PURE)
+                .method("custom", String.class);
+        ReflectedFunctionImporter.ImportPlan builtInReplacement = ReflectedFunctionImporter
+                .importSelected(BuiltInCollisionProvider.class, FunctionPurity.PURE)
+                .method("abs", BigDecimal.class);
+
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .replaceFunctions(absentReplacement)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no custom target")
+                .hasMessageContaining("custom");
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .replaceFunctions(builtInReplacement)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("official built-in")
+                .hasMessageContaining("abs");
+    }
+
+    @Test
+    @DisplayName("reflected replacement rejects multiple Java methods converging on one target")
+    void reflectedReplacementRejectsMultipleMethodsConvergingOnOneTarget() {
+        FunctionDescriptor original = ReflectedFunctionImporter
+                .importSelected(OriginalNumberProvider.class, FunctionPurity.PURE)
+                .method("original", BigDecimal.class)
+                .rename("original", BigDecimal.class, "numberValue")
+                .toList()
+                .getFirst();
+        ReflectedFunctionImporter.ImportPlan replacement = ReflectedFunctionImporter
+                .importSelected(ConvergingReplacementProvider.class, FunctionPurity.PURE)
+                .methods("replacement")
+                .rename("replacement", "numberValue");
+
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .function(original)
+                .replaceFunctions(replacement)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("more than one imported method")
+                .hasMessageContaining("numberValue");
     }
 
     private static FunctionDescriptor resolve(
@@ -392,6 +604,15 @@ public class ExpressionEnvironmentFunctionProviderTest {
         }
     }
 
+    public record RegisteredCustomer(String name) {
+    }
+
+    public static final class RegisteredTypeProvider {
+        public static String calculate(RegisteredCustomer customer) {
+            return "score:" + customer.name();
+        }
+    }
+
     public static final class NullProvider {
         public static String echo(String value) {
             return value;
@@ -414,6 +635,70 @@ public class ExpressionEnvironmentFunctionProviderTest {
         }
 
         public static Object unsupported(Object value) {
+            return value;
+        }
+    }
+
+    public static final class SelectiveEnvironmentProvider {
+        public static BigDecimal value(BigDecimal value) {
+            return value;
+        }
+
+        public static String value(String value) {
+            return value;
+        }
+    }
+
+    public static final class CollidingProviderOne {
+        public static String collision(String value) {
+            return "one:" + value;
+        }
+    }
+
+    public static final class CollidingProviderTwo {
+        public static String collision(String value) {
+            return "two:" + value;
+        }
+    }
+
+    public static final class DifferentSignatureProvider {
+        public static String abs(String value) {
+            return value;
+        }
+
+        public static BigDecimal value(BigDecimal value) {
+            return value;
+        }
+
+        public static String value(String value) {
+            return value;
+        }
+    }
+
+    public static final class OriginalCustomProvider {
+        public static String custom(String value) {
+            return "original:" + value;
+        }
+    }
+
+    public static final class ReplacementCustomProvider {
+        public static String custom(String value) {
+            return "replacement:" + value;
+        }
+    }
+
+    public static final class OriginalNumberProvider {
+        public static BigDecimal original(BigDecimal value) {
+            return value;
+        }
+    }
+
+    public static final class ConvergingReplacementProvider {
+        public static int replacement(int value) {
+            return value;
+        }
+
+        public static long replacement(long value) {
             return value;
         }
     }

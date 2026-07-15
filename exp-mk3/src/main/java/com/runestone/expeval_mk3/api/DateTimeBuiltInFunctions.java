@@ -15,42 +15,46 @@ final class DateTimeBuiltInFunctions {
     static List<FunctionDescriptor> descriptors() {
         ReflectedFunctionImporter.ImportPlan plan = ReflectedFunctionImporter
                 .importAll(DateTimeBuiltInFunctions.class, FunctionPurity.FOLDABLE);
-        renameTemporalPair(plan, "secondsBetween");
-        renameTemporalPair(plan, "minutesBetween");
-        renameTemporalPair(plan, "hoursBetween");
-        renameDatePair(plan, "daysBetween");
-        renameDatePair(plan, "monthsBetween");
-        renameDatePair(plan, "yearsBetween");
-        renameDatePair(plan, "setDay");
-        renameDatePair(plan, "setMonth");
-        renameDatePair(plan, "setYear");
-        renameTemporalPair(plan, "setHours");
-        renameTemporalPair(plan, "setMinutes");
-        renameTemporalPair(plan, "setSeconds");
-        renameTemporalPair(plan, "setMidnight");
-        renameTemporalPair(plan, "setMidday");
-        renameDatePair(plan, "addDay");
-        renameDatePair(plan, "addMonth");
-        renameDatePair(plan, "addYear");
-        renameTemporalPair(plan, "addHours");
-        renameTemporalPair(plan, "addMinutes");
-        renameTemporalPair(plan, "addSeconds");
-        renameDatePair(plan, "subDay");
-        renameDatePair(plan, "subMonth");
-        renameDatePair(plan, "subYear");
-        renameTemporalPair(plan, "subHours");
-        renameTemporalPair(plan, "subMinutes");
-        renameTemporalPair(plan, "subSeconds");
+        plan = renameTemporalPair(plan, "secondsBetween");
+        plan = renameTemporalPair(plan, "minutesBetween");
+        plan = renameTemporalPair(plan, "hoursBetween");
+        plan = renameDatePair(plan, "daysBetween");
+        plan = renameDatePair(plan, "monthsBetween");
+        plan = renameDatePair(plan, "yearsBetween");
+        plan = renameDatePair(plan, "setDay");
+        plan = renameDatePair(plan, "setMonth");
+        plan = renameDatePair(plan, "setYear");
+        plan = renameTemporalPair(plan, "setHours");
+        plan = renameTemporalPair(plan, "setMinutes");
+        plan = renameTemporalPair(plan, "setSeconds");
+        plan = renameTemporalPair(plan, "setMidnight");
+        plan = renameTemporalPair(plan, "setMidday");
+        plan = renameDatePair(plan, "addDay");
+        plan = renameDatePair(plan, "addMonth");
+        plan = renameDatePair(plan, "addYear");
+        plan = renameTemporalPair(plan, "addHours");
+        plan = renameTemporalPair(plan, "addMinutes");
+        plan = renameTemporalPair(plan, "addSeconds");
+        plan = renameDatePair(plan, "subDay");
+        plan = renameDatePair(plan, "subMonth");
+        plan = renameDatePair(plan, "subYear");
+        plan = renameTemporalPair(plan, "subHours");
+        plan = renameTemporalPair(plan, "subMinutes");
+        plan = renameTemporalPair(plan, "subSeconds");
         return plan.toList();
     }
 
-    private static void renameTemporalPair(ReflectedFunctionImporter.ImportPlan plan, String languageName) {
-        plan.rename(languageName + "Time", languageName)
+    private static ReflectedFunctionImporter.ImportPlan renameTemporalPair(
+            ReflectedFunctionImporter.ImportPlan plan,
+            String languageName) {
+        return plan.rename(languageName + "Time", languageName)
                 .rename(languageName + "DateTime", languageName);
     }
 
-    private static void renameDatePair(ReflectedFunctionImporter.ImportPlan plan, String languageName) {
-        plan.rename(languageName + "Date", languageName)
+    private static ReflectedFunctionImporter.ImportPlan renameDatePair(
+            ReflectedFunctionImporter.ImportPlan plan,
+            String languageName) {
+        return plan.rename(languageName + "Date", languageName)
                 .rename(languageName + "DateTime", languageName);
     }
 
