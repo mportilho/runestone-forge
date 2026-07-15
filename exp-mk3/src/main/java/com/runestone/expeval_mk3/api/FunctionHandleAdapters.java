@@ -11,6 +11,8 @@ import java.util.Objects;
 final class FunctionHandleAdapters {
 
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
+    private static final MethodHandle REQUIRE_NON_NULL = find(
+            "requireNonNull", MethodType.methodType(Object.class, Object.class));
     private static final Map<Class<?>, NumericAdapter> NUMERIC_ADAPTERS = Map.ofEntries(
             numeric(byte.class, "toByte", "fromByte"),
             numeric(Byte.class, "toByteBox", "fromByteBox"),
@@ -87,6 +89,19 @@ final class FunctionHandleAdapters {
             return toDouble(value);
         }
         return value;
+    }
+
+    static MethodHandle guardNonNullBoundaries(MethodHandle implementationHandle) {
+        Objects.requireNonNull(implementationHandle, "implementationHandle");
+        MethodHandle guarded = implementationHandle;
+        for (int index = 0; index < guarded.type().parameterCount(); index++) {
+            Class<?> parameterType = guarded.type().parameterType(index);
+            guarded = MethodHandles.filterArguments(
+                    guarded, index, REQUIRE_NON_NULL.asType(MethodType.methodType(parameterType, parameterType)));
+        }
+        Class<?> returnType = guarded.type().returnType();
+        return MethodHandles.filterReturnValue(
+                guarded, REQUIRE_NON_NULL.asType(MethodType.methodType(returnType, returnType)));
     }
 
     private static MethodHandle adaptNumericArguments(MethodHandle implementationHandle, List<ExpressionType> parameterTypes) {
@@ -265,6 +280,10 @@ final class FunctionHandleAdapters {
 
     private static BigDecimal fromDoubleBox(Double value) {
         return BigDecimal.valueOf(value);
+    }
+
+    private static Object requireNonNull(Object value) {
+        return Objects.requireNonNull(value, "function arguments and results must not be null");
     }
 
     private record NumericAdapter(

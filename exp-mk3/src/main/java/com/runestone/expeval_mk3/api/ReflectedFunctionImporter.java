@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -28,6 +29,7 @@ import java.util.Set;
 public final class ReflectedFunctionImporter {
 
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
+    private static final MethodHandles.Lookup PUBLIC_LOOKUP = MethodHandles.publicLookup();
     private static final Set<Class<?>> NUMERIC_TYPES = Set.of(
             BigDecimal.class,
             byte.class,
@@ -185,13 +187,25 @@ public final class ReflectedFunctionImporter {
     }
 
     private static FunctionDescriptor descriptor(String languageName, Source source, ImportedMethod importedMethod) {
+        return descriptor(languageName, source, importedMethod, LOOKUP, false);
+    }
+
+    private static FunctionDescriptor descriptor(
+            String languageName,
+            Source source,
+            ImportedMethod importedMethod,
+            MethodHandles.Lookup lookup,
+            boolean guardNulls) {
         Method method = importedMethod.method();
         try {
-            MethodHandle handle = LOOKUP.unreflect(method);
+            MethodHandle handle = lookup.unreflect(method);
             if (!source.importStatic()) {
                 handle = handle.bindTo(source.providerInstance());
             }
             handle = FunctionHandleAdapters.adapt(handle, importedMethod.parameterTypes(), importedMethod.returnType());
+            if (guardNulls) {
+                handle = FunctionHandleAdapters.guardNonNullBoundaries(handle);
+            }
             return FunctionDescriptor.fromHandle(
                     languageName,
                     handle,
@@ -237,6 +251,39 @@ public final class ReflectedFunctionImporter {
         }
         ExpressionType returnType = expressionType(method.getGenericReturnType(), method.getReturnType(), TypePosition.RETURN);
         return new ImportedMethod(method, List.copyOf(parameterTypes), returnType);
+    }
+
+    private static ImportedMethod importCanonicalScalarMethod(Method method) {
+        if (method.isVarArgs()) {
+            throw new IllegalArgumentException("varargs provider methods are not supported: " + method);
+        }
+        List<ExpressionType> parameterTypes = new ArrayList<>(method.getParameterCount());
+        for (Class<?> parameterType : method.getParameterTypes()) {
+            parameterTypes.add(canonicalScalarType(parameterType));
+        }
+        return new ImportedMethod(method, List.copyOf(parameterTypes), canonicalScalarType(method.getReturnType()));
+    }
+
+    private static ExpressionType canonicalScalarType(Class<?> rawType) {
+        if (rawType == BigDecimal.class) {
+            return ScalarType.NUMBER;
+        }
+        if (rawType == boolean.class || rawType == Boolean.class) {
+            return ScalarType.BOOLEAN;
+        }
+        if (rawType == String.class) {
+            return ScalarType.STRING;
+        }
+        if (rawType == LocalDate.class) {
+            return ScalarType.DATE;
+        }
+        if (rawType == LocalTime.class) {
+            return ScalarType.TIME;
+        }
+        if (rawType == LocalDateTime.class) {
+            return ScalarType.DATETIME;
+        }
+        throw new IllegalArgumentException("unsupported canonical scalar provider method type: " + rawType.getName());
     }
 
     private static ExpressionType expressionType(Type genericType, Class<?> rawType, TypePosition position) {
@@ -463,5 +510,91 @@ public final class ReflectedFunctionImporter {
     }
 
     private record ImportedDescriptor(FunctionDescriptor descriptor, String javaMethodName) {
+    }
+
+    static final class EnvironmentImport {
+
+        private final Source source;
+
+        private EnvironmentImport(Source source) {
+            this.source = source;
+        }
+
+        static EnvironmentImport staticProvider(Class<?> providerClass, FunctionPurity purity) {
+            return new EnvironmentImport(Source.staticProvider(providerClass, purity));
+        }
+
+        static EnvironmentImport instanceProvider(Object providerInstance, FunctionPurity purity) {
+            Objects.requireNonNull(providerInstance, "providerInstance");
+            return new EnvironmentImport(Source.instanceProvider(
+                    providerInstance.getClass(), providerInstance, purity));
+        }
+
+        static EnvironmentImport exposedInstanceProvider(
+                Class<?> exposureType,
+                Object providerInstance,
+                FunctionPurity purity) {
+            return new EnvironmentImport(Source.exposedInstanceProvider(exposureType, providerInstance, purity));
+        }
+
+        EnvironmentImportResolution resolve() {
+            List<ImportedMethod> importedMethods = new ArrayList<>();
+            List<IllegalArgumentException> failures = new ArrayList<>();
+            List<Method> declaredMethods = Arrays.stream(source.exposureType().getDeclaredMethods())
+                    .sorted(Comparator.comparing(Method::toGenericString))
+                    .toList();
+            int eligibleMethodCount = 0;
+            for (Method method : declaredMethods) {
+                if (isEligible(method, source)) {
+                    eligibleMethodCount++;
+                    try {
+                        importedMethods.add(importCanonicalScalarMethod(method));
+                    } catch (IllegalArgumentException exception) {
+                        failures.add(providerFailure(method.toGenericString() + ": " + exception.getMessage(), exception));
+                    }
+                }
+            }
+            if (eligibleMethodCount == 0) {
+                failures.add(new IllegalArgumentException(
+                        "function provider declares no eligible methods: " + source.exposureType().getName()));
+            }
+
+            List<FunctionDescriptor> descriptors = new ArrayList<>(importedMethods.size());
+            Set<FunctionSignature> signatures = new LinkedHashSet<>();
+            for (ImportedMethod importedMethod : importedMethods) {
+                try {
+                    FunctionDescriptor descriptor = descriptor(
+                            importedMethod.method().getName(), source, importedMethod, PUBLIC_LOOKUP, true);
+                    if (!signatures.add(descriptor.signature())) {
+                        IllegalArgumentException exception = new IllegalArgumentException(
+                                "duplicate function signature imported: " + descriptor.signature().canonical());
+                        failures.add(providerFailure(exception.getMessage(), exception));
+                    } else {
+                        descriptors.add(descriptor);
+                    }
+                } catch (IllegalArgumentException exception) {
+                    failures.add(providerFailure(
+                            importedMethod.method().toGenericString() + ": " + exception.getMessage(), exception));
+                }
+            }
+            descriptors.sort(Comparator.comparing(FunctionDescriptor::signature));
+            failures.sort(Comparator.comparing(Throwable::getMessage));
+            return new EnvironmentImportResolution(descriptors, failures);
+        }
+
+        private IllegalArgumentException providerFailure(String detail, IllegalArgumentException cause) {
+            return new IllegalArgumentException(
+                    "invalid function provider " + source.exposureType().getName() + ": " + detail, cause);
+        }
+    }
+
+    record EnvironmentImportResolution(
+            List<FunctionDescriptor> descriptors,
+            List<IllegalArgumentException> failures) {
+
+        EnvironmentImportResolution {
+            descriptors = List.copyOf(descriptors);
+            failures = List.copyOf(failures);
+        }
     }
 }

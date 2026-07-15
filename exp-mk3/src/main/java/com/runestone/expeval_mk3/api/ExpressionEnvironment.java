@@ -5,6 +5,9 @@ import com.runestone.converters.DataConversionService;
 import java.math.MathContext;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -47,8 +50,8 @@ public final class ExpressionEnvironment {
         conversionProfileIdentity = boundaryCoercion.profileIdentity();
         conversionProfileHash = boundaryCoercion.profileHash();
         externalSymbols = builder.externalSymbols.build(boundaryCoercion);
-        functions = buildFunctions(builder);
         javaTypes = builder.javaTypes.build();
+        functions = buildFunctions(builder);
         CollectionOperationCatalog.validateOfficial(collectionOperations);
         this.collectionOperations = collectionOperations;
         environmentId = UUID.randomUUID().toString();
@@ -131,6 +134,8 @@ public final class ExpressionEnvironment {
 
     private static FunctionCatalog buildFunctions(Builder builder) {
         FunctionCatalog.Builder functionBuilder = FunctionCatalog.builder();
+        List<ProviderConfigurationProblem> problems = new ArrayList<>();
+        List<FunctionDescriptor> importedDescriptors = new ArrayList<>();
         StandardBuiltInFunctions.registerAll(
                 functionBuilder,
                 builder.boundaryCoercion,
@@ -139,9 +144,49 @@ public final class ExpressionEnvironment {
         for (FunctionDescriptor descriptor : builder.functions.build().values()) {
             functionBuilder.register(descriptor);
         }
+        for (ReflectedFunctionImporter.EnvironmentImport providerImport : builder.functionProviders) {
+            ReflectedFunctionImporter.EnvironmentImportResolution resolution = providerImport.resolve();
+            importedDescriptors.addAll(resolution.descriptors());
+            for (IllegalArgumentException exception : resolution.failures()) {
+                problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
+            }
+        }
+        importedDescriptors.sort(Comparator
+                .comparing(FunctionDescriptor::signature)
+                .thenComparing(descriptor -> descriptor.implementationMetadata().owner())
+                .thenComparing(descriptor -> descriptor.implementationMetadata().methodType()));
+        for (FunctionDescriptor descriptor : importedDescriptors) {
+            try {
+                functionBuilder.register(descriptor);
+            } catch (IllegalArgumentException exception) {
+                problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
+            }
+        }
+        if (!problems.isEmpty()) {
+            throw providerConfigurationException(problems);
+        }
         FunctionCatalog catalog = functionBuilder.build();
         StandardBuiltInFunctions.validate(catalog);
         return catalog;
+    }
+
+    private static IllegalArgumentException providerConfigurationException(
+            List<ProviderConfigurationProblem> problems) {
+        problems.sort(Comparator.comparing(ProviderConfigurationProblem::message));
+        IllegalArgumentException exception = new IllegalArgumentException(
+                "invalid function provider configuration: " + problems.stream()
+                        .map(ProviderConfigurationProblem::message)
+                        .distinct()
+                        .reduce((first, second) -> first + "; " + second)
+                        .orElseThrow(),
+                problems.getFirst().failure());
+        for (int index = 1; index < problems.size(); index++) {
+            exception.addSuppressed(problems.get(index).failure());
+        }
+        return exception;
+    }
+
+    private record ProviderConfigurationProblem(String message, IllegalArgumentException failure) {
     }
 
     /**
@@ -159,6 +204,7 @@ public final class ExpressionEnvironment {
         private final ExternalSymbolCatalog.Builder externalSymbols = ExternalSymbolCatalog.builder();
         private final FunctionCatalog.Builder functions = FunctionCatalog.builder();
         private final JavaTypeCatalog.Builder javaTypes = JavaTypeCatalog.builder();
+        private final List<ReflectedFunctionImporter.EnvironmentImport> functionProviders = new ArrayList<>();
 
         private Builder() {
         }
@@ -229,6 +275,25 @@ public final class ExpressionEnvironment {
 
         public Builder replaceFunction(FunctionDescriptor descriptor) {
             functions.replace(descriptor);
+            return this;
+        }
+
+        public Builder functionsFrom(Class<?> providerClass, FunctionPurity purity) {
+            functionProviders.add(ReflectedFunctionImporter.EnvironmentImport.staticProvider(providerClass, purity));
+            return this;
+        }
+
+        public Builder functionsFrom(Object providerInstance, FunctionPurity purity) {
+            functionProviders.add(ReflectedFunctionImporter.EnvironmentImport.instanceProvider(providerInstance, purity));
+            return this;
+        }
+
+        public Builder functionsFrom(
+                Class<?> exposureType,
+                Object providerInstance,
+                FunctionPurity purity) {
+            functionProviders.add(ReflectedFunctionImporter.EnvironmentImport.exposedInstanceProvider(
+                    exposureType, providerInstance, purity));
             return this;
         }
 
