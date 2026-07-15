@@ -65,7 +65,7 @@ The type of an iterable group of values supplied externally or produced by navig
 _Avoid_: Vector alias, raw iterable
 
 **Limite de Materializacao**:
-An Ambiente de Expressao guard rail that bounds materialized container values created or exposed by the expression language, such as vector literals, materialized collection-operation results, map entries, or public-boundary collection materialization, without necessarily rejecting large external collections at entry.
+An Ambiente de Expressao guard rail that bounds materialized container values created or exposed by the expression language, such as vector literals, materialized collection-operation results, map entries, function-provider results, or public-boundary collection materialization, without necessarily rejecting large external collections at entry.
 _Avoid_: Parser size limit, input collection limit
 
 **Tipo Mapa**:
@@ -81,11 +81,11 @@ A nominal domain object type whose registered members can be used for navigation
 _Avoid_: Structural record type, map-like object
 
 **Tipo Java Registrado**:
-A Java-backed Tipo Objeto whose navigable members are declared by the Ambiente de Expressao through a chosen exposure policy, from property accessors to optionally all public methods.
+A Java-backed Tipo Objeto declared by the Ambiente de Expressao for nominal use in external values, function signatures, and navigation. Its navigable members follow a chosen exposure policy, from property accessors to optionally all public methods.
 _Avoid_: Reflected class, automatic object shape
 
 **Valor Nulo de Runtime**:
-A runtime absence value introduced by safe navigation. It is not a source literal, cannot be supplied as an external symbol override, and does not have a normal expression type; Java nulls from external data, members, maps, or collections are boundary/runtime contract violations rather than normal expression values. Null coalescence is the explicit way to discharge possible runtime null before a value reaches a non-null context.
+A runtime absence value introduced by safe navigation. It is not a source literal, cannot be supplied as an external symbol override, and does not have a normal expression type; Java nulls from external data, members, functions, maps, or collections are boundary/runtime contract violations rather than normal expression values. Null coalescence is the explicit way to discharge possible runtime null before a value reaches a non-null context.
 _Avoid_: Null literal, bottom type, unknown value
 
 **Nulidade de Runtime**:
@@ -137,11 +137,11 @@ An official function provided by the expression language through the Ambiente de
 _Avoid_: Helper method, default Java function
 
 **Provedor de Funcoes**:
-A Java class or object instance whose directly declared public methods are intentionally exposed for import into an Ambiente de Expressao as callable functions.
+A Java class or object instance whose directly declared public methods are intentionally exposed for import into an Ambiente de Expressao as callable functions. A supplied instance remains bound to that environment and is responsible for honoring its declared purity, non-null, lifetime, and concurrency contracts.
 _Avoid_: Utility class, reflected class, function container
 
 **Importador de Funcoes Refletidas**:
-A setup-time tool that turns eligible methods from a Provedor de Funcoes into function descriptors by inferring expression types, adapting invocation handles, applying explicit renames, and validating duplicate signatures before catalog registration.
+A setup-time declaration resolved atomically while building an Ambiente de Expressao, turning eligible provider methods into function descriptors against its registered Java types and boundary-coercion profile. It supports explicit selection, renaming, and custom-function replacement while rejecting incompatible methods and duplicate signatures before catalog registration.
 _Avoid_: Runtime reflection, dependency injection container, automatic scanner
 
 **Funcao de Assercao**:
@@ -149,7 +149,7 @@ A built-in `as*` function that locally validates or converts a value from an exp
 _Avoid_: Global cast rule, type hint syntax, unknown argument type
 
 **Coercao de Borda**:
-A type conversion allowed only at explicit boundaries, such as external values, declared defaults, explicit assertion functions, or API result conversion, without silently changing the meaning of concrete internal expression operations; its configured profile remains exposed by the Ambiente de Expressao for validation and audit, but is not encoded in the instance identifier.
+A type conversion allowed only at explicit boundaries, such as external values, declared defaults, Java function-provider arguments and results, explicit assertion functions, or API result conversion, without silently changing the meaning of concrete internal expression operations. Its configured profile supports setup-time compatibility validation and audit, but neither participates in function overload resolution nor forms part of the instance identifier.
 _Avoid_: Implicit cast, dynamic conversion, overload priority rule
 
 **Compatibilidade de Operador**:
