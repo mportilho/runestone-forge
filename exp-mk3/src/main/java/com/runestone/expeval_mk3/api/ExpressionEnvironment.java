@@ -36,7 +36,7 @@ public final class ExpressionEnvironment {
     private final CollectionOperationCatalog collectionOperations;
     private final String environmentId;
 
-    private ExpressionEnvironment(Builder builder) {
+    private ExpressionEnvironment(Builder builder, CollectionOperationCatalog collectionOperations) {
         zoneId = builder.zoneId;
         mathContext = builder.mathContext;
         transcendentalMathContext = builder.transcendentalMathContext;
@@ -49,7 +49,8 @@ public final class ExpressionEnvironment {
         externalSymbols = builder.externalSymbols.build(boundaryCoercion);
         functions = buildFunctions(builder);
         javaTypes = builder.javaTypes.build();
-        collectionOperations = CollectionOperationCatalog.standard();
+        CollectionOperationCatalog.validateOfficial(collectionOperations);
+        this.collectionOperations = collectionOperations;
         environmentId = UUID.randomUUID().toString();
     }
 
@@ -247,7 +248,11 @@ public final class ExpressionEnvironment {
         }
 
         public ExpressionEnvironment build() {
-            return new ExpressionEnvironment(this);
+            return build(CollectionOperationCatalog.standard());
+        }
+
+        ExpressionEnvironment build(CollectionOperationCatalog collectionOperations) {
+            return new ExpressionEnvironment(this, Objects.requireNonNull(collectionOperations, "collectionOperations"));
         }
     }
 }
