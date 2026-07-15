@@ -29,12 +29,11 @@ class FunctionCatalogTest {
         assertThat(descriptor.parameterTypes()).containsExactly(ScalarType.NUMBER);
         assertThat(descriptor.returnType()).isEqualTo(ScalarType.NUMBER);
         assertThat(descriptor.implementationHandle()).isNotNull();
+        assertThat(descriptor.implementationMetadata().kind()).isEqualTo("static-method");
         assertThat(descriptor.implementationMetadata().owner()).endsWith("FunctionCatalogTest$TestFunctions");
         assertThat(descriptor.implementationMetadata().memberName()).isEqualTo("numberIdentity");
-        assertThat(descriptor.implementationMetadata().stableImplementationId())
-                .isEqualTo("static-method:"
-                        + TestFunctions.class.getName()
-                        + "#numberIdentity(Ljava/math/BigDecimal;)Ljava/math/BigDecimal;");
+        assertThat(descriptor.implementationMetadata().methodType())
+                .isEqualTo("(Ljava/math/BigDecimal;)Ljava/math/BigDecimal;");
         assertThat(descriptor.pure()).isTrue();
         assertThat(descriptor.foldable()).isTrue();
         assertThat(descriptor.signature())
@@ -168,8 +167,8 @@ class FunctionCatalogTest {
     }
 
     @Test
-    @DisplayName("function catalog participates in environment identity deterministically")
-    void functionCatalogParticipatesInEnvironmentIdentityDeterministically() throws NoSuchMethodException {
+    @DisplayName("function catalog order is deterministic")
+    void functionCatalogOrderIsDeterministic() throws NoSuchMethodException {
         FunctionDescriptor text = descriptor(
                 "value",
                 "textIdentity",
@@ -185,66 +184,11 @@ class FunctionCatalogTest {
                 FunctionPurity.FOLDABLE,
                 BigDecimal.class);
 
-        ExpressionEnvironment first = ExpressionEnvironment.builder()
-                .function(text)
-                .function(number)
-                .build();
-        ExpressionEnvironment sameContentDifferentOrder = ExpressionEnvironment.builder()
-                .function(number)
-                .function(text)
-                .build();
-        ExpressionEnvironment withoutFunctions = ExpressionEnvironment.standard();
+        FunctionCatalog first = FunctionCatalog.builder().register(text).register(number).build();
+        FunctionCatalog second = FunctionCatalog.builder().register(number).register(text).build();
 
-        assertThat(first.functions().size()).isEqualTo(ExpressionEnvironment.standard().functions().size() + 2);
-        assertThat(first.environmentId()).isEqualTo(sameContentDifferentOrder.environmentId());
-        assertThat(first.environmentId()).isNotEqualTo(withoutFunctions.environmentId());
-    }
-
-    @Test
-    @DisplayName("environment identity includes the complete canonical function contract")
-    void environmentIdentityIncludesTheCompleteCanonicalFunctionContract() throws NoSuchMethodException {
-        FunctionDescriptor baseline = descriptor(
-                "canonicalValue",
-                "numberIdentity",
-                List.of(ScalarType.NUMBER),
-                ScalarType.NUMBER,
-                FunctionPurity.FOLDABLE,
-                BigDecimal.class);
-        FunctionDescriptor differentReturn = descriptor(
-                "canonicalValue",
-                "numberAsText",
-                List.of(ScalarType.NUMBER),
-                ScalarType.STRING,
-                FunctionPurity.FOLDABLE,
-                BigDecimal.class);
-        FunctionDescriptor differentPurity = descriptor(
-                "canonicalValue",
-                "numberIdentity",
-                List.of(ScalarType.NUMBER),
-                ScalarType.NUMBER,
-                FunctionPurity.IMPURE,
-                BigDecimal.class);
-        FunctionDescriptor differentFoldability = descriptor(
-                "canonicalValue",
-                "numberIdentity",
-                List.of(ScalarType.NUMBER),
-                ScalarType.NUMBER,
-                FunctionPurity.PURE,
-                BigDecimal.class);
-        FunctionDescriptor differentImplementation = descriptor(
-                "canonicalValue",
-                "alternateNumberIdentity",
-                List.of(ScalarType.NUMBER),
-                ScalarType.NUMBER,
-                FunctionPurity.FOLDABLE,
-                BigDecimal.class);
-
-        ExpressionEnvironmentId baselineId = environmentId(baseline);
-
-        assertThat(environmentId(differentReturn)).isNotEqualTo(baselineId);
-        assertThat(environmentId(differentPurity)).isNotEqualTo(baselineId);
-        assertThat(environmentId(differentFoldability)).isNotEqualTo(baselineId);
-        assertThat(environmentId(differentImplementation)).isNotEqualTo(baselineId);
+        assertThat(first.values()).extracting(FunctionDescriptor::signature)
+                .containsExactlyElementsOf(second.values().stream().map(FunctionDescriptor::signature).toList());
     }
 
     private static FunctionDescriptor descriptor(
@@ -258,17 +202,9 @@ class FunctionCatalogTest {
         return FunctionDescriptor.fromMethod(languageName, method, parameterTypes, returnType, purity);
     }
 
-    private static ExpressionEnvironmentId environmentId(FunctionDescriptor descriptor) {
-        return ExpressionEnvironment.builder().function(descriptor).build().environmentId();
-    }
-
     static final class TestFunctions {
 
         static BigDecimal numberIdentity(BigDecimal value) {
-            return value;
-        }
-
-        static BigDecimal alternateNumberIdentity(BigDecimal value) {
             return value;
         }
 

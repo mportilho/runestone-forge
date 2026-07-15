@@ -10,16 +10,14 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.BiFunction;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,76 +42,29 @@ class ExpressionEnvironmentTest {
                 .isEqualTo(DefaultDataConversionService.standard().conversionProfileIdentity());
         assertThat(environment.conversionProfileHash())
                 .isEqualTo(DefaultDataConversionService.standard().conversionProfileHash());
+        assertThat(environment).isSameAs(ExpressionEnvironment.standard());
         assertThat(environment.environmentId()).isEqualTo(ExpressionEnvironment.standard().environmentId());
     }
 
     @Test
-    @DisplayName("equivalent builder content produces the same canonical environment ID")
-    void equivalentBuilderContentProducesSameCanonicalEnvironmentId() {
-        ExpressionEnvironment first = ExpressionEnvironment.builder()
-                .zoneId(ZoneId.of("America/Sao_Paulo"))
-                .mathContext(new MathContext(20, RoundingMode.HALF_UP))
-                .transcendentalMathContext(new MathContext(34, RoundingMode.HALF_EVEN))
-                .maxCurrentItemDepth(7)
-                .maxMaterializedSize(512)
-                .maxFactorialInput(32)
-                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService("tenant-a:v2", "tenant-a-hash"))
-                .build();
-
-        ExpressionEnvironment second = ExpressionEnvironment.builder()
-                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService("tenant-a:v2", "tenant-a-hash"))
-                .maxFactorialInput(32)
-                .maxMaterializedSize(512)
-                .maxCurrentItemDepth(7)
-                .transcendentalMathContext(new MathContext(34, RoundingMode.HALF_EVEN))
-                .mathContext(new MathContext(20, RoundingMode.HALF_UP))
-                .zoneId(ZoneId.of("America/Sao_Paulo"))
-                .build();
+    @DisplayName("each built environment receives a canonical UUID string")
+    void eachBuiltEnvironmentReceivesACanonicalUuidString() {
+        ExpressionEnvironment first = ExpressionEnvironment.builder().build();
+        ExpressionEnvironment second = ExpressionEnvironment.builder().build();
+        String firstRead = first.environmentId();
 
         assertThat(first).isNotSameAs(second);
-        assertThat(first.environmentId()).isEqualTo(second.environmentId());
-        assertThat(first.environmentId().value()).startsWith("sha256:");
+        assertThat(firstRead).isNotEqualTo(second.environmentId());
+        assertThat(UUID.fromString(firstRead).toString()).isEqualTo(firstRead);
+        assertThat(first.environmentId()).isEqualTo(firstRead);
     }
 
     @Test
-    @DisplayName("otherwise equal environments with different time zones have different environment IDs")
-    void otherwiseEqualEnvironmentsWithDifferentTimeZonesHaveDifferentEnvironmentIds() {
-        ExpressionEnvironment utc = ExpressionEnvironment.builder()
-                .zoneId(ZoneId.of("UTC"))
-                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
-                .build();
-        ExpressionEnvironment saoPaulo = ExpressionEnvironment.builder()
-                .zoneId(ZoneId.of("America/Sao_Paulo"))
-                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
-                .build();
+    @DisplayName("repeated builds from one unchanged builder receive different IDs")
+    void repeatedBuildsFromOneUnchangedBuilderReceiveDifferentIds() {
+        ExpressionEnvironment.Builder builder = ExpressionEnvironment.builder();
 
-        assertThat(utc.environmentId()).isNotEqualTo(saoPaulo.environmentId());
-    }
-
-    @Test
-    @DisplayName("all compilation-relevant settings contribute to the environment ID")
-    void allCompilationRelevantSettingsContributeToEnvironmentId() {
-        ExpressionEnvironment baseline = ExpressionEnvironment.standard();
-        ZoneId changedZone = alternateZoneId();
-
-        assertThat(changedZone).isNotEqualTo(ZoneId.systemDefault());
-        assertThat(ExpressionEnvironment.builder().zoneId(changedZone).build().environmentId())
-                .isNotEqualTo(baseline.environmentId());
-        assertThat(ExpressionEnvironment.builder().mathContext(new MathContext(16, RoundingMode.HALF_EVEN)).build()
-                .environmentId()).isNotEqualTo(baseline.environmentId());
-        assertThat(ExpressionEnvironment.builder().transcendentalMathContext(new MathContext(16, RoundingMode.HALF_EVEN))
-                .build().environmentId()).isNotEqualTo(baseline.environmentId());
-        assertThat(ExpressionEnvironment.builder().maxCurrentItemDepth(33).build().environmentId())
-                .isNotEqualTo(baseline.environmentId());
-        assertThat(ExpressionEnvironment.builder().maxMaterializedSize(10_001).build().environmentId())
-                .isNotEqualTo(baseline.environmentId());
-        assertThat(ExpressionEnvironment.builder().maxFactorialInput(1_001).build().environmentId())
-                .isNotEqualTo(baseline.environmentId());
-        assertThat(ExpressionEnvironment.builder()
-                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService("custom", "custom-hash"))
-                .build()
-                .environmentId())
-                .isNotEqualTo(baseline.environmentId());
+        assertThat(builder.build().environmentId()).isNotEqualTo(builder.build().environmentId());
     }
 
     @Test
@@ -324,67 +275,8 @@ class ExpressionEnvironmentTest {
     }
 
     @Test
-    @DisplayName("external symbols contribute deterministically to the environment ID")
-    void externalSymbolsContributeDeterministicallyToEnvironmentId() {
-        ExpressionEnvironment first = ExpressionEnvironment.builder()
-                .externalSymbol("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 6),
-                        ExternalSymbolOverwritePolicy.FIXED)
-                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
-                .build();
-        ExpressionEnvironment sameContentDifferentOrder = ExpressionEnvironment.builder()
-                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
-                .externalSymbol("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 6),
-                        ExternalSymbolOverwritePolicy.FIXED)
-                .build();
-        ExpressionEnvironment differentDefault = ExpressionEnvironment.builder()
-                .externalSymbol("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 7),
-                        ExternalSymbolOverwritePolicy.FIXED)
-                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
-                .build();
-        ExpressionEnvironment differentOverwritePolicy = ExpressionEnvironment.builder()
-                .externalSymbol("businessDate", ScalarType.DATE, LocalDate.of(2026, 7, 6),
-                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
-                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
-                .build();
-
-        Map<String, Object> firstMap = new LinkedHashMap<>();
-        firstMap.put("b", BigDecimal.valueOf(2));
-        firstMap.put("a", BigDecimal.ONE);
-        Map<String, Object> sameMapDifferentOrder = new LinkedHashMap<>();
-        sameMapDifferentOrder.put("a", BigDecimal.ONE);
-        sameMapDifferentOrder.put("b", BigDecimal.valueOf(2));
-
-        ExpressionEnvironment firstMapDefault = ExpressionEnvironment.builder()
-                .externalSymbol("labels", new MapType(ScalarType.NUMBER), firstMap, ExternalSymbolOverwritePolicy.FIXED)
-                .build();
-        ExpressionEnvironment sameMapDefaultDifferentOrder = ExpressionEnvironment.builder()
-                .externalSymbol("labels", new MapType(ScalarType.NUMBER), sameMapDifferentOrder,
-                        ExternalSymbolOverwritePolicy.FIXED)
-                .build();
-
-        assertThat(first.environmentId()).isEqualTo(sameContentDifferentOrder.environmentId());
-        assertThat(first.environmentId()).isNotEqualTo(differentDefault.environmentId());
-        assertThat(first.environmentId()).isNotEqualTo(differentOverwritePolicy.environmentId());
-        assertThat(firstMapDefault.environmentId()).isEqualTo(sameMapDefaultDifferentOrder.environmentId());
-    }
-
-    @Test
-    @DisplayName("conversion profile differences affect the environment ID")
-    void conversionProfileDifferencesAffectEnvironmentId() {
-        ExpressionEnvironment standardProfile = ExpressionEnvironment.builder()
-                .build();
-        ExpressionEnvironment alternateProfile = ExpressionEnvironment.builder()
-                .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(
-                        "test.prefixed-number",
-                        "different-profile-hash"))
-                .build();
-
-        assertThat(standardProfile.environmentId()).isNotEqualTo(alternateProfile.environmentId());
-    }
-
-    @Test
-    @DisplayName("conversion profile hash differences affect the environment ID")
-    void conversionProfileHashDifferencesAffectEnvironmentId() {
+    @DisplayName("conversion profile metadata remains available for audit")
+    void conversionProfileMetadataRemainsAvailableForAudit() {
         ExpressionEnvironment first = ExpressionEnvironment.builder()
                 .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(
                         "same-audit-identity",
@@ -398,12 +290,13 @@ class ExpressionEnvironmentTest {
 
         assertThat(first.conversionProfileIdentity()).isEqualTo("same-audit-identity");
         assertThat(second.conversionProfileIdentity()).isEqualTo("same-audit-identity");
-        assertThat(first.environmentId()).isNotEqualTo(second.environmentId());
+        assertThat(first.conversionProfileHash()).isEqualTo("hash-a");
+        assertThat(second.conversionProfileHash()).isEqualTo("hash-b");
     }
 
     @Test
-    @DisplayName("equivalent foldable conversion services produce the same environment ID")
-    void equivalentFoldableConversionServicesProduceTheSameEnvironmentId() {
+    @DisplayName("equivalent foldable conversion services preserve their profile contract")
+    void equivalentFoldableConversionServicesPreserveTheirProfileContract() {
         DataConverter<String, BigDecimal> stringToNumber = rule(
                 String.class,
                 BigDecimal.class,
@@ -433,12 +326,13 @@ class ExpressionEnvironmentTest {
         assertThat(firstService.conversionProfileIdentity()).isEqualTo(secondService.conversionProfileIdentity());
         assertThat(firstService.conversionProfileHash()).isEqualTo(secondService.conversionProfileHash());
         assertThat(first.conversionProfileHash()).isEqualTo(firstService.conversionProfileHash());
-        assertThat(first.environmentId()).isEqualTo(second.environmentId());
+        assertThat(first.externalSymbols().find("amount").orElseThrow().defaultValue().value())
+                .isEqualTo(new BigDecimal("12.50"));
     }
 
     @Test
-    @DisplayName("conversion profile audit identity does not affect the environment ID without a hash change")
-    void conversionProfileAuditIdentityDoesNotAffectEnvironmentIdWithoutAHashChange() {
+    @DisplayName("conversion profile audit identity and hash remain separately exposed")
+    void conversionProfileAuditIdentityAndHashRemainSeparatelyExposed() {
         ExpressionEnvironment first = ExpressionEnvironment.builder()
                 .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(
                         "audit-identity-a",
@@ -454,7 +348,23 @@ class ExpressionEnvironmentTest {
         assertThat(second.conversionProfileIdentity()).isEqualTo("audit-identity-b");
         assertThat(first.conversionProfileHash()).isEqualTo("same-profile-hash");
         assertThat(second.conversionProfileHash()).isEqualTo("same-profile-hash");
-        assertThat(first.environmentId()).isEqualTo(second.environmentId());
+    }
+
+    @Test
+    @DisplayName("object defaults do not require reflective serialization to build an environment")
+    void objectDefaultsDoNotRequireReflectiveSerializationToBuildAnEnvironment() {
+        ThrowingGetter defaultValue = new ThrowingGetter();
+
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "opaque",
+                        new ObjectType(ThrowingGetter.class.getName()),
+                        defaultValue,
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThat(environment.externalSymbols().find("opaque").orElseThrow().defaultValue().value())
+                .isSameAs(defaultValue);
     }
 
     @Test
@@ -610,15 +520,6 @@ class ExpressionEnvironmentTest {
         return values;
     }
 
-    private static ZoneId alternateZoneId() {
-        ZoneId systemDefault = ZoneId.systemDefault();
-        ZoneId utc = ZoneOffset.UTC;
-        if (!systemDefault.equals(utc)) {
-            return utc;
-        }
-        return ZoneId.of("America/Sao_Paulo");
-    }
-
     private static <S, T> DataConverter<S, T> rule(
             Class<S> sourceType,
             Class<T> targetType,
@@ -645,6 +546,12 @@ class ExpressionEnvironmentTest {
                 return conversion.apply(source, context);
             }
         };
+    }
+
+    static final class ThrowingGetter {
+        public String getValue() {
+            throw new AssertionError("getter must not be invoked while building the environment");
+        }
     }
 
 }

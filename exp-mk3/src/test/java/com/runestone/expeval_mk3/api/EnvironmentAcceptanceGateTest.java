@@ -23,8 +23,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 final class EnvironmentAcceptanceGateTest {
 
     @Test
-    @DisplayName("complete equivalent environments produce the same environment ID")
-    void completeEquivalentEnvironmentsProduceTheSameEnvironmentId() throws NoSuchMethodException {
+    @DisplayName("complete equivalent environments receive different instance IDs")
+    void completeEquivalentEnvironmentsReceiveDifferentInstanceIds() throws NoSuchMethodException {
         ExpressionEnvironment first = EnvironmentConfigurations.complete();
         ExpressionEnvironment sameContentDifferentOrder = ExpressionEnvironment.builder()
                 .registerJavaType(EnvironmentConfigurations.customerProfileClass())
@@ -47,126 +47,7 @@ final class EnvironmentAcceptanceGateTest {
                 .build();
 
         assertThat(first).isNotSameAs(sameContentDifferentOrder);
-        assertThat(first.environmentId()).isEqualTo(sameContentDifferentOrder.environmentId());
-    }
-
-    @Test
-    @DisplayName("all environment identity inputs change the environment ID when relevant")
-    void allEnvironmentIdentityInputsChangeTheEnvironmentIdWhenRelevant() throws NoSuchMethodException {
-        ExpressionEnvironment baseline = EnvironmentConfigurations.complete();
-
-        assertEnvironmentIdChanges("symbol name", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "total",
-                        ScalarType.NUMBER,
-                        EnvironmentConfigurations.discountFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("symbol type", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        ScalarType.STRING,
-                        EnvironmentConfigurations.discountFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("composite symbol type", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        new VectorType(ScalarType.NUMBER),
-                        EnvironmentConfigurations.discountFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("collection symbol type", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        new CollectionType(ScalarType.NUMBER),
-                        EnvironmentConfigurations.discountFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("map symbol type", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        new MapType(ScalarType.NUMBER),
-                        EnvironmentConfigurations.discountFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("object symbol type", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        new ObjectType(EnvironmentConfigurations.AcceptanceObject.class.getName()),
-                        EnvironmentConfigurations.discountFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("symbol default", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        ScalarType.NUMBER,
-                        EnvironmentConfigurations.discountFunction(),
-                        LocalDate.of(2026, 7, 11)).build());
-        assertEnvironmentIdChanges("function return type", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        ScalarType.NUMBER,
-                        EnvironmentConfigurations.discountFunctionReturningText(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("function language name", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        ScalarType.NUMBER,
-                        EnvironmentConfigurations.renamedDiscountFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("function arity", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        ScalarType.NUMBER,
-                        EnvironmentConfigurations.twoArgumentDiscountFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("function parameter type", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        ScalarType.NUMBER,
-                        EnvironmentConfigurations.discountStringOverloadFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("function purity", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        ScalarType.NUMBER,
-                        EnvironmentConfigurations.nonFoldableDiscountFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("function implementation", baseline,
-                EnvironmentConfigurations.completeBuilderWithJavaTypeProperties(
-                        "amount",
-                        ScalarType.NUMBER,
-                        EnvironmentConfigurations.alternateImplementationDiscountFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("function overload set", baseline,
-                EnvironmentConfigurations.completeBuilder()
-                        .function(EnvironmentConfigurations.discountStringOverloadFunction())
-                        .build());
-        assertEnvironmentIdChanges("Java type catalog", baseline,
-                EnvironmentConfigurations.completeBuilderWithPublicJavaMethods(
-                        "amount",
-                        ScalarType.NUMBER,
-                        EnvironmentConfigurations.discountFunction(),
-                        LocalDate.of(2026, 7, 10)).build());
-        assertEnvironmentIdChanges("registered Java type class", baseline,
-                EnvironmentConfigurations.completeBuilder()
-                        .registerJavaType(SecondaryProfile.class)
-                        .build());
-        assertEnvironmentIdChanges("time zone", baseline,
-                EnvironmentConfigurations.completeBuilder().zoneId(ZoneId.of("America/Sao_Paulo")).build());
-        assertEnvironmentIdChanges("materialized size limit", baseline,
-                EnvironmentConfigurations.completeBuilder().maxMaterializedSize(257).build());
-        assertEnvironmentIdChanges("factorial input limit", baseline,
-                EnvironmentConfigurations.completeBuilder().maxFactorialInput(33).build());
-        assertEnvironmentIdChanges("current item limit", baseline,
-                EnvironmentConfigurations.completeBuilder().maxCurrentItemDepth(4).build());
-        assertEnvironmentIdChanges("math context", baseline,
-                EnvironmentConfigurations.completeBuilder().mathContext(new MathContext(19, RoundingMode.HALF_EVEN)).build());
-        assertEnvironmentIdChanges("transcendental math context", baseline,
-                EnvironmentConfigurations.completeBuilder()
-                        .transcendentalMathContext(new MathContext(31, RoundingMode.HALF_UP))
-                        .build());
-        assertEnvironmentIdChanges("conversion profile", baseline,
-                EnvironmentConfigurations.completeBuilder()
-                        .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService(
-                                "test.prefixed-number",
-                                "acceptance-profile-v2-hash"))
-                        .build());
+        assertThat(first.environmentId()).isNotEqualTo(sameContentDifferentOrder.environmentId());
     }
 
     @Test
@@ -234,7 +115,6 @@ final class EnvironmentAcceptanceGateTest {
                 .externalSymbol("zeta", ScalarType.STRING, "z", ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(first.environmentId()).isEqualTo(second.environmentId());
         assertThat(first.externalSymbols().values()).extracting(ExternalSymbol::name)
                 .containsExactly("alpha", "zeta");
         assertThat(second.externalSymbols().values()).extracting(ExternalSymbol::name)
@@ -521,15 +401,6 @@ final class EnvironmentAcceptanceGateTest {
             Class<?>... parameterClasses) throws NoSuchMethodException {
         Method method = TestFunctions.class.getDeclaredMethod(methodName, parameterClasses);
         return FunctionDescriptor.fromMethod(languageName, method, parameterTypes, returnType, FunctionPurity.FOLDABLE);
-    }
-
-    private static void assertEnvironmentIdChanges(
-            String variation,
-            ExpressionEnvironment baseline,
-            ExpressionEnvironment changed) {
-        assertThat(changed.environmentId())
-                .as(variation)
-                .isNotEqualTo(baseline.environmentId());
     }
 
     static final class DuplicatePropertyProvider {

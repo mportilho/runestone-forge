@@ -178,8 +178,8 @@ class JavaTypeCatalogTest {
     }
 
     @Test
-    @DisplayName("registered Java type metadata contributes stably to environment identity")
-    void registeredJavaTypeMetadataContributesStablyToEnvironmentIdentity() {
+    @DisplayName("registered Java type metadata is ordered deterministically")
+    void registeredJavaTypeMetadataIsOrderedDeterministically() {
         ExpressionEnvironment first = ExpressionEnvironment.builder()
                 .registerJavaTypeMethod(MethodProvider.class, "privatePrice", BigDecimal.class)
                 .registerJavaType(CustomerBean.class)
@@ -188,16 +188,11 @@ class JavaTypeCatalogTest {
                 .registerJavaType(CustomerBean.class)
                 .registerJavaTypeMethod(MethodProvider.class, "privatePrice", BigDecimal.class)
                 .build();
-        ExpressionEnvironment withoutJavaTypes = ExpressionEnvironment.builder().build();
-        ExpressionEnvironment withPublicMethods = ExpressionEnvironment.builder()
-                .registerJavaType(CustomerBean.class)
-                .registerJavaTypeWithPublicMethods(MethodProvider.class)
-                .build();
-
         assertThat(first.javaTypes().size()).isEqualTo(2);
-        assertThat(first.environmentId()).isEqualTo(sameContentDifferentOrder.environmentId());
-        assertThat(first.environmentId()).isNotEqualTo(withoutJavaTypes.environmentId());
-        assertThat(first.environmentId()).isNotEqualTo(withPublicMethods.environmentId());
+        assertThat(first.javaTypes().values()).extracting(descriptor -> descriptor.javaType().getName())
+                .containsExactlyElementsOf(sameContentDifferentOrder.javaTypes().values().stream()
+                        .map(descriptor -> descriptor.javaType().getName())
+                        .toList());
     }
 
     private static FunctionSignature signature(String languageName, ExpressionType... parameterTypes) {

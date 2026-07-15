@@ -1,7 +1,6 @@
 package com.runestone.expeval_mk3.api;
 
 import java.math.BigDecimal;
-import java.math.MathContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -66,12 +65,6 @@ final class BuiltInFunctionSupport {
 
     static long longValue(BigDecimal value) {
         return value.longValueExact();
-    }
-
-    static String mathContextProviderId(String providerName, MathContext mathContext) {
-        Objects.requireNonNull(providerName, "providerName");
-        Objects.requireNonNull(mathContext, "mathContext");
-        return providerName + ':' + mathContext.getPrecision() + ':' + mathContext.getRoundingMode();
     }
 
     static String requireText(String value) {

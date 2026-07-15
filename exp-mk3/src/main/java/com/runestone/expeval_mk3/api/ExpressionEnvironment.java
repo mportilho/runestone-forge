@@ -3,13 +3,10 @@ package com.runestone.expeval_mk3.api;
 import com.runestone.converters.DataConversionService;
 
 import java.math.MathContext;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
-import java.util.HexFormat;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Immutable compilation configuration for expressions.
@@ -37,7 +34,7 @@ public final class ExpressionEnvironment {
     private final FunctionCatalog functions;
     private final JavaTypeCatalog javaTypes;
     private final CollectionOperationCatalog collectionOperations;
-    private final ExpressionEnvironmentId environmentId;
+    private final String environmentId;
 
     private ExpressionEnvironment(Builder builder) {
         zoneId = builder.zoneId;
@@ -53,7 +50,7 @@ public final class ExpressionEnvironment {
         functions = buildFunctions(builder);
         javaTypes = builder.javaTypes.build();
         collectionOperations = CollectionOperationCatalog.standard();
-        environmentId = calculateEnvironmentId(this);
+        environmentId = UUID.randomUUID().toString();
     }
 
     /**
@@ -106,7 +103,7 @@ public final class ExpressionEnvironment {
         return boundaryCoercion;
     }
 
-    public ExpressionEnvironmentId environmentId() {
+    public String environmentId() {
         return environmentId;
     }
 
@@ -144,122 +141,6 @@ public final class ExpressionEnvironment {
         FunctionCatalog catalog = functionBuilder.build();
         StandardBuiltInFunctions.validate(catalog);
         return catalog;
-    }
-
-    private static ExpressionEnvironmentId calculateEnvironmentId(ExpressionEnvironment environment) {
-        String canonical = canonicalRepresentation(environment);
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(canonical.getBytes(StandardCharsets.UTF_8));
-            return new ExpressionEnvironmentId("sha256:" + HexFormat.of().formatHex(hash));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
-    }
-
-    private static String canonicalRepresentation(ExpressionEnvironment environment) {
-        StringBuilder builder = new StringBuilder(256);
-        appendCanonicalField(builder, "schema", "6");
-        appendCanonicalField(builder, "zoneId", environment.zoneId.getId());
-        appendCanonicalField(builder, "mathContext", canonicalMathContext(environment.mathContext));
-        appendCanonicalField(builder, "transcendentalMathContext",
-                canonicalMathContext(environment.transcendentalMathContext));
-        appendCanonicalField(builder, "maxCurrentItemDepth", Integer.toString(environment.maxCurrentItemDepth));
-        appendCanonicalField(builder, "maxMaterializedSize", Integer.toString(environment.maxMaterializedSize));
-        appendCanonicalField(builder, "maxFactorialInput", Integer.toString(environment.maxFactorialInput));
-        appendCanonicalField(builder, "conversionProfileHash", environment.conversionProfileHash);
-        appendCanonicalField(builder, "externalSymbols.count", Integer.toString(environment.externalSymbols.size()));
-        for (ExternalSymbol externalSymbol : environment.externalSymbols.values()) {
-            appendCanonicalField(builder, "externalSymbol.name", externalSymbol.name());
-            appendCanonicalField(builder, "externalSymbol.type", ExpressionTypes.canonical(externalSymbol.type()));
-            appendCanonicalField(builder, "externalSymbol.overwritePolicy", externalSymbol.overwritePolicy().name());
-            appendCanonicalField(
-                    builder,
-                    "externalSymbol.defaultValue",
-                    ExternalSymbolDefaults.canonicalValue(
-                            externalSymbol.name(),
-                            externalSymbol.type(),
-                            externalSymbol.defaultValue().value()));
-        }
-        appendCanonicalField(builder, "functions.count", Integer.toString(environment.functions.size()));
-        for (FunctionDescriptor function : environment.functions.values()) {
-            appendCanonicalField(builder, "function.languageName", function.languageName());
-            appendCanonicalField(builder, "function.arity", Integer.toString(function.arity()));
-            appendCanonicalField(builder, "function.parameterTypes.count",
-                    Integer.toString(function.parameterTypes().size()));
-            for (ExpressionType parameterType : function.parameterTypes()) {
-                appendCanonicalField(builder, "function.parameterType", ExpressionTypes.canonical(parameterType));
-            }
-            appendCanonicalField(builder, "function.returnType", ExpressionTypes.canonical(function.returnType()));
-            appendCanonicalField(builder, "function.pure", Boolean.toString(function.pure()));
-            appendCanonicalField(builder, "function.foldable", Boolean.toString(function.foldable()));
-            appendCanonicalField(
-                    builder,
-                    "function.stableImplementationId",
-                    function.implementationMetadata().stableImplementationId());
-        }
-        appendCanonicalField(builder, "javaTypes.count", Integer.toString(environment.javaTypes.size()));
-        for (JavaTypeDescriptor javaType : environment.javaTypes.values()) {
-            appendCanonicalField(builder, "javaType.class", javaType.javaType().getName());
-            appendCanonicalField(builder, "javaType.objectType", ExpressionTypes.canonical(javaType.objectType()));
-            appendCanonicalField(builder, "javaType.properties.count", Integer.toString(javaType.propertyCount()));
-            for (JavaPropertyDescriptor property : javaType.properties().values()) {
-                appendCanonicalField(builder, "javaType.property.name", property.name());
-                appendCanonicalField(builder, "javaType.property.type", ExpressionTypes.canonical(property.type()));
-                appendJavaMemberMetadata(builder, "javaType.property", property.implementationMetadata());
-            }
-            appendCanonicalField(builder, "javaType.methods.count", Integer.toString(javaType.methodCount()));
-            for (JavaMethodDescriptor method : javaType.methods()) {
-                appendCanonicalField(builder, "javaType.method.languageName", method.languageName());
-                appendCanonicalField(builder, "javaType.method.arity", Integer.toString(method.arity()));
-                appendCanonicalField(builder, "javaType.method.parameterTypes.count",
-                        Integer.toString(method.parameterTypes().size()));
-                for (ExpressionType parameterType : method.parameterTypes()) {
-                    appendCanonicalField(builder, "javaType.method.parameterType", ExpressionTypes.canonical(parameterType));
-                }
-                appendCanonicalField(builder, "javaType.method.returnType", ExpressionTypes.canonical(method.returnType()));
-                appendJavaMemberMetadata(builder, "javaType.method", method.implementationMetadata());
-            }
-        }
-        appendCanonicalField(
-                builder,
-                "collectionOperations.count",
-                Integer.toString(environment.collectionOperations.size()));
-        for (CollectionOperationCatalog.Descriptor descriptor : environment.collectionOperations.descriptors()) {
-            appendCanonicalField(builder, "collectionOperation.name", descriptor.name());
-            appendCanonicalField(builder, "collectionOperation.receivers", descriptor.receivers().toString());
-            appendCanonicalField(builder, "collectionOperation.currentItem", descriptor.currentItemContract().name());
-            appendCanonicalField(builder, "collectionOperation.resultShape", descriptor.resultShape().name());
-            appendCanonicalField(builder, "collectionOperation.evaluationPolicy", descriptor.evaluationPolicy().name());
-            appendCanonicalField(
-                    builder,
-                    "collectionOperation.materializationPolicy",
-                    descriptor.materializationPolicy().name());
-        }
-        return builder.toString();
-    }
-
-    private static void appendJavaMemberMetadata(
-            StringBuilder builder,
-            String prefix,
-            JavaMemberImplementationMetadata implementationMetadata) {
-        appendCanonicalField(builder, prefix + ".implementation.kind", implementationMetadata.kind());
-        appendCanonicalField(builder, prefix + ".implementation.owner", implementationMetadata.owner());
-        appendCanonicalField(builder, prefix + ".implementation.memberName", implementationMetadata.memberName());
-        appendCanonicalField(builder, prefix + ".implementation.methodType", implementationMetadata.methodType());
-    }
-
-    private static String canonicalMathContext(MathContext mathContext) {
-        return mathContext.getPrecision() + ":" + mathContext.getRoundingMode().name();
-    }
-
-    private static void appendCanonicalField(StringBuilder builder, String name, String value) {
-        builder.append(name)
-                .append('=')
-                .append(value.length())
-                .append(':')
-                .append(value)
-                .append('\n');
     }
 
     /**

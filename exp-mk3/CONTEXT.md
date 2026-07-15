@@ -149,7 +149,7 @@ A built-in `as*` function that locally validates or converts a value from an exp
 _Avoid_: Global cast rule, type hint syntax, unknown argument type
 
 **Coercao de Borda**:
-A type conversion allowed only at explicit boundaries, such as external values, declared defaults, explicit assertion functions, or API result conversion, without silently changing the meaning of concrete internal expression operations; its configured profile is part of the Ambiente de Expressao identity.
+A type conversion allowed only at explicit boundaries, such as external values, declared defaults, explicit assertion functions, or API result conversion, without silently changing the meaning of concrete internal expression operations; its configured profile remains exposed by the Ambiente de Expressao for validation and audit, but is not encoded in the instance identifier.
 _Avoid_: Implicit cast, dynamic conversion, overload priority rule
 
 **Compatibilidade de Operador**:

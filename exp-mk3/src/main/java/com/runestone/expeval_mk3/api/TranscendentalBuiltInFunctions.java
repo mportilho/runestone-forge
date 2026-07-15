@@ -20,7 +20,6 @@ final class TranscendentalBuiltInFunctions {
         return ReflectedFunctionImporter
                 .importAll(
                         new TranscendentalBuiltInFunctions(mathContext),
-                        BuiltInFunctionSupport.mathContextProviderId("built-in.transcendental", mathContext),
                         FunctionPurity.FOLDABLE)
                 .toList();
     }

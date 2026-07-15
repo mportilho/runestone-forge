@@ -10,8 +10,6 @@ import com.runestone.expeval_mk3.api.FunctionPurity;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ObjectType;
 import com.runestone.expeval_mk3.api.ScalarType;
-import com.runestone.expeval_mk3.api.VectorType;
-import com.runestone.expeval_mk3.api.CollectionType;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -21,7 +19,6 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 public final class EnvironmentConfigurations {
 
@@ -35,27 +32,22 @@ public final class EnvironmentConfigurations {
     }
 
     public static ExpressionEnvironment.Builder completeBuilder() throws NoSuchMethodException {
-        return completeBuilderWithJavaTypeProperties(
-                "amount",
-                ScalarType.NUMBER,
-                discountFunction(),
-                BUSINESS_DATE);
-    }
-
-    public static ExpressionEnvironment.Builder completeBuilderWithJavaTypeProperties(
-            String amountSymbolName,
-            ExpressionType amountType,
-            FunctionDescriptor function,
-            LocalDate businessDate) {
-        return completeBuilder(amountSymbolName, amountType, function, JavaTypeExposure.PROPERTIES, businessDate);
-    }
-
-    public static ExpressionEnvironment.Builder completeBuilderWithPublicJavaMethods(
-            String amountSymbolName,
-            ExpressionType amountType,
-            FunctionDescriptor function,
-            LocalDate businessDate) {
-        return completeBuilder(amountSymbolName, amountType, function, JavaTypeExposure.PUBLIC_METHODS, businessDate);
+        return ExpressionEnvironment.builder()
+                .zoneId(ZoneId.of("UTC"))
+                .mathContext(new MathContext(18, RoundingMode.HALF_EVEN))
+                .transcendentalMathContext(new MathContext(30, RoundingMode.HALF_UP))
+                .maxCurrentItemDepth(3)
+                .maxMaterializedSize(256)
+                .maxFactorialInput(32)
+                .boundaryCoercion(prefixedNumberConversionService())
+                .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("businessDate", ScalarType.DATE, BUSINESS_DATE, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("customer", customerProfileObjectType(), new CustomerProfile("Ana", BigDecimal.TEN),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("labels", new MapType(ScalarType.STRING), Map.of("tier", "gold"),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .function(discountFunction())
+                .registerJavaType(CustomerProfile.class);
     }
 
     public static Class<?> customerProfileClass() {
@@ -74,39 +66,6 @@ public final class EnvironmentConfigurations {
             String conversionProfileIdentity,
             String conversionProfileHash) {
         return new PrefixedNumberConversionService(conversionProfileIdentity, conversionProfileHash);
-    }
-
-    private static ExpressionEnvironment.Builder completeBuilder(
-            String amountSymbolName,
-            ExpressionType amountType,
-            FunctionDescriptor function,
-            JavaTypeExposure javaTypeExposure,
-            LocalDate businessDate) {
-        Objects.requireNonNull(amountSymbolName, "amountSymbolName");
-        Objects.requireNonNull(amountType, "amountType");
-        Objects.requireNonNull(function, "function");
-        Objects.requireNonNull(javaTypeExposure, "javaTypeExposure");
-        Objects.requireNonNull(businessDate, "businessDate");
-        ExpressionEnvironment.Builder builder = ExpressionEnvironment.builder()
-                .zoneId(ZoneId.of("UTC"))
-                .mathContext(new MathContext(18, RoundingMode.HALF_EVEN))
-                .transcendentalMathContext(new MathContext(30, RoundingMode.HALF_UP))
-                .maxCurrentItemDepth(3)
-                .maxMaterializedSize(256)
-                .maxFactorialInput(32)
-                .boundaryCoercion(prefixedNumberConversionService())
-                .externalSymbol(amountSymbolName, amountType, defaultValueFor(amountType),
-                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
-                .externalSymbol("businessDate", ScalarType.DATE, businessDate, ExternalSymbolOverwritePolicy.FIXED)
-                .externalSymbol("customer", customerProfileObjectType(), new CustomerProfile("Ana", BigDecimal.TEN),
-                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
-                .externalSymbol("labels", new MapType(ScalarType.STRING), Map.of("tier", "gold"),
-                        ExternalSymbolOverwritePolicy.FIXED)
-                .function(function);
-        return switch (javaTypeExposure) {
-            case PROPERTIES -> builder.registerJavaType(CustomerProfile.class);
-            case PUBLIC_METHODS -> builder.registerJavaTypeWithPublicMethods(CustomerProfile.class);
-        };
     }
 
     public static List<RepresentativeEnvironmentConfiguration> representativeConfigurations() throws NoSuchMethodException {
@@ -138,57 +97,6 @@ public final class EnvironmentConfigurations {
                 BigDecimal.class);
     }
 
-    public static FunctionDescriptor alternateImplementationDiscountFunction() throws NoSuchMethodException {
-        return descriptor(
-                "acceptanceDiscount",
-                "numberIdentityCopy",
-                List.of(ScalarType.NUMBER),
-                ScalarType.NUMBER,
-                FunctionPurity.FOLDABLE,
-                BigDecimal.class);
-    }
-
-    public static FunctionDescriptor renamedDiscountFunction() throws NoSuchMethodException {
-        return descriptor(
-                "renamedAcceptanceDiscount",
-                "numberIdentity",
-                List.of(ScalarType.NUMBER),
-                ScalarType.NUMBER,
-                FunctionPurity.FOLDABLE,
-                BigDecimal.class);
-    }
-
-    public static FunctionDescriptor twoArgumentDiscountFunction() throws NoSuchMethodException {
-        return descriptor(
-                "acceptanceDiscount",
-                "numberPairIdentity",
-                List.of(ScalarType.NUMBER, ScalarType.NUMBER),
-                ScalarType.NUMBER,
-                FunctionPurity.FOLDABLE,
-                BigDecimal.class,
-                BigDecimal.class);
-    }
-
-    public static FunctionDescriptor nonFoldableDiscountFunction() throws NoSuchMethodException {
-        return descriptor(
-                "acceptanceDiscount",
-                "numberIdentity",
-                List.of(ScalarType.NUMBER),
-                ScalarType.NUMBER,
-                FunctionPurity.PURE,
-                BigDecimal.class);
-    }
-
-    public static FunctionDescriptor discountFunctionReturningText() throws NoSuchMethodException {
-        return descriptor(
-                "acceptanceDiscount",
-                "numberAsText",
-                List.of(ScalarType.NUMBER),
-                ScalarType.STRING,
-                FunctionPurity.FOLDABLE,
-                BigDecimal.class);
-    }
-
     public static FunctionDescriptor discountStringOverloadFunction() throws NoSuchMethodException {
         return descriptor(
                 "acceptanceDiscount",
@@ -210,36 +118,11 @@ public final class EnvironmentConfigurations {
         return FunctionDescriptor.fromMethod(languageName, method, parameterTypes, returnType, purity);
     }
 
-    private enum JavaTypeExposure {
-        PROPERTIES,
-        PUBLIC_METHODS
-    }
-
-    private static Object defaultValueFor(ExpressionType type) {
-        return switch (type) {
-            case ScalarType.NUMBER -> BigDecimal.ONE;
-            case ScalarType.BOOLEAN -> true;
-            case ScalarType.STRING -> "value";
-            case ScalarType.DATE -> BUSINESS_DATE;
-            case ScalarType.TIME -> java.time.LocalTime.NOON;
-            case ScalarType.DATETIME -> java.time.LocalDateTime.of(BUSINESS_DATE, java.time.LocalTime.NOON);
-            case VectorType vectorType -> List.of(defaultValueFor(vectorType.elementType()));
-            case CollectionType collectionType -> List.of(defaultValueFor(collectionType.elementType()));
-            case MapType mapType -> Map.of("value", defaultValueFor(mapType.valueType()));
-            case ObjectType objectType when objectType.name().equals(CustomerProfile.class.getName()) ->
-                    new CustomerProfile("Ana", BigDecimal.ONE);
-            case ObjectType ignored -> new AcceptanceObject("value");
-        };
-    }
-
     public record CustomerProfile(String name, BigDecimal score) {
 
         public BigDecimal scorePlus(BigDecimal increment) {
             return score.add(increment);
         }
-    }
-
-    public record AcceptanceObject(String value) {
     }
 
     private static final class PrefixedNumberConversionService implements DataConversionService {
@@ -291,18 +174,6 @@ public final class EnvironmentConfigurations {
 
         public static BigDecimal numberIdentity(BigDecimal value) {
             return value;
-        }
-
-        public static BigDecimal numberIdentityCopy(BigDecimal value) {
-            return value;
-        }
-
-        public static BigDecimal numberPairIdentity(BigDecimal first, BigDecimal ignoredSecond) {
-            return first;
-        }
-
-        public static String numberAsText(BigDecimal value) {
-            return value.toPlainString();
         }
 
         public static String textIdentity(String value) {

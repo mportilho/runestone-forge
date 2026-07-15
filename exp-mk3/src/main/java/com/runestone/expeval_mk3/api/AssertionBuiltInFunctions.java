@@ -41,14 +41,13 @@ final class AssertionBuiltInFunctions {
                 ? FunctionPurity.FOLDABLE
                 : FunctionPurity.PURE;
         AssertionBuiltInFunctions assertions = new AssertionBuiltInFunctions(boundaryCoercion);
-        String providerId = "built-in.assertion:" + boundaryCoercion.profileHash();
         List<FunctionDescriptor> descriptors = new ArrayList<>(ASSERTION_DESCRIPTOR_COUNT);
-        addDescriptors(descriptors, assertions, "asNumber", NUMBER, assertionPurity, providerId);
-        addDescriptors(descriptors, assertions, "asText", STRING, assertionPurity, providerId);
-        addDescriptors(descriptors, assertions, "asBool", BOOLEAN, assertionPurity, providerId);
-        addDescriptors(descriptors, assertions, "asDate", DATE, assertionPurity, providerId);
-        addDescriptors(descriptors, assertions, "asTime", TIME, assertionPurity, providerId);
-        addDescriptors(descriptors, assertions, "asDateTime", DATETIME, assertionPurity, providerId);
+        addDescriptors(descriptors, assertions, "asNumber", NUMBER, assertionPurity);
+        addDescriptors(descriptors, assertions, "asText", STRING, assertionPurity);
+        addDescriptors(descriptors, assertions, "asBool", BOOLEAN, assertionPurity);
+        addDescriptors(descriptors, assertions, "asDate", DATE, assertionPurity);
+        addDescriptors(descriptors, assertions, "asTime", TIME, assertionPurity);
+        addDescriptors(descriptors, assertions, "asDateTime", DATETIME, assertionPurity);
         return List.copyOf(descriptors);
     }
 
@@ -57,12 +56,11 @@ final class AssertionBuiltInFunctions {
             AssertionBuiltInFunctions assertions,
             String methodName,
             ExpressionType returnType,
-            FunctionPurity purity,
-            String providerId) {
+            FunctionPurity purity) {
         Method method = assertionMethod(methodName);
         MethodHandle handle = assertionHandle(assertions, method);
         for (ScalarType sourceType : ASSERTION_SOURCE_TYPES) {
-            descriptors.add(descriptor(methodName, method, handle, sourceType, returnType, purity, providerId));
+            descriptors.add(descriptor(methodName, method, handle, sourceType, returnType, purity));
         }
     }
 
@@ -96,12 +94,11 @@ final class AssertionBuiltInFunctions {
             MethodHandle handle,
             ExpressionType parameterType,
             ExpressionType returnType,
-            FunctionPurity purity,
-            String providerId) {
+            FunctionPurity purity) {
         return FunctionDescriptor.fromHandle(
                 methodName,
                 handle,
-                FunctionImplementationMetadata.forInstanceMethod(method, providerId),
+                FunctionImplementationMetadata.forInstanceMethod(method),
                 List.of(parameterType),
                 returnType,
                 purity);

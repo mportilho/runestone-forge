@@ -22,7 +22,6 @@ final class FinancialBuiltInFunctions {
         return ReflectedFunctionImporter
                 .importAll(
                         new FinancialBuiltInFunctions(mathContext),
-                        BuiltInFunctionSupport.mathContextProviderId("built-in.financial", mathContext),
                         FunctionPurity.FOLDABLE)
                 .rename("fvRegular", "fv")
                 .rename("fvTyped", "fv")

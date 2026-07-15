@@ -26,7 +26,6 @@ final class MathBuiltInFunctions {
         return ReflectedFunctionImporter
                 .importAll(
                         new MathBuiltInFunctions(mathContext),
-                        BuiltInFunctionSupport.mathContextProviderId("built-in.math", mathContext),
                         FunctionPurity.FOLDABLE)
                 .toList();
     }
