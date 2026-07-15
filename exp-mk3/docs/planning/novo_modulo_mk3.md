@@ -1,5 +1,7 @@
 # Estratégia — `expression-evaluator` v2
 
+> **Documento histórico e não normativo.** As decisões vigentes estão no plano de implementação, nos ADRs e em `exp-mk3/docs/planning/etapa-4/etapa-4-resolver-semantico.md`. Em particular, referências abaixo a hex/octal, símbolos implícitos, `UnknownType`, `NullType`, strict mode, `NumericMode`/`FAST`, `maxFilterDepth` e `maxVectorSize` foram substituídas pelos ADRs 0007–0014.
+
 Nova estratégia de construção do analisador/executor de expressões, alinhada à gramática revisada (`ExpressionEvaluator.g4`, cadeia de precedência unificada, literais temporais prefixados, `:=` para atribuição, **sem type hints sintáticos**) e reorganizada com foco em **altíssimo desempenho de execução**, mantendo a arquitetura em camadas que provou seu valor na versão anterior.
 
 ---

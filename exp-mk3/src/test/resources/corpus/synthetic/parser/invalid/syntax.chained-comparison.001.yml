@@ -1,7 +1,10 @@
 id: parser.syntax.chained-comparison.001
-phase: semantics
+phase: parser
 kind: invalid
 source: 'a < b < c'
 coverage: [comparison, diagnostic]
 expected:
-  diagnostic: {category: SEMANTIC, code: TBD}
+  diagnostic:
+    category: PARSE
+    code: PARSE_UNEXPECTED_TOKEN
+    span: {offset: 6, endOffset: 7, line: 1, column: 7}

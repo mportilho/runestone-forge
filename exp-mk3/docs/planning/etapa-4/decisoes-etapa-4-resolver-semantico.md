@@ -27,7 +27,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - ADR 0011 remove `strict mode` do `Ambiente de Expressao`.
 - As ADRs 0007-0014 sao pre-trabalho bloqueante para implementar a Etapa 4.
 - O plano macro deve ser ajustado para remover referencias obsoletas a `UnknownType`, `NullType`, simbolos externos sem default, `strict mode`, e politica de hex/octal em subscripts.
-- A Etapa 4 deve ter um documento detalhado proprio em `exp-mk3/docs/planning/etapa-4-resolver-semantico.md` quando a sessao de planejamento for encerrada.
+- A Etapa 4 tem documento detalhado proprio em `exp-mk3/docs/planning/etapa-4/etapa-4-resolver-semantico.md`.
 
 ## Etapa 3.5 - Saneamento antes do Resolver
 
@@ -49,7 +49,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - O builder do ambiente deve validar descriptors invalidos de operacao de colecao.
 - O `Catalogo de Operacoes de Colecao` pertence ao ambiente que o declara; isolamento de cache ocorre pelo UUID da instancia, sem fingerprint canonico do catalogo.
 - O catalogo deve ser arquitetado com seam interno para extensao futura, mas a API publica de registro de operacoes de colecao customizadas fica fora da v2 inicial.
-- A v2 inicial registra apenas operacoes oficiais por helper de ambiente, por exemplo `addStandardCollectionOperations()`.
+- A v2 inicial instala automaticamente as operacoes oficiais em todo ambiente construido, sem helper publico de registro.
 - O resolver nao deve depender de hardcode dos built-ins; ele consome descriptors do catalogo.
 
 ### Criterios de aceite da Etapa 3.5

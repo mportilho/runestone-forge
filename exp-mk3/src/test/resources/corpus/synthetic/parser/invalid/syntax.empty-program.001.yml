@@ -1,5 +1,5 @@
 id: parser.syntax.empty-program.001
-phase: semantics
+phase: semantic
 kind: invalid
 source: ''
 coverage: [diagnostic]

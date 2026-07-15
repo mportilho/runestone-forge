@@ -88,6 +88,19 @@ class SemanticAstVerificationGateTest {
     }
 
     @Test
+    @DisplayName("semantic corpus cases parse and build ASTs before resolver implementation")
+    void semanticCorpusCasesParseAndBuildAstsBeforeResolverImplementation() {
+        List<CorpusCase> semanticCases = loadCorpusCases().stream()
+                .filter(corpusCase -> "semantic".equals(corpusCase.phase()))
+                .toList();
+
+        assertThat(semanticCases).isNotEmpty();
+        for (CorpusCase corpusCase : semanticCases) {
+            build(corpusCase.source(), corpusCase.path());
+        }
+    }
+
+    @Test
     @DisplayName("destructuring assignments build source-faithful target nodes")
     void destructuringAssignmentsBuildSourceFaithfulTargetNodes() {
         String source = "[a, b] := pair; a";
@@ -259,6 +272,7 @@ class SemanticAstVerificationGateTest {
             JsonNode root = YAML.readTree(path.toFile());
             return new CorpusCase(
                     path,
+                    requiredText(root, "phase", path),
                     "valid".equals(requiredText(root, "kind", path)),
                     requiredText(root, "source", path));
         } catch (IOException exception) {
@@ -562,6 +576,6 @@ class SemanticAstVerificationGateTest {
         return new BinaryOperationNode(GENERATED_ID, GENERATED_SPAN, left, operator, GENERATED_SPAN, right);
     }
 
-    private record CorpusCase(Path path, boolean valid, String source) {
+    private record CorpusCase(Path path, String phase, boolean valid, String source) {
     }
 }

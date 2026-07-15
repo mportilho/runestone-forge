@@ -1,3 +1,5 @@
+> **Documento histórico e não normativo.** Este arquivo descreve o módulo anterior e não define o contrato de `exp-mk3`; para decisões vigentes, consulte o plano de implementação e os ADRs do módulo.
+
 O módulo `expression-evaluator` é uma biblioteca Java para compilar expressões em texto e avaliá-las depois com variáveis fornecidas em runtime.
 
 A ideia central é:

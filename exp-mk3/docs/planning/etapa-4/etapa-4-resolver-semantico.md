@@ -1,6 +1,6 @@
 # Plano Detalhado - Etapa 3.5 e Etapa 4 - Resolver Semantico
 
-Este plano detalha o saneamento necessario antes do resolver semantico e a implementacao da Etapa 4 do `exp-mk3`. Ele consolida as decisoes registradas em `exp-mk3/docs/decisoes-etapa-4-resolver-semantico.md` e nos ADRs 0007-0014.
+Este plano detalha o saneamento necessario antes do resolver semantico e a implementacao da Etapa 4 do `exp-mk3`. Ele consolida as decisoes registradas em `exp-mk3/docs/planning/etapa-4/decisoes-etapa-4-resolver-semantico.md` e nos ADRs 0007-0014.
 
 ## Objetivo
 
@@ -52,6 +52,7 @@ Remover conceitos obsoletos do contrato publico e do caminho interno planejavel 
 - `JavaTypeCatalog` deve rejeitar membro exposto sem tipo de retorno mapeavel.
 - Propriedades/metodos Java registrados sao tratados como `NEVER_NULL` por contrato de exposicao.
 - `CollectionOperationCatalog` deve existir com seam interno para extensao futura, mas sem API publica de registro custom na v2 inicial.
+- Todo ambiente construido recebe automaticamente o catalogo oficial de operacoes de colecao; nao ha helper publico de registro padrao.
 - Operacoes oficiais minimas: `map`, `sum`, `count`, `keys`, `values`, `any`, `all`.
 
 ### Criterios de Aceite

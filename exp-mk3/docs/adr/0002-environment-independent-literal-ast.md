@@ -12,8 +12,8 @@ Etapa 2 originally said `FLOAT` literals should become the type of the numeric m
 
 ## Decision
 
-The Arvore Semantica de Expressao materializes literals independently of the environment. `INT` becomes `long` or `BigInteger`, `FLOAT` becomes an exact `BigDecimal`, date and time literals become `LocalDate` and `LocalTime`, date-time literals without offset become `LocalDateTime`, and date-time literals with offset become `OffsetDateTime`. `NumericMode` and environment time-zone normalization are applied later by the resolver and plan builder.
+The Arvore Semantica de Expressao materializes literals independently of the environment. `INT` becomes `long` or `BigInteger`, `FLOAT` becomes an exact `BigDecimal`, date and time literals become `LocalDate` and `LocalTime`, date-time literals without offset become `LocalDateTime`, and date-time literals with offset become `OffsetDateTime`. Environment time-zone normalization is applied later by the resolver and plan builder.
 
 ## Consequences
 
-The tree stays deterministic for a given source and easier to use in structural round-trip tests. FAST-mode compilation and offset date-time normalization pay a later conversion step, but avoid leaking execution strategy or environment policy into the semantic tree.
+The tree stays deterministic for a given source and easier to use in structural round-trip tests. Offset date-time normalization pays a later conversion step, but avoids leaking environment policy into the semantic tree.

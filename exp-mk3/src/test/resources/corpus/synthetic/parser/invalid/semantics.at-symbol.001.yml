@@ -1,5 +1,5 @@
 id: parser.at.symbol.001
-phase: semantics
+phase: semantic
 kind: invalid
 source: '@'
 coverage: [at-symbol, diagnostic]

@@ -1,5 +1,5 @@
 id: parser.semantics.at-outside-filter.001
-phase: semantics
+phase: semantic
 kind: invalid
 source: '@.name'
 coverage: [at-symbol, property-access, diagnostic]

@@ -53,7 +53,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 
 **Entregas**
 - Hierarquia selada de records: `ExpressionFileNode` (com `resultExpression` opcional), `AssignmentNode` (incluindo destructuring), `LiteralNode`, `IdentifierNode`, `BinaryOperationNode`, `UnaryOperationNode`, `PostfixOperationNode`, `TernaryOperationNode` (between, com flag de negação), `FunctionCallNode`, `ConditionalNode` (forma clássica e funcional na mesma AST), `VectorLiteralNode`, `NullCoalesceNode` (variádico), `PropertyChainNode` (elos com flag de navegação segura, inclusive `?.[…]`), `FilterNode`/`LambdaNode`. Todos com `NodeId` estável e `SourceSpan`.
-- `SemanticAstBuilder`: visitor que consome a parse tree em **uma única passada** e a descarta. Nesta passada já ocorrem as materializações da §3.3: literais temporais viram `LocalDate`/`LocalTime`/`LocalDateTime`/`OffsetDateTime` prontos; `INT` vira `long` ou `BigInteger`; `FLOAT` vira o tipo do modo numérico; `nin` e `not in` produzem o mesmo nó; `[]` vira o singleton de lista vazia; `x%` **ainda não** é reescrito (reescritas ficam no plano, §7 deste documento — a AST espelha a fonte para auditoria fiel).
+- `SemanticAstBuilder`: visitor que consome a parse tree em **uma única passada** e a descarta. Nesta passada já ocorrem as materializações da §3.3: literais temporais viram `LocalDate`/`LocalTime`/`LocalDateTime`/`OffsetDateTime` prontos; `INT` vira `long` ou `BigInteger`; `FLOAT` vira `BigDecimal` exato; `nin` e `not in` produzem o mesmo nó; `[]` vira o singleton de lista vazia; `x%` **ainda não** é reescrito (reescritas ficam no plano, §7 deste documento — a AST espelha a fonte para auditoria fiel).
 - Pretty-printer da AST (necessário para o teste de propriedade round-trip e para mensagens de diagnóstico).
 
 **Critérios de aceite:** teste de propriedade round-trip (pretty-print → reparse → AST estruturalmente igual) verde sobre geração aleatória e sobre o corpus; nenhum nó sem `SourceSpan`; parse tree comprovadamente não retida (teste de heap ou por design — builder não guarda referência).
@@ -72,7 +72,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 - `ExternalSymbolCatalog`: todo símbolo externo exige default não nulo e política de sobrescrita; o tipo é declarado e validado contra o default, ou inferido do default. Declarações sem default, sem política, ou com tipo desconhecido não fazem parte da v2.
 - `FunctionCatalog`: descoberta por reflexão → `FunctionDescriptor` (`MethodHandle` adaptado em registro, tipos, retorno, flags `foldable`/`pure`); despacho por aridade+tipos como estrutura de consulta para o resolver. **Nesta etapa a invocação pode ser `invokeExact` simples**; `LambdaMetafactory` e inline caches ficam para a Etapa 8.
 - Built-ins completos desde já no escopo de catálogo (§9): matemática **incluindo `abs` e `sqrt`** (obrigatórios — saíram da gramática), transcendentais, strings, datas/horas, comparáveis, financeiras, e as funções de asserção `asNumber/asText/asBool/asDate/asTime/asDateTime` (`pure`, `foldable`). Asserções vetoriais devem declarar elemento conhecido, como `asVectorOfNumber`, em vez de `asVector` genérico. Validação no builder: `addMathFunctions()` sem `abs`/`sqrt` presentes é erro de construção.
-- `JavaTypeCatalog` (`registerJavaType`), `CollectionOperationCatalog` com operações oficiais mínimas (`map`, `sum`, `count`, `keys`, `values`, `any`, `all`) e `DataConversionService`/`RuntimeCoercionService` com a matriz de coerções de borda.
+- `JavaTypeCatalog` (`registerJavaType`), `CollectionOperationCatalog` instalado automaticamente em todo ambiente com operações oficiais mínimas (`map`, `sum`, `count`, `keys`, `values`, `any`, `all`) e `DataConversionService`/`RuntimeCoercionService` com a matriz de coerções de borda.
 
 **Critérios de aceite:** o mesmo ambiente preserva seu `environmentId` e builds separados recebem IDs diferentes; catálogo resolve overloads deterministicamente; todas as funções built-in com testes unitários próprios (independentes do runtime de expressões).
 
@@ -88,7 +88,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 - Remoção de `UnknownType`, `NullType`, `strictMode`, `NumericMode`/`FAST`, literal fonte `null`, inteiros hexadecimais/octais e declarações de símbolo externo sem default/política do contrato público e do caminho planejável.
 - Simplificação da identidade do ambiente: remover `ExpressionEnvironmentId`, fingerprint de conteúdo, serialização canônica exclusiva do ID, identificadores estáveis de implementação e `providerId`; cada build recebe um UUID textual opaco.
 - Validações de builder: defaults/overrides sem null validável; mapas sem chave/valor null validável; funções sem tipo desconhecido; função dobrável sempre pura; Java member exposto sempre com tipo mapeável; descriptors de operação de coleção válidos.
-- `CollectionOperationCatalog` preparado com descriptors oficiais e seam interno para extensão futura, sem API pública de operações custom na v2 inicial.
+- `CollectionOperationCatalog` preparado com descriptors oficiais instalados automaticamente em todo ambiente e seam interno para extensão futura, sem API pública de operações custom na v2 inicial.
 - Atualização do corpus para `phase: semantic`, ADRs 0007–0014, `maxMaterializedSize` e nulidade estrita.
 
 **Critérios de aceite:** `mvn -pl exp-mk3 -am test` verde; gramática rejeita `null`, `0x10` e `077`; ambiente não expõe `strictMode`/`NumericMode`; catálogos e corpus alinhados aos ADRs 0007–0014.
@@ -121,7 +121,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 **Objetivo:** fechar o ciclo `compile → plan → compute` com **semântica correta e simples** — nós executáveis genéricos, modo `DECIMAL` apenas, zero otimizações. Este é o baseline funcional e de desempenho contra o qual as etapas 7–9 serão medidas.
 
 **Entregas**
-- `ExecutionPlanBuilder` ingênuo: AST semântica → árvore de `ExecutableNode` genéricos (um `ExecutableBinaryOp` com switch é aceitável **aqui e só aqui**), `ExecutionPlan` com a forma da §10 (assignments, `resultExpression` opcional, defaults, `ExternalBindingPlan[]` ordenado, `frameSize`, `maxFilterDepth`).
+- `ExecutionPlanBuilder` ingênuo: AST semântica → árvore de `ExecutableNode` genéricos (um `ExecutableBinaryOp` com switch é aceitável **aqui e só aqui**), `ExecutionPlan` com a forma da §10 (assignments, `resultExpression` opcional, defaults, `ExternalBindingPlan[]` ordenado, `frameSize`, `maxCurrentItemDepth`).
 - `ExecutionScope` (§13): `Object[] frame` único, sentinela `UNBOUND ≠ null`, preenchimento único no início do compute (defaults → overrides via array de bindings, coerção uma vez por valor), `currDate/currTime/currDateTime` derivados de um único `Clock.instant()` por execução.
 - Semântica completa dos operadores escalares: aritmética `DECIMAL`, comparações, `and`/`or` com curto-circuito, `nand/nor/xor/xnor` (ambos os lados), `??` variádico preguiçoso, `between` ternário com curto-circuito, `in`/`not in` (avaliação linear por ora), regex com `Pattern` do binding, `%` e `!` pós-fixados, `^` associativo à direita com `2^-3`, `root`, concatenação, condicionais (as duas formas → mesmo `ExecutableConditional` linear), vetores literais, chamadas de função via handle do catálogo, atribuições em ordem + destructuring.
 - API pública (§2): `ExpressionCompiler.compile(source, env)` → `CompiledExpression`; visões `asMath()`/`asLogical()`/`asAssignments()` como fachadas finas com as validações semânticas de borda; conversão do resultado só na borda (§14); nenhuma exceção como controle de fluxo no caminho quente; erros de runtime com `SourceSpan`.
@@ -141,10 +141,10 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 - `ExecutablePropertyChain`: com metadados Java, acessores resolvidos em compilação (nesta etapa pode ser `MethodHandle` adaptado; `LambdaMetafactory`/`VarHandle` na Etapa 8); sem metadados, resolução reflexiva com memoização simples por call-site (o inline cache mono→bi→megamórfico completo também fica para a Etapa 8).
 - `?.` para propriedades, métodos e todas as formas de subscript, com a semântica exata da §3.3/§15: protege **apenas** receptor `null`; erros de tipo/índice/chave/predicado continuam diagnósticos normais.
 - Subscripts completos: `[i]` com índice negativo a partir do fim, `[a:b]`/`[a:]`/`[:b]`, `["key"]`, `[*]`, `.` `*` (wildcard de filho), `[?(...)]`.
-- Filtros e lambdas: predicado é `ExecutableNode` comum; `@` como slot de frame com disciplina save/restore para aninhamento; enforcement de `maxFilterDepth`.
+- Filtros e lambdas: predicado é `ExecutableNode` comum; `@` como slot de frame com disciplina save/restore para aninhamento; enforcement de `maxCurrentItemDepth`.
 - Operações de coleção `..sum()`, `..map(@ -> e)`, `..keys()`, `..values()` etc., com loops indexados para `List`/arrays (sem streams no caminho quente); sem fusão ainda.
 
-**Critérios de aceite:** corpus completo executa; matriz de testes de `?.` (cada forma × receptor null × erro real não mascarado); filtros aninhados até `maxFilterDepth` com valores de `@` corretos por nível; testes de coleção sobre `List`, array e `Map`.
+**Critérios de aceite:** corpus completo executa; matriz de testes de `?.` (cada forma × receptor null × erro real não mascarado); filtros aninhados até `maxCurrentItemDepth` com valores de `@` corretos por nível; testes de coleção sobre `List`, array e `Map`.
 
 **Depende de:** Etapa 5.
 

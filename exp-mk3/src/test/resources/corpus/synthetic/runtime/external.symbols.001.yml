@@ -3,10 +3,17 @@ phase: runtime
 kind: valid
 source: 'a + b * 2'
 environment:
-  numericMode: DECIMAL
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
   symbols:
-    a: NUMBER
-    b: NUMBER
+    a:
+      type: NUMBER
+      default: {type: NUMBER, value: "0"}
+      overwritePolicy: OVERRIDABLE
+    b:
+      type: NUMBER
+      default: {type: NUMBER, value: "0"}
+      overwritePolicy: OVERRIDABLE
 inputs:
   a: {type: NUMBER, value: "10"}
   b: {type: NUMBER, value: "5"}

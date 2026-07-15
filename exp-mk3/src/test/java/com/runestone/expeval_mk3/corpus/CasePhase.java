@@ -2,7 +2,7 @@ package com.runestone.expeval_mk3.corpus;
 
 enum CasePhase {
     PARSER("parser"),
-    SEMANTICS("semantics"),
+    SEMANTIC("semantic"),
     RUNTIME("runtime"),
     MIGRATION("migration"),
     DIFFERENTIAL("differential");
