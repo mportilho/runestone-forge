@@ -170,7 +170,7 @@ public final class ReflectedFunctionImporter {
 
         @Override
         public List<FunctionDescriptor> toList() {
-            ImportResolution resolution = resolve(LOOKUP, false, JavaTypeCatalog.empty());
+            ImportResolution resolution = resolve(LOOKUP, false, JavaTypeCatalog.empty(), null, 0);
             if (!resolution.failures().isEmpty()) {
                 throw combinedFailure(resolution.failures());
             }
@@ -181,7 +181,9 @@ public final class ReflectedFunctionImporter {
         private ImportResolution resolve(
                 MethodHandles.Lookup lookup,
                 boolean guardNulls,
-                JavaTypeCatalog javaTypes) {
+                JavaTypeCatalog javaTypes,
+                BoundaryCoercion boundaryCoercion,
+                int maxMaterializedSize) {
             List<Method> eligibleMethods = eligibleMethods(source);
             List<IllegalArgumentException> failures = new ArrayList<>();
             if (eligibleMethods.isEmpty()) {
@@ -198,6 +200,12 @@ public final class ReflectedFunctionImporter {
             List<FunctionDescriptor> descriptors = new ArrayList<>(selectedMethods.size());
             for (Method method : selectedMethods) {
                 try {
+                    if (boundaryCoercion != null) {
+                        ProviderMethodAdapter.PreparedMethod prepared = ProviderMethodAdapter.prepare(
+                                method, javaTypes, boundaryCoercion, maxMaterializedSize);
+                        descriptors.add(descriptor(languageName(method), source, method, prepared, lookup));
+                        continue;
+                    }
                     ImportedMethod importedMethod = source.canonicalScalarsOnly()
                             ? importCanonicalScalarMethod(method)
                             : importMethod(method, javaTypes);
@@ -336,6 +344,32 @@ public final class ReflectedFunctionImporter {
                             : FunctionImplementationMetadata.forInstanceMethod(method),
                     importedMethod.parameterTypes(),
                     importedMethod.returnType(),
+                    source.purity());
+        } catch (IllegalAccessException exception) {
+            throw new IllegalArgumentException("function provider method is not accessible: " + method, exception);
+        }
+    }
+
+    private static FunctionDescriptor descriptor(
+            String languageName,
+            Source source,
+            Method method,
+            ProviderMethodAdapter.PreparedMethod prepared,
+            MethodHandles.Lookup lookup) {
+        try {
+            MethodHandle handle = lookup.unreflect(method);
+            if (!source.importStatic()) {
+                handle = handle.bindTo(source.providerInstance());
+            }
+            handle = prepared.adapt(handle);
+            return FunctionDescriptor.fromHandle(
+                    languageName,
+                    handle,
+                    source.importStatic()
+                            ? FunctionImplementationMetadata.forStaticMethod(method)
+                            : FunctionImplementationMetadata.forInstanceMethod(method),
+                    prepared.parameterTypes(),
+                    prepared.returnType(),
                     source.purity());
         } catch (IllegalAccessException exception) {
             throw new IllegalArgumentException("function provider method is not accessible: " + method, exception);
@@ -692,13 +726,19 @@ public final class ReflectedFunctionImporter {
         }
     }
 
-    static ImportResolution resolveForEnvironment(ImportPlan plan, JavaTypeCatalog javaTypes) {
+    static ImportResolution resolveForEnvironment(
+            ImportPlan plan,
+            JavaTypeCatalog javaTypes,
+            BoundaryCoercion boundaryCoercion,
+            int maxMaterializedSize) {
         Objects.requireNonNull(plan, "plan");
         Objects.requireNonNull(javaTypes, "javaTypes");
+        Objects.requireNonNull(boundaryCoercion, "boundaryCoercion");
         if (!(plan instanceof ImportPlanImpl implementation)) {
             throw new IllegalArgumentException("unsupported reflected function import plan implementation");
         }
-        return implementation.resolve(PUBLIC_LOOKUP, true, javaTypes);
+        return implementation.resolve(
+                PUBLIC_LOOKUP, true, javaTypes, boundaryCoercion, maxMaterializedSize);
     }
 
     record ImportResolution(

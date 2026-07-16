@@ -149,7 +149,8 @@ public final class ExpressionEnvironment {
         }
         for (ReflectedFunctionImporter.ImportPlan providerImport : builder.functionProviders) {
             ReflectedFunctionImporter.ImportResolution resolution =
-                    ReflectedFunctionImporter.resolveForEnvironment(providerImport, javaTypes);
+                    ReflectedFunctionImporter.resolveForEnvironment(
+                            providerImport, javaTypes, builder.boundaryCoercion, builder.maxMaterializedSize);
             for (FunctionDescriptor descriptor : resolution.descriptors()) {
                 registrations.add(FunctionDeclaration.imported(descriptor));
             }
@@ -172,7 +173,8 @@ public final class ExpressionEnvironment {
         }
         for (ReflectedFunctionImporter.ImportPlan replacementImport : builder.functionReplacementProviders) {
             ReflectedFunctionImporter.ImportResolution resolution =
-                    ReflectedFunctionImporter.resolveForEnvironment(replacementImport, javaTypes);
+                    ReflectedFunctionImporter.resolveForEnvironment(
+                            replacementImport, javaTypes, builder.boundaryCoercion, builder.maxMaterializedSize);
             for (IllegalArgumentException exception : resolution.failures()) {
                 problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
             }
@@ -379,18 +381,18 @@ public final class ExpressionEnvironment {
         }
 
         public Builder functionsFrom(Class<?> providerClass, FunctionPurity purity) {
-            return functions(ReflectedFunctionImporter.importCanonicalAll(providerClass, purity));
+            return functions(ReflectedFunctionImporter.importAll(providerClass, purity));
         }
 
         public Builder functionsFrom(Object providerInstance, FunctionPurity purity) {
-            return functions(ReflectedFunctionImporter.importCanonicalAll(providerInstance, purity));
+            return functions(ReflectedFunctionImporter.importAll(providerInstance, purity));
         }
 
         public Builder functionsFrom(
                 Class<?> exposureType,
                 Object providerInstance,
                 FunctionPurity purity) {
-            return functions(ReflectedFunctionImporter.importCanonicalAll(exposureType, providerInstance, purity));
+            return functions(ReflectedFunctionImporter.importAll(exposureType, providerInstance, purity));
         }
 
         public Builder registerJavaType(Class<?> javaType) {

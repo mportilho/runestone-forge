@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.api;
 
 import com.runestone.converters.DataConversionService;
+import com.runestone.converters.PreparedDataConversion;
 import com.runestone.converters.impl.stable.DefaultDataConversionService;
 
 import java.lang.reflect.Array;
@@ -9,8 +10,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -71,6 +75,32 @@ public final class BoundaryCoercion {
         } catch (IllegalArgumentException exception) {
             return false;
         }
+    }
+
+    PreparedJavaConversion prepareJavaConversion(Class<?> sourceType, Class<?> targetType) {
+        Objects.requireNonNull(sourceType, "sourceType");
+        Objects.requireNonNull(targetType, "targetType");
+        Class<?> boxedSourceType = ExpressionJavaTypes.boxed(sourceType);
+        Class<?> boxedTargetType = ExpressionJavaTypes.boxed(targetType);
+        if (boxedTargetType.isAssignableFrom(boxedSourceType)) {
+            return value -> requireConversionValue(value, boxedSourceType, boxedTargetType);
+        }
+        PreparedJavaConversion containerConversion = prepareContainerConversion(
+                boxedSourceType, boxedTargetType);
+        if (containerConversion != null) {
+            return containerConversion;
+        }
+        if (!dataConversionService.canPrepareConversion(boxedSourceType, boxedTargetType)) {
+            throw new IllegalArgumentException("configured boundary coercion does not support "
+                    + boxedSourceType.getName() + " -> " + boxedTargetType.getName());
+        }
+        PreparedDataConversion conversion = dataConversionService.prepareConversion(
+                boxedSourceType, boxedTargetType);
+        return value -> {
+            requireConversionValue(value, boxedSourceType, boxedSourceType);
+            Object converted = conversion.convert(value);
+            return requireConversionValue(converted, boxedTargetType, boxedTargetType);
+        };
     }
 
     public Object convertFunctionBindingFallback(Object sourceValue, ExpressionType targetType) {
@@ -154,6 +184,36 @@ public final class BoundaryCoercion {
         return false;
     }
 
+    private static Object requireConversionValue(Object value, Class<?> sourceType, Class<?> targetType) {
+        if (value == null) {
+            throw new NullPointerException("function arguments and results must not be null");
+        }
+        if (!sourceType.isInstance(value)) {
+            throw new IllegalArgumentException("boundary value must be an instance of " + sourceType.getName());
+        }
+        if (!targetType.isInstance(value)) {
+            throw new IllegalArgumentException("boundary conversion did not produce " + targetType.getName());
+        }
+        return value;
+    }
+
+    private static PreparedJavaConversion prepareContainerConversion(Class<?> sourceType, Class<?> targetType) {
+        if (sourceType == List.class && targetType == ArrayList.class) {
+            return value -> new ArrayList<>((List<?>) requireConversionValue(value, List.class, List.class));
+        }
+        if (sourceType == List.class && targetType == Set.class) {
+            return value -> Collections.unmodifiableSet(
+                    new LinkedHashSet<>((List<?>) requireConversionValue(value, List.class, List.class)));
+        }
+        if (sourceType == List.class && targetType == LinkedHashSet.class) {
+            return value -> new LinkedHashSet<>((List<?>) requireConversionValue(value, List.class, List.class));
+        }
+        if (sourceType == Map.class && targetType == LinkedHashMap.class) {
+            return value -> new LinkedHashMap<>((Map<?, ?>) requireConversionValue(value, Map.class, Map.class));
+        }
+        return null;
+    }
+
     private Object convertCollection(String valueName, Object sourceValue, ExpressionType elementType, String typeName) {
         if (sourceValue instanceof Collection<?> values) {
             ArrayList<Object> convertedValues = new ArrayList<>(values.size());
@@ -222,5 +282,10 @@ public final class BoundaryCoercion {
         private BoundaryCoercionFailure(String message, Throwable cause) {
             super(message, cause);
         }
+    }
+
+    @FunctionalInterface
+    interface PreparedJavaConversion {
+        Object convert(Object value);
     }
 }

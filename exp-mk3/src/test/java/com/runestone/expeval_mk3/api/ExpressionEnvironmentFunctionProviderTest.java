@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -224,7 +225,7 @@ public class ExpressionEnvironmentFunctionProviderTest {
 
         assertThatThrownBy(builder::build)
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("unsupported canonical scalar");
+                .hasMessageContaining("Object provider method types are not supported");
     }
 
     @Test
@@ -257,7 +258,7 @@ public class ExpressionEnvironmentFunctionProviderTest {
         assertThat(firstMessage)
                 .isEqualTo(secondMessage)
                 .contains("abs")
-                .contains("unsupported canonical scalar");
+                .contains("Object provider method types are not supported");
     }
 
     @Test
@@ -267,7 +268,7 @@ public class ExpressionEnvironmentFunctionProviderTest {
                 .functionsFrom(MixedInvalidAndCollisionProvider.class, FunctionPurity.PURE);
 
         assertThat(failureMessage(builder))
-                .contains("unsupported canonical scalar")
+                .contains("Object provider method types are not supported")
                 .contains("abs");
     }
 
@@ -528,8 +529,8 @@ public class ExpressionEnvironmentFunctionProviderTest {
             return value;
         }
 
-        public static int unsupportedInteger(int value) {
-            return value;
+        public static Optional<String> unsupportedInteger(String value) {
+            return Optional.of(value);
         }
     }
 

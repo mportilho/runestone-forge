@@ -6,6 +6,7 @@ import com.runestone.converters.DataConverter;
 import com.runestone.converters.DataConverterConfigurationException;
 import com.runestone.converters.NoDataConverterFoundException;
 import com.runestone.converters.NonFoldableValueException;
+import com.runestone.converters.PreparedDataConversion;
 import com.runestone.converters.StandardConverters;
 
 import java.lang.reflect.Array;
@@ -157,6 +158,31 @@ public final class DefaultDataConversionService implements DataConversionService
     }
 
     @Override
+    public boolean canPrepareConversion(Class<?> sourceType, Class<?> targetType) {
+        if (sourceType == null || targetType == null) {
+            return false;
+        }
+        Class<?> boxedTargetType = boxedType(targetType);
+        return isKnownImmutableType(boxedTargetType)
+                && findConverter(sourceType, boxedTargetType) != null;
+    }
+
+    @Override
+    public PreparedDataConversion prepareConversion(Class<?> sourceType, Class<?> targetType) {
+        Objects.requireNonNull(sourceType, "Source Type must be provided");
+        Objects.requireNonNull(targetType, "Target Type must be provided");
+        Class<?> boxedTargetType = boxedType(targetType);
+        if (!isKnownImmutableType(boxedTargetType)) {
+            throw new NoDataConverterFoundException(sourceType, targetType);
+        }
+        DataConverter<?, ?> converter = findConverter(sourceType, boxedTargetType);
+        if (converter != null) {
+            return preparedConverter(sourceType, boxedTargetType, converter);
+        }
+        throw new NoDataConverterFoundException(sourceType, targetType);
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
     public <S, T> T convert(S source, Class<T> targetType) {
         Objects.requireNonNull(targetType, "Target Type must be provided");
@@ -270,6 +296,29 @@ public final class DefaultDataConversionService implements DataConversionService
     private DataConverter<?, ?> findExactConverter(Class<?> sourceType, Class<?> targetType) {
         Map<Class<?>, DataConverter<?, ?>> sourceConverters = exactConverters.get(targetType);
         return sourceConverters == null ? null : sourceConverters.get(sourceType);
+    }
+
+    @SuppressWarnings("unchecked")
+    private PreparedDataConversion preparedConverter(
+            Class<?> sourceType,
+            Class<?> targetType,
+            DataConverter<?, ?> converter) {
+        DataConverter<Object, Object> prepared = (DataConverter<Object, Object>) converter;
+        return source -> {
+            Object converted = prepared.convert(requirePreparedSource(sourceType, source), context);
+            if (converted == null || !targetType.isInstance(converted)) {
+                throw new NoDataConverterFoundException(sourceType, targetType);
+            }
+            return copyFoldableValue(converted);
+        };
+    }
+
+    private static Object requirePreparedSource(Class<?> sourceType, Object source) {
+        Objects.requireNonNull(source, "Source must be provided");
+        if (!sourceType.isInstance(source)) {
+            throw new IllegalArgumentException("Prepared conversion requires " + sourceType.getName());
+        }
+        return source;
     }
 
     private Map<Class<?>, ConverterLookup> findAssignableConverters(Class<?> sourceType) {
