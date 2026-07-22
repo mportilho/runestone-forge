@@ -41,7 +41,7 @@ The case where an assignment introduces a Simbolo Interno with the same name as 
 _Avoid_: Redeclaration error, parameter mutation, aliasing
 
 **Desestruturacao de Atribuicao**:
-An assignment target that binds multiple internal symbols from an ordered expression value, with compile-time validation when shape is known and runtime shape checking only when the source shape is known only at execution time.
+An assignment target that binds multiple internal symbols from the prefix of an ordered collection, ignoring surplus elements and checking that the source has at least as many elements as targets.
 _Avoid_: Tuple unpacking syntax, multiple assignment statement, array pattern
 
 **Valor Padrao de Simbolo**:
@@ -56,17 +56,13 @@ _Avoid_: Mutable parameter, assignment permission, runtime redeclaration
 Semantic facts about a numeric expression under the language's decimal numeric semantics, such as whether a value is provably integral or provably fractional, used by validation and later planning without changing the public expression type.
 _Avoid_: Numeric mode, public number type, Java primitive type, optimization hint
 
-**Tipo Vetor**:
-The type of a vector value created by the expression language, preserving ordered elements and one common element type resolved from the vector literal.
-_Avoid_: Java list type, generic collection
-
 **Tipo Colecao**:
-The type of an iterable group of values supplied externally or produced by navigation and collection operations, preserving an element type without implying vector-literal semantics, indexability, or sliceability.
-_Avoid_: Vector alias, raw iterable
+The single sequential container type of the expression language, preserving ordered values of one known element type and supporting indexing, slicing, filtering, wildcard expansion, and assignment destructuring.
+_Avoid_: Vector, Java collection implementation, raw iterable
 
 **Limite de Materializacao**:
-An Ambiente de Expressao guard rail that bounds materialized container values created or exposed by the expression language, such as vector literals, materialized collection-operation results, map entries, function-provider results, or public-boundary collection materialization, without necessarily rejecting large external collections at entry.
-_Avoid_: Parser size limit, input collection limit
+An Ambiente de Expressao guard rail that bounds every container snapshot materialized at an external boundary or by the language, including collection literals, maps, operation results, function-provider results, and public results.
+_Avoid_: Parser size limit, result-only collection limit
 
 **Tipo Mapa**:
 The type of a text-keyed value map understood by the expression language, preserving the type of values reachable by textual keys.
@@ -97,7 +93,7 @@ The semantic requirement that every accepted expression node, symbol, function b
 _Avoid_: Dynamic type, any type, unknown semantic type
 
 **Variavel de Tipo Pendente**:
-An internal resolver-only placeholder used while inferring a known type from local context, such as an empty vector literal receiving its element type from a sibling branch, function parameter, or membership operand. Every pending type variable must resolve to a known type or produce a semantic diagnostic before a Modelo Semantico can succeed.
+An internal resolver-only placeholder used while inferring a known type from local context, such as an empty collection literal receiving its element type from a sibling branch, function parameter, or membership operand. Every pending type variable must resolve to a known type or produce a semantic diagnostic before a Modelo Semantico can succeed.
 _Avoid_: UnknownType, dynamic type, planner-visible placeholder
 
 **Tipo Invalido**:
@@ -157,7 +153,7 @@ The semantic requirement that an operator's operands already have acceptable exp
 _Avoid_: Operator casting, parser precedence rule, runtime conversion
 
 **Pertencimento**:
-The typed meaning of `in` and `not in`: membership in a vector or collection by compatible element value, membership in a map by textual key, or a runtime-deferred membership check for an unknown right-hand side constrained as a membership container. Text containment is not part of this operator.
+The typed meaning of `in` and `not in`: membership in a collection by compatible element value or membership in a map by textual key. Text containment is not part of this operator.
 _Avoid_: Substring search, generic contains call, dynamic inclusion
 
 **Arquivo de Expressao**:
@@ -189,24 +185,28 @@ The semantic resolution of one navigation link against the receiver type, either
 _Avoid_: Reflection lookup, path segment, dynamic property access
 
 **Curinga de Navegacao**:
-The navigation link that expands child values from a receiver: `[*]` expands vector or collection elements, while `.*` expands map values or explicitly exposed object child values. It produces a collection of values and does not preserve map keys unless a collection operation explicitly requests keys.
-_Avoid_: Recursive search, implicit reflection over all members, map entry wildcard
+The `[*]` navigation link that produces a collection from collection elements, map values, or an explicitly registered homogeneous set of object child members. It does not preserve map keys or reflect arbitrary public members.
+_Avoid_: `.*`, recursive search, implicit reflection over all members, map entry wildcard
 
 **Operacao de Colecao**:
-A navigation operation invoked with collection-operation syntax on a receiver value, with semantics for receiver type, arguments, optional Item Atual usage, materialization, and future pipeline optimization.
+A receiver operation invoked with ordinary `.` or safe `?.` call syntax and resolved from the receiver's collection or map type, with explicit contracts for arguments, Item Atual usage, evaluation, and materialization.
 _Avoid_: Global function, Java collection method, stream operation
 
 **Catalogo de Operacoes de Colecao**:
-The Ambiente de Expressao catalog that declares built-in Operacao de Colecao descriptors separately from global functions, with a future extension seam for user-provided operations.
+The Ambiente de Expressao catalog that declares official Operacao de Colecao descriptors separately from global functions, retaining only an internal seam for future extensions in the initial version.
 _Avoid_: FunctionCatalog convention, method registry, stream extension list
 
 **Descritor de Operacao de Colecao**:
-The declarative catalog contract that defines accepted receivers, argument shape, Item Atual type derivation, result rule, shape preservation, intrinsic purity, evaluation policy, and materialization policy for an Operacao de Colecao. It contains no runtime execution and is not the semantic binding of a source occurrence.
+The declarative catalog contract that defines accepted receivers, an ordered list of value or lambda argument contracts, Item Atual type derivation, result rule, intrinsic purity, evaluation policy, and materialization policy for an Operacao de Colecao. It contains no runtime execution and is not the semantic binding of a source occurrence.
 _Avoid_: Collection function, operation handler, runtime implementation, collection-operation binding
 
 **Item Atual**:
 The contextual value referenced by `@` inside filters and lambdas, typed from the current collection element when that element type is known; parsing can recognize it anywhere, but semantic validation decides whether a current item context exists.
 _Avoid_: At variable, implicit identifier, lambda parameter name
+
+**Item de Reducao**:
+The contextual Item Atual available only inside a `reduce` lambda, exposing the current accumulator as `@.accumulator` and the current collection element as `@.item` without becoming a registrable object type.
+_Avoid_: Tuple, map entry, first-class lambda parameter
 
 **Profundidade de Item Atual**:
 The nesting depth of filters and lambdas that introduce an Item Atual; the Ambiente de Expressao can limit this depth as a guard rail for semantic resolution and execution frame layout.

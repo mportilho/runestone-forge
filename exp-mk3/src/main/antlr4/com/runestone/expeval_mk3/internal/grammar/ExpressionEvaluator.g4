@@ -52,7 +52,31 @@
  *    De menor precedência, encadeável (a ?? b ?? c), em vez de sufixo repetido
  *    em cada família tipada.
  *
- * 9. VETOR VAZIO [] PASSA A SER VÁLIDO.
+ * 9. COLEÇÃO VAZIA [] PASSA A SER VÁLIDA.
+ *
+ * 10. VECTOR E COLLECTION UNIFICADOS EM UM ÚNICO CONCEITO: COLEÇÃO
+ *     A sintaxe dedicada de funções de coleção — 'x..sum()', com o operador '..'
+ *     (DOUBLE_PERIOD) e a regra paralela collectionFunctionAccess /
+ *     collectionFunctionArguments — foi removida. Chamadas sobre coleções usam a
+ *     mesma sintaxe de método de qualquer objeto: 'x.sum()', 'x.map(@ -> @ * 2)'.
+ *     O lambda '@ -> expr' deixa de ser exclusividade de uma regra especial e
+ *     vira um TIPO DE ARGUMENTO comum (regra 'argument'), aceito tanto em
+ *     chamadas de função de topo ('map(lista, @ -> @ * 2)') quanto em métodos.
+ *     O despacho "função de coleção vs. método do objeto" é decidido pelo
+ *     visitor via registro de nomes (sum, avg, count, map, sortBy, reduce...),
+ *     no mesmo movimento arquitetural do item 1. Ganhos colaterais:
+ *       - safe-nav em funções de coleção: 'pedidos?.map(@ -> @.total)'
+ *         (a antiga collectionFunctionAccess não tinha variante '?.');
+ *       - argumentos mistos: 'reduce(0, @ -> ...)', 'sortBy(@ -> @.nome, "desc")'
+ *         (a forma antiga era OU um lambda sozinho OU só posicionais);
+ *       - encadeamento uniforme: 'x.map(@ -> @ * 2)[0]', sem alternar '.' e '..'.
+ *     As antigas regras vectorLiteral/vectorOfVariables foram renomeadas para
+ *     collectionLiteral/destructuringPattern, unificando a nomenclatura.
+ *     Migração mecânica: 'a..f(x)' → 'a.f(x)'.
+ *
+ * 11. WILDCARD TEM FORMA ÚNICA: [*]
+ *     O acesso '.*' (childWildcardAccess) foi removido; 'x[*]' é a única grafia.
+ *     Uma forma, um nó no AST.
  *
  * PRECEDÊNCIA (da menor para a maior):
  *    ??  <  or  <  and  <  comparação/in/between/regex  <  nand/nor/xor/xnor
@@ -70,6 +94,12 @@
  *    barateando a predição. Sem colisão com o ':' de slices: por maximal munch,
  *    ':=' só vence quando um '=' segue o ':'.
  *  - Comparações não são encadeáveis (a < b < c é erro), como na original.
+ *  - Com a remoção do token DOUBLE_PERIOD, um '..' residual no fonte lexa como
+ *    dois PERIODs e produz erro de sintaxe imediato — bom para flagrar código
+ *    não migrado (item 10).
+ *  - '->' (ARROW) não é operador de expressão; aparece apenas na alternativa
+ *    lambdaArgument. '@' sozinho como argumento cai em expressionArgument sem
+ *    ambiguidade.
  */
 
 grammar ExpressionEvaluator;
@@ -132,7 +162,6 @@ LBRACKET      : '[' ;
 RBRACKET      : ']' ;
 COMMA         : ',' ;
 SEMI          : ';' ;
-DOUBLE_PERIOD : '..' ;   // '..' vence '.' '.' por maximal munch; a ordem aqui é apenas organizacional
 PERIOD        : '.' ;
 NULLCOALESCE  : '??' ;   // '??' e '?.' vencem '?' por maximal munch
 SAFE_NAV      : '?.' ;
@@ -179,12 +208,13 @@ start
     ;
 
 assignmentExpression
-    : IDENTIFIER ASSIGN expression SEMI                                 # assignmentOperation
-    | vectorOfVariables ASSIGN expression SEMI                          # destructuringAssignmentOperation
+    : IDENTIFIER ASSIGN expression SEMI                                  # assignmentOperation
+    | destructuringPattern ASSIGN expression SEMI                        # destructuringAssignmentOperation
     ;
 
-vectorOfVariables
-    : LBRACKET IDENTIFIER (COMMA IDENTIFIER)* RBRACKET                   # vectorOfVariablesOperation
+// Padrão de atribuição, não um valor: [a, b] := minhaColecao;
+destructuringPattern
+    : LBRACKET IDENTIFIER (COMMA IDENTIFIER)* RBRACKET                   # destructuringPatternOperation
     ;
 
 // ---------------------------------------------------------------------------
@@ -263,7 +293,7 @@ postfixExpression
 primaryExpression
     : LPAREN expression RPAREN                                           # parenthesisOperation
     | ifExpression                                                       # decisionOperation
-    | vectorLiteral                                                      # vectorLiteralOperation
+    | collectionLiteral                                                  # collectionLiteralOperation
     | referenceTarget                                                    # referenceTargetOperation
     | literal                                                            # literalOperation
     ;
@@ -290,8 +320,8 @@ literal
     | NOW_DATETIME                                                       # dateTimeCurrentValueOperation
     ;
 
-vectorLiteral
-    : LBRACKET (expression (COMMA expression)*)? RBRACKET                # vectorOfEntitiesOperation
+collectionLiteral
+    : LBRACKET (expression (COMMA expression)*)? RBRACKET                # collectionOfEntitiesOperation
     ;
 
 // ---------------------------------------------------------------------------
@@ -333,29 +363,38 @@ referenceTarget
     ;
 
 function
-    : IDENTIFIER LPAREN (expression (COMMA expression)*)? RPAREN # functionCallOperation
+    : IDENTIFIER LPAREN argumentList? RPAREN                             # functionCallOperation
     ;
 
+// Lista de argumentos única para funções de topo e métodos.
+// Lambdas ('@ -> expr') podem ser misturados a argumentos posicionais em
+// qualquer posição: reduce(0, @ -> ...), sortBy(@ -> @.nome, "desc").
+argumentList
+    : argument (COMMA argument)*                                         # argumentListOperation
+    ;
+
+argument
+    : AT ARROW expression                                                # lambdaArgument
+    | expression                                                         # expressionArgument
+    ;
+
+// Uma única sintaxe de chamada '.nome(...)' cobre métodos de objetos e funções
+// de coleção (sum, avg, count, map, sortBy, reduce...) — o despacho é feito
+// pelo visitor via registro de nomes.
 memberChain
-    : DOUBLE_PERIOD memberName LPAREN collectionFunctionArguments? RPAREN # collectionFunctionAccess
-    | PERIOD MULT                                                        # childWildcardAccess
     // methodCallAccess antes de propertyAccess: 'ident(' não deve virar propriedade + '(' extra
-    | PERIOD memberName LPAREN (expression (COMMA expression)*)? RPAREN  # methodCallAccess
-    | SAFE_NAV memberName LPAREN (expression (COMMA expression)*)? RPAREN # safeMethodCallAccess
+    : PERIOD memberName LPAREN argumentList? RPAREN                      # methodCallAccess
+    | SAFE_NAV memberName LPAREN argumentList? RPAREN                    # safeMethodCallAccess
     | PERIOD memberName                                                  # propertyAccess
     | SAFE_NAV memberName                                                # safePropertyAccess
     | SAFE_NAV subscript                                                 # safeSubscriptAccess
     | subscript                                                          # subscriptAccess
     ;
 
-collectionFunctionArguments
-    : AT ARROW expression                                                # lambdaCollectionFunctionArguments
-    | expression (COMMA expression)*                                     # positionalCollectionFunctionArguments
-    ;
-
 // Com literais de hora prefixados (t"10:20"), [10:20] é sempre um slice comum:
 // não há mais colisão léxica, e [-10:20], [10:20:30]... simplesmente não existem
 // como tokens — slices negativos ([-10:20]) agora funcionam naturalmente.
+// [*] é a ÚNICA grafia de wildcard (item 11).
 subscript
     : LBRACKET MULT RBRACKET                                             # wildcardSubscript
     | LBRACKET STRING RBRACKET                                           # stringKeySubscript

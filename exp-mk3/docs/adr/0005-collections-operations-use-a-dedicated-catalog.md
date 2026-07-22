@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; environment-identity clauses amended by ADR 0014
+Accepted; environment-identity clauses amended by ADR 0014; syntax, source-AST classification, and public extension scope partially superseded by ADR 0016
 
 ## Context
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted; vector/collection mapping clauses partially superseded by ADR 0016
 
 ## Context
 
