@@ -41,6 +41,103 @@ class JavaTypeCatalogTest {
     }
 
     @Test
+    @DisplayName("wildcard children are explicit and independent from navigable members")
+    void wildcardChildrenAreExplicitAndIndependentFromNavigableMembers() throws Throwable {
+        JavaTypeCatalog catalog = JavaTypeCatalog.builder()
+                .registerJavaTypeWildcardChildren(WildcardChildProvider.class, "second", "first")
+                .build();
+
+        JavaTypeDescriptor descriptor = catalog.find(WildcardChildProvider.class).orElseThrow();
+
+        assertThat(descriptor.properties()).containsOnlyKeys("first", "navigableOnly");
+        assertThat(descriptor.methods()).isEmpty();
+        assertThat(descriptor.wildcardChildren())
+                .extracting(JavaWildcardChildDescriptor::name)
+                .containsExactly("second", "first");
+        assertThat(descriptor.wildcardChildType()).contains(ScalarType.STRING);
+        assertThat(descriptor.wildcardChildren().getFirst().accessorHandle()
+                .invoke(new WildcardChildProvider()))
+                .isEqualTo("second");
+
+        JavaTypeDescriptor withoutDeclaration = JavaTypeCatalog.builder()
+                .registerJavaType(WildcardChildProvider.class)
+                .build()
+                .find(WildcardChildProvider.class)
+                .orElseThrow();
+        assertThat(withoutDeclaration.wildcardChildren()).isEmpty();
+        assertThat(withoutDeclaration.wildcardChildType()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("unordered reflected wildcard child selections use binary name order")
+    void unorderedReflectedWildcardChildSelectionsUseBinaryNameOrder() {
+        JavaTypeDescriptor descriptor = JavaTypeCatalog.builder()
+                .registerJavaTypeWildcardChildren(
+                        WildcardChildProvider.class,
+                        Set.of("second", "first"))
+                .build()
+                .find(WildcardChildProvider.class)
+                .orElseThrow();
+
+        assertThat(descriptor.wildcardChildren())
+                .extracting(JavaWildcardChildDescriptor::name)
+                .containsExactly("first", "second");
+    }
+
+    @Test
+    @DisplayName("invalid wildcard child declarations fail catalog construction atomically")
+    void invalidWildcardChildDeclarationsFailCatalogConstructionAtomically() {
+        assertThatThrownBy(() -> JavaTypeCatalog.builder()
+                .registerJavaTypeWildcardChildren(WildcardChildProvider.class)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("wildcard child declaration must select at least one member");
+        assertThatThrownBy(() -> JavaTypeCatalog.builder()
+                .registerJavaTypeWildcardChildren(WildcardChildProvider.class, Set.of())
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("wildcard child declaration must select at least one member");
+        assertThatThrownBy(() -> JavaTypeCatalog.builder()
+                .registerJavaTypeWildcardChildren(WildcardChildProvider.class, "missing")
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("selected wildcard child member has no target: missing");
+        assertThatThrownBy(() -> JavaTypeCatalog.builder()
+                .registerJavaTypeWildcardChildren(WildcardChildProvider.class, "first", "first")
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("duplicate wildcard child member: first");
+        assertThatThrownBy(() -> JavaTypeCatalog.builder()
+                .registerJavaTypeWildcardChildren(InvalidWildcardChildProvider.class, "unsupported")
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("unsupported Java member type: java.util.Optional");
+        assertThatThrownBy(() -> JavaTypeCatalog.builder()
+                .registerJavaTypeWildcardChildren(InvalidWildcardChildProvider.class, "text", "number")
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("wildcard child members must have one expression type")
+                .hasMessageContaining("STRING")
+                .hasMessageContaining("NUMBER");
+    }
+
+    @Test
+    @DisplayName("wildcard child accessors reject null Java results")
+    void wildcardChildAccessorsRejectNullJavaResults() {
+        JavaWildcardChildDescriptor child = JavaTypeCatalog.builder()
+                .registerJavaTypeWildcardChildren(InvalidWildcardChildProvider.class, "nullable")
+                .build()
+                .find(InvalidWildcardChildProvider.class)
+                .orElseThrow()
+                .wildcardChildren()
+                .getFirst();
+
+        assertThatThrownBy(() -> child.accessorHandle().invoke(new InvalidWildcardChildProvider()))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("function arguments and results must not be null");
+    }
+
+    @Test
     @DisplayName("Java type registration exposes explicit methods and eligible public methods")
     void javaTypeRegistrationExposesExplicitMethodsAndEligiblePublicMethods() throws Throwable {
         JavaTypeCatalog catalog = JavaTypeCatalog.builder()
@@ -423,6 +520,40 @@ class JavaTypeCatalogTest {
 
         public Set<Integer> integerSet(Set<Integer> values) {
             return values;
+        }
+    }
+
+    static final class WildcardChildProvider {
+
+        public String getFirst() {
+            return "first";
+        }
+
+        public String second() {
+            return "second";
+        }
+
+        public String getNavigableOnly() {
+            return "navigable";
+        }
+    }
+
+    static final class InvalidWildcardChildProvider {
+
+        public String text() {
+            return "text";
+        }
+
+        public BigDecimal number() {
+            return BigDecimal.ONE;
+        }
+
+        public Optional<String> unsupported() {
+            return Optional.empty();
+        }
+
+        public String nullable() {
+            return null;
         }
     }
 }

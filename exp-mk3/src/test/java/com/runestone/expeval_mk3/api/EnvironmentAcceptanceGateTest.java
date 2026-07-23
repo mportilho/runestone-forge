@@ -249,6 +249,28 @@ final class EnvironmentAcceptanceGateTest {
     }
 
     @Test
+    @DisplayName("environment construction publishes only valid homogeneous wildcard child metadata")
+    void environmentConstructionPublishesOnlyValidHomogeneousWildcardChildMetadata() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaTypeWildcardChildren(SecondaryProfile.class, "code")
+                .build();
+
+        assertThat(environment.javaTypes().find(SecondaryProfile.class))
+                .get()
+                .satisfies(descriptor -> {
+                    assertThat(descriptor.wildcardChildren())
+                            .extracting(JavaWildcardChildDescriptor::name)
+                            .containsExactly("code");
+                    assertThat(descriptor.wildcardChildType()).contains(ScalarType.STRING);
+                });
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .registerJavaTypeWildcardChildren(HeterogeneousChildren.class, "text", "number")
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("wildcard child members must have one expression type");
+    }
+
+    @Test
     @DisplayName("Etapa 3 representative environment configurations are reusable and buildable")
     void etapa3RepresentativeEnvironmentConfigurationsAreReusableAndBuildable() throws NoSuchMethodException {
         List<RepresentativeEnvironmentConfiguration> configurations = EnvironmentConfigurations.representativeConfigurations();
@@ -436,6 +458,9 @@ final class EnvironmentAcceptanceGateTest {
     }
 
     record SecondaryProfile(String code) {
+    }
+
+    record HeterogeneousChildren(String text, BigDecimal number) {
     }
 
     static final class TestFunctions {

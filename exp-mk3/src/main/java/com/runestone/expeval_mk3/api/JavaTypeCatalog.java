@@ -106,6 +106,16 @@ public final class JavaTypeCatalog {
             return this;
         }
 
+        public Builder registerJavaTypeWildcardChildren(Class<?> javaType, String... memberNames) {
+            registration(javaType).addWildcardChildren(memberNames);
+            return this;
+        }
+
+        public Builder registerJavaTypeWildcardChildren(Class<?> javaType, Set<String> memberNames) {
+            registration(javaType).addUnorderedWildcardChildren(memberNames);
+            return this;
+        }
+
         public JavaTypeCatalog build() {
             if (registrations.isEmpty()) {
                 return EMPTY;
@@ -131,7 +141,9 @@ public final class JavaTypeCatalog {
 
         private final Class<?> javaType;
         private final List<MethodKey> explicitMethods = new ArrayList<>();
+        private final List<String> wildcardChildren = new ArrayList<>();
         private boolean includePublicMethods;
+        private boolean wildcardChildrenDeclared;
 
         private JavaTypeRegistration(Class<?> javaType) {
             this.javaType = Objects.requireNonNull(javaType, "javaType");
@@ -145,12 +157,60 @@ public final class JavaTypeCatalog {
             explicitMethods.add(new MethodKey(methodName, javaParameterTypes));
         }
 
+        private void addWildcardChildren(String... memberNames) {
+            Objects.requireNonNull(memberNames, "memberNames");
+            wildcardChildrenDeclared = true;
+            for (String memberName : memberNames) {
+                addWildcardChild(memberName);
+            }
+        }
+
+        private void addUnorderedWildcardChildren(Set<String> memberNames) {
+            Objects.requireNonNull(memberNames, "memberNames");
+            wildcardChildrenDeclared = true;
+            memberNames.stream()
+                    .map(FunctionSignature::validateLanguageName)
+                    .sorted()
+                    .forEach(wildcardChildren::add);
+        }
+
+        private void addWildcardChild(String memberName) {
+            wildcardChildren.add(FunctionSignature.validateLanguageName(memberName));
+        }
+
         private JavaTypeDescriptor toDescriptor() {
             return new JavaTypeDescriptor(
                     javaType,
                     new ObjectType(javaType.getName()),
                     discoverProperties(javaType),
-                    discoverMethods());
+                    discoverMethods(),
+                    discoverWildcardChildren());
+        }
+
+        private List<JavaWildcardChildDescriptor> discoverWildcardChildren() {
+            if (wildcardChildrenDeclared && wildcardChildren.isEmpty()) {
+                throw new IllegalArgumentException("wildcard child declaration must select at least one member");
+            }
+            List<JavaWildcardChildDescriptor> descriptors = new ArrayList<>(wildcardChildren.size());
+            Set<String> selectedNames = new LinkedHashSet<>();
+            List<Method> publicMethods = sortedPublicMethods(javaType);
+            for (String memberName : wildcardChildren) {
+                if (!selectedNames.add(memberName)) {
+                    throw new IllegalArgumentException("duplicate wildcard child member: " + memberName);
+                }
+                List<Method> candidates = publicMethods.stream()
+                        .filter(JavaTypeCatalog::isWildcardChildCandidate)
+                        .filter(method -> exposedChildName(method).equals(memberName))
+                        .toList();
+                if (candidates.isEmpty()) {
+                    throw new IllegalArgumentException("selected wildcard child member has no target: " + memberName);
+                }
+                if (candidates.size() > 1) {
+                    throw new IllegalArgumentException("selected wildcard child member is ambiguous: " + memberName);
+                }
+                descriptors.add(createWildcardChildDescriptor(javaType, memberName, candidates.getFirst()));
+            }
+            return List.copyOf(descriptors);
         }
 
         private Map<FunctionSignature, JavaMethodDescriptor> discoverMethods() {
@@ -231,6 +291,25 @@ public final class JavaTypeCatalog {
                     JavaMemberImplementationMetadata.forMethod(kind, method));
         } catch (IllegalAccessException exception) {
             throw new IllegalArgumentException("Java property accessor is not accessible: " + method, exception);
+        }
+    }
+
+    private static JavaWildcardChildDescriptor createWildcardChildDescriptor(
+            Class<?> javaType,
+            String name,
+            Method method) {
+        ExpressionType type = JavaMemberTypes.expressionType(method.getGenericReturnType(), method.getReturnType(), true);
+        try {
+            MethodHandle methodHandle = adaptSequenceReturn(LOOKUP.unreflect(method), type);
+            MethodHandle handle = FunctionHandleAdapters.adaptInstance(methodHandle, javaType, List.of(), type);
+            handle = FunctionHandleAdapters.guardNonNullBoundaries(handle);
+            return new JavaWildcardChildDescriptor(
+                    name,
+                    type,
+                    handle,
+                    JavaMemberImplementationMetadata.forMethod("wildcard-child", method));
+        } catch (IllegalAccessException exception) {
+            throw new IllegalArgumentException("Java wildcard child accessor is not accessible: " + method, exception);
         }
     }
 
@@ -482,6 +561,15 @@ public final class JavaTypeCatalog {
                 && !method.isBridge()
                 && !method.isSynthetic()
                 && !isObjectMethod(method);
+    }
+
+    private static boolean isWildcardChildCandidate(Method method) {
+        return isPropertyAccessorCandidate(method);
+    }
+
+    private static String exposedChildName(Method method) {
+        String propertyName = propertyName(method);
+        return propertyName == null ? method.getName() : propertyName;
     }
 
     private static boolean isObjectMethod(Method method) {

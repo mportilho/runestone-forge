@@ -410,6 +410,16 @@ public final class ExpressionEnvironment {
             return this;
         }
 
+        public Builder registerJavaTypeWildcardChildren(Class<?> javaType, String... memberNames) {
+            javaTypes.registerJavaTypeWildcardChildren(javaType, memberNames);
+            return this;
+        }
+
+        public Builder registerJavaTypeWildcardChildren(Class<?> javaType, Set<String> memberNames) {
+            javaTypes.registerJavaTypeWildcardChildren(javaType, memberNames);
+            return this;
+        }
+
         public ExpressionEnvironment build() {
             return build(CollectionOperationCatalog.standard());
         }

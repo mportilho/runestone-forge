@@ -71,7 +71,7 @@ class ExpressionEnvironmentProviderNominalContractTest {
                 .build();
         ExpressionEnvironment nominalEnvironment = ExpressionEnvironment.builder()
                 .functionsFrom(CollectionClassProvider.class, FunctionPurity.PURE)
-                .registerJavaType(GenericCollection.class)
+                .registerJavaTypeWildcardChildren(GenericCollection.class, "size")
                 .build();
         CollectionType collectionType = new CollectionType(ScalarType.STRING);
         ObjectType nominalType = new ObjectType(GenericCollection.class.getName());
@@ -83,6 +83,15 @@ class ExpressionEnvironmentProviderNominalContractTest {
         assertThat(resolve(nominalEnvironment, "values").returnType()).isEqualTo(nominalType);
         assertThat(resolve(nominalEnvironment, "values").implementationHandle().invoke())
                 .isSameAs(CollectionClassProvider.VALUES);
+        assertThat(nominalEnvironment.javaTypes().find(GenericCollection.class))
+                .get()
+                .satisfies(descriptor -> {
+                    assertThat(descriptor.objectType()).isEqualTo(nominalType);
+                    assertThat(descriptor.wildcardChildType()).contains(ScalarType.NUMBER);
+                    assertThat(descriptor.wildcardChildren())
+                            .extracting(JavaWildcardChildDescriptor::name)
+                            .containsExactly("size");
+                });
     }
 
     @Test
