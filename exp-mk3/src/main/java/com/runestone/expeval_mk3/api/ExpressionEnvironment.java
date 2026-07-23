@@ -22,7 +22,7 @@ public final class ExpressionEnvironment {
     private static final MathContext DEFAULT_MATH_CONTEXT = MathContext.DECIMAL128;
     private static final MathContext DEFAULT_TRANSCENDENTAL_MATH_CONTEXT = MathContext.DECIMAL128;
     private static final int DEFAULT_MAX_CURRENT_ITEM_DEPTH = 32;
-    private static final int DEFAULT_MAX_MATERIALIZED_SIZE = 10_000;
+    private static final int DEFAULT_MAX_MATERIALIZED_SIZE = BoundaryCoercion.DEFAULT_MAX_MATERIALIZED_SIZE;
     private static final int DEFAULT_MAX_FACTORIAL_INPUT = 1_000;
     private static final ExpressionEnvironment STANDARD = builder().build();
 
@@ -51,7 +51,7 @@ public final class ExpressionEnvironment {
         boundaryCoercion = builder.boundaryCoercion;
         conversionProfileIdentity = boundaryCoercion.profileIdentity();
         conversionProfileHash = boundaryCoercion.profileHash();
-        externalSymbols = builder.externalSymbols.build(boundaryCoercion);
+        externalSymbols = builder.externalSymbols.build(boundaryCoercion, maxMaterializedSize);
         javaTypes = builder.javaTypes.build();
         functions = buildFunctions(builder, javaTypes);
         CollectionOperationCatalog.validateOfficial(collectionOperations);

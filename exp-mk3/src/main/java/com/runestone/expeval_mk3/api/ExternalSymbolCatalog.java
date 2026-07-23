@@ -90,11 +90,12 @@ public final class ExternalSymbolCatalog {
                 Object defaultValue,
                 ExternalSymbolOverwritePolicy overwritePolicy) {
             String validatedName = ExternalSymbolNames.validate(name);
-            return addDeclaration(ExternalSymbolDeclaration.withDefault(
-                    validatedName,
-                    ExternalSymbolDefaults.inferType(validatedName, defaultValue),
-                    defaultValue,
-                    overwritePolicy));
+            if (defaultValue == null) {
+                throw new IllegalArgumentException(
+                        "external symbol '" + validatedName + "' default must not be null");
+            }
+            return addDeclaration(ExternalSymbolDeclaration.withInferredDefault(
+                    validatedName, defaultValue, overwritePolicy));
         }
 
         public Builder externalSymbol(
@@ -107,13 +108,13 @@ public final class ExternalSymbolCatalog {
         }
 
         public ExternalSymbolCatalog build() {
-            return build(BoundaryCoercion.standard());
+            return build(BoundaryCoercion.standard(), BoundaryCoercion.DEFAULT_MAX_MATERIALIZED_SIZE);
         }
 
-        ExternalSymbolCatalog build(BoundaryCoercion boundaryCoercion) {
+        ExternalSymbolCatalog build(BoundaryCoercion boundaryCoercion, int maxMaterializedSize) {
             Map<String, ExternalSymbol> builtSymbols = new LinkedHashMap<>();
             for (ExternalSymbolDeclaration declaration : symbols.values()) {
-                ExternalSymbol externalSymbol = declaration.toExternalSymbol(boundaryCoercion);
+                ExternalSymbol externalSymbol = declaration.toExternalSymbol(boundaryCoercion, maxMaterializedSize);
                 builtSymbols.put(externalSymbol.name(), externalSymbol);
             }
             return ExternalSymbolCatalog.from(builtSymbols);
@@ -131,11 +132,14 @@ public final class ExternalSymbolCatalog {
                 String name,
                 ExpressionType type,
                 Object defaultValue,
-                ExternalSymbolOverwritePolicy overwritePolicy) {
+                ExternalSymbolOverwritePolicy overwritePolicy,
+                boolean inferred) {
 
             private ExternalSymbolDeclaration {
                 name = ExternalSymbolNames.validate(name);
-                type = Objects.requireNonNull(type, "type");
+                if (!inferred) {
+                    type = Objects.requireNonNull(type, "type");
+                }
                 Objects.requireNonNull(defaultValue, "defaultValue");
                 Objects.requireNonNull(overwritePolicy, "overwritePolicy");
             }
@@ -145,11 +149,23 @@ public final class ExternalSymbolCatalog {
                     ExpressionType type,
                     Object defaultValue,
                     ExternalSymbolOverwritePolicy overwritePolicy) {
-                return new ExternalSymbolDeclaration(name, type, defaultValue, overwritePolicy);
+                return new ExternalSymbolDeclaration(name, type, defaultValue, overwritePolicy, false);
             }
 
-            private ExternalSymbol toExternalSymbol(BoundaryCoercion boundaryCoercion) {
-                return ExternalSymbol.withDefault(name, type, defaultValue, overwritePolicy, boundaryCoercion);
+            private static ExternalSymbolDeclaration withInferredDefault(
+                    String name,
+                    Object defaultValue,
+                    ExternalSymbolOverwritePolicy overwritePolicy) {
+                return new ExternalSymbolDeclaration(name, null, defaultValue, overwritePolicy, true);
+            }
+
+            private ExternalSymbol toExternalSymbol(BoundaryCoercion boundaryCoercion, int maxMaterializedSize) {
+                if (inferred) {
+                    return ExternalSymbol.withInferredDefault(
+                            name, defaultValue, overwritePolicy, boundaryCoercion, maxMaterializedSize);
+                }
+                return ExternalSymbol.withDefault(
+                        name, type, defaultValue, overwritePolicy, boundaryCoercion, maxMaterializedSize);
             }
         }
     }
