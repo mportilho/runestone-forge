@@ -111,12 +111,17 @@ final class ProviderMethodAdapter {
                     + rawType.getName());
         }
 
+        JavaTypeDescriptor registeredType = javaTypes.find(rawType).orElse(null);
+        if (registeredType != null) {
+            if (rawType.isInterface() || Modifier.isAbstract(rawType.getModifiers())) {
+                throw new IllegalArgumentException("registered nominal provider method types must be concrete: "
+                        + rawType.getName());
+            }
+            return nominal(rawType, registeredType.objectType());
+        }
+
         ContainerKind containerKind = ContainerKind.of(rawType);
         if (containerKind != null) {
-            if (javaTypes.find(rawType).isPresent()) {
-                throw new IllegalArgumentException("provider method type is ambiguous between registered Java type and "
-                        + "container semantics: " + rawType.getName());
-            }
             return prepareContainer(
                     genericType,
                     rawType,
@@ -129,14 +134,8 @@ final class ProviderMethodAdapter {
         if (rawType == Object.class) {
             throw new IllegalArgumentException("Object provider method types are not supported");
         }
-        JavaTypeDescriptor descriptor = javaTypes.find(rawType)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "unsupported provider method type; not a registered Java type: " + rawType.getName()));
-        if (rawType.isInterface() || Modifier.isAbstract(rawType.getModifiers())) {
-            throw new IllegalArgumentException("registered nominal provider method types must be concrete: "
-                    + rawType.getName());
-        }
-        return nominal(rawType, descriptor.objectType());
+        throw new IllegalArgumentException(
+                "unsupported provider method type; not a registered Java type: " + rawType.getName());
     }
 
     private static PreparedValue prepareArray(

@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -59,6 +60,9 @@ class ExpressionEnvironmentProviderContainerContractTest {
         assertThat(resolve(environment, "collection", textCollection).implementationHandle()
                 .invoke(List.of("stone")))
                 .isEqualTo(List.of("stone", "collection"));
+        assertThat(resolve(environment, "set", textCollection).implementationHandle()
+                .invoke(List.of("second", "first", "second")))
+                .isEqualTo(List.of("second", "first"));
         assertThat(resolve(environment, "iterable", textCollection).implementationHandle()
                 .invoke(List.of("stone")))
                 .isEqualTo(List.of("stone", "iterable"));
@@ -68,6 +72,22 @@ class ExpressionEnvironmentProviderContainerContractTest {
         assertThat(resolve(environment, "concrete", numberCollection).implementationHandle()
                 .invoke(List.of(new BigDecimal("7"))))
                 .isEqualTo(List.of(new BigDecimal("8")));
+    }
+
+    @Test
+    @DisplayName("Set parameters are immutable and preserve first occurrence order while removing duplicates")
+    void setParametersUseStableImmutableBoundaryCoercion() throws Throwable {
+        SetArgumentProvider.reset();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(SetArgumentProvider.class, FunctionPurity.IMPURE)
+                .build();
+        CollectionType textCollection = new CollectionType(ScalarType.STRING);
+
+        Object result = resolve(environment, "inspect", textCollection).implementationHandle()
+                .invoke(List.of("second", "first", "second"));
+
+        assertThat(result).isEqualTo(List.of("second", "first"));
+        assertThat(SetArgumentProvider.mutationRejected()).isTrue();
     }
 
     @Test
@@ -141,6 +161,7 @@ class ExpressionEnvironmentProviderContainerContractTest {
         assertBuildFailure(NonTextMapProvider.class, "String keys");
         assertBuildFailure(MultidimensionalArrayProvider.class, "multidimensional");
         assertBuildFailure(VarargsProvider.class, "varargs");
+        assertBuildFailure(LambdaProvider.class, "registered Java type");
     }
 
     @Test
@@ -238,6 +259,27 @@ class ExpressionEnvironmentProviderContainerContractTest {
         }
     }
 
+    public static final class SetArgumentProvider {
+        private static boolean mutationRejected;
+
+        static void reset() {
+            mutationRejected = false;
+        }
+
+        static boolean mutationRejected() {
+            return mutationRejected;
+        }
+
+        public static List<String> inspect(Set<String> values) {
+            try {
+                values.add("later");
+            } catch (UnsupportedOperationException exception) {
+                mutationRejected = true;
+            }
+            return new ArrayList<>(values);
+        }
+    }
+
     public static final class InvalidResultProvider {
         public static List<String> nullElement() {
             return Arrays.asList("stone", null);
@@ -320,6 +362,12 @@ class ExpressionEnvironmentProviderContainerContractTest {
     public static final class VarargsProvider {
         public static String values(String... values) {
             return String.join(",", values);
+        }
+    }
+
+    public static final class LambdaProvider {
+        public static String apply(Function<String, String> function, String value) {
+            return function.apply(value);
         }
     }
 

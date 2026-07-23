@@ -383,6 +383,10 @@ public final class JavaTypeCatalog {
         Class<?>[] rawParameterTypes = method.getParameterTypes();
         java.lang.reflect.Type[] genericParameterTypes = method.getGenericParameterTypes();
         for (int index = 0; index < rawParameterTypes.length; index++) {
+            if (isFunctionalInterface(rawParameterTypes[index])) {
+                throw new IllegalArgumentException("Java member lambda parameters are not supported: "
+                        + rawParameterTypes[index].getName());
+            }
             parameterTypes.add(JavaMemberTypes.expressionType(
                     genericParameterTypes[index],
                     rawParameterTypes[index],
@@ -409,11 +413,27 @@ public final class JavaTypeCatalog {
         Class<?>[] rawParameterTypes = method.getParameterTypes();
         java.lang.reflect.Type[] genericParameterTypes = method.getGenericParameterTypes();
         for (int index = 0; index < rawParameterTypes.length; index++) {
-            if (JavaMemberTypes.tryExpressionType(genericParameterTypes[index], rawParameterTypes[index], true).isEmpty()) {
+            if (isFunctionalInterface(rawParameterTypes[index])
+                    || JavaMemberTypes.tryExpressionType(
+                    genericParameterTypes[index], rawParameterTypes[index], true).isEmpty()) {
                 return false;
             }
         }
         return true;
+    }
+
+    private static boolean isFunctionalInterface(Class<?> type) {
+        if (!type.isInterface() || type.isAnnotation() || type.isSealed()) {
+            return false;
+        }
+        return java.util.Arrays.stream(type.getMethods())
+                .filter(method -> Modifier.isAbstract(method.getModifiers()))
+                .filter(method -> !isObjectMethod(method))
+                .map(method -> method.getName()
+                        + MethodType.methodType(void.class, method.getParameterTypes()).descriptorString())
+                .distinct()
+                .limit(2)
+                .count() == 1;
     }
 
     private static List<Method> sortedPublicMethods(Class<?> javaType) {

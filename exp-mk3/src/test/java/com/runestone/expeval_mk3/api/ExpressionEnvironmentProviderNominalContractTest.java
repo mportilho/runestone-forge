@@ -3,6 +3,7 @@ package com.runestone.expeval_mk3.api;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.AbstractCollection;
 import java.util.Iterator;
 import java.util.List;
 
@@ -63,16 +64,25 @@ class ExpressionEnvironmentProviderNominalContractTest {
     }
 
     @Test
-    @DisplayName("registered container classes are rejected as ambiguous contracts")
-    void registeredContainerClassesAreRejectedAsAmbiguousContracts() {
-        ExpressionEnvironment.Builder builder = ExpressionEnvironment.builder()
-                .functionsFrom(AmbiguousProvider.class, FunctionPurity.PURE)
-                .registerJavaType(RegisteredStringIterable.class);
+    @DisplayName("concrete collection classes use collection semantics unless registered as nominal objects")
+    void collectionClassesChooseExactlyOneDeclaredSemantics() throws Throwable {
+        ExpressionEnvironment collectionEnvironment = ExpressionEnvironment.builder()
+                .functionsFrom(CollectionClassProvider.class, FunctionPurity.PURE)
+                .build();
+        ExpressionEnvironment nominalEnvironment = ExpressionEnvironment.builder()
+                .functionsFrom(CollectionClassProvider.class, FunctionPurity.PURE)
+                .registerJavaType(GenericCollection.class)
+                .build();
+        CollectionType collectionType = new CollectionType(ScalarType.STRING);
+        ObjectType nominalType = new ObjectType(GenericCollection.class.getName());
 
-        assertThatThrownBy(builder::build)
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("ambiguous")
-                .hasMessageContaining(RegisteredStringIterable.class.getName());
+        assertThat(resolve(collectionEnvironment, "values").returnType())
+                .isEqualTo(collectionType);
+        assertThat(resolve(collectionEnvironment, "values").implementationHandle().invoke())
+                .isEqualTo(List.of("stone"));
+        assertThat(resolve(nominalEnvironment, "values").returnType()).isEqualTo(nominalType);
+        assertThat(resolve(nominalEnvironment, "values").implementationHandle().invoke())
+                .isSameAs(CollectionClassProvider.VALUES);
     }
 
     @Test
@@ -160,16 +170,29 @@ class ExpressionEnvironmentProviderNominalContractTest {
         }
     }
 
-    public static final class RegisteredStringIterable implements Iterable<String> {
-        @Override
-        public Iterator<String> iterator() {
-            return List.<String>of().iterator();
+    public static final class CollectionClassProvider {
+        private static final GenericCollection<String> VALUES = new GenericCollection<>(List.of("stone"));
+
+        public static GenericCollection<String> values() {
+            return VALUES;
         }
     }
 
-    public static final class AmbiguousProvider {
-        public static RegisteredStringIterable same(RegisteredStringIterable value) {
-            return value;
+    public static final class GenericCollection<T> extends AbstractCollection<T> {
+        private final List<T> values;
+
+        private GenericCollection(List<T> values) {
+            this.values = List.copyOf(values);
+        }
+
+        @Override
+        public Iterator<T> iterator() {
+            return values.iterator();
+        }
+
+        @Override
+        public int size() {
+            return values.size();
         }
     }
 

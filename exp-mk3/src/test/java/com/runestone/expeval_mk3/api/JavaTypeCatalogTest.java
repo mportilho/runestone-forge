@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -170,6 +171,28 @@ class JavaTypeCatalogTest {
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("unsupported Java member type: java.util.Optional");
+    }
+
+    @Test
+    @DisplayName("lambda parameters are excluded from public methods and rejected when explicitly registered")
+    void registeredJavaMethodsDoNotExposeLambdaParameters() {
+        JavaTypeDescriptor publicMethods = JavaTypeCatalog.builder()
+                .registerJavaTypeWithPublicMethods(LambdaMethodProvider.class)
+                .build()
+                .find(LambdaMethodProvider.class)
+                .orElseThrow();
+
+        assertThat(publicMethods.methods())
+                .extracting(JavaMethodDescriptor::signature)
+                .containsExactly(
+                        signature("annotation", new ObjectType(SingleMemberAnnotation.class.getName())),
+                        signature("sealed", new ObjectType(SealedContract.class.getName())));
+        assertThatThrownBy(() -> JavaTypeCatalog.builder()
+                .registerJavaTypeMethod(LambdaMethodProvider.class, "apply", Function.class, String.class)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("lambda parameters are not supported")
+                .hasMessageContaining(Function.class.getName());
     }
 
     @Test
@@ -341,6 +364,36 @@ class JavaTypeCatalogTest {
     }
 
     static final class UnregisteredChild {
+    }
+
+    static final class LambdaMethodProvider {
+
+        public String apply(Function<String, String> function, String value) {
+            return function.apply(value);
+        }
+
+        public String annotation(SingleMemberAnnotation annotation) {
+            return annotation.value();
+        }
+
+        public String sealed(SealedContract contract) {
+            return contract.value();
+        }
+    }
+
+    @interface SingleMemberAnnotation {
+        String value();
+    }
+
+    sealed interface SealedContract permits SealedContractImpl {
+        String value();
+    }
+
+    static final class SealedContractImpl implements SealedContract {
+        @Override
+        public String value() {
+            return "value";
+        }
     }
 
     static final class DuplicateMethodProvider {
