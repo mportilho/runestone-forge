@@ -184,7 +184,9 @@ final class EnvironmentAcceptanceGateTest {
                         "asDateTime");
         StandardBuiltInFunctions.validate(functions);
         assertThat(environment.collectionOperations().operationNames())
-                .containsExactly("all", "any", "count", "keys", "map", "sum", "values");
+                .containsExactly("all", "any", "avg", "count", "keys", "map", "reduce", "sortBy", "sum", "values");
+        assertThat(standardFunctionNames)
+                .doesNotContain("all", "any", "avg", "count", "keys", "map", "reduce", "sortBy", "sum", "values");
     }
 
     @Test
