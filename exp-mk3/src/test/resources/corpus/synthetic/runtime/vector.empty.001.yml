@@ -1,8 +1,0 @@
-id: runtime.vector.empty.001
-phase: runtime
-kind: valid
-source: '[]'
-coverage: [empty-vector, vector-literal]
-expected:
-  type: VECTOR
-  result: []

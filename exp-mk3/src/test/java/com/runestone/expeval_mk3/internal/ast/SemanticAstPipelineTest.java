@@ -214,8 +214,8 @@ class SemanticAstPipelineTest {
         assertThat(excluded.negated()).isTrue();
         assertThat(alsoExcluded.negated()).isTrue();
         assertThat(included.negated()).isFalse();
-        assertThat(excluded.collection()).isInstanceOf(VectorLiteralNode.class);
-        assertThat(((VectorLiteralNode) included.collection()).elements()).isEmpty();
+        assertThat(excluded.collection()).isInstanceOf(CollectionLiteralNode.class);
+        assertThat(((CollectionLiteralNode) included.collection()).elements()).isEmpty();
 
         String printed = AstPrettyPrinter.print(ast);
         assertThat(printed).isEqualTo("range := x not between low and high;\n"
@@ -255,7 +255,7 @@ class SemanticAstPipelineTest {
     @Test
     @DisplayName("navigation from identifiers, calls, and current item builds ordered typed links")
     void navigationFromIdentifiersCallsAndCurrentItemBuildsOrderedTypedLinks() {
-        String source = "identifier := account.name?.if(total, @.value)[\"key\"]?.[2].*; "
+        String source = "identifier := account.name?.if(total, @.value)[\"key\"]?.[2][*]; "
                 + "call := load().items(1, @)?.size; current := @?.name; current";
         ExpressionFileNode ast = build(source);
 
@@ -265,7 +265,7 @@ class SemanticAstPipelineTest {
         assertThat(identifierChain.links()).hasSize(5);
         assertThat(identifierChain.links()).extracting(link -> link.getClass().getSimpleName()).containsExactly(
                 "PropertyNavigationLink",
-                "MethodNavigationLink",
+                "CallNavigationLink",
                 "StringKeySubscriptNavigationLink",
                 "IndexSubscriptNavigationLink",
                 "WildcardNavigationLink");
@@ -276,12 +276,12 @@ class SemanticAstPipelineTest {
         PropertyNavigationLink property = (PropertyNavigationLink) identifierChain.links().getFirst();
         assertThat(property.memberName().value()).isEqualTo("name");
         assertThat(property.safe()).isFalse();
-        MethodNavigationLink method = (MethodNavigationLink) identifierChain.links().get(1);
-        assertThat(method.memberName().value()).isEqualTo("if");
-        assertThat(method.safe()).isTrue();
-        assertThat(method.arguments()).hasSize(2);
-        assertThat(method.arguments().getLast()).isInstanceOf(NavigationChainNode.class);
-        NavigationChainNode currentArgument = (NavigationChainNode) method.arguments().getLast();
+        CallNavigationLink call = (CallNavigationLink) identifierChain.links().get(1);
+        assertThat(call.memberName().value()).isEqualTo("if");
+        assertThat(call.safe()).isTrue();
+        assertThat(call.arguments()).hasSize(2);
+        assertThat(call.arguments().getLast()).isInstanceOf(ExpressionCallArgument.class);
+        NavigationChainNode currentArgument = (NavigationChainNode) ((ExpressionCallArgument) call.arguments().getLast()).expression();
         assertThat(currentArgument.receiver()).isInstanceOf(CurrentItemNode.class);
         assertThat(currentArgument.links()).singleElement().satisfies(link -> {
             assertThat(link).isInstanceOf(PropertyNavigationLink.class);
@@ -295,19 +295,13 @@ class SemanticAstPipelineTest {
         assertThat(index.safe()).isTrue();
         WildcardNavigationLink wildcard = (WildcardNavigationLink) identifierChain.links().getLast();
         assertThat(wildcard.safe()).isFalse();
-        assertThatExceptionOfType(IllegalArgumentException.class)
-                .isThrownBy(() -> new WildcardNavigationLink(
-                        NodeId.UNASSIGNED,
-                        wildcard.sourceSpan(),
-                        WildcardNavigationKind.CHILD,
-                        true));
 
         NavigationChainNode callChain = (NavigationChainNode) ast.assignments().get(1).expression();
         assertThat(callChain.receiver()).isInstanceOf(FunctionCallNode.class);
         FunctionCallNode receiverCall = (FunctionCallNode) callChain.receiver();
         assertThat(receiverCall.name().value()).isEqualTo("load");
         assertThat(callChain.links()).hasSize(2);
-        MethodNavigationLink items = (MethodNavigationLink) callChain.links().getFirst();
+        CallNavigationLink items = (CallNavigationLink) callChain.links().getFirst();
         assertThat(items.memberName().value()).isEqualTo("items");
         assertThat(items.arguments()).hasSize(2);
         assertThat(callChain.links().getLast()).isInstanceOf(PropertyNavigationLink.class);
@@ -321,7 +315,7 @@ class SemanticAstPipelineTest {
         });
 
         String printed = AstPrettyPrinter.print(ast);
-        assertThat(printed).isEqualTo("identifier := account.name?.if(total, @.value)[\"key\"]?.[2].*;\n"
+        assertThat(printed).isEqualTo("identifier := account.name?.if(total, @.value)[\"key\"]?.[2][*];\n"
                 + "call := load().items(1, @)?.size;\n"
                 + "current := @?.name;\n"
                 + "current");
@@ -358,12 +352,13 @@ class SemanticAstPipelineTest {
     }
 
     @Test
-    @DisplayName("filters current item and collection operation arguments build source-faithful AST nodes")
-    void filtersCurrentItemAndCollectionOperationArgumentsBuildSourceFaithfulAstNodes() {
+    @DisplayName("filters, global calls, and navigated calls share source-faithful call arguments")
+    void filtersGlobalCallsAndNavigatedCallsShareSourceFaithfulCallArguments() {
         String source = "filtered := items[?(@.active and @.score > 10)]; "
-                + "mapped := filtered..map(@ -> @.score + bonus)..sum(); "
-                + "nested := groups..map(@ -> @.items[?(@.active)]); "
-                + "paged := mapped..window(0, 10); standalone := @; paged";
+                + "mapped := filtered.map(@ -> @.score + bonus).sum(); "
+                + "nested := groups?.map(@ -> @.items[?(@.active)]); "
+                + "paged := mapped.window(0, @ -> @.score, 10); "
+                + "global := transform(items, @ -> @.value); standalone := @; paged";
         ExpressionFileNode ast = build(source);
 
         NavigationChainNode filtered = (NavigationChainNode) ast.assignments().getFirst().expression();
@@ -378,23 +373,24 @@ class SemanticAstPipelineTest {
 
         NavigationChainNode mapped = (NavigationChainNode) ast.assignments().get(1).expression();
         assertThat(mapped.links()).hasSize(2);
-        CollectionOperationNavigationLink map = (CollectionOperationNavigationLink) mapped.links().getFirst();
+        CallNavigationLink map = (CallNavigationLink) mapped.links().getFirst();
         assertThat(map.memberName().value()).isEqualTo("map");
         assertThat(map.arguments()).singleElement().satisfies(argument -> {
-            assertThat(argument).isInstanceOf(LambdaCollectionOperationArgument.class);
-            LambdaNode lambda = ((LambdaCollectionOperationArgument) argument).lambda();
+            assertThat(argument).isInstanceOf(LambdaCallArgument.class);
+            LambdaNode lambda = ((LambdaCallArgument) argument).lambda();
             assertThat(lambda.currentItem()).isInstanceOf(CurrentItemNode.class);
             assertThat(source.substring(lambda.sourceSpan().offset(), lambda.sourceSpan().endOffset()))
                     .isEqualTo("@ -> @.score + bonus");
             assertThat(lambda.body()).isInstanceOf(BinaryOperationNode.class);
         });
-        CollectionOperationNavigationLink sum = (CollectionOperationNavigationLink) mapped.links().getLast();
+        CallNavigationLink sum = (CallNavigationLink) mapped.links().getLast();
         assertThat(sum.memberName().value()).isEqualTo("sum");
         assertThat(sum.arguments()).isEmpty();
 
         NavigationChainNode nested = (NavigationChainNode) ast.assignments().get(2).expression();
-        CollectionOperationNavigationLink nestedMap = (CollectionOperationNavigationLink) nested.links().getFirst();
-        LambdaNode nestedLambda = ((LambdaCollectionOperationArgument) nestedMap.arguments().getFirst()).lambda();
+        CallNavigationLink nestedMap = (CallNavigationLink) nested.links().getFirst();
+        assertThat(nestedMap.safe()).isTrue();
+        LambdaNode nestedLambda = ((LambdaCallArgument) nestedMap.arguments().getFirst()).lambda();
         assertThat(nestedLambda.body()).isInstanceOf(NavigationChainNode.class);
         NavigationChainNode nestedLambdaBody = (NavigationChainNode) nestedLambda.body();
         assertThat(nestedLambdaBody.receiver()).isInstanceOf(CurrentItemNode.class);
@@ -402,20 +398,25 @@ class SemanticAstPipelineTest {
         assertThat(nestedLambdaBody.links().getLast()).isInstanceOf(FilterNavigationLink.class);
 
         NavigationChainNode paged = (NavigationChainNode) ast.assignments().get(3).expression();
-        CollectionOperationNavigationLink window = (CollectionOperationNavigationLink) paged.links().getFirst();
-        assertThat(window.arguments()).hasSize(2);
-        assertThat(window.arguments()).allSatisfy(argument ->
-                assertThat(argument).isInstanceOf(PositionalCollectionOperationArgument.class));
-        PositionalCollectionOperationArgument firstArgument = (PositionalCollectionOperationArgument) window.arguments().getFirst();
+        CallNavigationLink window = (CallNavigationLink) paged.links().getFirst();
+        assertThat(window.arguments()).hasSize(3);
+        assertThat(window.arguments().get(0)).isInstanceOf(ExpressionCallArgument.class);
+        assertThat(window.arguments().get(1)).isInstanceOf(LambdaCallArgument.class);
+        assertThat(window.arguments().get(2)).isInstanceOf(ExpressionCallArgument.class);
+        ExpressionCallArgument firstArgument = (ExpressionCallArgument) window.arguments().getFirst();
         assertThat(firstArgument.expression()).isInstanceOf(LiteralNode.class);
 
-        assertThat(ast.assignments().get(4).expression()).isInstanceOf(CurrentItemNode.class);
+        FunctionCallNode global = (FunctionCallNode) ast.assignments().get(4).expression();
+        assertThat(global.arguments().getFirst()).isInstanceOf(ExpressionCallArgument.class);
+        assertThat(global.arguments().getLast()).isInstanceOf(LambdaCallArgument.class);
+        assertThat(ast.assignments().get(5).expression()).isInstanceOf(CurrentItemNode.class);
 
         String printed = AstPrettyPrinter.print(ast);
         assertThat(printed).isEqualTo("filtered := items[?(@.active and @.score > 10)];\n"
-                + "mapped := filtered..map(@ -> @.score + bonus)..sum();\n"
-                + "nested := groups..map(@ -> @.items[?(@.active)]);\n"
-                + "paged := mapped..window(0, 10);\n"
+                + "mapped := filtered.map(@ -> @.score + bonus).sum();\n"
+                + "nested := groups?.map(@ -> @.items[?(@.active)]);\n"
+                + "paged := mapped.window(0, @ -> @.score, 10);\n"
+                + "global := transform(items, @ -> @.value);\n"
                 + "standalone := @;\n"
                 + "paged");
         assertThat(AstStructuralEquality.equals(ast, build(printed))).isTrue();
@@ -443,10 +444,10 @@ class SemanticAstPipelineTest {
         assertThat(identifierName(functional.branches().getFirst().condition())).isEqualTo("flag");
         assertThat(identifierName(classic.branches().getLast().condition())).isEqualTo("fallback");
         assertThat(identifierName(functional.branches().getLast().condition())).isEqualTo("fallback");
-        assertThat(classic.branches().getFirst().consequence()).isInstanceOf(VectorLiteralNode.class);
-        assertThat(functional.branches().getFirst().consequence()).isInstanceOf(VectorLiteralNode.class);
-        assertThat(classic.elseExpression()).isInstanceOf(VectorLiteralNode.class);
-        assertThat(functional.elseExpression()).isInstanceOf(VectorLiteralNode.class);
+        assertThat(classic.branches().getFirst().consequence()).isInstanceOf(CollectionLiteralNode.class);
+        assertThat(functional.branches().getFirst().consequence()).isInstanceOf(CollectionLiteralNode.class);
+        assertThat(classic.elseExpression()).isInstanceOf(CollectionLiteralNode.class);
+        assertThat(functional.elseExpression()).isInstanceOf(CollectionLiteralNode.class);
         assertThat(functional.separators()).extracting(ConditionalSeparatorOccurrence::separator)
                 .containsExactly(
                         ConditionalSeparator.COMMA,
@@ -500,14 +501,14 @@ class SemanticAstPipelineTest {
     }
 
     @Test
-    @DisplayName("vector literals are immutable full-span nodes and empty vectors share the empty element list")
-    void vectorLiteralsAreImmutableFullSpanNodesAndEmptyVectorsShareTheEmptyElementList() {
+    @DisplayName("collection literals are immutable full-span nodes and empty collections share the empty element list")
+    void collectionLiteralsAreImmutableFullSpanNodesAndEmptyCollectionsShareTheEmptyElementList() {
         String source = "first := []; second := []; numbers := [1, 2]; numbers";
         ExpressionFileNode ast = build(source);
 
-        VectorLiteralNode first = (VectorLiteralNode) ast.assignments().getFirst().expression();
-        VectorLiteralNode second = (VectorLiteralNode) ast.assignments().get(1).expression();
-        VectorLiteralNode numbers = (VectorLiteralNode) ast.assignments().get(2).expression();
+        CollectionLiteralNode first = (CollectionLiteralNode) ast.assignments().getFirst().expression();
+        CollectionLiteralNode second = (CollectionLiteralNode) ast.assignments().get(1).expression();
+        CollectionLiteralNode numbers = (CollectionLiteralNode) ast.assignments().get(2).expression();
 
         assertThat(first).isNotSameAs(second);
         assertThat(first.id()).isNotEqualTo(second.id());
@@ -675,7 +676,7 @@ class SemanticAstPipelineTest {
                     shift(functionCall.id(), offset),
                     functionCall.sourceSpan(),
                     functionCall.name(),
-                    functionCall.arguments().stream().map(argument -> shiftNodeIds(argument, offset)).toList());
+                    functionCall.arguments().stream().map(argument -> shiftCallArgument(argument, offset)).toList());
             case ConditionalNode conditional -> new ConditionalNode(
                     shift(conditional.id(), offset),
                     conditional.sourceSpan(),
@@ -736,22 +737,21 @@ class SemanticAstPipelineTest {
                     coalesce.sourceSpan(),
                     coalesce.operands().stream().map(operand -> shiftNodeIds(operand, offset)).toList(),
                     coalesce.operatorSpans());
-            case VectorLiteralNode vector -> new VectorLiteralNode(
-                    shift(vector.id(), offset),
-                    vector.sourceSpan(),
-                    vector.elements().stream().map(operand -> shiftNodeIds(operand, offset)).toList());
+            case CollectionLiteralNode collection -> new CollectionLiteralNode(
+                    shift(collection.id(), offset),
+                    collection.sourceSpan(),
+                    collection.elements().stream().map(operand -> shiftNodeIds(operand, offset)).toList());
         };
     }
 
     private static NavigationLink shiftNodeIds(NavigationLink link, int offset) {
         return switch (link) {
-            case CollectionOperationNavigationLink collectionOperation -> new CollectionOperationNavigationLink(
-                    shift(collectionOperation.id(), offset),
-                    collectionOperation.sourceSpan(),
-                    collectionOperation.memberName(),
-                    collectionOperation.arguments().stream()
-                            .map(argument -> shiftCollectionOperationArgument(argument, offset))
-                            .toList());
+            case CallNavigationLink call -> new CallNavigationLink(
+                    shift(call.id(), offset),
+                    call.sourceSpan(),
+                    call.memberName(),
+                    call.safe(),
+                    call.arguments().stream().map(argument -> shiftCallArgument(argument, offset)).toList());
             case FilterNavigationLink filter -> new FilterNavigationLink(
                     shift(filter.id(), offset),
                     filter.sourceSpan(),
@@ -762,12 +762,6 @@ class SemanticAstPipelineTest {
                     index.sourceSpan(),
                     index.index(),
                     index.safe());
-            case MethodNavigationLink method -> new MethodNavigationLink(
-                    shift(method.id(), offset),
-                    method.sourceSpan(),
-                    method.memberName(),
-                    method.safe(),
-                    method.arguments().stream().map(argument -> shiftNodeIds(argument, offset)).toList());
             case PropertyNavigationLink property -> new PropertyNavigationLink(
                     shift(property.id(), offset),
                     property.sourceSpan(),
@@ -787,19 +781,15 @@ class SemanticAstPipelineTest {
             case WildcardNavigationLink wildcard -> new WildcardNavigationLink(
                     shift(wildcard.id(), offset),
                     wildcard.sourceSpan(),
-                    wildcard.kind(),
                     wildcard.safe());
         };
     }
 
-    private static CollectionOperationArgument shiftCollectionOperationArgument(
-            CollectionOperationArgument argument,
-            int offset) {
+    private static CallArgument shiftCallArgument(CallArgument argument, int offset) {
         return switch (argument) {
-            case LambdaCollectionOperationArgument lambda -> new LambdaCollectionOperationArgument(
-                    shiftNodeIds(lambda.lambda(), offset));
-            case PositionalCollectionOperationArgument positional -> new PositionalCollectionOperationArgument(
-                    shiftNodeIds(positional.expression(), offset));
+            case ExpressionCallArgument expression -> new ExpressionCallArgument(
+                    shiftNodeIds(expression.expression(), offset));
+            case LambdaCallArgument lambda -> new LambdaCallArgument(shiftNodeIds(lambda.lambda(), offset));
         };
     }
 

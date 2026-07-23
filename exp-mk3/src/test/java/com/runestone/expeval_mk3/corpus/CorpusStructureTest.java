@@ -16,7 +16,6 @@ class CorpusStructureTest {
             "numericMode",
             "strict",
             "strictMode",
-            "maxVectorSize",
             "maxFilterDepth");
 
     @Test

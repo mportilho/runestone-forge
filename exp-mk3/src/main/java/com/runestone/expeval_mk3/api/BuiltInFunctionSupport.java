@@ -28,7 +28,7 @@ final class BuiltInFunctionSupport {
     static <T> List<T> cast(List<?> values, Class<T> valueType) {
         Objects.requireNonNull(values, "values");
         if (values.isEmpty()) {
-            throw new IllegalArgumentException("comparable vector must not be empty");
+            throw new IllegalArgumentException("comparable collection must not be empty");
         }
         ArrayList<T> typedValues = new ArrayList<>(values.size());
         for (Object value : values) {

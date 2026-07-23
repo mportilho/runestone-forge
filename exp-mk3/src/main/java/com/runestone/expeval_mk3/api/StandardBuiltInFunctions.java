@@ -15,8 +15,8 @@ import static com.runestone.expeval_mk3.api.ScalarType.TIME;
 
 final class StandardBuiltInFunctions {
 
-    private static final ExpressionType NUMBER_VECTOR = new VectorType(NUMBER);
-    private static final ExpressionType STRING_VECTOR = new VectorType(STRING);
+    private static final ExpressionType NUMBER_COLLECTION = new CollectionType(NUMBER);
+    private static final ExpressionType STRING_COLLECTION = new CollectionType(STRING);
 
     private StandardBuiltInFunctions() {
     }
@@ -86,16 +86,16 @@ final class StandardBuiltInFunctions {
             case MATH -> signatures(
                     signature("abs", NUMBER),
                     signature("sqrt", NUMBER),
-                    signature("mean", NUMBER_VECTOR),
-                    signature("geometricMean", NUMBER_VECTOR),
-                    signature("harmonicMean", NUMBER_VECTOR),
-                    signature("variance", NUMBER_VECTOR, NUMBER),
-                    signature("stdDev", NUMBER_VECTOR, NUMBER),
-                    signature("meanDev", NUMBER_VECTOR),
+                    signature("mean", NUMBER_COLLECTION),
+                    signature("geometricMean", NUMBER_COLLECTION),
+                    signature("harmonicMean", NUMBER_COLLECTION),
+                    signature("variance", NUMBER_COLLECTION, NUMBER),
+                    signature("stdDev", NUMBER_COLLECTION, NUMBER),
+                    signature("meanDev", NUMBER_COLLECTION),
                     signature("rule3d", NUMBER, NUMBER, NUMBER),
                     signature("rule3i", NUMBER, NUMBER, NUMBER),
-                    signature("distribute", NUMBER, NUMBER, NUMBER_VECTOR, NUMBER_VECTOR),
-                    signature("spread", NUMBER, NUMBER, NUMBER_VECTOR));
+                    signature("distribute", NUMBER, NUMBER, NUMBER_COLLECTION, NUMBER_COLLECTION),
+                    signature("spread", NUMBER, NUMBER, NUMBER_COLLECTION));
             case TRANSCENDENTAL -> signatures(
                     signature("sin", NUMBER),
                     signature("cos", NUMBER),
@@ -117,7 +117,7 @@ final class StandardBuiltInFunctions {
                     signature("lbFast", NUMBER),
                     signature("logFast", NUMBER, NUMBER));
             case STRING -> signatures(
-                    signature("concat", STRING_VECTOR),
+                    signature("concat", STRING_COLLECTION),
                     signature("toUpper", STRING),
                     signature("toLower", STRING),
                     signature("trim", STRING),
@@ -146,23 +146,23 @@ final class StandardBuiltInFunctions {
                     signature("isBlank", STRING),
                     signature("length", STRING),
                     signature("split", STRING, STRING),
-                    signature("join", STRING_VECTOR, STRING));
+                    signature("join", STRING_COLLECTION, STRING));
             case DATE_TIME -> dateTimeExpectedSignatures();
             case COMPARABLE -> signatures(
-                    signature("max", new VectorType(NUMBER)),
-                    signature("min", new VectorType(NUMBER)),
-                    signature("max", new VectorType(STRING)),
-                    signature("min", new VectorType(STRING)),
-                    signature("max", new VectorType(DATE)),
-                    signature("min", new VectorType(DATE)),
-                    signature("max", new VectorType(TIME)),
-                    signature("min", new VectorType(TIME)),
-                    signature("max", new VectorType(DATETIME)),
-                    signature("min", new VectorType(DATETIME)));
+                    signature("max", new CollectionType(NUMBER)),
+                    signature("min", new CollectionType(NUMBER)),
+                    signature("max", new CollectionType(STRING)),
+                    signature("min", new CollectionType(STRING)),
+                    signature("max", new CollectionType(DATE)),
+                    signature("min", new CollectionType(DATE)),
+                    signature("max", new CollectionType(TIME)),
+                    signature("min", new CollectionType(TIME)),
+                    signature("max", new CollectionType(DATETIME)),
+                    signature("min", new CollectionType(DATETIME)));
             case FINANCIAL -> signatures(
                     signature("fv", NUMBER, NUMBER, NUMBER, NUMBER, BOOLEAN),
                     signature("pv", NUMBER, NUMBER, NUMBER, NUMBER, BOOLEAN),
-                    signature("npv", NUMBER, NUMBER_VECTOR),
+                    signature("npv", NUMBER, NUMBER_COLLECTION),
                     signature("pmt", NUMBER, NUMBER, NUMBER, NUMBER, BOOLEAN),
                     signature("nper", NUMBER, NUMBER, NUMBER, NUMBER, BOOLEAN),
                     signature("pmt", NUMBER, NUMBER, NUMBER, NUMBER, NUMBER),

@@ -57,7 +57,7 @@ final class AstPrettyPrinter {
             case NullCoalesceNode coalesce -> joinExpressions(coalesce.operands(), " ?? ");
             case PostfixOperationNode postfix -> printPostfix(postfix);
             case UnaryOperationNode unary -> printUnary(unary);
-            case VectorLiteralNode vector -> "[" + joinExpressions(vector.elements(), ", ") + "]";
+            case CollectionLiteralNode collection -> "[" + joinExpressions(collection.elements(), ", ") + "]";
         };
     }
 
@@ -147,7 +147,7 @@ final class AstPrettyPrinter {
     }
 
     private static String printFunctionCall(FunctionCallNode functionCall) {
-        return functionCall.name().value() + "(" + joinExpressions(functionCall.arguments(), ", ") + ")";
+        return functionCall.name().value() + "(" + joinCallArguments(functionCall.arguments()) + ")";
     }
 
     private static String printNavigationChain(NavigationChainNode navigation) {
@@ -160,38 +160,32 @@ final class AstPrettyPrinter {
 
     private static String printNavigationLink(NavigationLink link) {
         return switch (link) {
-            case CollectionOperationNavigationLink collectionOperation -> ".."
-                    + collectionOperation.memberName().value()
-                    + "(" + joinCollectionOperationArguments(collectionOperation.arguments()) + ")";
+            case CallNavigationLink call -> (call.safe() ? "?." : ".")
+                    + call.memberName().value()
+                    + "(" + joinCallArguments(call.arguments()) + ")";
             case FilterNavigationLink filter -> safePrefix(filter.safe()) + "[?(" + printExpression(filter.predicate()) + ")]";
             case IndexSubscriptNavigationLink index -> safePrefix(index.safe())
                     + "[" + printSubscriptInteger(index.index()) + "]";
-            case MethodNavigationLink method -> (method.safe() ? "?." : ".")
-                    + method.memberName().value()
-                    + "(" + joinExpressions(method.arguments(), ", ") + ")";
             case PropertyNavigationLink property -> (property.safe() ? "?." : ".") + property.memberName().value();
             case SliceSubscriptNavigationLink slice -> safePrefix(slice.safe())
                     + "[" + printSliceBound(slice.start()) + ":" + printSliceBound(slice.end()) + "]";
             case StringKeySubscriptNavigationLink stringKey -> safePrefix(stringKey.safe()) + "[" + quote(stringKey.key()) + "]";
-            case WildcardNavigationLink wildcard -> switch (wildcard.kind()) {
-                case CHILD -> ".*";
-                case SUBSCRIPT -> safePrefix(wildcard.safe()) + "[*]";
-            };
+            case WildcardNavigationLink wildcard -> safePrefix(wildcard.safe()) + "[*]";
         };
     }
 
-    private static String joinCollectionOperationArguments(List<CollectionOperationArgument> arguments) {
+    private static String joinCallArguments(List<CallArgument> arguments) {
         List<String> printed = new ArrayList<>(arguments.size());
-        for (CollectionOperationArgument argument : arguments) {
-            printed.add(printCollectionOperationArgument(argument));
+        for (CallArgument argument : arguments) {
+            printed.add(printCallArgument(argument));
         }
         return String.join(", ", printed);
     }
 
-    private static String printCollectionOperationArgument(CollectionOperationArgument argument) {
+    private static String printCallArgument(CallArgument argument) {
         return switch (argument) {
-            case LambdaCollectionOperationArgument lambda -> printLambda(lambda.lambda());
-            case PositionalCollectionOperationArgument positional -> printExpression(positional.expression());
+            case ExpressionCallArgument expression -> printExpression(expression.expression());
+            case LambdaCallArgument lambda -> printLambda(lambda.lambda());
         };
     }
 

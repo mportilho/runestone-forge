@@ -82,19 +82,19 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
             return new AssignmentNode(
                     NodeId.UNASSIGNED,
                     span(assignment),
-                    destructuringTarget(assignment.vectorOfVariables()),
+                    destructuringTarget(assignment.destructuringPattern()),
                     visit(assignment.expression()));
         }
         throw unsupported(context, "assignment");
     }
 
     private DestructuringAssignmentTargetNode destructuringTarget(
-            ExpressionEvaluatorParser.VectorOfVariablesContext context) {
-        if (!(context instanceof ExpressionEvaluatorParser.VectorOfVariablesOperationContext vector)) {
+            ExpressionEvaluatorParser.DestructuringPatternContext context) {
+        if (!(context instanceof ExpressionEvaluatorParser.DestructuringPatternOperationContext pattern)) {
             throw unsupported(context, "destructuring target");
         }
-        List<IdentifierAssignmentTargetNode> elements = new ArrayList<>(vector.IDENTIFIER().size());
-        for (TerminalNode identifier : vector.IDENTIFIER()) {
+        List<IdentifierAssignmentTargetNode> elements = new ArrayList<>(pattern.IDENTIFIER().size());
+        for (TerminalNode identifier : pattern.IDENTIFIER()) {
             elements.add(new IdentifierAssignmentTargetNode(
                     NodeId.UNASSIGNED,
                     span(identifier.getSymbol()),
@@ -359,17 +359,17 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     }
 
     @Override
-    public ExpressionNode visitVectorLiteralOperation(ExpressionEvaluatorParser.VectorLiteralOperationContext context) {
-        return visit(context.vectorLiteral());
+    public ExpressionNode visitCollectionLiteralOperation(ExpressionEvaluatorParser.CollectionLiteralOperationContext context) {
+        return visit(context.collectionLiteral());
     }
 
     @Override
-    public ExpressionNode visitVectorOfEntitiesOperation(ExpressionEvaluatorParser.VectorOfEntitiesOperationContext context) {
+    public ExpressionNode visitCollectionOfEntitiesOperation(ExpressionEvaluatorParser.CollectionOfEntitiesOperationContext context) {
         List<ExpressionNode> elements = new ArrayList<>(context.expression().size());
         for (ExpressionEvaluatorParser.ExpressionContext expression : context.expression()) {
             elements.add(visit(expression));
         }
-        return new VectorLiteralNode(NodeId.UNASSIGNED, span(context), elements);
+        return new CollectionLiteralNode(NodeId.UNASSIGNED, span(context), elements);
     }
 
     @Override
@@ -515,28 +515,23 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
 
     private NavigationLink buildNavigationLink(ExpressionEvaluatorParser.MemberChainContext context) {
         return switch (context) {
-            case ExpressionEvaluatorParser.ChildWildcardAccessContext childWildcard -> new WildcardNavigationLink(
+            case ExpressionEvaluatorParser.NavigatedCallAccessContext call -> new CallNavigationLink(
                     NodeId.UNASSIGNED,
-                    span(childWildcard),
-                    WildcardNavigationKind.CHILD,
-                    false);
-            case ExpressionEvaluatorParser.MethodCallAccessContext method -> new MethodNavigationLink(
-                    NodeId.UNASSIGNED,
-                    span(method),
-                    memberName(method.memberName()),
+                    span(call),
+                    memberName(call.memberName()),
                     false,
-                    visitExpressions(method.expression()));
+                    callArguments(call.argumentList()));
             case ExpressionEvaluatorParser.PropertyAccessContext property -> new PropertyNavigationLink(
                     NodeId.UNASSIGNED,
                     span(property),
                     memberName(property.memberName()),
                     false);
-            case ExpressionEvaluatorParser.SafeMethodCallAccessContext method -> new MethodNavigationLink(
+            case ExpressionEvaluatorParser.SafeNavigatedCallAccessContext call -> new CallNavigationLink(
                     NodeId.UNASSIGNED,
-                    span(method),
-                    memberName(method.memberName()),
+                    span(call),
+                    memberName(call.memberName()),
                     true,
-                    visitExpressions(method.expression()));
+                    callArguments(call.argumentList()));
             case ExpressionEvaluatorParser.SafePropertyAccessContext property -> new PropertyNavigationLink(
                     NodeId.UNASSIGNED,
                     span(property),
@@ -550,36 +545,35 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
                     subscript.subscript(),
                     span(subscript),
                     false);
-            case ExpressionEvaluatorParser.CollectionFunctionAccessContext collectionFunction -> new CollectionOperationNavigationLink(
-                    NodeId.UNASSIGNED,
-                    span(collectionFunction),
-                    memberName(collectionFunction.memberName()),
-                    collectionOperationArguments(collectionFunction.collectionFunctionArguments()));
             default -> throw unsupported(context, "navigation link");
         };
     }
 
-    private List<CollectionOperationArgument> collectionOperationArguments(
-            ExpressionEvaluatorParser.CollectionFunctionArgumentsContext context) {
+    private List<CallArgument> callArguments(ExpressionEvaluatorParser.ArgumentListContext context) {
         if (context == null) {
             return List.of();
         }
+        if (!(context instanceof ExpressionEvaluatorParser.ArgumentListOperationContext argumentList)) {
+            throw unsupported(context, "call arguments");
+        }
+        List<CallArgument> arguments = new ArrayList<>(argumentList.argument().size());
+        for (ExpressionEvaluatorParser.ArgumentContext argument : argumentList.argument()) {
+            arguments.add(callArgument(argument));
+        }
+        return arguments;
+    }
+
+    private CallArgument callArgument(ExpressionEvaluatorParser.ArgumentContext context) {
         return switch (context) {
-            case ExpressionEvaluatorParser.LambdaCollectionFunctionArgumentsContext lambda -> List.of(
-                    new LambdaCollectionOperationArgument(new LambdaNode(
-                            NodeId.UNASSIGNED,
-                            span(lambda),
-                            new CurrentItemNode(NodeId.UNASSIGNED, span(lambda.AT().getSymbol())),
-                            span(lambda.ARROW().getSymbol()),
-                            visit(lambda.expression()))));
-            case ExpressionEvaluatorParser.PositionalCollectionFunctionArgumentsContext positional -> {
-                List<CollectionOperationArgument> arguments = new ArrayList<>(positional.expression().size());
-                for (ExpressionEvaluatorParser.ExpressionContext expression : positional.expression()) {
-                    arguments.add(new PositionalCollectionOperationArgument(visit(expression)));
-                }
-                yield arguments;
-            }
-            default -> throw unsupported(context, "collection operation arguments");
+            case ExpressionEvaluatorParser.ExpressionArgumentContext expression ->
+                    new ExpressionCallArgument(visit(expression.expression()));
+            case ExpressionEvaluatorParser.LambdaArgumentContext lambda -> new LambdaCallArgument(new LambdaNode(
+                    NodeId.UNASSIGNED,
+                    span(lambda),
+                    new CurrentItemNode(NodeId.UNASSIGNED, span(lambda.AT().getSymbol())),
+                    span(lambda.ARROW().getSymbol()),
+                    visit(lambda.expression())));
+            default -> throw unsupported(context, "call argument");
         };
     }
 
@@ -591,7 +585,6 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
             case ExpressionEvaluatorParser.WildcardSubscriptContext ignored -> new WildcardNavigationLink(
                     NodeId.UNASSIGNED,
                     linkSpan,
-                    WildcardNavigationKind.SUBSCRIPT,
                     safe);
             case ExpressionEvaluatorParser.StringKeySubscriptContext stringKey -> new StringKeySubscriptNavigationLink(
                     NodeId.UNASSIGNED,
@@ -632,7 +625,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
                     NodeId.UNASSIGNED,
                     span(function),
                     new FunctionName(function.IDENTIFIER().getText()),
-                    visitExpressions(function.expression()));
+                    callArguments(function.argumentList()));
         }
         throw unsupported(context, "function call");
     }

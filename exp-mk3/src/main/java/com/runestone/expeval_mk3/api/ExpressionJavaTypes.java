@@ -15,7 +15,6 @@ final class ExpressionJavaTypes {
     static Class<?> valueType(ExpressionType expressionType) {
         return switch (expressionType) {
             case ScalarType scalarType -> scalarValueType(scalarType);
-            case VectorType ignored -> List.class;
             case CollectionType ignored -> List.class;
             case MapType ignored -> Map.class;
             case ObjectType ignored -> Object.class;

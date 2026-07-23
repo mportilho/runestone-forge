@@ -173,7 +173,7 @@ The semantic evaluation contract attached to an operator or construct, such as s
 _Avoid_: Runtime optimization, parser associativity, incidental evaluation order
 
 **Cadeia de Navegacao**:
-A source-ordered access path from an expression receiver through property, method, subscript, filter, wildcard, or collection-operation links; safe navigation belongs to the individual link that declares it.
+A source-ordered access path from an expression receiver through property, unresolved call, subscript, filter, or wildcard links; safe navigation belongs to the individual link that declares it.
 _Avoid_: Nested getter calls, path string, reflection chain
 
 **Navegacao Segura**:

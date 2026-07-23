@@ -163,7 +163,7 @@ final class ProviderMethodAdapter {
         ValueConversion conversion = direction == Direction.ARGUMENT
                 ? value -> toArray(value, componentType, element)
                 : value -> arrayResult(value, element, maxMaterializedSize);
-        return new PreparedValue(new VectorType(element.expressionType()), conversion);
+        return new PreparedValue(new CollectionType(element.expressionType()), conversion);
     }
 
     private static PreparedValue prepareContainer(
@@ -206,9 +206,7 @@ final class ProviderMethodAdapter {
                 javaTypes,
                 boundaryCoercion,
                 maxMaterializedSize);
-        ExpressionType expressionType = kind == ContainerKind.VECTOR
-                ? new VectorType(element.expressionType())
-                : new CollectionType(element.expressionType());
+        ExpressionType expressionType = new CollectionType(element.expressionType());
         ValueConversion conversion = direction == Direction.ARGUMENT
                 ? sequenceArgument(rawType, element, boundaryCoercion)
                 : value -> sequenceResult(value, element, maxMaterializedSize);
@@ -296,7 +294,7 @@ final class ProviderMethodAdapter {
     private static List<Object> convertCanonicalSequence(Object value, PreparedValue element) throws Throwable {
         requireNonNull(value);
         if (!(value instanceof List<?> values)) {
-            throw new IllegalArgumentException("canonical vector and collection values must be lists");
+            throw new IllegalArgumentException("canonical collection values must be lists");
         }
         ArrayList<Object> converted = new ArrayList<>(values.size());
         for (Object item : values) {
@@ -323,7 +321,7 @@ final class ProviderMethodAdapter {
     private static Object toArray(Object value, Class<?> componentType, PreparedValue element) throws Throwable {
         requireNonNull(value);
         if (!(value instanceof List<?> values)) {
-            throw new IllegalArgumentException("canonical vector values must be lists");
+            throw new IllegalArgumentException("canonical collection values must be lists");
         }
         Object array = Array.newInstance(componentType, values.size());
         for (int index = 0; index < values.size(); index++) {
@@ -509,16 +507,12 @@ final class ProviderMethodAdapter {
     }
 
     private enum ContainerKind {
-        VECTOR,
         COLLECTION,
         MAP;
 
         private static ContainerKind of(Class<?> rawType) {
             if (Map.class.isAssignableFrom(rawType)) {
                 return MAP;
-            }
-            if (List.class.isAssignableFrom(rawType)) {
-                return VECTOR;
             }
             if (Collection.class.isAssignableFrom(rawType) || Iterable.class.isAssignableFrom(rawType)) {
                 return COLLECTION;

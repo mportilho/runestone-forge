@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -100,6 +101,36 @@ class JavaTypeCatalogTest {
         assertThat(primitiveVarargs.invocationHandle()
                 .invoke(new MethodProvider(), List.of(BigDecimal.ONE, BigDecimal.TEN)))
                 .isEqualTo(new BigDecimal("11"));
+    }
+
+    @Test
+    @DisplayName("arrays collections sets and iterables share collection member metadata")
+    void sequentialJavaMembersShareCollectionMetadata() throws Throwable {
+        JavaTypeDescriptor descriptor = JavaTypeCatalog.builder()
+                .registerJavaTypeWithPublicMethods(SequentialMemberProvider.class)
+                .build()
+                .find(SequentialMemberProvider.class)
+                .orElseThrow();
+        CollectionType numbers = new CollectionType(ScalarType.NUMBER);
+        CollectionType texts = new CollectionType(ScalarType.STRING);
+
+        JavaMethodDescriptor array = descriptor.findMethod(signature("array")).orElseThrow();
+        JavaMethodDescriptor iterable = descriptor.findMethod(signature("iterable")).orElseThrow();
+        JavaMethodDescriptor set = descriptor.findMethod(signature("set", texts)).orElseThrow();
+        JavaMethodDescriptor integerSet = descriptor.findMethod(signature("integerSet", numbers)).orElseThrow();
+
+        assertThat(array.returnType()).isEqualTo(numbers);
+        assertThat(iterable.returnType()).isEqualTo(texts);
+        assertThat(set.returnType()).isEqualTo(texts);
+        assertThat(array.invocationHandle().invoke(new SequentialMemberProvider()))
+                .isEqualTo(List.of(BigDecimal.ONE, BigDecimal.TWO));
+        assertThat(iterable.invocationHandle().invoke(new SequentialMemberProvider()))
+                .isEqualTo(List.of("a", "b"));
+        assertThat(set.invocationHandle().invoke(new SequentialMemberProvider(), List.of("a", "b")))
+                .isEqualTo(List.of("a", "b"));
+        assertThat(integerSet.invocationHandle()
+                .invoke(new SequentialMemberProvider(), List.of(BigDecimal.ONE, BigDecimal.TWO)))
+                .isEqualTo(List.of(BigDecimal.ONE, BigDecimal.TWO));
     }
 
     @Test
@@ -320,6 +351,25 @@ class JavaTypeCatalogTest {
 
         public int same(int value) {
             return value;
+        }
+    }
+
+    static final class SequentialMemberProvider {
+
+        public int[] array() {
+            return new int[]{1, 2};
+        }
+
+        public Iterable<String> iterable() {
+            return List.of("a", "b");
+        }
+
+        public Set<String> set(Set<String> values) {
+            return values;
+        }
+
+        public Set<Integer> integerSet(Set<Integer> values) {
+            return values;
         }
     }
 }

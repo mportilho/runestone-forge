@@ -42,7 +42,7 @@ final class MathBuiltInFunctions {
         BigDecimal[] numbers = BuiltInFunctionSupport.numbers(values);
         int size = numbers.length;
         if (size == 0) {
-            throw new ArithmeticException("mean of empty vector is undefined");
+            throw new ArithmeticException("mean of empty collection is undefined");
         }
         if (size == 1) {
             return numbers[0];
@@ -63,7 +63,7 @@ final class MathBuiltInFunctions {
     public BigDecimal geometricMean(List<BigDecimal> values) {
         BigDecimal[] numbers = BuiltInFunctionSupport.numbers(values);
         if (numbers.length == 0) {
-            throw new ArithmeticException("geometric mean of empty vector is undefined");
+            throw new ArithmeticException("geometric mean of empty collection is undefined");
         }
         BigDecimal product = ONE;
         for (BigDecimal number : numbers) {
@@ -85,7 +85,7 @@ final class MathBuiltInFunctions {
         BigDecimal[] numbers = BuiltInFunctionSupport.numbers(values);
         int size = numbers.length;
         if (size == 0) {
-            throw new ArithmeticException("variance of empty vector is undefined");
+            throw new ArithmeticException("variance of empty collection is undefined");
         }
         BigDecimal divisor = BigDecimal.valueOf(size - BuiltInFunctionSupport.integer(type));
         if (size >= KAHAN_THRESHOLD) {
@@ -129,7 +129,7 @@ final class MathBuiltInFunctions {
         BigDecimal[] numbers = BuiltInFunctionSupport.numbers(values);
         int size = numbers.length;
         if (size == 0) {
-            throw new ArithmeticException("mean deviation of empty vector is undefined");
+            throw new ArithmeticException("mean deviation of empty collection is undefined");
         }
         if (size >= KAHAN_THRESHOLD) {
             double mean = BuiltInFunctionSupport.kahanSum(numbers) / size;
@@ -164,7 +164,7 @@ final class MathBuiltInFunctions {
         BigDecimal[] targets = BuiltInFunctionSupport.numbers(targetValues);
         BigDecimal[] limits = BuiltInFunctionSupport.numbers(limitValues);
         if (targets.length != limits.length) {
-            throw new IllegalArgumentException("target and limits vectors must have the same size");
+            throw new IllegalArgumentException("target and limits collections must have the same size");
         }
         BigDecimal[] distributed = new BigDecimal[targets.length + 1];
         System.arraycopy(targets, 0, distributed, 0, targets.length);
@@ -211,7 +211,7 @@ final class MathBuiltInFunctions {
     public List<BigDecimal> spread(BigDecimal value, BigDecimal direction, List<BigDecimal> referenceValues) {
         BigDecimal[] references = BuiltInFunctionSupport.numbers(referenceValues);
         if (references.length == 0) {
-            throw new IllegalArgumentException("references vector must not be empty");
+            throw new IllegalArgumentException("references collection must not be empty");
         }
         int scale = value.scale();
         if (value.compareTo(ZERO) == 0) {

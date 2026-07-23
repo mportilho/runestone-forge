@@ -29,7 +29,6 @@ import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ReceiverI
 import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ReceiverItemConstraint.NUMBER_ITEM;
 import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ReceiverKind.COLLECTION;
 import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ReceiverKind.MAP;
-import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ReceiverKind.VECTOR;
 import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ResultTypeRule.BOOLEAN;
 import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ResultTypeRule.COLLECTION_OF_MAP_KEYS;
 import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ResultTypeRule.COLLECTION_OF_MAP_VALUES;
@@ -37,7 +36,7 @@ import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ResultTyp
 import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ResultTypeRule.NUMBER;
 import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ShapePreservationRule.MAP_TO_COLLECTION;
 import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ShapePreservationRule.NOT_APPLICABLE;
-import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ShapePreservationRule.VECTOR_TO_VECTOR_OTHERS_TO_COLLECTION;
+import static com.runestone.expeval_mk3.api.CollectionOperationCatalog.ShapePreservationRule.COLLECTION_TO_COLLECTION;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -49,23 +48,23 @@ final class CollectionOperationCatalogTest {
         CollectionOperationCatalog catalog = CollectionOperationCatalog.standard();
 
         assertThat(catalog.descriptors()).containsExactly(
-                descriptor("all", List.of(VECTOR, COLLECTION, MAP), ANY_ITEM, ONE_LAMBDA,
+                descriptor("all", List.of(COLLECTION, MAP), ANY_ITEM, ONE_LAMBDA,
                         RECEIVER_ITEM_OR_MAP_ENTRY, BOOLEAN_NEVER_NULL, BOOLEAN, NO_NUMERIC_FACT, NOT_APPLICABLE,
                         PURE, RuntimeNullability.NEVER_NULL, SHORT_CIRCUIT_ON_FALSE, DOES_NOT_MATERIALIZE),
-                descriptor("any", List.of(VECTOR, COLLECTION, MAP), ANY_ITEM, ONE_LAMBDA,
+                descriptor("any", List.of(COLLECTION, MAP), ANY_ITEM, ONE_LAMBDA,
                         RECEIVER_ITEM_OR_MAP_ENTRY, BOOLEAN_NEVER_NULL, BOOLEAN, NO_NUMERIC_FACT, NOT_APPLICABLE,
                         PURE, RuntimeNullability.NEVER_NULL, SHORT_CIRCUIT_ON_TRUE, DOES_NOT_MATERIALIZE),
-                descriptor("count", List.of(VECTOR, COLLECTION, MAP), ANY_ITEM, NO_ARGUMENTS,
+                descriptor("count", List.of(COLLECTION, MAP), ANY_ITEM, NO_ARGUMENTS,
                         NONE, NO_LAMBDA_RESULT, NUMBER, INTEGRAL_KNOWN, NOT_APPLICABLE,
                         PURE, RuntimeNullability.NEVER_NULL, EAGER, DOES_NOT_MATERIALIZE),
                 descriptor("keys", List.of(MAP), ANY_ITEM, NO_ARGUMENTS,
                         NONE, NO_LAMBDA_RESULT, COLLECTION_OF_MAP_KEYS, NO_NUMERIC_FACT, MAP_TO_COLLECTION,
                         PURE, RuntimeNullability.NEVER_NULL, EAGER, MATERIALIZES),
-                descriptor("map", List.of(VECTOR, COLLECTION, MAP), ANY_ITEM, ONE_LAMBDA,
+                descriptor("map", List.of(COLLECTION, MAP), ANY_ITEM, ONE_LAMBDA,
                         RECEIVER_ITEM_OR_MAP_ENTRY, KNOWN_NEVER_NULL, MAPPED_ITEM_CONTAINER, NO_NUMERIC_FACT,
-                        VECTOR_TO_VECTOR_OTHERS_TO_COLLECTION,
+                        COLLECTION_TO_COLLECTION,
                         PURE, RuntimeNullability.NEVER_NULL, EAGER, MATERIALIZES),
-                descriptor("sum", List.of(VECTOR, COLLECTION), NUMBER_ITEM, NO_ARGUMENTS,
+                descriptor("sum", List.of(COLLECTION), NUMBER_ITEM, NO_ARGUMENTS,
                         NONE, NO_LAMBDA_RESULT, NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE,
                         PURE, RuntimeNullability.NEVER_NULL, EAGER, DOES_NOT_MATERIALIZE),
                 descriptor("values", List.of(MAP), ANY_ITEM, NO_ARGUMENTS,
@@ -77,10 +76,10 @@ final class CollectionOperationCatalogTest {
     @DisplayName("lookup is direct, case-sensitive, deterministically ordered, and immutable")
     void lookupIsDirectCaseSensitiveDeterministicallyOrderedAndImmutable() {
         CollectionOperationCatalog catalog = CollectionOperationCatalog.of(new ArrayList<>(List.of(
-                descriptor("zeta", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
+                descriptor("zeta", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
                         NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE, PURE, RuntimeNullability.NEVER_NULL, EAGER,
                         DOES_NOT_MATERIALIZE),
-                descriptor("alpha", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
+                descriptor("alpha", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
                         NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE, PURE, RuntimeNullability.NEVER_NULL, EAGER,
                         DOES_NOT_MATERIALIZE))));
 
@@ -107,17 +106,17 @@ final class CollectionOperationCatalogTest {
     @Test
     @DisplayName("generic construction rejects invalid names, receivers, and duplicate operations")
     void genericConstructionRejectsInvalidNamesReceiversAndDuplicateOperations() {
-        assertThatThrownBy(() -> scalarDescriptor(" ", List.of(VECTOR)))
+        assertThatThrownBy(() -> scalarDescriptor(" ", List.of(COLLECTION)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("name must not be blank");
         assertThatThrownBy(() -> scalarDescriptor("empty", List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("receivers must not be empty");
-        assertThatThrownBy(() -> scalarDescriptor("duplicate-receiver", List.of(VECTOR, VECTOR)))
+        assertThatThrownBy(() -> scalarDescriptor("duplicate-receiver", List.of(COLLECTION, COLLECTION)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("receivers must not contain duplicates");
 
-        CollectionOperationCatalog.Descriptor duplicate = scalarDescriptor("duplicate", List.of(VECTOR));
+        CollectionOperationCatalog.Descriptor duplicate = scalarDescriptor("duplicate", List.of(COLLECTION));
         assertThatThrownBy(() -> CollectionOperationCatalog.of(List.of(duplicate, duplicate)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("collection operation already registered: duplicate");
@@ -127,37 +126,37 @@ final class CollectionOperationCatalogTest {
     @DisplayName("generic construction rejects every missing declarative policy")
     void genericConstructionRejectsEveryMissingDeclarativePolicy() {
         List<Supplier<CollectionOperationCatalog.Descriptor>> missingPolicies = List.of(
-                () -> descriptor("invalid", List.of(VECTOR), null, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
+                () -> descriptor("invalid", List.of(COLLECTION), null, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
                         NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE, PURE, RuntimeNullability.NEVER_NULL, EAGER,
                         DOES_NOT_MATERIALIZE),
-                () -> descriptor("invalid", List.of(VECTOR), ANY_ITEM, null, NONE, NO_LAMBDA_RESULT,
+                () -> descriptor("invalid", List.of(COLLECTION), ANY_ITEM, null, NONE, NO_LAMBDA_RESULT,
                         NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE, PURE, RuntimeNullability.NEVER_NULL, EAGER,
                         DOES_NOT_MATERIALIZE),
-                () -> descriptor("invalid", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS, null, NO_LAMBDA_RESULT,
+                () -> descriptor("invalid", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS, null, NO_LAMBDA_RESULT,
                         NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE, PURE, RuntimeNullability.NEVER_NULL, EAGER,
                         DOES_NOT_MATERIALIZE),
-                () -> descriptor("invalid", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS, NONE, null,
+                () -> descriptor("invalid", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS, NONE, null,
                         NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE, PURE, RuntimeNullability.NEVER_NULL, EAGER,
                         DOES_NOT_MATERIALIZE),
-                () -> descriptor("invalid", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
+                () -> descriptor("invalid", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
                         null, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE, PURE, RuntimeNullability.NEVER_NULL, EAGER,
                         DOES_NOT_MATERIALIZE),
-                () -> descriptor("invalid", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
+                () -> descriptor("invalid", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
                         NUMBER, null, NOT_APPLICABLE, PURE, RuntimeNullability.NEVER_NULL, EAGER,
                         DOES_NOT_MATERIALIZE),
-                () -> descriptor("invalid", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
+                () -> descriptor("invalid", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
                         NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, null, PURE, RuntimeNullability.NEVER_NULL, EAGER,
                         DOES_NOT_MATERIALIZE),
-                () -> descriptor("invalid", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
+                () -> descriptor("invalid", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
                         NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE, null, RuntimeNullability.NEVER_NULL, EAGER,
                         DOES_NOT_MATERIALIZE),
-                () -> descriptor("invalid", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
+                () -> descriptor("invalid", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
                         NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE, PURE, null, EAGER,
                         DOES_NOT_MATERIALIZE),
-                () -> descriptor("invalid", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
+                () -> descriptor("invalid", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
                         NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE, PURE,
                         RuntimeNullability.NEVER_NULL, null, DOES_NOT_MATERIALIZE),
-                () -> descriptor("invalid", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
+                () -> descriptor("invalid", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS, NONE, NO_LAMBDA_RESULT,
                         NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE, PURE,
                         RuntimeNullability.NEVER_NULL, EAGER, null));
 
@@ -168,19 +167,19 @@ final class CollectionOperationCatalogTest {
     @Test
     @DisplayName("generic construction rejects contradictory argument and evaluation policies")
     void genericConstructionRejectsContradictoryArgumentAndEvaluationPolicies() {
-        assertThatThrownBy(() -> descriptor("lambda-without-item", List.of(VECTOR), ANY_ITEM, ONE_LAMBDA,
+        assertThatThrownBy(() -> descriptor("lambda-without-item", List.of(COLLECTION), ANY_ITEM, ONE_LAMBDA,
                 NONE, KNOWN_NEVER_NULL, MAPPED_ITEM_CONTAINER, NO_NUMERIC_FACT,
-                VECTOR_TO_VECTOR_OTHERS_TO_COLLECTION,
+                COLLECTION_TO_COLLECTION,
                 PURE, RuntimeNullability.NEVER_NULL, EAGER, MATERIALIZES))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("argument shape");
-        assertThatThrownBy(() -> descriptor("arguments-with-lambda-contract", List.of(VECTOR), ANY_ITEM,
+        assertThatThrownBy(() -> descriptor("arguments-with-lambda-contract", List.of(COLLECTION), ANY_ITEM,
                 NO_ARGUMENTS, RECEIVER_ITEM_OR_MAP_ENTRY, KNOWN_NEVER_NULL, NUMBER,
                 UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE, PURE,
                 RuntimeNullability.NEVER_NULL, EAGER, DOES_NOT_MATERIALIZE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("argument shape");
-        assertThatThrownBy(() -> descriptor("invalid-short-circuit", List.of(VECTOR), ANY_ITEM, ONE_LAMBDA,
+        assertThatThrownBy(() -> descriptor("invalid-short-circuit", List.of(COLLECTION), ANY_ITEM, ONE_LAMBDA,
                 RECEIVER_ITEM_OR_MAP_ENTRY, KNOWN_NEVER_NULL, BOOLEAN, NO_NUMERIC_FACT, NOT_APPLICABLE,
                 PURE, RuntimeNullability.NEVER_NULL, SHORT_CIRCUIT_ON_TRUE, DOES_NOT_MATERIALIZE))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -195,25 +194,25 @@ final class CollectionOperationCatalogTest {
                 PURE, RuntimeNullability.NEVER_NULL, EAGER, DOES_NOT_MATERIALIZE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("numeric receiver constraint");
-        assertThatThrownBy(() -> descriptor("scalar-shape", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS,
+        assertThatThrownBy(() -> descriptor("scalar-shape", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS,
                 NONE, NO_LAMBDA_RESULT, NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE,
-                VECTOR_TO_VECTOR_OTHERS_TO_COLLECTION,
+                COLLECTION_TO_COLLECTION,
                 PURE, RuntimeNullability.NEVER_NULL, EAGER, DOES_NOT_MATERIALIZE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("scalar result");
-        assertThatThrownBy(() -> descriptor("scalar-materializes", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS,
+        assertThatThrownBy(() -> descriptor("scalar-materializes", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS,
                 NONE, NO_LAMBDA_RESULT, NUMBER, UNKNOWN_NUMERIC_VALUE_SHAPE, NOT_APPLICABLE,
                 PURE, RuntimeNullability.NEVER_NULL, EAGER, MATERIALIZES))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("scalar result");
-        assertThatThrownBy(() -> descriptor("keys-on-vector", List.of(VECTOR), ANY_ITEM, NO_ARGUMENTS,
+        assertThatThrownBy(() -> descriptor("keys-on-collection", List.of(COLLECTION), ANY_ITEM, NO_ARGUMENTS,
                 NONE, NO_LAMBDA_RESULT, COLLECTION_OF_MAP_KEYS, NO_NUMERIC_FACT, MAP_TO_COLLECTION,
                 PURE, RuntimeNullability.NEVER_NULL, EAGER, MATERIALIZES))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("map collection result");
-        assertThatThrownBy(() -> descriptor("non-materialized-map", List.of(VECTOR, COLLECTION), ANY_ITEM,
+        assertThatThrownBy(() -> descriptor("non-materialized-map", List.of(COLLECTION), ANY_ITEM,
                 ONE_LAMBDA, RECEIVER_ITEM_OR_MAP_ENTRY, KNOWN_NEVER_NULL, MAPPED_ITEM_CONTAINER,
-                NO_NUMERIC_FACT, VECTOR_TO_VECTOR_OTHERS_TO_COLLECTION, PURE,
+                NO_NUMERIC_FACT, COLLECTION_TO_COLLECTION, PURE,
                 RuntimeNullability.NEVER_NULL, EAGER, DOES_NOT_MATERIALIZE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("mapped result");
@@ -223,16 +222,16 @@ final class CollectionOperationCatalogTest {
     @DisplayName("generic construction permits coherent policies beyond the official set")
     void genericConstructionPermitsCoherentPoliciesBeyondTheOfficialSet() {
         CollectionOperationCatalog.Descriptor numericPredicate = descriptor(
-                "numeric-predicate", List.of(VECTOR), NUMBER_ITEM, NO_ARGUMENTS,
+                "numeric-predicate", List.of(COLLECTION), NUMBER_ITEM, NO_ARGUMENTS,
                 NONE, NO_LAMBDA_RESULT, BOOLEAN, NO_NUMERIC_FACT, NOT_APPLICABLE,
                 PURE, RuntimeNullability.NEVER_NULL, EAGER, DOES_NOT_MATERIALIZE);
-        CollectionOperationCatalog.Descriptor vectorTransform = descriptor(
-                "vector-transform", List.of(VECTOR), ANY_ITEM, ONE_LAMBDA,
+        CollectionOperationCatalog.Descriptor collectionTransform = descriptor(
+                "collection-transform", List.of(COLLECTION), ANY_ITEM, ONE_LAMBDA,
                 RECEIVER_ITEM_OR_MAP_ENTRY, KNOWN_NEVER_NULL, MAPPED_ITEM_CONTAINER, NO_NUMERIC_FACT,
-                VECTOR_TO_VECTOR_OTHERS_TO_COLLECTION, PURE, RuntimeNullability.NEVER_NULL, EAGER, MATERIALIZES);
+                COLLECTION_TO_COLLECTION, PURE, RuntimeNullability.NEVER_NULL, EAGER, MATERIALIZES);
 
-        assertThat(CollectionOperationCatalog.of(List.of(numericPredicate, vectorTransform)).operationNames())
-                .containsExactly("numeric-predicate", "vector-transform");
+        assertThat(CollectionOperationCatalog.of(List.of(numericPredicate, collectionTransform)).operationNames())
+                .containsExactly("collection-transform", "numeric-predicate");
     }
 
     @Test
@@ -241,7 +240,7 @@ final class CollectionOperationCatalogTest {
         List<CollectionOperationCatalog.Descriptor> official = CollectionOperationCatalog.standard().descriptors();
         CollectionOperationCatalog incomplete = CollectionOperationCatalog.of(official.subList(0, official.size() - 1));
         List<CollectionOperationCatalog.Descriptor> additionalDescriptors = new ArrayList<>(official);
-        additionalDescriptors.add(scalarDescriptor("extra", List.of(VECTOR)));
+        additionalDescriptors.add(scalarDescriptor("extra", List.of(COLLECTION)));
         CollectionOperationCatalog additional = CollectionOperationCatalog.of(additionalDescriptors);
         List<CollectionOperationCatalog.Descriptor> alteredDescriptors = new ArrayList<>(official);
         CollectionOperationCatalog.Descriptor sum = CollectionOperationCatalog.standard().find("sum").orElseThrow();

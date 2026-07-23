@@ -1,5 +1,0 @@
-id: parser.vector.empty.001
-phase: parser
-kind: valid
-source: '[]'
-coverage: [vector-literal, empty-vector]

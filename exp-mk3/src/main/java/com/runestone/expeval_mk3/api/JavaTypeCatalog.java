@@ -27,6 +27,8 @@ public final class JavaTypeCatalog {
     private static final JavaTypeCatalog EMPTY = new JavaTypeCatalog(Map.of());
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
     private static final MethodHandle COLLECTION_TO_ARRAY = findCollectionToArray();
+    private static final MethodHandle SEQUENCE_ARGUMENT = findSequenceArgument();
+    private static final MethodHandle SEQUENCE_RESULT = findSequenceResult();
 
     private final Map<Class<?>, JavaTypeDescriptor> descriptorsByClass;
     private final Map<ObjectType, JavaTypeDescriptor> descriptorsByObjectType;
@@ -214,10 +216,11 @@ public final class JavaTypeCatalog {
     }
 
     private static JavaPropertyDescriptor createPropertyDescriptor(String propertyName, String kind, Method method) {
-        ExpressionType type = JavaMemberTypes.expressionType(method.getGenericReturnType(), method.getReturnType(), false);
+        ExpressionType type = JavaMemberTypes.expressionType(method.getGenericReturnType(), method.getReturnType(), true);
         try {
+            MethodHandle methodHandle = adaptSequenceReturn(LOOKUP.unreflect(method), type);
             MethodHandle handle = FunctionHandleAdapters.adaptInstance(
-                    LOOKUP.unreflect(method),
+                    methodHandle,
                     method.getDeclaringClass(),
                     List.of(),
                     type);
@@ -233,12 +236,11 @@ public final class JavaTypeCatalog {
 
     private static JavaMethodDescriptor createMethodDescriptor(Class<?> javaType, Method method, boolean allowVarargs) {
         List<ExpressionType> parameterTypes = parameterTypes(method, allowVarargs);
-        ExpressionType returnType = JavaMemberTypes.expressionType(method.getGenericReturnType(), method.getReturnType(), false);
+        ExpressionType returnType = JavaMemberTypes.expressionType(method.getGenericReturnType(), method.getReturnType(), true);
         try {
             MethodHandle methodHandle = LOOKUP.unreflect(method);
-            if (allowVarargs && method.isVarArgs()) {
-                methodHandle = adaptVarargsParameter(methodHandle, method);
-            }
+            methodHandle = adaptSequenceArguments(methodHandle, method, parameterTypes);
+            methodHandle = adaptSequenceReturn(methodHandle, returnType);
             MethodHandle handle = FunctionHandleAdapters.adaptInstance(
                     methodHandle,
                     javaType,
@@ -255,11 +257,77 @@ public final class JavaTypeCatalog {
         }
     }
 
-    private static MethodHandle adaptVarargsParameter(MethodHandle methodHandle, Method method) {
-        Class<?> arrayType = method.getParameterTypes()[method.getParameterCount() - 1];
-        MethodHandle adapter = MethodHandles.insertArguments(COLLECTION_TO_ARRAY, 1, arrayType);
-        adapter = MethodHandles.explicitCastArguments(adapter, MethodType.methodType(arrayType, List.class));
-        return MethodHandles.filterArguments(methodHandle, method.getParameterCount(), adapter);
+    private static MethodHandle adaptSequenceArguments(
+            MethodHandle methodHandle,
+            Method method,
+            List<ExpressionType> parameterTypes) {
+        MethodHandle adapted = methodHandle;
+        Class<?>[] javaParameterTypes = method.getParameterTypes();
+        for (int index = 0; index < parameterTypes.size(); index++) {
+            if (parameterTypes.get(index) instanceof CollectionType) {
+                Class<?> javaType = javaParameterTypes[index];
+                Class<?> elementType = sequenceElementType(method.getGenericParameterTypes()[index], javaType);
+                MethodHandle adapter = MethodHandles.insertArguments(SEQUENCE_ARGUMENT, 1, javaType, elementType)
+                        .asType(MethodType.methodType(javaType, List.class));
+                adapted = MethodHandles.filterArguments(adapted, index + 1, adapter);
+            }
+        }
+        return adapted;
+    }
+
+    private static MethodHandle adaptSequenceReturn(MethodHandle methodHandle, ExpressionType returnType) {
+        if (!(returnType instanceof CollectionType collectionType)) {
+            return methodHandle;
+        }
+        MethodHandle adapter = MethodHandles.insertArguments(SEQUENCE_RESULT, 1, collectionType.elementType())
+                .asType(MethodType.methodType(
+                List.class,
+                methodHandle.type().returnType()));
+        return MethodHandles.filterReturnValue(methodHandle, adapter);
+    }
+
+    private static Object sequenceArgument(List<?> values, Class<?> javaType, Class<?> elementType) {
+        if (javaType.isArray()) {
+            return collectionToArray(values, javaType);
+        }
+        List<?> converted = values.stream()
+                .map(value -> value instanceof java.math.BigDecimal number
+                        ? FunctionHandleAdapters.adaptNumericValue(number, elementType)
+                        : value)
+                .toList();
+        if (javaType.isAssignableFrom(List.class)) {
+            return converted;
+        }
+        return BoundaryCoercion.standard().prepareJavaConversion(List.class, javaType).convert(converted);
+    }
+
+    private static Class<?> sequenceElementType(java.lang.reflect.Type genericType, Class<?> javaType) {
+        if (javaType.isArray()) {
+            return javaType.getComponentType();
+        }
+        if (genericType instanceof java.lang.reflect.ParameterizedType parameterizedType
+                && parameterizedType.getActualTypeArguments()[0] instanceof Class<?> elementType) {
+            return elementType;
+        }
+        throw new IllegalArgumentException("Java collection member must declare a concrete element type");
+    }
+
+    private static List<?> sequenceResult(Object value, ExpressionType elementType) {
+        Objects.requireNonNull(value, "Java member results must not be null");
+        ArrayList<Object> snapshot = new ArrayList<>();
+        if (value.getClass().isArray()) {
+            int length = Array.getLength(value);
+            for (int index = 0; index < length; index++) {
+                snapshot.add(BoundaryCoercion.standard()
+                        .convertFunctionBindingFallback(Array.get(value, index), elementType));
+            }
+        } else if (value instanceof Iterable<?> iterable) {
+            iterable.forEach(item -> snapshot.add(BoundaryCoercion.standard()
+                    .convertFunctionBindingFallback(item, elementType)));
+        } else {
+            throw new IllegalArgumentException("Java collection member result must be an array or Iterable");
+        }
+        return List.copyOf(snapshot);
     }
 
     private static Object collectionToArray(List<?> values, Class<?> arrayType) {
@@ -288,16 +356,37 @@ public final class JavaTypeCatalog {
         }
     }
 
+    private static MethodHandle findSequenceArgument() {
+        try {
+            return LOOKUP.findStatic(
+                    JavaTypeCatalog.class,
+                    "sequenceArgument",
+                    MethodType.methodType(Object.class, List.class, Class.class, Class.class));
+        } catch (NoSuchMethodException | IllegalAccessException exception) {
+            throw new IllegalStateException("failed to resolve sequence argument adapter", exception);
+        }
+    }
+
+    private static MethodHandle findSequenceResult() {
+        try {
+            return LOOKUP.findStatic(
+                    JavaTypeCatalog.class,
+                    "sequenceResult",
+                    MethodType.methodType(List.class, Object.class, ExpressionType.class));
+        } catch (NoSuchMethodException | IllegalAccessException exception) {
+            throw new IllegalStateException("failed to resolve sequence result adapter", exception);
+        }
+    }
+
     private static List<ExpressionType> parameterTypes(Method method, boolean allowVarargs) {
         List<ExpressionType> parameterTypes = new ArrayList<>(method.getParameterCount());
         Class<?>[] rawParameterTypes = method.getParameterTypes();
         java.lang.reflect.Type[] genericParameterTypes = method.getGenericParameterTypes();
         for (int index = 0; index < rawParameterTypes.length; index++) {
-            boolean arrayAsCollection = allowVarargs && method.isVarArgs() && index == rawParameterTypes.length - 1;
             parameterTypes.add(JavaMemberTypes.expressionType(
                     genericParameterTypes[index],
                     rawParameterTypes[index],
-                    arrayAsCollection));
+                    true));
         }
         return List.copyOf(parameterTypes);
     }
@@ -314,13 +403,13 @@ public final class JavaTypeCatalog {
     }
 
     private static boolean isSupportedPublicMethod(Method method) {
-        if (JavaMemberTypes.tryExpressionType(method.getGenericReturnType(), method.getReturnType(), false).isEmpty()) {
+        if (JavaMemberTypes.tryExpressionType(method.getGenericReturnType(), method.getReturnType(), true).isEmpty()) {
             return false;
         }
         Class<?>[] rawParameterTypes = method.getParameterTypes();
         java.lang.reflect.Type[] genericParameterTypes = method.getGenericParameterTypes();
         for (int index = 0; index < rawParameterTypes.length; index++) {
-            if (JavaMemberTypes.tryExpressionType(genericParameterTypes[index], rawParameterTypes[index], false).isEmpty()) {
+            if (JavaMemberTypes.tryExpressionType(genericParameterTypes[index], rawParameterTypes[index], true).isEmpty()) {
                 return false;
             }
         }

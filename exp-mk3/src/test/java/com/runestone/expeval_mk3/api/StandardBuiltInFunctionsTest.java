@@ -52,7 +52,7 @@ class StandardBuiltInFunctionsTest {
                 .isEqualByComparingTo(new BigDecimal("12.50"));
         assertThat((BigDecimal) invoke(functions, "sqrt", List.of(ScalarType.NUMBER), new BigDecimal("4")))
                 .isEqualByComparingTo(new BigDecimal("2"));
-        assertThat((BigDecimal) invoke(functions, "mean", List.of(new VectorType(ScalarType.NUMBER)),
+        assertThat((BigDecimal) invoke(functions, "mean", List.of(new CollectionType(ScalarType.NUMBER)),
                 List.of(BigDecimal.ONE, BigDecimal.valueOf(2), BigDecimal.valueOf(3))))
                 .isEqualByComparingTo(new BigDecimal("2"));
 
@@ -68,7 +68,7 @@ class StandardBuiltInFunctionsTest {
         assertThat((BigDecimal) invoke(functions, "daysBetween", List.of(ScalarType.DATE, ScalarType.DATE),
                 LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 9)))
                 .isEqualByComparingTo(new BigDecimal("8"));
-        assertThat(invoke(functions, "max", List.of(new VectorType(ScalarType.STRING)), List.of("b", "a", "c")))
+        assertThat(invoke(functions, "max", List.of(new CollectionType(ScalarType.STRING)), List.of("b", "a", "c")))
                 .isEqualTo("c");
         assertThat((BigDecimal) invoke(functions, "pmt", List.of(
                 ScalarType.NUMBER,
@@ -159,7 +159,7 @@ class StandardBuiltInFunctionsTest {
                 });
         assertThat(functions.values())
                 .extracting(FunctionDescriptor::languageName)
-                .doesNotContain("asVector");
+                .doesNotContain("asCollection");
     }
 
     private static Object invoke(

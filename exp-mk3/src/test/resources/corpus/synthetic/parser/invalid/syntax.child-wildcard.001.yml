@@ -1,0 +1,10 @@
+id: parser.syntax.child-wildcard.001
+phase: parser
+kind: invalid
+source: 'items.*'
+coverage: [diagnostic]
+expected:
+  diagnostic:
+    category: PARSE
+    code: PARSE_NO_VIABLE_ALTERNATIVE
+    span: {offset: 6, endOffset: 7, line: 1, column: 7}

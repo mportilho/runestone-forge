@@ -7,7 +7,7 @@
  * ------------------------------------------------------------------------------
  * 1. HIERARQUIA UNIFICADA DE EXPRESSÕES
  *    As oito famílias tipadas (numericEntity, stringEntity, dateEntity, timeEntity,
- *    dateTimeEntity, logicalEntity, vectorEntity, genericEntity) foram fundidas em
+ *    dateTimeEntity, logicalEntity, sequentialEntity, genericEntity) foram fundidas em
  *    uma única cadeia de precedência. A verificação de tipos passa a ser
  *    responsabilidade da análise semântica (visitor), que já precisava fazê-la de
  *    qualquer forma, pois toda família aceitava referenceTarget e o tipo real só é
@@ -54,25 +54,22 @@
  *
  * 9. COLEÇÃO VAZIA [] PASSA A SER VÁLIDA.
  *
- * 10. VECTOR E COLLECTION UNIFICADOS EM UM ÚNICO CONCEITO: COLEÇÃO
+ * 10. VALORES SEQUENCIAIS USAM UM ÚNICO CONCEITO: COLEÇÃO
  *     A sintaxe dedicada de funções de coleção — 'x..sum()', com o operador '..'
  *     (DOUBLE_PERIOD) e a regra paralela collectionFunctionAccess /
  *     collectionFunctionArguments — foi removida. Chamadas sobre coleções usam a
- *     mesma sintaxe de método de qualquer objeto: 'x.sum()', 'x.map(@ -> @ * 2)'.
+ *     mesma sintaxe de chamada navegada: 'x.sum()', 'x.map(@ -> @ * 2)'.
  *     O lambda '@ -> expr' deixa de ser exclusividade de uma regra especial e
  *     vira um TIPO DE ARGUMENTO comum (regra 'argument'), aceito tanto em
- *     chamadas de função de topo ('map(lista, @ -> @ * 2)') quanto em métodos.
- *     O despacho "função de coleção vs. método do objeto" é decidido pelo
- *     visitor via registro de nomes (sum, avg, count, map, sortBy, reduce...),
- *     no mesmo movimento arquitetural do item 1. Ganhos colaterais:
+ *     chamadas de função de topo ('map(lista, @ -> @ * 2)') quanto em chamadas navegadas.
+ *     O despacho "operação de coleção vs. método do objeto" é decidido pelo
+ *     resolvedor semântico a partir do tipo conhecido do receptor. Ganhos colaterais:
  *       - safe-nav em funções de coleção: 'pedidos?.map(@ -> @.total)'
  *         (a antiga collectionFunctionAccess não tinha variante '?.');
  *       - argumentos mistos: 'reduce(0, @ -> ...)', 'sortBy(@ -> @.nome, "desc")'
  *         (a forma antiga era OU um lambda sozinho OU só posicionais);
  *       - encadeamento uniforme: 'x.map(@ -> @ * 2)[0]', sem alternar '.' e '..'.
- *     As antigas regras vectorLiteral/vectorOfVariables foram renomeadas para
- *     collectionLiteral/destructuringPattern, unificando a nomenclatura.
- *     Migração mecânica: 'a..f(x)' → 'a.f(x)'.
+ *     Literais e padrões de desestruturação usam nomenclatura de coleção.
  *
  * 11. WILDCARD TEM FORMA ÚNICA: [*]
  *     O acesso '.*' (childWildcardAccess) foi removido; 'x[*]' é a única grafia.
@@ -94,9 +91,7 @@
  *    barateando a predição. Sem colisão com o ':' de slices: por maximal munch,
  *    ':=' só vence quando um '=' segue o ':'.
  *  - Comparações não são encadeáveis (a < b < c é erro), como na original.
- *  - Com a remoção do token DOUBLE_PERIOD, um '..' residual no fonte lexa como
- *    dois PERIODs e produz erro de sintaxe imediato — bom para flagrar código
- *    não migrado (item 10).
+ *  - Com a remoção do token DOUBLE_PERIOD, '..' é apenas um erro sintático comum.
  *  - '->' (ARROW) não é operador de expressão; aparece apenas na alternativa
  *    lambdaArgument. '@' sozinho como argumento cai em expressionArgument sem
  *    ambiguidade.
@@ -366,7 +361,7 @@ function
     : IDENTIFIER LPAREN argumentList? RPAREN                             # functionCallOperation
     ;
 
-// Lista de argumentos única para funções de topo e métodos.
+// Lista de argumentos única para funções de topo e chamadas navegadas.
 // Lambdas ('@ -> expr') podem ser misturados a argumentos posicionais em
 // qualquer posição: reduce(0, @ -> ...), sortBy(@ -> @.nome, "desc").
 argumentList
@@ -378,13 +373,13 @@ argument
     | expression                                                         # expressionArgument
     ;
 
-// Uma única sintaxe de chamada '.nome(...)' cobre métodos de objetos e funções
-// de coleção (sum, avg, count, map, sortBy, reduce...) — o despacho é feito
-// pelo visitor via registro de nomes.
+// Uma única sintaxe de chamada '.nome(...)' cobre destinos ainda não classificados;
+// o despacho para método de objeto ou operação de coleção é feito
+// pelo resolvedor semântico a partir do tipo conhecido do receptor.
 memberChain
-    // methodCallAccess antes de propertyAccess: 'ident(' não deve virar propriedade + '(' extra
-    : PERIOD memberName LPAREN argumentList? RPAREN                      # methodCallAccess
-    | SAFE_NAV memberName LPAREN argumentList? RPAREN                    # safeMethodCallAccess
+    // navigatedCallAccess antes de propertyAccess: 'ident(' não deve virar propriedade + '(' extra
+    : PERIOD memberName LPAREN argumentList? RPAREN                      # navigatedCallAccess
+    | SAFE_NAV memberName LPAREN argumentList? RPAREN                    # safeNavigatedCallAccess
     | PERIOD memberName                                                  # propertyAccess
     | SAFE_NAV memberName                                                # safePropertyAccess
     | SAFE_NAV subscript                                                 # safeSubscriptAccess

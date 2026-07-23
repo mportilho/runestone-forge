@@ -83,7 +83,6 @@ class ExpressionEnvironmentTest {
     @Test
     @DisplayName("type vocabulary exposes scalar and composite expression types")
     void typeVocabularyExposesScalarAndCompositeExpressionTypes() {
-        VectorType numberVector = new VectorType(ScalarType.NUMBER);
         CollectionType numberCollection = new CollectionType(ScalarType.NUMBER);
         MapType stringMap = new MapType(ScalarType.STRING);
 
@@ -95,9 +94,7 @@ class ExpressionEnvironmentTest {
                         ScalarType.DATE,
                         ScalarType.TIME,
                         ScalarType.DATETIME);
-        assertThat(numberVector.elementType()).isEqualTo(ScalarType.NUMBER);
         assertThat(numberCollection.elementType()).isEqualTo(ScalarType.NUMBER);
-        assertThat(numberVector).isNotEqualTo(numberCollection);
         assertThat(stringMap.valueType()).isEqualTo(ScalarType.STRING);
         assertThat(new ObjectType("Customer")).isEqualTo(new ObjectType("Customer"));
         assertThat(new ObjectType("Customer")).isNotEqualTo(new ObjectType("Order"));
@@ -187,7 +184,7 @@ class ExpressionEnvironmentTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("heterogeneous");
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .externalSymbol("items", new VectorType(ScalarType.STRING), listWithNull(), ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("items", new CollectionType(ScalarType.STRING), listWithNull(), ExternalSymbolOverwritePolicy.FIXED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("items");
@@ -209,7 +206,7 @@ class ExpressionEnvironmentTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("amount", ScalarType.NUMBER, "12.50", ExternalSymbolOverwritePolicy.FIXED)
                 .externalSymbol("businessDate", ScalarType.DATE, "2026-07-06", ExternalSymbolOverwritePolicy.FIXED)
-                .externalSymbol("scores", new VectorType(ScalarType.NUMBER), List.of("1.5", 2),
+                .externalSymbol("scores", new CollectionType(ScalarType.NUMBER), List.of("1.5", 2),
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
@@ -258,7 +255,7 @@ class ExpressionEnvironmentTest {
         assertThat(coercion.profileHash())
                 .isEqualTo(DefaultDataConversionService.standard().conversionProfileHash());
         assertThat(coercion.canConvert(String.class, ScalarType.NUMBER)).isTrue();
-        assertThat(coercion.canConvert(String[].class, new VectorType(ScalarType.NUMBER))).isTrue();
+        assertThat(coercion.canConvert(String[].class, new CollectionType(ScalarType.NUMBER))).isTrue();
         assertThat(coercion.canConvert(int[].class, new CollectionType(ScalarType.NUMBER))).isTrue();
         assertThat(coercion.canConvert(Map.class, new MapType(ScalarType.NUMBER))).isFalse();
         assertThat(coercion.canConvert("12.50", ScalarType.NUMBER)).isTrue();

@@ -1,5 +1,0 @@
-id: parser.safe.method.001
-phase: parser
-kind: valid
-source: 'customer?.fullName()'
-coverage: [safe-navigation, method-call, identifier]

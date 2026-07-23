@@ -9,7 +9,7 @@ record FunctionCallNode(
         NodeId id,
         SourceSpan sourceSpan,
         FunctionName name,
-        List<ExpressionNode> arguments) implements ExpressionNode {
+        List<CallArgument> arguments) implements ExpressionNode {
 
     FunctionCallNode {
         Objects.requireNonNull(id, "id");

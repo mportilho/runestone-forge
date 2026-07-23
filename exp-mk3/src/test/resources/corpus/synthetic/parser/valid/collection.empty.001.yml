@@ -1,0 +1,5 @@
+id: parser.collection.empty.001
+phase: parser
+kind: valid
+source: '[]'
+coverage: [collection-literal, empty-collection]

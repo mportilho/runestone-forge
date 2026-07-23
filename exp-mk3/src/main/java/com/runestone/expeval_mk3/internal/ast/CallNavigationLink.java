@@ -5,13 +5,14 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 import java.util.List;
 import java.util.Objects;
 
-record CollectionOperationNavigationLink(
+record CallNavigationLink(
         NodeId id,
         SourceSpan sourceSpan,
         MemberName memberName,
-        List<CollectionOperationArgument> arguments) implements NavigationLink {
+        boolean safe,
+        List<CallArgument> arguments) implements NavigationLink {
 
-    CollectionOperationNavigationLink {
+    CallNavigationLink {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(memberName, "memberName");

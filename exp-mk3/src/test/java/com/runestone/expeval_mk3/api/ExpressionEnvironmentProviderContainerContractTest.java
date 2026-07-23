@@ -13,6 +13,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,16 +27,17 @@ class ExpressionEnvironmentProviderContainerContractTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(ContainerProvider.class, FunctionPurity.PURE)
                 .build();
-        VectorType numberVector = new VectorType(ScalarType.NUMBER);
+        CollectionType numberCollection = new CollectionType(ScalarType.NUMBER);
         CollectionType textCollection = new CollectionType(ScalarType.STRING);
-        MapType nestedMap = new MapType(numberVector);
+        MapType nestedMap = new MapType(numberCollection);
 
-        assertThat(resolve(environment, "array", numberVector).returnType()).isEqualTo(numberVector);
-        assertThat(resolve(environment, "list", numberVector).returnType()).isEqualTo(numberVector);
+        assertThat(resolve(environment, "array", numberCollection).returnType()).isEqualTo(numberCollection);
+        assertThat(resolve(environment, "list", numberCollection).returnType()).isEqualTo(numberCollection);
         assertThat(resolve(environment, "collection", textCollection).returnType()).isEqualTo(textCollection);
+        assertThat(resolve(environment, "set", textCollection).returnType()).isEqualTo(textCollection);
         assertThat(resolve(environment, "iterable", textCollection).returnType()).isEqualTo(textCollection);
         assertThat(resolve(environment, "nestedMap", nestedMap).returnType()).isEqualTo(nestedMap);
-        assertThat(resolve(environment, "concrete", numberVector).returnType()).isEqualTo(numberVector);
+        assertThat(resolve(environment, "concrete", numberCollection).returnType()).isEqualTo(numberCollection);
     }
 
     @Test
@@ -44,14 +46,14 @@ class ExpressionEnvironmentProviderContainerContractTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(ContainerProvider.class, FunctionPurity.PURE)
                 .build();
-        VectorType numberVector = new VectorType(ScalarType.NUMBER);
+        CollectionType numberCollection = new CollectionType(ScalarType.NUMBER);
         CollectionType textCollection = new CollectionType(ScalarType.STRING);
-        MapType nestedMap = new MapType(numberVector);
+        MapType nestedMap = new MapType(numberCollection);
 
-        assertThat(resolve(environment, "array", numberVector).implementationHandle()
+        assertThat(resolve(environment, "array", numberCollection).implementationHandle()
                 .invoke(List.of(BigDecimal.ONE, BigDecimal.TWO)))
                 .isEqualTo(List.of(new BigDecimal("2"), new BigDecimal("3")));
-        assertThat(resolve(environment, "list", numberVector).implementationHandle()
+        assertThat(resolve(environment, "list", numberCollection).implementationHandle()
                 .invoke(List.of(new BigDecimal("3"))))
                 .isEqualTo(List.of(new BigDecimal("6")));
         assertThat(resolve(environment, "collection", textCollection).implementationHandle()
@@ -63,7 +65,7 @@ class ExpressionEnvironmentProviderContainerContractTest {
         assertThat(resolve(environment, "nestedMap", nestedMap).implementationHandle()
                 .invoke(Map.of("values", List.of(new BigDecimal("4")))))
                 .isEqualTo(Map.of("values", List.of(new BigDecimal("5"))));
-        assertThat(resolve(environment, "concrete", numberVector).implementationHandle()
+        assertThat(resolve(environment, "concrete", numberCollection).implementationHandle()
                 .invoke(List.of(new BigDecimal("7"))))
                 .isEqualTo(List.of(new BigDecimal("8")));
     }
@@ -75,7 +77,7 @@ class ExpressionEnvironmentProviderContainerContractTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(MutableResultProvider.class, FunctionPurity.IMPURE)
                 .build();
-        MapType resultType = new MapType(new VectorType(ScalarType.NUMBER));
+        MapType resultType = new MapType(new CollectionType(ScalarType.NUMBER));
 
         @SuppressWarnings("unchecked")
         Map<String, List<BigDecimal>> result = (Map<String, List<BigDecimal>>) resolve(environment, "values")
@@ -109,7 +111,7 @@ class ExpressionEnvironmentProviderContainerContractTest {
         assertThatThrownBy(() -> resolve(
                         environment,
                         "echo",
-                        new MapType(new VectorType(ScalarType.NUMBER)))
+                        new MapType(new CollectionType(ScalarType.NUMBER)))
                 .implementationHandle().invoke(Map.of("numbers", Arrays.asList(BigDecimal.ONE, null))))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("function arguments and results must not be null");
@@ -139,6 +141,17 @@ class ExpressionEnvironmentProviderContainerContractTest {
         assertBuildFailure(NonTextMapProvider.class, "String keys");
         assertBuildFailure(MultidimensionalArrayProvider.class, "multidimensional");
         assertBuildFailure(VarargsProvider.class, "varargs");
+    }
+
+    @Test
+    @DisplayName("Java sequence overloads that share one collection signature are rejected")
+    void javaSequenceOverloadsThatShareOneCollectionSignatureAreRejected() {
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .functionsFrom(CollapsedSequenceOverloadProvider.class, FunctionPurity.PURE)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("already registered")
+                .hasMessageContaining("sequence");
     }
 
     @Test
@@ -185,6 +198,10 @@ class ExpressionEnvironmentProviderContainerContractTest {
 
         public static Collection<String> collection(Collection<String> values) {
             return List.of(values.iterator().next(), "collection");
+        }
+
+        public static Set<String> set(Set<String> values) {
+            return values;
         }
 
         public static Iterable<String> iterable(Iterable<String> values) {
@@ -303,6 +320,16 @@ class ExpressionEnvironmentProviderContainerContractTest {
     public static final class VarargsProvider {
         public static String values(String... values) {
             return String.join(",", values);
+        }
+    }
+
+    public static final class CollapsedSequenceOverloadProvider {
+        public static List<Integer> sequence(List<Integer> values) {
+            return values;
+        }
+
+        public static Set<Integer> sequence(Set<Integer> values) {
+            return values;
         }
     }
 

@@ -80,7 +80,7 @@ final class JavaMemberTypes {
         if (Map.class.isAssignableFrom(rawType)) {
             return mapType(genericType);
         }
-        if (Collection.class.isAssignableFrom(rawType)) {
+        if (Collection.class.isAssignableFrom(rawType) || Iterable.class.isAssignableFrom(rawType)) {
             return collectionType(genericType);
         }
         if (rawType.isPrimitive()) {

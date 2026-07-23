@@ -194,12 +194,12 @@ class SemanticAstVerificationGateTest {
                 GENERATED_SPAN,
                 List.of(grouped(identifier("primary" + seed)), grouped(identifier("fallback" + seed)), grouped(text)),
                 List.of(GENERATED_SPAN, GENERATED_SPAN));
-        ExpressionNode vector = new VectorLiteralNode(GENERATED_ID, GENERATED_SPAN, List.of(one, grouped(sum), text));
+        ExpressionNode collection = new CollectionLiteralNode(GENERATED_ID, GENERATED_SPAN, List.of(one, grouped(sum), text));
         ExpressionNode functionCall = new FunctionCallNode(
                 GENERATED_ID,
                 GENERATED_SPAN,
                 new FunctionName("max"),
-                List.of(one, two));
+                List.of(new ExpressionCallArgument(one), new ExpressionCallArgument(two)));
         ExpressionNode navigation = new NavigationChainNode(
                 GENERATED_ID,
                 GENERATED_SPAN,
@@ -222,7 +222,7 @@ class SemanticAstVerificationGateTest {
             case 0 -> file(List.of(), Optional.of(sum));
             case 1 -> file(List.of(assignment("result" + seed, coalesce)), Optional.of(identifier("result" + seed)));
             case 2 -> file(List.of(assignment("negative" + seed, negated)), Optional.of(identifier("negative" + seed)));
-            case 3 -> file(List.of(assignment("items" + seed, vector)), Optional.of(identifier("items" + seed)));
+            case 3 -> file(List.of(assignment("items" + seed, collection)), Optional.of(identifier("items" + seed)));
             case 4 -> file(List.of(assignment("largest" + seed, functionCall)), Optional.of(identifier("largest" + seed)));
             case 5 -> file(List.of(assignment("selected" + seed, navigation)), Optional.of(identifier("selected" + seed)));
             case 6 -> file(List.of(assignment("decision" + seed, conditional)), Optional.of(identifier("decision" + seed)));
@@ -367,7 +367,7 @@ class SemanticAstVerificationGateTest {
             case NullCoalesceNode coalesce -> coalesce.operands().forEach(operand -> collect(operand, nodes));
             case PostfixOperationNode postfix -> collect(postfix.operand(), nodes);
             case UnaryOperationNode unary -> collect(unary.operand(), nodes);
-            case VectorLiteralNode vector -> vector.elements().forEach(element -> collect(element, nodes));
+            case CollectionLiteralNode collection -> collection.elements().forEach(element -> collect(element, nodes));
         }
     }
 
@@ -380,12 +380,10 @@ class SemanticAstVerificationGateTest {
     private static void collect(NavigationLink link, List<AstNode> nodes) {
         nodes.add(link);
         switch (link) {
-            case CollectionOperationNavigationLink collectionOperation -> collectionOperation.arguments()
-                    .forEach(argument -> collect(argument, nodes));
+            case CallNavigationLink call -> call.arguments().forEach(argument -> collect(argument, nodes));
             case FilterNavigationLink filter -> collect(filter.predicate(), nodes);
             case IndexSubscriptNavigationLink ignored -> {
             }
-            case MethodNavigationLink method -> method.arguments().forEach(argument -> collect(argument, nodes));
             case PropertyNavigationLink ignored -> {
             }
             case SliceSubscriptNavigationLink ignored -> {
@@ -397,10 +395,10 @@ class SemanticAstVerificationGateTest {
         }
     }
 
-    private static void collect(CollectionOperationArgument argument, List<AstNode> nodes) {
+    private static void collect(CallArgument argument, List<AstNode> nodes) {
         switch (argument) {
-            case LambdaCollectionOperationArgument lambda -> collect(lambda.lambda(), nodes);
-            case PositionalCollectionOperationArgument positional -> collect(positional.expression(), nodes);
+            case ExpressionCallArgument expression -> collect(expression.expression(), nodes);
+            case LambdaCallArgument lambda -> collect(lambda.lambda(), nodes);
         }
     }
 
@@ -413,7 +411,7 @@ class SemanticAstVerificationGateTest {
     private static Set<Class<?>> astTypes() {
         Set<Class<?>> types = new LinkedHashSet<>();
         collectAstType(AstNode.class, types);
-        collectAstType(CollectionOperationArgument.class, types);
+        collectAstType(CallArgument.class, types);
         collectAstType(LiteralValue.class, types);
         collectAstType(SubscriptSliceBound.class, types);
         return types;

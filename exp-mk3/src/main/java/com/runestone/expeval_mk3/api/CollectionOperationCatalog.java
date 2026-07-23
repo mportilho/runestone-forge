@@ -15,7 +15,7 @@ public final class CollectionOperationCatalog {
     private static final List<Descriptor> OFFICIAL_DESCRIPTORS = List.of(
             new Descriptor(
                     "all",
-                    List.of(ReceiverKind.VECTOR, ReceiverKind.COLLECTION, ReceiverKind.MAP),
+                    List.of(ReceiverKind.COLLECTION, ReceiverKind.MAP),
                     ReceiverItemConstraint.ANY_ITEM,
                     ArgumentShape.ONE_LAMBDA,
                     CurrentItemTypeRule.RECEIVER_ITEM_OR_MAP_ENTRY,
@@ -29,7 +29,7 @@ public final class CollectionOperationCatalog {
                     MaterializationPolicy.DOES_NOT_MATERIALIZE),
             new Descriptor(
                     "any",
-                    List.of(ReceiverKind.VECTOR, ReceiverKind.COLLECTION, ReceiverKind.MAP),
+                    List.of(ReceiverKind.COLLECTION, ReceiverKind.MAP),
                     ReceiverItemConstraint.ANY_ITEM,
                     ArgumentShape.ONE_LAMBDA,
                     CurrentItemTypeRule.RECEIVER_ITEM_OR_MAP_ENTRY,
@@ -43,7 +43,7 @@ public final class CollectionOperationCatalog {
                     MaterializationPolicy.DOES_NOT_MATERIALIZE),
             new Descriptor(
                     "count",
-                    List.of(ReceiverKind.VECTOR, ReceiverKind.COLLECTION, ReceiverKind.MAP),
+                    List.of(ReceiverKind.COLLECTION, ReceiverKind.MAP),
                     ReceiverItemConstraint.ANY_ITEM,
                     ArgumentShape.NO_ARGUMENTS,
                     CurrentItemTypeRule.NONE,
@@ -71,21 +71,21 @@ public final class CollectionOperationCatalog {
                     MaterializationPolicy.MATERIALIZES),
             new Descriptor(
                     "map",
-                    List.of(ReceiverKind.VECTOR, ReceiverKind.COLLECTION, ReceiverKind.MAP),
+                    List.of(ReceiverKind.COLLECTION, ReceiverKind.MAP),
                     ReceiverItemConstraint.ANY_ITEM,
                     ArgumentShape.ONE_LAMBDA,
                     CurrentItemTypeRule.RECEIVER_ITEM_OR_MAP_ENTRY,
                     LambdaResultConstraint.KNOWN_NEVER_NULL,
                     ResultTypeRule.MAPPED_ITEM_CONTAINER,
                     NumericResultFact.NO_NUMERIC_FACT,
-                    ShapePreservationRule.VECTOR_TO_VECTOR_OTHERS_TO_COLLECTION,
+                    ShapePreservationRule.COLLECTION_TO_COLLECTION,
                     IntrinsicPurity.PURE,
                     RuntimeNullability.NEVER_NULL,
                     EvaluationPolicy.EAGER,
                     MaterializationPolicy.MATERIALIZES),
             new Descriptor(
                     "sum",
-                    List.of(ReceiverKind.VECTOR, ReceiverKind.COLLECTION),
+                    List.of(ReceiverKind.COLLECTION),
                     ReceiverItemConstraint.NUMBER_ITEM,
                     ArgumentShape.NO_ARGUMENTS,
                     CurrentItemTypeRule.NONE,
@@ -312,7 +312,7 @@ public final class CollectionOperationCatalog {
                 case MAPPED_ITEM_CONTAINER -> {
                     if (argumentShape != ArgumentShape.ONE_LAMBDA
                             || lambdaResultConstraint != LambdaResultConstraint.KNOWN_NEVER_NULL
-                            || shapePreservationRule != ShapePreservationRule.VECTOR_TO_VECTOR_OTHERS_TO_COLLECTION
+                            || shapePreservationRule != ShapePreservationRule.COLLECTION_TO_COLLECTION
                             || materializationPolicy != MaterializationPolicy.MATERIALIZES) {
                         throw inconsistent("mapped result requires a non-null transform, sequence shape, and materialization");
                     }
@@ -406,12 +406,11 @@ public final class CollectionOperationCatalog {
     }
 
     public enum ReceiverKind {
-        VECTOR,
         COLLECTION,
         MAP;
 
         private boolean isSequence() {
-            return this == VECTOR || this == COLLECTION;
+            return this == COLLECTION;
         }
     }
 
@@ -452,7 +451,7 @@ public final class CollectionOperationCatalog {
 
     public enum ShapePreservationRule {
         NOT_APPLICABLE,
-        VECTOR_TO_VECTOR_OTHERS_TO_COLLECTION,
+        COLLECTION_TO_COLLECTION,
         MAP_TO_COLLECTION
     }
 

@@ -78,7 +78,7 @@ final class AstStructuralEquality {
                     leftCurrentTemporalValue.kind() == rightCurrentTemporalValue.kind();
             case FunctionCallNode leftFunctionCall when right instanceof FunctionCallNode rightFunctionCall ->
                     leftFunctionCall.name().equals(rightFunctionCall.name())
-                            && equalsExpressions(leftFunctionCall.arguments(), rightFunctionCall.arguments());
+                            && equalsCallArguments(leftFunctionCall.arguments(), rightFunctionCall.arguments());
             case GroupedExpressionNode leftGrouped when right instanceof GroupedExpressionNode rightGrouped ->
                     equals(leftGrouped.expression(), rightGrouped.expression());
             case IdentifierNode leftIdentifier when right instanceof IdentifierNode rightIdentifier ->
@@ -100,8 +100,8 @@ final class AstStructuralEquality {
                             && equals(leftPostfix.operand(), rightPostfix.operand());
             case UnaryOperationNode leftUnary when right instanceof UnaryOperationNode rightUnary ->
                     leftUnary.operator() == rightUnary.operator() && equals(leftUnary.operand(), rightUnary.operand());
-            case VectorLiteralNode leftVector when right instanceof VectorLiteralNode rightVector ->
-                    equalsExpressions(leftVector.elements(), rightVector.elements());
+            case CollectionLiteralNode leftCollection when right instanceof CollectionLiteralNode rightCollection ->
+                    equalsExpressions(leftCollection.elements(), rightCollection.elements());
             default -> false;
         };
     }
@@ -120,20 +120,14 @@ final class AstStructuralEquality {
 
     private static boolean equals(NavigationLink left, NavigationLink right) {
         return switch (left) {
-            case CollectionOperationNavigationLink leftCollectionOperation
-                    when right instanceof CollectionOperationNavigationLink rightCollectionOperation ->
-                    leftCollectionOperation.memberName().equals(rightCollectionOperation.memberName())
-                            && equalsCollectionOperationArguments(
-                                    leftCollectionOperation.arguments(),
-                                    rightCollectionOperation.arguments());
+            case CallNavigationLink leftCall when right instanceof CallNavigationLink rightCall ->
+                    leftCall.safe() == rightCall.safe()
+                            && leftCall.memberName().equals(rightCall.memberName())
+                            && equalsCallArguments(leftCall.arguments(), rightCall.arguments());
             case FilterNavigationLink leftFilter when right instanceof FilterNavigationLink rightFilter ->
                     leftFilter.safe() == rightFilter.safe() && equals(leftFilter.predicate(), rightFilter.predicate());
             case IndexSubscriptNavigationLink leftIndex when right instanceof IndexSubscriptNavigationLink rightIndex ->
                     leftIndex.safe() == rightIndex.safe() && leftIndex.index().equals(rightIndex.index());
-            case MethodNavigationLink leftMethod when right instanceof MethodNavigationLink rightMethod ->
-                    leftMethod.safe() == rightMethod.safe()
-                            && leftMethod.memberName().equals(rightMethod.memberName())
-                            && equalsExpressions(leftMethod.arguments(), rightMethod.arguments());
             case PropertyNavigationLink leftProperty when right instanceof PropertyNavigationLink rightProperty ->
                     leftProperty.safe() == rightProperty.safe()
                             && leftProperty.memberName().equals(rightProperty.memberName());
@@ -145,14 +139,12 @@ final class AstStructuralEquality {
                     when right instanceof StringKeySubscriptNavigationLink rightStringKey ->
                     leftStringKey.safe() == rightStringKey.safe() && leftStringKey.key().equals(rightStringKey.key());
             case WildcardNavigationLink leftWildcard when right instanceof WildcardNavigationLink rightWildcard ->
-                    leftWildcard.safe() == rightWildcard.safe() && leftWildcard.kind() == rightWildcard.kind();
+                    leftWildcard.safe() == rightWildcard.safe();
             default -> false;
         };
     }
 
-    private static boolean equalsCollectionOperationArguments(
-            List<CollectionOperationArgument> left,
-            List<CollectionOperationArgument> right) {
+    private static boolean equalsCallArguments(List<CallArgument> left, List<CallArgument> right) {
         if (left.size() != right.size()) {
             return false;
         }
@@ -164,14 +156,12 @@ final class AstStructuralEquality {
         return true;
     }
 
-    private static boolean equals(CollectionOperationArgument left, CollectionOperationArgument right) {
+    private static boolean equals(CallArgument left, CallArgument right) {
         return switch (left) {
-            case LambdaCollectionOperationArgument leftLambda
-                    when right instanceof LambdaCollectionOperationArgument rightLambda ->
+            case ExpressionCallArgument leftExpression when right instanceof ExpressionCallArgument rightExpression ->
+                    equals(leftExpression.expression(), rightExpression.expression());
+            case LambdaCallArgument leftLambda when right instanceof LambdaCallArgument rightLambda ->
                     equals(leftLambda.lambda(), rightLambda.lambda());
-            case PositionalCollectionOperationArgument leftPositional
-                    when right instanceof PositionalCollectionOperationArgument rightPositional ->
-                    equals(leftPositional.expression(), rightPositional.expression());
             default -> false;
         };
     }

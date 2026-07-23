@@ -108,8 +108,8 @@ class ReflectedFunctionImporterTest {
     }
 
     @Test
-    @DisplayName("infers scalar and vector expression types")
-    void infersScalarAndVectorExpressionTypes() {
+    @DisplayName("infers scalar and collection expression types")
+    void infersScalarAndCollectionExpressionTypes() {
         List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
                 .importAll(TypeInferenceProvider.class, FunctionPurity.FOLDABLE)
                 .toList();
@@ -120,27 +120,54 @@ class ReflectedFunctionImporterTest {
                         signature("booleans", ScalarType.BOOLEAN, ScalarType.BOOLEAN),
                         signature("dates", ScalarType.DATE, ScalarType.TIME, ScalarType.DATETIME),
                         signature("number", ScalarType.NUMBER, ScalarType.NUMBER, ScalarType.NUMBER),
-                        signature("numbers", new VectorType(ScalarType.NUMBER), new VectorType(ScalarType.STRING)),
+                        signature("numbers", new CollectionType(ScalarType.NUMBER), new CollectionType(ScalarType.STRING)),
                         signature("text", ScalarType.STRING));
-        assertThat(descriptor(descriptors, "numbers", new VectorType(ScalarType.NUMBER), new VectorType(ScalarType.STRING))
+        assertThat(descriptor(descriptors, "numbers", new CollectionType(ScalarType.NUMBER), new CollectionType(ScalarType.STRING))
                 .returnType())
-                .isEqualTo(new VectorType(ScalarType.NUMBER));
+                .isEqualTo(new CollectionType(ScalarType.NUMBER));
     }
 
     @Test
     @DisplayName("rejects unsupported provider method signatures")
     void rejectsUnsupportedProviderMethodSignatures() {
-        assertUnsupported(RawListReturnProvider.class, "raw List");
-        assertUnsupported(RawCollectionParameterProvider.class, "raw Collection");
-        assertUnsupported(CollectionReturnProvider.class, "Collection return");
-        assertUnsupported(ArrayProvider.class, "array");
-        assertUnsupported(MapProvider.class, "Map");
+        assertUnsupported(RawListReturnProvider.class, "raw java.util.List");
+        assertUnsupported(RawCollectionParameterProvider.class, "raw java.util.Collection");
         assertUnsupported(ObjectProvider.class, "Object");
         assertUnsupported(OptionalProvider.class, "Optional");
         assertUnsupported(VoidProvider.class, "void");
         assertUnsupported(VarargsProvider.class, "varargs");
         assertUnsupported(UnsupportedObjectProvider.class, "unsupported");
-        assertUnsupported(WildcardVectorProvider.class, "wildcard");
+        assertUnsupported(WildcardCollectionProvider.class, "wildcard");
+    }
+
+    @Test
+    @DisplayName("sequential provider contracts use immutable ordered collection values")
+    void sequentialProviderContractsUseImmutableOrderedCollectionValues() throws Throwable {
+        FunctionDescriptor array = only(ReflectedFunctionImporter
+                .importAll(ArrayProvider.class, FunctionPurity.FOLDABLE)
+                .toList());
+        FunctionDescriptor collection = only(ReflectedFunctionImporter
+                .importAll(CollectionReturnProvider.class, FunctionPurity.FOLDABLE)
+                .toList());
+        FunctionDescriptor map = only(ReflectedFunctionImporter
+                .importAll(MapProvider.class, FunctionPurity.FOLDABLE)
+                .toList());
+
+        @SuppressWarnings("unchecked")
+        List<BigDecimal> arrayResult = (List<BigDecimal>) array.implementationHandle().invoke();
+        @SuppressWarnings("unchecked")
+        List<BigDecimal> collectionResult = (List<BigDecimal>) collection.implementationHandle().invoke();
+
+        assertThat(array.returnType()).isEqualTo(new CollectionType(ScalarType.NUMBER));
+        assertThat(collection.returnType()).isEqualTo(new CollectionType(ScalarType.NUMBER));
+        assertThat(arrayResult).containsExactly(BigDecimal.ONE);
+        assertThat(collectionResult).containsExactly(BigDecimal.ONE);
+        assertThatThrownBy(() -> arrayResult.add(BigDecimal.TEN))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> collectionResult.add(BigDecimal.TEN))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(map.signature()).isEqualTo(signature("map", new MapType(ScalarType.NUMBER)));
+        assertThat(map.implementationHandle().invoke(Map.of("a", BigDecimal.TEN))).isEqualTo(BigDecimal.TEN);
     }
 
     @Test
@@ -184,8 +211,8 @@ class ReflectedFunctionImporterTest {
         assertThat(descriptors)
                 .extracting(FunctionDescriptor::signature)
                 .containsExactly(
-                        signature("max", new VectorType(ScalarType.NUMBER)),
-                        signature("max", new VectorType(ScalarType.STRING)));
+                        signature("max", new CollectionType(ScalarType.NUMBER)),
+                        signature("max", new CollectionType(ScalarType.STRING)));
 
         assertThatThrownBy(() -> ReflectedFunctionImporter
                 .importAll(RenameProvider.class, FunctionPurity.FOLDABLE)
@@ -498,7 +525,7 @@ class ReflectedFunctionImporterTest {
         }
     }
 
-    static final class WildcardVectorProvider {
+    static final class WildcardCollectionProvider {
         public static String join(List<?> values) {
             return values.toString();
         }

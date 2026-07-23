@@ -1,8 +1,8 @@
-id: parser.syntax.unclosed-vector.001
+id: parser.syntax.unclosed-collection.001
 phase: parser
 kind: invalid
 source: '[1, 2'
-coverage: [vector-literal, diagnostic]
+coverage: [collection-literal, diagnostic]
 expected:
   diagnostic:
     category: PARSE

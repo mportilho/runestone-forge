@@ -1,0 +1,5 @@
+id: parser.safe.call.001
+phase: parser
+kind: valid
+source: 'customer?.fullName()'
+coverage: [safe-navigation, call, identifier]

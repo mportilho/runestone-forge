@@ -170,7 +170,12 @@ public final class ReflectedFunctionImporter {
 
         @Override
         public List<FunctionDescriptor> toList() {
-            ImportResolution resolution = resolve(LOOKUP, false, JavaTypeCatalog.empty(), null, 0);
+            ImportResolution resolution = resolve(
+                    LOOKUP,
+                    false,
+                    JavaTypeCatalog.empty(),
+                    BoundaryCoercion.standard(),
+                    Integer.MAX_VALUE);
             if (!resolution.failures().isEmpty()) {
                 throw combinedFailure(resolution.failures());
             }
@@ -200,7 +205,7 @@ public final class ReflectedFunctionImporter {
             List<FunctionDescriptor> descriptors = new ArrayList<>(selectedMethods.size());
             for (Method method : selectedMethods) {
                 try {
-                    if (boundaryCoercion != null) {
+                    if (boundaryCoercion != null && (guardNulls || hasContainerContract(method))) {
                         ProviderMethodAdapter.PreparedMethod prepared = ProviderMethodAdapter.prepare(
                                 method, javaTypes, boundaryCoercion, maxMaterializedSize);
                         descriptors.add(descriptor(languageName(method), source, method, prepared, lookup));
@@ -391,6 +396,19 @@ public final class ReflectedFunctionImporter {
         return source.importStatic() == Modifier.isStatic(modifiers);
     }
 
+    private static boolean hasContainerContract(Method method) {
+        if (isContainerType(method.getReturnType())) {
+            return true;
+        }
+        return Arrays.stream(method.getParameterTypes()).anyMatch(ReflectedFunctionImporter::isContainerType);
+    }
+
+    private static boolean isContainerType(Class<?> type) {
+        return type.isArray()
+                || Map.class.isAssignableFrom(type)
+                || Iterable.class.isAssignableFrom(type);
+    }
+
     private static ImportedMethod importMethod(Method method, JavaTypeCatalog javaTypes) {
         if (method.isVarArgs()) {
             throw new IllegalArgumentException("varargs provider methods are not supported: " + method);
@@ -479,13 +497,13 @@ public final class ReflectedFunctionImporter {
             throw new IllegalArgumentException("Object provider method types are not supported");
         }
         if (List.class.isAssignableFrom(rawType)) {
-            return vectorType(genericType, "raw List", javaTypes);
+            return collectionType(genericType, "raw List", javaTypes);
         }
         if (Collection.class.isAssignableFrom(rawType)) {
             if (position == TypePosition.RETURN) {
                 throw new IllegalArgumentException("Collection return types are not supported");
             }
-            return vectorType(genericType, "raw Collection", javaTypes);
+            return collectionType(genericType, "raw Collection", javaTypes);
         }
         return javaTypes.find(rawType)
                 .map(JavaTypeDescriptor::objectType)
@@ -493,7 +511,7 @@ public final class ReflectedFunctionImporter {
                         "unsupported provider method type; not a registered Java type: " + rawType.getName()));
     }
 
-    private static ExpressionType vectorType(
+    private static ExpressionType collectionType(
             Type genericType,
             String rawMessage,
             JavaTypeCatalog javaTypes) {
@@ -505,15 +523,15 @@ public final class ReflectedFunctionImporter {
             if (wildcardType.getLowerBounds().length == 0
                     && wildcardType.getUpperBounds().length == 1
                     && wildcardType.getUpperBounds()[0] == Object.class) {
-                throw new IllegalArgumentException("wildcard vector element types are not supported");
+                throw new IllegalArgumentException("wildcard collection element types are not supported");
             }
-            throw new IllegalArgumentException("bounded wildcard vector element types are not supported");
+            throw new IllegalArgumentException("bounded wildcard collection element types are not supported");
         }
         if (!(elementType instanceof Class<?> elementClass)) {
-            throw new IllegalArgumentException("unresolvable vector element type is not supported");
+            throw new IllegalArgumentException("unresolvable collection element type is not supported");
         }
-        return new VectorType(expressionType(
-                elementClass, elementClass, TypePosition.VECTOR_ELEMENT, javaTypes));
+        return new CollectionType(expressionType(
+                elementClass, elementClass, TypePosition.COLLECTION_ELEMENT, javaTypes));
     }
 
     private static void validateSelectionTargets(
@@ -551,7 +569,7 @@ public final class ReflectedFunctionImporter {
     private enum TypePosition {
         PARAMETER,
         RETURN,
-        VECTOR_ELEMENT
+        COLLECTION_ELEMENT
     }
 
     private record Source(

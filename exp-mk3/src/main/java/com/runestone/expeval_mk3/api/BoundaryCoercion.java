@@ -60,7 +60,6 @@ public final class BoundaryCoercion {
         Objects.requireNonNull(targetType, "targetType");
         return switch (targetType) {
             case ScalarType scalarType -> canConvertScalarType(sourceType, scalarType);
-            case VectorType vectorType -> canConvertCollectionType(sourceType, vectorType.elementType());
             case CollectionType collectionType -> canConvertCollectionType(sourceType, collectionType.elementType());
             case MapType mapType -> canConvertMapType(sourceType, mapType.valueType());
             case ObjectType objectType -> sourceType.getName().equals(objectType.name());
@@ -130,7 +129,6 @@ public final class BoundaryCoercion {
         Objects.requireNonNull(targetType, "targetType");
         return switch (targetType) {
             case ScalarType scalarType -> convertScalar(valueName, sourceValue, scalarType);
-            case VectorType vectorType -> convertCollection(valueName, sourceValue, vectorType.elementType(), "VectorType");
             case CollectionType collectionType -> convertCollection(
                     valueName,
                     sourceValue,

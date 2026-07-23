@@ -116,21 +116,21 @@ final class ExpressionCaseLoader {
         if ("NUMBER".equals(type) && !result.isTextual()) {
             throw new IllegalArgumentException("NUMBER expected.result must be a string in " + path);
         }
-        if ("VECTOR".equals(type)) {
-            validateVectorResult(result, path);
+        if ("COLLECTION".equals(type)) {
+            validateCollectionResult(result, path);
         }
     }
 
-    private static void validateVectorResult(JsonNode result, Path path) {
+    private static void validateCollectionResult(JsonNode result, Path path) {
         if (!result.isArray()) {
-            throw new IllegalArgumentException("VECTOR expected.result must be an array in " + path);
+            throw new IllegalArgumentException("COLLECTION expected.result must be an array in " + path);
         }
         for (JsonNode item : result) {
             String itemType = requiredText(item, "type", path);
             if ("NUMBER".equals(itemType)) {
                 JsonNode value = item.get("value");
                 if (value == null || !value.isTextual()) {
-                    throw new IllegalArgumentException("NUMBER vector item value must be a string in " + path);
+                    throw new IllegalArgumentException("NUMBER collection item value must be a string in " + path);
                 }
             }
         }

@@ -1,5 +1,5 @@
 id: parser.collection.sum.001
 phase: parser
 kind: valid
-source: 'values..sum()'
-coverage: [collection-function, identifier]
+source: 'values.sum()'
+coverage: [call, identifier]

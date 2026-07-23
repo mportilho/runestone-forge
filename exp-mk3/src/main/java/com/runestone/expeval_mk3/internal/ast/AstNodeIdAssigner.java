@@ -81,7 +81,7 @@ final class AstNodeIdAssigner {
                     next(),
                     functionCall.sourceSpan(),
                     functionCall.name(),
-                    functionCall.arguments().stream().map(this::assignExpression).toList());
+                    functionCall.arguments().stream().map(this::assignCallArgument).toList());
             case GroupedExpressionNode grouped -> new GroupedExpressionNode(
                     next(),
                     grouped.sourceSpan(),
@@ -116,20 +116,21 @@ final class AstNodeIdAssigner {
                     unary.operator(),
                     unary.operatorSpan(),
                     assignExpression(unary.operand()));
-            case VectorLiteralNode vector -> new VectorLiteralNode(
+            case CollectionLiteralNode collection -> new CollectionLiteralNode(
                     next(),
-                    vector.sourceSpan(),
-                    vector.elements().stream().map(this::assignExpression).toList());
+                    collection.sourceSpan(),
+                    collection.elements().stream().map(this::assignExpression).toList());
         };
     }
 
     private NavigationLink assignNavigationLink(NavigationLink link) {
         return switch (link) {
-            case CollectionOperationNavigationLink collectionOperation -> new CollectionOperationNavigationLink(
+            case CallNavigationLink call -> new CallNavigationLink(
                     next(),
-                    collectionOperation.sourceSpan(),
-                    collectionOperation.memberName(),
-                    collectionOperation.arguments().stream().map(this::assignCollectionOperationArgument).toList());
+                    call.sourceSpan(),
+                    call.memberName(),
+                    call.safe(),
+                    call.arguments().stream().map(this::assignCallArgument).toList());
             case FilterNavigationLink filter -> new FilterNavigationLink(
                     next(),
                     filter.sourceSpan(),
@@ -140,12 +141,6 @@ final class AstNodeIdAssigner {
                     index.sourceSpan(),
                     index.index(),
                     index.safe());
-            case MethodNavigationLink method -> new MethodNavigationLink(
-                    next(),
-                    method.sourceSpan(),
-                    method.memberName(),
-                    method.safe(),
-                    method.arguments().stream().map(this::assignExpression).toList());
             case PropertyNavigationLink property -> new PropertyNavigationLink(
                     next(),
                     property.sourceSpan(),
@@ -165,16 +160,14 @@ final class AstNodeIdAssigner {
             case WildcardNavigationLink wildcard -> new WildcardNavigationLink(
                     next(),
                     wildcard.sourceSpan(),
-                    wildcard.kind(),
                     wildcard.safe());
         };
     }
 
-    private CollectionOperationArgument assignCollectionOperationArgument(CollectionOperationArgument argument) {
+    private CallArgument assignCallArgument(CallArgument argument) {
         return switch (argument) {
-            case LambdaCollectionOperationArgument lambda -> new LambdaCollectionOperationArgument(assignLambda(lambda.lambda()));
-            case PositionalCollectionOperationArgument positional -> new PositionalCollectionOperationArgument(
-                    assignExpression(positional.expression()));
+            case ExpressionCallArgument expression -> new ExpressionCallArgument(assignExpression(expression.expression()));
+            case LambdaCallArgument lambda -> new LambdaCallArgument(assignLambda(lambda.lambda()));
         };
     }
 

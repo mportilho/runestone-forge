@@ -37,7 +37,7 @@ Remover conceitos obsoletos do contrato publico e do caminho interno planejavel 
 - Remover declaracoes de `Simbolo Externo` sem default ou sem politica de sobrescrita.
 - Validar defaults externos: sem default null, sem containers/mapas com null validavel, sem mapa com chave null.
 - Rejeitar defaults externos heterogeneos de mapa/colecao sem tipo declarado.
-- Renomear `maxVectorSize` para `maxMaterializedSize` como limite geral de materializacao.
+- Usar `maxMaterializedSize` como limite geral de materializacao.
 - Adicionar `maxFactorialInput` como guard-rail de ambiente.
 - Substituir `ExpressionEnvironmentId` e sua canonicalizacao de conteudo por um UUID textual opaco, gerado internamente para cada ambiente construido e estavel apenas durante a reutilizacao dessa instancia.
 
@@ -138,9 +138,9 @@ Invariantes de sucesso:
 
 - Apenas plana.
 - Nomes duplicados no target sao erro; diagnostico aponta para a segunda ocorrencia e relaciona a primeira.
-- RHS `Vector<T>` com shape conhecido valida aridade em compilacao.
-- RHS `Vector<T>` com shape desconhecido registra checagem diferida de aridade exata.
-- `Collection<T>`, `Map` e `ObjectType` nao sao desestruturaveis.
+- RHS `Collection<T>` com shape conhecido valida aridade minima em compilacao.
+- RHS `Collection<T>` com shape desconhecido registra checagem diferida de aridade minima.
+- `Map` e `ObjectType` nao sao desestruturaveis.
 
 ### Nulidade
 
@@ -169,7 +169,7 @@ Invariantes de sucesso:
 - Ordenacao aceita apenas familias homogeneas ordenaveis: `NUMBER`, `STRING`, `DATE`, `TIME`, `DATETIME`.
 - `DATE`, `TIME` e `DATETIME` nao sao comparaveis entre si.
 - `in` em mapa testa existencia de chave textual e exige lado esquerdo `STRING`.
-- `in`/`not in` de `ObjectType` em colecao/vetor nao e permitido.
+- `in`/`not in` de `ObjectType` em colecao nao e permitido.
 
 ### Funcoes
 
@@ -179,7 +179,7 @@ Invariantes de sucesso:
 - Overload comum nao usa coercao de borda.
 - Funcoes nao aceitam argumento `MAY_BE_NULL`.
 - `as*` refinam apenas o resultado da chamada, nunca o simbolo original.
-- `asVector(x)` generico nao existe; assercoes vetoriais devem declarar elemento conhecido.
+- `asCollection(x)` generico nao existe; assercoes de colecao devem declarar elemento conhecido.
 - Funcoes impuras sao semanticamente validas, mas bloqueiam folding/CSE/reordenacao posterior.
 
 ### Navegacao
@@ -191,21 +191,19 @@ Invariantes de sucesso:
 - `Map<V>["key"]` retorna `V NEVER_NULL` quando executa com sucesso; chave ausente ou valor null e erro runtime do link.
 - Link nao seguro exige receiver `NEVER_NULL`.
 - `?.` protege apenas receiver null daquele link e nao mascara membro invalido, indice invalido, chave ausente ou erro de predicado.
-- Nao ha projecao implicita sobre `Vector<T>` ou `Collection<T>`.
+- Nao ha projecao implicita sobre `Collection<T>`.
 
-### Vetores, Colecoes e Mapas
+### Colecoes e Mapas
 
-- `Vector<T>` e ordenado, indexavel e fatiavel.
-- `Collection<T>` e iteravel, filtravel, mapeavel, quantificavel e agregavel, mas nao indexavel/fatiavel.
+- `Collection<T>` e ordenada, indexavel, fatiavel, filtravel, mapeavel, quantificavel, agregavel e desestruturavel.
 - `STRING` nao e indexavel/fatiavel na Etapa 4.
 - Index/slice exigem indice/bounds `NUMBER NEVER_NULL` e integralidade conhecida ou checagem diferida.
 - Slice usa intervalo half-open `[start:end)`, bounds negativos a partir do fim, e nao faz clamp silencioso.
-- `[*]` e valido apenas em `Vector<T>` e retorna `Collection<T>`.
-- `.*` em mapa retorna `Collection<V>`.
-- Filtro `[?(...)]` e selecao iteravel e vale para vetor, colecao e mapa.
-- `map` preserva vetor, preserva colecao e transforma mapa em colecao.
+- `[*]` e o unico Curinga de Navegacao e retorna `Collection<T>` para colecao ou `Collection<V>` para mapa.
+- Filtro `[?(...)]` e selecao iteravel e vale para colecao e mapa.
+- `map` preserva colecao e transforma mapa em colecao.
 - `any/all` sao lazy por elemento.
-- `sum` de vetor/colecao vazia retorna zero decimal.
+- `sum` de colecao vazia retorna zero decimal.
 - `count` retorna `NUMBER NEVER_NULL` com `Fato Numerico.INTEGRAL_KNOWN`.
 - Operacoes que materializam carregam metadata de `Limite de Materializacao`.
 
@@ -214,7 +212,7 @@ Invariantes de sucesso:
 - `ObjectType` pode ser intermediario para navegacao, atribuicao interna e funcao explicita.
 - Resultado final `ObjectType` e erro semantico.
 - Containers contendo `ObjectType` em qualquer profundidade nao sao publicamente exponiveis.
-- Resultado final `Vector`, `Collection` ou `Map` e valido se `NEVER_NULL` e publicamente exponivel.
+- Resultado final `Collection` ou `Map` e valido se `NEVER_NULL` e publicamente exponivel.
 - `Collection<T>` publicamente exponivel deve ser materializada na borda; nao expor `Iterable` Java cru.
 - `Map<V>` publicamente exponivel deve ser materializado como mapa imutavel com chaves `String`.
 

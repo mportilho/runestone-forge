@@ -2,6 +2,8 @@
 
 Este documento consolida as decisoes tomadas durante a sessao de planejamento da Etapa 4 do `exp-mk3`. Ele registra o estado atual das decisoes, ja considerando revisoes que substituem decisoes anteriores da conversa.
 
+> A ADR 0016 supersede neste registro os contratos anteriores de containers sequenciais, chamadas com sintaxe dedicada, curinga de filho e classificacao de chamadas na AST fonte. O contrato vigente usa apenas `CollectionType<T>`, chamadas navegadas `.`/`?.` classificadas pelo resolvedor e o curinga `[*]`/`?.[*]`.
+
 ## Escopo da Etapa 4
 
 - O `SemanticResolver` e responsavel por decidir o significado semantico da expressao; etapas posteriores executam esse significado.
@@ -69,9 +71,9 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - `UnknownType` nao deve ser mantido como tipo publico de "qualquer entrada" e nao deve ser renomeado para `AnyType`.
 - Tipos de expressao aceitos continuam sendo tipos conhecidos; abertura de argumento deve ser representada por contrato ou restricao de parametro, nao por `ExpressionType` planejavel.
 - Funcoes `asNumber/asText/asBool/asDate/asTime/asDateTime` recebem um contrato especial de entrada de assercao/conversao, nao um parametro `UnknownType`.
-- `asVector(x)` generico nao deve ser oferecido como built-in na Etapa 4, porque nao produz elemento conhecido sem contrato adicional.
-- Built-ins vetoriais devem declarar o elemento no nome ou na assinatura, por exemplo `asVectorOfNumber(x)` ou assinatura concreta equivalente.
-- Regra geral de catalogo: uma funcao de assercao vetorial so e registravel se declarar retorno `VectorType<T>` com `T` conhecido.
+- `asCollection(x)` generico nao deve ser oferecido como built-in na Etapa 4, porque nao produz elemento conhecido sem contrato adicional.
+- Built-ins de colecao devem declarar o elemento no nome ou na assinatura, por exemplo `asCollectionOfNumber(x)` ou assinatura concreta equivalente.
+- Regra geral de catalogo: uma funcao de assercao de colecao so e registravel se declarar retorno `CollectionType<T>` com `T` conhecido.
 - O `ReflectedFunctionImporter` deve rejeitar no registro qualquer tipo Java sem mapeamento conhecido para tipo de expressao.
 - Coercao de borda deve operar sobre valor Java de origem e tipo alvo conhecido, sem modelar a origem como `UnknownType`.
 - Defaults externos de mapa ou colecao vazios ou heterogeneos sem tipo declarado devem ser rejeitados no builder do ambiente.
@@ -105,7 +107,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - `Variavel de Tipo Pendente` pode existir apenas durante a resolucao para inferencia contextual local.
 - `Variavel de Tipo Pendente` nao representa simbolo fonte implicito nem simbolo externo nao declarado.
 - Toda `Variavel de Tipo Pendente` deve resolver para tipo conhecido ou gerar diagnostico antes de sucesso.
-- Exemplos de uso de `Variavel de Tipo Pendente`: vetor vazio em `??`, condicional, membership ou parametro de funcao.
+- Exemplos de uso de `Variavel de Tipo Pendente`: colecao vazia em `??`, condicional, membership ou parametro de funcao.
 
 ## Null e Nulidade de Runtime
 
@@ -182,8 +184,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Ambientes construidos separadamente nao compartilham plano, independentemente de diferirem ou nao em `overridable`.
 - Defaults externos heterogeneos de mapa ou colecao sem tipo declarado devem ser rejeitados.
 - Default externo de colecao/mapa vazio exige tipo declarado.
-- Default externo Java `List`, array ou `Iterable` entra como `Tipo Colecao<T>` por padrao, nao `Tipo Vetor<T>`.
-- Externo so e `Tipo Vetor<T>` se o ambiente declarar explicitamente `VectorType<T>`.
+- Default externo Java `List`, array ou `Iterable` entra como `Tipo Colecao<T>`.
 
 ## Simbolos Internos e Atribuicoes
 
@@ -205,8 +206,8 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - `x := 1; x := "s"` e erro semantico.
 - `x := 1; x := "2"` e erro semantico mesmo que `asNumber("2")` fosse conversivel.
 - `x := 1; x := asNumber("2")` e valido se a assercao/conversao explicita for aceita.
-- `x := []; x := [1]` pode refinar o vetor vazio para `Vetor<NUMBER>`.
-- `x := [1]; x := []` pode tipar o segundo vetor vazio pelo tipo existente de `x`.
+- `x := []; x := [1]` pode refinar a colecao vazia para `Colecao<NUMBER>`.
+- `x := [1]; x := []` pode tipar a segunda colecao vazia pelo tipo existente de `x`.
 - Usos intermediarios tambem participam das restricoes do simbolo interno.
 - Atribuicao cujo RHS e `Tipo Invalido` faz o simbolo interno propagar `Tipo Invalido` no fluxo de falha sem cascata.
 - Programa com atribuicoes e sem expressao de resultado e semanticamente valido.
@@ -219,14 +220,13 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Nao projetar suporte a desestruturacao aninhada agora.
 - Cada identificador folha da desestruturacao vira um `Simbolo Interno` proprio com slot proprio.
 - A ordem de slots da desestruturacao segue a ordem textual esquerda-para-direita.
-- Atribuicao de desestruturacao nao cria slot para a tupla/vetor inteiro, salvo temporario de execucao se necessario.
-- Aridade conhecida de vetor literal deve ser validada em compile-time.
+- Atribuicao de desestruturacao nao cria slot para a colecao inteira, salvo temporario de execucao se necessario.
+- Tamanho conhecido de literal de colecao deve ser validado em compile-time.
 - `[a, b] := [1, 2]` e valido.
 - `[a, b] := [1]` e erro semantico.
 - `[a, b] := []` e erro semantico de aridade conhecida incompativel.
-- Fonte desestruturavel com aridade desconhecida e valida apenas quando o RHS tem tipo `Vector<T>` e forma `UNKNOWN_SIZE`; nesse caso o resolver registra `Checagem Diferida` de aridade exata.
-- Cada alvo de desestruturacao de `Vector<T>` recebe tipo `T`.
-- `Collection<T>` nao e desestruturavel por padrao, porque nao e indexavel nem promete forma estavel.
+- Fonte desestruturavel com tamanho desconhecido e valida quando o RHS tem tipo `Collection<T>` e forma `UNKNOWN_SIZE`; nesse caso o resolver registra `Checagem Diferida` de tamanho minimo.
+- Cada alvo de desestruturacao de `Collection<T>` recebe tipo `T`; elementos excedentes sao ignorados.
 - `Map` e `Object` nao sao desestruturaveis na Etapa 4.
 - Nomes duplicados no mesmo target, como `[a, a]`, sao erro semantico.
 - O diagnostico de duplicidade deve apontar para a segunda ocorrencia e relacionar a primeira.
@@ -277,7 +277,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Evitar um resultado unico com `SemanticModel` opcional, porque permite estados invalidos como modelo com erro ou falha sem erro.
 - `SemanticModel` deve preservar a AST imutavel e source-faithful.
 - Anotacoes semanticas devem ficar em mapas por `NodeId`, nao em wrappers mutaveis de AST.
-- Campos esperados incluem AST, tipos resolvidos, bindings de simbolo, bindings de funcao, bindings de navegacao, fatos numericos, nulidade de runtime, formas de colecao/vetor conhecidas, valores preparados, checagens diferidas e layout de frame.
+- Campos esperados incluem AST, tipos resolvidos, bindings de simbolo, bindings de funcao, bindings de navegacao, fatos numericos, nulidade de runtime, formas de colecao conhecidas, valores preparados, checagens diferidas e layout de frame.
 - Todo `ExpressionNode` em `SemanticResolutionSuccess` deve ter entrada em `resolvedTypes`.
 - Todo `ExpressionNode` valorado em `SemanticResolutionSuccess` deve ter tipo resolvido e nulidade resolvida.
 - Elementos de AST que produzem valor, incluindo links de navegacao com `NodeId`, devem ter tipo resolvido ou tipo resultante registrado.
@@ -291,7 +291,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 
 - `Checagem Diferida` existe apenas para pre-condicoes de valor runtime em constructs ja tipados.
 - Checagens diferidas nao podem representar escolha de tipo, overload runtime ou navegacao sobre tipo desconhecido.
-- Exemplos validos: fatorial integral nao negativo, grau de `root` integral positivo, bounds de subscript, aridade de desestruturacao de vetor dinamico e limites de materializacao.
+- Exemplos validos: fatorial integral nao negativo, grau de `root` integral positivo, bounds de subscript, tamanho minimo de desestruturacao de colecao dinamica e limites de materializacao.
 - O `ExecutionPlanBuilder` consome checagens diferidas sem redescobrir regras semanticas.
 - Com `strict mode` removido, nao ha politica de rejeicao especial de checagens diferidas por modo estrito.
 
@@ -364,22 +364,21 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - `ObjectType` deve ser navegado ou passado para funcoes com contrato explicito, nao usado diretamente em operadores.
 - Ordenacao aceita apenas familias homogeneas ordenaveis: `NUMBER`, `STRING`, `DATE`, `TIME`, `DATETIME`.
 - Ordenacao exige operandos `RuntimeNullability.NEVER_NULL`.
-- `BOOLEAN`, `VECTOR`, `COLLECTION`, `MAP` e `OBJECT` nao sao ordenaveis por padrao.
+- `BOOLEAN`, `COLLECTION`, `MAP` e `OBJECT` nao sao ordenaveis por padrao.
 - Temporais diferentes nao sao comparaveis diretamente.
 - `DATE = DATETIME` e erro semantico.
 - `DATE < DATE`, `TIME < TIME` e `DATETIME < DATETIME` sao validos.
 - `between` exige que valor e limites unifiquem na mesma familia ordenavel.
 - `between` exige valor e limites `RuntimeNullability.NEVER_NULL`.
-- `x in Tipo Vetor<T>` e valido se `x` for compativel com `T`.
 - `x in Tipo Colecao<T>` e valido se `x` for compativel com `T`.
 - `x in Tipo Mapa<V>` testa existencia de chave textual e exige lado esquerdo `STRING`.
 - `in` e `not in` exigem operandos `RuntimeNullability.NEVER_NULL`.
-- Pertencimento de `ObjectType` em vetor/colecao de objetos nao e permitido na Etapa 4; usar funcao explicita quando necessario.
+- Pertencimento de `ObjectType` em colecao de objetos nao e permitido na Etapa 4; usar funcao explicita quando necessario.
 - `value in map` nao testa valores.
-- Para valores de mapa, o usuario deve usar `value in map..values()`.
+- Para valores de mapa, o usuario deve usar `value in map.values()`.
 - `x in STRING` nao significa substring.
 - Substring deve ser funcao explicita, se existir.
-- `x in []` pode usar o tipo conhecido de `x` para tipar o vetor vazio.
+- `x in []` pode usar o tipo conhecido de `x` para tipar a colecao vazia.
 
 ## Condicionais e Coalescencia Nula
 
@@ -391,50 +390,42 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Null runtime em condicao nao e tratado como `false`; fallback deve ser explicito, por exemplo `customer?.active ?? false`.
 - Ramos de resultado de condicional devem unificar para tipo conhecido.
 - Como a fonte nao tem `null`, nao ha ramo literal nulo.
-- Condicionais podem usar inferencia contextual local para vetor vazio.
-- `if c then [] else [1] endif` resolve como `Vetor<NUMBER>`.
+- Condicionais podem usar inferencia contextual local para colecao vazia.
+- `if c then [] else [1] endif` resolve como `Colecao<NUMBER>`.
 - `if c then [] else [] endif` e erro por elemento indeterminado.
 - `??` exige operandos de tipos estaticos unificaveis.
-- `[] ?? [1]` resolve como `Vetor<NUMBER>`.
+- `[] ?? [1]` resolve como `Colecao<NUMBER>`.
 - `[] ?? []` e erro por elemento indeterminado.
 - `1 ?? "x"` e erro de tipos incompativeis, mesmo que folding posterior pudesse provar alcance.
 
-## Vetores, Colecoes e Mapas
+## Colecoes e Mapas
 
-- Forma/tamanho conhecido de vetor ou colecao deve ser metadata semantica por no, nao parte de `VectorType<T>` ou `CollectionType<T>`.
+- Forma/tamanho conhecido de colecao e metadata semantica por no, nao parte de `CollectionType<T>`.
 - Metadata de forma inicial recomendada: `FIXED_SIZE(n)` e `UNKNOWN_SIZE`.
-- Vetor literal recebe `FIXED_SIZE(n)`.
-- Vetores externos, colecoes externas e resultados dinamicos recebem `UNKNOWN_SIZE`, salvo contrato futuro mais especifico.
-- Forma conhecida e usada para validar desestruturacao estatica, bounds de index/slice estaticos e `maxMaterializedSize` de vetor literal.
-- `Tipo Vetor<T>` e ordenado, indexavel e fatiavel.
-- `Tipo Colecao<T>` e iteravel, filtravel, mapeavel, quantificavel e agregavel conforme elemento, mas nao e indexavel nem fatiavel por padrao.
-- `STRING` nao e indexavel nem fatiavel na Etapa 4; subscript e slice de texto devem ser funcoes built-in explicitas se necessarios.
-- Arrays, `List` e `Iterable` externos entram como `Tipo Colecao<T>` por padrao e nao aceitam `[i]` ou `[a:b]` salvo declaracao explicita como `VectorType<T>`.
-- Se indexacao de listas externas for necessaria no futuro, deve ser modelada por capacidade/tipo explicito, nao presumida em `Tipo Colecao`.
-- `Vector<T>[i]` retorna `T`.
-- `Vector<T>[a:b]` retorna `Vector<T>`.
-- Indice negativo em vetor e contado a partir do fim.
-- Slice de vetor usa intervalo half-open `[start:end)`.
-- Bound omitido em slice usa inicio ou fim do vetor.
-- Bound negativo em slice e contado a partir do fim.
+- Literal de colecao recebe `FIXED_SIZE(n)`; colecoes externas e resultados dinamicos recebem `UNKNOWN_SIZE`, salvo contrato mais especifico.
+- Forma conhecida e usada para validar desestruturacao estatica, bounds de index/slice estaticos e `maxMaterializedSize` do literal.
+- `Tipo Colecao<T>` e ordenado, indexavel, fatiavel, desestruturavel, filtravel, mapeavel, quantificavel e agregavel conforme o elemento.
+- Arrays, `List`, `Collection` e `Iterable` externos entram como `Tipo Colecao<T>`.
+- `Collection<T>[i]` retorna `T`; `Collection<T>[a:b]` retorna `Collection<T>`.
+- Indice negativo e contado a partir do fim; slice usa intervalo half-open `[start:end)`.
+- Bound omitido usa inicio ou fim da colecao e bound negativo e contado a partir do fim.
 - Apos normalizacao, slice exige `0 <= start <= end <= size`.
 - Slice fora de bounds ou invertido falha; nao ha clamp silencioso.
-- Quando vetor e indice tem forma/tamanho conhecidos em compilacao, bounds impossiveis sao erro semantico.
+- Quando colecao e indice tem forma/tamanho conhecidos em compilacao, bounds impossiveis sao erro semantico.
 - Quando bounds dependem de valor runtime, o resolver registra `Checagem Diferida` de bounds.
-- Indices de vetor e bounds de slice exigem `NUMBER` `RuntimeNullability.NEVER_NULL`.
+- Indices de colecao e bounds de slice exigem `NUMBER` `RuntimeNullability.NEVER_NULL`.
 - Indice/bound com fato numerico `FRACTIONAL_KNOWN`, como `v[1.5]`, e erro semantico.
 - Indice/bound dinamico com fato numerico desconhecido gera `Checagem Diferida` de integralidade.
-- Vetor literal com elementos deve unificar os elementos para tipo conhecido.
-- `[1, 2, 3]` resolve como `Tipo Vetor<NUMBER>`.
+- Literal de colecao com elementos deve unificar os elementos para tipo conhecido.
+- `[1, 2, 3]` resolve como `Tipo Colecao<NUMBER>`.
 - `[1, "x"]` e erro semantico.
 - `[null]` nao existe porque `null` nao e literal de fonte.
 - `[]` e valido apenas quando contexto fornece tipo de elemento conhecido.
 - `[]` isolado como expressao final e erro semantico.
 - `x := []` e erro semantico se nao houver tipo esperado para `x`.
-- `asVector([])` e erro se `asVector` nao define elemento.
-- Vetores aninhados unificam recursivamente quando os elementos sao conhecidos.
-- `Tipo Vetor` representa valores vetoriais produzidos pela linguagem ou declarados explicitamente.
-- `Tipo Colecao` representa grupos externos/iteraveis e resultados de operacoes que nao prometem semantica vetorial.
+- `asCollection([])` e erro se `asCollection` nao define elemento.
+- Colecoes aninhadas unificam recursivamente quando os elementos sao conhecidos.
+- `Tipo Colecao` representa todos os valores sequenciais da linguagem, independentemente da origem.
 - `Tipo Mapa` e text-keyed.
 - Acesso a mapa por propriedade nao e permitido.
 - `m["key"]` e a forma de acessar valor de mapa.
@@ -472,10 +463,10 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - `asNumber(x)` quando `x` ja e `NUMBER` deve ser marcado como assercao redundante para Etapa 7 elidir.
 - Funcoes `as*` refinam apenas o resultado da chamada, nao alteram o tipo global nem o binding do simbolo passado como argumento.
 - Se o usuario quiser reutilizar um valor convertido, deve atribuir explicitamente, por exemplo `n := asNumber(x); n + 2`.
-- `asVector(x)` generico nao deve existir como built-in na Etapa 4.
-- Assercoes vetoriais devem ser explicitas quanto ao elemento, por exemplo `asVectorOfNumber(x)`, ou declaradas por assinatura concreta equivalente.
-- `f([])` pode tipar `[]` pelo parametro se houver assinatura unica, como `f(Vector<NUMBER>)`.
-- `f([])` e ambiguo se houver overloads como `f(Vector<NUMBER>)` e `f(Vector<STRING>)`.
+- `asCollection(x)` generico nao deve existir como built-in na Etapa 4.
+- Assercoes de colecao devem ser explicitas quanto ao elemento, por exemplo `asCollectionOfNumber(x)`, ou declaradas por assinatura concreta equivalente.
+- `f([])` pode tipar `[]` pelo parametro se houver assinatura unica, como `f(Collection<NUMBER>)`.
+- `f([])` e ambiguo se houver overloads como `f(Collection<NUMBER>)` e `f(Collection<STRING>)`.
 - `FunctionCatalog` deve validar que toda `Funcao Dobravel` e `Funcao Pura`.
 - Etapa 4 nao executa funcoes dobraveis; apenas marca.
 - Funcoes impuras sao semanticamente validas, mas bloqueiam folding, CSE e reordenacao posterior.
@@ -539,24 +530,24 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - `ObjectType` pode ser atribuido a `Simbolo Interno` como valor intermediario para navegacao posterior ou passagem para funcao.
 - Expressao de resultado final com tipo `ObjectType` e erro semantico.
 - Views publicas de atribuicao nao devem expor valores finais `ObjectType` por padrao; se necessario no futuro, isso exige contrato/API explicito.
-- `Vector<ObjectType>`, `Collection<ObjectType>` e `Map<ObjectType>` tambem nao podem ser resultado final nem valor exposto por views publicas de atribuicao.
+- `Collection<ObjectType>` e `Map<ObjectType>` tambem nao podem ser resultado final nem valor exposto por views publicas de atribuicao.
 - Containers com `ObjectType` podem existir como intermediarios para filtro, `map`, navegacao explicita e funcoes.
-- `Map<ObjectType>` pode ser simbolo externo/intermediario; `map["id"].property` e `map..values()..map(@ -> @.property)` sao usos validos quando os membros existem.
+- `Map<ObjectType>` pode ser simbolo externo/intermediario; `map["id"].property` e `map.values().map(@ -> @.property)` sao usos validos quando os membros existem.
 - `map[?(@.v.active)]` preserva `Map<ObjectType>` e precisa de projecao antes da borda publica.
 - A regra de nao expor `ObjectType` na borda publica e recursiva: qualquer tipo que contenha `ObjectType` em qualquer profundidade nao e exponivel.
 - Escalares e containers compostos apenas por escalares ou containers exponiveis podem ser exponiveis.
-- Resultado final `Vector`, `Collection` ou `Map` e semanticamente valido quando e `NEVER_NULL` e publicamente exponivel.
+- Resultado final `Collection` ou `Map` e semanticamente valido quando e `NEVER_NULL` e publicamente exponivel.
 - Resultado final `Collection<T>` publicamente exponivel deve ser marcado para materializacao na borda publica; a API nao deve expor `Iterable` Java cru.
 - Etapa 6 aplica `Limite de Materializacao` em runtime para colecoes materializadas na borda.
 - Resultado final `Map<V>` publicamente exponivel deve ser materializado como mapa imutavel com chaves `String`.
 - Conversao de borda de mapas e recursiva sobre valores; chave null e valor null nao sao permitidos.
-- `Limite de Materializacao` deve contar entradas de mapa materializadas, nao apenas elementos de vetor/colecao.
+- `Limite de Materializacao` deve contar entradas de mapa materializadas e elementos de colecao.
 - `asMath()` exige resultado escalar `NUMBER`.
 - `asLogical()` exige resultado escalar `BOOLEAN`.
 - `asAssignments()` pode expor simbolos internos com tipos publicamente exponiveis.
 - `asAssignments()` deve rejeitar a view se algum simbolo a ser exposto tiver tipo nao exponivel; nao deve omitir simbolos silenciosamente.
 - O modelo pode carregar metadata/helper de tipo exponivel publicamente para validar expressao de resultado e views de atribuicao.
-- O usuario deve projetar objetos para valores de linguagem antes da borda publica, por exemplo `customers..map(@ -> @.name)`.
+- O usuario deve projetar objetos para valores de linguagem antes da borda publica, por exemplo `customers.map(@ -> @.name)`.
 - Metodo de objeto e `Vinculo de Navegacao`, nao `Vinculo de Funcao`.
 - `customer.fullName()` pertence ao Java type/catalogo de navegacao do receptor.
 - `customer?.fullName()` segue politica de navegacao segura.
@@ -582,35 +573,29 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Subscript textual `receiver["key"]` e valido apenas em `Tipo Mapa<V>`.
 - `Tipo Objeto["key"]` e erro semantico; objetos usam apenas membros registrados por propriedade/metodo.
 - A Etapa 4 nao tem acesso dinamico a membro de objeto por string.
-- Nao ha projecao implicita de propriedade ou metodo sobre `Tipo Vetor<T>` ou `Tipo Colecao<T>`.
+- Nao ha projecao implicita de propriedade ou chamada sobre `Tipo Colecao<T>`.
 - Propriedade e metodo navegam sobre `Tipo Objeto`, nao sobre colecao de objetos.
-- Depois de `pessoa.endereco[?(@.principal)]`, o resultado continua sendo colecao/vetor de `Endereco`; `.ativo` aplicado diretamente sobre essa colecao e erro semantico.
-- Para projetar membros de itens, o usuario deve usar operacao explicita, por exemplo `..map(@ -> @.ativo)`.
+- Depois de `pessoa.endereco[?(@.principal)]`, o resultado continua sendo colecao de `Endereco`; `.ativo` aplicado diretamente sobre essa colecao e erro semantico.
+- Para projetar membros de itens, o usuario deve usar operacao explicita, por exemplo `.map(@ -> @.ativo)`.
 - Comparacao entre colecao projetada e escalar continua invalida; quantificacao deve ser explicita com operacoes como `any`/`all` quando disponiveis no catalogo.
 
 ## Wildcards
 
-- `[*]` em `Tipo Vetor<T>` resulta `Tipo Colecao<T>`.
-- `[*]` em `Tipo Colecao<T>` e invalido.
-- `[*]` em `Tipo Mapa` e invalido.
-- `.*` em `Tipo Mapa<V>` resulta `Tipo Colecao<V>`.
-- `.*` em `Tipo Objeto` conhecido so e valido se o tipo registrado declarar exposicao de filhos/valores.
-- `.*` nao deve refletir automaticamente todos os membros publicos.
+- `[*]` e o unico curinga e resulta `Tipo Colecao<T>` para colecao, `Tipo Colecao<V>` para mapa ou a colecao homogenea de filhos explicitamente registrados de um objeto.
+- `?.[*]` e a unica forma segura do curinga.
+- O curinga nao reflete automaticamente todos os membros publicos.
 - Wildcard produz colecao de valores e nao preserva chaves de mapa.
-- Para chaves de mapa, usar `..keys()`.
+- Para chaves de mapa, usar `.keys()`.
 
 ## Filtros, Lambdas e Item Atual
 
-- Filtro e valido em `Tipo Vetor<T>`, `Tipo Colecao<T>` e `Tipo Mapa<V>`.
-- Filtro sintatico `[?(...)]` e uma selecao iteravel, nao uma indexacao; por isso continua valido em `Tipo Colecao<T>` mesmo que `[i]`, `[a:b]` e `[*]` sejam invalidos em colecao.
+- Filtro e valido em `Tipo Colecao<T>` e `Tipo Mapa<V>`.
 - Filtro exige receiver `RuntimeNullability.NEVER_NULL` e predicado `BOOLEAN` `RuntimeNullability.NEVER_NULL`.
 - Resultado de filtro e `RuntimeNullability.NEVER_NULL` quando executa com sucesso.
-- Filtro em vetor preserva `Tipo Vetor<T>`.
 - Filtro em colecao preserva `Tipo Colecao<T>`.
 - Filtro em mapa preserva `Tipo Mapa<V>`.
-- Em filtro de vetor/colecao, `@` tem tipo do elemento `T`.
-- Em filtro de vetor/colecao, `@` tem `RuntimeNullability.NEVER_NULL`.
-- Se uma colecao/vetor externo contiver elemento null em runtime, filtro, `map`, `any`, `all` ou `sum` falham com diagnostico runtime ao encontrar o elemento.
+- Em filtro de colecao, `@` tem tipo do elemento `T` e `RuntimeNullability.NEVER_NULL`.
+- Se uma colecao externa contiver elemento null em runtime, filtro, `map`, `any`, `all` ou `sum` falham com diagnostico runtime ao encontrar o elemento.
 - `@?.property` e permitido e produz `MAY_BE_NULL`, mas e defensivo/redundante quando `@` vem de colecao bem formada; a Etapa 4 nao emite warning por isso.
 - Em filtro de mapa, `@` tem tipo contextual `Entrada de Mapa<V>`.
 - `@.k` em filtro de mapa e `STRING`.
@@ -625,7 +610,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Pipelines sequenciais nao somam profundidade depois que o lambda/filtro anterior saiu de escopo.
 - O limite e validado semanticamente na Etapa 4.
 - Diagnostico por excesso de profundidade aponta para o filtro/lambda que tentaria entrar no nivel proibido.
-- Operacoes de colecao com lambda, como `..map(@ -> e)`, devem ser resolvidas na Etapa 4.
+- Chamadas navegadas permanecem nao classificadas na AST; operacoes de colecao com lambda, como `.map(@ -> e)`, sao classificadas e resolvidas na Etapa 4 conforme o tipo do receptor.
 - Lambda introduz `Item Atual` com tipo vindo do descriptor da operacao de colecao.
 - `LambdaNode` so e valido como argumento sintatico direto de operacao de colecao cujo descriptor declara lambda.
 - Funcao global nao recebe lambda na v2; `f(@ -> @.name)` e invalido.
@@ -633,22 +618,18 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Descriptor de operacao de colecao define quais argumentos sao lambdas e quais sao posicionais.
 - Argumento posicional de operacao de colecao nao introduz novo `Item Atual`.
 - `@` em argumento posicional resolve apenas se ja existir contexto externo; caso contrario e erro semantico.
-- `Vector<T>..map(@ -> R)` retorna `Vector<R>`.
-- `Collection<T>..map(@ -> R)` retorna `Collection<R>`.
-- `Map<V>..map(@ -> R)` retorna `Collection<R>`, porque nao preserva chaves.
+- `Collection<T>.map(@ -> R)` retorna `Collection<R>`.
+- `Map<V>.map(@ -> R)` retorna `Collection<R>`, porque nao preserva chaves.
 - Corpo de lambda de `map` deve produzir `RuntimeNullability.NEVER_NULL`; `map` nao pode criar container com elementos null.
-- `..any(@ -> predicate)` e `..all(@ -> predicate)` devem ser incluidos no `Catalogo de Operacoes de Colecao` da Etapa 4.
-- `..any(@ -> predicate)` e `..all(@ -> predicate)` retornam `BOOLEAN` e exigem predicado `BOOLEAN`.
+- `.any(@ -> predicate)` e `.all(@ -> predicate)` devem ser incluidos no `Catalogo de Operacoes de Colecao` da Etapa 4; retornam `BOOLEAN` e exigem predicado `BOOLEAN`.
 - Predicado de `any`/`all` deve produzir `RuntimeNullability.NEVER_NULL`.
-- `..any` curto-circuita no primeiro `true`; `..all` curto-circuita no primeiro `false`.
-- Em colecao vazia, `..any` retorna `false` e `..all` retorna `true`.
-- Versoes sem lambda, como `booleans..any()`, ficam fora da Etapa 4 para reduzir superficie inicial.
-- `..sum()` exige elemento `NUMBER` e retorna `NUMBER`.
-- `Vector<NUMBER>..sum()` e `Collection<NUMBER>..sum()` retornam `NUMBER` `RuntimeNullability.NEVER_NULL`.
-- `sum()` sobre vetor/colecao vazia retorna zero decimal.
+- `.any` curto-circuita no primeiro `true`; `.all` curto-circuita no primeiro `false`.
+- Em colecao vazia, `.any` retorna `false` e `.all` retorna `true`.
+- Versoes sem lambda, como `booleans.any()`, ficam fora da Etapa 4 para reduzir superficie inicial.
+- `Collection<NUMBER>.sum()` retorna `NUMBER` `RuntimeNullability.NEVER_NULL`; sobre colecao vazia, retorna zero decimal.
 - Elemento null encontrado durante `sum()` e erro runtime.
-- `Vector<T>..count()`, `Collection<T>..count()` e `Map<V>..count()` retornam `NUMBER` `RuntimeNullability.NEVER_NULL` com `Fato Numerico.INTEGRAL_KNOWN`.
-- `map..count()` conta entradas do mapa.
+- `Collection<T>.count()` e `Map<V>.count()` retornam `NUMBER` `RuntimeNullability.NEVER_NULL` com `Fato Numerico.INTEGRAL_KNOWN`.
+- `map.count()` conta entradas do mapa.
 - `count()` nao introduz tipo publico `INTEGER`.
 - `count()` em `Collection<T>` pode exigir iteracao runtime, mas nao materializa elementos em novo container.
 - `map()` materializa resultado e deve carregar metadata de `Limite de Materializacao`.
@@ -659,20 +640,16 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 
 ## Operacoes de Colecao em Mapas
 
-- `map..keys()` retorna `Tipo Colecao<STRING>`.
-- `map..values()` retorna `Tipo Colecao<V>`.
-- `map..keys()` e `map..values()` exigem receiver `Map<V>` `RuntimeNullability.NEVER_NULL` e retornam `RuntimeNullability.NEVER_NULL`.
-- Se `V` contem `ObjectType`, `map..values()` e valido como intermediario, mas nao como resultado final publicamente exponivel.
+- `map.keys()` retorna `Tipo Colecao<STRING>` e `map.values()` retorna `Tipo Colecao<V>`.
+- `map.keys()` e `map.values()` exigem receiver `Map<V>` `RuntimeNullability.NEVER_NULL` e retornam `RuntimeNullability.NEVER_NULL`.
+- Se `V` contem `ObjectType`, `map.values()` e valido como intermediario, mas nao como resultado final publicamente exponivel.
 - Valor null encontrado em mapa durante `values()` e erro runtime, nao elemento `MAY_BE_NULL`.
-- `map..map(@ -> e)` e valido com `@` como `Entrada de Mapa<V>` e retorna `Tipo Colecao<R>`.
-- `map..map(@ -> e)` nao preserva chaves.
-- `map..any(@ -> predicate)` e `map..all(@ -> predicate)` sao validos com `@` como `Entrada de Mapa<V>` e retornam `BOOLEAN`.
-- `map..any` e `map..all` permitem quantificacao explicita sobre chaves e valores sem preservar mapa.
-- `map..count()` retorna quantidade de entradas como `NUMBER` integral.
-- `map..sum()` nao soma valores implicitamente.
-- Para somar valores, usar `map..values()..sum()`.
+- `map.map(@ -> e)` e valido com `@` como `Entrada de Mapa<V>` e retorna `Tipo Colecao<R>` sem preservar chaves.
+- `map.any(@ -> predicate)` e `map.all(@ -> predicate)` sao validos com `@` como `Entrada de Mapa<V>` e retornam `BOOLEAN`.
+- `map.count()` retorna quantidade de entradas como `NUMBER` integral.
+- `map.sum()` nao soma valores implicitamente; para somar valores, usar `map.values().sum()`.
 - Filtro sintatico `map[?(...)]` cobre o caso de filtrar preservando mapa.
-- Nao e necessario criar uma operacao separada `map..filter(...)` para preservar mapa nesta etapa.
+- Nao e necessario criar uma operacao separada `map.filter(...)` para preservar mapa nesta etapa.
 
 ## JavaTypeCatalog e Metadados Java
 
@@ -691,8 +668,8 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 ## Limites e Materializacao
 
 - `maxMaterializedSize` deve ser validado na Etapa 4 apenas para materializacoes estaticamente conhecidas.
-- Vetor literal maior que `maxMaterializedSize` e erro semantico.
-- `maxMaterializedSize` limita vetor literal, resultados materializados de operacoes de colecao, entradas de mapa materializado e materializacao de colecao na borda publica.
+- Literal de colecao maior que `maxMaterializedSize` e erro semantico.
+- `maxMaterializedSize` limita literal de colecao, resultados materializados de operacoes de colecao, entradas de mapa materializado e materializacao de colecao na borda publica.
 - `maxMaterializedSize` pertence ao ambiente e afeta aceitacao/execucao, sem ser serializado no identificador de instancia.
 - Filtros, `map`, `values`, wildcard e operacoes com tamanho runtime carregam metadata de materializacao.
 - Etapa 6 aplica limites em runtime para materializacoes dinamicas.
