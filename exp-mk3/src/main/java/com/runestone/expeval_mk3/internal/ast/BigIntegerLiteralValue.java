@@ -3,9 +3,9 @@ package com.runestone.expeval_mk3.internal.ast;
 import java.math.BigInteger;
 import java.util.Objects;
 
-record BigIntegerLiteralValue(BigInteger value) implements LiteralValue {
+public record BigIntegerLiteralValue(BigInteger value) implements LiteralValue {
 
-    BigIntegerLiteralValue {
+    public BigIntegerLiteralValue {
         Objects.requireNonNull(value, "value");
     }
 }

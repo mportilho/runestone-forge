@@ -1,6 +1,6 @@
 package com.runestone.expeval_mk3.internal.ast;
 
-sealed interface LiteralValue permits
+public sealed interface LiteralValue permits
         BigIntegerLiteralValue,
         BooleanLiteralValue,
         DateLiteralValue,

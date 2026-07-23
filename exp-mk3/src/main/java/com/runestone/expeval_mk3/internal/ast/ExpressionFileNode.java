@@ -6,13 +6,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-record ExpressionFileNode(
+public record ExpressionFileNode(
         NodeId id,
         SourceSpan sourceSpan,
         List<AssignmentNode> assignments,
         Optional<ExpressionNode> resultExpression) implements AstNode {
 
-    ExpressionFileNode {
+    public ExpressionFileNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(assignments, "assignments");

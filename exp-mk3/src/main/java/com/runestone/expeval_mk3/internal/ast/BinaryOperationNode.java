@@ -4,7 +4,7 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 
 import java.util.Objects;
 
-record BinaryOperationNode(
+public record BinaryOperationNode(
         NodeId id,
         SourceSpan sourceSpan,
         ExpressionNode left,
@@ -12,7 +12,7 @@ record BinaryOperationNode(
         SourceSpan operatorSpan,
         ExpressionNode right) implements ExpressionNode {
 
-    BinaryOperationNode {
+    public BinaryOperationNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(left, "left");

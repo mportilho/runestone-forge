@@ -98,7 +98,9 @@ final class ExpressionCaseLoader {
         if (requiresResult(phase)) {
             JsonNode expectedObject = requiredObject(root, "expected", path);
             validateExpectedResult(expectedObject, path);
-            return new ExpectedResult(requiredText(expectedObject, "type", path));
+            return new ExpectedResult(
+                    requiredText(expectedObject, "type", path),
+                    expectedObject.get("result").deepCopy());
         }
         return NoExpectedOutcome.INSTANCE;
     }

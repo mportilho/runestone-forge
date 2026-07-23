@@ -3,9 +3,9 @@ package com.runestone.expeval_mk3.internal.ast;
 import java.time.OffsetDateTime;
 import java.util.Objects;
 
-record OffsetDateTimeLiteralValue(OffsetDateTime value) implements LiteralValue {
+public record OffsetDateTimeLiteralValue(OffsetDateTime value) implements LiteralValue {
 
-    OffsetDateTimeLiteralValue {
+    public OffsetDateTimeLiteralValue {
         Objects.requireNonNull(value, "value");
     }
 }

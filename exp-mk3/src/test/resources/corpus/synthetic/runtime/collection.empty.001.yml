@@ -1,8 +1,10 @@
-id: runtime.collection.empty.001
-phase: runtime
-kind: valid
+id: semantic.collection.empty.001
+phase: semantic
+kind: invalid
 source: '[]'
 coverage: [empty-collection, collection-literal]
 expected:
-  type: COLLECTION
-  result: []
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_EMPTY_COLLECTION_REQUIRES_CONTEXT
+    span: {offset: 0, endOffset: 2, line: 1, column: 1}

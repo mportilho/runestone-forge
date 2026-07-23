@@ -1,6 +1,6 @@
 package com.runestone.expeval_mk3.internal.ast;
 
-enum BinaryOperator {
+public enum BinaryOperator {
     LOGICAL_OR,
     LOGICAL_AND,
     LOGICAL_NAND,

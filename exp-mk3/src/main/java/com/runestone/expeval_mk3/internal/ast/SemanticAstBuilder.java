@@ -25,9 +25,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 
-final class SemanticAstBuilder {
+public final class SemanticAstBuilder {
 
-    SemanticAstBuildResult build(ParseSuccess parseSuccess) {
+    public SemanticAstBuildResult build(ParseSuccess parseSuccess) {
         return new SemanticAstBuildSession().build(parseSuccess);
     }
 }

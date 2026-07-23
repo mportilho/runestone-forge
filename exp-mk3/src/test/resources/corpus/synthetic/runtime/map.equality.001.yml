@@ -1,0 +1,24 @@
+id: runtime.map.equality.001
+phase: runtime
+kind: valid
+source: 'left = right'
+environment:
+  maxMaterializedSize: 16
+  maxFactorialInput: 32
+  symbols:
+    left:
+      type: MAP_COLLECTION_NUMBER
+      default:
+        first: [{type: NUMBER, value: "1.0"}]
+        second: [{type: NUMBER, value: "2"}]
+      overwritePolicy: FIXED
+    right:
+      type: MAP_COLLECTION_NUMBER
+      default:
+        second: [{type: NUMBER, value: "2.00"}]
+        first: [{type: NUMBER, value: "1"}]
+      overwritePolicy: FIXED
+coverage: [identifier, comparison, collection-literal]
+expected:
+  type: BOOLEAN
+  result: true

@@ -4,13 +4,13 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 
 import java.util.Objects;
 
-record AssignmentNode(
+public record AssignmentNode(
         NodeId id,
         SourceSpan sourceSpan,
         AssignmentTargetNode target,
         ExpressionNode expression) implements AstNode {
 
-    AssignmentNode {
+    public AssignmentNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(target, "target");
