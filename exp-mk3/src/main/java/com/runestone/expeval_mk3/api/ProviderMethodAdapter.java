@@ -28,6 +28,7 @@ import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow;
 import java.util.concurrent.Future;
@@ -366,14 +367,19 @@ final class ProviderMethodAdapter {
             throw new IllegalArgumentException("provider map result must be a map");
         }
         requireWithinLimit(values.size(), maxMaterializedSize);
-        LinkedHashMap<String, Object> converted = new LinkedHashMap<>(values.size());
+        TreeMap<String, Object> converted = new TreeMap<>();
+        int entryCount = 0;
         for (Map.Entry<?, ?> entry : values.entrySet()) {
+            if (entryCount == maxMaterializedSize) {
+                throw materializationLimitExceeded(maxMaterializedSize);
+            }
+            entryCount++;
             if (!(entry.getKey() instanceof String key)) {
                 throw new IllegalArgumentException("provider maps must have non-null String keys");
             }
             converted.put(key, mapValue.convert(entry.getValue()));
         }
-        return Collections.unmodifiableMap(converted);
+        return Collections.unmodifiableMap(new LinkedHashMap<>(converted));
     }
 
     private static void requireWithinLimit(int size, int maxMaterializedSize) {

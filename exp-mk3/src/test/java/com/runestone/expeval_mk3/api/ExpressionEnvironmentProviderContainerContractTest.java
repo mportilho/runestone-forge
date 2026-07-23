@@ -6,6 +6,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.AbstractMap;
+import java.util.AbstractSet;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -113,6 +115,25 @@ class ExpressionEnvironmentProviderContainerContractTest {
     }
 
     @Test
+    @DisplayName("provider maps use canonical key order and recursive immutable coercion")
+    void providerMapsUseCanonicalKeyOrderAndRecursiveImmutableCoercion() throws Throwable {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(CanonicalMapProvider.class, FunctionPurity.PURE)
+                .build();
+
+        @SuppressWarnings("unchecked")
+        Map<String, List<BigDecimal>> result = (Map<String, List<BigDecimal>>) resolve(environment, "values")
+                .implementationHandle().invoke();
+
+        assertThat(result.keySet()).containsExactly("Zeta", "alpha", "middle", "zeta");
+        assertThat(result.get("alpha")).containsExactly(new BigDecimal("1"));
+        assertThatThrownBy(() -> result.put("other", List.of()))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> result.get("alpha").add(BigDecimal.TWO))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
     @DisplayName("provider container boundaries reject null recursively and non-text map keys")
     void providerContainerBoundariesRejectInvalidNestedValues() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
@@ -125,6 +146,9 @@ class ExpressionEnvironmentProviderContainerContractTest {
         assertThatThrownBy(() -> resolve(environment, "nullMapValue").implementationHandle().invoke())
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("function arguments and results must not be null");
+        assertThatThrownBy(() -> resolve(environment, "nullMapKey").implementationHandle().invoke())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("String keys");
         assertThatThrownBy(() -> resolve(environment, "nonTextRuntimeKey").implementationHandle().invoke())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("String keys");
@@ -150,6 +174,19 @@ class ExpressionEnvironmentProviderContainerContractTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("maxMaterializedSize 2");
         assertThat(InfiniteIterableProvider.produced()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("provider maps enforce maxMaterializedSize while iterating")
+    void providerMapsEnforceMaterializationLimitWhileIterating() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(UnderreportedMapProvider.class, FunctionPurity.PURE)
+                .maxMaterializedSize(2)
+                .build();
+
+        assertThatThrownBy(() -> resolve(environment, "values").implementationHandle().invoke())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("maxMaterializedSize 2");
     }
 
     @Test
@@ -259,6 +296,45 @@ class ExpressionEnvironmentProviderContainerContractTest {
         }
     }
 
+    public static final class CanonicalMapProvider {
+        public static Map<String, List<Integer>> values() {
+            LinkedHashMap<String, List<Integer>> values = new LinkedHashMap<>();
+            values.put("zeta", List.of(3));
+            values.put("alpha", List.of(1));
+            values.put("Zeta", List.of(4));
+            values.put("middle", List.of(2));
+            return values;
+        }
+    }
+
+    public static final class UnderreportedMapProvider {
+        public static Map<String, String> values() {
+            return new AbstractMap<>() {
+                @Override
+                public Set<Entry<String, String>> entrySet() {
+                    return new AbstractSet<>() {
+                        @Override
+                        public Iterator<Entry<String, String>> iterator() {
+                            return Map.of("first", "1", "second", "2", "third", "3")
+                                    .entrySet()
+                                    .iterator();
+                        }
+
+                        @Override
+                        public int size() {
+                            return 2;
+                        }
+                    };
+                }
+
+                @Override
+                public int size() {
+                    return 2;
+                }
+            };
+        }
+    }
+
     public static final class SetArgumentProvider {
         private static boolean mutationRejected;
 
@@ -288,6 +364,12 @@ class ExpressionEnvironmentProviderContainerContractTest {
         public static Map<String, List<String>> nullMapValue() {
             LinkedHashMap<String, List<String>> values = new LinkedHashMap<>();
             values.put("stone", null);
+            return values;
+        }
+
+        public static Map<String, String> nullMapKey() {
+            LinkedHashMap<String, String> values = new LinkedHashMap<>();
+            values.put(null, "stone");
             return values;
         }
 
