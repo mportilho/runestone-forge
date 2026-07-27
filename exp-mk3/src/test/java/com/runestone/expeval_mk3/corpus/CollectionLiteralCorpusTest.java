@@ -24,14 +24,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CollectionLiteralCorpusTest {
 
     private static final Set<String> CASE_IDS = Set.of(
+            "runtime.assignment.destructuring.001",
+            "runtime.collection.filter.001",
+            "runtime.collection.index.001",
+            "runtime.collection.index-negative.001",
             "runtime.collection.numbers.001",
             "runtime.collection.empty-context.001",
             "runtime.collection.equality.001",
             "runtime.collection.order.001",
             "runtime.collection.inequality.001",
+            "runtime.collection.slice.closed.001",
+            "runtime.collection.slice.open-end.001",
+            "runtime.collection.slice.open-start.001",
             "runtime.map.equality.001",
             "semantic.collection.empty.001",
-            "semantic.collection.limit.001");
+            "semantic.collection.limit.001",
+            "semantic.destructuring.duplicate.001",
+            "semantic.destructuring.fixed-size.001",
+            "semantic.filter.depth.001",
+            "runtime.destructuring.dynamic-size.001");
 
     @Test
     void executesTheCollectionLiteralSliceFromTheExpressionCorpus() {
@@ -42,6 +53,14 @@ class CollectionLiteralCorpusTest {
         assertThat(cases).hasSize(CASE_IDS.size());
         for (ExpressionCase expressionCase : cases) {
             if (expressionCase.kind() == CaseKind.INVALID) {
+                if (expressionCase.expectedOutcome() instanceof ExpectedRuntimeError expected) {
+                    assertThatThrownBy(() -> ExpressionCompiler.compile(
+                                    expressionCase.source(), environment(expressionCase)).compute())
+                            .as(expressionCase.id())
+                            .isInstanceOf(runtimeErrorType(expected.type()))
+                            .hasMessageContaining(expected.messageContains());
+                    continue;
+                }
                 ExpectedDiagnostic expected = (ExpectedDiagnostic) expressionCase.expectedOutcome();
                 assertThatThrownBy(() -> ExpressionCompiler.compile(
                         expressionCase.source(), environment(expressionCase)))
@@ -49,8 +68,10 @@ class CollectionLiteralCorpusTest {
                         .isInstanceOfSatisfying(ExpressionCompilationException.class, failure -> {
                             CompilationDiagnostic actual = failure.diagnostics().getFirst();
                             assertThat(actual.code()).isEqualTo(expected.code());
-                            assertThat(actual.offset()).isEqualTo(expected.spans().getFirst().offset());
-                            assertThat(actual.endOffset()).isEqualTo(expected.spans().getFirst().endOffset());
+                            if (!expected.spans().isEmpty()) {
+                                assertThat(actual.offset()).isEqualTo(expected.spans().getFirst().offset());
+                                assertThat(actual.endOffset()).isEqualTo(expected.spans().getFirst().endOffset());
+                            }
                         });
                 continue;
             }
@@ -68,8 +89,21 @@ class CollectionLiteralCorpusTest {
     }
 
     private static ExpressionEnvironment environment(ExpressionCase expressionCase) {
-        if (expressionCase.id().equals("semantic.collection.limit.001")) {
-            return ExpressionEnvironment.builder().maxMaterializedSize(2).build();
+        ExpressionEnvironment.Builder builder = ExpressionEnvironment.builder();
+        JsonNode environment = expressionCase.root().get("environment");
+        if (environment != null) {
+            JsonNode maxMaterializedSize = environment.get("maxMaterializedSize");
+            if (maxMaterializedSize != null) {
+                builder.maxMaterializedSize(maxMaterializedSize.intValue());
+            }
+            JsonNode maxFactorialInput = environment.get("maxFactorialInput");
+            if (maxFactorialInput != null) {
+                builder.maxFactorialInput(maxFactorialInput.intValue());
+            }
+            JsonNode maxCurrentItemDepth = environment.get("maxCurrentItemDepth");
+            if (maxCurrentItemDepth != null) {
+                builder.maxCurrentItemDepth(maxCurrentItemDepth.intValue());
+            }
         }
         if (expressionCase.id().equals("runtime.map.equality.001")) {
             Map<String, Object> left = new LinkedHashMap<>();
@@ -79,12 +113,12 @@ class CollectionLiteralCorpusTest {
             right.put("second", List.of(new BigDecimal("2.00")));
             right.put("first", List.of(new BigDecimal("1")));
             MapType type = new MapType(new CollectionType(ScalarType.NUMBER));
-            return ExpressionEnvironment.builder()
+            return builder
                     .externalSymbol("left", type, left, ExternalSymbolOverwritePolicy.FIXED)
                     .externalSymbol("right", type, right, ExternalSymbolOverwritePolicy.FIXED)
                     .build();
         }
-        return ExpressionEnvironment.standard();
+        return builder.build();
     }
 
     private static Object expectedValue(String type, JsonNode value) {
@@ -103,5 +137,12 @@ class CollectionLiteralCorpusTest {
             result.add(expectedValue(value.get("type").textValue(), value.get("value")));
         }
         return List.copyOf(result);
+    }
+
+    private static Class<? extends Throwable> runtimeErrorType(String type) {
+        return switch (type) {
+            case "IllegalStateException" -> IllegalStateException.class;
+            default -> throw new IllegalArgumentException("Unsupported runtime error type: " + type);
+        };
     }
 }

@@ -1,4 +1,4 @@
 package com.runestone.expeval_mk3.internal.ast;
 
-sealed interface SubscriptSliceBound permits IntegerSubscriptSliceBound, UnboundedSubscriptSliceBound {
+public sealed interface SubscriptSliceBound permits IntegerSubscriptSliceBound, UnboundedSubscriptSliceBound {
 }

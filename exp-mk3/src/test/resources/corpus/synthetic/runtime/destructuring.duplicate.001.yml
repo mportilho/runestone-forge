@@ -1,0 +1,7 @@
+id: semantic.destructuring.duplicate.001
+phase: semantic
+kind: invalid
+source: '[a, a] := [1, 2]; a'
+coverage: [assignment, destructuring, collection-literal, identifier, diagnostic]
+expected:
+  diagnostic: {category: SEMANTIC, code: SEMANTIC_DUPLICATE_ASSIGNMENT_TARGET}

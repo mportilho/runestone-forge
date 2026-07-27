@@ -15,20 +15,27 @@ import com.runestone.expeval_mk3.internal.ast.BinaryOperator;
 import com.runestone.expeval_mk3.internal.ast.CollectionLiteralNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalBranchNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalNode;
+import com.runestone.expeval_mk3.internal.ast.CurrentItemNode;
 import com.runestone.expeval_mk3.internal.ast.CurrentTemporalValueNode;
 import com.runestone.expeval_mk3.internal.ast.DestructuringAssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.ExpressionCallArgument;
 import com.runestone.expeval_mk3.internal.ast.ExpressionNode;
+import com.runestone.expeval_mk3.internal.ast.FilterNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.FunctionCallNode;
 import com.runestone.expeval_mk3.internal.ast.GroupedExpressionNode;
 import com.runestone.expeval_mk3.internal.ast.IdentifierAssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.IdentifierNode;
+import com.runestone.expeval_mk3.internal.ast.IndexSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.LiteralNode;
 import com.runestone.expeval_mk3.internal.ast.MembershipNode;
+import com.runestone.expeval_mk3.internal.ast.NavigationChainNode;
+import com.runestone.expeval_mk3.internal.ast.NavigationLink;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.NullCoalesceNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperator;
+import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
+import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
@@ -110,6 +117,10 @@ public final class ExecutionPlanBuilder {
             SymbolBinding binding = required(model.symbolBindings(), identifier.id(), "symbol binding");
             return scope -> scope.read(binding.frameSlot());
         }
+        if (node instanceof CurrentItemNode currentItem) {
+            SymbolBinding binding = required(model.symbolBindings(), currentItem.id(), "current item binding");
+            return scope -> scope.read(binding.frameSlot());
+        }
         if (node instanceof CurrentTemporalValueNode currentTemporalValue) {
             return switch (currentTemporalValue.kind()) {
                 case DATE -> ExecutionScope::currentDate;
@@ -158,6 +169,9 @@ public final class ExecutionPlanBuilder {
         }
         if (node instanceof FunctionCallNode functionCall) {
             return buildFunctionCall(functionCall, model, environment);
+        }
+        if (node instanceof NavigationChainNode navigation) {
+            return buildNavigationChain(navigation, model, environment);
         }
         throw new IllegalArgumentException("unsupported planned node: " + node.getClass().getSimpleName());
     }
@@ -287,6 +301,41 @@ public final class ExecutionPlanBuilder {
         return scope -> invokeFunction(descriptor, arguments, scope);
     }
 
+    private ExecutableNode buildNavigationChain(
+            NavigationChainNode navigation,
+            SemanticModel model,
+            ExpressionEnvironment environment) {
+        ExecutableNode current = buildNode(navigation.receiver(), model, environment);
+        for (NavigationLink link : navigation.links()) {
+            current = buildNavigationLink(link, current, model, environment);
+        }
+        return current;
+    }
+
+    private ExecutableNode buildNavigationLink(
+            NavigationLink link,
+            ExecutableNode receiver,
+            SemanticModel model,
+            ExpressionEnvironment environment) {
+        if (link instanceof IndexSubscriptNavigationLink index) {
+            return scope -> indexedValue(receiver.execute(scope), index);
+        }
+        if (link instanceof SliceSubscriptNavigationLink slice) {
+            return scope -> slicedValues(receiver.execute(scope), slice, environment.maxMaterializedSize());
+        }
+        if (link instanceof FilterNavigationLink filter) {
+            ExecutableNode predicate = buildNode(filter.predicate(), model, environment);
+            SymbolBinding currentItem = required(model.symbolBindings(), filter.id(), "filter current item binding");
+            return scope -> filteredValues(
+                    receiver.execute(scope),
+                    predicate,
+                    currentItem.frameSlot(),
+                    scope,
+                    environment.maxMaterializedSize());
+        }
+        throw new IllegalArgumentException("unsupported planned navigation link: " + link.getClass().getSimpleName());
+    }
+
     private static Object invokeFunction(
             FunctionDescriptor descriptor,
             List<ExecutableNode> argumentNodes,
@@ -312,6 +361,62 @@ public final class ExecutionPlanBuilder {
             values.add(Objects.requireNonNull(element.execute(scope), "collection element"));
         }
         return List.copyOf(values);
+    }
+
+    private static Object indexedValue(Object receiver, IndexSubscriptNavigationLink index) {
+        List<?> values = (List<?>) receiver;
+        int resolvedIndex = SubscriptBounds.normalizedIndex(index.index().value(), values.size());
+        return Objects.requireNonNull(values.get(resolvedIndex), "collection element");
+    }
+
+    private static List<Object> slicedValues(
+            Object receiver,
+            SliceSubscriptNavigationLink slice,
+            int maxMaterializedSize) {
+        List<?> values = (List<?>) receiver;
+        int start = SubscriptBounds.normalizedSliceBound(slice.start(), values.size(), 0);
+        int end = SubscriptBounds.normalizedSliceBound(slice.end(), values.size(), values.size());
+        if (end < start) {
+            end = start;
+        }
+        requireMaterializedSize(end - start, maxMaterializedSize);
+        ArrayList<Object> result = new ArrayList<>(end - start);
+        for (int index = start; index < end; index++) {
+            result.add(Objects.requireNonNull(values.get(index), "collection element"));
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<Object> filteredValues(
+            Object receiver,
+            ExecutableNode predicate,
+            int currentItemSlot,
+            ExecutionScope scope,
+            int maxMaterializedSize) {
+        List<?> values = (List<?>) receiver;
+        ArrayList<Object> result = new ArrayList<>();
+        for (Object value : values) {
+            Object item = Objects.requireNonNull(value, "collection element");
+            Object previous = scope.replace(currentItemSlot, item);
+            try {
+                if (bool(predicate.execute(scope))) {
+                    if (result.size() == maxMaterializedSize) {
+                        throw new IllegalStateException(
+                                "materialized collection exceeds maxMaterializedSize " + maxMaterializedSize);
+                    }
+                    result.add(item);
+                }
+            } finally {
+                scope.restore(currentItemSlot, previous);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static void requireMaterializedSize(int size, int maxMaterializedSize) {
+        if (size > maxMaterializedSize) {
+            throw new IllegalStateException("materialized collection exceeds maxMaterializedSize " + maxMaterializedSize);
+        }
     }
 
     private static BigDecimal executePostfix(

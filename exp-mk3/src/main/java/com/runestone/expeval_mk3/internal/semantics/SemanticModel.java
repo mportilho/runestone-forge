@@ -10,12 +10,16 @@ import com.runestone.expeval_mk3.internal.ast.BinaryOperator;
 import com.runestone.expeval_mk3.internal.ast.CollectionLiteralNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalBranchNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalNode;
+import com.runestone.expeval_mk3.internal.ast.CurrentItemNode;
 import com.runestone.expeval_mk3.internal.ast.CurrentTemporalValueNode;
 import com.runestone.expeval_mk3.internal.ast.ExpressionFileNode;
 import com.runestone.expeval_mk3.internal.ast.ExpressionNode;
+import com.runestone.expeval_mk3.internal.ast.FilterNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.FunctionCallNode;
 import com.runestone.expeval_mk3.internal.ast.GroupedExpressionNode;
 import com.runestone.expeval_mk3.internal.ast.IdentifierNode;
+import com.runestone.expeval_mk3.internal.ast.NavigationChainNode;
+import com.runestone.expeval_mk3.internal.ast.NavigationLink;
 import com.runestone.expeval_mk3.internal.ast.LiteralNode;
 import com.runestone.expeval_mk3.internal.ast.MembershipNode;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
@@ -121,6 +125,10 @@ public final class SemanticModel {
             requireEntry(symbolBindings, identifier.id(), "symbol binding");
             return;
         }
+        if (expression instanceof CurrentItemNode currentItem) {
+            requireEntry(symbolBindings, currentItem.id(), "current item binding");
+            return;
+        }
         if (expression instanceof CurrentTemporalValueNode) {
             return;
         }
@@ -178,7 +186,21 @@ public final class SemanticModel {
             });
             return;
         }
+        if (expression instanceof NavigationChainNode navigation) {
+            validateCompleteExpression(navigation.receiver());
+            navigation.links().forEach(this::validateNavigationLink);
+            return;
+        }
         throw new IllegalStateException("successful semantic model contains an unsupported expression node");
+    }
+
+    private void validateNavigationLink(NavigationLink link) {
+        requireEntry(resolvedTypes, link.id(), "navigation link resolved type");
+        requireEntry(runtimeNullability, link.id(), "navigation link runtime nullability");
+        if (link instanceof FilterNavigationLink filter) {
+            requireEntry(symbolBindings, filter.id(), "filter current item binding");
+            validateCompleteExpression(filter.predicate());
+        }
     }
 
     private void validateConditionalBranch(ConditionalBranchNode branch) {

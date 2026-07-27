@@ -1,0 +1,11 @@
+id: semantic.filter.depth.001
+phase: semantic
+kind: invalid
+source: 'outer := [[1]]; inner := [1]; outer[?(inner[?(@ = 1)] = [1])]'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  maxCurrentItemDepth: 1
+coverage: [assignment, collection-literal, identifier, filter, at-symbol, comparison, diagnostic]
+expected:
+  diagnostic: {category: SEMANTIC, code: SEMANTIC_CURRENT_ITEM_DEPTH_EXCEEDED}

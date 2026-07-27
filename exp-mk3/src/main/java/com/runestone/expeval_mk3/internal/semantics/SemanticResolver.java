@@ -21,6 +21,7 @@ import com.runestone.expeval_mk3.internal.ast.CallArgument;
 import com.runestone.expeval_mk3.internal.ast.CollectionLiteralNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalBranchNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalNode;
+import com.runestone.expeval_mk3.internal.ast.CurrentItemNode;
 import com.runestone.expeval_mk3.internal.ast.CurrentTemporalValueNode;
 import com.runestone.expeval_mk3.internal.ast.DateLiteralValue;
 import com.runestone.expeval_mk3.internal.ast.DecimalLiteralValue;
@@ -28,20 +29,26 @@ import com.runestone.expeval_mk3.internal.ast.DestructuringAssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.ExpressionCallArgument;
 import com.runestone.expeval_mk3.internal.ast.ExpressionFileNode;
 import com.runestone.expeval_mk3.internal.ast.ExpressionNode;
+import com.runestone.expeval_mk3.internal.ast.FilterNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.FunctionCallNode;
 import com.runestone.expeval_mk3.internal.ast.GroupedExpressionNode;
 import com.runestone.expeval_mk3.internal.ast.IdentifierAssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.IdentifierNode;
+import com.runestone.expeval_mk3.internal.ast.IndexSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.LiteralNode;
 import com.runestone.expeval_mk3.internal.ast.LiteralValue;
 import com.runestone.expeval_mk3.internal.ast.LocalDateTimeLiteralValue;
 import com.runestone.expeval_mk3.internal.ast.LongLiteralValue;
 import com.runestone.expeval_mk3.internal.ast.MembershipNode;
+import com.runestone.expeval_mk3.internal.ast.NavigationChainNode;
+import com.runestone.expeval_mk3.internal.ast.NavigationLink;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.NullCoalesceNode;
 import com.runestone.expeval_mk3.internal.ast.OffsetDateTimeLiteralValue;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
+import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.StringLiteralValue;
+import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.ast.TimeLiteralValue;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
@@ -53,10 +60,12 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -81,7 +90,10 @@ public final class SemanticResolver {
         private final Map<NodeId, ExpressionType> equalityOperandTypes = new HashMap<>();
         private final Map<NodeId, FunctionDescriptor> functionBindings = new HashMap<>();
         private final Map<String, SymbolBinding> visibleBindings = new LinkedHashMap<>();
+        private final Map<String, CollectionShape> visibleCollectionShapes = new HashMap<>();
         private final List<SymbolBinding> externalBindings = new ArrayList<>();
+        private final List<SymbolBinding> currentItemBindings = new ArrayList<>();
+        private final List<Integer> currentItemSlotsByDepth = new ArrayList<>();
         private int nextFrameSlot;
 
         private ResolutionSession(ExpressionEnvironment environment) {
@@ -125,13 +137,14 @@ public final class SemanticResolver {
             if (value.invalid()) {
                 return;
             }
-            bindAssignmentTarget(assignment.target(), value.type());
+            bindAssignmentTarget(assignment.target(), value.type(), assignment.expression().id());
         }
 
-        private void bindAssignmentTarget(AssignmentTargetNode target, ExpressionType valueType) {
+        private void bindAssignmentTarget(AssignmentTargetNode target, ExpressionType valueType, NodeId valueNodeId) {
             if (target instanceof IdentifierAssignmentTargetNode identifier) {
                 SymbolBinding binding = bindInternal(identifier.name(), valueType, identifier.sourceSpan());
                 symbolBindings.put(identifier.id(), binding);
+                updateVisibleCollectionShape(identifier.name(), valueType, collectionShapes.get(valueNodeId));
                 return;
             }
             if (target instanceof DestructuringAssignmentTargetNode destructuring) {
@@ -142,6 +155,17 @@ public final class SemanticResolver {
                             target.sourceSpan());
                     return;
                 }
+                if (!destructuringTargetsAreUnique(destructuring)) {
+                    return;
+                }
+                CollectionShape shape = collectionShapes.get(valueNodeId);
+                if (shape != null && shape.fixed() && shape.fixedSize() < destructuring.elements().size()) {
+                    diagnostic(
+                            DiagnosticCode.SEMANTIC_DESTRUCTURING_SIZE_MISMATCH,
+                            "Destructuring source has fewer elements than targets",
+                            destructuring.sourceSpan());
+                    return;
+                }
                 for (IdentifierAssignmentTargetNode element : destructuring.elements()) {
                     SymbolBinding binding = bindInternal(element.name(), collectionType.elementType(), element.sourceSpan());
                     symbolBindings.put(element.id(), binding);
@@ -149,6 +173,21 @@ public final class SemanticResolver {
                 return;
             }
             diagnostic(DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION, "Unsupported assignment target", target.sourceSpan());
+        }
+
+        private boolean destructuringTargetsAreUnique(DestructuringAssignmentTargetNode destructuring) {
+            Set<String> names = new HashSet<>();
+            boolean unique = true;
+            for (IdentifierAssignmentTargetNode element : destructuring.elements()) {
+                if (!names.add(element.name())) {
+                    diagnostic(
+                            DiagnosticCode.SEMANTIC_DUPLICATE_ASSIGNMENT_TARGET,
+                            "Destructuring assignment target contains duplicate symbol '" + element.name() + "'",
+                            element.sourceSpan());
+                    unique = false;
+                }
+            }
+            return unique;
         }
 
         private SymbolBinding bindInternal(String name, ExpressionType type, SourceSpan span) {
@@ -171,6 +210,14 @@ public final class SemanticResolver {
             SymbolBinding binding = SymbolBinding.internal(name, type, nextFrameSlot++);
             visibleBindings.put(name, binding);
             return binding;
+        }
+
+        private void updateVisibleCollectionShape(String name, ExpressionType type, CollectionShape shape) {
+            if (type instanceof CollectionType) {
+                visibleCollectionShapes.put(name, shape == null ? CollectionShape.unknown() : shape);
+                return;
+            }
+            visibleCollectionShapes.remove(name);
         }
 
         private Resolution resolveExpression(ExpressionNode expression, ExpressionType expectedType) {
@@ -204,6 +251,12 @@ public final class SemanticResolver {
             if (expression instanceof FunctionCallNode functionCall) {
                 return resolveFunctionCall(functionCall);
             }
+            if (expression instanceof NavigationChainNode navigation) {
+                return resolveNavigationChain(navigation);
+            }
+            if (expression instanceof CurrentItemNode currentItem) {
+                return resolveCurrentItem(currentItem);
+            }
             if (expression instanceof CurrentTemporalValueNode currentTemporalValue) {
                 return resolveCurrentTemporalValue(currentTemporalValue);
             }
@@ -214,6 +267,7 @@ public final class SemanticResolver {
                 Resolution resolution = resolveExpression(grouped.expression(), expectedType);
                 if (resolution.known()) {
                     recordValue(grouped.id(), resolution.type());
+                    recordCollectionShape(grouped.id(), resolution.type(), collectionShapes.get(grouped.expression().id()));
                 }
                 return resolution;
             }
@@ -642,6 +696,149 @@ public final class SemanticResolver {
             return Resolution.known(descriptor.returnType());
         }
 
+        private Resolution resolveNavigationChain(NavigationChainNode navigation) {
+            Resolution receiver = resolveExpression(navigation.receiver(), null);
+            if (receiver.invalid() || receiver.pending()) {
+                return invalidForPending(receiver);
+            }
+
+            ExpressionType currentType = receiver.type();
+            CollectionShape currentShape = collectionShapes.get(navigation.receiver().id());
+            for (NavigationLink link : navigation.links()) {
+                LinkResolution linkResolution = resolveNavigationLink(link, currentType, currentShape);
+                if (linkResolution.invalid()) {
+                    return Resolution.invalidResolution();
+                }
+                currentType = linkResolution.type();
+                currentShape = linkResolution.shape();
+                recordValue(link.id(), currentType);
+                recordCollectionShape(link.id(), currentType, currentShape);
+            }
+            recordValue(navigation.id(), currentType);
+            recordCollectionShape(navigation.id(), currentType, currentShape);
+            return Resolution.known(currentType);
+        }
+
+        private LinkResolution resolveNavigationLink(
+                NavigationLink link,
+                ExpressionType receiverType,
+                CollectionShape receiverShape) {
+            if (link instanceof IndexSubscriptNavigationLink index) {
+                return resolveIndexSubscript(index, receiverType, receiverShape);
+            }
+            if (link instanceof SliceSubscriptNavigationLink slice) {
+                return resolveSliceSubscript(slice, receiverType, receiverShape);
+            }
+            if (link instanceof FilterNavigationLink filter) {
+                return resolveFilter(filter, receiverType);
+            }
+            diagnostic(
+                    DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION,
+                    "Navigation link is not supported by this compilation slice",
+                    link.sourceSpan());
+            return LinkResolution.invalidResolution();
+        }
+
+        private LinkResolution resolveIndexSubscript(
+                IndexSubscriptNavigationLink index,
+                ExpressionType receiverType,
+                CollectionShape receiverShape) {
+            if (!(receiverType instanceof CollectionType collectionType)) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Index subscript requires a collection receiver",
+                        index.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            if (receiverShape != null && receiverShape.fixed()
+                    && !SubscriptBounds.indexWithinFixedSize(index.index().value(), receiverShape.fixedSize())) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_COLLECTION_INDEX_OUT_OF_BOUNDS,
+                        "Collection index is outside the known collection bounds",
+                        index.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            return LinkResolution.known(collectionType.elementType(), null);
+        }
+
+        private LinkResolution resolveSliceSubscript(
+                SliceSubscriptNavigationLink slice,
+                ExpressionType receiverType,
+                CollectionShape receiverShape) {
+            if (!(receiverType instanceof CollectionType collectionType)) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Slice subscript requires a collection receiver",
+                        slice.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            CollectionShape shape = CollectionShape.unknown();
+            if (receiverShape != null && receiverShape.fixed()) {
+                int size = receiverShape.fixedSize();
+                int start = SubscriptBounds.normalizedSliceBound(slice.start(), size, 0);
+                int end = SubscriptBounds.normalizedSliceBound(slice.end(), size, size);
+                shape = new CollectionShape(Math.max(end - start, 0));
+            }
+            return LinkResolution.known(new CollectionType(collectionType.elementType()), shape);
+        }
+
+        private LinkResolution resolveFilter(FilterNavigationLink filter, ExpressionType receiverType) {
+            if (!(receiverType instanceof CollectionType collectionType)) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Filter requires a collection receiver",
+                        filter.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            if (currentItemBindings.size() >= environment.maxCurrentItemDepth()) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_CURRENT_ITEM_DEPTH_EXCEEDED,
+                        "Filter exceeds maxCurrentItemDepth " + environment.maxCurrentItemDepth(),
+                        filter.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            int depth = currentItemBindings.size();
+            SymbolBinding currentItem = SymbolBinding.internal(
+                    "@" + depth, collectionType.elementType(), currentItemFrameSlot(depth));
+            symbolBindings.put(filter.id(), currentItem);
+            currentItemBindings.add(currentItem);
+            Resolution predicate = resolveExpression(filter.predicate(), ScalarType.BOOLEAN);
+            currentItemBindings.remove(currentItemBindings.size() - 1);
+            if (predicate.invalid() || predicate.pending()) {
+                invalidForPending(predicate);
+                return LinkResolution.invalidResolution();
+            }
+            if (predicate.type() != ScalarType.BOOLEAN) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Filter predicate must be boolean",
+                        filter.predicate().sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            return LinkResolution.known(new CollectionType(collectionType.elementType()), CollectionShape.unknown());
+        }
+
+        private int currentItemFrameSlot(int depth) {
+            if (depth == currentItemSlotsByDepth.size()) {
+                currentItemSlotsByDepth.add(nextFrameSlot++);
+            }
+            return currentItemSlotsByDepth.get(depth);
+        }
+
+        private Resolution resolveCurrentItem(CurrentItemNode currentItem) {
+            if (currentItemBindings.isEmpty()) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_CURRENT_ITEM_OUT_OF_SCOPE,
+                        "Current item is only available inside filters and lambdas",
+                        currentItem.sourceSpan());
+                return Resolution.invalidResolution();
+            }
+            SymbolBinding binding = currentItemBindings.getLast();
+            symbolBindings.put(currentItem.id(), binding);
+            recordValue(currentItem.id(), binding.type());
+            return Resolution.known(binding.type());
+        }
+
         private Resolution resolveCurrentTemporalValue(CurrentTemporalValueNode currentTemporalValue) {
             ScalarType type = switch (currentTemporalValue.kind()) {
                 case DATE -> ScalarType.DATE;
@@ -663,6 +860,7 @@ public final class SemanticResolver {
             }
             symbolBindings.put(identifier.id(), binding);
             recordValue(identifier.id(), binding.type());
+            recordCollectionShape(identifier.id(), binding.type(), visibleCollectionShapes.get(binding.name()));
             return Resolution.known(binding.type());
         }
 
@@ -685,6 +883,12 @@ public final class SemanticResolver {
         private void recordValue(NodeId nodeId, ExpressionType type) {
             resolvedTypes.put(nodeId, type);
             nullability.put(nodeId, RuntimeNullability.NEVER_NULL);
+        }
+
+        private void recordCollectionShape(NodeId nodeId, ExpressionType type, CollectionShape shape) {
+            if (type instanceof CollectionType && shape != null) {
+                collectionShapes.put(nodeId, shape);
+            }
         }
 
         private void diagnostic(DiagnosticCode code, String message, SourceSpan span) {
@@ -721,11 +925,23 @@ public final class SemanticResolver {
                 SymbolBinding binding = SymbolBinding.external(symbol, nextFrameSlot++);
                 externalBindings.add(binding);
                 visibleBindings.put(symbol.name(), binding);
+                updateVisibleCollectionShape(symbol.name(), symbol.type(), CollectionShape.unknown());
             }
         }
     }
 
     private record LiteralResolution(ExpressionType type, Object value) {
+    }
+
+    private record LinkResolution(ExpressionType type, CollectionShape shape, boolean invalid) {
+
+        private static LinkResolution known(ExpressionType type, CollectionShape shape) {
+            return new LinkResolution(Objects.requireNonNull(type, "type"), shape, false);
+        }
+
+        private static LinkResolution invalidResolution() {
+            return new LinkResolution(null, null, true);
+        }
     }
 
     private record Resolution(ExpressionType type, SourceSpan pendingSpan, boolean pending, boolean invalid) {

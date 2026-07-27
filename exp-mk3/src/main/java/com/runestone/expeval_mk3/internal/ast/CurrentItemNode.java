@@ -4,9 +4,9 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 
 import java.util.Objects;
 
-record CurrentItemNode(NodeId id, SourceSpan sourceSpan) implements ExpressionNode {
+public record CurrentItemNode(NodeId id, SourceSpan sourceSpan) implements ExpressionNode {
 
-    CurrentItemNode {
+    public CurrentItemNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
     }

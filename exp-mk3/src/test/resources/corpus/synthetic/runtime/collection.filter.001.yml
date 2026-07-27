@@ -1,0 +1,10 @@
+id: runtime.collection.filter.001
+phase: runtime
+kind: valid
+source: 'items := [1, 2, 3, 4]; items[?(@ > 2)]'
+coverage: [assignment, collection-literal, identifier, filter, at-symbol, comparison]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "3"}
+    - {type: NUMBER, value: "4"}

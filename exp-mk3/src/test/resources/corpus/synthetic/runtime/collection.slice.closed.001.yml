@@ -1,0 +1,10 @@
+id: runtime.collection.slice.closed.001
+phase: runtime
+kind: valid
+source: 'items := [10, 20, 30, 40]; items[1:3]'
+coverage: [assignment, collection-literal, identifier, subscript-slice]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "20"}
+    - {type: NUMBER, value: "30"}

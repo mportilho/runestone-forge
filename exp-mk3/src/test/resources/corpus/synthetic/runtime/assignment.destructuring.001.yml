@@ -1,0 +1,8 @@
+id: runtime.assignment.destructuring.001
+phase: runtime
+kind: valid
+source: '[a, b] := [10, 20, 30]; a + b'
+coverage: [assignment, destructuring, collection-literal, identifier, additive]
+expected:
+  type: NUMBER
+  result: "30"

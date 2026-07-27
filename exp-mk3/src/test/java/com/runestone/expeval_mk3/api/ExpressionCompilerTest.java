@@ -193,6 +193,106 @@ class ExpressionCompilerTest {
     }
 
     @Test
+    void indexesSlicesAndFiltersCollectionValuesThroughTheCompiledPlan() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        new BigDecimal[] {BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3")},
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThat(decimal(ExpressionCompiler.compile("items[0]", environment).compute()))
+                .isEqualByComparingTo(BigDecimal.ONE);
+        assertThat(decimal(ExpressionCompiler.compile("items[-1]", environment).compute()))
+                .isEqualByComparingTo(new BigDecimal("3"));
+        assertThat(ExpressionCompiler.compile("items[1:]", environment).compute())
+                .isEqualTo(List.of(new BigDecimal("2"), new BigDecimal("3")));
+        assertThat(ExpressionCompiler.compile("items[?(@ > 1)]", environment).compute())
+                .isEqualTo(List.of(new BigDecimal("2"), new BigDecimal("3")));
+    }
+
+    @Test
+    void destructuresCollectionPrefixesAndRejectsInvalidTargets() {
+        assertThat(decimal(ExpressionCompiler.compile("[a, b] := [10, 20, 30]; a + b", ExpressionEnvironment.standard())
+                .compute()))
+                .isEqualByComparingTo(new BigDecimal("30"));
+
+        assertThatThrownBy(() -> ExpressionCompiler.compile("[a, a] := [1, 2]; a", ExpressionEnvironment.standard()))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code())
+                                .isEqualTo("SEMANTIC_DUPLICATE_ASSIGNMENT_TARGET"));
+
+        assertThatThrownBy(() -> ExpressionCompiler.compile("[a, b, c] := [1, 2]; a", ExpressionEnvironment.standard()))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code())
+                                .isEqualTo("SEMANTIC_DESTRUCTURING_SIZE_MISMATCH"));
+    }
+
+    @Test
+    void defersDestructuringMinimumSizeChecksForDynamicCollections() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(BigDecimal.ONE, new BigDecimal("2")),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        CompiledExpression expression = ExpressionCompiler.compile("[a, b] := items; a", environment);
+
+        assertThat(decimal(expression.compute())).isEqualByComparingTo(BigDecimal.ONE);
+        assertThatThrownBy(() -> expression.compute(Map.of("items", List.of(BigDecimal.ONE))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("destructuring source does not contain enough elements");
+    }
+
+    @Test
+    void propagatesSliceCardinalityAndDefersFilterCardinality() {
+        assertThatThrownBy(() -> ExpressionCompiler.compile(
+                        "items := [1, 2, 3, 4]; [a, b, c] := items[1:3]; a",
+                        ExpressionEnvironment.standard()))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code())
+                                .isEqualTo("SEMANTIC_DESTRUCTURING_SIZE_MISMATCH"));
+
+        CompiledExpression expression = ExpressionCompiler.compile(
+                "items := [1, 2]; [a, b] := items[?(@ > 1)]; a",
+                ExpressionEnvironment.standard());
+        assertThatThrownBy(expression::compute)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("destructuring source does not contain enough elements");
+    }
+
+    @Test
+    void nestedFiltersUseTheInnermostCurrentItem() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "outer",
+                        new CollectionType(new CollectionType(ScalarType.NUMBER)),
+                        List.of(List.of(BigDecimal.ONE, new BigDecimal("2")), List.of(new BigDecimal("3"))),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        Object result = ExpressionCompiler.compile("outer[?(@[?(@ > 2)] = [3])]", environment).compute();
+
+        assertThat(result).isEqualTo(List.of(List.of(new BigDecimal("3"))));
+    }
+
+    @Test
+    void enforcesCurrentItemDepthForNestedFilters() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .maxCurrentItemDepth(1)
+                .build();
+
+        assertThatThrownBy(() -> ExpressionCompiler.compile(
+                        "outer := [[1]]; inner := [1]; outer[?(inner[?(@ = 1)] = [1])]",
+                        environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code())
+                                .isEqualTo("SEMANTIC_CURRENT_ITEM_DEPTH_EXCEEDED"));
+    }
+
+    @Test
     void preservesShortCircuitAndEagerEvaluationContracts() {
         CountingFunctions functions = new CountingFunctions();
         ExpressionEnvironment environment = ExpressionEnvironment.builder()

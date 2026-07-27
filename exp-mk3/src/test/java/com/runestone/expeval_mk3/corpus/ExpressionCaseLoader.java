@@ -85,6 +85,12 @@ final class ExpressionCaseLoader {
 
     private static ExpectedOutcome expectedOutcome(JsonNode root, CasePhase phase, CaseKind kind, Path path) {
         JsonNode expected = root.get("expected");
+        if (kind == CaseKind.INVALID && phase == CasePhase.RUNTIME && expected != null && expected.has("runtimeError")) {
+            JsonNode runtimeError = requiredObject(expected, "runtimeError", path);
+            return new ExpectedRuntimeError(
+                    requiredText(runtimeError, "type", path),
+                    requiredText(runtimeError, "messageContains", path));
+        }
         if (kind == CaseKind.INVALID) {
             JsonNode diagnostic = requiredObject(expected, "diagnostic", path);
             String category = requiredText(diagnostic, "category", path);

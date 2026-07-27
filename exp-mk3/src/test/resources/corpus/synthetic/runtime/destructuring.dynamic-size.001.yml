@@ -1,0 +1,9 @@
+id: runtime.destructuring.dynamic-size.001
+phase: runtime
+kind: invalid
+source: 'items := [1, 2]; [a, b] := items[?(@ > 1)]; a'
+coverage: [assignment, destructuring, collection-literal, identifier, filter, at-symbol, comparison, diagnostic]
+expected:
+  runtimeError:
+    type: IllegalStateException
+    messageContains: 'destructuring source does not contain enough elements'

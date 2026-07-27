@@ -40,6 +40,16 @@ public final class ExecutionScope {
         frame[slot] = Objects.requireNonNull(value, "value");
     }
 
+    public Object replace(int slot, Object value) {
+        Object previous = frame[slot];
+        frame[slot] = Objects.requireNonNull(value, "value");
+        return previous;
+    }
+
+    public void restore(int slot, Object previous) {
+        frame[slot] = Objects.requireNonNull(previous, "previous");
+    }
+
     public LocalDate currentDate() {
         return currentDate;
     }
