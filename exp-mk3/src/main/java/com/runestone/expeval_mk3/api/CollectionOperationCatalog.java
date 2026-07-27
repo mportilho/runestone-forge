@@ -175,6 +175,7 @@ public final class CollectionOperationCatalog {
     public static final class Descriptor {
 
         private final String name;
+        private final OperationIdentity identity;
         private final List<ReceiverKind> receivers;
         private final ReceiverItemConstraint receiverItemConstraint;
         private final List<ArgumentContract> arguments;
@@ -201,6 +202,7 @@ public final class CollectionOperationCatalog {
                 MaterializationPolicy materializationPolicy,
                 NumericComputationPolicy numericComputationPolicy) {
             this.name = requireName(name);
+            identity = OperationIdentity.fromName(this.name).orElse(OperationIdentity.CUSTOM);
             this.receivers = requireReceivers(receivers);
             this.receiverItemConstraint = Objects.requireNonNull(receiverItemConstraint, "receiverItemConstraint");
             this.arguments = List.copyOf(Objects.requireNonNull(arguments, "arguments"));
@@ -219,6 +221,10 @@ public final class CollectionOperationCatalog {
 
         public String name() {
             return name;
+        }
+
+        public OperationIdentity identity() {
+            return identity;
         }
 
         public List<ReceiverKind> receivers() {
@@ -407,6 +413,7 @@ public final class CollectionOperationCatalog {
                 return false;
             }
             return name.equals(that.name)
+                    && identity == that.identity
                     && receivers.equals(that.receivers)
                     && receiverItemConstraint == that.receiverItemConstraint
                     && arguments.equals(that.arguments)
@@ -423,7 +430,7 @@ public final class CollectionOperationCatalog {
         @Override
         public int hashCode() {
             return Objects.hash(
-                    name, receivers, receiverItemConstraint, arguments, resultTypeRule, numericResultFact,
+                    name, identity, receivers, receiverItemConstraint, arguments, resultTypeRule, numericResultFact,
                     cardinalityPreservation, intrinsicPurity, resultNullability, evaluationPolicy,
                     materializationPolicy, numericComputationPolicy);
         }
@@ -451,6 +458,39 @@ public final class CollectionOperationCatalog {
                 throw new IllegalArgumentException("receivers must not contain duplicates");
             }
             return copy;
+        }
+    }
+
+    public enum OperationIdentity {
+        ALL("all"),
+        ANY("any"),
+        AVG("avg"),
+        COUNT("count"),
+        KEYS("keys"),
+        MAP("map"),
+        REDUCE("reduce"),
+        SORT_BY("sortBy"),
+        SUM("sum"),
+        VALUES("values"),
+        CUSTOM("");
+
+        private final String operationName;
+
+        OperationIdentity(String operationName) {
+            this.operationName = operationName;
+        }
+
+        public String operationName() {
+            return operationName;
+        }
+
+        static Optional<OperationIdentity> fromName(String operationName) {
+            for (OperationIdentity identity : values()) {
+                if (identity != CUSTOM && identity.operationName.equals(operationName)) {
+                    return Optional.of(identity);
+                }
+            }
+            return Optional.empty();
         }
     }
 

@@ -3,9 +3,11 @@ package com.runestone.expeval_mk3.api;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -210,6 +212,92 @@ class ExpressionCompilerTest {
                 .isEqualTo(List.of(new BigDecimal("2"), new BigDecimal("3")));
         assertThat(ExpressionCompiler.compile("items[?(@ > 1)]", environment).compute())
                 .isEqualTo(List.of(new BigDecimal("2"), new BigDecimal("3")));
+    }
+
+    @Test
+    void computesNavigatedCollectionOperationsWithoutLambdaThroughTheCompiledPlan() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .mathContext(new MathContext(4))
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(new BigDecimal("1.0"), new BigDecimal("2.00"), new BigDecimal("3.000")),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThat(decimal(ExpressionCompiler.compile("items.count()", environment).compute()))
+                .isEqualByComparingTo(new BigDecimal("3"));
+        assertThat(decimal(ExpressionCompiler.compile("items.sum()", environment).compute()))
+                .isEqualByComparingTo(new BigDecimal("6.000"));
+        assertThat(decimal(ExpressionCompiler.compile("items.avg()", environment).compute()))
+                .isEqualByComparingTo(new BigDecimal("2.000"));
+        assertThat(decimal(ExpressionCompiler.compile("one := [1]; empty := one[1:1]; empty.sum()", environment).compute()))
+                .isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(decimal(ExpressionCompiler.compile("one := [1]; one.avg()", environment).compute()))
+                .isEqualByComparingTo(BigDecimal.ONE);
+    }
+
+    @Test
+    void materializesNavigatedMapOperationsInCanonicalOrder() {
+        Map<String, BigDecimal> source = new HashMap<>();
+        source.put("b", new BigDecimal("2"));
+        source.put("A", BigDecimal.ONE);
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThat(decimal(ExpressionCompiler.compile("m.count()", environment).compute()))
+                .isEqualByComparingTo(new BigDecimal("2"));
+        assertThat(ExpressionCompiler.compile("m.keys()", environment).compute())
+                .isEqualTo(List.of("A", "b"));
+        assertThat(ExpressionCompiler.compile("m.values()", environment).compute())
+                .isEqualTo(List.of(BigDecimal.ONE, new BigDecimal("2")));
+        assertThatThrownBy(() -> ((List<Object>) ExpressionCompiler.compile("m.keys()", environment).compute()).add("x"))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void rejectsInvalidNavigatedCollectionOperationCallsBeforeRuntime() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThatThrownBy(() -> ExpressionCompiler.compile("sum([1])", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_UNKNOWN_FUNCTION"));
+        assertThatThrownBy(() -> ExpressionCompiler.compile("items := [1]; items.keys()", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+        assertThatThrownBy(() -> ExpressionCompiler.compile("m.sum()", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+        assertThatThrownBy(() -> ExpressionCompiler.compile("texts := [\"x\"]; texts.sum()", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+        assertThatThrownBy(() -> ExpressionCompiler.compile("items := [1]; empty := items[1:1]; empty.avg()", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+        assertThatThrownBy(() -> ExpressionCompiler.compile("items := [1]; items.sum(2)", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+        assertThatThrownBy(() -> ExpressionCompiler.compile("items := [true]; items.all()", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_UNSUPPORTED_EXPRESSION"));
+    }
+
+    @Test
+    void safeNavigatedCollectionOperationKeepsTheRealReceiverBehaviorWhenNotNull() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(BigDecimal.ONE, new BigDecimal("2")),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThat(decimal(ExpressionCompiler.compile("items?.sum()", environment).compute()))
+                .isEqualByComparingTo(new BigDecimal("3"));
     }
 
     @Test

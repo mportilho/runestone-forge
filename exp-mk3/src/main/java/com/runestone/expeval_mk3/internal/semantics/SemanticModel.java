@@ -7,6 +7,7 @@ import com.runestone.expeval_mk3.internal.ast.AssignmentNode;
 import com.runestone.expeval_mk3.internal.ast.BetweenNode;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperator;
+import com.runestone.expeval_mk3.internal.ast.CallNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.CollectionLiteralNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalBranchNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalNode;
@@ -40,6 +41,7 @@ public final class SemanticModel {
     private final Map<NodeId, SymbolBinding> symbolBindings;
     private final Map<NodeId, ExpressionType> equalityOperandTypes;
     private final Map<NodeId, FunctionDescriptor> functionBindings;
+    private final Map<NodeId, CollectionOperationBinding> collectionOperationBindings;
     private final FrameLayout frameLayout;
 
     SemanticModel(
@@ -51,6 +53,7 @@ public final class SemanticModel {
             Map<NodeId, SymbolBinding> symbolBindings,
             Map<NodeId, ExpressionType> equalityOperandTypes,
             Map<NodeId, FunctionDescriptor> functionBindings,
+            Map<NodeId, CollectionOperationBinding> collectionOperationBindings,
             FrameLayout frameLayout) {
         this.ast = Objects.requireNonNull(ast, "ast");
         this.resolvedTypes = Map.copyOf(resolvedTypes);
@@ -60,6 +63,7 @@ public final class SemanticModel {
         this.symbolBindings = Map.copyOf(symbolBindings);
         this.equalityOperandTypes = Map.copyOf(equalityOperandTypes);
         this.functionBindings = Map.copyOf(functionBindings);
+        this.collectionOperationBindings = Map.copyOf(collectionOperationBindings);
         this.frameLayout = Objects.requireNonNull(frameLayout, "frameLayout");
         ast.assignments().forEach(this::validateAssignment);
         ast.resultExpression().ifPresent(this::validateCompleteExpression);
@@ -95,6 +99,10 @@ public final class SemanticModel {
 
     public Map<NodeId, FunctionDescriptor> functionBindings() {
         return functionBindings;
+    }
+
+    public Map<NodeId, CollectionOperationBinding> collectionOperationBindings() {
+        return collectionOperationBindings;
     }
 
     public FrameLayout frameLayout() {
@@ -200,6 +208,15 @@ public final class SemanticModel {
         if (link instanceof FilterNavigationLink filter) {
             requireEntry(symbolBindings, filter.id(), "filter current item binding");
             validateCompleteExpression(filter.predicate());
+            return;
+        }
+        if (link instanceof CallNavigationLink call) {
+            requireEntry(collectionOperationBindings, call.id(), "collection operation binding");
+            call.arguments().forEach(argument -> {
+                if (argument instanceof com.runestone.expeval_mk3.internal.ast.ExpressionCallArgument expressionArgument) {
+                    validateCompleteExpression(expressionArgument.expression());
+                }
+            });
         }
     }
 

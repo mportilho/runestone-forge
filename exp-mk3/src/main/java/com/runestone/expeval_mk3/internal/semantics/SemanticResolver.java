@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.internal.semantics;
 
+import com.runestone.expeval_mk3.api.CollectionOperationCatalog;
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
@@ -17,6 +18,7 @@ import com.runestone.expeval_mk3.internal.ast.BigIntegerLiteralValue;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperator;
 import com.runestone.expeval_mk3.internal.ast.BooleanLiteralValue;
+import com.runestone.expeval_mk3.internal.ast.CallNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.CallArgument;
 import com.runestone.expeval_mk3.internal.ast.CollectionLiteralNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalBranchNode;
@@ -89,6 +91,7 @@ public final class SemanticResolver {
         private final Map<NodeId, SymbolBinding> symbolBindings = new HashMap<>();
         private final Map<NodeId, ExpressionType> equalityOperandTypes = new HashMap<>();
         private final Map<NodeId, FunctionDescriptor> functionBindings = new HashMap<>();
+        private final Map<NodeId, CollectionOperationBinding> collectionOperationBindings = new HashMap<>();
         private final Map<String, SymbolBinding> visibleBindings = new LinkedHashMap<>();
         private final Map<String, CollectionShape> visibleCollectionShapes = new HashMap<>();
         private final List<SymbolBinding> externalBindings = new ArrayList<>();
@@ -125,6 +128,7 @@ public final class SemanticResolver {
                     symbolBindings,
                     equalityOperandTypes,
                     functionBindings,
+                    collectionOperationBindings,
                     new FrameLayout(externalBindings, nextFrameSlot)), warnings);
         }
 
@@ -137,12 +141,21 @@ public final class SemanticResolver {
             if (value.invalid()) {
                 return;
             }
-            bindAssignmentTarget(assignment.target(), value.type(), assignment.expression().id());
+            bindAssignmentTarget(
+                    assignment.target(),
+                    value.type(),
+                    assignment.expression().id(),
+                    nullabilityOf(assignment.expression().id()));
         }
 
-        private void bindAssignmentTarget(AssignmentTargetNode target, ExpressionType valueType, NodeId valueNodeId) {
+        private void bindAssignmentTarget(
+                AssignmentTargetNode target,
+                ExpressionType valueType,
+                NodeId valueNodeId,
+                RuntimeNullability valueNullability) {
             if (target instanceof IdentifierAssignmentTargetNode identifier) {
-                SymbolBinding binding = bindInternal(identifier.name(), valueType, identifier.sourceSpan());
+                SymbolBinding binding = bindInternal(
+                        identifier.name(), valueType, valueNullability, identifier.sourceSpan());
                 symbolBindings.put(identifier.id(), binding);
                 updateVisibleCollectionShape(identifier.name(), valueType, collectionShapes.get(valueNodeId));
                 return;
@@ -167,7 +180,11 @@ public final class SemanticResolver {
                     return;
                 }
                 for (IdentifierAssignmentTargetNode element : destructuring.elements()) {
-                    SymbolBinding binding = bindInternal(element.name(), collectionType.elementType(), element.sourceSpan());
+                    SymbolBinding binding = bindInternal(
+                            element.name(),
+                            collectionType.elementType(),
+                            RuntimeNullability.NEVER_NULL,
+                            element.sourceSpan());
                     symbolBindings.put(element.id(), binding);
                 }
                 return;
@@ -190,7 +207,11 @@ public final class SemanticResolver {
             return unique;
         }
 
-        private SymbolBinding bindInternal(String name, ExpressionType type, SourceSpan span) {
+        private SymbolBinding bindInternal(
+                String name,
+                ExpressionType type,
+                RuntimeNullability runtimeNullability,
+                SourceSpan span) {
             SymbolBinding existing = visibleBindings.get(name);
             if (existing != null && !existing.external()) {
                 if (!existing.type().equals(type)) {
@@ -207,7 +228,7 @@ public final class SemanticResolver {
                         "Internal symbol shadows external symbol '" + name + "'",
                         span);
             }
-            SymbolBinding binding = SymbolBinding.internal(name, type, nextFrameSlot++);
+            SymbolBinding binding = SymbolBinding.internal(name, type, nextFrameSlot++, runtimeNullability);
             visibleBindings.put(name, binding);
             return binding;
         }
@@ -266,7 +287,7 @@ public final class SemanticResolver {
             if (expression instanceof GroupedExpressionNode grouped) {
                 Resolution resolution = resolveExpression(grouped.expression(), expectedType);
                 if (resolution.known()) {
-                    recordValue(grouped.id(), resolution.type());
+                    recordValue(grouped.id(), resolution.type(), nullabilityOf(grouped.expression().id()));
                     recordCollectionShape(grouped.id(), resolution.type(), collectionShapes.get(grouped.expression().id()));
                 }
                 return resolution;
@@ -697,13 +718,15 @@ public final class SemanticResolver {
         }
 
         private Resolution resolveNavigationChain(NavigationChainNode navigation) {
-            Resolution receiver = resolveExpression(navigation.receiver(), null);
+            Resolution receiver = resolveExpression(navigation.receiver(), initialNavigationReceiverContext(navigation));
             if (receiver.invalid() || receiver.pending()) {
                 return invalidForPending(receiver);
             }
 
             ExpressionType currentType = receiver.type();
             CollectionShape currentShape = collectionShapes.get(navigation.receiver().id());
+            RuntimeNullability currentNullability = nullability.getOrDefault(
+                    navigation.receiver().id(), RuntimeNullability.NEVER_NULL);
             for (NavigationLink link : navigation.links()) {
                 LinkResolution linkResolution = resolveNavigationLink(link, currentType, currentShape);
                 if (linkResolution.invalid()) {
@@ -711,12 +734,38 @@ public final class SemanticResolver {
                 }
                 currentType = linkResolution.type();
                 currentShape = linkResolution.shape();
-                recordValue(link.id(), currentType);
+                currentNullability = linkResolution.nullability();
+                recordValue(link.id(), currentType, currentNullability);
                 recordCollectionShape(link.id(), currentType, currentShape);
             }
-            recordValue(navigation.id(), currentType);
+            recordValue(navigation.id(), currentType, currentNullability);
             recordCollectionShape(navigation.id(), currentType, currentShape);
             return Resolution.known(currentType);
+        }
+
+        private ExpressionType initialNavigationReceiverContext(NavigationChainNode navigation) {
+            NavigationLink firstLink = navigation.links().getFirst();
+            if (!(firstLink instanceof CallNavigationLink call)
+                    || !emptyCollectionReceiver(navigation.receiver())) {
+                return null;
+            }
+            CollectionOperationCatalog.Descriptor descriptor = environment.collectionOperations()
+                    .find(call.memberName().value())
+                    .orElse(null);
+            if (descriptor == null) {
+                return null;
+            }
+            return switch (descriptor.identity()) {
+                case SUM, AVG, COUNT -> new CollectionType(ScalarType.NUMBER);
+                case ALL, ANY, KEYS, MAP, REDUCE, SORT_BY, VALUES, CUSTOM -> null;
+            };
+        }
+
+        private static boolean emptyCollectionReceiver(ExpressionNode receiver) {
+            if (receiver instanceof CollectionLiteralNode collection) {
+                return collection.elements().isEmpty();
+            }
+            return receiver instanceof GroupedExpressionNode grouped && emptyCollectionReceiver(grouped.expression());
         }
 
         private LinkResolution resolveNavigationLink(
@@ -731,6 +780,9 @@ public final class SemanticResolver {
             }
             if (link instanceof FilterNavigationLink filter) {
                 return resolveFilter(filter, receiverType);
+            }
+            if (link instanceof CallNavigationLink call) {
+                return resolveCollectionOperation(call, receiverType, receiverShape);
             }
             diagnostic(
                     DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION,
@@ -818,6 +870,125 @@ public final class SemanticResolver {
             return LinkResolution.known(new CollectionType(collectionType.elementType()), CollectionShape.unknown());
         }
 
+        private LinkResolution resolveCollectionOperation(
+                CallNavigationLink call,
+                ExpressionType receiverType,
+                CollectionShape receiverShape) {
+            CollectionOperationCatalog.ReceiverKind receiverKind = receiverKind(receiverType);
+            if (receiverKind == null) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Collection operation requires a collection or map receiver",
+                        call.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            CollectionOperationCatalog.Descriptor descriptor = environment.collectionOperations()
+                    .find(call.memberName().value())
+                    .orElse(null);
+            if (descriptor == null) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_UNKNOWN_FUNCTION,
+                        "No collection operation registered for " + call.memberName().value(),
+                        call.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            if (!call.arguments().isEmpty()) {
+                resolveUnsupportedOperationArguments(call);
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Collection operation '" + descriptor.name() + "' does not accept these arguments",
+                        call.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            if (!supportedNoLambdaOperation(descriptor.identity())) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION,
+                        "Collection operation '" + descriptor.name() + "' is not supported by this compilation slice",
+                        call.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            if (!descriptor.receivers().contains(receiverKind)) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Collection operation '" + descriptor.name() + "' is not compatible with receiver type",
+                        call.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            if (descriptor.receiverItemConstraint() == CollectionOperationCatalog.ReceiverItemConstraint.NUMBER_ITEM
+                    && (!(receiverType instanceof CollectionType collectionType)
+                    || collectionType.elementType() != ScalarType.NUMBER)) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Collection operation '" + descriptor.name() + "' requires numeric collection items",
+                        call.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            if (descriptor.identity() == CollectionOperationCatalog.OperationIdentity.AVG
+                    && receiverShape != null
+                    && receiverShape.fixed()
+                    && receiverShape.fixedSize() == 0) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Average over a known empty collection is not defined",
+                        call.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            ExpressionType resultType = collectionOperationResultType(descriptor, receiverType);
+            RuntimeNullability resultNullability = call.safe()
+                    ? RuntimeNullability.MAY_BE_NULL
+                    : descriptor.resultNullability();
+            collectionOperationBindings.put(call.id(), CollectionOperationBinding.fromDescriptor(
+                    descriptor, receiverType, resultType, resultNullability));
+            CollectionShape resultShape = descriptor.cardinalityPreservation()
+                    == CollectionOperationCatalog.CardinalityPreservation.PRESERVES_RECEIVER_CARDINALITY
+                    ? receiverShape
+                    : null;
+            return LinkResolution.known(resultType, resultShape, resultNullability);
+        }
+
+        private void resolveUnsupportedOperationArguments(CallNavigationLink call) {
+            for (CallArgument argument : call.arguments()) {
+                if (argument instanceof ExpressionCallArgument expressionArgument) {
+                    resolveExpression(expressionArgument.expression(), null);
+                    continue;
+                }
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_LAMBDA_ARGUMENT_UNSUPPORTED,
+                        "Lambda arguments are not supported by this collection operation slice",
+                        call.sourceSpan());
+            }
+        }
+
+        private static CollectionOperationCatalog.ReceiverKind receiverKind(ExpressionType receiverType) {
+            if (receiverType instanceof CollectionType) {
+                return CollectionOperationCatalog.ReceiverKind.COLLECTION;
+            }
+            if (receiverType instanceof MapType) {
+                return CollectionOperationCatalog.ReceiverKind.MAP;
+            }
+            return null;
+        }
+
+        private static boolean supportedNoLambdaOperation(CollectionOperationCatalog.OperationIdentity identity) {
+            return switch (identity) {
+                case COUNT, KEYS, VALUES, SUM, AVG -> true;
+                case ALL, ANY, MAP, REDUCE, SORT_BY, CUSTOM -> false;
+            };
+        }
+
+        private static ExpressionType collectionOperationResultType(
+                CollectionOperationCatalog.Descriptor descriptor,
+                ExpressionType receiverType) {
+            return switch (descriptor.resultTypeRule()) {
+                case NUMBER_RESULT -> ScalarType.NUMBER;
+                case COLLECTION_OF_MAP_KEYS -> new CollectionType(ScalarType.STRING);
+                case COLLECTION_OF_MAP_VALUES -> new CollectionType(((MapType) receiverType).valueType());
+                case BOOLEAN_RESULT, COLLECTION_OF_LAMBDA_RESULT, SAME_AS_VALUE_ARGUMENT_0, SAME_AS_RECEIVER_COLLECTION ->
+                        throw new IllegalArgumentException(
+                                "collection operation is not supported by this runtime slice: " + descriptor.identity());
+            };
+        }
+
         private int currentItemFrameSlot(int depth) {
             if (depth == currentItemSlotsByDepth.size()) {
                 currentItemSlotsByDepth.add(nextFrameSlot++);
@@ -835,7 +1006,7 @@ public final class SemanticResolver {
             }
             SymbolBinding binding = currentItemBindings.getLast();
             symbolBindings.put(currentItem.id(), binding);
-            recordValue(currentItem.id(), binding.type());
+            recordValue(currentItem.id(), binding.type(), binding.runtimeNullability());
             return Resolution.known(binding.type());
         }
 
@@ -859,7 +1030,7 @@ public final class SemanticResolver {
                 return Resolution.invalidResolution();
             }
             symbolBindings.put(identifier.id(), binding);
-            recordValue(identifier.id(), binding.type());
+            recordValue(identifier.id(), binding.type(), binding.runtimeNullability());
             recordCollectionShape(identifier.id(), binding.type(), visibleCollectionShapes.get(binding.name()));
             return Resolution.known(binding.type());
         }
@@ -883,6 +1054,15 @@ public final class SemanticResolver {
         private void recordValue(NodeId nodeId, ExpressionType type) {
             resolvedTypes.put(nodeId, type);
             nullability.put(nodeId, RuntimeNullability.NEVER_NULL);
+        }
+
+        private void recordValue(NodeId nodeId, ExpressionType type, RuntimeNullability runtimeNullability) {
+            resolvedTypes.put(nodeId, type);
+            nullability.put(nodeId, runtimeNullability);
+        }
+
+        private RuntimeNullability nullabilityOf(NodeId nodeId) {
+            return nullability.getOrDefault(nodeId, RuntimeNullability.NEVER_NULL);
         }
 
         private void recordCollectionShape(NodeId nodeId, ExpressionType type, CollectionShape shape) {
@@ -933,14 +1113,29 @@ public final class SemanticResolver {
     private record LiteralResolution(ExpressionType type, Object value) {
     }
 
-    private record LinkResolution(ExpressionType type, CollectionShape shape, boolean invalid) {
+    private record LinkResolution(
+            ExpressionType type,
+            CollectionShape shape,
+            RuntimeNullability nullability,
+            boolean invalid) {
 
         private static LinkResolution known(ExpressionType type, CollectionShape shape) {
-            return new LinkResolution(Objects.requireNonNull(type, "type"), shape, false);
+            return known(type, shape, RuntimeNullability.NEVER_NULL);
+        }
+
+        private static LinkResolution known(
+                ExpressionType type,
+                CollectionShape shape,
+                RuntimeNullability nullability) {
+            return new LinkResolution(
+                    Objects.requireNonNull(type, "type"),
+                    shape,
+                    Objects.requireNonNull(nullability, "nullability"),
+                    false);
         }
 
         private static LinkResolution invalidResolution() {
-            return new LinkResolution(null, null, true);
+            return new LinkResolution(null, null, RuntimeNullability.NEVER_NULL, true);
         }
     }
 

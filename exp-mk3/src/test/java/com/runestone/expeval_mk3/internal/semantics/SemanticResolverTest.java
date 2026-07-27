@@ -1,18 +1,32 @@
 package com.runestone.expeval_mk3.internal.semantics;
 
+import com.runestone.expeval_mk3.api.CollectionOperationCatalog.CardinalityPreservation;
+import com.runestone.expeval_mk3.api.CollectionOperationCatalog.EvaluationPolicy;
+import com.runestone.expeval_mk3.api.CollectionOperationCatalog.MaterializationPolicy;
+import com.runestone.expeval_mk3.api.CollectionOperationCatalog.NumericResultFact;
+import com.runestone.expeval_mk3.api.CollectionOperationCatalog.OperationIdentity;
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
+import com.runestone.expeval_mk3.api.ExpressionType;
+import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
+import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.RuntimeNullability;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.CollectionLiteralNode;
 import com.runestone.expeval_mk3.internal.ast.ExpressionFileNode;
+import com.runestone.expeval_mk3.internal.ast.NavigationChainNode;
+import com.runestone.expeval_mk3.internal.ast.NavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildSuccess;
 import com.runestone.expeval_mk3.internal.ast.SemanticAstBuilder;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.parser.ExpressionParser;
 import com.runestone.expeval_mk3.internal.parser.ParseSuccess;
 import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -65,8 +79,100 @@ class SemanticResolverTest {
         });
     }
 
+    @Test
+    void bindsNavigatedCollectionOperationsByClosedCatalogIdentity() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(BigDecimal.ONE, new BigDecimal("2")),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        ExpressionFileNode ast = ast("items?.sum()");
+        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        NavigationLink link = navigation.links().getFirst();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            SemanticModel model = success.model();
+            assertThat(model.collectionOperationBindings()).containsKey(link.id());
+            CollectionOperationBinding binding = model.collectionOperationBindings().get(link.id());
+            assertThat(binding.identity()).isEqualTo(OperationIdentity.SUM);
+            assertThat(binding.receiverType())
+                    .isEqualTo(new CollectionType(ScalarType.NUMBER));
+            assertThat(binding.resultNullability()).isEqualTo(RuntimeNullability.MAY_BE_NULL);
+            assertThat(binding.evaluationPolicy()).isEqualTo(EvaluationPolicy.EAGER);
+            assertThat(binding.pure()).isTrue();
+            assertThat(binding.materializationPolicy()).isEqualTo(MaterializationPolicy.DOES_NOT_MATERIALIZE);
+            assertThat(binding.numericResultFact()).isEqualTo(NumericResultFact.UNKNOWN_NUMERIC_VALUE_SHAPE);
+            assertThat(binding.cardinalityPreservation()).isEqualTo(CardinalityPreservation.NOT_APPLICABLE);
+            assertThat(model.resolvedTypes()).containsEntry(link.id(), ScalarType.NUMBER);
+            assertThat(model.runtimeNullability()).containsEntry(link.id(), RuntimeNullability.MAY_BE_NULL);
+            assertThat(model.runtimeNullability()).containsEntry(navigation.id(), RuntimeNullability.MAY_BE_NULL);
+        });
+    }
+
+    @Test
+    void bindsNavigatedMapOperationsWithMaterializedCollectionResultTypes() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertMapOperationBinding("m.keys()", environment, OperationIdentity.KEYS, new CollectionType(ScalarType.STRING));
+        assertMapOperationBinding("m.values()", environment, OperationIdentity.VALUES, new CollectionType(ScalarType.NUMBER));
+        assertMapOperationBinding("m.count()", environment, OperationIdentity.COUNT, ScalarType.NUMBER);
+    }
+
+    @Test
+    void preservesSafeOperationNullabilityThroughGroupingAndAssignment() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertResultNullability("(items?.sum())", environment, RuntimeNullability.MAY_BE_NULL);
+        assertResultNullability("value := items?.sum(); value", environment, RuntimeNullability.MAY_BE_NULL);
+    }
+
     private static ExpressionFileNode ast(String source) {
         ParseSuccess parse = (ParseSuccess) new ExpressionParser().parse(source);
         return ((SemanticAstBuildSuccess) new SemanticAstBuilder().build(parse)).file();
+    }
+
+    private static void assertMapOperationBinding(
+            String source,
+            ExpressionEnvironment environment,
+            OperationIdentity identity,
+            ExpressionType expectedType) {
+        ExpressionFileNode ast = ast(source);
+        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        NavigationLink link = navigation.links().getFirst();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            SemanticModel model = success.model();
+            assertThat(model.collectionOperationBindings().get(link.id()).identity())
+                    .isEqualTo(identity);
+            assertThat(model.resolvedTypes()).containsEntry(link.id(), expectedType);
+            assertThat(model.runtimeNullability()).containsEntry(link.id(), RuntimeNullability.NEVER_NULL);
+        });
+    }
+
+    private static void assertResultNullability(
+            String source,
+            ExpressionEnvironment environment,
+            RuntimeNullability expectedNullability) {
+        ExpressionFileNode ast = ast(source);
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success ->
+                assertThat(success.model().runtimeNullability())
+                        .containsEntry(ast.resultExpression().orElseThrow().id(), expectedNullability));
     }
 }

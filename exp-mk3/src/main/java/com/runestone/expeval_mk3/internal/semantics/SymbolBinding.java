@@ -47,6 +47,14 @@ public final class SymbolBinding {
         return new SymbolBinding(name, type, null, frameSlot, RuntimeNullability.NEVER_NULL);
     }
 
+    public static SymbolBinding internal(
+            String name,
+            ExpressionType type,
+            int frameSlot,
+            RuntimeNullability runtimeNullability) {
+        return new SymbolBinding(name, type, null, frameSlot, runtimeNullability);
+    }
+
     public String name() {
         return name;
     }

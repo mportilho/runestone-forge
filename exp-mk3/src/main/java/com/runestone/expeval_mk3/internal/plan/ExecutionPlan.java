@@ -58,6 +58,6 @@ public final class ExecutionPlan {
         for (Consumer<ExecutionScope> assignment : assignments) {
             assignment.accept(scope);
         }
-        return Objects.requireNonNull(resultExpression.execute(scope), "expression result");
+        return resultExpression.execute(scope);
     }
 }

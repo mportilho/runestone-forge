@@ -12,6 +12,7 @@ import com.runestone.expeval_mk3.internal.ast.AssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.BetweenNode;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperator;
+import com.runestone.expeval_mk3.internal.ast.CallNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.CollectionLiteralNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalBranchNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalNode;
@@ -39,6 +40,7 @@ import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
+import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
 import com.runestone.expeval_mk3.internal.semantics.SemanticModel;
 import com.runestone.expeval_mk3.internal.semantics.SymbolBinding;
 
@@ -333,6 +335,16 @@ public final class ExecutionPlanBuilder {
                     scope,
                     environment.maxMaterializedSize());
         }
+        if (link instanceof CallNavigationLink call) {
+            CollectionOperationBinding binding = required(
+                    model.collectionOperationBindings(), call.id(), "collection operation binding");
+            return scope -> executeCollectionOperation(
+                    binding,
+                    receiver.execute(scope),
+                    call.safe(),
+                    environment.mathContext(),
+                    environment.maxMaterializedSize());
+        }
         throw new IllegalArgumentException("unsupported planned navigation link: " + link.getClass().getSimpleName());
     }
 
@@ -411,6 +423,72 @@ public final class ExecutionPlanBuilder {
             }
         }
         return List.copyOf(result);
+    }
+
+    private static Object executeCollectionOperation(
+            CollectionOperationBinding binding,
+            Object receiver,
+            boolean safe,
+            MathContext mathContext,
+            int maxMaterializedSize) {
+        if (receiver == null) {
+            if (safe) {
+                return null;
+            }
+            throw new NullPointerException("navigation receiver");
+        }
+        return switch (binding.identity()) {
+            case COUNT -> count(receiver);
+            case KEYS -> mapKeys(receiver, maxMaterializedSize);
+            case VALUES -> mapValues(receiver, maxMaterializedSize);
+            case SUM -> sum(receiver);
+            case AVG -> avg(receiver, mathContext);
+            case ALL, ANY, MAP, REDUCE, SORT_BY, CUSTOM -> throw new IllegalStateException(
+                    "unsupported collection operation binding: " + binding.identity());
+        };
+    }
+
+    private static BigDecimal count(Object receiver) {
+        if (receiver instanceof List<?> values) {
+            return BigDecimal.valueOf(values.size());
+        }
+        return BigDecimal.valueOf(((Map<?, ?>) receiver).size());
+    }
+
+    private static List<Object> mapKeys(Object receiver, int maxMaterializedSize) {
+        Map<?, ?> values = (Map<?, ?>) receiver;
+        requireMaterializedSize(values.size(), maxMaterializedSize);
+        ArrayList<Object> result = new ArrayList<>(values.size());
+        for (Object key : values.keySet()) {
+            result.add(Objects.requireNonNull(key, "map key"));
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<Object> mapValues(Object receiver, int maxMaterializedSize) {
+        Map<?, ?> values = (Map<?, ?>) receiver;
+        requireMaterializedSize(values.size(), maxMaterializedSize);
+        ArrayList<Object> result = new ArrayList<>(values.size());
+        for (Object value : values.values()) {
+            result.add(Objects.requireNonNull(value, "map value"));
+        }
+        return List.copyOf(result);
+    }
+
+    private static BigDecimal sum(Object receiver) {
+        BigDecimal result = BigDecimal.ZERO;
+        for (Object value : (List<?>) receiver) {
+            result = result.add(number(Objects.requireNonNull(value, "collection element")));
+        }
+        return result;
+    }
+
+    private static BigDecimal avg(Object receiver, MathContext mathContext) {
+        List<?> values = (List<?>) receiver;
+        if (values.isEmpty()) {
+            throw new IllegalStateException("average over an empty collection is not defined");
+        }
+        return sum(values).divide(BigDecimal.valueOf(values.size()), mathContext);
     }
 
     private static void requireMaterializedSize(int size, int maxMaterializedSize) {
