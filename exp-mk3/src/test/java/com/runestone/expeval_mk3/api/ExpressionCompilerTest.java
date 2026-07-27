@@ -9,6 +9,7 @@ import java.time.LocalTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -141,5 +142,110 @@ class ExpressionCompilerTest {
                 .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
                         assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic ->
                                 assertThat(diagnostic.code()).isEqualTo("SEMANTIC_UNKNOWN_SYMBOL")));
+    }
+
+    @Test
+    void computesScalarOperatorsThroughTheCompiledPlan() {
+        ExpressionEnvironment environment = ExpressionEnvironment.standard();
+
+        assertThat(decimal(ExpressionCompiler.compile("1 + 2 * 3 - 4 / 2", environment).compute()))
+                .isEqualByComparingTo(new BigDecimal("5"));
+        assertThat(decimal(ExpressionCompiler.compile("2^-3", environment).compute()))
+                .isEqualByComparingTo(new BigDecimal("0.125"));
+        assertThat(decimal(ExpressionCompiler.compile("50%", environment).compute()))
+                .isEqualByComparingTo(new BigDecimal("0.5"));
+        assertThat(decimal(ExpressionCompiler.compile("5!", environment).compute()))
+                .isEqualByComparingTo(new BigDecimal("120"));
+        assertThat(ExpressionCompiler.compile("\"run\" || \"estone\"", environment).compute()).isEqualTo("runestone");
+        assertThat(ExpressionCompiler.compile("3 between 1 and 5", environment).compute()).isEqualTo(true);
+        assertThat(ExpressionCompiler.compile("\"abc123\" =~ \"[a-z]+\\\\d+\"", environment).compute()).isEqualTo(true);
+        assertThat(ExpressionCompiler.compile("2 in [1, 2, 3]", environment).compute()).isEqualTo(true);
+    }
+
+    @Test
+    void usesStableSlotsForDefaultsAndOverrides() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("fixed", new BigDecimal("10"), ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("input", new BigDecimal("2"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        CompiledExpression expression = ExpressionCompiler.compile("fixed + input * 3", environment);
+
+        assertThat(decimal(expression.compute())).isEqualByComparingTo(new BigDecimal("16"));
+        assertThat(decimal(expression.compute(Map.of("input", new BigDecimal("4")))))
+                .isEqualByComparingTo(new BigDecimal("22"));
+    }
+
+    @Test
+    void computesAssignmentsConditionalsAndBoundFunctions() {
+        CountingFunctions functions = new CountingFunctions();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .externalSymbol("base", new BigDecimal("4"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        CompiledExpression expression = ExpressionCompiler.compile("x := base + 1; if(x > 5, bump(x), x)", environment);
+
+        assertThat(decimal(expression.compute())).isEqualByComparingTo(new BigDecimal("5"));
+        assertThat(functions.invocations()).isZero();
+
+        assertThat(decimal(expression.compute(Map.of("base", new BigDecimal("6")))))
+                .isEqualByComparingTo(new BigDecimal("8"));
+        assertThat(functions.invocations()).isOne();
+    }
+
+    @Test
+    void preservesShortCircuitAndEagerEvaluationContracts() {
+        CountingFunctions functions = new CountingFunctions();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .build();
+
+        assertThat(ExpressionCompiler.compile("false and markTrue()", environment).compute()).isEqualTo(false);
+        assertThat(functions.invocations()).isZero();
+
+        assertThat(ExpressionCompiler.compile("true or markTrue()", environment).compute()).isEqualTo(true);
+        assertThat(functions.invocations()).isZero();
+
+        assertThat(ExpressionCompiler.compile("false xor markTrue()", environment).compute()).isEqualTo(true);
+        assertThat(functions.invocations()).isOne();
+
+        assertThat(ExpressionCompiler.compile("false nand markTrue()", environment).compute()).isEqualTo(true);
+        assertThat(functions.invocations()).isEqualTo(2);
+
+        assertThat(ExpressionCompiler.compile("true nor markTrue()", environment).compute()).isEqualTo(false);
+        assertThat(functions.invocations()).isEqualTo(3);
+
+        assertThat(ExpressionCompiler.compile("1 ?? markNumber()", environment).compute()).isEqualTo(new BigDecimal("1"));
+        assertThat(functions.invocations()).isEqualTo(3);
+
+        assertThat(ExpressionCompiler.compile("0 between 1 and markNumber()", environment).compute()).isEqualTo(false);
+        assertThat(functions.invocations()).isEqualTo(3);
+    }
+
+    public static final class CountingFunctions {
+
+        private final AtomicInteger invocations = new AtomicInteger();
+
+        public BigDecimal bump(BigDecimal value) {
+            invocations.incrementAndGet();
+            return value.add(BigDecimal.ONE);
+        }
+
+        public Boolean markTrue() {
+            invocations.incrementAndGet();
+            return true;
+        }
+
+        public BigDecimal markNumber() {
+            invocations.incrementAndGet();
+            return BigDecimal.TEN;
+        }
+
+        private int invocations() {
+            return invocations.get();
+        }
+    }
+
+    private static BigDecimal decimal(Object value) {
+        return (BigDecimal) value;
     }
 }

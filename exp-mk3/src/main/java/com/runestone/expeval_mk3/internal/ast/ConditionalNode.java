@@ -5,7 +5,7 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 import java.util.List;
 import java.util.Objects;
 
-record ConditionalNode(
+public record ConditionalNode(
         NodeId id,
         SourceSpan sourceSpan,
         ConditionalSyntax syntax,
@@ -13,7 +13,7 @@ record ConditionalNode(
         List<ConditionalSeparatorOccurrence> separators,
         ExpressionNode elseExpression) implements ExpressionNode {
 
-    ConditionalNode {
+    public ConditionalNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(syntax, "syntax");

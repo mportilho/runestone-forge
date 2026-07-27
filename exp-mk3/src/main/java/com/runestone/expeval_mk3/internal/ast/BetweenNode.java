@@ -4,7 +4,7 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 
 import java.util.Objects;
 
-record BetweenNode(
+public record BetweenNode(
         NodeId id,
         SourceSpan sourceSpan,
         ExpressionNode value,
@@ -14,7 +14,7 @@ record BetweenNode(
         SourceSpan lowerSeparatorSpan,
         ExpressionNode upperBound) implements ExpressionNode {
 
-    BetweenNode {
+    public BetweenNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(value, "value");

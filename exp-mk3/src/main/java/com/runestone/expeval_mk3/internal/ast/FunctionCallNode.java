@@ -5,13 +5,13 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 import java.util.List;
 import java.util.Objects;
 
-record FunctionCallNode(
+public record FunctionCallNode(
         NodeId id,
         SourceSpan sourceSpan,
         FunctionName name,
         List<CallArgument> arguments) implements ExpressionNode {
 
-    FunctionCallNode {
+    public FunctionCallNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(name, "name");

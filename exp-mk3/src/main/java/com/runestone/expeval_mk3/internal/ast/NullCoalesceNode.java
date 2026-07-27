@@ -4,13 +4,13 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 import java.util.List;
 import java.util.Objects;
 
-record NullCoalesceNode(
+public record NullCoalesceNode(
         NodeId id,
         SourceSpan sourceSpan,
         List<ExpressionNode> operands,
         List<SourceSpan> operatorSpans) implements ExpressionNode {
 
-    NullCoalesceNode {
+    public NullCoalesceNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(operands, "operands");

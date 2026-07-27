@@ -5,13 +5,13 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 import java.util.List;
 import java.util.Objects;
 
-record PostfixOperationNode(
+public record PostfixOperationNode(
         NodeId id,
         SourceSpan sourceSpan,
         ExpressionNode operand,
         List<PostfixOperatorOccurrence> operations) implements ExpressionNode {
 
-    PostfixOperationNode {
+    public PostfixOperationNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(operand, "operand");

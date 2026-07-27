@@ -5,12 +5,12 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 import java.util.List;
 import java.util.Objects;
 
-record DestructuringAssignmentTargetNode(
+public record DestructuringAssignmentTargetNode(
         NodeId id,
         SourceSpan sourceSpan,
         List<IdentifierAssignmentTargetNode> elements) implements AssignmentTargetNode {
 
-    DestructuringAssignmentTargetNode {
+    public DestructuringAssignmentTargetNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(elements, "elements");

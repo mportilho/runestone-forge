@@ -4,13 +4,13 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 
 import java.util.Objects;
 
-record ConditionalBranchNode(
+public record ConditionalBranchNode(
         NodeId id,
         SourceSpan sourceSpan,
         ExpressionNode condition,
         ExpressionNode consequence) implements AstNode {
 
-    ConditionalBranchNode {
+    public ConditionalBranchNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(condition, "condition");

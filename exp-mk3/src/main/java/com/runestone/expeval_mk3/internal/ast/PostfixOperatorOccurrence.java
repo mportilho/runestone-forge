@@ -4,9 +4,9 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 
 import java.util.Objects;
 
-record PostfixOperatorOccurrence(PostfixOperator operator, SourceSpan sourceSpan) {
+public record PostfixOperatorOccurrence(PostfixOperator operator, SourceSpan sourceSpan) {
 
-    PostfixOperatorOccurrence {
+    public PostfixOperatorOccurrence {
         Objects.requireNonNull(operator, "operator");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
     }

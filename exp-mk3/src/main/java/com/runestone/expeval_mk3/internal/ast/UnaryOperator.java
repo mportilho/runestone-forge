@@ -1,6 +1,6 @@
 package com.runestone.expeval_mk3.internal.ast;
 
-enum UnaryOperator {
+public enum UnaryOperator {
     NEGATE,
     LOGICAL_NOT
 }

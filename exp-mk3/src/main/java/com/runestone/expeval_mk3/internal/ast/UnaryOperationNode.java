@@ -4,14 +4,14 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 
 import java.util.Objects;
 
-record UnaryOperationNode(
+public record UnaryOperationNode(
         NodeId id,
         SourceSpan sourceSpan,
         UnaryOperator operator,
         SourceSpan operatorSpan,
         ExpressionNode operand) implements ExpressionNode {
 
-    UnaryOperationNode {
+    public UnaryOperationNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(operator, "operator");
