@@ -85,8 +85,12 @@ public final class SemanticResolver {
     private static final class ResolutionSession {
 
         private static final ObjectType MAP_ENTRY_TYPE = new ObjectType("com.runestone.expeval_mk3.internal.MapEntry");
+        private static final ObjectType REDUCTION_ITEM_TYPE = new ObjectType(
+                "com.runestone.expeval_mk3.internal.ReductionItem");
         private static final String MAP_ENTRY_KEY_MEMBER = "k";
         private static final String MAP_ENTRY_VALUE_MEMBER = "v";
+        private static final String REDUCTION_ACCUMULATOR_MEMBER = "accumulator";
+        private static final String REDUCTION_ITEM_MEMBER = "item";
 
         private final ExpressionEnvironment environment;
         private final List<ExpressionDiagnostic> diagnostics = new ArrayList<>();
@@ -106,6 +110,7 @@ public final class SemanticResolver {
         private final List<SymbolBinding> currentItemBindings = new ArrayList<>();
         private final List<Integer> currentItemSlotsByDepth = new ArrayList<>();
         private final Map<Integer, ExpressionType> mapEntryValueTypesByFrameSlot = new HashMap<>();
+        private final Map<Integer, ReductionItemTypes> reductionItemTypesByFrameSlot = new HashMap<>();
         private int nextFrameSlot;
 
         private ResolutionSession(ExpressionEnvironment environment) {
@@ -754,10 +759,10 @@ public final class SemanticResolver {
             RuntimeNullability currentNullability = nullability.getOrDefault(
                     navigation.receiver().id(), RuntimeNullability.NEVER_NULL);
             boolean currentPure = purityOf(navigation.receiver().id());
-            ExpressionType currentMapEntryValueType = mapEntryValueType(navigation.receiver(), currentType);
+            ContextualItemMembers currentContextualMembers = contextualItemMembers(navigation.receiver(), currentType);
             for (NavigationLink link : navigation.links()) {
                 LinkResolution linkResolution = resolveNavigationLink(
-                        link, currentType, currentShape, currentPure, currentMapEntryValueType);
+                        link, currentType, currentShape, currentPure, currentContextualMembers);
                 if (linkResolution.invalid()) {
                     return Resolution.invalidResolution();
                 }
@@ -765,7 +770,7 @@ public final class SemanticResolver {
                 currentShape = linkResolution.shape();
                 currentNullability = linkResolution.nullability();
                 currentPure = linkResolution.pure();
-                currentMapEntryValueType = linkResolution.mapEntryValueType();
+                currentContextualMembers = linkResolution.contextualItemMembers();
                 recordValue(link.id(), currentType, currentNullability);
                 recordPure(link.id(), currentPure);
                 recordCollectionShape(link.id(), currentType, currentShape);
@@ -806,7 +811,7 @@ public final class SemanticResolver {
                 ExpressionType receiverType,
                 CollectionShape receiverShape,
                 boolean receiverPure,
-                ExpressionType mapEntryValueType) {
+                ContextualItemMembers contextualMembers) {
             if (link instanceof IndexSubscriptNavigationLink index) {
                 return resolveIndexSubscript(index, receiverType, receiverShape, receiverPure);
             }
@@ -817,7 +822,7 @@ public final class SemanticResolver {
                 return resolveFilter(filter, receiverType, receiverPure);
             }
             if (link instanceof PropertyNavigationLink property) {
-                return resolveProperty(property, receiverType, receiverPure, mapEntryValueType);
+                return resolveProperty(property, receiverType, receiverPure, contextualMembers);
             }
             if (link instanceof CallNavigationLink call) {
                 return resolveCollectionOperation(call, receiverType, receiverShape, receiverPure);
@@ -919,30 +924,51 @@ public final class SemanticResolver {
                 PropertyNavigationLink property,
                 ExpressionType receiverType,
                 boolean receiverPure,
-                ExpressionType mapEntryValueType) {
-            if (receiverType != MAP_ENTRY_TYPE) {
-                diagnostic(
-                        DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION,
-                        "Property navigation is not supported by this compilation slice",
-                        property.sourceSpan());
-                return LinkResolution.invalidResolution();
+                ContextualItemMembers contextualMembers) {
+            if (receiverType == MAP_ENTRY_TYPE) {
+                ExpressionType resultType = switch (property.memberName().value()) {
+                    case MAP_ENTRY_KEY_MEMBER -> ScalarType.STRING;
+                    case MAP_ENTRY_VALUE_MEMBER -> Objects.requireNonNull(contextualMembers.mapEntryValueType(),
+                            "mapEntryValueType");
+                    default -> null;
+                };
+                if (resultType == null) {
+                    diagnostic(
+                            DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL,
+                            "Map entry exposes only @.k and @.v",
+                            property.sourceSpan());
+                    return LinkResolution.invalidResolution();
+                }
+                RuntimeNullability nullability = property.safe()
+                        ? RuntimeNullability.MAY_BE_NULL
+                        : RuntimeNullability.NEVER_NULL;
+                return LinkResolution.known(resultType, null, nullability, receiverPure);
             }
-            ExpressionType resultType = switch (property.memberName().value()) {
-                case MAP_ENTRY_KEY_MEMBER -> ScalarType.STRING;
-                case MAP_ENTRY_VALUE_MEMBER -> Objects.requireNonNull(mapEntryValueType, "mapEntryValueType");
-                default -> null;
-            };
-            if (resultType == null) {
-                diagnostic(
-                        DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL,
-                        "Map entry exposes only @.k and @.v",
-                        property.sourceSpan());
-                return LinkResolution.invalidResolution();
+            if (receiverType == REDUCTION_ITEM_TYPE) {
+                ReductionItemTypes reductionTypes = Objects.requireNonNull(
+                        contextualMembers.reductionItemTypes(), "reductionItemTypes");
+                ExpressionType resultType = switch (property.memberName().value()) {
+                    case REDUCTION_ACCUMULATOR_MEMBER -> reductionTypes.accumulatorType();
+                    case REDUCTION_ITEM_MEMBER -> reductionTypes.itemType();
+                    default -> null;
+                };
+                if (resultType == null) {
+                    diagnostic(
+                            DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL,
+                            "Reduction item exposes only @.accumulator and @.item",
+                            property.sourceSpan());
+                    return LinkResolution.invalidResolution();
+                }
+                RuntimeNullability nullability = property.safe()
+                        ? RuntimeNullability.MAY_BE_NULL
+                        : RuntimeNullability.NEVER_NULL;
+                return LinkResolution.known(resultType, null, nullability, receiverPure);
             }
-            RuntimeNullability nullability = property.safe()
-                    ? RuntimeNullability.MAY_BE_NULL
-                    : RuntimeNullability.NEVER_NULL;
-            return LinkResolution.known(resultType, null, nullability, receiverPure);
+            diagnostic(
+                    DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION,
+                    "Property navigation is not supported by this compilation slice",
+                    property.sourceSpan());
+            return LinkResolution.invalidResolution();
         }
 
         private LinkResolution resolveCollectionOperation(
@@ -1016,12 +1042,14 @@ public final class SemanticResolver {
                         call.sourceSpan());
                 return LinkResolution.invalidResolution();
             }
-            ExpressionType resultType = collectionOperationResultType(descriptor, receiverType, lambdaBindings);
+            ExpressionType resultType = collectionOperationResultType(
+                    descriptor, receiverType, arguments.valueArgumentTypes(), lambdaBindings);
             RuntimeNullability resultNullability = call.safe()
                     ? RuntimeNullability.MAY_BE_NULL
                     : descriptor.resultNullability();
             boolean operationPure = descriptor.intrinsicPurity() == CollectionOperationCatalog.IntrinsicPurity.PURE
                     && receiverPure
+                    && arguments.pure()
                     && lambdaBindingsPure(lambdaBindings);
             collectionOperationBindings.put(call.id(), CollectionOperationBinding.fromDescriptor(
                     descriptor, receiverType, resultType, resultNullability, lambdaBindings, operationPure));
@@ -1037,18 +1065,23 @@ public final class SemanticResolver {
                 CollectionOperationCatalog.Descriptor descriptor,
                 ExpressionType receiverType) {
             if (descriptor.arguments().isEmpty()) {
-                return OperationArgumentResolution.valid(List.of());
+                return OperationArgumentResolution.valid(List.of(), List.of(), true);
             }
             List<CollectionOperationBinding.LambdaBinding> lambdaBindings = new ArrayList<>();
+            List<ExpressionType> valueArgumentTypes = new ArrayList<>();
+            boolean pure = true;
             for (int index = 0; index < descriptor.arguments().size(); index++) {
                 CollectionOperationCatalog.ArgumentContract contract = descriptor.arguments().get(index);
                 CallArgument argument = call.arguments().get(index);
-                if (contract.kind() != CollectionOperationCatalog.ArgumentKind.LAMBDA) {
-                    diagnostic(
-                            DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION,
-                            "Collection operation value arguments are not supported by this compilation slice",
-                            call.sourceSpan());
-                    return OperationArgumentResolution.invalidResolution();
+                if (contract.kind() == CollectionOperationCatalog.ArgumentKind.VALUE) {
+                    ValueArgumentResolution valueResolution = resolveValueArgument(
+                            call, descriptor, argument, contract, valueArgumentTypes);
+                    if (valueResolution.invalid()) {
+                        return OperationArgumentResolution.invalidResolution();
+                    }
+                    valueArgumentTypes.add(valueResolution.type());
+                    pure = pure && valueResolution.pure();
+                    continue;
                 }
                 if (!(argument instanceof LambdaCallArgument lambdaArgument)) {
                     resolveUnsupportedOperationArguments(call);
@@ -1059,19 +1092,64 @@ public final class SemanticResolver {
                     return OperationArgumentResolution.invalidResolution();
                 }
                 LambdaResolution lambdaResolution = resolveLambdaArgument(
-                        lambdaArgument.lambda(), contract, receiverType);
+                        lambdaArgument.lambda(), contract, receiverType, valueArgumentTypes);
                 if (lambdaResolution.invalid()) {
                     return OperationArgumentResolution.invalidResolution();
                 }
                 lambdaBindings.add(lambdaResolution.lambdaBinding());
             }
-            return OperationArgumentResolution.valid(lambdaBindings);
+            return OperationArgumentResolution.valid(valueArgumentTypes, lambdaBindings, pure);
+        }
+
+        private ValueArgumentResolution resolveValueArgument(
+                CallNavigationLink call,
+                CollectionOperationCatalog.Descriptor descriptor,
+                CallArgument argument,
+                CollectionOperationCatalog.ArgumentContract contract,
+                List<ExpressionType> valueArgumentTypes) {
+            if (!(argument instanceof ExpressionCallArgument expressionArgument)) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Collection operation '" + descriptor.name() + "' requires a value argument",
+                        call.sourceSpan());
+                return ValueArgumentResolution.invalidResolution();
+            }
+            ExpressionNode expression = expressionArgument.expression();
+            Resolution value = resolveExpression(expression, expectedArgumentType(contract, valueArgumentTypes));
+            if (value.invalid() || value.pending()) {
+                invalidForPending(value);
+                return ValueArgumentResolution.invalidResolution();
+            }
+            if (!typeMatches(contract, value.type(), valueArgumentTypes)) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Collection operation value argument is not compatible with its contract",
+                        expression.sourceSpan());
+                return ValueArgumentResolution.invalidResolution();
+            }
+            RuntimeNullability valueNullability = nullabilityOf(expression.id());
+            if (valueNullability != RuntimeNullability.NEVER_NULL || containsContextualItem(value.type())) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Collection operation value argument must be a known non-null source value",
+                        expression.sourceSpan());
+                return ValueArgumentResolution.invalidResolution();
+            }
+            if (!valueConstraintMatches(contract, expression)) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Collection operation value argument violates its literal value constraint",
+                        expression.sourceSpan());
+                return ValueArgumentResolution.invalidResolution();
+            }
+            return ValueArgumentResolution.valid(value.type(), purityOf(expression.id()));
         }
 
         private LambdaResolution resolveLambdaArgument(
                 LambdaNode lambda,
                 CollectionOperationCatalog.ArgumentContract contract,
-                ExpressionType receiverType) {
+                ExpressionType receiverType,
+                List<ExpressionType> valueArgumentTypes) {
             if (currentItemBindings.size() >= environment.maxCurrentItemDepth()) {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_CURRENT_ITEM_DEPTH_EXCEEDED,
@@ -1083,17 +1161,17 @@ public final class SemanticResolver {
             int currentItemSlot = currentItemFrameSlot(depth);
             SymbolBinding currentItem = SymbolBinding.internal(
                     "@" + depth,
-                    currentItemType(contract.currentItemTypeRule(), receiverType, currentItemSlot),
+                    currentItemType(contract.currentItemTypeRule(), receiverType, currentItemSlot, valueArgumentTypes),
                     currentItemSlot);
             symbolBindings.put(lambda.currentItem().id(), currentItem);
             currentItemBindings.add(currentItem);
-            Resolution body = resolveExpression(lambda.body(), expectedLambdaType(contract));
+            Resolution body = resolveExpression(lambda.body(), expectedArgumentType(contract, valueArgumentTypes));
             currentItemBindings.remove(currentItemBindings.size() - 1);
             if (body.invalid() || body.pending()) {
                 invalidForPending(body);
                 return LambdaResolution.invalidResolution();
             }
-            if (!lambdaTypeMatches(contract, body.type())) {
+            if (!typeMatches(contract, body.type(), valueArgumentTypes)) {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
                         "Lambda result is not compatible with collection operation contract",
@@ -1101,7 +1179,7 @@ public final class SemanticResolver {
                 return LambdaResolution.invalidResolution();
             }
             RuntimeNullability bodyNullability = nullabilityOf(lambda.body().id());
-            if (bodyNullability != RuntimeNullability.NEVER_NULL || containsContextualMapEntry(body.type())) {
+            if (bodyNullability != RuntimeNullability.NEVER_NULL || containsContextualItem(body.type())) {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
                         "Lambda result must be a known non-null source value",
@@ -1112,30 +1190,47 @@ public final class SemanticResolver {
                     lambda, body.type(), bodyNullability, currentItem.frameSlot(), purityOf(lambda.body().id())));
         }
 
-        private static ExpressionType expectedLambdaType(CollectionOperationCatalog.ArgumentContract contract) {
+        private static ExpressionType expectedArgumentType(
+                CollectionOperationCatalog.ArgumentContract contract,
+                List<ExpressionType> valueArgumentTypes) {
             return switch (contract.typeRule()) {
                 case BOOLEAN -> ScalarType.BOOLEAN;
                 case STRING -> ScalarType.STRING;
-                case ANY_KNOWN_TYPE, ORDERABLE_SCALAR, SAME_AS_ARGUMENT_0 -> null;
+                case SAME_AS_ARGUMENT_0 -> valueArgumentTypes.getFirst();
+                case ANY_KNOWN_TYPE, ORDERABLE_SCALAR -> null;
             };
         }
 
-        private static boolean lambdaTypeMatches(
+        private static boolean typeMatches(
                 CollectionOperationCatalog.ArgumentContract contract,
-                ExpressionType type) {
+                ExpressionType type,
+                List<ExpressionType> valueArgumentTypes) {
             return switch (contract.typeRule()) {
                 case ANY_KNOWN_TYPE -> true;
                 case BOOLEAN -> type == ScalarType.BOOLEAN;
                 case STRING -> type == ScalarType.STRING;
                 case ORDERABLE_SCALAR -> contract.typeRule().concreteTypes().contains(type);
-                case SAME_AS_ARGUMENT_0 -> false;
+                case SAME_AS_ARGUMENT_0 -> type.equals(valueArgumentTypes.getFirst());
             };
+        }
+
+        private static boolean valueConstraintMatches(
+                CollectionOperationCatalog.ArgumentContract contract,
+                ExpressionNode expression) {
+            if (contract.valueConstraint() == CollectionOperationCatalog.ValueConstraint.NONE_REQUIRED) {
+                return true;
+            }
+            if (!(expression instanceof LiteralNode literal) || !(literal.value() instanceof StringLiteralValue value)) {
+                return false;
+            }
+            return contract.valueConstraint().allowedTextValues().contains(value.value());
         }
 
         private ExpressionType currentItemType(
                 CollectionOperationCatalog.CurrentItemTypeRule rule,
                 ExpressionType receiverType,
-                int currentItemSlot) {
+                int currentItemSlot,
+                List<ExpressionType> valueArgumentTypes) {
             if (rule == CollectionOperationCatalog.CurrentItemTypeRule.RECEIVER_ITEM_OR_MAP_ENTRY) {
                 if (receiverType instanceof CollectionType collectionType) {
                     return collectionType.elementType();
@@ -1145,21 +1240,30 @@ public final class SemanticResolver {
                     return MAP_ENTRY_TYPE;
                 }
             }
+            if (rule == CollectionOperationCatalog.CurrentItemTypeRule.REDUCTION_ITEM
+                    && receiverType instanceof CollectionType collectionType) {
+                reductionItemTypesByFrameSlot.put(currentItemSlot,
+                        new ReductionItemTypes(valueArgumentTypes.getFirst(), collectionType.elementType()));
+                return REDUCTION_ITEM_TYPE;
+            }
             throw new IllegalArgumentException("unsupported current item type rule: " + rule);
         }
 
-        private ExpressionType mapEntryValueType(ExpressionNode expression, ExpressionType type) {
-            if (type != MAP_ENTRY_TYPE) {
-                return null;
+        private ContextualItemMembers contextualItemMembers(ExpressionNode expression, ExpressionType type) {
+            if (type != MAP_ENTRY_TYPE && type != REDUCTION_ITEM_TYPE) {
+                return ContextualItemMembers.none();
             }
             if (expression instanceof GroupedExpressionNode grouped) {
-                return mapEntryValueType(grouped.expression(), type);
+                return contextualItemMembers(grouped.expression(), type);
             }
             SymbolBinding binding = symbolBindings.get(expression.id());
             if (binding == null) {
-                return null;
+                return ContextualItemMembers.none();
             }
-            return mapEntryValueTypesByFrameSlot.get(binding.frameSlot());
+            if (type == MAP_ENTRY_TYPE) {
+                return new ContextualItemMembers(mapEntryValueTypesByFrameSlot.get(binding.frameSlot()), null);
+            }
+            return new ContextualItemMembers(null, reductionItemTypesByFrameSlot.get(binding.frameSlot()));
         }
 
         private void resolveUnsupportedOperationArguments(CallNavigationLink call) {
@@ -1187,14 +1291,15 @@ public final class SemanticResolver {
 
         private static boolean supportedOperation(CollectionOperationCatalog.OperationIdentity identity) {
             return switch (identity) {
-                case ALL, ANY, COUNT, KEYS, MAP, VALUES, SUM, AVG -> true;
-                case REDUCE, SORT_BY, CUSTOM -> false;
+                case ALL, ANY, COUNT, KEYS, MAP, REDUCE, SORT_BY, VALUES, SUM, AVG -> true;
+                case CUSTOM -> false;
             };
         }
 
         private static ExpressionType collectionOperationResultType(
                 CollectionOperationCatalog.Descriptor descriptor,
                 ExpressionType receiverType,
+                List<ExpressionType> valueArgumentTypes,
                 List<CollectionOperationBinding.LambdaBinding> lambdaBindings) {
             return switch (descriptor.resultTypeRule()) {
                 case BOOLEAN_RESULT -> ScalarType.BOOLEAN;
@@ -1202,9 +1307,8 @@ public final class SemanticResolver {
                 case COLLECTION_OF_MAP_KEYS -> new CollectionType(ScalarType.STRING);
                 case COLLECTION_OF_MAP_VALUES -> new CollectionType(((MapType) receiverType).valueType());
                 case COLLECTION_OF_LAMBDA_RESULT -> new CollectionType(lambdaBindings.getFirst().resultType());
-                case SAME_AS_VALUE_ARGUMENT_0, SAME_AS_RECEIVER_COLLECTION ->
-                        throw new IllegalArgumentException(
-                                "collection operation is not supported by this runtime slice: " + descriptor.identity());
+                case SAME_AS_VALUE_ARGUMENT_0 -> valueArgumentTypes.getFirst();
+                case SAME_AS_RECEIVER_COLLECTION -> receiverType;
             };
         }
 
@@ -1355,7 +1459,7 @@ public final class SemanticResolver {
         }
 
         private static boolean supportsStructuralEquality(ExpressionType type) {
-            if (containsContextualMapEntry(type)) {
+            if (containsContextualItem(type)) {
                 return false;
             }
             if (type instanceof ObjectType) {
@@ -1370,15 +1474,15 @@ public final class SemanticResolver {
             return true;
         }
 
-        private static boolean containsContextualMapEntry(ExpressionType type) {
-            if (type == MAP_ENTRY_TYPE) {
+        private static boolean containsContextualItem(ExpressionType type) {
+            if (type == MAP_ENTRY_TYPE || type == REDUCTION_ITEM_TYPE) {
                 return true;
             }
             if (type instanceof CollectionType collectionType) {
-                return containsContextualMapEntry(collectionType.elementType());
+                return containsContextualItem(collectionType.elementType());
             }
             if (type instanceof MapType mapType) {
-                return containsContextualMapEntry(mapType.valueType());
+                return containsContextualItem(mapType.valueType());
             }
             return false;
         }
@@ -1400,7 +1504,7 @@ public final class SemanticResolver {
             ExpressionType type,
             CollectionShape shape,
             RuntimeNullability nullability,
-            ExpressionType mapEntryValueType,
+            ContextualItemMembers contextualItemMembers,
             boolean pure,
             boolean invalid) {
 
@@ -1424,31 +1528,64 @@ public final class SemanticResolver {
                     Objects.requireNonNull(type, "type"),
                     shape,
                     Objects.requireNonNull(nullability, "nullability"),
-                    null,
+                    ContextualItemMembers.none(),
                     pure,
                     false);
         }
 
         private static LinkResolution invalidResolution() {
-            return new LinkResolution(null, null, RuntimeNullability.NEVER_NULL, null, true, true);
+            return new LinkResolution(null, null, RuntimeNullability.NEVER_NULL, ContextualItemMembers.none(), true, true);
         }
     }
 
     private record OperationArgumentResolution(
+            List<ExpressionType> valueArgumentTypes,
             List<CollectionOperationBinding.LambdaBinding> lambdaBindings,
+            boolean pure,
             boolean invalid) {
 
         private OperationArgumentResolution {
+            valueArgumentTypes = List.copyOf(Objects.requireNonNull(valueArgumentTypes, "valueArgumentTypes"));
             lambdaBindings = List.copyOf(Objects.requireNonNull(lambdaBindings, "lambdaBindings"));
         }
 
         private static OperationArgumentResolution valid(
-                List<CollectionOperationBinding.LambdaBinding> lambdaBindings) {
-            return new OperationArgumentResolution(lambdaBindings, false);
+                List<ExpressionType> valueArgumentTypes,
+                List<CollectionOperationBinding.LambdaBinding> lambdaBindings,
+                boolean pure) {
+            return new OperationArgumentResolution(valueArgumentTypes, lambdaBindings, pure, false);
         }
 
         private static OperationArgumentResolution invalidResolution() {
-            return new OperationArgumentResolution(List.of(), true);
+            return new OperationArgumentResolution(List.of(), List.of(), true, true);
+        }
+    }
+
+    private record ValueArgumentResolution(ExpressionType type, boolean pure, boolean invalid) {
+
+        private static ValueArgumentResolution valid(ExpressionType type, boolean pure) {
+            return new ValueArgumentResolution(Objects.requireNonNull(type, "type"), pure, false);
+        }
+
+        private static ValueArgumentResolution invalidResolution() {
+            return new ValueArgumentResolution(null, true, true);
+        }
+    }
+
+    private record ContextualItemMembers(
+            ExpressionType mapEntryValueType,
+            ReductionItemTypes reductionItemTypes) {
+
+        private static ContextualItemMembers none() {
+            return new ContextualItemMembers(null, null);
+        }
+    }
+
+    private record ReductionItemTypes(ExpressionType accumulatorType, ExpressionType itemType) {
+
+        private ReductionItemTypes {
+            Objects.requireNonNull(accumulatorType, "accumulatorType");
+            Objects.requireNonNull(itemType, "itemType");
         }
     }
 

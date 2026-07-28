@@ -1,0 +1,11 @@
+id: runtime.collection.sort-by.001
+phase: runtime
+kind: valid
+source: 'items := [3, 1, 2]; items.sortBy(@ -> @, "asc")'
+coverage: [assignment, collection-literal, identifier, call, lambda, at-symbol]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "1"}
+    - {type: NUMBER, value: "2"}
+    - {type: NUMBER, value: "3"}

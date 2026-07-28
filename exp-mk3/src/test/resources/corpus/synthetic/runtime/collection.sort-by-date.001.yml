@@ -1,0 +1,10 @@
+id: runtime.collection.sort-by-date.001
+phase: runtime
+kind: valid
+source: 'items := [d"2024-01-02", d"2024-01-01"]; items.sortBy(@ -> @, "asc")'
+coverage: [assignment, collection-literal, date-literal, identifier, call, lambda, at-symbol]
+expected:
+  type: COLLECTION
+  result:
+    - {type: DATE, value: "2024-01-01"}
+    - {type: DATE, value: "2024-01-02"}

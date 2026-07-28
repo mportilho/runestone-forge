@@ -12,6 +12,7 @@ import com.runestone.expeval_mk3.internal.ast.AssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.BetweenNode;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperator;
+import com.runestone.expeval_mk3.internal.ast.CallArgument;
 import com.runestone.expeval_mk3.internal.ast.CallNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.CollectionLiteralNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalBranchNode;
@@ -62,6 +63,8 @@ public final class ExecutionPlanBuilder {
 
     private static final String MAP_ENTRY_KEY_MEMBER = "k";
     private static final String MAP_ENTRY_VALUE_MEMBER = "v";
+    private static final String REDUCTION_ACCUMULATOR_MEMBER = "accumulator";
+    private static final String REDUCTION_ITEM_MEMBER = "item";
 
     public ExecutionPlan build(SemanticModel model, ExpressionEnvironment environment) {
         Objects.requireNonNull(model, "model");
@@ -347,29 +350,39 @@ public final class ExecutionPlanBuilder {
         if (link instanceof CallNavigationLink call) {
             CollectionOperationBinding binding = required(
                     model.collectionOperationBindings(), call.id(), "collection operation binding");
-            ExecutableLambda lambda = buildOperationLambda(binding, model, environment);
+            ExecutableOperationArguments arguments = buildOperationArguments(call, binding, model, environment);
             return scope -> executeCollectionOperation(
                     binding,
                     receiver.execute(scope),
                     call.safe(),
                     environment.mathContext(),
                     environment.maxMaterializedSize(),
-                    lambda,
+                    arguments,
                     scope);
         }
         throw new IllegalArgumentException("unsupported planned navigation link: " + link.getClass().getSimpleName());
     }
 
-    private ExecutableLambda buildOperationLambda(
+    private ExecutableOperationArguments buildOperationArguments(
+            CallNavigationLink call,
             CollectionOperationBinding binding,
             SemanticModel model,
             ExpressionEnvironment environment) {
-        if (binding.lambdaBindings().isEmpty()) {
-            return null;
+        ArrayList<ExecutableNode> valueArguments = new ArrayList<>();
+        ArrayList<ExecutableLambda> lambdaArguments = new ArrayList<>();
+        int lambdaIndex = 0;
+        for (CallArgument argument : call.arguments()) {
+            if (argument instanceof ExpressionCallArgument expressionArgument) {
+                valueArguments.add(buildNode(expressionArgument.expression(), model, environment));
+                continue;
+            }
+            LambdaCallArgument lambdaArgument = (LambdaCallArgument) argument;
+            CollectionOperationBinding.LambdaBinding lambdaBinding = binding.lambdaBindings().get(lambdaIndex++);
+            LambdaNode lambda = lambdaArgument.lambda();
+            lambdaArguments.add(new ExecutableLambda(
+                    buildNode(lambda.body(), model, environment), lambdaBinding.currentItemFrameSlot()));
         }
-        CollectionOperationBinding.LambdaBinding lambdaBinding = binding.lambdaBindings().getFirst();
-        LambdaNode lambda = lambdaBinding.lambda();
-        return new ExecutableLambda(buildNode(lambda.body(), model, environment), lambdaBinding.currentItemFrameSlot());
+        return new ExecutableOperationArguments(valueArguments, lambdaArguments);
     }
 
     private static Object invokeFunction(
@@ -456,11 +469,24 @@ public final class ExecutionPlanBuilder {
             }
             throw new NullPointerException("navigation receiver");
         }
-        MapEntryValue entry = (MapEntryValue) receiver;
+        if (receiver instanceof MapEntryValue entry) {
+            return switch (property.memberName().value()) {
+                case MAP_ENTRY_KEY_MEMBER -> entry.key();
+                case MAP_ENTRY_VALUE_MEMBER -> entry.value();
+                default -> throw new IllegalStateException(
+                        "unsupported map entry property: " + property.memberName().value());
+            };
+        }
+        return reductionItemProperty(receiver, property);
+    }
+
+    private static Object reductionItemProperty(Object receiver, PropertyNavigationLink property) {
+        ReductionItemValue reductionItem = (ReductionItemValue) receiver;
         return switch (property.memberName().value()) {
-            case MAP_ENTRY_KEY_MEMBER -> entry.key();
-            case MAP_ENTRY_VALUE_MEMBER -> entry.value();
-            default -> throw new IllegalStateException("unsupported map entry property: " + property.memberName().value());
+            case REDUCTION_ACCUMULATOR_MEMBER -> reductionItem.accumulator();
+            case REDUCTION_ITEM_MEMBER -> reductionItem.item();
+            default -> throw new IllegalStateException(
+                    "unsupported contextual item property: " + property.memberName().value());
         };
     }
 
@@ -470,7 +496,7 @@ public final class ExecutionPlanBuilder {
             boolean safe,
             MathContext mathContext,
             int maxMaterializedSize,
-            ExecutableLambda lambda,
+            ExecutableOperationArguments arguments,
             ExecutionScope scope) {
         if (receiver == null) {
             if (safe) {
@@ -479,16 +505,20 @@ public final class ExecutionPlanBuilder {
             throw new NullPointerException("navigation receiver");
         }
         return switch (binding.identity()) {
-            case ALL -> all(receiver, lambda, scope, binding.receiverType());
-            case ANY -> any(receiver, lambda, scope, binding.receiverType());
+            case ALL -> all(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType());
+            case ANY -> any(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType());
             case COUNT -> count(receiver);
             case KEYS -> mapKeys(receiver, maxMaterializedSize);
             case VALUES -> mapValues(receiver, maxMaterializedSize);
-            case MAP -> map(receiver, lambda, scope, binding.receiverType(), maxMaterializedSize);
+            case MAP -> map(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType(), maxMaterializedSize);
             case SUM -> sum(receiver);
             case AVG -> avg(receiver, mathContext);
-            case REDUCE, SORT_BY, CUSTOM -> throw new IllegalStateException(
-                    "unsupported collection operation binding: " + binding.identity());
+            case REDUCE -> reduce(receiver, arguments.valueArguments().getFirst().execute(scope),
+                    arguments.lambdaArguments().getFirst(), scope);
+            case SORT_BY -> sortBy(receiver, (String) arguments.valueArguments().getFirst().execute(scope),
+                    arguments.lambdaArguments().getFirst(), scope, maxMaterializedSize,
+                    binding.lambdaBindings().getFirst().resultType());
+            case CUSTOM -> throw new IllegalStateException("unsupported collection operation binding: " + binding.identity());
         };
     }
 
@@ -555,6 +585,55 @@ public final class ExecutionPlanBuilder {
             for (Map.Entry<?, ?> entry : ((Map<?, ?>) receiver).entrySet()) {
                 result.add(Objects.requireNonNull(lambda.execute(scope, mapEntryValue(entry)), "map lambda result"));
             }
+        }
+        return List.copyOf(result);
+    }
+
+    private static Object reduce(
+            Object receiver,
+            Object initialValue,
+            ExecutableLambda lambda,
+            ExecutionScope scope) {
+        Object accumulator = Objects.requireNonNull(initialValue, "reduce initial value");
+        List<?> values = (List<?>) receiver;
+        for (int index = 0; index < values.size(); index++) {
+            Object value = values.get(index);
+            Object item = Objects.requireNonNull(value, "collection element");
+            accumulator = Objects.requireNonNull(
+                    lambda.execute(scope, new ReductionItemValue(accumulator, item)),
+                    "reduce lambda result");
+        }
+        return accumulator;
+    }
+
+    private static List<Object> sortBy(
+            Object receiver,
+            String direction,
+            ExecutableLambda lambda,
+            ExecutionScope scope,
+            int maxMaterializedSize,
+            ExpressionType keyType) {
+        int directionMultiplier = switch (Objects.requireNonNull(direction, "sort direction")) {
+            case "asc" -> 1;
+            case "desc" -> -1;
+            default -> throw new IllegalArgumentException("unsupported sort direction: " + direction);
+        };
+        List<?> values = (List<?>) receiver;
+        requireMaterializedSize(values.size(), maxMaterializedSize);
+        ArrayList<SortItem> keyedValues = new ArrayList<>(values.size());
+        for (int index = 0; index < values.size(); index++) {
+            Object value = values.get(index);
+            Object item = Objects.requireNonNull(value, "collection element");
+            Object key = Objects.requireNonNull(lambda.execute(scope, item), "sortBy selector result");
+            keyedValues.add(new SortItem(item, key));
+        }
+        keyedValues.sort((left, right) -> directionMultiplier == 1
+                ? compareValues(left.key(), right.key(), keyType)
+                : compareValues(right.key(), left.key(), keyType));
+        ArrayList<Object> result = new ArrayList<>(keyedValues.size());
+        for (int index = 0; index < keyedValues.size(); index++) {
+            SortItem keyedValue = keyedValues.get(index);
+            result.add(keyedValue.value());
         }
         return List.copyOf(result);
     }
@@ -737,11 +816,37 @@ public final class ExecutionPlanBuilder {
         }
     }
 
+    private record ExecutableOperationArguments(
+            List<ExecutableNode> valueArguments,
+            List<ExecutableLambda> lambdaArguments) {
+
+        private ExecutableOperationArguments {
+            valueArguments = List.copyOf(Objects.requireNonNull(valueArguments, "valueArguments"));
+            lambdaArguments = List.copyOf(Objects.requireNonNull(lambdaArguments, "lambdaArguments"));
+        }
+    }
+
+    private record SortItem(Object value, Object key) {
+
+        private SortItem {
+            Objects.requireNonNull(value, "value");
+            Objects.requireNonNull(key, "key");
+        }
+    }
+
     private record MapEntryValue(String key, Object value) {
 
         private MapEntryValue {
             Objects.requireNonNull(key, "key");
             Objects.requireNonNull(value, "value");
+        }
+    }
+
+    private record ReductionItemValue(Object accumulator, Object item) {
+
+        private ReductionItemValue {
+            Objects.requireNonNull(accumulator, "accumulator");
+            Objects.requireNonNull(item, "item");
         }
     }
 }

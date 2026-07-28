@@ -303,6 +303,146 @@ class ExpressionCompilerTest {
     }
 
     @Test
+    void reducesCollectionsLeftToRightWithTheInitialAccumulatorType() {
+        CountingFunctions functions = new CountingFunctions();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .build();
+
+        assertThat(decimal(ExpressionCompiler.compile(
+                        "items := [1, 2, 3]; items.reduce(0, @ -> @.accumulator + trackNumber(@.item))",
+                        environment)
+                .compute())).isEqualByComparingTo(new BigDecimal("6"));
+        assertThat(functions.seen()).containsExactly(BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3"));
+
+        assertThat(ExpressionCompiler.compile(
+                        "texts := [\"a\", \"b\", \"c\"]; texts.reduce(\"\", @ -> @.accumulator || @.item)",
+                        environment)
+                .compute()).isEqualTo("abc");
+    }
+
+    @Test
+    void returnsTheInitialReduceValueForEmptyCollectionsWithoutInvokingTheLambda() {
+        CountingFunctions functions = new CountingFunctions();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .build();
+
+        Object result = ExpressionCompiler.compile(
+                        "one := [1]; empty := one[1:1]; empty.reduce(10, @ -> trackNumber(@.item))",
+                        environment)
+                .compute();
+
+        assertThat(decimal(result)).isEqualByComparingTo(BigDecimal.TEN);
+        assertThat(functions.invocations()).isZero();
+    }
+
+    @Test
+    void sortsByOneSelectorEvaluationPerElementInSourceOrderAndReturnsAnImmutableCollection() {
+        CountingFunctions functions = new CountingFunctions();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .build();
+
+        Object result = ExpressionCompiler.compile(
+                        "items := [3, 1, 2]; items.sortBy(@ -> trackNumber(@), \"asc\")",
+                        environment)
+                .compute();
+
+        assertThat(result).isEqualTo(List.of(BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3")));
+        assertThat(functions.seen()).containsExactly(new BigDecimal("3"), BigDecimal.ONE, new BigDecimal("2"));
+        assertThat(functions.invocations()).isEqualTo(3);
+        assertThatThrownBy(() -> ((List<Object>) result).add(BigDecimal.TEN))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void sortBySupportsDescendingAndStableOrderingForEqualKeys() {
+        CountingFunctions functions = new CountingFunctions();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .build();
+
+        assertThat(ExpressionCompiler.compile(
+                        "texts := [\"b2\", \"a1\", \"b1\"]; texts.sortBy(@ -> firstChar(@), \"asc\")",
+                        environment)
+                .compute()).isEqualTo(List.of("a1", "b2", "b1"));
+        assertThat(ExpressionCompiler.compile(
+                        "items := [1, 3, 2]; items.sortBy(@ -> @, \"desc\")",
+                        environment)
+                .compute()).isEqualTo(List.of(new BigDecimal("3"), new BigDecimal("2"), BigDecimal.ONE));
+    }
+
+    @Test
+    void sortByAcceptsTemporalSelectorKeyFamilies() {
+        ExpressionEnvironment environment = ExpressionEnvironment.standard();
+
+        assertThat(ExpressionCompiler.compile(
+                        "dates := [d\"2024-01-02\", d\"2024-01-01\"]; dates.sortBy(@ -> @, \"asc\")",
+                        environment)
+                .compute()).isEqualTo(List.of(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 2)));
+        assertThat(ExpressionCompiler.compile(
+                        "times := [t\"10:30\", t\"09:15\"]; times.sortBy(@ -> @, \"asc\")",
+                        environment)
+                .compute()).isEqualTo(List.of(LocalTime.of(9, 15), LocalTime.of(10, 30)));
+        assertThat(ExpressionCompiler.compile(
+                        "datetimes := [dt\"2024-01-02T10:30:00\", dt\"2024-01-01T09:15:00\"]; "
+                                + "datetimes.sortBy(@ -> @, \"asc\")",
+                        environment)
+                .compute()).isEqualTo(List.of(
+                        LocalDateTime.of(2024, 1, 1, 9, 15),
+                        LocalDateTime.of(2024, 1, 2, 10, 30)));
+    }
+
+    @Test
+    void rejectsInvalidReduceAndSortByContractsBeforeRuntime() {
+        ExpressionEnvironment environment = ExpressionEnvironment.standard();
+
+        assertThatThrownBy(() -> ExpressionCompiler.compile(
+                        "items := [1]; items.reduce(0, @ -> \"x\")",
+                        environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+        assertThatThrownBy(() -> ExpressionCompiler.compile(
+                        "items := [1]; items.sortBy(@ -> @, \"up\")",
+                        environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+        assertThatThrownBy(() -> ExpressionCompiler.compile(
+                        "items := [true]; items.sortBy(@ -> @, \"asc\")",
+                        environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+        assertThatThrownBy(() -> ExpressionCompiler.compile(
+                        "items := [1]; items.sortBy(@ -> items?.sum(), \"asc\")",
+                        environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+    }
+
+    @Test
+    void checksSortByMaterializationLimitBeforeInvokingTheSelector() {
+        CountingFunctions functions = new CountingFunctions();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .maxMaterializedSize(2)
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(BigDecimal.ONE, new BigDecimal("2")),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        CompiledExpression expression = ExpressionCompiler.compile(
+                "items.sortBy(@ -> trackNumber(@), \"asc\")", environment);
+
+        assertThatThrownBy(() -> expression.compute(Map.of(
+                        "items", List.of(BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3")))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("maxMaterializedSize 2");
+        assertThat(functions.invocations()).isZero();
+    }
+
+    @Test
     void exposesMapEntriesToLambdasInCanonicalOrderWithoutPreservingKeys() {
         Map<String, BigDecimal> source = new HashMap<>();
         source.put("b", new BigDecimal("2"));
@@ -623,6 +763,12 @@ class ExpressionCompilerTest {
             invocations.incrementAndGet();
             seenText.add(value);
             return "b".equals(value);
+        }
+
+        public String firstChar(String value) {
+            invocations.incrementAndGet();
+            seenText.add(value);
+            return value.substring(0, 1);
         }
 
         private int invocations() {

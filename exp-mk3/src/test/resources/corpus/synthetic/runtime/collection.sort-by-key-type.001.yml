@@ -1,0 +1,9 @@
+id: semantic.collection.sort-by-key-type.001
+phase: semantic
+kind: invalid
+source: 'items := [true]; items.sortBy(@ -> @, "asc")'
+coverage: [assignment, collection-literal, identifier, call, lambda, at-symbol, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_OPERATOR_TYPE_MISMATCH

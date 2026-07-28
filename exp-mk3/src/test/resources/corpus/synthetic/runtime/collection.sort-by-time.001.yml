@@ -1,0 +1,10 @@
+id: runtime.collection.sort-by-time.001
+phase: runtime
+kind: valid
+source: 'items := [t"10:30", t"09:15"]; items.sortBy(@ -> @, "asc")'
+coverage: [assignment, collection-literal, time-literal, identifier, call, lambda, at-symbol]
+expected:
+  type: COLLECTION
+  result:
+    - {type: TIME, value: "09:15"}
+    - {type: TIME, value: "10:30"}

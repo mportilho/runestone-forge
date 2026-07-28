@@ -12,6 +12,9 @@ import com.runestone.expeval_mk3.api.ExpressionCompilationException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,7 +41,18 @@ class CollectionLiteralCorpusTest {
             "runtime.collection.slice.open-end.001",
             "runtime.collection.slice.open-start.001",
             "runtime.collection.operations-lambda.001",
+            "runtime.collection.reduce-atomicity.001",
+            "runtime.collection.reduce.001",
+            "runtime.collection.reduce-empty.001",
+            "runtime.collection.reduce-safe.001",
             "runtime.collection.safe-map.001",
+            "runtime.collection.sort-by-atomicity.001",
+            "runtime.collection.sort-by-date.001",
+            "runtime.collection.sort-by-datetime.001",
+            "runtime.collection.sort-by.001",
+            "runtime.collection.sort-by-safe.001",
+            "runtime.collection.sort-by-string.001",
+            "runtime.collection.sort-by-time.001",
             "runtime.map.operations-lambda.001",
             "semantic.map.entry-escape.001",
             "runtime.map.equality.001",
@@ -47,6 +61,10 @@ class CollectionLiteralCorpusTest {
             "semantic.collection.lambda-depth.001",
             "semantic.collection.lambda-nullable.001",
             "semantic.collection.lambda-type.001",
+            "semantic.collection.reduce-type.001",
+            "semantic.collection.sort-by-direction.001",
+            "semantic.collection.sort-by-key-type.001",
+            "semantic.collection.sort-by-limit.001",
             "semantic.destructuring.duplicate.001",
             "semantic.destructuring.fixed-size.001",
             "semantic.filter.depth.001",
@@ -145,6 +163,9 @@ class CollectionLiteralCorpusTest {
             case "NUMBER" -> new BigDecimal(value.textValue());
             case "BOOLEAN" -> value.booleanValue();
             case "STRING" -> value.textValue();
+            case "DATE" -> LocalDate.parse(value.textValue());
+            case "TIME" -> LocalTime.parse(value.textValue());
+            case "DATETIME" -> LocalDateTime.parse(value.textValue());
             case "COLLECTION" -> expectedCollection(value);
             default -> throw new IllegalArgumentException("Unsupported expected corpus type: " + type);
         };
@@ -160,6 +181,7 @@ class CollectionLiteralCorpusTest {
 
     private static Class<? extends Throwable> runtimeErrorType(String type) {
         return switch (type) {
+            case "ArithmeticException" -> ArithmeticException.class;
             case "IllegalStateException" -> IllegalStateException.class;
             default -> throw new IllegalArgumentException("Unsupported runtime error type: " + type);
         };

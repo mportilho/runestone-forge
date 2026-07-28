@@ -1,0 +1,9 @@
+id: semantic.collection.reduce-type.001
+phase: semantic
+kind: invalid
+source: 'items := [1]; items.reduce(0, @ -> "x")'
+coverage: [assignment, collection-literal, identifier, call, lambda, at-symbol, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_OPERATOR_TYPE_MISMATCH
