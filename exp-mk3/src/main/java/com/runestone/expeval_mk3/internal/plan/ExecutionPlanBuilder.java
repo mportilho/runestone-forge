@@ -120,77 +120,62 @@ public final class ExecutionPlanBuilder {
     }
 
     private ExecutableNode buildNode(ExpressionNode node, SemanticModel model, ExpressionEnvironment environment) {
-        if (node instanceof LiteralNode literal) {
-            Object value = required(model.preparedValues(), literal.id(), "prepared literal value");
-            return scope -> value;
-        }
-        if (node instanceof CollectionLiteralNode collection) {
-            List<ExecutableNode> elements = collection.elements().stream()
-                    .map(element -> buildNode(element, model, environment))
-                    .toList();
-            return scope -> materialize(elements, scope);
-        }
-        if (node instanceof IdentifierNode identifier) {
-            SymbolBinding binding = required(model.symbolBindings(), identifier.id(), "symbol binding");
-            return scope -> scope.read(binding.frameSlot());
-        }
-        if (node instanceof CurrentItemNode currentItem) {
-            SymbolBinding binding = required(model.symbolBindings(), currentItem.id(), "current item binding");
-            return scope -> scope.read(binding.frameSlot());
-        }
-        if (node instanceof CurrentTemporalValueNode currentTemporalValue) {
-            return switch (currentTemporalValue.kind()) {
+        return switch (node) {
+            case LiteralNode literal -> {
+                Object value = required(model.preparedValues(), literal.id(), "prepared literal value");
+                yield scope -> value;
+            }
+            case CollectionLiteralNode collection -> {
+                List<ExecutableNode> elements = collection.elements().stream()
+                        .map(element -> buildNode(element, model, environment))
+                        .toList();
+                yield scope -> materialize(elements, scope);
+            }
+            case IdentifierNode identifier -> {
+                SymbolBinding binding = required(model.symbolBindings(), identifier.id(), "symbol binding");
+                yield scope -> scope.read(binding.frameSlot());
+            }
+            case CurrentItemNode currentItem -> {
+                SymbolBinding binding = required(model.symbolBindings(), currentItem.id(), "current item binding");
+                yield scope -> scope.read(binding.frameSlot());
+            }
+            case CurrentTemporalValueNode currentTemporalValue -> switch (currentTemporalValue.kind()) {
                 case DATE -> ExecutionScope::currentDate;
                 case TIME -> ExecutionScope::currentTime;
                 case DATE_TIME -> ExecutionScope::currentDateTime;
             };
-        }
-        if (node instanceof GroupedExpressionNode grouped) {
-            return buildNode(grouped.expression(), model, environment);
-        }
-        if (node instanceof BinaryOperationNode binary) {
-            return buildBinary(binary, model, requireEnvironment(environment));
-        }
-        if (node instanceof UnaryOperationNode unary) {
-            ExecutableNode operand = buildNode(unary.operand(), model, environment);
-            return scope -> unary.operator() == UnaryOperator.NEGATE
-                    ? number(operand.execute(scope)).negate()
-                    : !bool(operand.execute(scope));
-        }
-        if (node instanceof PostfixOperationNode postfix) {
-            ExecutableNode operand = buildNode(postfix.operand(), model, environment);
-            return scope -> executePostfix(number(operand.execute(scope)), postfix, requireEnvironment(environment));
-        }
-        if (node instanceof BetweenNode between) {
-            return buildBetween(between, model, environment);
-        }
-        if (node instanceof MembershipNode membership) {
-            return buildMembership(membership, model, environment);
-        }
-        if (node instanceof NullCoalesceNode coalesce) {
-            List<ExecutableNode> operands = coalesce.operands().stream()
-                    .map(operand -> buildNode(operand, model, environment))
-                    .toList();
-            return scope -> {
-                for (ExecutableNode operand : operands) {
-                    Object value = operand.execute(scope);
-                    if (value != null) {
-                        return value;
+            case GroupedExpressionNode grouped -> buildNode(grouped.expression(), model, environment);
+            case BinaryOperationNode binary -> buildBinary(binary, model, requireEnvironment(environment));
+            case UnaryOperationNode unary -> {
+                ExecutableNode operand = buildNode(unary.operand(), model, environment);
+                yield scope -> unary.operator() == UnaryOperator.NEGATE
+                        ? number(operand.execute(scope)).negate()
+                        : !bool(operand.execute(scope));
+            }
+            case PostfixOperationNode postfix -> {
+                ExecutableNode operand = buildNode(postfix.operand(), model, environment);
+                yield scope -> executePostfix(number(operand.execute(scope)), postfix, requireEnvironment(environment));
+            }
+            case BetweenNode between -> buildBetween(between, model, environment);
+            case MembershipNode membership -> buildMembership(membership, model, environment);
+            case NullCoalesceNode coalesce -> {
+                List<ExecutableNode> operands = coalesce.operands().stream()
+                        .map(operand -> buildNode(operand, model, environment))
+                        .toList();
+                yield scope -> {
+                    for (ExecutableNode operand : operands) {
+                        Object value = operand.execute(scope);
+                        if (value != null) {
+                            return value;
+                        }
                     }
-                }
-                return null;
-            };
-        }
-        if (node instanceof ConditionalNode conditional) {
-            return buildConditional(conditional, model, environment);
-        }
-        if (node instanceof FunctionCallNode functionCall) {
-            return buildFunctionCall(functionCall, model, environment);
-        }
-        if (node instanceof NavigationChainNode navigation) {
-            return buildNavigationChain(navigation, model, environment);
-        }
-        throw new IllegalArgumentException("unsupported planned node: " + node.getClass().getSimpleName());
+                    return null;
+                };
+            }
+            case ConditionalNode conditional -> buildConditional(conditional, model, environment);
+            case FunctionCallNode functionCall -> buildFunctionCall(functionCall, model, environment);
+            case NavigationChainNode navigation -> buildNavigationChain(navigation, model, environment);
+        };
     }
 
     private ExecutableNode buildBinary(

@@ -1,0 +1,7 @@
+id: semantic.collection.avg-empty.001
+phase: semantic
+kind: invalid
+source: 'one := [1]; empty := one[1:1]; empty.avg()'
+coverage: [assignment, collection-literal, identifier, subscript-slice, call, diagnostic]
+expected:
+  diagnostic: {category: SEMANTIC, code: SEMANTIC_OPERATOR_TYPE_MISMATCH}

@@ -261,62 +261,33 @@ public final class SemanticResolver {
         }
 
         private Resolution resolveExpression(ExpressionNode expression, ExpressionType expectedType) {
-            if (expression instanceof LiteralNode literal) {
-                return resolveLiteral(literal, expectedType);
+            return switch (expression) {
+                case LiteralNode literal -> resolveLiteral(literal, expectedType);
+                case CollectionLiteralNode collection -> resolveCollection(collection, expectedType);
+                case BinaryOperationNode binary -> resolveBinary(binary);
+                case UnaryOperationNode unary -> resolveUnary(unary);
+                case PostfixOperationNode postfix -> resolvePostfix(postfix);
+                case BetweenNode between -> resolveBetween(between);
+                case MembershipNode membership -> resolveMembership(membership);
+                case NullCoalesceNode coalesce -> resolveNullCoalesce(coalesce, expectedType);
+                case ConditionalNode conditional -> resolveConditional(conditional, expectedType);
+                case FunctionCallNode functionCall -> resolveFunctionCall(functionCall);
+                case NavigationChainNode navigation -> resolveNavigationChain(navigation);
+                case CurrentItemNode currentItem -> resolveCurrentItem(currentItem);
+                case CurrentTemporalValueNode currentTemporalValue -> resolveCurrentTemporalValue(currentTemporalValue);
+                case IdentifierNode identifier -> resolveIdentifier(identifier);
+                case GroupedExpressionNode grouped -> resolveGrouped(grouped, expectedType);
+            };
+        }
+
+        private Resolution resolveGrouped(GroupedExpressionNode grouped, ExpressionType expectedType) {
+            Resolution resolution = resolveExpression(grouped.expression(), expectedType);
+            if (resolution.known()) {
+                recordValue(grouped.id(), resolution.type(), nullabilityOf(grouped.expression().id()));
+                recordPure(grouped.id(), purityOf(grouped.expression().id()));
+                recordCollectionShape(grouped.id(), resolution.type(), collectionShapes.get(grouped.expression().id()));
             }
-            if (expression instanceof CollectionLiteralNode collection) {
-                return resolveCollection(collection, expectedType);
-            }
-            if (expression instanceof BinaryOperationNode binary) {
-                return resolveBinary(binary);
-            }
-            if (expression instanceof UnaryOperationNode unary) {
-                return resolveUnary(unary);
-            }
-            if (expression instanceof PostfixOperationNode postfix) {
-                return resolvePostfix(postfix);
-            }
-            if (expression instanceof BetweenNode between) {
-                return resolveBetween(between);
-            }
-            if (expression instanceof MembershipNode membership) {
-                return resolveMembership(membership);
-            }
-            if (expression instanceof NullCoalesceNode coalesce) {
-                return resolveNullCoalesce(coalesce, expectedType);
-            }
-            if (expression instanceof ConditionalNode conditional) {
-                return resolveConditional(conditional, expectedType);
-            }
-            if (expression instanceof FunctionCallNode functionCall) {
-                return resolveFunctionCall(functionCall);
-            }
-            if (expression instanceof NavigationChainNode navigation) {
-                return resolveNavigationChain(navigation);
-            }
-            if (expression instanceof CurrentItemNode currentItem) {
-                return resolveCurrentItem(currentItem);
-            }
-            if (expression instanceof CurrentTemporalValueNode currentTemporalValue) {
-                return resolveCurrentTemporalValue(currentTemporalValue);
-            }
-            if (expression instanceof IdentifierNode identifier) {
-                return resolveIdentifier(identifier);
-            }
-            if (expression instanceof GroupedExpressionNode grouped) {
-                Resolution resolution = resolveExpression(grouped.expression(), expectedType);
-                if (resolution.known()) {
-                    recordValue(grouped.id(), resolution.type(), nullabilityOf(grouped.expression().id()));
-                    recordPure(grouped.id(), purityOf(grouped.expression().id()));
-                    recordCollectionShape(grouped.id(), resolution.type(), collectionShapes.get(grouped.expression().id()));
-                }
-                return resolution;
-            }
-            diagnostic(
-                    DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION,
-                    "Expression construct is not supported by this compilation slice",
-                    expression.sourceSpan());
-            return Resolution.invalidResolution();
+            return resolution;
         }
 
         private Resolution resolveLiteral(LiteralNode literal, ExpressionType expectedType) {

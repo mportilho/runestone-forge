@@ -25,8 +25,8 @@
 
 ## Generated Grammar Files
 - `expression-evaluator/src/main/antlr4/.../ExpressionEvaluator.g4` and `exp-mk3/src/main/antlr4/.../ExpressionEvaluator.g4` are grammar sources.
-- There is no ANTLR Maven plugin; generated parser/lexer files for `expression-evaluator` are committed under `src/main/java/com/runestone/expeval/internal/grammar`.
-- If the grammar changes, regenerate and review the committed parser/lexer/token/interp files rather than assuming Maven will generate them during `test`.
+- `expression-evaluator` has no ANTLR Maven plugin; its generated parser/lexer files are committed under `src/main/java/com/runestone/expeval/internal/grammar`. If its grammar changes, regenerate and review the committed parser/lexer/token/interp files rather than assuming Maven will generate them during `test`.
+- `exp-mk3` uses the `antlr4-maven-plugin` (declared in `exp-mk3/pom.xml`); its generated parser/lexer sources are produced at build time under `target/generated-sources` and are intentionally not committed.
 
 ## Dynamic Filter Notes
 - Spring setup is opt-in through `@EnableDynamicFilterServletConfiguration`; there is no Spring Boot `AutoConfiguration.imports` or `spring.factories` resource.
