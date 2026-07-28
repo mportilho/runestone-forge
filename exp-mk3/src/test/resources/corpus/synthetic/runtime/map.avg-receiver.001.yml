@@ -1,7 +1,7 @@
-id: runtime.map.any-key.001
-phase: runtime
-kind: valid
-source: 'm.any(@ -> @.k = "b")'
+id: semantic.map.avg-receiver.001
+phase: semantic
+kind: invalid
+source: 'm.avg()'
 environment:
   maxMaterializedSize: 256
   maxFactorialInput: 32
@@ -12,7 +12,8 @@ environment:
         b: {type: NUMBER, value: "2"}
         A: {type: NUMBER, value: "1"}
       overwritePolicy: FIXED
-coverage: [identifier, call, lambda, at-symbol, property-access, comparison, string-literal]
+coverage: [identifier, call, diagnostic]
 expected:
-  type: BOOLEAN
-  result: true
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_OPERATOR_TYPE_MISMATCH

@@ -1,7 +1,7 @@
-id: semantic.map.entry-escape.001
+id: semantic.map.reduce-receiver.001
 phase: semantic
 kind: invalid
-source: 'm.map(@ -> [@])'
+source: 'm.reduce(0, @ -> @.accumulator + @.item)'
 environment:
   maxMaterializedSize: 256
   maxFactorialInput: 32
@@ -12,7 +12,7 @@ environment:
         b: {type: NUMBER, value: "2"}
         A: {type: NUMBER, value: "1"}
       overwritePolicy: FIXED
-coverage: [identifier, call, lambda, at-symbol, collection-literal, diagnostic]
+coverage: [identifier, call, int-literal, lambda, at-symbol, property-access, additive, diagnostic]
 expected:
   diagnostic:
     category: SEMANTIC

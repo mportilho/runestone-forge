@@ -2,6 +2,16 @@ id: runtime.object-wildcard.accessor-failure.001
 phase: runtime
 kind: invalid
 source: 'object?.[*]'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    object:
+      type: OBJECT_FAILING_WILDCARD_CHILD_PROVIDER
+      default:
+        wildcardChildren: [first]
+        ordered: true
+      overwritePolicy: FIXED
 coverage: [identifier, wildcard, safe-navigation]
 expected:
   runtimeError:

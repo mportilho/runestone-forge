@@ -1,0 +1,11 @@
+id: runtime.collection.sum.001
+phase: runtime
+kind: valid
+source: 'items := [1, 2, 3, 4]; items.sum()'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+coverage: [assignment, collection-literal, identifier, call]
+expected:
+  type: NUMBER
+  result: "10"

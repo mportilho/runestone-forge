@@ -1,0 +1,12 @@
+id: semantic.map.keys-receiver.001
+phase: semantic
+kind: invalid
+source: 'items := [1]; items.keys()'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+coverage: [assignment, collection-literal, identifier, call, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_OPERATOR_TYPE_MISMATCH

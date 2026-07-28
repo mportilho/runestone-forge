@@ -2,6 +2,14 @@ id: parser.semantics.invalid-regex.001
 phase: semantic
 kind: invalid
 source: 'name =~ "["'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    name:
+      type: STRING
+      default: {type: STRING, value: "abc"}
+      overwritePolicy: FIXED
 coverage: [regex, string-literal, diagnostic]
 expected:
-  diagnostic: {category: SEMANTIC, code: TBD}
+  diagnostic: {category: SEMANTIC, code: SEMANTIC_REGEX_PATTERN_INVALID}

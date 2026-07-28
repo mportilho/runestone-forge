@@ -4,4 +4,4 @@ kind: invalid
 source: '@'
 coverage: [at-symbol, diagnostic]
 expected:
-  diagnostic: {category: SEMANTIC, code: TBD}
+  diagnostic: {category: SEMANTIC, code: SEMANTIC_CURRENT_ITEM_OUT_OF_SCOPE}

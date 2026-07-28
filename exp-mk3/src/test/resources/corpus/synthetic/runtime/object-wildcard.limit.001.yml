@@ -6,6 +6,13 @@ coverage: [identifier, wildcard]
 environment:
   maxMaterializedSize: 1
   maxFactorialInput: 1000
+  symbols:
+    object:
+      type: OBJECT_WILDCARD_CHILD_PROVIDER
+      default:
+        wildcardChildren: [second, first]
+        ordered: false
+      overwritePolicy: FIXED
 expected:
   diagnostic:
     category: SEMANTIC

@@ -4,4 +4,4 @@ kind: invalid
 source: '@.name'
 coverage: [at-symbol, property-access, diagnostic]
 expected:
-  diagnostic: {category: SEMANTIC, code: TBD}
+  diagnostic: {category: SEMANTIC, code: SEMANTIC_CURRENT_ITEM_OUT_OF_SCOPE}

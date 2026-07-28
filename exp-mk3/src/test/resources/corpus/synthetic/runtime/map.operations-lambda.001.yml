@@ -2,6 +2,16 @@ id: runtime.map.operations-lambda.001
 phase: runtime
 kind: valid
 source: 'm.map(@ -> @.v + 10)'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    m:
+      type: MAP_NUMBER
+      default:
+        b: {type: NUMBER, value: "2"}
+        A: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
 coverage: [identifier, call, lambda, at-symbol, property-access, additive]
 expected:
   type: COLLECTION

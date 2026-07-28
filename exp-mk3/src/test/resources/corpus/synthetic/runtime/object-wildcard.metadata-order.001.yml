@@ -2,6 +2,16 @@ id: runtime.object-wildcard.metadata-order.001
 phase: runtime
 kind: valid
 source: 'object[*]'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    object:
+      type: OBJECT_WILDCARD_CHILD_PROVIDER
+      default:
+        wildcardChildren: [second, first]
+        ordered: false
+      overwritePolicy: FIXED
 coverage: [identifier, wildcard]
 expected:
   type: COLLECTION

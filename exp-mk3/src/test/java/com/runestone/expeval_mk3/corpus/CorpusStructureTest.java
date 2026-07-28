@@ -48,6 +48,21 @@ class CorpusStructureTest {
     }
 
     @Test
+    @DisplayName("executable corpus diagnostics use stable codes")
+    void executableCorpusDiagnosticsUseStableCodes() {
+        for (ExpressionCase expressionCase : ExpressionCaseLoader.loadAll()) {
+            if ((expressionCase.phase() != CasePhase.SEMANTIC && expressionCase.phase() != CasePhase.RUNTIME)
+                    || !(expressionCase.expectedOutcome() instanceof ExpectedDiagnostic expected)) {
+                continue;
+            }
+
+            assertThat(expected.code())
+                    .as("%s", expressionCase.path())
+                    .isNotEqualTo("TBD");
+        }
+    }
+
+    @Test
     @DisplayName("corpus environments follow the Etapa 3.5 contract")
     void corpusEnvironmentsFollowEtapa35Contract() {
         for (ExpressionCase expressionCase : ExpressionCaseLoader.loadAll()) {

@@ -1,7 +1,7 @@
-id: runtime.map.any-key.001
+id: runtime.map.values.001
 phase: runtime
 kind: valid
-source: 'm.any(@ -> @.k = "b")'
+source: 'm.values()'
 environment:
   maxMaterializedSize: 256
   maxFactorialInput: 32
@@ -12,7 +12,9 @@ environment:
         b: {type: NUMBER, value: "2"}
         A: {type: NUMBER, value: "1"}
       overwritePolicy: FIXED
-coverage: [identifier, call, lambda, at-symbol, property-access, comparison, string-literal]
+coverage: [identifier, call]
 expected:
-  type: BOOLEAN
-  result: true
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "1"}
+    - {type: NUMBER, value: "2"}
