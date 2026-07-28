@@ -1,0 +1,10 @@
+id: runtime.collection.nested-lambda.001
+phase: runtime
+kind: valid
+source: 'outer := [[1, 2], [3]]; outer.map(@ -> @[?(@ > 1)].count())'
+coverage: [assignment, collection-literal, identifier, call, lambda, at-symbol, filter, comparison]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "1"}
+    - {type: NUMBER, value: "1"}

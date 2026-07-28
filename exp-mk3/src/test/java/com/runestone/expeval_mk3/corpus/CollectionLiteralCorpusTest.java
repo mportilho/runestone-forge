@@ -28,6 +28,7 @@ class CollectionLiteralCorpusTest {
             "runtime.collection.filter.001",
             "runtime.collection.index.001",
             "runtime.collection.index-negative.001",
+            "runtime.collection.nested-lambda.001",
             "runtime.collection.numbers.001",
             "runtime.collection.empty-context.001",
             "runtime.collection.equality.001",
@@ -36,9 +37,16 @@ class CollectionLiteralCorpusTest {
             "runtime.collection.slice.closed.001",
             "runtime.collection.slice.open-end.001",
             "runtime.collection.slice.open-start.001",
+            "runtime.collection.operations-lambda.001",
+            "runtime.collection.safe-map.001",
+            "runtime.map.operations-lambda.001",
+            "semantic.map.entry-escape.001",
             "runtime.map.equality.001",
             "semantic.collection.empty.001",
             "semantic.collection.limit.001",
+            "semantic.collection.lambda-depth.001",
+            "semantic.collection.lambda-nullable.001",
+            "semantic.collection.lambda-type.001",
             "semantic.destructuring.duplicate.001",
             "semantic.destructuring.fixed-size.001",
             "semantic.filter.depth.001",
@@ -116,6 +124,17 @@ class CollectionLiteralCorpusTest {
             return builder
                     .externalSymbol("left", type, left, ExternalSymbolOverwritePolicy.FIXED)
                     .externalSymbol("right", type, right, ExternalSymbolOverwritePolicy.FIXED)
+                    .build();
+        }
+        if (expressionCase.id().equals("runtime.map.operations-lambda.001")
+                || expressionCase.id().equals("runtime.map.all.001")
+                || expressionCase.id().equals("runtime.map.any-key.001")
+                || expressionCase.id().equals("semantic.map.entry-escape.001")) {
+            Map<String, Object> source = new LinkedHashMap<>();
+            source.put("b", new BigDecimal("2"));
+            source.put("A", BigDecimal.ONE);
+            return builder
+                    .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
                     .build();
         }
         return builder.build();

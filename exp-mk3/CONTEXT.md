@@ -69,7 +69,7 @@ The type of a text-keyed value map understood by the expression language, preser
 _Avoid_: Generic Java map, object property bag
 
 **Entrada de Mapa**:
-The contextual item type exposed by filtering a Tipo Mapa, with `@.k` as the textual key and `@.v` as the map value. It is available only inside the map filter predicate and is not a general source-level value type.
+The contextual item type exposed by filtering or lambda-processing a Tipo Mapa, with `@.k` as the textual key and `@.v` as the map value. It is available only inside map Item Atual contexts and is not a general source-level value type.
 _Avoid_: Map object, structural pair, Java Map.Entry API
 
 **Tipo Objeto**:

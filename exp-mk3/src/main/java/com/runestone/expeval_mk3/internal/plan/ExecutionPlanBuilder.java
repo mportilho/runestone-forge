@@ -27,6 +27,8 @@ import com.runestone.expeval_mk3.internal.ast.GroupedExpressionNode;
 import com.runestone.expeval_mk3.internal.ast.IdentifierAssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.IdentifierNode;
 import com.runestone.expeval_mk3.internal.ast.IndexSubscriptNavigationLink;
+import com.runestone.expeval_mk3.internal.ast.LambdaCallArgument;
+import com.runestone.expeval_mk3.internal.ast.LambdaNode;
 import com.runestone.expeval_mk3.internal.ast.LiteralNode;
 import com.runestone.expeval_mk3.internal.ast.MembershipNode;
 import com.runestone.expeval_mk3.internal.ast.NavigationChainNode;
@@ -35,6 +37,7 @@ import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.NullCoalesceNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperator;
+import com.runestone.expeval_mk3.internal.ast.PropertyNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
@@ -56,6 +59,9 @@ import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 public final class ExecutionPlanBuilder {
+
+    private static final String MAP_ENTRY_KEY_MEMBER = "k";
+    private static final String MAP_ENTRY_VALUE_MEMBER = "v";
 
     public ExecutionPlan build(SemanticModel model, ExpressionEnvironment environment) {
         Objects.requireNonNull(model, "model");
@@ -335,17 +341,35 @@ public final class ExecutionPlanBuilder {
                     scope,
                     environment.maxMaterializedSize());
         }
+        if (link instanceof PropertyNavigationLink property) {
+            return scope -> propertyValue(receiver.execute(scope), property);
+        }
         if (link instanceof CallNavigationLink call) {
             CollectionOperationBinding binding = required(
                     model.collectionOperationBindings(), call.id(), "collection operation binding");
+            ExecutableLambda lambda = buildOperationLambda(binding, model, environment);
             return scope -> executeCollectionOperation(
                     binding,
                     receiver.execute(scope),
                     call.safe(),
                     environment.mathContext(),
-                    environment.maxMaterializedSize());
+                    environment.maxMaterializedSize(),
+                    lambda,
+                    scope);
         }
         throw new IllegalArgumentException("unsupported planned navigation link: " + link.getClass().getSimpleName());
+    }
+
+    private ExecutableLambda buildOperationLambda(
+            CollectionOperationBinding binding,
+            SemanticModel model,
+            ExpressionEnvironment environment) {
+        if (binding.lambdaBindings().isEmpty()) {
+            return null;
+        }
+        CollectionOperationBinding.LambdaBinding lambdaBinding = binding.lambdaBindings().getFirst();
+        LambdaNode lambda = lambdaBinding.lambda();
+        return new ExecutableLambda(buildNode(lambda.body(), model, environment), lambdaBinding.currentItemFrameSlot());
     }
 
     private static Object invokeFunction(
@@ -425,12 +449,29 @@ public final class ExecutionPlanBuilder {
         return List.copyOf(result);
     }
 
+    private static Object propertyValue(Object receiver, PropertyNavigationLink property) {
+        if (receiver == null) {
+            if (property.safe()) {
+                return null;
+            }
+            throw new NullPointerException("navigation receiver");
+        }
+        MapEntryValue entry = (MapEntryValue) receiver;
+        return switch (property.memberName().value()) {
+            case MAP_ENTRY_KEY_MEMBER -> entry.key();
+            case MAP_ENTRY_VALUE_MEMBER -> entry.value();
+            default -> throw new IllegalStateException("unsupported map entry property: " + property.memberName().value());
+        };
+    }
+
     private static Object executeCollectionOperation(
             CollectionOperationBinding binding,
             Object receiver,
             boolean safe,
             MathContext mathContext,
-            int maxMaterializedSize) {
+            int maxMaterializedSize,
+            ExecutableLambda lambda,
+            ExecutionScope scope) {
         if (receiver == null) {
             if (safe) {
                 return null;
@@ -438,14 +479,90 @@ public final class ExecutionPlanBuilder {
             throw new NullPointerException("navigation receiver");
         }
         return switch (binding.identity()) {
+            case ALL -> all(receiver, lambda, scope, binding.receiverType());
+            case ANY -> any(receiver, lambda, scope, binding.receiverType());
             case COUNT -> count(receiver);
             case KEYS -> mapKeys(receiver, maxMaterializedSize);
             case VALUES -> mapValues(receiver, maxMaterializedSize);
+            case MAP -> map(receiver, lambda, scope, binding.receiverType(), maxMaterializedSize);
             case SUM -> sum(receiver);
             case AVG -> avg(receiver, mathContext);
-            case ALL, ANY, MAP, REDUCE, SORT_BY, CUSTOM -> throw new IllegalStateException(
+            case REDUCE, SORT_BY, CUSTOM -> throw new IllegalStateException(
                     "unsupported collection operation binding: " + binding.identity());
         };
+    }
+
+    private static boolean all(
+            Object receiver,
+            ExecutableLambda lambda,
+            ExecutionScope scope,
+            ExpressionType receiverType) {
+        if (receiverType instanceof CollectionType) {
+            for (Object value : (List<?>) receiver) {
+                if (!bool(lambda.execute(scope, Objects.requireNonNull(value, "collection element")))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        for (Map.Entry<?, ?> entry : ((Map<?, ?>) receiver).entrySet()) {
+            if (!bool(lambda.execute(scope, mapEntryValue(entry)))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean any(
+            Object receiver,
+            ExecutableLambda lambda,
+            ExecutionScope scope,
+            ExpressionType receiverType) {
+        if (receiverType instanceof CollectionType) {
+            for (Object value : (List<?>) receiver) {
+                if (bool(lambda.execute(scope, Objects.requireNonNull(value, "collection element")))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        for (Map.Entry<?, ?> entry : ((Map<?, ?>) receiver).entrySet()) {
+            if (bool(lambda.execute(scope, mapEntryValue(entry)))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<Object> map(
+            Object receiver,
+            ExecutableLambda lambda,
+            ExecutionScope scope,
+            ExpressionType receiverType,
+            int maxMaterializedSize) {
+        int size = receiverType instanceof CollectionType
+                ? ((List<?>) receiver).size()
+                : ((Map<?, ?>) receiver).size();
+        requireMaterializedSize(size, maxMaterializedSize);
+        ArrayList<Object> result = new ArrayList<>(size);
+        if (receiverType instanceof CollectionType) {
+            for (Object value : (List<?>) receiver) {
+                result.add(Objects.requireNonNull(
+                        lambda.execute(scope, Objects.requireNonNull(value, "collection element")),
+                        "map lambda result"));
+            }
+        } else {
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) receiver).entrySet()) {
+                result.add(Objects.requireNonNull(lambda.execute(scope, mapEntryValue(entry)), "map lambda result"));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static MapEntryValue mapEntryValue(Map.Entry<?, ?> entry) {
+        return new MapEntryValue(
+                (String) Objects.requireNonNull(entry.getKey(), "map key"),
+                Objects.requireNonNull(entry.getValue(), "map value"));
     }
 
     private static BigDecimal count(Object receiver) {
@@ -606,5 +723,25 @@ public final class ExecutionPlanBuilder {
     }
 
     private record ExecutableBranch(ExecutableNode condition, ExecutableNode consequence) {
+    }
+
+    private record ExecutableLambda(ExecutableNode body, int currentItemSlot) {
+
+        private Object execute(ExecutionScope scope, Object currentItem) {
+            Object previous = scope.replace(currentItemSlot, currentItem);
+            try {
+                return body.execute(scope);
+            } finally {
+                scope.restore(currentItemSlot, previous);
+            }
+        }
+    }
+
+    private record MapEntryValue(String key, Object value) {
+
+        private MapEntryValue {
+            Objects.requireNonNull(key, "key");
+            Objects.requireNonNull(value, "value");
+        }
     }
 }

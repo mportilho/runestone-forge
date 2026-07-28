@@ -1,0 +1,10 @@
+id: runtime.map.operations-lambda.001
+phase: runtime
+kind: valid
+source: 'm.map(@ -> @.v + 10)'
+coverage: [identifier, call, lambda, at-symbol, property-access, additive]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "11"}
+    - {type: NUMBER, value: "12"}

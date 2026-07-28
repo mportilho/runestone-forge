@@ -9,6 +9,7 @@ import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
+import com.runestone.expeval_mk3.api.FunctionPurity;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.RuntimeNullability;
 import com.runestone.expeval_mk3.api.ScalarType;
@@ -139,6 +140,24 @@ class SemanticResolverTest {
         assertResultNullability("value := items?.sum(); value", environment, RuntimeNullability.MAY_BE_NULL);
     }
 
+    @Test
+    void combinesCollectionOperationPurityWithImpureLambdaBindings() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(new ImpureFunctions(), FunctionPurity.IMPURE)
+                .build();
+        ExpressionFileNode ast = ast("items := [1]; items.map(@ -> touch(@))");
+        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        NavigationLink link = navigation.links().getFirst();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            CollectionOperationBinding binding = success.model().collectionOperationBindings().get(link.id());
+            assertThat(binding.pure()).isFalse();
+            assertThat(binding.lambdaBindings()).singleElement().satisfies(lambda -> assertThat(lambda.pure()).isFalse());
+        });
+    }
+
     private static ExpressionFileNode ast(String source) {
         ParseSuccess parse = (ParseSuccess) new ExpressionParser().parse(source);
         return ((SemanticAstBuildSuccess) new SemanticAstBuilder().build(parse)).file();
@@ -174,5 +193,12 @@ class SemanticResolverTest {
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success ->
                 assertThat(success.model().runtimeNullability())
                         .containsEntry(ast.resultExpression().orElseThrow().id(), expectedNullability));
+    }
+
+    public static final class ImpureFunctions {
+
+        public BigDecimal touch(BigDecimal value) {
+            return value;
+        }
     }
 }

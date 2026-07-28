@@ -5,6 +5,7 @@ import com.runestone.expeval_mk3.api.ExpressionCompiler;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
+import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ScalarType;
 import org.junit.jupiter.api.Test;
 
@@ -29,6 +30,10 @@ class ScalarRuntimeCorpusTest {
             "runtime.arithmetic.percent.001",
             "runtime.arithmetic.root.001",
             "runtime.assignment.basic.001",
+            "runtime.collection.all.001",
+            "runtime.collection.all-empty.001",
+            "runtime.collection.any.001",
+            "runtime.collection.any-empty.001",
             "runtime.comparison.between.001",
             "runtime.comparison.in.001",
             "runtime.comparison.less-than.001",
@@ -40,6 +45,8 @@ class ScalarRuntimeCorpusTest {
             "runtime.logical.and.001",
             "runtime.logical.or.001",
             "runtime.logical.xor.001",
+            "runtime.map.all.001",
+            "runtime.map.any-key.001",
             "runtime.null.coalesce.001",
             "runtime.string.concat.001");
 
@@ -72,6 +79,15 @@ class ScalarRuntimeCorpusTest {
     }
 
     private static ExpressionEnvironment environment(ExpressionCase expressionCase) {
+        if (expressionCase.id().equals("runtime.map.all.001")
+                || expressionCase.id().equals("runtime.map.any-key.001")) {
+            Map<String, Object> source = new LinkedHashMap<>();
+            source.put("b", new BigDecimal("2"));
+            source.put("A", BigDecimal.ONE);
+            return ExpressionEnvironment.builder()
+                    .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
+                    .build();
+        }
         JsonNode environment = expressionCase.root().get("environment");
         if (environment == null) {
             return ExpressionEnvironment.standard();

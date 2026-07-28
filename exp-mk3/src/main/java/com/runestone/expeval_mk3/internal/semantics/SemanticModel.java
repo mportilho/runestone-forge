@@ -21,6 +21,7 @@ import com.runestone.expeval_mk3.internal.ast.GroupedExpressionNode;
 import com.runestone.expeval_mk3.internal.ast.IdentifierNode;
 import com.runestone.expeval_mk3.internal.ast.NavigationChainNode;
 import com.runestone.expeval_mk3.internal.ast.NavigationLink;
+import com.runestone.expeval_mk3.internal.ast.LambdaCallArgument;
 import com.runestone.expeval_mk3.internal.ast.LiteralNode;
 import com.runestone.expeval_mk3.internal.ast.MembershipNode;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
@@ -215,6 +216,9 @@ public final class SemanticModel {
             call.arguments().forEach(argument -> {
                 if (argument instanceof com.runestone.expeval_mk3.internal.ast.ExpressionCallArgument expressionArgument) {
                     validateCompleteExpression(expressionArgument.expression());
+                } else if (argument instanceof LambdaCallArgument lambdaArgument) {
+                    requireEntry(symbolBindings, lambdaArgument.lambda().currentItem().id(), "lambda current item binding");
+                    validateCompleteExpression(lambdaArgument.lambda().body());
                 }
             });
         }

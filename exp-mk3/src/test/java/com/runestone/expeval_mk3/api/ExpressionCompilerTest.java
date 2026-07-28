@@ -7,6 +7,7 @@ import java.math.MathContext;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -238,6 +239,178 @@ class ExpressionCompilerTest {
     }
 
     @Test
+    void evaluatesAllAndAnyLambdasWithEmptyIdentitiesAndShortCircuiting() {
+        CountingFunctions functions = new CountingFunctions();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .build();
+
+        assertThat(ExpressionCompiler.compile("items := [1, 2, 3, 4]; items.all(@ -> lessThanThree(@))", environment)
+                .compute()).isEqualTo(false);
+        assertThat(functions.invocations()).isEqualTo(3);
+
+        functions.reset();
+        assertThat(ExpressionCompiler.compile("items := [1, 2, 3, 4]; items.any(@ -> greaterThanTwo(@))", environment)
+                .compute()).isEqualTo(true);
+        assertThat(functions.invocations()).isEqualTo(3);
+
+        functions.reset();
+        assertThat(ExpressionCompiler.compile("one := [1]; empty := one[1:1]; empty.all(@ -> lessThanThree(@))", environment)
+                .compute()).isEqualTo(true);
+        assertThat(ExpressionCompiler.compile("one := [1]; empty := one[1:1]; empty.any(@ -> greaterThanTwo(@))", environment)
+                .compute()).isEqualTo(false);
+        assertThat(functions.invocations()).isZero();
+    }
+
+    @Test
+    void evaluatesMapAllAndAnyLambdasInCanonicalOrderWithShortCircuiting() {
+        CountingFunctions functions = new CountingFunctions();
+        Map<String, BigDecimal> source = new HashMap<>();
+        source.put("c", new BigDecimal("3"));
+        source.put("b", new BigDecimal("2"));
+        source.put("A", BigDecimal.ONE);
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThat(ExpressionCompiler.compile("m.all(@ -> lessThanThree(@.v))", environment).compute())
+                .isEqualTo(false);
+        assertThat(functions.invocations()).isEqualTo(3);
+
+        functions.reset();
+        assertThat(ExpressionCompiler.compile("m.any(@ -> isKeyB(@.k))", environment).compute())
+                .isEqualTo(true);
+        assertThat(functions.seenText()).containsExactly("A", "b");
+        assertThat(functions.invocations()).isEqualTo(2);
+    }
+
+    @Test
+    void mapsCollectionLambdasOncePerItemInOrderAndReturnsAnImmutableCollection() {
+        CountingFunctions functions = new CountingFunctions();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .build();
+
+        Object result = ExpressionCompiler.compile("items := [1, 2, 3]; items.map(@ -> trackNumber(@))", environment)
+                .compute();
+
+        assertThat(result).isEqualTo(List.of(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3")));
+        assertThat(functions.seen()).containsExactly(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3"));
+        assertThat(functions.invocations()).isEqualTo(3);
+        assertThatThrownBy(() -> ((List<Object>) result).add(BigDecimal.TEN))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void exposesMapEntriesToLambdasInCanonicalOrderWithoutPreservingKeys() {
+        Map<String, BigDecimal> source = new HashMap<>();
+        source.put("b", new BigDecimal("2"));
+        source.put("A", BigDecimal.ONE);
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThat(ExpressionCompiler.compile("m.map(@ -> @.k)", environment).compute())
+                .isEqualTo(List.of("A", "b"));
+        assertThat(ExpressionCompiler.compile("m.map(@ -> @.v + 10)", environment).compute())
+                .isEqualTo(List.of(new BigDecimal("11"), new BigDecimal("12")));
+    }
+
+    @Test
+    void nestedLambdasUseTheInnermostCurrentItemAndRespectDepthLimits() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "outer",
+                        new CollectionType(new CollectionType(ScalarType.NUMBER)),
+                        List.of(List.of(BigDecimal.ONE, new BigDecimal("2")), List.of(new BigDecimal("3"))),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThat(ExpressionCompiler.compile("outer.map(@ -> @[?(@ > 1)].count())", environment).compute())
+                .isEqualTo(List.of(BigDecimal.ONE, BigDecimal.ONE));
+
+        ExpressionEnvironment shallowEnvironment = ExpressionEnvironment.builder()
+                .maxCurrentItemDepth(1)
+                .build();
+        assertThatThrownBy(() -> ExpressionCompiler.compile("outer := [[1]]; outer.map(@ -> @.map(@ -> @))", shallowEnvironment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code())
+                                .isEqualTo("SEMANTIC_CURRENT_ITEM_DEPTH_EXCEEDED"));
+    }
+
+    @Test
+    void rejectsInvalidLambdaResults() {
+        CountingFunctions functions = new CountingFunctions();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .build();
+
+        assertThatThrownBy(() -> ExpressionCompiler.compile("items := [1]; items.all(@ -> @)", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+        assertThatThrownBy(() -> ExpressionCompiler.compile("items := [1]; items.map(@ -> items?.sum())", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+        assertThat(functions.invocations()).isZero();
+    }
+
+    @Test
+    void rejectsEscapedMapEntryLambdaResultsAndEntryEquality() {
+        Map<String, BigDecimal> source = new HashMap<>();
+        source.put("a", BigDecimal.ONE);
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThatThrownBy(() -> ExpressionCompiler.compile("m.map(@ -> [@])", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+        assertThatThrownBy(() -> ExpressionCompiler.compile("m.any(@ -> @ = @)", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OBJECT_EQUALITY_NOT_SUPPORTED"));
+    }
+
+    @Test
+    void rejectsLambdaArgumentsForGlobalFunctions() {
+        assertThatThrownBy(() -> ExpressionCompiler.compile("unknown(@ -> @)", ExpressionEnvironment.standard()))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code())
+                                .isEqualTo("SEMANTIC_LAMBDA_ARGUMENT_UNSUPPORTED"));
+    }
+
+    @Test
+    void checksMapMaterializationBeforeInvokingLambda() {
+        CountingFunctions functions = new CountingFunctions();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .maxMaterializedSize(2)
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(BigDecimal.ONE, new BigDecimal("2")),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        CompiledExpression expression = ExpressionCompiler.compile("items.map(@ -> trackNumber(@))", environment);
+
+        assertThatThrownBy(() -> expression.compute(Map.of(
+                        "items", List.of(BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3")))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("maxMaterializedSize 2");
+        assertThat(functions.invocations()).isZero();
+    }
+
+    @Test
+    void safeMapCallPreservesTheRealReceiverBehaviorWhenNotNull() {
+        ExpressionEnvironment environment = ExpressionEnvironment.standard();
+
+        assertThat(ExpressionCompiler.compile("items := [1, 2]; items?.map(@ -> @ + 1)", environment).compute())
+                .isEqualTo(List.of(new BigDecimal("2"), new BigDecimal("3")));
+        assertThat(ExpressionCompiler.compile("one := [1]; empty := one[1:1]; empty.map(@ -> @ + 1)", environment)
+                .compute()).isEqualTo(List.of());
+    }
+
+    @Test
     void materializesNavigatedMapOperationsInCanonicalOrder() {
         Map<String, BigDecimal> source = new HashMap<>();
         source.put("b", new BigDecimal("2"));
@@ -283,7 +456,7 @@ class ExpressionCompilerTest {
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
         assertThatThrownBy(() -> ExpressionCompiler.compile("items := [true]; items.all()", environment))
                 .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_UNSUPPORTED_EXPRESSION"));
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
     }
 
     @Test
@@ -412,6 +585,8 @@ class ExpressionCompilerTest {
     public static final class CountingFunctions {
 
         private final AtomicInteger invocations = new AtomicInteger();
+        private final List<BigDecimal> seen = new ArrayList<>();
+        private final List<String> seenText = new ArrayList<>();
 
         public BigDecimal bump(BigDecimal value) {
             invocations.incrementAndGet();
@@ -428,8 +603,44 @@ class ExpressionCompilerTest {
             return BigDecimal.TEN;
         }
 
+        public Boolean lessThanThree(BigDecimal value) {
+            invocations.incrementAndGet();
+            return value.compareTo(new BigDecimal("3")) < 0;
+        }
+
+        public Boolean greaterThanTwo(BigDecimal value) {
+            invocations.incrementAndGet();
+            return value.compareTo(new BigDecimal("2")) > 0;
+        }
+
+        public BigDecimal trackNumber(BigDecimal value) {
+            invocations.incrementAndGet();
+            seen.add(value);
+            return value;
+        }
+
+        public Boolean isKeyB(String value) {
+            invocations.incrementAndGet();
+            seenText.add(value);
+            return "b".equals(value);
+        }
+
         private int invocations() {
             return invocations.get();
+        }
+
+        private List<BigDecimal> seen() {
+            return List.copyOf(seen);
+        }
+
+        private List<String> seenText() {
+            return List.copyOf(seenText);
+        }
+
+        private void reset() {
+            invocations.set(0);
+            seen.clear();
+            seenText.clear();
         }
     }
 
