@@ -2,6 +2,7 @@ package com.runestone.expeval_mk3.internal.plan;
 
 import com.runestone.expeval_mk3.api.BoundaryCoercion;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
+import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 
 import java.time.ZoneId;
