@@ -571,6 +571,36 @@ class ExpressionCompilerTest {
     }
 
     @Test
+    void readsMapValuesByExplicitStringKeySubscript() {
+        Map<String, BigDecimal> source = new HashMap<>();
+        source.put("b", new BigDecimal("2"));
+        source.put("A", BigDecimal.ONE);
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThat(ExpressionCompiler.compile("m[\"A\"]", environment).compute())
+                .isEqualTo(BigDecimal.ONE);
+        assertThat(ExpressionCompiler.compile("m?.[\"b\"]", environment).compute())
+                .isEqualTo(new BigDecimal("2"));
+    }
+
+    @Test
+    void mapStringKeySubscriptDoesNotMaskMissingKeys() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("A", BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThatThrownBy(() -> ExpressionCompiler.compile("m[\"missing\"]", environment).compute())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("map key not found: missing");
+        assertThatThrownBy(() -> ExpressionCompiler.compile("m?.[\"missing\"]", environment).compute())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("map key not found: missing");
+    }
+
+    @Test
     void materializesWildcardNavigationForCollectionsMapsAndRegisteredObjects() {
         Map<String, BigDecimal> source = new HashMap<>();
         source.put("b", new BigDecimal("2"));

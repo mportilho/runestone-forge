@@ -1,0 +1,8 @@
+id: runtime.map.key-subscript.001
+phase: runtime
+kind: valid
+source: 'm["A"]'
+coverage: [identifier, subscript-key, string-literal]
+expected:
+  type: NUMBER
+  result: "1"

@@ -55,6 +55,8 @@ class CollectionLiteralCorpusTest {
             "runtime.collection.sort-by-string.001",
             "runtime.collection.sort-by-time.001",
             "runtime.map.operations-lambda.001",
+            "runtime.map.key-subscript.001",
+            "runtime.map.key-subscript-safe.001",
             "semantic.map.entry-escape.001",
             "runtime.map.equality.001",
             "runtime.map.wildcard.001",
@@ -153,6 +155,8 @@ class CollectionLiteralCorpusTest {
         if (expressionCase.id().equals("runtime.map.operations-lambda.001")
                 || expressionCase.id().equals("runtime.map.all.001")
                 || expressionCase.id().equals("runtime.map.any-key.001")
+                || expressionCase.id().equals("runtime.map.key-subscript.001")
+                || expressionCase.id().equals("runtime.map.key-subscript-safe.001")
                 || expressionCase.id().equals("runtime.map.wildcard.001")
                 || expressionCase.id().equals("semantic.map.entry-escape.001")) {
             Map<String, Object> source = new LinkedHashMap<>();

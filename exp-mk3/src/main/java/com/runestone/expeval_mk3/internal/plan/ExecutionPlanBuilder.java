@@ -41,6 +41,7 @@ import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperator;
 import com.runestone.expeval_mk3.internal.ast.PropertyNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
+import com.runestone.expeval_mk3.internal.ast.StringKeySubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
@@ -50,6 +51,7 @@ import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
 import com.runestone.expeval_mk3.internal.semantics.SemanticModel;
 import com.runestone.expeval_mk3.internal.semantics.SymbolBinding;
 import com.runestone.expeval_mk3.internal.semantics.WildcardNavigationBinding;
+import com.runestone.expeval_mk3.internal.source.SourceSpan;
 
 import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
@@ -338,6 +340,9 @@ public final class ExecutionPlanBuilder {
         if (link instanceof SliceSubscriptNavigationLink slice) {
             return scope -> slicedValues(receiver.execute(scope), slice, environment.maxMaterializedSize());
         }
+        if (link instanceof StringKeySubscriptNavigationLink stringKey) {
+            return scope -> mapKeyValue(receiver.execute(scope), stringKey.key(), stringKey.safe(), stringKey.sourceSpan());
+        }
         if (link instanceof FilterNavigationLink filter) {
             ExecutableNode predicate = buildNode(filter.predicate(), model, environment);
             SymbolBinding currentItem = required(model.symbolBindings(), filter.id(), "filter current item binding");
@@ -447,6 +452,26 @@ public final class ExecutionPlanBuilder {
             result.add(Objects.requireNonNull(values.get(index), "collection element"));
         }
         return List.copyOf(result);
+    }
+
+    static Object mapKeyValue(Object receiver, String key, boolean safe, SourceSpan sourceSpan) {
+        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(sourceSpan, "sourceSpan");
+        if (receiver == null) {
+            if (safe) {
+                return null;
+            }
+            throw new NullPointerException("navigation receiver at " + sourceSpan);
+        }
+        Map<?, ?> values = (Map<?, ?>) receiver;
+        Object value = values.get(key);
+        if (value == null) {
+            if (!values.containsKey(key)) {
+                throw new IllegalArgumentException("map key not found: " + key + " at " + sourceSpan);
+            }
+            throw new NullPointerException("map value at " + sourceSpan);
+        }
+        return value;
     }
 
     private static List<Object> filteredValues(

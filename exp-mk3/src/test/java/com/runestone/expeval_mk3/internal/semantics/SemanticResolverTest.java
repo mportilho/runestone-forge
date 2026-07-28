@@ -216,6 +216,48 @@ class SemanticResolverTest {
                 CollectionShape.unknown());
     }
 
+    @Test
+    void bindsStringKeyMapSubscriptTypeAndNullability() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("A", BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertStringKeySubscript("m[\"A\"]", environment, RuntimeNullability.NEVER_NULL);
+        assertStringKeySubscript("m?.[\"A\"]", environment, RuntimeNullability.MAY_BE_NULL);
+    }
+
+    @Test
+    void recordsUnknownCollectionShapeForStringKeyMapSubscriptCollectionValues() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(new CollectionType(ScalarType.NUMBER)),
+                        Map.of("A", List.of(BigDecimal.ONE)), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        ExpressionFileNode ast = ast("m[\"A\"]");
+        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        NavigationLink link = navigation.links().getFirst();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success ->
+                assertThat(success.model().collectionShapes()).containsEntry(link.id(), CollectionShape.unknown()));
+    }
+
+    @Test
+    void rejectsStringKeySubscriptOnNonMapReceivers() {
+        assertSemanticDiagnostic("items := [1]; items[\"A\"]", ExpressionEnvironment.standard());
+        ExpressionEnvironment scalarEnvironment = ExpressionEnvironment.builder()
+                .externalSymbol("n", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        assertSemanticDiagnostic("n[\"A\"]", scalarEnvironment);
+
+        ExpressionEnvironment objectEnvironment = ExpressionEnvironment.builder()
+                .registerJavaType(WildcardChildProvider.class)
+                .externalSymbol("object", new WildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        assertSemanticDiagnostic("object[\"A\"]", objectEnvironment);
+    }
+
     private static ExpressionFileNode ast(String source) {
         ParseSuccess parse = (ParseSuccess) new ExpressionParser().parse(source);
         return ((SemanticAstBuildSuccess) new SemanticAstBuilder().build(parse)).file();
@@ -274,6 +316,33 @@ class SemanticResolverTest {
             assertThat(binding.resultShape()).isEqualTo(shape);
             assertThat(success.model().runtimeNullability()).containsEntry(link.id(), nullability);
         });
+    }
+
+    private static void assertStringKeySubscript(
+            String source,
+            ExpressionEnvironment environment,
+            RuntimeNullability expectedNullability) {
+        ExpressionFileNode ast = ast(source);
+        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        NavigationLink link = navigation.links().getFirst();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            SemanticModel model = success.model();
+            assertThat(model.resolvedTypes()).containsEntry(link.id(), ScalarType.NUMBER);
+            assertThat(model.runtimeNullability()).containsEntry(link.id(), expectedNullability);
+            assertThat(model.collectionShapes()).doesNotContainKey(link.id());
+            assertThat(model.runtimeNullability()).containsEntry(navigation.id(), expectedNullability);
+        });
+    }
+
+    private static void assertSemanticDiagnostic(String source, ExpressionEnvironment environment) {
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast(source), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure ->
+                assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic ->
+                        assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH)));
     }
 
     public static final class ImpureFunctions {

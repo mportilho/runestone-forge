@@ -53,6 +53,7 @@ import com.runestone.expeval_mk3.internal.ast.OffsetDateTimeLiteralValue;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
 import com.runestone.expeval_mk3.internal.ast.PropertyNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
+import com.runestone.expeval_mk3.internal.ast.StringKeySubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.StringLiteralValue;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.ast.TimeLiteralValue;
@@ -822,6 +823,9 @@ public final class SemanticResolver {
             if (link instanceof SliceSubscriptNavigationLink slice) {
                 return resolveSliceSubscript(slice, receiverType, receiverShape, receiverPure);
             }
+            if (link instanceof StringKeySubscriptNavigationLink stringKey) {
+                return resolveStringKeySubscript(stringKey, receiverType, receiverPure);
+            }
             if (link instanceof FilterNavigationLink filter) {
                 return resolveFilter(filter, receiverType, receiverPure);
             }
@@ -885,6 +889,26 @@ public final class SemanticResolver {
             }
             return LinkResolution.known(
                     new CollectionType(collectionType.elementType()), shape, RuntimeNullability.NEVER_NULL, receiverPure);
+        }
+
+        private LinkResolution resolveStringKeySubscript(
+                StringKeySubscriptNavigationLink stringKey,
+                ExpressionType receiverType,
+                boolean receiverPure) {
+            if (!(receiverType instanceof MapType mapType)) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "String key subscript requires a map receiver",
+                        stringKey.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            RuntimeNullability nullability = stringKey.safe()
+                    ? RuntimeNullability.MAY_BE_NULL
+                    : RuntimeNullability.NEVER_NULL;
+            CollectionShape shape = mapType.valueType() instanceof CollectionType
+                    ? CollectionShape.unknown()
+                    : null;
+            return LinkResolution.known(mapType.valueType(), shape, nullability, receiverPure);
         }
 
         private LinkResolution resolveFilter(FilterNavigationLink filter, ExpressionType receiverType, boolean receiverPure) {
