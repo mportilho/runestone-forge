@@ -4,10 +4,10 @@ import com.runestone.expeval_mk3.internal.source.SourceSpan;
 
 import java.util.Objects;
 
-record WildcardNavigationLink(NodeId id, SourceSpan sourceSpan, boolean safe)
+public record WildcardNavigationLink(NodeId id, SourceSpan sourceSpan, boolean safe)
         implements NavigationLink {
 
-    WildcardNavigationLink {
+    public WildcardNavigationLink {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
     }

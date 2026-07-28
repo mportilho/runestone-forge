@@ -1,0 +1,13 @@
+id: semantic.object-wildcard.limit.001
+phase: semantic
+kind: invalid
+source: 'object[*]'
+coverage: [identifier, wildcard]
+environment:
+  maxMaterializedSize: 1
+  maxFactorialInput: 1000
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_MATERIALIZATION_LIMIT_EXCEEDED
+    span: {offset: 6, endOffset: 9, line: 1, column: 7}

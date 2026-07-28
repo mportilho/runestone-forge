@@ -158,6 +158,64 @@ class SemanticResolverTest {
         });
     }
 
+    @Test
+    void bindsWildcardNavigationWithElementTypeCardinalityNullabilityAccessorsAndMaterializationPolicy() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaTypeWildcardChildren(WildcardChildProvider.class, "second", "first")
+                .externalSymbol("object", new WildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        ExpressionFileNode ast = ast("object?.[*]");
+        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        NavigationLink link = navigation.links().getFirst();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            SemanticModel model = success.model();
+            assertThat(model.resolvedTypes()).containsEntry(link.id(), new CollectionType(ScalarType.NUMBER));
+            assertThat(model.runtimeNullability()).containsEntry(link.id(), RuntimeNullability.MAY_BE_NULL);
+            assertThat(model.collectionShapes()).containsEntry(link.id(), new CollectionShape(2));
+            assertThat(model.wildcardNavigationBindings()).containsKey(link.id());
+            WildcardNavigationBinding binding = model.wildcardNavigationBindings().get(link.id());
+            assertThat(binding.receiverKind()).isEqualTo(WildcardNavigationBinding.ReceiverKind.OBJECT);
+            assertThat(binding.elementType()).isEqualTo(ScalarType.NUMBER);
+            assertThat(binding.resultShape()).isEqualTo(new CollectionShape(2));
+            assertThat(binding.resultNullability()).isEqualTo(RuntimeNullability.MAY_BE_NULL);
+            assertThat(binding.materializationPolicy()).isEqualTo(MaterializationPolicy.MATERIALIZES);
+            assertThat(binding.objectChildren())
+                    .extracting(child -> child.name())
+                    .containsExactly("second", "first");
+        });
+    }
+
+    @Test
+    void bindsCollectionAndMapWildcardNavigationTypesAndNullability() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(BigDecimal.ONE, new BigDecimal("2")),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("m", new MapType(ScalarType.STRING), Map.of("b", "B"),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertWildcardBinding(
+                "items := [1, 2]; items[*]",
+                ExpressionEnvironment.standard(),
+                WildcardNavigationBinding.ReceiverKind.COLLECTION,
+                ScalarType.NUMBER,
+                RuntimeNullability.NEVER_NULL,
+                new CollectionShape(2));
+        assertWildcardBinding(
+                "m?.[*]",
+                environment,
+                WildcardNavigationBinding.ReceiverKind.MAP,
+                ScalarType.STRING,
+                RuntimeNullability.MAY_BE_NULL,
+                CollectionShape.unknown());
+    }
+
     private static ExpressionFileNode ast(String source) {
         ParseSuccess parse = (ParseSuccess) new ExpressionParser().parse(source);
         return ((SemanticAstBuildSuccess) new SemanticAstBuilder().build(parse)).file();
@@ -195,10 +253,44 @@ class SemanticResolverTest {
                         .containsEntry(ast.resultExpression().orElseThrow().id(), expectedNullability));
     }
 
+    private static void assertWildcardBinding(
+            String source,
+            ExpressionEnvironment environment,
+            WildcardNavigationBinding.ReceiverKind receiverKind,
+            ExpressionType elementType,
+            RuntimeNullability nullability,
+            CollectionShape shape) {
+        ExpressionFileNode ast = ast(source);
+        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        NavigationLink link = navigation.links().getFirst();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            WildcardNavigationBinding binding = success.model().wildcardNavigationBindings().get(link.id());
+            assertThat(binding.receiverKind()).isEqualTo(receiverKind);
+            assertThat(binding.elementType()).isEqualTo(elementType);
+            assertThat(binding.resultNullability()).isEqualTo(nullability);
+            assertThat(binding.resultShape()).isEqualTo(shape);
+            assertThat(success.model().runtimeNullability()).containsEntry(link.id(), nullability);
+        });
+    }
+
     public static final class ImpureFunctions {
 
         public BigDecimal touch(BigDecimal value) {
             return value;
+        }
+    }
+
+    public static final class WildcardChildProvider {
+
+        public BigDecimal first() {
+            return BigDecimal.ONE;
+        }
+
+        public BigDecimal second() {
+            return new BigDecimal("2");
         }
     }
 }

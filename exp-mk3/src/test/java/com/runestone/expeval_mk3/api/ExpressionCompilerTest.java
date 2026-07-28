@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -570,6 +571,64 @@ class ExpressionCompilerTest {
     }
 
     @Test
+    void materializesWildcardNavigationForCollectionsMapsAndRegisteredObjects() {
+        Map<String, BigDecimal> source = new HashMap<>();
+        source.put("b", new BigDecimal("2"));
+        source.put("A", BigDecimal.ONE);
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaTypeWildcardChildren(WildcardChildProvider.class, "second", "first")
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(BigDecimal.ONE, new BigDecimal("2")),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("object", new WildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        Object collectionResult = ExpressionCompiler.compile("items[*]", environment).compute();
+        assertThat(collectionResult).isEqualTo(List.of(BigDecimal.ONE, new BigDecimal("2")));
+        assertThatThrownBy(() -> ((List<Object>) collectionResult).add(BigDecimal.TEN))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(ExpressionCompiler.compile("m[*]", environment).compute())
+                .isEqualTo(List.of(BigDecimal.ONE, new BigDecimal("2")));
+        assertThat(ExpressionCompiler.compile("object[*]", environment).compute())
+                .isEqualTo(List.of(new BigDecimal("2"), BigDecimal.ONE));
+    }
+
+    @Test
+    void unorderedObjectWildcardMetadataUsesBinaryMemberOrderAtRuntime() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaTypeWildcardChildren(WildcardChildProvider.class, Set.of("second", "first"))
+                .externalSymbol("object", new WildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThat(ExpressionCompiler.compile("object[*]", environment).compute())
+                .isEqualTo(List.of(BigDecimal.ONE, new BigDecimal("2")));
+    }
+
+    @Test
+    void objectWildcardNavigationDoesNotMaskAccessorFailuresOrMaterializationLimits() {
+        ExpressionEnvironment failingAccessor = ExpressionEnvironment.builder()
+                .registerJavaTypeWildcardChildren(FailingWildcardChildProvider.class, "first")
+                .externalSymbol("object", new FailingWildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        assertThatThrownBy(() -> ExpressionCompiler.compile("object?.[*]", failingAccessor).compute())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("first failed");
+
+        ExpressionEnvironment limited = ExpressionEnvironment.builder()
+                .maxMaterializedSize(1)
+                .registerJavaTypeWildcardChildren(WildcardChildProvider.class, "first", "second")
+                .externalSymbol("object", new WildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        assertThatThrownBy(() -> ExpressionCompiler.compile("object[*]", limited))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code())
+                                .isEqualTo("SEMANTIC_MATERIALIZATION_LIMIT_EXCEEDED"));
+    }
+
+    @Test
     void rejectsInvalidNavigatedCollectionOperationCallsBeforeRuntime() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE),
@@ -787,6 +846,24 @@ class ExpressionCompilerTest {
             invocations.set(0);
             seen.clear();
             seenText.clear();
+        }
+    }
+
+    public static final class WildcardChildProvider {
+
+        public BigDecimal first() {
+            return BigDecimal.ONE;
+        }
+
+        public BigDecimal second() {
+            return new BigDecimal("2");
+        }
+    }
+
+    public static final class FailingWildcardChildProvider {
+
+        public BigDecimal first() {
+            throw new IllegalStateException("first failed");
         }
     }
 

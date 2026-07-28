@@ -1,0 +1,10 @@
+id: runtime.object-wildcard.explicit-order.001
+phase: runtime
+kind: valid
+source: 'object[*]'
+coverage: [identifier, wildcard]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "2"}
+    - {type: NUMBER, value: "1"}

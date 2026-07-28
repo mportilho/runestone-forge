@@ -1,0 +1,10 @@
+id: runtime.object-wildcard.metadata-order.001
+phase: runtime
+kind: valid
+source: 'object[*]'
+coverage: [identifier, wildcard]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "1"}
+    - {type: NUMBER, value: "2"}

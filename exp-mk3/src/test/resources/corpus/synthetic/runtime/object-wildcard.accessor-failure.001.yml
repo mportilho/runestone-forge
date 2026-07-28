@@ -1,0 +1,9 @@
+id: runtime.object-wildcard.accessor-failure.001
+phase: runtime
+kind: invalid
+source: 'object?.[*]'
+coverage: [identifier, wildcard, safe-navigation]
+expected:
+  runtimeError:
+    type: IllegalStateException
+    messageContains: 'first failed'

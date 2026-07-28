@@ -29,6 +29,7 @@ class CollectionLiteralCorpusTest {
     private static final Set<String> CASE_IDS = Set.of(
             "runtime.assignment.destructuring.001",
             "runtime.collection.filter.001",
+            "runtime.collection.wildcard.001",
             "runtime.collection.index.001",
             "runtime.collection.index-negative.001",
             "runtime.collection.nested-lambda.001",
@@ -56,6 +57,10 @@ class CollectionLiteralCorpusTest {
             "runtime.map.operations-lambda.001",
             "semantic.map.entry-escape.001",
             "runtime.map.equality.001",
+            "runtime.map.wildcard.001",
+            "runtime.object-wildcard.accessor-failure.001",
+            "runtime.object-wildcard.explicit-order.001",
+            "runtime.object-wildcard.metadata-order.001",
             "semantic.collection.empty.001",
             "semantic.collection.limit.001",
             "semantic.collection.lambda-depth.001",
@@ -65,6 +70,7 @@ class CollectionLiteralCorpusTest {
             "semantic.collection.sort-by-direction.001",
             "semantic.collection.sort-by-key-type.001",
             "semantic.collection.sort-by-limit.001",
+            "semantic.object-wildcard.limit.001",
             "semantic.destructuring.duplicate.001",
             "semantic.destructuring.fixed-size.001",
             "semantic.filter.depth.001",
@@ -147,12 +153,32 @@ class CollectionLiteralCorpusTest {
         if (expressionCase.id().equals("runtime.map.operations-lambda.001")
                 || expressionCase.id().equals("runtime.map.all.001")
                 || expressionCase.id().equals("runtime.map.any-key.001")
+                || expressionCase.id().equals("runtime.map.wildcard.001")
                 || expressionCase.id().equals("semantic.map.entry-escape.001")) {
             Map<String, Object> source = new LinkedHashMap<>();
             source.put("b", new BigDecimal("2"));
             source.put("A", BigDecimal.ONE);
             return builder
                     .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
+                    .build();
+        }
+        if (expressionCase.id().equals("runtime.object-wildcard.explicit-order.001")) {
+            return builder
+                    .registerJavaTypeWildcardChildren(WildcardChildProvider.class, "second", "first")
+                    .externalSymbol("object", new WildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
+                    .build();
+        }
+        if (expressionCase.id().equals("runtime.object-wildcard.metadata-order.001")
+                || expressionCase.id().equals("semantic.object-wildcard.limit.001")) {
+            return builder
+                    .registerJavaTypeWildcardChildren(WildcardChildProvider.class, Set.of("second", "first"))
+                    .externalSymbol("object", new WildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
+                    .build();
+        }
+        if (expressionCase.id().equals("runtime.object-wildcard.accessor-failure.001")) {
+            return builder
+                    .registerJavaTypeWildcardChildren(FailingWildcardChildProvider.class, "first")
+                    .externalSymbol("object", new FailingWildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
                     .build();
         }
         return builder.build();
@@ -185,5 +211,23 @@ class CollectionLiteralCorpusTest {
             case "IllegalStateException" -> IllegalStateException.class;
             default -> throw new IllegalArgumentException("Unsupported runtime error type: " + type);
         };
+    }
+
+    public static final class WildcardChildProvider {
+
+        public BigDecimal first() {
+            return BigDecimal.ONE;
+        }
+
+        public BigDecimal second() {
+            return new BigDecimal("2");
+        }
+    }
+
+    public static final class FailingWildcardChildProvider {
+
+        public BigDecimal first() {
+            throw new IllegalStateException("first failed");
+        }
     }
 }

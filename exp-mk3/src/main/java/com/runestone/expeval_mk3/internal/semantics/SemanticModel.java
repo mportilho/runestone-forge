@@ -28,6 +28,7 @@ import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.NullCoalesceNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
+import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
 
 import java.util.Map;
 import java.util.Objects;
@@ -43,6 +44,7 @@ public final class SemanticModel {
     private final Map<NodeId, ExpressionType> equalityOperandTypes;
     private final Map<NodeId, FunctionDescriptor> functionBindings;
     private final Map<NodeId, CollectionOperationBinding> collectionOperationBindings;
+    private final Map<NodeId, WildcardNavigationBinding> wildcardNavigationBindings;
     private final FrameLayout frameLayout;
 
     SemanticModel(
@@ -55,6 +57,7 @@ public final class SemanticModel {
             Map<NodeId, ExpressionType> equalityOperandTypes,
             Map<NodeId, FunctionDescriptor> functionBindings,
             Map<NodeId, CollectionOperationBinding> collectionOperationBindings,
+            Map<NodeId, WildcardNavigationBinding> wildcardNavigationBindings,
             FrameLayout frameLayout) {
         this.ast = Objects.requireNonNull(ast, "ast");
         this.resolvedTypes = Map.copyOf(resolvedTypes);
@@ -65,6 +68,7 @@ public final class SemanticModel {
         this.equalityOperandTypes = Map.copyOf(equalityOperandTypes);
         this.functionBindings = Map.copyOf(functionBindings);
         this.collectionOperationBindings = Map.copyOf(collectionOperationBindings);
+        this.wildcardNavigationBindings = Map.copyOf(wildcardNavigationBindings);
         this.frameLayout = Objects.requireNonNull(frameLayout, "frameLayout");
         ast.assignments().forEach(this::validateAssignment);
         ast.resultExpression().ifPresent(this::validateCompleteExpression);
@@ -104,6 +108,10 @@ public final class SemanticModel {
 
     public Map<NodeId, CollectionOperationBinding> collectionOperationBindings() {
         return collectionOperationBindings;
+    }
+
+    public Map<NodeId, WildcardNavigationBinding> wildcardNavigationBindings() {
+        return wildcardNavigationBindings;
     }
 
     public FrameLayout frameLayout() {
@@ -221,6 +229,10 @@ public final class SemanticModel {
                     validateCompleteExpression(lambdaArgument.lambda().body());
                 }
             });
+            return;
+        }
+        if (link instanceof WildcardNavigationLink wildcard) {
+            requireEntry(wildcardNavigationBindings, wildcard.id(), "wildcard navigation binding");
         }
     }
 

@@ -5,6 +5,7 @@ import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
+import com.runestone.expeval_mk3.api.JavaWildcardChildDescriptor;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.AssignmentNode;
@@ -43,16 +44,19 @@ import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
+import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
 import com.runestone.expeval_mk3.internal.semantics.SemanticModel;
 import com.runestone.expeval_mk3.internal.semantics.SymbolBinding;
+import com.runestone.expeval_mk3.internal.semantics.WildcardNavigationBinding;
 
 import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -344,6 +348,15 @@ public final class ExecutionPlanBuilder {
                     scope,
                     environment.maxMaterializedSize());
         }
+        if (link instanceof WildcardNavigationLink wildcard) {
+            WildcardNavigationBinding binding = required(
+                    model.wildcardNavigationBindings(), wildcard.id(), "wildcard navigation binding");
+            return scope -> wildcardValues(
+                    receiver.execute(scope),
+                    wildcard.safe(),
+                    binding,
+                    environment.maxMaterializedSize());
+        }
         if (link instanceof PropertyNavigationLink property) {
             return scope -> propertyValue(receiver.execute(scope), property);
         }
@@ -457,6 +470,68 @@ public final class ExecutionPlanBuilder {
                 }
             } finally {
                 scope.restore(currentItemSlot, previous);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private static Object wildcardValues(
+            Object receiver,
+            boolean safe,
+            WildcardNavigationBinding binding,
+            int maxMaterializedSize) {
+        if (receiver == null) {
+            if (safe) {
+                return null;
+            }
+            throw new NullPointerException("navigation receiver");
+        }
+        return switch (binding.receiverKind()) {
+            case COLLECTION -> collectionWildcardValues(receiver, maxMaterializedSize);
+            case MAP -> mapWildcardValues(receiver, maxMaterializedSize);
+            case OBJECT -> objectWildcardValues(receiver, binding.objectChildren(), maxMaterializedSize);
+        };
+    }
+
+    private static List<Object> collectionWildcardValues(Object receiver, int maxMaterializedSize) {
+        List<?> values = (List<?>) receiver;
+        requireMaterializedSize(values.size(), maxMaterializedSize);
+        ArrayList<Object> result = new ArrayList<>(values.size());
+        for (Object value : values) {
+            result.add(Objects.requireNonNull(value, "collection element"));
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<Object> mapWildcardValues(Object receiver, int maxMaterializedSize) {
+        Map<?, ?> values = (Map<?, ?>) receiver;
+        requireMaterializedSize(values.size(), maxMaterializedSize);
+        ArrayList<String> keys = new ArrayList<>(values.size());
+        for (Object key : values.keySet()) {
+            keys.add((String) Objects.requireNonNull(key, "map key"));
+        }
+        Collections.sort(keys);
+        ArrayList<Object> result = new ArrayList<>(keys.size());
+        for (String key : keys) {
+            result.add(Objects.requireNonNull(values.get(key), "map value"));
+        }
+        return List.copyOf(result);
+    }
+
+    private static List<Object> objectWildcardValues(
+            Object receiver,
+            List<JavaWildcardChildDescriptor> children,
+            int maxMaterializedSize) {
+        requireMaterializedSize(children.size(), maxMaterializedSize);
+        ArrayList<Object> result = new ArrayList<>(children.size());
+        for (JavaWildcardChildDescriptor child : children) {
+            try {
+                result.add(Objects.requireNonNull(child.accessorHandle().invoke(receiver), "wildcard child value"));
+            } catch (RuntimeException | Error exception) {
+                throw exception;
+            } catch (Throwable exception) {
+                // MethodHandle.invoke declares Throwable; this boundary preserves accessor failures.
+                throw new IllegalStateException("wildcard child accessor failed: " + child.name(), exception);
             }
         }
         return List.copyOf(result);

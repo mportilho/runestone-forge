@@ -7,6 +7,7 @@ import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.FunctionLookupResult;
+import com.runestone.expeval_mk3.api.JavaTypeDescriptor;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ObjectType;
 import com.runestone.expeval_mk3.api.RuntimeNullability;
@@ -57,6 +58,7 @@ import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.ast.TimeLiteralValue;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
+import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCategory;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
@@ -104,6 +106,7 @@ public final class SemanticResolver {
         private final Map<NodeId, ExpressionType> equalityOperandTypes = new HashMap<>();
         private final Map<NodeId, FunctionDescriptor> functionBindings = new HashMap<>();
         private final Map<NodeId, CollectionOperationBinding> collectionOperationBindings = new HashMap<>();
+        private final Map<NodeId, WildcardNavigationBinding> wildcardNavigationBindings = new HashMap<>();
         private final Map<String, SymbolBinding> visibleBindings = new LinkedHashMap<>();
         private final Map<String, CollectionShape> visibleCollectionShapes = new HashMap<>();
         private final List<SymbolBinding> externalBindings = new ArrayList<>();
@@ -143,6 +146,7 @@ public final class SemanticResolver {
                     equalityOperandTypes,
                     functionBindings,
                     collectionOperationBindings,
+                    wildcardNavigationBindings,
                     new FrameLayout(externalBindings, nextFrameSlot)), warnings);
         }
 
@@ -821,6 +825,9 @@ public final class SemanticResolver {
             if (link instanceof FilterNavigationLink filter) {
                 return resolveFilter(filter, receiverType, receiverPure);
             }
+            if (link instanceof WildcardNavigationLink wildcard) {
+                return resolveWildcard(wildcard, receiverType, receiverShape, receiverPure);
+            }
             if (link instanceof PropertyNavigationLink property) {
                 return resolveProperty(property, receiverType, receiverPure, contextualMembers);
             }
@@ -918,6 +925,69 @@ public final class SemanticResolver {
                     CollectionShape.unknown(),
                     RuntimeNullability.NEVER_NULL,
                     receiverPure && purityOf(filter.predicate().id()));
+        }
+
+        private LinkResolution resolveWildcard(
+                WildcardNavigationLink wildcard,
+                ExpressionType receiverType,
+                CollectionShape receiverShape,
+                boolean receiverPure) {
+            ExpressionType elementType;
+            WildcardNavigationBinding.ReceiverKind receiverKind;
+            CollectionShape resultShape = CollectionShape.unknown();
+            List<com.runestone.expeval_mk3.api.JavaWildcardChildDescriptor> objectChildren = List.of();
+            if (receiverType instanceof CollectionType collectionType) {
+                receiverKind = WildcardNavigationBinding.ReceiverKind.COLLECTION;
+                elementType = collectionType.elementType();
+                resultShape = receiverShape == null ? CollectionShape.unknown() : receiverShape;
+            } else if (receiverType instanceof MapType mapType) {
+                receiverKind = WildcardNavigationBinding.ReceiverKind.MAP;
+                elementType = mapType.valueType();
+            } else if (receiverType instanceof ObjectType objectType) {
+                receiverKind = WildcardNavigationBinding.ReceiverKind.OBJECT;
+                JavaTypeDescriptor descriptor = environment.javaTypes().find(objectType).orElse(null);
+                if (descriptor == null || descriptor.wildcardChildType().isEmpty()) {
+                    diagnostic(
+                            DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                            "Object wildcard navigation requires explicitly registered homogeneous child members",
+                            wildcard.sourceSpan());
+                    return LinkResolution.invalidResolution();
+                }
+                objectChildren = descriptor.wildcardChildren();
+                if (objectChildren.size() > environment.maxMaterializedSize()) {
+                    diagnostic(
+                            DiagnosticCode.SEMANTIC_MATERIALIZATION_LIMIT_EXCEEDED,
+                            "Object wildcard navigation exceeds maxMaterializedSize "
+                                    + environment.maxMaterializedSize(),
+                            wildcard.sourceSpan());
+                    return LinkResolution.invalidResolution();
+                }
+                elementType = descriptor.wildcardChildType().orElseThrow();
+                resultShape = new CollectionShape(objectChildren.size());
+            } else {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Wildcard navigation requires a collection, map, or registered object receiver",
+                        wildcard.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            RuntimeNullability resultNullability = wildcard.safe()
+                    ? RuntimeNullability.MAY_BE_NULL
+                    : RuntimeNullability.NEVER_NULL;
+            wildcardNavigationBindings.put(wildcard.id(), new WildcardNavigationBinding(
+                    receiverKind,
+                    receiverType,
+                    elementType,
+                    resultNullability,
+                    resultShape,
+                    CollectionOperationCatalog.MaterializationPolicy.MATERIALIZES,
+                    receiverPure,
+                    objectChildren));
+            return LinkResolution.known(
+                    new CollectionType(elementType),
+                    resultShape,
+                    resultNullability,
+                    receiverPure);
         }
 
         private LinkResolution resolveProperty(
