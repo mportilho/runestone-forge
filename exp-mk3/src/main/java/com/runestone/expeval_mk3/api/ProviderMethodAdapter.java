@@ -1,12 +1,15 @@
 package com.runestone.expeval_mk3.api;
 
+import java.lang.annotation.Annotation;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Array;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
@@ -39,6 +42,11 @@ final class ProviderMethodAdapter {
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
     private static final MethodHandle CONVERT = findConvert();
     private static final String NON_NULL_MESSAGE = "function arguments and results must not be null";
+    private static final Set<String> KNOWN_NULLABLE_ANNOTATIONS = Set.of(
+            "jakarta.annotation.Nullable",
+            "javax.annotation.Nullable",
+            "org.springframework.lang.Nullable",
+            "org.jspecify.annotations.Nullable");
 
     private ProviderMethodAdapter() {
     }
@@ -57,6 +65,7 @@ final class ProviderMethodAdapter {
         if (method.getTypeParameters().length > 0) {
             throw new IllegalArgumentException("generic provider methods are not supported: " + method);
         }
+        rejectNullableAnnotations(method);
 
         Type[] genericParameterTypes = method.getGenericParameterTypes();
         Class<?>[] parameterTypes = method.getParameterTypes();
@@ -402,6 +411,28 @@ final class ProviderMethodAdapter {
 
     private static void requireNonNull(Object value) {
         Objects.requireNonNull(value, NON_NULL_MESSAGE);
+    }
+
+    private static void rejectNullableAnnotations(Method method) {
+        if (declaresKnownNullableAnnotation(method) || declaresKnownNullableAnnotation(method.getAnnotatedReturnType())) {
+            throw new IllegalArgumentException(
+                    "provider methods with a nullable result are not supported: " + method);
+        }
+        for (Parameter parameter : method.getParameters()) {
+            if (declaresKnownNullableAnnotation(parameter) || declaresKnownNullableAnnotation(parameter.getAnnotatedType())) {
+                throw new IllegalArgumentException(
+                        "provider methods with a nullable parameter are not supported: " + method);
+            }
+        }
+    }
+
+    private static boolean declaresKnownNullableAnnotation(AnnotatedElement element) {
+        for (Annotation annotation : element.getAnnotations()) {
+            if (KNOWN_NULLABLE_ANNOTATIONS.contains(annotation.annotationType().getName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void rejectUnresolved(Type type) {

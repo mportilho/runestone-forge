@@ -249,6 +249,41 @@ final class EnvironmentAcceptanceGateTest {
     }
 
     @Test
+    @DisplayName("ADR 0015: invalid function providers atomically fail the whole build with one structured exception")
+    void adr0015InvalidFunctionProvidersAtomicallyFailTheWholeBuildWithOneStructuredException() {
+        ExpressionEnvironment.Builder builder = ExpressionEnvironment.builder()
+                .functionsFrom(GateBuiltInCollisionProvider.class, FunctionPurity.PURE)
+                .functionsFrom(GateUnsupportedProvider.class, FunctionPurity.PURE);
+
+        EnvironmentConfigurationException exception = (EnvironmentConfigurationException)
+                org.assertj.core.api.Assertions.catchThrowable(builder::build);
+        assertThat(exception).isNotNull();
+
+        assertThat(exception.problems()).hasSize(2);
+        assertThat(exception.problems())
+                .extracting(ProviderConfigurationProblem::providerExposureType)
+                .containsExactlyInAnyOrder(
+                        GateBuiltInCollisionProvider.class.getName(), GateUnsupportedProvider.class.getName());
+        assertThat(exception.problems()).allSatisfy(problem -> {
+            assertThat(problem.message()).doesNotContain("@");
+            assertThat(problem.purity()).isEqualTo(FunctionPurity.PURE);
+        });
+        assertThat(exception.problems()).isSortedAccordingTo(ProviderConfigurationProblem.ORDER);
+    }
+
+    static final class GateBuiltInCollisionProvider {
+        public static BigDecimal abs(BigDecimal value) {
+            return value.abs();
+        }
+    }
+
+    static final class GateUnsupportedProvider {
+        public static Object identity(Object value) {
+            return value;
+        }
+    }
+
+    @Test
     @DisplayName("environment construction publishes only valid homogeneous wildcard child metadata")
     void environmentConstructionPublishesOnlyValidHomogeneousWildcardChildMetadata() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()

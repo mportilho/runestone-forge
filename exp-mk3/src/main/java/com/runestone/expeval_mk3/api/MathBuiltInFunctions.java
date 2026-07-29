@@ -22,12 +22,11 @@ final class MathBuiltInFunctions {
         this.mathContext = Objects.requireNonNull(mathContext, "mathContext");
     }
 
-    static List<FunctionDescriptor> descriptors(MathContext mathContext) {
-        return ReflectedFunctionImporter
-                .importAll(
-                        new MathBuiltInFunctions(mathContext),
-                        FunctionPurity.FOLDABLE)
-                .toList();
+    static List<FunctionDescriptor> descriptors(BuiltInResolutionContext context, MathContext mathContext) {
+        ReflectedFunctionImporter.ImportPlan plan = ReflectedFunctionImporter.importAll(
+                new MathBuiltInFunctions(mathContext),
+                FunctionPurity.FOLDABLE);
+        return ReflectedFunctionImporter.importTrustedOrThrow(plan, context);
     }
 
     public BigDecimal abs(BigDecimal value) {

@@ -16,12 +16,11 @@ final class TranscendentalBuiltInFunctions {
         this.mathContext = Objects.requireNonNull(mathContext, "mathContext");
     }
 
-    static List<FunctionDescriptor> descriptors(MathContext mathContext) {
-        return ReflectedFunctionImporter
-                .importAll(
-                        new TranscendentalBuiltInFunctions(mathContext),
-                        FunctionPurity.FOLDABLE)
-                .toList();
+    static List<FunctionDescriptor> descriptors(BuiltInResolutionContext context, MathContext mathContext) {
+        ReflectedFunctionImporter.ImportPlan plan = ReflectedFunctionImporter.importAll(
+                new TranscendentalBuiltInFunctions(mathContext),
+                FunctionPurity.FOLDABLE);
+        return ReflectedFunctionImporter.importTrustedOrThrow(plan, context);
     }
 
     public BigDecimal sin(BigDecimal value) {

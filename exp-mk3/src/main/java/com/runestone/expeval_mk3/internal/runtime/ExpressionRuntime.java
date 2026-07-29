@@ -5,6 +5,7 @@ import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
+import com.runestone.expeval_mk3.api.FunctionInvocationException;
 import com.runestone.expeval_mk3.api.JavaWildcardChildDescriptor;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ScalarType;
@@ -44,6 +45,7 @@ public final class ExpressionRuntime {
     private ExpressionRuntime() {
     }
 
+    @SuppressWarnings("removal")
     public static Object invokeFunction(
             FunctionDescriptor descriptor,
             List<ExecutableNode> argumentNodes,
@@ -55,11 +57,13 @@ public final class ExpressionRuntime {
         MethodHandle handle = descriptor.implementationHandle();
         try {
             return Objects.requireNonNull(handle.invokeWithArguments(arguments), "function result");
-        } catch (RuntimeException | Error exception) {
-            throw exception;
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
         } catch (Throwable exception) {
-            // MethodHandle.invokeWithArguments declares Throwable; this boundary preserves provider failures.
-            throw new IllegalStateException("function invocation failed: " + descriptor, exception);
+            // Declared checked exceptions, ordinary runtime exceptions, and nonfatal errors thrown
+            // by the provider implementation are all provider-invocation failures; only fatal JVM
+            // conditions propagate unchanged.
+            throw FunctionInvocationException.providerFailure(descriptor, exception);
         }
     }
 

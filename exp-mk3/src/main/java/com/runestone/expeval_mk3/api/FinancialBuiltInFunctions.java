@@ -18,8 +18,8 @@ final class FinancialBuiltInFunctions {
         this.mathContext = Objects.requireNonNull(mathContext, "mathContext");
     }
 
-    static List<FunctionDescriptor> descriptors(MathContext mathContext) {
-        return ReflectedFunctionImporter
+    static List<FunctionDescriptor> descriptors(BuiltInResolutionContext context, MathContext mathContext) {
+        ReflectedFunctionImporter.ImportPlan plan = ReflectedFunctionImporter
                 .importAll(
                         new FinancialBuiltInFunctions(mathContext),
                         FunctionPurity.FOLDABLE)
@@ -35,8 +35,8 @@ final class FinancialBuiltInFunctions {
                 .rename("ipmtPresent", "ipmt")
                 .rename("ppmtTyped", "ppmt")
                 .rename("ppmtNoType", "ppmt")
-                .rename("ppmtPresent", "ppmt")
-                .toList();
+                .rename("ppmtPresent", "ppmt");
+        return ReflectedFunctionImporter.importTrustedOrThrow(plan, context);
     }
 
     public BigDecimal fvRegular(

@@ -29,7 +29,8 @@ final class FunctionCatalogAssembly {
             List<ReflectedFunctionImporter.ImportPlan> functionReplacementProviders) {
         FunctionCatalog.Builder functionBuilder = FunctionCatalog.builder();
         List<ProviderConfigurationProblem> problems = new ArrayList<>();
-        StandardBuiltInFunctions.registerAll(functionBuilder, boundaryCoercion, mathContext, transcendentalMathContext);
+        StandardBuiltInFunctions.registerAll(
+                functionBuilder, javaTypes, boundaryCoercion, mathContext, transcendentalMathContext, maxMaterializedSize);
 
         List<FunctionDeclaration> registrations = new ArrayList<>();
         for (FunctionDescriptor descriptor : functions) {
@@ -42,16 +43,18 @@ final class FunctionCatalogAssembly {
             for (FunctionDescriptor descriptor : resolution.descriptors()) {
                 registrations.add(FunctionDeclaration.imported(descriptor));
             }
-            for (IllegalArgumentException exception : resolution.failures()) {
-                problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
-            }
+            problems.addAll(resolution.failures());
         }
         registrations.sort(FunctionDeclaration.ORDER);
         for (FunctionDeclaration registration : registrations) {
             try {
                 registration.register(functionBuilder);
             } catch (IllegalArgumentException exception) {
-                problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
+                problems.add(ProviderConfigurationProblem.fromDescriptor(
+                        ProviderConfigurationProblem.Category.REGISTRATION_COLLISION,
+                        registration.descriptor(),
+                        exception.getMessage(),
+                        exception));
             }
         }
 
@@ -63,71 +66,58 @@ final class FunctionCatalogAssembly {
             ReflectedFunctionImporter.ImportResolution resolution =
                     ReflectedFunctionImporter.resolveForEnvironment(
                             replacementImport, javaTypes, boundaryCoercion, maxMaterializedSize);
-            for (IllegalArgumentException exception : resolution.failures()) {
-                problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
-            }
+            problems.addAll(resolution.failures());
             if (resolution.descriptors().size() == 1) {
                 replacements.add(FunctionDeclaration.imported(resolution.descriptors().getFirst()));
             } else if (resolution.descriptors().size() > 1) {
-                IllegalArgumentException exception = invalidReplacementCardinality(resolution.descriptors());
-                problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
+                problems.add(invalidReplacementCardinality(resolution.descriptors()));
             }
         }
         replacements.sort(FunctionDeclaration.ORDER);
         Set<FunctionSignature> replacedSignatures = new HashSet<>();
         for (FunctionDeclaration replacement : replacements) {
             if (!replacedSignatures.add(replacement.descriptor().signature())) {
-                IllegalArgumentException exception = new IllegalArgumentException(
+                problems.add(ProviderConfigurationProblem.fromDescriptor(
+                        ProviderConfigurationProblem.Category.REPLACEMENT_CARDINALITY,
+                        replacement.descriptor(),
                         "more than one replacement declared for function signature: "
-                                + replacement.descriptor().signature().canonical());
-                problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
+                                + replacement.descriptor().signature().canonical(),
+                        null));
                 continue;
             }
             try {
                 replacement.replace(functionBuilder);
             } catch (IllegalArgumentException exception) {
-                problems.add(new ProviderConfigurationProblem(exception.getMessage(), exception));
+                problems.add(ProviderConfigurationProblem.fromDescriptor(
+                        ProviderConfigurationProblem.Category.REGISTRATION_COLLISION,
+                        replacement.descriptor(),
+                        exception.getMessage(),
+                        exception));
             }
         }
         if (!problems.isEmpty()) {
-            throw providerConfigurationException(problems);
+            throw EnvironmentConfigurationException.of(problems);
         }
         FunctionCatalog catalog = functionBuilder.build();
         StandardBuiltInFunctions.validate(catalog);
         return catalog;
     }
 
-    private static IllegalArgumentException invalidReplacementCardinality(List<FunctionDescriptor> descriptors) {
+    private static ProviderConfigurationProblem invalidReplacementCardinality(List<FunctionDescriptor> descriptors) {
         List<FunctionSignature> signatures = descriptors.stream()
                 .map(FunctionDescriptor::signature)
                 .distinct()
                 .sorted()
                 .toList();
-        if (signatures.size() == 1) {
-            return new IllegalArgumentException("more than one imported method converges on replacement target: "
-                    + signatures.getFirst().canonical());
-        }
-        return new IllegalArgumentException("function replacement plan must import exactly one method; imported signatures: "
-                + signatures.stream().map(FunctionSignature::canonical).toList());
-    }
-
-    private static IllegalArgumentException providerConfigurationException(
-            List<ProviderConfigurationProblem> problems) {
-        problems.sort(Comparator.comparing(ProviderConfigurationProblem::message));
-        IllegalArgumentException exception = new IllegalArgumentException(
-                "invalid function provider configuration: " + problems.stream()
-                        .map(ProviderConfigurationProblem::message)
-                        .distinct()
-                        .reduce((first, second) -> first + "; " + second)
-                        .orElseThrow(),
-                problems.getFirst().failure());
-        for (int index = 1; index < problems.size(); index++) {
-            exception.addSuppressed(problems.get(index).failure());
-        }
-        return exception;
-    }
-
-    private record ProviderConfigurationProblem(String message, IllegalArgumentException failure) {
+        String message = signatures.size() == 1
+                ? "more than one imported method converges on replacement target: " + signatures.getFirst().canonical()
+                : "function replacement plan must import exactly one method; imported signatures: "
+                        + signatures.stream().map(FunctionSignature::canonical).toList();
+        return ProviderConfigurationProblem.fromDescriptor(
+                ProviderConfigurationProblem.Category.REPLACEMENT_CARDINALITY,
+                descriptors.getFirst(),
+                message,
+                null);
     }
 
     private record FunctionDeclaration(FunctionDescriptor descriptor, boolean imported) {

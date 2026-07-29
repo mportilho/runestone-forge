@@ -4,22 +4,13 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.lang.reflect.WildcardType;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -29,20 +20,6 @@ public final class ReflectedFunctionImporter {
 
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
     private static final MethodHandles.Lookup PUBLIC_LOOKUP = MethodHandles.publicLookup();
-    private static final Set<Class<?>> NUMERIC_TYPES = Set.of(
-            BigDecimal.class,
-            byte.class,
-            Byte.class,
-            short.class,
-            Short.class,
-            int.class,
-            Integer.class,
-            long.class,
-            Long.class,
-            float.class,
-            Float.class,
-            double.class,
-            Double.class);
 
     private ReflectedFunctionImporter() {
     }
@@ -92,37 +69,12 @@ public final class ReflectedFunctionImporter {
                 List.of());
     }
 
-    static ImportPlan importCanonicalAll(Class<?> providerClass, FunctionPurity purity) {
-        return new ImportPlanImpl(
-                Source.canonicalStaticProvider(providerClass, purity), SelectionMode.allMode(), List.of());
-    }
-
-    static ImportPlan importCanonicalAll(Object providerInstance, FunctionPurity purity) {
-        Objects.requireNonNull(providerInstance, "providerInstance");
-        return new ImportPlanImpl(
-                Source.canonicalInstanceProvider(providerInstance.getClass(), providerInstance, purity),
-                SelectionMode.allMode(),
-                List.of());
-    }
-
-    static ImportPlan importCanonicalAll(
-            Class<?> exposureType,
-            Object providerInstance,
-            FunctionPurity purity) {
-        return new ImportPlanImpl(
-                Source.canonicalInstanceProvider(exposureType, providerInstance, purity),
-                SelectionMode.allMode(),
-                List.of());
-    }
-
     public interface ImportPlan {
         ImportPlan rename(String javaMethodName, String languageName);
 
         ImportPlan rename(String javaMethodName, Class<?> javaParameterType, String languageName);
 
         ImportPlan rename(String javaMethodName, String languageName, Class<?>... javaParameterTypes);
-
-        List<FunctionDescriptor> toList();
     }
 
     public interface Selection extends ImportPlan {
@@ -168,60 +120,47 @@ public final class ReflectedFunctionImporter {
             return withRename(Rename.exact(javaMethodName, javaParameterTypes, languageName));
         }
 
-        @Override
-        public List<FunctionDescriptor> toList() {
-            ImportResolution resolution = resolve(
-                    LOOKUP,
-                    false,
-                    JavaTypeCatalog.empty(),
-                    BoundaryCoercion.standard(),
-                    Integer.MAX_VALUE);
-            if (!resolution.failures().isEmpty()) {
-                throw combinedFailure(resolution.failures());
-            }
-            validateUniqueSignatures(resolution.descriptors());
-            return sortedDescriptors(resolution.descriptors());
-        }
-
         private ImportResolution resolve(
                 MethodHandles.Lookup lookup,
-                boolean guardNulls,
                 JavaTypeCatalog javaTypes,
                 BoundaryCoercion boundaryCoercion,
                 int maxMaterializedSize) {
             List<Method> eligibleMethods = eligibleMethods(source);
-            List<IllegalArgumentException> failures = new ArrayList<>();
+            List<ProviderConfigurationProblem> problems = new ArrayList<>();
             if (eligibleMethods.isEmpty()) {
-                failures.add(new IllegalArgumentException(
-                        "function provider declares no eligible methods: " + source.exposureType().getName()));
+                problems.add(ProviderConfigurationProblem.providerLevel(
+                        ProviderConfigurationProblem.Category.NO_ELIGIBLE_METHODS,
+                        source.exposureType(),
+                        source.purity(),
+                        "function provider declares no eligible methods: " + source.exposureType().getName(),
+                        null));
             }
 
             List<Method> selectedMethods = eligibleMethods.stream()
                     .filter(selectionMode::matches)
                     .toList();
-            validateSelectionTargets(selectionMode, selectedMethods, failures);
-            validateRenames(selectedMethods, failures);
+            validateSelectionTargets(selectionMode, source.exposureType(), source.purity(), selectedMethods, problems);
+            validateRenames(selectedMethods, problems);
 
             List<FunctionDescriptor> descriptors = new ArrayList<>(selectedMethods.size());
             for (Method method : selectedMethods) {
                 try {
-                    if (boundaryCoercion != null && (guardNulls || hasContainerContract(method))) {
-                        ProviderMethodAdapter.PreparedMethod prepared = ProviderMethodAdapter.prepare(
-                                method, javaTypes, boundaryCoercion, maxMaterializedSize);
-                        descriptors.add(descriptor(languageName(method), source, method, prepared, lookup));
-                        continue;
-                    }
-                    ImportedMethod importedMethod = source.canonicalScalarsOnly()
-                            ? importCanonicalScalarMethod(method)
-                            : importMethod(method, javaTypes);
-                    descriptors.add(descriptor(
-                            languageName(method), source, importedMethod, lookup, guardNulls));
+                    String languageName = languageName(method);
+                    ProviderMethodAdapter.PreparedMethod prepared = ProviderMethodAdapter.prepare(
+                            method, javaTypes, boundaryCoercion, maxMaterializedSize);
+                    descriptors.add(descriptor(languageName, source, method, prepared, lookup));
                 } catch (IllegalArgumentException exception) {
-                    failures.add(providerFailure(method.toGenericString() + ": " + exception.getMessage(), exception));
+                    problems.add(ProviderConfigurationProblem.methodLevel(
+                            ProviderConfigurationProblem.Category.METHOD_REJECTED,
+                            source.exposureType(),
+                            method,
+                            source.purity(),
+                            exception.getMessage(),
+                            exception));
                 }
             }
-            failures.sort(Comparator.comparing(Throwable::getMessage));
-            return new ImportResolution(descriptors, failures);
+            problems.sort(ProviderConfigurationProblem.ORDER);
+            return new ImportResolution(descriptors, problems);
         }
 
         private ImportPlanImpl withRename(Rename rename) {
@@ -249,17 +188,18 @@ public final class ReflectedFunctionImporter {
             return FunctionSignature.validateLanguageName(languageName);
         }
 
-        private void validateRenames(List<Method> selectedMethods, List<IllegalArgumentException> failures) {
+        private void validateRenames(List<Method> selectedMethods, List<ProviderConfigurationProblem> problems) {
             for (Rename rename : renames) {
                 if (selectedMethods.stream().noneMatch(rename::matches)) {
-                    failures.add(providerFailure("rename has no imported target: " + rename.target(), null));
+                    problems.add(ProviderConfigurationProblem.providerLevel(
+                            ProviderConfigurationProblem.Category.RENAME,
+                            source.exposureType(),
+                            source.purity(),
+                            "invalid function provider " + source.exposureType().getName()
+                                    + ": rename has no imported target: " + rename.target(),
+                            null));
                 }
             }
-        }
-
-        private IllegalArgumentException providerFailure(String detail, IllegalArgumentException cause) {
-            return new IllegalArgumentException(
-                    "invalid function provider " + source.exposureType().getName() + ": " + detail, cause);
         }
     }
 
@@ -321,40 +261,6 @@ public final class ReflectedFunctionImporter {
         }
     }
 
-    private static FunctionDescriptor descriptor(String languageName, Source source, ImportedMethod importedMethod) {
-        return descriptor(languageName, source, importedMethod, LOOKUP, false);
-    }
-
-    private static FunctionDescriptor descriptor(
-            String languageName,
-            Source source,
-            ImportedMethod importedMethod,
-            MethodHandles.Lookup lookup,
-            boolean guardNulls) {
-        Method method = importedMethod.method();
-        try {
-            MethodHandle handle = lookup.unreflect(method);
-            if (!source.importStatic()) {
-                handle = handle.bindTo(source.providerInstance());
-            }
-            handle = FunctionHandleAdapters.adapt(handle, importedMethod.parameterTypes(), importedMethod.returnType());
-            if (guardNulls) {
-                handle = FunctionHandleAdapters.guardNonNullBoundaries(handle);
-            }
-            return FunctionDescriptor.fromHandle(
-                    languageName,
-                    handle,
-                    source.importStatic()
-                            ? FunctionImplementationMetadata.forStaticMethod(method)
-                            : FunctionImplementationMetadata.forInstanceMethod(method),
-                    importedMethod.parameterTypes(),
-                    importedMethod.returnType(),
-                    source.purity());
-        } catch (IllegalAccessException exception) {
-            throw new IllegalArgumentException("function provider method is not accessible: " + method, exception);
-        }
-    }
-
     private static FunctionDescriptor descriptor(
             String languageName,
             Source source,
@@ -396,165 +302,44 @@ public final class ReflectedFunctionImporter {
         return source.importStatic() == Modifier.isStatic(modifiers);
     }
 
-    private static boolean hasContainerContract(Method method) {
-        if (isContainerType(method.getReturnType())) {
-            return true;
-        }
-        return Arrays.stream(method.getParameterTypes()).anyMatch(ReflectedFunctionImporter::isContainerType);
-    }
-
-    private static boolean isContainerType(Class<?> type) {
-        return type.isArray()
-                || Map.class.isAssignableFrom(type)
-                || Iterable.class.isAssignableFrom(type);
-    }
-
-    private static ImportedMethod importMethod(Method method, JavaTypeCatalog javaTypes) {
-        if (method.isVarArgs()) {
-            throw new IllegalArgumentException("varargs provider methods are not supported: " + method);
-        }
-        List<ExpressionType> parameterTypes = new ArrayList<>(method.getParameterCount());
-        Type[] genericParameterTypes = method.getGenericParameterTypes();
-        Class<?>[] rawParameterTypes = method.getParameterTypes();
-        for (int index = 0; index < genericParameterTypes.length; index++) {
-            parameterTypes.add(expressionType(
-                    genericParameterTypes[index], rawParameterTypes[index], TypePosition.PARAMETER, javaTypes));
-        }
-        ExpressionType returnType = expressionType(
-                method.getGenericReturnType(), method.getReturnType(), TypePosition.RETURN, javaTypes);
-        return new ImportedMethod(method, List.copyOf(parameterTypes), returnType);
-    }
-
-    private static ImportedMethod importCanonicalScalarMethod(Method method) {
-        if (method.isVarArgs()) {
-            throw new IllegalArgumentException("varargs provider methods are not supported: " + method);
-        }
-        List<ExpressionType> parameterTypes = new ArrayList<>(method.getParameterCount());
-        for (Class<?> parameterType : method.getParameterTypes()) {
-            parameterTypes.add(canonicalScalarType(parameterType));
-        }
-        return new ImportedMethod(method, List.copyOf(parameterTypes), canonicalScalarType(method.getReturnType()));
-    }
-
-    private static ExpressionType canonicalScalarType(Class<?> rawType) {
-        if (rawType == BigDecimal.class) {
-            return ScalarType.NUMBER;
-        }
-        if (rawType == boolean.class || rawType == Boolean.class) {
-            return ScalarType.BOOLEAN;
-        }
-        if (rawType == String.class) {
-            return ScalarType.STRING;
-        }
-        if (rawType == LocalDate.class) {
-            return ScalarType.DATE;
-        }
-        if (rawType == LocalTime.class) {
-            return ScalarType.TIME;
-        }
-        if (rawType == LocalDateTime.class) {
-            return ScalarType.DATETIME;
-        }
-        throw new IllegalArgumentException("unsupported canonical scalar provider method type: " + rawType.getName());
-    }
-
-    private static ExpressionType expressionType(
-            Type genericType,
-            Class<?> rawType,
-            TypePosition position,
-            JavaTypeCatalog javaTypes) {
-        if (rawType == void.class) {
-            throw new IllegalArgumentException("void provider method returns are not supported");
-        }
-        if (rawType.isArray()) {
-            throw new IllegalArgumentException("array provider method types are not supported");
-        }
-        if (Map.class.isAssignableFrom(rawType)) {
-            throw new IllegalArgumentException("Map provider method types are not supported");
-        }
-        if (Optional.class.isAssignableFrom(rawType)) {
-            throw new IllegalArgumentException("Optional provider method types are not supported");
-        }
-        if (NUMERIC_TYPES.contains(rawType)) {
-            return ScalarType.NUMBER;
-        }
-        if (rawType == boolean.class || rawType == Boolean.class) {
-            return ScalarType.BOOLEAN;
-        }
-        if (rawType == String.class) {
-            return ScalarType.STRING;
-        }
-        if (rawType == LocalDate.class) {
-            return ScalarType.DATE;
-        }
-        if (rawType == LocalTime.class) {
-            return ScalarType.TIME;
-        }
-        if (rawType == LocalDateTime.class) {
-            return ScalarType.DATETIME;
-        }
-        if (rawType == Object.class) {
-            throw new IllegalArgumentException("Object provider method types are not supported");
-        }
-        if (List.class.isAssignableFrom(rawType)) {
-            return collectionType(genericType, "raw List", javaTypes);
-        }
-        if (Collection.class.isAssignableFrom(rawType)) {
-            if (position == TypePosition.RETURN) {
-                throw new IllegalArgumentException("Collection return types are not supported");
-            }
-            return collectionType(genericType, "raw Collection", javaTypes);
-        }
-        return javaTypes.find(rawType)
-                .map(JavaTypeDescriptor::objectType)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "unsupported provider method type; not a registered Java type: " + rawType.getName()));
-    }
-
-    private static ExpressionType collectionType(
-            Type genericType,
-            String rawMessage,
-            JavaTypeCatalog javaTypes) {
-        if (!(genericType instanceof ParameterizedType parameterizedType)) {
-            throw new IllegalArgumentException(rawMessage + " provider method types are not supported");
-        }
-        Type elementType = parameterizedType.getActualTypeArguments()[0];
-        if (elementType instanceof WildcardType wildcardType) {
-            if (wildcardType.getLowerBounds().length == 0
-                    && wildcardType.getUpperBounds().length == 1
-                    && wildcardType.getUpperBounds()[0] == Object.class) {
-                throw new IllegalArgumentException("wildcard collection element types are not supported");
-            }
-            throw new IllegalArgumentException("bounded wildcard collection element types are not supported");
-        }
-        if (!(elementType instanceof Class<?> elementClass)) {
-            throw new IllegalArgumentException("unresolvable collection element type is not supported");
-        }
-        return new CollectionType(expressionType(
-                elementClass, elementClass, TypePosition.COLLECTION_ELEMENT, javaTypes));
-    }
-
     private static void validateSelectionTargets(
             SelectionMode selectionMode,
+            Class<?> exposureType,
+            FunctionPurity purity,
             List<Method> selectedMethods,
-            List<IllegalArgumentException> failures) {
+            List<ProviderConfigurationProblem> problems) {
         if (selectionMode.isAll()) {
             return;
         }
         for (String selectedName : selectionMode.names()) {
             boolean found = selectedMethods.stream().anyMatch(method -> method.getName().equals(selectedName));
             if (!found) {
-                failures.add(new IllegalArgumentException("selected method has no imported target: " + selectedName));
+                problems.add(ProviderConfigurationProblem.providerLevel(
+                        ProviderConfigurationProblem.Category.SELECTION,
+                        exposureType,
+                        purity,
+                        "selected method has no imported target: " + selectedName,
+                        null));
             }
         }
         for (MethodKey selectedMethod : selectionMode.exactMethods()) {
             boolean found = selectedMethods.stream().anyMatch(selectedMethod::matches);
             if (!found) {
-                failures.add(new IllegalArgumentException("selected method has no imported target: " + selectedMethod));
+                problems.add(ProviderConfigurationProblem.providerLevel(
+                        ProviderConfigurationProblem.Category.SELECTION,
+                        exposureType,
+                        purity,
+                        "selected method has no imported target: " + selectedMethod,
+                        null));
             }
         }
         if (selectionMode.names().isEmpty() && selectionMode.exactMethods().isEmpty()) {
-            failures.add(new IllegalArgumentException("selective function import declares no methods"));
+            problems.add(ProviderConfigurationProblem.providerLevel(
+                    ProviderConfigurationProblem.Category.SELECTION,
+                    exposureType,
+                    purity,
+                    "selective function import declares no methods",
+                    null));
         }
     }
 
@@ -566,18 +351,11 @@ public final class ReflectedFunctionImporter {
         return javaMethodName;
     }
 
-    private enum TypePosition {
-        PARAMETER,
-        RETURN,
-        COLLECTION_ELEMENT
-    }
-
     private record Source(
             Class<?> exposureType,
             Object providerInstance,
             FunctionPurity purity,
-            boolean importStatic,
-            boolean canonicalScalarsOnly) {
+            boolean importStatic) {
 
         private Source {
             exposureType = Objects.requireNonNull(exposureType, "exposureType");
@@ -591,32 +369,21 @@ public final class ReflectedFunctionImporter {
         }
 
         private static Source staticProvider(Class<?> providerClass, FunctionPurity purity) {
-            return new Source(Objects.requireNonNull(providerClass, "providerClass"), null, purity, true, false);
+            return new Source(Objects.requireNonNull(providerClass, "providerClass"), null, purity, true);
         }
 
         private static Source instanceProvider(
                 Class<?> exposureType,
                 Object providerInstance,
                 FunctionPurity purity) {
-            return new Source(exposureType, providerInstance, purity, false, false);
+            return new Source(exposureType, providerInstance, purity, false);
         }
 
         private static Source exposedInstanceProvider(
                 Class<?> exposureType,
                 Object providerInstance,
                 FunctionPurity purity) {
-            return new Source(exposureType, providerInstance, purity, false, false);
-        }
-
-        private static Source canonicalStaticProvider(Class<?> providerClass, FunctionPurity purity) {
-            return new Source(Objects.requireNonNull(providerClass, "providerClass"), null, purity, true, true);
-        }
-
-        private static Source canonicalInstanceProvider(
-                Class<?> exposureType,
-                Object providerInstance,
-                FunctionPurity purity) {
-            return new Source(exposureType, providerInstance, purity, false, true);
+            return new Source(exposureType, providerInstance, purity, false);
         }
     }
 
@@ -713,9 +480,6 @@ public final class ReflectedFunctionImporter {
         }
     }
 
-    private record ImportedMethod(Method method, List<ExpressionType> parameterTypes, ExpressionType returnType) {
-    }
-
     private record Rename(MethodKey exactMethod, String javaMethodName, String languageName) {
 
         private Rename {
@@ -744,7 +508,21 @@ public final class ReflectedFunctionImporter {
         }
     }
 
+    /**
+     * Resolves an arbitrary caller-supplied plan against the real environment configuration, using
+     * the public lookup: external provider classes and their exposed methods must be public. This
+     * is the sole entry point used while building an {@link ExpressionEnvironment}.
+     */
     static ImportResolution resolveForEnvironment(
+            ImportPlan plan,
+            JavaTypeCatalog javaTypes,
+            BoundaryCoercion boundaryCoercion,
+            int maxMaterializedSize) {
+        return resolve(PUBLIC_LOOKUP, plan, javaTypes, boundaryCoercion, maxMaterializedSize);
+    }
+
+    private static ImportResolution resolve(
+            MethodHandles.Lookup lookup,
             ImportPlan plan,
             JavaTypeCatalog javaTypes,
             BoundaryCoercion boundaryCoercion,
@@ -755,13 +533,49 @@ public final class ReflectedFunctionImporter {
         if (!(plan instanceof ImportPlanImpl implementation)) {
             throw new IllegalArgumentException("unsupported reflected function import plan implementation");
         }
-        return implementation.resolve(
-                PUBLIC_LOOKUP, true, javaTypes, boundaryCoercion, maxMaterializedSize);
+        return implementation.resolve(lookup, javaTypes, boundaryCoercion, maxMaterializedSize);
+    }
+
+    /**
+     * Resolves a plan against a standard, unbounded environment and returns its descriptors in
+     * deterministic order, or throws if any configuration problem was discovered. Package-visible
+     * only, using the module-private lookup so package-private provider classes (built-ins, and
+     * test fixtures within this package) remain importable without opening them up publicly.
+     */
+    static List<FunctionDescriptor> toList(ImportPlan plan) {
+        ImportResolution resolution = resolve(
+                LOOKUP, plan, JavaTypeCatalog.empty(), BoundaryCoercion.standard(), Integer.MAX_VALUE);
+        if (!resolution.failures().isEmpty()) {
+            throw combinedFailure(resolution.failures());
+        }
+        validateUniqueSignatures(resolution.descriptors());
+        return sortedDescriptors(resolution.descriptors());
+    }
+
+    /**
+     * Resolves a trusted internal (built-in) plan against the real environment configuration,
+     * using the module-private lookup, and returns its descriptors, or fails fast with
+     * {@link IllegalStateException} since a rejected built-in method is a defect in the engine, not
+     * a caller configuration error.
+     */
+    static List<FunctionDescriptor> importTrustedOrThrow(ImportPlan plan, BuiltInResolutionContext context) {
+        ImportResolution resolution = resolve(
+                LOOKUP, plan, context.javaTypes(), context.boundaryCoercion(), context.maxMaterializedSize());
+        if (!resolution.failures().isEmpty()) {
+            throw new IllegalStateException("built-in function provider misconfigured: " + resolution.failures()
+                    .stream()
+                    .map(ProviderConfigurationProblem::message)
+                    .distinct()
+                    .reduce((first, second) -> first + "; " + second)
+                    .orElseThrow());
+        }
+        validateUniqueSignatures(resolution.descriptors());
+        return sortedDescriptors(resolution.descriptors());
     }
 
     record ImportResolution(
             List<FunctionDescriptor> descriptors,
-            List<IllegalArgumentException> failures) {
+            List<ProviderConfigurationProblem> failures) {
 
         ImportResolution {
             descriptors = List.copyOf(descriptors);
@@ -796,17 +610,8 @@ public final class ReflectedFunctionImporter {
                 });
     }
 
-    private static IllegalArgumentException combinedFailure(List<IllegalArgumentException> failures) {
-        IllegalArgumentException failure = new IllegalArgumentException(failures.stream()
-                .map(Throwable::getMessage)
-                .distinct()
-                .sorted()
-                .reduce((first, second) -> first + "; " + second)
-                .orElseThrow(), failures.getFirst());
-        for (int index = 1; index < failures.size(); index++) {
-            failure.addSuppressed(failures.get(index));
-        }
-        return failure;
+    private static EnvironmentConfigurationException combinedFailure(List<ProviderConfigurationProblem> problems) {
+        return EnvironmentConfigurationException.of(problems);
     }
 
 }

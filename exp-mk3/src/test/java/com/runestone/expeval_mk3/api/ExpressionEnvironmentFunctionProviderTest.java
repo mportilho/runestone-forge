@@ -262,6 +262,25 @@ public class ExpressionEnvironmentFunctionProviderTest {
     }
 
     @Test
+    @DisplayName("ADR 0015: environment build reports a structured, deterministically ordered configuration exception")
+    void adr0015EnvironmentBuildReportsStructuredDeterministicallyOrderedException() {
+        ExpressionEnvironment.Builder builder = ExpressionEnvironment.builder()
+                .functionsFrom(BuiltInCollisionProvider.class, FunctionPurity.PURE)
+                .functionsFrom(UnsupportedProvider.class, FunctionPurity.PURE);
+
+        EnvironmentConfigurationException exception = (EnvironmentConfigurationException)
+                org.assertj.core.api.Assertions.catchThrowable(builder::build);
+
+        assertThat(exception).isNotNull();
+        assertThat(exception.problems()).hasSize(2);
+        assertThat(exception.problems())
+                .extracting(ProviderConfigurationProblem::providerExposureType)
+                .containsExactlyInAnyOrder(
+                        BuiltInCollisionProvider.class.getName(), UnsupportedProvider.class.getName());
+        assertThat(exception.problems()).isSortedAccordingTo(ProviderConfigurationProblem.ORDER);
+    }
+
+    @Test
     @DisplayName("environment reports invalid methods and collisions from the same provider")
     void environmentReportsInvalidMethodsAndCollisionsFromTheSameProvider() {
         ExpressionEnvironment.Builder builder = ExpressionEnvironment.builder()
@@ -433,11 +452,10 @@ public class ExpressionEnvironmentFunctionProviderTest {
     @Test
     @DisplayName("reflected replacement rejects multiple Java methods converging on one target")
     void reflectedReplacementRejectsMultipleMethodsConvergingOnOneTarget() {
-        FunctionDescriptor original = ReflectedFunctionImporter
+        FunctionDescriptor original = ReflectedFunctionImporter.toList(ReflectedFunctionImporter
                 .importSelected(OriginalNumberProvider.class, FunctionPurity.PURE)
                 .method("original", BigDecimal.class)
-                .rename("original", BigDecimal.class, "numberValue")
-                .toList()
+                .rename("original", BigDecimal.class, "numberValue"))
                 .getFirst();
         ReflectedFunctionImporter.ImportPlan replacement = ReflectedFunctionImporter
                 .importSelected(ConvergingReplacementProvider.class, FunctionPurity.PURE)

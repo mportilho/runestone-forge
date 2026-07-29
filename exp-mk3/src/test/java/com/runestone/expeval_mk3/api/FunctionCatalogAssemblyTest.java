@@ -85,6 +85,67 @@ class FunctionCatalogAssemblyTest {
                 .satisfies(exception -> assertThat(exception.getSuppressed()).hasSize(2));
     }
 
+    @Test
+    @DisplayName("aggregated exception carries structured problems sorted by exposure type, method, and category")
+    void aggregatedExceptionCarriesStructuredSortedProblems() throws Throwable {
+        FunctionDescriptor builtInCollision = firstDescriptor(BuiltInCollisionProvider.class);
+
+        EnvironmentConfigurationException thrown = catchEnvironmentConfigurationException(() -> FunctionCatalogAssembly.assemble(
+                BOUNDARY_COERCION,
+                MATH_CONTEXT,
+                MATH_CONTEXT,
+                MAX_MATERIALIZED_SIZE,
+                JAVA_TYPES,
+                List.of(builtInCollision),
+                List.of(ReflectedFunctionImporter.importAll(UnsupportedProvider.class, FunctionPurity.PURE)),
+                List.of(),
+                List.of(ReflectedFunctionImporter.importAll(GreetProvider.class, FunctionPurity.PURE))));
+
+        assertThat(thrown.problems()).hasSize(3);
+        assertThat(thrown.problems())
+                .extracting(ProviderConfigurationProblem::category)
+                .containsExactly(
+                        ProviderConfigurationProblem.Category.REGISTRATION_COLLISION,
+                        ProviderConfigurationProblem.Category.REGISTRATION_COLLISION,
+                        ProviderConfigurationProblem.Category.METHOD_REJECTED);
+        assertThat(thrown.problems())
+                .allSatisfy(problem -> assertThat(problem.providerExposureType()).isNotBlank());
+        assertThat(thrown.problems()).isSortedAccordingTo(ProviderConfigurationProblem.ORDER);
+    }
+
+    @Test
+    @DisplayName("problem ordering is independent of provider declaration order")
+    void problemOrderingIsIndependentOfDeclarationOrder() throws Throwable {
+        FunctionDescriptor builtInCollision = firstDescriptor(BuiltInCollisionProvider.class);
+
+        EnvironmentConfigurationException first = catchEnvironmentConfigurationException(() -> FunctionCatalogAssembly.assemble(
+                BOUNDARY_COERCION, MATH_CONTEXT, MATH_CONTEXT, MAX_MATERIALIZED_SIZE, JAVA_TYPES,
+                List.of(builtInCollision),
+                List.of(ReflectedFunctionImporter.importAll(UnsupportedProvider.class, FunctionPurity.PURE)),
+                List.of(),
+                List.of(ReflectedFunctionImporter.importAll(GreetProvider.class, FunctionPurity.PURE))));
+        EnvironmentConfigurationException second = catchEnvironmentConfigurationException(() -> FunctionCatalogAssembly.assemble(
+                BOUNDARY_COERCION, MATH_CONTEXT, MATH_CONTEXT, MAX_MATERIALIZED_SIZE, JAVA_TYPES,
+                List.of(),
+                List.of(
+                        ReflectedFunctionImporter.importAll(UnsupportedProvider.class, FunctionPurity.PURE),
+                        ReflectedFunctionImporter.importAll(BuiltInCollisionProvider.class, FunctionPurity.PURE)),
+                List.of(),
+                List.of(ReflectedFunctionImporter.importAll(GreetProvider.class, FunctionPurity.PURE))));
+
+        assertThat(second.problems())
+                .extracting(ProviderConfigurationProblem::providerExposureType, ProviderConfigurationProblem::category)
+                .containsExactlyElementsOf(first.problems().stream()
+                        .map(problem -> org.assertj.core.groups.Tuple.tuple(
+                                problem.providerExposureType(), problem.category()))
+                        .toList());
+    }
+
+    private static EnvironmentConfigurationException catchEnvironmentConfigurationException(
+            org.assertj.core.api.ThrowableAssert.ThrowingCallable callable) {
+        return (EnvironmentConfigurationException) org.assertj.core.api.Assertions.catchThrowable(callable);
+    }
+
     private static FunctionDescriptor firstDescriptor(Class<?> providerClass) {
         return ReflectedFunctionImporter.resolveForEnvironment(
                         ReflectedFunctionImporter.importAll(providerClass, FunctionPurity.PURE),

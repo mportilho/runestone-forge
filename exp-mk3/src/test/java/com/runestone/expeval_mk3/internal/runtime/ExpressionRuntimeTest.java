@@ -1,6 +1,9 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
 import com.runestone.expeval_mk3.api.CollectionType;
+import com.runestone.expeval_mk3.api.FunctionDescriptor;
+import com.runestone.expeval_mk3.api.FunctionInvocationException;
+import com.runestone.expeval_mk3.api.FunctionPurity;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.MemberName;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
@@ -8,6 +11,8 @@ import com.runestone.expeval_mk3.internal.ast.PropertyNavigationLink;
 import com.runestone.expeval_mk3.internal.source.SourceSpan;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
@@ -25,6 +30,60 @@ class ExpressionRuntimeTest {
 
     private static ExecutionScope newScope() {
         return new ExecutionScope(1, ZoneId.of("UTC"));
+    }
+
+    @Test
+    void invokeFunctionWrapsProviderRuntimeExceptionPreservingCause() throws Exception {
+        FunctionDescriptor descriptor = functionDescriptor("throwsRuntime");
+
+        assertThatThrownBy(() -> ExpressionRuntime.invokeFunction(
+                descriptor, List.of(constant(BigDecimal.ONE)), newScope()))
+                .isInstanceOf(FunctionInvocationException.class)
+                .hasCauseInstanceOf(IllegalStateException.class)
+                .satisfies(exception -> assertThat(exception.getCause()).hasMessage("boom"));
+    }
+
+    @Test
+    void invokeFunctionWrapsDeclaredCheckedExceptionPreservingCause() throws Exception {
+        FunctionDescriptor descriptor = functionDescriptor("throwsChecked");
+
+        assertThatThrownBy(() -> ExpressionRuntime.invokeFunction(
+                descriptor, List.of(constant(BigDecimal.ONE)), newScope()))
+                .isInstanceOf(FunctionInvocationException.class)
+                .hasCauseInstanceOf(IOException.class);
+    }
+
+    @Test
+    void invokeFunctionPropagatesFatalErrorsUnchanged() throws Exception {
+        FunctionDescriptor descriptor = functionDescriptor("throwsFatal");
+
+        assertThatThrownBy(() -> ExpressionRuntime.invokeFunction(
+                descriptor, List.of(constant(BigDecimal.ONE)), newScope()))
+                .isInstanceOf(StackOverflowError.class);
+    }
+
+    private static ExecutableNode constant(Object value) {
+        return scope -> value;
+    }
+
+    private static FunctionDescriptor functionDescriptor(String methodName) throws NoSuchMethodException {
+        Method method = FunctionUnderTest.class.getDeclaredMethod(methodName, BigDecimal.class);
+        return FunctionDescriptor.fromMethod(
+                methodName, method, List.of(ScalarType.NUMBER), ScalarType.NUMBER, FunctionPurity.IMPURE);
+    }
+
+    public static final class FunctionUnderTest {
+        public static BigDecimal throwsRuntime(BigDecimal value) {
+            throw new IllegalStateException("boom");
+        }
+
+        public static BigDecimal throwsChecked(BigDecimal value) throws IOException {
+            throw new IOException("io failure");
+        }
+
+        public static BigDecimal throwsFatal(BigDecimal value) {
+            throw new StackOverflowError();
+        }
     }
 
     @Test

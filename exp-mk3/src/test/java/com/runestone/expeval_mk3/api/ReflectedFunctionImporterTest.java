@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.api;
 
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -21,9 +22,8 @@ class ReflectedFunctionImporterTest {
     @Test
     @DisplayName("imports only directly declared public static provider methods")
     void importsOnlyDirectlyDeclaredPublicStaticProviderMethods() {
-        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
-                .importAll(StaticProvider.class, FunctionPurity.FOLDABLE)
-                .toList();
+        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter.toList(ReflectedFunctionImporter
+                .importAll(StaticProvider.class, FunctionPurity.FOLDABLE));
 
         assertThat(descriptors)
                 .extracting(FunctionDescriptor::signature)
@@ -38,9 +38,8 @@ class ReflectedFunctionImporterTest {
     void importsPublicInstanceMethodsAndBindsProviderInstance() throws Throwable {
         InstanceProvider provider = new InstanceProvider(BigDecimal.TEN);
 
-        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
-                .importAll(provider, FunctionPurity.PURE)
-                .toList();
+        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter.toList(ReflectedFunctionImporter
+                .importAll(provider, FunctionPurity.PURE));
 
         FunctionDescriptor descriptor = only(descriptors);
         assertThat(descriptor.signature()).isEqualTo(signature("addBase", ScalarType.NUMBER));
@@ -61,9 +60,8 @@ class ReflectedFunctionImporterTest {
     @Test
     @DisplayName("explicit exposure type imports declared interface methods bound to instance")
     void explicitExposureTypeImportsDeclaredInterfaceMethodsBoundToInstance() throws Throwable {
-        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
-                .importAll(ExposedContract.class, new ContractProvider(), FunctionPurity.FOLDABLE)
-                .toList();
+        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter.toList(ReflectedFunctionImporter
+                .importAll(ExposedContract.class, new ContractProvider(), FunctionPurity.FOLDABLE));
 
         assertThat(descriptors)
                 .extracting(FunctionDescriptor::signature)
@@ -110,9 +108,8 @@ class ReflectedFunctionImporterTest {
     @Test
     @DisplayName("infers scalar and collection expression types")
     void infersScalarAndCollectionExpressionTypes() {
-        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
-                .importAll(TypeInferenceProvider.class, FunctionPurity.FOLDABLE)
-                .toList();
+        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter.toList(ReflectedFunctionImporter
+                .importAll(TypeInferenceProvider.class, FunctionPurity.FOLDABLE));
 
         assertThat(descriptors)
                 .extracting(FunctionDescriptor::signature)
@@ -138,20 +135,19 @@ class ReflectedFunctionImporterTest {
         assertUnsupported(VarargsProvider.class, "varargs");
         assertUnsupported(UnsupportedObjectProvider.class, "unsupported");
         assertUnsupported(WildcardCollectionProvider.class, "wildcard");
+        assertUnsupported(NullableParameterProvider.class, "nullable");
+        assertUnsupported(NullableResultProvider.class, "nullable");
     }
 
     @Test
     @DisplayName("sequential provider contracts use immutable ordered collection values")
     void sequentialProviderContractsUseImmutableOrderedCollectionValues() throws Throwable {
-        FunctionDescriptor array = only(ReflectedFunctionImporter
-                .importAll(ArrayProvider.class, FunctionPurity.FOLDABLE)
-                .toList());
-        FunctionDescriptor collection = only(ReflectedFunctionImporter
-                .importAll(CollectionReturnProvider.class, FunctionPurity.FOLDABLE)
-                .toList());
-        FunctionDescriptor map = only(ReflectedFunctionImporter
-                .importAll(MapProvider.class, FunctionPurity.FOLDABLE)
-                .toList());
+        FunctionDescriptor array = only(ReflectedFunctionImporter.toList(ReflectedFunctionImporter
+                .importAll(ArrayProvider.class, FunctionPurity.FOLDABLE)));
+        FunctionDescriptor collection = only(ReflectedFunctionImporter.toList(ReflectedFunctionImporter
+                .importAll(CollectionReturnProvider.class, FunctionPurity.FOLDABLE)));
+        FunctionDescriptor map = only(ReflectedFunctionImporter.toList(ReflectedFunctionImporter
+                .importAll(MapProvider.class, FunctionPurity.FOLDABLE)));
 
         @SuppressWarnings("unchecked")
         List<BigDecimal> arrayResult = (List<BigDecimal>) array.implementationHandle().invoke();
@@ -173,9 +169,8 @@ class ReflectedFunctionImporterTest {
     @Test
     @DisplayName("adapts primitive and wrapper numeric parameters and returns through BigDecimal")
     void adaptsPrimitiveAndWrapperNumericParametersAndReturnsThroughBigDecimal() throws Throwable {
-        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
-                .importAll(NumericAdapterProvider.class, FunctionPurity.FOLDABLE)
-                .toList();
+        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter.toList(ReflectedFunctionImporter
+                .importAll(NumericAdapterProvider.class, FunctionPurity.FOLDABLE));
 
         assertThat(descriptor(descriptors, "addInt", ScalarType.NUMBER)
                 .implementationHandle()
@@ -193,20 +188,19 @@ class ReflectedFunctionImporterTest {
                 .implementationHandle()
                 .invoke(new BigDecimal("1.25")))
                 .isEqualTo(new BigDecimal("1.25"));
-        assertThatThrownBy(() -> descriptor(descriptors, "addInt", ScalarType.NUMBER)
+        assertThat(descriptor(descriptors, "addInt", ScalarType.NUMBER)
                 .implementationHandle()
                 .invoke(new BigDecimal("1.5")))
-                .isInstanceOf(ArithmeticException.class);
+                .isEqualTo(new BigDecimal("2"));
     }
 
     @Test
     @DisplayName("applies renames and rejects missing or conflicting renames")
     void appliesRenamesAndRejectsMissingOrConflictingRenames() {
-        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
+        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter.toList(ReflectedFunctionImporter
                 .importAll(RenameProvider.class, FunctionPurity.FOLDABLE)
                 .rename("maxNumber", "max")
-                .rename("maxText", "max")
-                .toList();
+                .rename("maxText", "max"));
 
         assertThat(descriptors)
                 .extracting(FunctionDescriptor::signature)
@@ -214,17 +208,15 @@ class ReflectedFunctionImporterTest {
                         signature("max", new CollectionType(ScalarType.NUMBER)),
                         signature("max", new CollectionType(ScalarType.STRING)));
 
-        assertThatThrownBy(() -> ReflectedFunctionImporter
+        assertThatThrownBy(() -> ReflectedFunctionImporter.toList(ReflectedFunctionImporter
                 .importAll(RenameProvider.class, FunctionPurity.FOLDABLE)
-                .rename("missing", "x")
-                .toList())
+                .rename("missing", "x")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("missing");
-        assertThatThrownBy(() -> ReflectedFunctionImporter
+        assertThatThrownBy(() -> ReflectedFunctionImporter.toList(ReflectedFunctionImporter
                 .importAll(RenameProvider.class, FunctionPurity.FOLDABLE)
                 .rename("maxNumber", "max")
-                .rename("maxNumber", "greatest")
-                .toList())
+                .rename("maxNumber", "greatest")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("maxNumber");
     }
@@ -232,10 +224,9 @@ class ReflectedFunctionImporterTest {
     @Test
     @DisplayName("fails on duplicate imported function signatures")
     void failsOnDuplicateImportedFunctionSignatures() {
-        assertThatThrownBy(() -> ReflectedFunctionImporter
+        assertThatThrownBy(() -> ReflectedFunctionImporter.toList(ReflectedFunctionImporter
                 .importAll(DuplicateProvider.class, FunctionPurity.FOLDABLE)
-                .rename("sameTwo", "sameOne")
-                .toList())
+                .rename("sameTwo", "sameOne")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("duplicate");
     }
@@ -243,14 +234,12 @@ class ReflectedFunctionImporterTest {
     @Test
     @DisplayName("selective import supports all overloads by name and exact Java parameter types")
     void selectiveImportSupportsAllOverloadsByNameAndExactJavaParameterTypes() {
-        List<FunctionDescriptor> byName = ReflectedFunctionImporter
+        List<FunctionDescriptor> byName = ReflectedFunctionImporter.toList(ReflectedFunctionImporter
                 .importSelected(SelectiveProvider.class, FunctionPurity.FOLDABLE)
-                .methods("value")
-                .toList();
-        List<FunctionDescriptor> exact = ReflectedFunctionImporter
+                .methods("value"));
+        List<FunctionDescriptor> exact = ReflectedFunctionImporter.toList(ReflectedFunctionImporter
                 .importSelected(SelectiveProvider.class, FunctionPurity.FOLDABLE)
-                .method("value", String.class)
-                .toList();
+                .method("value", String.class));
 
         assertThat(byName)
                 .extracting(FunctionDescriptor::signature)
@@ -265,12 +254,11 @@ class ReflectedFunctionImporterTest {
     @Test
     @DisplayName("exact overload renames disambiguate Java numeric methods that collapse to one language signature")
     void exactOverloadRenamesDisambiguateCollapsedNumericSignatures() {
-        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
+        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter.toList(ReflectedFunctionImporter
                 .importSelected(CollapsedNumericProvider.class, FunctionPurity.FOLDABLE)
                 .methods("score")
                 .rename("score", int.class, "integerScore")
-                .rename("score", "longScore", long.class)
-                .toList();
+                .rename("score", "longScore", long.class));
 
         assertThat(descriptors)
                 .extracting(FunctionDescriptor::signature)
@@ -288,10 +276,10 @@ class ReflectedFunctionImporterTest {
 
         ReflectedFunctionImporter.Selection renamed = selected.rename("value", String.class, "textValue");
 
-        assertThat(selected.toList())
+        assertThat(ReflectedFunctionImporter.toList(selected))
                 .extracting(FunctionDescriptor::signature)
                 .containsExactly(signature("value", ScalarType.STRING));
-        assertThat(renamed.toList())
+        assertThat(ReflectedFunctionImporter.toList(renamed))
                 .extracting(FunctionDescriptor::signature)
                 .containsExactly(signature("textValue", ScalarType.STRING));
     }
@@ -299,10 +287,9 @@ class ReflectedFunctionImporterTest {
     @Test
     @DisplayName("name selection imports every overload and reports collapsed signatures deterministically")
     void nameSelectionReportsCollapsedSignaturesDeterministically() {
-        assertThatThrownBy(() -> ReflectedFunctionImporter
+        assertThatThrownBy(() -> ReflectedFunctionImporter.toList(ReflectedFunctionImporter
                 .importSelected(CollapsedNumericProvider.class, FunctionPurity.FOLDABLE)
-                .methods("score")
-                .toList())
+                .methods("score")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("duplicate")
                 .hasMessageContaining("score")
@@ -320,7 +307,7 @@ class ReflectedFunctionImporterTest {
                 .rename("zero", "renamedZero", new Class<?>[0])
                 .rename("pair", "renamedPair", String.class, BigDecimal.class);
 
-        assertThat(plan.toList())
+        assertThat(ReflectedFunctionImporter.toList(plan))
                 .extracting(FunctionDescriptor::signature)
                 .containsExactly(
                         signature("renamedPair", ScalarType.STRING, ScalarType.NUMBER),
@@ -330,11 +317,10 @@ class ReflectedFunctionImporterTest {
     @Test
     @DisplayName("descriptor order is deterministic by language signature and Java method name")
     void descriptorOrderIsDeterministicByLanguageSignatureAndJavaMethodName() {
-        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter
+        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter.toList(ReflectedFunctionImporter
                 .importAll(OrderProvider.class, FunctionPurity.FOLDABLE)
                 .rename("aText", "a")
-                .rename("aNumber", "a")
-                .toList();
+                .rename("aNumber", "a"));
 
         assertThat(descriptors)
                 .extracting(descriptor -> descriptor.signature().canonical())
@@ -345,7 +331,8 @@ class ReflectedFunctionImporterTest {
     }
 
     private static void assertUnsupported(Class<?> providerClass, String expectedMessage) {
-        assertThatThrownBy(() -> ReflectedFunctionImporter.importAll(providerClass, FunctionPurity.FOLDABLE).toList())
+        assertThatThrownBy(() -> ReflectedFunctionImporter.toList(
+                ReflectedFunctionImporter.importAll(providerClass, FunctionPurity.FOLDABLE)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining(expectedMessage);
     }
@@ -528,6 +515,19 @@ class ReflectedFunctionImporterTest {
     static final class WildcardCollectionProvider {
         public static String join(List<?> values) {
             return values.toString();
+        }
+    }
+
+    static final class NullableParameterProvider {
+        public static String describe(@Nullable String value) {
+            return String.valueOf(value);
+        }
+    }
+
+    static final class NullableResultProvider {
+        @Nullable
+        public static String maybe(String value) {
+            return value;
         }
     }
 

@@ -12,7 +12,7 @@ final class DateTimeBuiltInFunctions {
     private DateTimeBuiltInFunctions() {
     }
 
-    static List<FunctionDescriptor> descriptors() {
+    static List<FunctionDescriptor> descriptors(BuiltInResolutionContext context) {
         ReflectedFunctionImporter.ImportPlan plan = ReflectedFunctionImporter
                 .importAll(DateTimeBuiltInFunctions.class, FunctionPurity.FOLDABLE);
         plan = renameTemporalPair(plan, "secondsBetween");
@@ -41,7 +41,7 @@ final class DateTimeBuiltInFunctions {
         plan = renameTemporalPair(plan, "subHours");
         plan = renameTemporalPair(plan, "subMinutes");
         plan = renameTemporalPair(plan, "subSeconds");
-        return plan.toList();
+        return ReflectedFunctionImporter.importTrustedOrThrow(plan, context);
     }
 
     private static ReflectedFunctionImporter.ImportPlan renameTemporalPair(

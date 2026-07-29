@@ -11,8 +11,8 @@ final class ComparableBuiltInFunctions {
     private ComparableBuiltInFunctions() {
     }
 
-    static List<FunctionDescriptor> descriptors() {
-        return ReflectedFunctionImporter
+    static List<FunctionDescriptor> descriptors(BuiltInResolutionContext context) {
+        ReflectedFunctionImporter.ImportPlan plan = ReflectedFunctionImporter
                 .importAll(ComparableBuiltInFunctions.class, FunctionPurity.FOLDABLE)
                 .rename("maxNumber", "max")
                 .rename("maxString", "max")
@@ -23,8 +23,8 @@ final class ComparableBuiltInFunctions {
                 .rename("minString", "min")
                 .rename("minDate", "min")
                 .rename("minTime", "min")
-                .rename("minDateTime", "min")
-                .toList();
+                .rename("minDateTime", "min");
+        return ReflectedFunctionImporter.importTrustedOrThrow(plan, context);
     }
 
     public static BigDecimal maxNumber(List<BigDecimal> values) {

@@ -12,14 +12,14 @@ final class StringBuiltInFunctions {
     private StringBuiltInFunctions() {
     }
 
-    static List<FunctionDescriptor> descriptors() {
-        return ReflectedFunctionImporter
+    static List<FunctionDescriptor> descriptors(BuiltInResolutionContext context) {
+        ReflectedFunctionImporter.ImportPlan plan = ReflectedFunctionImporter
                 .importAll(StringBuiltInFunctions.class, FunctionPurity.FOLDABLE)
                 .rename("substringFrom", "substring")
                 .rename("substringBetween", "substring")
                 .rename("padLeftWith", "padLeft")
-                .rename("padRightWith", "padRight")
-                .toList();
+                .rename("padRightWith", "padRight");
+        return ReflectedFunctionImporter.importTrustedOrThrow(plan, context);
     }
 
     public static String concat(List<String> values) {

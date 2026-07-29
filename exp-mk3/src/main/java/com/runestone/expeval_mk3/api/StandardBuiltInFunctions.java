@@ -23,21 +23,23 @@ final class StandardBuiltInFunctions {
 
     static void registerAll(
             FunctionCatalog.Builder functions,
+            JavaTypeCatalog javaTypes,
             BoundaryCoercion boundaryCoercion,
             MathContext mathContext,
-            MathContext transcendentalMathContext) {
+            MathContext transcendentalMathContext,
+            int maxMaterializedSize) {
         Objects.requireNonNull(functions, "functions");
-        Objects.requireNonNull(boundaryCoercion, "boundaryCoercion");
         Objects.requireNonNull(mathContext, "mathContext");
         Objects.requireNonNull(transcendentalMathContext, "transcendentalMathContext");
+        BuiltInResolutionContext context = new BuiltInResolutionContext(javaTypes, boundaryCoercion, maxMaterializedSize);
 
-        register(functions, BuiltInFunctionGroup.MATH, MathBuiltInFunctions.descriptors(mathContext));
+        register(functions, BuiltInFunctionGroup.MATH, MathBuiltInFunctions.descriptors(context, mathContext));
         register(functions, BuiltInFunctionGroup.TRANSCENDENTAL,
-                TranscendentalBuiltInFunctions.descriptors(transcendentalMathContext));
-        register(functions, BuiltInFunctionGroup.STRING, StringBuiltInFunctions.descriptors());
-        register(functions, BuiltInFunctionGroup.DATE_TIME, DateTimeBuiltInFunctions.descriptors());
-        register(functions, BuiltInFunctionGroup.COMPARABLE, ComparableBuiltInFunctions.descriptors());
-        register(functions, BuiltInFunctionGroup.FINANCIAL, FinancialBuiltInFunctions.descriptors(mathContext));
+                TranscendentalBuiltInFunctions.descriptors(context, transcendentalMathContext));
+        register(functions, BuiltInFunctionGroup.STRING, StringBuiltInFunctions.descriptors(context));
+        register(functions, BuiltInFunctionGroup.DATE_TIME, DateTimeBuiltInFunctions.descriptors(context));
+        register(functions, BuiltInFunctionGroup.COMPARABLE, ComparableBuiltInFunctions.descriptors(context));
+        register(functions, BuiltInFunctionGroup.FINANCIAL, FinancialBuiltInFunctions.descriptors(context, mathContext));
         register(functions, BuiltInFunctionGroup.ASSERTION, AssertionBuiltInFunctions.descriptors(boundaryCoercion));
     }
 
