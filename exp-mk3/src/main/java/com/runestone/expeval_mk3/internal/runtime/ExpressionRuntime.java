@@ -15,6 +15,7 @@ import com.runestone.expeval_mk3.internal.ast.PropertyNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
+import com.runestone.expeval_mk3.internal.semantics.CollectionOperationWiring;
 import com.runestone.expeval_mk3.internal.semantics.WildcardNavigationBinding;
 import com.runestone.expeval_mk3.internal.source.SourceSpan;
 
@@ -243,6 +244,7 @@ public final class ExpressionRuntime {
     }
 
     public static Object executeCollectionOperation(
+            CollectionOperationExecutor executor,
             CollectionOperationBinding binding,
             Object receiver,
             boolean safe,
@@ -256,22 +258,110 @@ public final class ExpressionRuntime {
             }
             throw new NullPointerException("navigation receiver");
         }
-        return switch (binding.identity()) {
-            case ALL -> all(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType());
-            case ANY -> any(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType());
-            case COUNT -> count(receiver);
-            case KEYS -> mapKeys(receiver, maxMaterializedSize);
-            case VALUES -> mapValues(receiver, maxMaterializedSize);
-            case MAP -> map(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType(), maxMaterializedSize);
-            case SUM -> sum(receiver);
-            case AVG -> avg(receiver, mathContext);
-            case REDUCE -> reduce(receiver, arguments.valueArguments().getFirst().execute(scope),
-                    arguments.lambdaArguments().getFirst(), scope);
-            case SORT_BY -> sortBy(receiver, (String) arguments.valueArguments().getFirst().execute(scope),
-                    arguments.lambdaArguments().getFirst(), scope, maxMaterializedSize,
-                    binding.lambdaBindings().getFirst().resultType());
-            case CUSTOM -> throw new IllegalStateException("unsupported collection operation binding: " + binding.identity());
-        };
+        return executor.execute(binding, receiver, mathContext, maxMaterializedSize, arguments, scope);
+    }
+
+    static Object executeAll(
+            CollectionOperationBinding binding,
+            Object receiver,
+            MathContext mathContext,
+            int maxMaterializedSize,
+            ExecutableOperationArguments arguments,
+            ExecutionScope scope) {
+        return all(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType());
+    }
+
+    static Object executeAny(
+            CollectionOperationBinding binding,
+            Object receiver,
+            MathContext mathContext,
+            int maxMaterializedSize,
+            ExecutableOperationArguments arguments,
+            ExecutionScope scope) {
+        return any(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType());
+    }
+
+    static Object executeCount(
+            CollectionOperationBinding binding,
+            Object receiver,
+            MathContext mathContext,
+            int maxMaterializedSize,
+            ExecutableOperationArguments arguments,
+            ExecutionScope scope) {
+        return count(receiver);
+    }
+
+    static Object executeKeys(
+            CollectionOperationBinding binding,
+            Object receiver,
+            MathContext mathContext,
+            int maxMaterializedSize,
+            ExecutableOperationArguments arguments,
+            ExecutionScope scope) {
+        return mapKeys(receiver, maxMaterializedSize);
+    }
+
+    static Object executeValues(
+            CollectionOperationBinding binding,
+            Object receiver,
+            MathContext mathContext,
+            int maxMaterializedSize,
+            ExecutableOperationArguments arguments,
+            ExecutionScope scope) {
+        return mapValues(receiver, maxMaterializedSize);
+    }
+
+    static Object executeMap(
+            CollectionOperationBinding binding,
+            Object receiver,
+            MathContext mathContext,
+            int maxMaterializedSize,
+            ExecutableOperationArguments arguments,
+            ExecutionScope scope) {
+        return map(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType(), maxMaterializedSize);
+    }
+
+    static Object executeSum(
+            CollectionOperationBinding binding,
+            Object receiver,
+            MathContext mathContext,
+            int maxMaterializedSize,
+            ExecutableOperationArguments arguments,
+            ExecutionScope scope) {
+        return sum(receiver);
+    }
+
+    static Object executeAvg(
+            CollectionOperationBinding binding,
+            Object receiver,
+            MathContext mathContext,
+            int maxMaterializedSize,
+            ExecutableOperationArguments arguments,
+            ExecutionScope scope) {
+        return avg(receiver, mathContext);
+    }
+
+    static Object executeReduce(
+            CollectionOperationBinding binding,
+            Object receiver,
+            MathContext mathContext,
+            int maxMaterializedSize,
+            ExecutableOperationArguments arguments,
+            ExecutionScope scope) {
+        return reduce(receiver, arguments.valueArguments().getFirst().execute(scope),
+                arguments.lambdaArguments().getFirst(), scope);
+    }
+
+    static Object executeSortBy(
+            CollectionOperationBinding binding,
+            Object receiver,
+            MathContext mathContext,
+            int maxMaterializedSize,
+            ExecutableOperationArguments arguments,
+            ExecutionScope scope) {
+        return sortBy(receiver, (String) arguments.valueArguments().getFirst().execute(scope),
+                arguments.lambdaArguments().getFirst(), scope, maxMaterializedSize,
+                binding.lambdaBindings().getFirst().resultType());
     }
 
     static boolean all(
@@ -433,7 +523,7 @@ public final class ExpressionRuntime {
 
     private static BigDecimal avg(Object receiver, MathContext mathContext) {
         List<?> values = (List<?>) receiver;
-        if (values.isEmpty()) {
+        if (CollectionOperationWiring.isAverageOfEmptyCollectionUndefined(values.size())) {
             throw new IllegalStateException("average over an empty collection is not defined");
         }
         return sum(values).divide(BigDecimal.valueOf(values.size()), mathContext);

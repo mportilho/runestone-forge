@@ -1100,7 +1100,7 @@ public final class SemanticResolver {
             if (descriptor.identity() == CollectionOperationCatalog.OperationIdentity.AVG
                     && receiverShape != null
                     && receiverShape.fixed()
-                    && receiverShape.fixedSize() == 0) {
+                    && CollectionOperationWiring.isAverageOfEmptyCollectionUndefined(receiverShape.fixedSize())) {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
                         "Average over a known empty collection is not defined",
@@ -1355,10 +1355,7 @@ public final class SemanticResolver {
         }
 
         private static boolean supportedOperation(CollectionOperationCatalog.OperationIdentity identity) {
-            return switch (identity) {
-                case ALL, ANY, COUNT, KEYS, MAP, REDUCE, SORT_BY, VALUES, SUM, AVG -> true;
-                case CUSTOM -> false;
-            };
+            return CollectionOperationWiring.semanticsSupported(identity);
         }
 
         private static ExpressionType collectionOperationResultType(

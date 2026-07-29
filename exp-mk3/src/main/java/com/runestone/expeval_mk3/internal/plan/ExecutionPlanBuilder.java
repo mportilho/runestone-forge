@@ -39,6 +39,8 @@ import com.runestone.expeval_mk3.internal.ast.StringKeySubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
 import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
+import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutor;
+import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutors;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableBranch;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableLambda;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
@@ -337,7 +339,9 @@ public final class ExecutionPlanBuilder {
             CollectionOperationBinding binding = required(
                     model.collectionOperationBindings(), call.id(), "collection operation binding");
             ExecutableOperationArguments arguments = buildOperationArguments(call, binding, model, environment);
+            CollectionOperationExecutor executor = CollectionOperationExecutors.executorFor(binding.identity());
             return scope -> ExpressionRuntime.executeCollectionOperation(
+                    executor,
                     binding,
                     receiver.execute(scope),
                     call.safe(),
