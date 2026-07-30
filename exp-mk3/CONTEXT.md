@@ -12,9 +12,17 @@ _Avoid_: Test fixture, corpus item
 A versioned collection of expression cases used as the shared behavioral contract for parser, semantic resolver, runtime, migration, and differential verification.
 _Avoid_: Test data, examples folder
 
+**Resultado de Compilacao**:
+The closed public outcome of compiling one expression source, containing either a reusable compiled expression plus warnings or the complete compilation diagnostics without an executable plan.
+_Avoid_: Nullable compiled expression, compilation exception as the primary result
+
 **Plano Imutavel**:
 A compiled, thread-safe, reusable representation of an expression that is executed with an isolated scope for each call.
 _Avoid_: Compiled tree, executable expression internals
+
+**Visao de Expressao**:
+A validated public projection over one Plano Imutavel that defines which result is executed and exposed, such as a general result, number, boolean, or final assignment map, without recompiling the source.
+_Avoid_: Compilation mode, result cast, independent compiled plan
 
 **Resultado Esperado**:
 The value or diagnostic that an expression case declares as the correct behavior.
@@ -53,8 +61,12 @@ The Ambiente de Expressao declaration that says whether a Simbolo Externo defaul
 _Avoid_: Mutable parameter, assignment permission, runtime redeclaration
 
 **Fato Numerico**:
-Semantic facts about a numeric expression under the language's decimal numeric semantics, such as whether a value is provably integral or provably fractional, used by validation and later planning without changing the public expression type.
+Semantic facts about a numeric expression under the language's decimal numeric semantics, such as integral shape or exact reduced-rational parity relevant to a real-domain operation, used by validation and later planning without changing the public expression type.
 _Avoid_: Numeric mode, public number type, Java primitive type, optimization hint
+
+**Dominio Numerico Real**:
+The numeric contract that classifies mathematically defined decimal operations with real results as admissible and rejects complex or undefined results, interpreting every finite decimal as an exact rational when classifying exponentiation and roots. Admissible operations may still fail under representation or configured resource limits.
+_Avoid_: Floating-point domain, complex-number fallback, library-defined domain
 
 **Tipo Colecao**:
 The single sequential container type of the expression language, preserving ordered values of one known element type and supporting indexing, slicing, filtering, wildcard expansion, and assignment destructuring.
@@ -63,6 +75,10 @@ _Avoid_: Vector, Java collection implementation, raw iterable
 **Limite de Materializacao**:
 An Ambiente de Expressao guard rail that bounds every container snapshot materialized at an external boundary or by the language, including collection literals, maps, operation results, function-provider results, and public results.
 _Avoid_: Parser size limit, result-only collection limit
+
+**Materializacao Publica**:
+The type-directed creation of a bounded immutable snapshot when an expression result or assignment map crosses the public API boundary, recursively excluding null and non-exposable object values.
+_Avoid_: Raw Java result, unchecked collection cast, result-only coercion
 
 **Tipo Mapa**:
 The type of a text-keyed value map understood by the expression language, preserving the type of values reachable by textual keys.
@@ -181,8 +197,8 @@ The per-link navigation behavior that returns null only when that link's receive
 _Avoid_: Null-safe chain, error suppression, optional property access
 
 **Vinculo de Navegacao**:
-The semantic resolution of one navigation link against the receiver type, either to a known object member, explicit map key subscript, collection operation, subscript behavior, or a runtime-deferred unknown receiver check. Property navigation does not access map keys.
-_Avoid_: Reflection lookup, path segment, dynamic property access
+The semantic resolution of one navigation link against a known receiver type, selecting a registered object member, explicit map key subscript, collection operation, or typed subscript behavior before planning. Property navigation does not access map keys.
+_Avoid_: Reflection lookup, path segment, dynamic property access, runtime member choice
 
 **Curinga de Navegacao**:
 The `[*]` navigation link that produces a collection from collection elements, map values, or an explicitly registered homogeneous set of object child members. It does not preserve map keys or reflect arbitrary public members.
@@ -216,8 +232,12 @@ _Avoid_: Filter depth, lambda count
 The stable slot arrangement selected during semantic resolution for internal symbols, external symbols, and Item Atual depths so a Plano Imutavel can execute without name lookup.
 _Avoid_: Variable map, runtime scope, symbol table order
 
+**Escopo de Execucao**:
+The isolated per-call state used to execute a Plano Imutavel, containing its frame, one coherent current-time snapshot when needed, and no mutable state shared with another execution.
+_Avoid_: Compiled expression state, variable map, pooled session
+
 **Valor Temporal Corrente**:
-A dynamic expression value such as `currDate`, `currTime`, or `currDateTime` that is derived from the execution clock, not a constant literal captured during AST construction.
+A dynamic expression value such as `currDate`, `currTime`, or `currDateTime` that is derived from one execution-clock instant truncated to whole seconds, not a constant literal captured during AST construction.
 _Avoid_: Date literal, external symbol, compile-time constant
 
 **Nome Reservado**:
@@ -237,7 +257,7 @@ A source-faithful, immutable expression tree that carries materialized literals,
 _Avoid_: Parse tree, canonical plan, typed AST
 
 **Modelo Semantico**:
-The complete semantic interpretation of an Arvore Semantica de Expressao for one Ambiente de Expressao, including resolved types, symbols, function bindings, contextual diagnostics, and runtime-deferred decisions for unknown values.
+The complete semantic interpretation of an Arvore Semantica de Expressao for one Ambiente de Expressao, including known types, resolved bindings, evaluation policies, prepared values, value preconditions, diagnostics, and frame layout required for planning.
 _Avoid_: Typed AST, partial resolver result, execution plan
 
 **Resultado de Resolucao Semantica**:
@@ -245,7 +265,7 @@ The outcome of resolving an Arvore Semantica de Expressao in one Ambiente de Exp
 _Avoid_: Semantic exception, partial semantic model, planner input with errors
 
 **Checagem Diferida**:
-A runtime validation selected during semantic resolution when a source construct has known types but a value precondition cannot be proven at compilation time, such as dynamic factorial bounds, root degree constraints, subscript bounds, receiver null checks for non-safe navigation, or materialization limits. The execution plan consumes these checks without rediscovering semantic rules.
+A runtime validation selected during semantic resolution when a source construct has known types but a value precondition cannot be proven at compilation time, such as a dynamic real-number domain, factorial bounds, subscript bounds, or materialization limits. The execution plan consumes these checks without rediscovering semantic rules.
 _Avoid_: Late semantic resolution, runtime overload choice, generic cast, unknown type handling
 
 **Identificador de No**:
@@ -261,5 +281,5 @@ A half-open character range in an expression source, with zero-based offsets for
 _Avoid_: Token position, raw ANTLR location
 
 **Diagnostico de Expressao**:
-A stable, categorized and severity-marked explanation of why an expression source cannot be accepted or should be warned about in a compilation phase, always tied to a primary source span when it originates from source text and identified by a testable diagnostic code. It may include related spans or notes for multi-cause diagnostics. Error diagnostics block a planejable semantic model; warning diagnostics do not.
+A stable, categorized and severity-marked explanation of a compilation warning/error or execution failure, identified by a testable code and tied to a primary source span whenever the failure originates in source text. It may include related spans, notes, or a suggestion; compilation errors block a planejable semantic model while warnings do not.
 _Avoid_: Exception message, ANTLR error text

@@ -4,6 +4,8 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 
 > A ADR 0016 supersede neste registro os contratos anteriores de containers sequenciais, chamadas com sintaxe dedicada, curinga de filho e classificacao de chamadas na AST fonte. O contrato vigente usa apenas `CollectionType<T>`, chamadas navegadas `.`/`?.` classificadas pelo resolvedor e o curinga `[*]`/`?.[*]`.
 
+> A ADR 0017 supersede neste registro a restricao anterior de `root` a grau integral positivo. Potencia e raiz agora aceitam todo resultado decimal real e definido, com classificacao racional estatica ou Checagem Diferida.
+
 ## Escopo da Etapa 4
 
 - O `SemanticResolver` e responsavel por decidir o significado semantico da expressao; etapas posteriores executam esse significado.
@@ -291,7 +293,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 
 - `Checagem Diferida` existe apenas para pre-condicoes de valor runtime em constructs ja tipados.
 - Checagens diferidas nao podem representar escolha de tipo, overload runtime ou navegacao sobre tipo desconhecido.
-- Exemplos validos: fatorial integral nao negativo, grau de `root` integral positivo, bounds de subscript, tamanho minimo de desestruturacao de colecao dinamica e limites de materializacao.
+- Exemplos validos: fatorial integral nao negativo, dominio real/definido de potencia e raiz, bounds de subscript, tamanho minimo de desestruturacao de colecao dinamica e limites de materializacao.
 - O `ExecutionPlanBuilder` consome checagens diferidas sem redescobrir regras semanticas.
 - Com `strict mode` removido, nao ha politica de rejeicao especial de checagens diferidas por modo estrito.
 
@@ -312,9 +314,10 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Literais inteiros pequenos podem ser preservados internamente como `long`/`BigInteger` para AST/folding.
 - `root` exige operandos `NUMBER`.
 - `root` exige operandos `RuntimeNullability.NEVER_NULL`.
-- O grau de `root` continua tendo tipo publico `NUMBER`; integralidade positiva e restricao de valor do operador, nao tipo publico separado.
-- Grau de `root` deve ser integral positivo quando estaticamente conhecido.
-- Grau dinamico de `root` gera checagem diferida de valor integral positivo.
+- O grau de `root` continua tendo tipo publico `NUMBER`; pertencer ao Dominio Numerico Real e restricao de valor do operador, nao tipo publico separado.
+- Grau de `root` pode ser integral, fracionario, positivo ou negativo; grau zero e indefinido.
+- Base ou radicando negativo usa a fracao decimal exata reduzida para classificar resultado real, complexo e sinal.
+- Violacao estatica do dominio de potencia/raiz e erro semantico; valor dinamico gera Checagem Diferida.
 - `x!` exige `NUMBER` com restricao de valor integral nao negativo.
 - `x!` exige operando `RuntimeNullability.NEVER_NULL`.
 - Fatorial constante negativa/fracionaria e erro semantico.
@@ -332,11 +335,11 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 
 - A Etapa 4 deve calcular fatos numericos minimos por no numerico quando forem relevantes para validacao semantica.
 - Fatos numericos nao mudam o tipo publico `NUMBER`.
-- Fatos iniciais recomendados: `INTEGRAL_KNOWN`, `FRACTIONAL_KNOWN` e `UNKNOWN_NUMERIC_VALUE_SHAPE`.
+- Fatos iniciais incluem forma integral/fracionaria/desconhecida e fracao decimal exata reduzida quando sua paridade for relevante ao dominio real.
 - Literal decimal inteiro recebe `INTEGRAL_KNOWN`.
 - Literal decimal fracionario recebe `FRACTIONAL_KNOWN` quando a fracao e evidente na propria literal.
 - Simbolos, funcoes e operacoes dinamicas recebem `UNKNOWN_NUMERIC_VALUE_SHAPE`, salvo prova conservadora simples sem folding complexo.
-- `root` e fatorial usam fatos numericos para aceitar constantes integrais positivas, rejeitar constantes fracionarias/negativas e registrar checagens diferidas quando o formato de valor e desconhecido.
+- Potencia e `root` usam fatos numericos para classificar constantes reais, complexas ou indefinidas e registrar checagens diferidas quando o valor e desconhecido; fatorial continua exigindo integral nao negativo dentro do limite.
 - A Etapa 4 nao precisa categorizar toda operacao numerica como `DECIMAL`, porque toda execucao numerica planejada e decimal.
 - O campo do modelo pode se chamar `numericFacts` em vez de `numericKinds`.
 
@@ -538,7 +541,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Escalares e containers compostos apenas por escalares ou containers exponiveis podem ser exponiveis.
 - Resultado final `Collection` ou `Map` e semanticamente valido quando e `NEVER_NULL` e publicamente exponivel.
 - Resultado final `Collection<T>` publicamente exponivel deve ser marcado para materializacao na borda publica; a API nao deve expor `Iterable` Java cru.
-- Etapa 6 aplica `Limite de Materializacao` em runtime para colecoes materializadas na borda.
+- Etapa 5 aplica `Limite de Materializacao` em toda Materializacao Publica; Etapa 6 aplica o limite nas materializacoes introduzidas por navegacao e operacoes de colecao.
 - Resultado final `Map<V>` publicamente exponivel deve ser materializado como mapa imutavel com chaves `String`.
 - Conversao de borda de mapas e recursiva sobre valores; chave null e valor null nao sao permitidos.
 - `Limite de Materializacao` deve contar entradas de mapa materializadas e elementos de colecao.
@@ -672,7 +675,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - `maxMaterializedSize` limita literal de colecao, resultados materializados de operacoes de colecao, entradas de mapa materializado e materializacao de colecao na borda publica.
 - `maxMaterializedSize` pertence ao ambiente e afeta aceitacao/execucao, sem ser serializado no identificador de instancia.
 - Filtros, `map`, `values`, wildcard e operacoes com tamanho runtime carregam metadata de materializacao.
-- Etapa 6 aplica limites em runtime para materializacoes dinamicas.
+- Etapa 5 aplica limites em resultados dinamicos de funcoes e na Materializacao Publica; Etapa 6 aplica limites nas materializacoes dinamicas introduzidas por navegacao e operacoes de colecao.
 - Grandes colecoes externas nao devem ser rejeitadas semanticamente apenas por tamanho.
 
 ## Compilacao, Views e Runtime

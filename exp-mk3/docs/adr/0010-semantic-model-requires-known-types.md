@@ -14,4 +14,4 @@ Accepted expressions must resolve to known semantic types at compilation time. M
 
 ## Consequences
 
-The semantic resolver no longer produces `UnknownType` in a successful `Modelo Semantico`. Deferred checks are limited to runtime value preconditions for already-typed constructs, such as factorial bounds, root degree constraints, subscript bounds, receiver null checks, and materialization limits. Strict mode no longer exists to reject residual unknown types unless a later decision gives it a different purpose.
+The semantic resolver no longer produces `UnknownType` in a successful `Modelo Semantico`. Deferred checks are limited to runtime value preconditions for already-typed constructs, such as factorial bounds, numeric-domain constraints, subscript bounds, and materialization limits. Receiver nullability is resolved semantically: an unsafe nullable receiver is rejected and safe navigation handles null through its evaluation policy rather than a deferred check. Strict mode no longer exists to reject residual unknown types unless a later decision gives it a different purpose.

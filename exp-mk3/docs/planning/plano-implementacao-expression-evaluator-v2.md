@@ -1,6 +1,6 @@
 # Plano de Implementação — `expression-evaluator` v2
 
-Plano de execução do módulo descrito na estratégia v2, dividido em etapas incrementais. O sequenciamento segue três princípios: (1) obter um *walking skeleton* de ponta a ponta o mais cedo possível, com semântica correta antes de qualquer otimização; (2) tratar a gramática (`ExpressionEvaluator.g4`) como contrato congelado desde a Etapa 1 — qualquer mudança nela é evento de exceção; (3) desempenho como requisito testável contínuo, com benchmarks JMH criados junto com o runtime mínimo (Etapa 5) e usados como gate de regressão a partir daí, não como fase final.
+Plano de execução do módulo descrito na estratégia v2, dividido em etapas incrementais. O sequenciamento segue três princípios: (1) obter um *walking skeleton* de ponta a ponta o mais cedo possível, com semântica correta antes de qualquer otimização; (2) tratar a gramática (`ExpressionEvaluator.g4`) como contrato congelado desde a Etapa 1 — qualquer mudança nela é evento de exceção; (3) desempenho como requisito testável contínuo, com baseline JMH reproduzível criada junto com o runtime mínimo (Etapa 5) e comparações/gates definidos nas etapas de otimização a partir da variabilidade medida, não como fase final.
 
 Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As referências entre parênteses (ex.: §12) apontam para as seções do documento de estratégia.
 
@@ -26,9 +26,9 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 - Estrutura de módulos (sugestão: módulo único com pacotes `parser`, `ast`, `semantics`, `types`, `env`, `plan`, `runtime`, `cache`, `audit`, `api`; separar em módulos Maven/Gradle apenas se o Pratt da fase 2 exigir isolar a dependência do ANTLR).
 - Plugin ANTLR integrado ao build gerando lexer/parser a partir do `.g4` versionado.
 - CI com: testes unitários, testes de propriedade (jqwik ou similar), harness JMH executável localmente e perfil de alocação (JFR/async-profiler) preparado como job opcional.
-- **Corpus de expressões**: repositório de casos reais (v1) + casos sintéticos por feature, em formato dado (arquivo por caso: fonte, ambiente, entradas, resultado esperado). Este corpus alimenta testes de todas as etapas seguintes e, depois, os testes diferenciais (§21).
+- **Corpus de expressões**: repositório de casos sintéticos por feature e dos casos reais v1 disponíveis, em formato dado (arquivo por caso: fonte, ambiente, entradas, resultado esperado). O corpus alimenta testes de todas as etapas seguintes; ingestão real continua incremental e sua completude é gate dos testes diferenciais da Etapa 11, não de M1.
 
-**Critérios de aceite:** build reprodutível; `.g4` compila sem warnings do ANTLR; corpus inicial com ≥ 100 expressões cobrindo cada construção da gramática; pipeline de CI verde.
+**Critérios de aceite:** build reprodutível; `.g4` compila sem warnings do ANTLR; corpus sintético inicial com ≥ 100 expressões cobrindo cada construção da gramática e todos os casos reais então disponíveis incorporados; pipeline de CI verde.
 
 ---
 
@@ -105,7 +105,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 - `SemanticResolver` produzindo `SemanticResolutionSuccess` ou `SemanticResolutionFailure`; o `SemanticModel` só existe em sucesso e inclui AST, `resolvedTypes`, bindings de símbolos/funções/navegação/operações de coleção, fatos numéricos, nulidade de runtime, formas conhecidas, valores semânticos preparados, checagens diferidas, layout de frame e warnings.
 - Inferência contextual local para literais de coleção vazios, condicionais, `??`, funções e operações de coleção, sem criar símbolos fonte implícitos e sem permitir tipo desconhecido em sucesso.
 - Nulidade estrita: `?.` produz `MAY_BE_NULL`; `??` descarrega nulidade; resultado final, atribuições, operadores, funções, predicados e navegação não segura exigem `NEVER_NULL`.
-- Checagens contextuais: compatibilidade de tipos por operador; `ObjectType` apenas como intermediário navegável/passável para função; regex com lado direito literal e `Pattern` pré-compilado; `root` e fatorial com fatos numéricos e checagens diferidas; programa vazio como erro semântico claro.
+- Checagens contextuais: compatibilidade de tipos por operador; `ObjectType` apenas como intermediário navegável/passável para função; regex com lado direito literal e `Pattern` pré-compilado; potência/`root` no domínio real e fatorial com fatos numéricos e checagens diferidas; programa vazio como erro semântico claro.
 - Resolução de símbolos e **layout de frame** (§7): índice estável por símbolo usado, slots de `@` por profundidade simultânea máxima, resolução de destructuring para slots, política de sombreamento externo→interno (permitir com warning).
 - Resolução completa de navegação, filtros, lambdas e operações de coleção; Etapa 6 apenas executa os bindings.
 - Diagnósticos semânticos didáticos, incluindo família específica para `MAY_BE_NULL` escapando para contexto que exige `NEVER_NULL`.
@@ -118,16 +118,20 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 
 ## Etapa 5 — Runtime mínimo de ponta a ponta + API pública (M1)
 
-**Objetivo:** fechar o ciclo `compile → plan → compute` com **semântica correta e simples** — nós executáveis genéricos, modo `DECIMAL` apenas, zero otimizações. Este é o baseline funcional e de desempenho contra o qual as etapas 7–9 serão medidas.
+**Objetivo:** fechar o ciclo `compile → plan → view → compute` com **semântica correta e simples** — nós executáveis genéricos, domínio decimal real, zero otimizações. Este é o baseline funcional e de desempenho contra o qual as etapas 7–9 serão medidas. O detalhamento normativo está em `docs/planning/etapa-5/` e no ADR 0017.
 
 **Entregas**
-- `ExecutionPlanBuilder` ingênuo: AST semântica → árvore de `ExecutableNode` genéricos (um `ExecutableBinaryOp` com switch é aceitável **aqui e só aqui**), `ExecutionPlan` com a forma da §10 (assignments, `resultExpression` opcional, defaults, `ExternalBindingPlan[]` ordenado, `frameSize`, `maxCurrentItemDepth`).
-- `ExecutionScope` (§13): `Object[] frame` único, sentinela `UNBOUND ≠ null`, preenchimento único no início do compute (defaults → overrides via array de bindings, coerção uma vez por valor), `currDate/currTime/currDateTime` derivados de um único `Clock.instant()` por execução.
-- Semântica completa dos operadores escalares: aritmética `DECIMAL`, comparações, `and`/`or` com curto-circuito, `nand/nor/xor/xnor` (ambos os lados), `??` variádico preguiçoso, `between` ternário com curto-circuito, `in`/`not in` (avaliação linear por ora), regex com `Pattern` do binding, `%` e `!` pós-fixados, `^` associativo à direita com `2^-3`, `root`, concatenação, condicionais (as duas formas → mesmo `ExecutableConditional` linear), literais de coleção, chamadas de função via handle do catálogo, atribuições em ordem + destructuring.
-- API pública (§2): `ExpressionCompiler.compile(source, env)` → `CompiledExpression`; visões `asMath()`/`asLogical()`/`asAssignments()` como fachadas finas com as validações semânticas de borda; conversão do resultado só na borda (§14); nenhuma exceção como controle de fluxo no caminho quente; erros de runtime com `SourceSpan`.
-- **Benchmarks JMH baseline** criados agora: `a + b * 2` em `DECIMAL`, expressão lógica típica, compilação fria. Registrar números — são a referência das etapas 7–9.
+- **Gate de estabilização da Etapa 4:** antes do planner, completar nulidade estrita, bindings, fatos numéricos, Checagens Diferidas, Layout de Frame canônico e arquivos apenas com atribuições. O planner não compensa metadata ausente.
+- `ExecutionPlanBuilder` sem otimizações: `SemanticModel` de sucesso → árvore de `ExecutableNode` genéricos com `NodeId`/`SourceSpan`; plano sem retenção de parse tree, AST, modelo, fonte ou ambiente inteiro. A mesma pipeline permite omitir internamente transformações futuras para gerar o oráculo de equivalência, sem flag pública ou runtime duplicado.
+- `ExecutionScope`: um `Object[] frame` isolado por chamada, template de defaults, sentinela `UNBOUND ≠ null`, validação determinística de todos os overrides antes de efeitos e coerção única por valor. Símbolos declarados mas não usados são validados sem receber slot.
+- `RuntimeServices` interno separado do plano e da identidade do ambiente; valores temporais correntes usam um único `Clock.instant()` truncado para segundos quando ao menos um deles for necessário.
+- Semântica completa dos operadores escalares com avaliação eager esquerda→direita e políticas lazy explícitas. Potência e raiz aceitam todo resultado decimal real e definido, usam `big-math` em todos os caminhos e consomem fatos/Checagens Diferidas do resolver; complexos e operações indefinidas produzem diagnósticos distintos.
+- Modelo público comum de `ExpressionDiagnostic`; `ExpressionCompilationResult` orientado a sucesso/falha, `compileOrThrow` auxiliar e `ExpressionExecutionException` para a primeira falha real de execução.
+- `CompiledExpression` sem `compute()` direto e com visões `asResult()`/`asMath()`/`asLogical()`/`asAssignments()` sobre um único plano. A visão de atribuições não avalia a expressão final opcional e devolve mapa imutável em ordem de criação dos símbolos.
+- Materialização pública tipada, recursiva, imutável, sem `ObjectType`/null e limitada por `maxMaterializedSize`.
+- **Benchmarks JMH baseline:** compute aritmético `a + b * 2`, compute lógico, compilação completa sem cache e materialização pública, com `ns/op`/`B/op` registrados. A Etapa 5 caracteriza a baseline sem impor limiar de aprovação.
 
-**Critérios de aceite:** corpus completo (exceto navegação/filtros, Etapa 6) executa com resultados corretos; testes de curto-circuito provando não-avaliação (funções com contador de efeitos); visões validam/rejeitam corretamente; baseline JMH registrado no repositório.
+**Critérios de aceite:** gate normativo da Etapa 4 atendido; corpus M1 executa corretamente; testes de ordem/curto-circuito provam avaliação e não avaliação com funções de efeito; propriedades cobrem domínio real; visões validam/rejeitam e materializam corretamente; plano compartilhado usa escopos isolados; suíte existente compatível permanece verde; baseline JMH reproduzível registrada. A ausência atual de casos reais v1 não bloqueia M1.
 
 **Depende de:** Etapa 4.
 
@@ -138,7 +142,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 **Objetivo:** completar a linguagem — a parte com mais superfície de casos de borda (§15).
 
 **Entregas**
-- `ExecutablePropertyChain`: com metadados Java, acessores resolvidos em compilação (nesta etapa pode ser `MethodHandle` adaptado; `LambdaMetafactory`/`VarHandle` na Etapa 8); sem metadados, resolução reflexiva com memoização simples por call-site (o inline cache mono→bi→megamórfico completo também fica para a Etapa 8).
+- `ExecutablePropertyChain`: consome bindings e metadados Java resolvidos na Etapa 4; acessores podem usar `MethodHandle` adaptado nesta etapa (`LambdaMetafactory`/`VarHandle` ficam para a Etapa 8). Tipo ou membro desconhecido não tem fallback reflexivo no runtime.
 - `?.` para propriedades, métodos e todas as formas de subscript, com a semântica exata da §3.3/§15: protege **apenas** receptor `null`; erros de tipo/índice/chave/predicado continuam diagnósticos normais.
 - Subscripts completos: `[i]` com índice negativo a partir do fim, `[a:b]`/`[a:]`/`[:b]`, `["key"]`, o único curinga `[*]` e `[?(...)]`; todas as formas admitem o prefixo seguro `?.`.
 - Filtros e lambdas: predicado é `ExecutableNode` comum; `@` como slot de frame com disciplina save/restore para aninhamento; enforcement de `maxCurrentItemDepth`.
@@ -152,18 +156,18 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 
 ## Etapa 7 — Otimizações de compilação
 
-**Objetivo:** as transformações da §11, sobre a AST semântica, no `ExecutionPlanBuilder`. A partir daqui vale a regra: **todo plano otimizado é validado por equivalência contra o plano ingênuo da Etapa 5**, que permanece disponível atrás de flag.
+**Objetivo:** aplicar transformações opcionais entre a forma sem otimizações e o plano executado. A partir daqui vale a regra: **todo plano otimizado é validado por equivalência contra a forma sem otimizações da Etapa 5**, gerada pela mesma pipeline e selecionável apenas internamente.
 
 **Entregas, na ordem interna sugerida**
 1. Constant folding completo (binários, unários, postfix, between constante, `??` com esquerda constante não-nula respeitando efeitos, funções `foldable`, coleções constantes, condicionais com condição constante, prefixos constantes de navegação). Registrar `foldedVariableReads` no plano desde já (pré-requisito da auditoria, Etapa 10).
-2. Reescritas/strength reduction: `x% → x*0.01` (constante compartilhada, cadeias compostas), `root → ^(1/n)` com nó exato para raízes inteiras em `DECIMAL`, `x^2 → x*x`, `x^1/x^0` (cuidado com `0^0`), `x*1`/`x+0`/`x*0` só com operando puro, `not not x → x`.
+2. Reescritas/strength reduction somente com prova de equivalência em valor, escala, arredondamento, domínio, falha, ordem e efeitos. `not not x → x` é candidato simples; reescritas de `%`, potência, raiz e identidades aritméticas não são presumidas válidas sob `MathContext` e ADR 0017.
 3. Elisão de `as*` quando o tipo já foi provado (§9) — as asserções redundantes viram no-ops.
 4. `in` com lado direito constante → `HashSet` ou array ordenado + busca binária, por tamanho.
 5. CSE sobre subexpressões puras (slots internos sintéticos no frame).
 6. Eliminação de atribuições mortas (com warning; preservadas em `asAssignments()`).
 7. Reordenação segura de curto-circuito (nunca operandos com efeitos).
 
-**Critérios de aceite:** teste de propriedade "plano otimizado ≡ plano ingênuo" (entradas aleatórias, corpus inteiro, incluindo funções com efeitos para provar que folding/reordenação os respeita); ganho mensurável no JMH sobre o baseline da Etapa 5.
+**Critérios de aceite:** teste de propriedade "plano otimizado ≡ forma sem otimizações" (entradas aleatórias, corpus inteiro, incluindo funções com efeitos, falhas, escala e domínio real); comparação JMH por benchmark contra a baseline da Etapa 5, com limiar definido a partir da variabilidade observada e exceção somente quando documentada.
 
 **Depende de:** Etapa 6 (folding de navegação precisa dela).
 
@@ -175,12 +179,12 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 
 **Entregas**
 - Substituição dos nós genéricos por famílias especializadas operador × tipo (`AddDecimal`, `CompareStringEQ`, `ConcatStrings2/N` com capacidade estimada, `FactorialPostfix`, `NullCoalesceN`, `Between` especializado, etc.), guiadas por `resolvedTypes`, fatos numéricos e nulidade.
-- Otimizações decimais da §12: cache de constantes pequenas, evitar `stripTrailingZeros`/`setScale` intermediários, reduzir boxing/alocação onde isso não mudar o contrato público.
+- Otimizações decimais da §12: cache de constantes pequenas, evitar `stripTrailingZeros`/`setScale` intermediários, reduzir boxing/alocação onde isso não mudar valor, escala, arredondamento, domínio ou falha. Potência e raiz continuam usando `big-math`; substituí-lo exige decisão explícita posterior com equivalência e medição.
 - Invocação de funções sem reflexão: `LambdaMetafactory` para aridades 1–4, `invokeExact` com handle pré-adaptado no resto; pré-alocação de arrays de varargs por call-site quando justificado por perfil.
 - Navegação: acessores via `LambdaMetafactory`/`VarHandle` com metadados registrados; `?.` como checagem de null, sem try/catch e sem fallback reflexivo por tipo desconhecido.
 - Pool opcional de `ExecutionScope` por thread — **implementar somente se o perfil de alocação justificar** (§13).
 
-**Critérios de aceite (gates JMH da §21):** expressões decimais comuns com ganho mensurável sobre o baseline da Etapa 5; alocação decimal limitada aos valores necessários de resultado/intermediários inevitáveis; navegação com metadados ≈ getter direto + indireção constante; equivalência com o plano ingênuo mantida.
+**Critérios de aceite (gates JMH da §21):** expressões decimais comuns com ganho mensurável sobre o baseline da Etapa 5; alocação decimal limitada aos valores necessários de resultado/intermediários inevitáveis; navegação com metadados ≈ getter direto + indireção constante; equivalência com a forma sem otimizações mantida.
 
 **Depende de:** Etapa 7.
 
@@ -191,12 +195,13 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 **Objetivo:** amortização da compilação (§17) e fechamento do marco de desempenho.
 
 **Entregas**
-- Cache Caffeine com chave `(source, environmentId)` — sem `resultType` e com compartilhamento limitado à reutilização da mesma instância de ambiente; valor `CompiledExpression` (plano + metadados mínimos de visão/auditoria; AST e parse tree não retidas — verificar por teste de heap).
+- Cache Caffeine com chave `(source, environmentId)` — sem tipo de visão e com compartilhamento limitado à reutilização da mesma instância de ambiente; valor compilado compartilhado por `asResult()`/`asMath()`/`asLogical()`/`asAssignments()` (plano + warnings/metadados mínimos de visão/auditoria; AST, `SemanticModel`, fonte duplicada e parse tree não retidos no valor — verificar por teste de heap).
 - Engine default singleton + engines isolados; `CacheConfig` (tamanho máximo, TTL opcional, weigher por número de nós).
+- `RuntimeServices`, incluindo `Clock`, pertence ao engine/expressão compilada e não à identidade do ambiente nem ao Plano Imutável.
 - Contador de execuções por entrada (insumo do Tier 1 futuro).
-- Medição separada de compilação fria × quente no JMH; warm-up de ATN da Etapa 1 revisitado com o corpus final.
+- Medição separada de compilação sem cache × hit de cache no JMH; custo de startup/ATN permanece benchmark separado e é revisitado com o corpus final.
 
-**Critérios de aceite:** mesmo texto usado como `asMath()` e `asLogical()` comprovadamente compartilha um único plano; hit de cache na ordem do custo de um lookup + validação de visão; ausência de retenção de AST/parse tree confirmada.
+**Critérios de aceite:** todas as visões compatíveis criadas do mesmo `CompiledExpression` compartilham um único plano e uma visão incompatível falha sem recompilar; hit de cache na ordem do custo de um lookup + validação de visão; ausência de retenção de parse tree/AST/`SemanticModel` e fonte duplicada no valor confirmada.
 
 **Depende de:** Etapa 5 (funcional) e 8 (números finais).
 
@@ -207,7 +212,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 **Objetivo:** §18 — explicabilidade sem tocar o caminho quente.
 
 **Entregas**
-- Plano instrumentado construído lazy na primeira chamada de `computeWithAudit`, cacheado ao lado do plano normal; decoradores sobre `ExecutableNode` emitindo eventos (leituras, valores dinâmicos, chamadas, atribuições) em ring buffer pré-alocado com `maxAuditEvents`.
+- Plano instrumentado construído lazy na primeira chamada de auditoria de uma Visão de Expressão, cacheado ao lado do plano normal; decoradores sobre `ExecutableNode` usam `NodeId`/`SourceSpan` para emitir eventos (leituras, valores dinâmicos, chamadas, atribuições) em ring buffer pré-alocado com `maxAuditEvents`.
 - Integração dos `foldedVariableReads` (Etapa 7) para explicar valores dobrados.
 - `AuditResult<T>` com resultado + `ExpressionAuditTrace`.
 
@@ -237,7 +242,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 **Objetivo:** fechar §19 e §21 como estado permanente, não como esforço pontual.
 
 **Entregas**
-- Revisão de exaustividade dos diagnósticos: todo erro com `SourceSpan`, código estável e sugestão quando aplicável; erros semânticos sempre acumulados.
+- Revisão de exaustividade dos diagnósticos: toda falha originada na fonte com `SourceSpan`, todo diagnóstico com código estável e sugestão quando aplicável; falhas puramente externas podem não ter trecho primário; erros semânticos sempre acumulados.
 - Guard-rails multi-tenant sob teste de estresse: `maxCurrentItemDepth`, `maxMaterializedSize`, `maxFactorialInput`, expressões patológicas (aninhamento profundo, coleções enormes, regex custosas) sem degradar o processo.
 - Testes de concorrência: plano compartilhado entre threads com escopos isolados; pool de parser sob contenção.
 - Consolidação dos gates de CI: JMH com limiares, perfil de alocação como gate, property-based e diferenciais no pipeline.
@@ -254,7 +259,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 Três trilhas já previstas na estratégia, cada uma ativável por demanda medida:
 
 1. **Parser Pratt artesanal** (§3.2): tabela de binding powers derivada da cadeia única de precedência; o `.g4` permanece como especificação executável com testes diferenciais ANTLR × Pratt sobre o corpus antes de qualquer troca no caminho quente.
-2. **Tier 1 de compilação** (§10): promoção dos planos mais quentes (pelo contador da Etapa 9) para lambda composta via `LambdaMetafactory`/`MethodHandle` ou bytecode com `defineHiddenClass`; Tier 0 permanece default e fallback.
+2. **Tier 1 de compilação** (§10): promoção dos planos mais quentes (pelo contador da Etapa 9) para lambda composta via `LambdaMetafactory`/`MethodHandle` ou bytecode com `defineHiddenClass`; Tier 0 e a forma interna sem otimizações permanecem fallback/oráculo, e todos preservam ADR 0017/`big-math`.
 3. **Fusão de pipelines de coleção** (§11.6): `values.map(@ -> f).sum()` em loop único, validada por equivalência contra a forma não fundida.
 
 ---
@@ -274,8 +279,8 @@ Paralelismos úteis: E3 corre em paralelo com E1–E2; os built-ins do catálogo
 
 ## Riscos principais e mitigações embutidas no plano
 
-- **Otimização quebrar semântica** → plano ingênuo da E5 mantido atrás de flag como oráculo permanente; equivalência por property-based em E7/E8.
-- **Metas de desempenho descobertas tarde** → JMH baseline nasce na E5 e vira gate; nada de "fase de otimização" descolada da medição.
+- **Otimização quebrar semântica** → forma sem otimizações da E5 gerada pela mesma pipeline e selecionável apenas internamente; equivalência de valor, escala, falha, ordem e efeitos por property-based em E7/E8.
+- **Metas de desempenho descobertas tarde** → JMH baseline reproduzível nasce na E5; E7-E9 definem comparação/gates por benchmark depois de medir variabilidade, sem "fase de otimização" descolada da medição.
 - **Explosão de casos em navegação/`?.`** → E6 isolada como a etapa de maior superfície de teste, antes de qualquer especialização, para que E8 otimize comportamento já provado.
 - **Cache reter memória (AST/parse tree)** → critério de aceite explícito de não-retenção nas E2 e E9.
-- **Migração v1 subestimada** → corpus real v1 entra na E0 e os diferenciais v1×v2 são critério de aceite da E11, não tarefa de rodapé.
+- **Migração v1 subestimada** → todo corpus real disponível é executado desde cedo, mas sua ausência atual não bloqueia M1; ingestão e diferenciais completos são critério de aceite da E11, não tarefa de rodapé.

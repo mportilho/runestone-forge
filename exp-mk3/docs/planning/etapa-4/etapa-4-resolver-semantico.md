@@ -1,6 +1,6 @@
 # Plano Detalhado - Etapa 3.5 e Etapa 4 - Resolver Semantico
 
-Este plano detalha o saneamento necessario antes do resolver semantico e a implementacao da Etapa 4 do `exp-mk3`. Ele consolida as decisoes registradas em `exp-mk3/docs/planning/etapa-4/decisoes-etapa-4-resolver-semantico.md` e nos ADRs 0007-0014.
+Este plano detalha o saneamento necessario antes do resolver semantico e a implementacao da Etapa 4 do `exp-mk3`. Ele consolida as decisoes registradas em `exp-mk3/docs/planning/etapa-4/decisoes-etapa-4-resolver-semantico.md`, nos ADRs 0007-0014 e na revisao numerica do ADR 0017.
 
 ## Objetivo
 
@@ -14,6 +14,7 @@ O resolver deve decidir tipos, simbolos, funcoes, navegacao, operacoes de coleca
 - Literais inteiros sao apenas decimais.
 - O `Ambiente de Expressao` nao expoe `strictMode`.
 - A v2 nao expoe `NumericMode` nem modo `FAST`; a semantica numerica e decimal.
+- O dominio numerico aceita operacoes definidas com resultado real; classificacao estatica ou diferida de potencia e raiz segue o ADR 0017.
 - O modelo aceito exige tipos conhecidos.
 - `UnknownType`, `NullType` e placeholders de inferencia nao aparecem em sucesso.
 - Todo `Simbolo Externo` exige default nao nulo e politica de sobrescrita.
@@ -100,7 +101,7 @@ Campos esperados:
 - AST imutavel original.
 - `resolvedTypes` por `NodeId`.
 - `runtimeNullability` por `NodeId`/binding valorado.
-- `numericFacts` por no numerico relevante.
+- `numericFacts` por no numerico relevante, incluindo forma integral e paridade racional exata quando necessaria ao dominio real.
 - `collectionShapes` por no/container relevante.
 - `symbolBindings` por referencia/target.
 - `functionBindings` por chamada.
@@ -117,7 +118,7 @@ Invariantes de sucesso:
 - Todo link de navegacao valorado tem tipo resultante ou binding resolvido.
 - Nenhum `Tipo Invalido`, placeholder de inferencia ou tipo desconhecido aparece no modelo.
 - Bindings exigidos por nos aceitos existem.
-- Tipos de resultado/assignments publicos sao publicamente exponiveis.
+- Tipo de resultado final e publicamente exponivel; tipos de simbolos internos carregam metadata de exposicao para que uma Visao de Atribuicoes incompativel seja rejeitada depois, sem invalidar seu uso interno.
 
 ## Regras Semanticas Principais
 
@@ -156,9 +157,11 @@ Invariantes de sucesso:
 
 - Tipo publico numerico e `NUMBER`.
 - Semantica numerica e decimal.
-- `Fato Numerico` substitui categoria operacional: `INTEGRAL_KNOWN`, `FRACTIONAL_KNOWN`, `UNKNOWN_NUMERIC_VALUE_SHAPE`.
+- `Fato Numerico` registra forma integral/fracionaria e, quando necessario, a fracao decimal exata reduzida para classificar dominio e sinal.
 - Fatorial exige `NUMBER`, `NEVER_NULL`, integral nao negativo e `<= maxFactorialInput` quando estatico; caso dinamico gera checagem diferida.
-- `root` exige `NUMBER`, `NEVER_NULL` e grau integral positivo quando estatico; caso dinamico gera checagem diferida.
+- Potencia e `root` exigem operandos `NUMBER`, `NEVER_NULL` e resultado matematicamente definido no Dominio Numerico Real.
+- Grau de `root` pode ser integral, fracionario, positivo ou negativo; grau zero e erro estatico ou Checagem Diferida conforme o valor conhecido.
+- Base/radicando negativo usa a fracao exata reduzida para decidir se o resultado e real e qual e seu sinal; casos dinamicos geram Checagem Diferida.
 - `%` pos-fixado nao e reescrito na Etapa 4.
 
 ### Operadores
