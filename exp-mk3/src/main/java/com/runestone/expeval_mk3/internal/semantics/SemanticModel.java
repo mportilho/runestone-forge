@@ -232,9 +232,7 @@ public final class SemanticModel {
                     switch (argument) {
                         case ExpressionCallArgument expressionArgument ->
                                 validateCompleteExpression(expressionArgument.expression(), visited);
-                        case LambdaCallArgument ignored -> throw new IllegalStateException(
-                                "successful semantic model contains an unsupported lambda argument"
-                                        + " for a global function call " + functionCall.id());
+                        case LambdaCallArgument ignored -> reject(functionCall, "an unsupported lambda argument");
                     }
                 });
             }
@@ -322,5 +320,10 @@ public final class SemanticModel {
             throw new IllegalStateException("successful semantic model is missing " + description + " for "
                     + node.getClass().getSimpleName() + " " + node.id() + " at " + node.sourceSpan());
         }
+    }
+
+    private static void reject(AstNode node, String description) {
+        throw new IllegalStateException("successful semantic model contains " + description + " for "
+                + node.getClass().getSimpleName() + " " + node.id() + " at " + node.sourceSpan());
     }
 }

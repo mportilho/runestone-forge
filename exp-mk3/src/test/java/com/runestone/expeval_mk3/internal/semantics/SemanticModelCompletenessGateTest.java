@@ -8,9 +8,14 @@ import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.ast.AssignmentNode;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperationNode;
+import com.runestone.expeval_mk3.internal.ast.CurrentItemNode;
 import com.runestone.expeval_mk3.internal.ast.ExpressionFileNode;
 import com.runestone.expeval_mk3.internal.ast.ExpressionNode;
+import com.runestone.expeval_mk3.internal.ast.FunctionCallNode;
+import com.runestone.expeval_mk3.internal.ast.FunctionName;
 import com.runestone.expeval_mk3.internal.ast.IdentifierAssignmentTargetNode;
+import com.runestone.expeval_mk3.internal.ast.LambdaCallArgument;
+import com.runestone.expeval_mk3.internal.ast.LambdaNode;
 import com.runestone.expeval_mk3.internal.ast.LiteralNode;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildSuccess;
@@ -180,6 +185,28 @@ class SemanticModelCompletenessGateTest {
     }
 
     @Test
+    void rejectsAModelWhereAGlobalFunctionCallCarriesALambdaArgument() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        SemanticModel model = resolve("sqrt(x)", environment);
+        FunctionCallNode originalCall = (FunctionCallNode) ast("sqrt(x)").resultExpression().orElseThrow();
+        SourceSpan span = new SourceSpan(0, 0, 1, 1);
+        LambdaNode lambda = new LambdaNode(
+                new NodeId(500), span, new CurrentItemNode(new NodeId(501), span), span,
+                new CurrentItemNode(new NodeId(502), span));
+        FunctionCallNode tampered = new FunctionCallNode(
+                originalCall.id(), originalCall.sourceSpan(), new FunctionName("sqrt"),
+                List.of(new LambdaCallArgument(lambda)));
+        ExpressionFileNode tamperedAst = new ExpressionFileNode(
+                model.ast().id(), model.ast().sourceSpan(), model.ast().assignments(), java.util.Optional.of(tampered));
+
+        assertThatThrownBy(() -> rebuild(model, builder -> builder.ast = tamperedAst))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("unsupported lambda argument");
+    }
+
+    @Test
     void rejectsAModelMissingAFunctionBinding() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("x", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
@@ -290,7 +317,7 @@ class SemanticModelCompletenessGateTest {
 
     /** Mutable staging area mirroring {@link SemanticModel}'s constructor arguments for malformed-model tests. */
     private static final class Builder {
-        private final ExpressionFileNode ast;
+        private ExpressionFileNode ast;
         private Map<NodeId, com.runestone.expeval_mk3.api.ExpressionType> resolvedTypes;
         private Map<NodeId, com.runestone.expeval_mk3.api.RuntimeNullability> runtimeNullability;
         private Map<NodeId, Object> preparedValues;
