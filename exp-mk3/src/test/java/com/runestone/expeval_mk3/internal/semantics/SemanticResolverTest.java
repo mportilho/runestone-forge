@@ -102,6 +102,190 @@ class SemanticResolverTest {
     }
 
     @Test
+    void shadowingKeepsExternalAndInternalIdentitiesDistinctWhenTheExternalIsReferenced() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast("x := x + 1; x"), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            SemanticModel model = success.model();
+            assertThat(success.warnings()).singleElement().satisfies(diagnostic ->
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_SYMBOL_SHADOWING.name()));
+            assertThat(model.frameLayout().externalBindings()).extracting(SymbolBinding::name).containsExactly("x");
+            SymbolBinding externalX = model.frameLayout().externalBindings().getFirst();
+            SymbolBinding internalX = model.symbolBindings().values().stream()
+                    .filter(binding -> !binding.external())
+                    .findFirst().orElseThrow();
+            assertThat(externalX.frameSlot()).isEqualTo(0);
+            assertThat(internalX.frameSlot()).isEqualTo(1);
+            assertThat(internalX.name()).isEqualTo("x");
+        });
+    }
+
+    @Test
+    void nestedCurrentItemDepthsInterleaveWithLazilyAllocatedExternalSlots() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("matrix", new CollectionType(new CollectionType(ScalarType.NUMBER)),
+                        List.of(List.of(BigDecimal.ONE)), ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("threshold", ScalarType.NUMBER, BigDecimal.ZERO, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(
+                ast("matrix[?(@.any(@ -> @ > threshold))]"), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            SemanticModel model = success.model();
+            FrameLayout frameLayout = model.frameLayout();
+            assertThat(frameLayout.externalBindings()).extracting(SymbolBinding::name)
+                    .containsExactly("matrix", "threshold");
+            assertThat(frameLayout.externalBindings().get(0).frameSlot()).isZero();
+            assertThat(frameLayout.externalBindings().get(1).frameSlot()).isEqualTo(3);
+            assertThat(frameLayout.frameSize()).isEqualTo(4);
+
+            List<SymbolBinding> currentItemBindings = model.symbolBindings().values().stream()
+                    .filter(binding -> binding.name().startsWith("@"))
+                    .distinct()
+                    .sorted((a, b) -> Integer.compare(a.frameSlot(), b.frameSlot()))
+                    .toList();
+            assertThat(currentItemBindings).extracting(SymbolBinding::frameSlot).containsExactly(1, 2);
+        });
+    }
+
+    @Test
+    void unusedExternalSymbolsConsumeNoFrameSlot() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("used", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("unused", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast("used"), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            FrameLayout frameLayout = success.model().frameLayout();
+            assertThat(frameLayout.externalBindings()).extracting(SymbolBinding::name).containsExactly("used");
+            assertThat(frameLayout.frameSize()).isEqualTo(1);
+        });
+    }
+
+    @Test
+    void addingAnUnusedExternalSymbolDoesNotChangeFrameSizeOrExistingSlots() {
+        ExpressionEnvironment baseline = ExpressionEnvironment.builder()
+                .externalSymbol("used", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        ExpressionEnvironment withExtraDeclaration = ExpressionEnvironment.builder()
+                .externalSymbol("used", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("unused", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        FrameLayout baselineLayout = frameLayoutOf(ast("used"), baseline);
+        FrameLayout extraLayout = frameLayoutOf(ast("used"), withExtraDeclaration);
+
+        assertThat(extraLayout.frameSize()).isEqualTo(baselineLayout.frameSize());
+        assertThat(extraLayout.externalBindings()).extracting(SymbolBinding::frameSlot)
+                .isEqualTo(baselineLayout.externalBindings().stream().map(SymbolBinding::frameSlot).toList());
+    }
+
+    @Test
+    void usedExternalsAreOrderedByFirstSourceReferenceNotDeclarationOrder() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("zeta", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("alpha", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast("alpha + zeta"), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            assertThat(success.model().frameLayout().externalBindings())
+                    .extracting(SymbolBinding::name)
+                    .containsExactly("alpha", "zeta");
+        });
+    }
+
+    @Test
+    void changingEnvironmentDeclarationOrderDoesNotChangeSlots() {
+        ExpressionEnvironment declaredZetaFirst = ExpressionEnvironment.builder()
+                .externalSymbol("zeta", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("alpha", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        ExpressionEnvironment declaredAlphaFirst = ExpressionEnvironment.builder()
+                .externalSymbol("alpha", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("zeta", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        FrameLayout first = frameLayoutOf(ast("alpha + zeta"), declaredZetaFirst);
+        FrameLayout second = frameLayoutOf(ast("alpha + zeta"), declaredAlphaFirst);
+
+        assertThat(first.externalBindings()).extracting(SymbolBinding::name)
+                .isEqualTo(second.externalBindings().stream().map(SymbolBinding::name).toList());
+        assertThat(first.externalBindings()).extracting(SymbolBinding::frameSlot)
+                .isEqualTo(second.externalBindings().stream().map(SymbolBinding::frameSlot).toList());
+    }
+
+    @Test
+    void assignmentOnlyFileResolvesSuccessfullyWithoutAResultExpression() {
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast("x := 1;"), ExpressionEnvironment.standard());
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            assertThat(success.model().ast().resultExpression()).isEmpty();
+            assertThat(success.model().frameLayout().frameSize()).isEqualTo(1);
+        });
+    }
+
+    @Test
+    void reassignmentReusesTheSameInternalSlot() {
+        SemanticResolutionResult result = new SemanticResolver().resolve(
+                ast("x := 1; x := x + 1;"), ExpressionEnvironment.standard());
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            assertThat(success.model().symbolBindings().values())
+                    .extracting(SymbolBinding::frameSlot)
+                    .containsOnly(0);
+        });
+    }
+
+    @Test
+    void destructuringTargetsReceiveIndividualSlotsInTextualOrder() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("values", new CollectionType(ScalarType.NUMBER), List.of(BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(
+                ast("[first, second] := values;"), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            List<SymbolBinding> bindings = success.model().symbolBindings().values().stream()
+                    .filter(binding -> !binding.external())
+                    .sorted((a, b) -> Integer.compare(a.frameSlot(), b.frameSlot()))
+                    .toList();
+            assertThat(bindings).extracting(SymbolBinding::name).containsExactly("first", "second");
+            assertThat(bindings).extracting(SymbolBinding::frameSlot).containsExactly(1, 2);
+        });
+    }
+
+    @Test
+    void completelyEmptyFileFailsWithTheStablePositionedEmptyFileDiagnostic() {
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast(""), ExpressionEnvironment.standard());
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure -> {
+            assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic -> {
+                assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_EMPTY_EXPRESSION.name());
+                assertThat(diagnostic.primarySpan().orElseThrow().offset()).isZero();
+                assertThat(diagnostic.primarySpan().orElseThrow().endOffset()).isZero();
+                assertThat(diagnostic.primarySpan().orElseThrow().line()).isEqualTo(1);
+                assertThat(diagnostic.primarySpan().orElseThrow().column()).isEqualTo(1);
+            });
+        });
+    }
+
+    private static FrameLayout frameLayoutOf(ExpressionFileNode ast, ExpressionEnvironment environment) {
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+        return ((SemanticResolutionSuccess) result).model().frameLayout();
+    }
+
+    @Test
     void bindsNavigatedCollectionOperationsByClosedCatalogIdentity() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol(

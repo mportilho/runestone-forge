@@ -4,7 +4,6 @@ import com.runestone.expeval_mk3.api.CollectionOperationCatalog;
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
-import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.FunctionLookupResult;
 import com.runestone.expeval_mk3.api.JavaTypeDescriptor;
@@ -120,16 +119,20 @@ public final class SemanticResolver {
 
         private ResolutionSession(ExpressionEnvironment environment) {
             this.environment = environment;
-            buildExternalBindings(environment);
         }
 
         private SemanticResolutionResult resolve(ExpressionFileNode ast) {
             for (AssignmentNode assignment : ast.assignments()) {
                 resolveAssignment(assignment);
             }
-            if (ast.resultExpression().isEmpty()) {
-                diagnostic(DiagnosticCode.SEMANTIC_EMPTY_EXPRESSION, "Expression file has no result expression", ast.sourceSpan());
-            } else {
+            if (ast.assignments().isEmpty() && ast.resultExpression().isEmpty()) {
+                // ast.sourceSpan() falls back to the EOF token position, offset 0/line 1/column 1 for a
+                // literally empty source, matching the decided stable span for this diagnostic.
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_EMPTY_EXPRESSION,
+                        "Expression file has no assignments and no result expression",
+                        ast.sourceSpan());
+            } else if (ast.resultExpression().isPresent()) {
                 ExpressionNode result = ast.resultExpression().orElseThrow();
                 Resolution resolution = resolveExpression(result, null);
                 if (resolution.pending()) {
@@ -255,7 +258,7 @@ public final class SemanticResolver {
                 }
                 return existing;
             }
-            if (existing != null && existing.external()) {
+            if (shadowsExternalSymbol(existing, name)) {
                 warning(
                         DiagnosticCode.SEMANTIC_SYMBOL_SHADOWING,
                         "Internal symbol shadows external symbol '" + name + "'",
@@ -264,6 +267,13 @@ public final class SemanticResolver {
             SymbolBinding binding = SymbolBinding.internal(name, type, nextFrameSlot++, runtimeNullability);
             visibleBindings.put(name, binding);
             return binding;
+        }
+
+        private boolean shadowsExternalSymbol(SymbolBinding existing, String name) {
+            if (existing != null) {
+                return existing.external();
+            }
+            return environment.externalSymbols().contains(name);
         }
 
         private void updateVisibleCollectionShape(String name, ExpressionType type, CollectionShape shape) {
@@ -1520,6 +1530,9 @@ public final class SemanticResolver {
         private Resolution resolveIdentifier(IdentifierNode identifier) {
             SymbolBinding binding = visibleBindings.get(identifier.name());
             if (binding == null) {
+                binding = bindExternalIfDeclared(identifier.name());
+            }
+            if (binding == null) {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL,
                         "Unknown symbol '" + identifier.name() + "'",
@@ -1689,13 +1702,14 @@ public final class SemanticResolver {
             return false;
         }
 
-        private void buildExternalBindings(ExpressionEnvironment environment) {
-            for (ExternalSymbol symbol : environment.externalSymbols().values()) {
+        private SymbolBinding bindExternalIfDeclared(String name) {
+            return environment.externalSymbols().find(name).map(symbol -> {
                 SymbolBinding binding = SymbolBinding.external(symbol, nextFrameSlot++);
                 externalBindings.add(binding);
                 visibleBindings.put(symbol.name(), binding);
                 updateVisibleCollectionShape(symbol.name(), symbol.type(), CollectionShape.unknown());
-            }
+                return binding;
+            }).orElse(null);
         }
     }
 

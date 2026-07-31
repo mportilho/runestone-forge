@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.internal.plan;
 
 import com.runestone.expeval_mk3.api.BoundaryCoercion;
+import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public final class ExecutionPlan {
 
@@ -17,6 +19,7 @@ public final class ExecutionPlan {
     private final List<Consumer<ExecutionScope>> assignments;
     private final List<ExternalBindingPlan> externalBindings;
     private final Map<String, ExternalBindingPlan> bindingsByName;
+    private final Map<String, ExternalSymbol> declaredButUnusedSymbolsByName;
     private final int frameSize;
     private final BoundaryCoercion boundaryCoercion;
     private final ZoneId zoneId;
@@ -25,6 +28,7 @@ public final class ExecutionPlan {
             ExecutableNode resultExpression,
             List<Consumer<ExecutionScope>> assignments,
             List<ExternalBindingPlan> externalBindings,
+            List<ExternalSymbol> declaredButUnusedSymbols,
             int frameSize,
             BoundaryCoercion boundaryCoercion,
             ZoneId zoneId) {
@@ -32,7 +36,9 @@ public final class ExecutionPlan {
         this.assignments = List.copyOf(assignments);
         this.externalBindings = List.copyOf(externalBindings);
         bindingsByName = this.externalBindings.stream()
-                .collect(java.util.stream.Collectors.toUnmodifiableMap(binding -> binding.symbol().name(), binding -> binding));
+                .collect(Collectors.toUnmodifiableMap(binding -> binding.symbol().name(), binding -> binding));
+        declaredButUnusedSymbolsByName = declaredButUnusedSymbols.stream()
+                .collect(Collectors.toUnmodifiableMap(ExternalSymbol::name, symbol -> symbol));
         this.frameSize = frameSize;
         this.boundaryCoercion = Objects.requireNonNull(boundaryCoercion, "boundaryCoercion");
         this.zoneId = Objects.requireNonNull(zoneId, "zoneId");
@@ -47,11 +53,10 @@ public final class ExecutionPlan {
         for (Map.Entry<String, ?> override : overrides.entrySet()) {
             ExternalBindingPlan binding = bindingsByName.get(override.getKey());
             if (binding == null) {
-                throw new IllegalArgumentException("unknown external symbol override: " + override.getKey());
+                validateUnusedSymbolOverride(override.getKey(), override.getValue());
+                continue;
             }
-            if (binding.symbol().overwritePolicy() != ExternalSymbolOverwritePolicy.OVERRIDABLE) {
-                throw new IllegalArgumentException("external symbol '" + override.getKey() + "' is not overridable");
-            }
+            requireOverridable(binding.symbol(), override.getKey());
             scope.write(
                     binding.frameSlot(),
                     binding.symbol().coerceOverride(override.getValue(), boundaryCoercion));
@@ -60,5 +65,20 @@ public final class ExecutionPlan {
             assignment.accept(scope);
         }
         return resultExpression.execute(scope);
+    }
+
+    private void validateUnusedSymbolOverride(String name, Object value) {
+        ExternalSymbol symbol = declaredButUnusedSymbolsByName.get(name);
+        if (symbol == null) {
+            throw new IllegalArgumentException("unknown external symbol override: " + name);
+        }
+        requireOverridable(symbol, name);
+        symbol.coerceOverride(value, boundaryCoercion); // no frame slot to write into: symbol is unused, so only the override is validated
+    }
+
+    private static void requireOverridable(ExternalSymbol symbol, String name) {
+        if (symbol.overwritePolicy() != ExternalSymbolOverwritePolicy.OVERRIDABLE) {
+            throw new IllegalArgumentException("external symbol '" + name + "' is not overridable");
+        }
     }
 }

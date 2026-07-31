@@ -41,6 +41,16 @@ class ExpressionCompilerTest {
     }
 
     @Test
+    void compileOrThrowThrowsExpressionCompilationExceptionForAnAssignmentOnlyFile() {
+        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("x := 1;", ExpressionEnvironment.standard()))
+                .isInstanceOf(ExpressionCompilationException.class)
+                .satisfies(exception -> assertThat(((ExpressionCompilationException) exception).diagnostics())
+                        .singleElement()
+                        .satisfies(diagnostic -> assertThat(diagnostic.code())
+                                .isEqualTo("SEMANTIC_ASSIGNMENTS_ONLY_COMPUTE_NOT_SUPPORTED")));
+    }
+
+    @Test
     void compileDelegatesToCompileOrThrowWithTheSameBehavior() {
         assertThat(ExpressionCompiler.compile("1 + 2", ExpressionEnvironment.standard()).compute())
                 .isEqualTo(new BigDecimal("3"));
@@ -204,6 +214,30 @@ class ExpressionCompilerTest {
         assertThat(decimal(expression.compute())).isEqualByComparingTo(new BigDecimal("16"));
         assertThat(decimal(expression.compute(Map.of("input", new BigDecimal("4")))))
                 .isEqualByComparingTo(new BigDecimal("22"));
+    }
+
+    @Test
+    void overridingADeclaredButUnreferencedExternalSymbolIsAcceptedAndHasNoEffect() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("used", new BigDecimal("1"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("unused", new BigDecimal("1"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        CompiledExpression expression = ExpressionCompiler.compileOrThrow("used + 2", environment);
+
+        assertThat(decimal(expression.compute(Map.of("unused", new BigDecimal("999")))))
+                .isEqualByComparingTo(new BigDecimal("3"));
+    }
+
+    @Test
+    void overridingADeclaredButUnreferencedNonOverridableExternalSymbolStillFails() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("used", new BigDecimal("1"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("unused", new BigDecimal("1"), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        CompiledExpression expression = ExpressionCompiler.compileOrThrow("used + 2", environment);
+
+        assertThatThrownBy(() -> expression.compute(Map.of("unused", new BigDecimal("999"))))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

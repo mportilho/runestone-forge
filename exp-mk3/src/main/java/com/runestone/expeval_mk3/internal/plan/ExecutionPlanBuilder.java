@@ -4,6 +4,7 @@ import ch.obermuhlner.math.big.BigDecimalMath;
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
+import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.internal.ast.AssignmentNode;
 import com.runestone.expeval_mk3.internal.ast.AssignmentTargetNode;
@@ -56,8 +57,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public final class ExecutionPlanBuilder {
 
@@ -69,6 +72,12 @@ public final class ExecutionPlanBuilder {
         List<ExternalBindingPlan> externalBindings = model.frameLayout().externalBindings().stream()
                 .map(binding -> new ExternalBindingPlan(binding.requireExternalSymbol(), binding.frameSlot()))
                 .toList();
+        Set<String> frameResidentNames = model.frameLayout().externalBindings().stream()
+                .map(binding -> binding.requireExternalSymbol().name())
+                .collect(Collectors.toSet());
+        List<ExternalSymbol> declaredButUnusedSymbols = environment.externalSymbols().values().stream()
+                .filter(symbol -> !frameResidentNames.contains(symbol.name()))
+                .toList();
         List<Consumer<ExecutionScope>> assignments = model.ast().assignments().stream()
                 .map(assignment -> buildAssignment(assignment, model, environment))
                 .toList();
@@ -76,6 +85,7 @@ public final class ExecutionPlanBuilder {
                 buildNode(result, model, environment),
                 assignments,
                 externalBindings,
+                declaredButUnusedSymbols,
                 model.frameLayout().frameSize(),
                 environment.boundaryCoercion(),
                 environment.zoneId());
