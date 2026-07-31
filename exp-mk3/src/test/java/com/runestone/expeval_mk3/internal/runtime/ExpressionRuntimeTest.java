@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,7 +30,7 @@ class ExpressionRuntimeTest {
     private static final CollectionType NUMBER_COLLECTION = new CollectionType(ScalarType.NUMBER);
 
     private static ExecutionScope newScope() {
-        return new ExecutionScope(1, ZoneId.of("UTC"));
+        return new ExecutionScope(ExecutionScope.blankFrame(1), ZoneId.of("UTC"), Clock.systemUTC());
     }
 
     @Test

@@ -10,6 +10,7 @@ import com.runestone.expeval_mk3.internal.parser.ParseFailure;
 import com.runestone.expeval_mk3.internal.parser.ParseResult;
 import com.runestone.expeval_mk3.internal.parser.ParseSuccess;
 import com.runestone.expeval_mk3.internal.plan.ExecutionPlanBuilder;
+import com.runestone.expeval_mk3.internal.runtime.RuntimeServices;
 import com.runestone.expeval_mk3.internal.semantics.SemanticModel;
 import com.runestone.expeval_mk3.internal.semantics.SemanticResolutionFailure;
 import com.runestone.expeval_mk3.internal.semantics.SemanticResolutionResult;
@@ -31,8 +32,15 @@ public final class ExpressionCompiler {
     }
 
     public static CompiledExpression compileOrThrow(String source, ExpressionEnvironment environment) {
+        return compileOrThrow(source, environment, RuntimeServices.systemDefault());
+    }
+
+    /** Internal seam letting tests inject a fixed or counting {@link java.time.Clock}. */
+    static CompiledExpression compileOrThrow(
+            String source, ExpressionEnvironment environment, RuntimeServices runtimeServices) {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(environment, "environment");
+        Objects.requireNonNull(runtimeServices, "runtimeServices");
 
         ParseResult parseResult = PARSER.parse(source);
         if (parseResult instanceof ParseFailure failure) {
@@ -56,6 +64,6 @@ public final class ExpressionCompiler {
                     "Expression file has only assignments and no result expression; computing such files is not supported yet",
                     model.ast().sourceSpan())));
         }
-        return new CompiledExpression(new ExecutionPlanBuilder().build(model, environment));
+        return new CompiledExpression(new ExecutionPlanBuilder().build(model, environment), runtimeServices);
     }
 }

@@ -1,11 +1,12 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
-import java.time.Instant;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -14,18 +15,21 @@ public final class ExecutionScope {
     private static final Object UNBOUND = new Object();
 
     private final Object[] frame;
-    private final LocalDate currentDate;
-    private final LocalTime currentTime;
-    private final LocalDateTime currentDateTime;
+    private final ZoneId zoneId;
+    private final Clock clock;
+    private ZonedDateTime currentInstant;
 
-    public ExecutionScope(int frameSize, ZoneId zoneId) {
-        Objects.requireNonNull(zoneId, "zoneId");
-        frame = new Object[frameSize];
+    /** Builds a frame template with every slot set to the {@code UNBOUND} sentinel, distinct from {@code null}. */
+    public static Object[] blankFrame(int frameSize) {
+        Object[] frame = new Object[frameSize];
         Arrays.fill(frame, UNBOUND);
-        ZonedDateTime current = Instant.now().atZone(zoneId);
-        currentDate = current.toLocalDate();
-        currentTime = current.toLocalTime();
-        currentDateTime = current.toLocalDateTime();
+        return frame;
+    }
+
+    public ExecutionScope(Object[] frame, ZoneId zoneId, Clock clock) {
+        this.frame = Objects.requireNonNull(frame, "frame");
+        this.zoneId = Objects.requireNonNull(zoneId, "zoneId");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     public Object read(int slot) {
@@ -51,14 +55,25 @@ public final class ExecutionScope {
     }
 
     public LocalDate currentDate() {
-        return currentDate;
+        return currentZonedDateTime().toLocalDate();
     }
 
     public LocalTime currentTime() {
-        return currentTime;
+        return currentZonedDateTime().toLocalTime();
     }
 
     public LocalDateTime currentDateTime() {
-        return currentDateTime;
+        return currentZonedDateTime().toLocalDateTime();
+    }
+
+    /**
+     * Consults the clock at most once per scope, on first use, truncated to whole seconds so that
+     * {@code currDate}, {@code currTime}, and {@code currDateTime} observed in the same call are coherent.
+     */
+    private ZonedDateTime currentZonedDateTime() {
+        if (currentInstant == null) {
+            currentInstant = clock.instant().truncatedTo(ChronoUnit.SECONDS).atZone(zoneId);
+        }
+        return currentInstant;
     }
 }

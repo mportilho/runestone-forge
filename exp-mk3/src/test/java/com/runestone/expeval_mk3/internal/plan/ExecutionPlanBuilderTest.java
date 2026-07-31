@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 
@@ -44,7 +45,7 @@ class ExecutionPlanBuilderTest {
         ExecutionPlan plan = new ExecutionPlanBuilder().build(model, numberEnvironment());
 
         assertThat(plan.hasResult()).isFalse();
-        assertThat(plan.compute(Map.of())).isNull();
+        assertThat(plan.compute(Map.of(), Clock.systemUTC())).isNull();
     }
 
     @Test
@@ -54,7 +55,7 @@ class ExecutionPlanBuilderTest {
         ExecutionPlan plan = new ExecutionPlanBuilder().build(model, numberEnvironment());
 
         assertThat(plan.hasResult()).isTrue();
-        assertThat(plan.compute(Map.of())).isEqualTo(new BigDecimal("3"));
+        assertThat(plan.compute(Map.of(), Clock.systemUTC())).isEqualTo(new BigDecimal("3"));
     }
 
     @Test

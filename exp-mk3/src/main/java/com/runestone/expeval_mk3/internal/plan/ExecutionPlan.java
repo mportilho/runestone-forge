@@ -6,10 +6,12 @@ import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 
+import java.time.Clock;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -23,8 +25,9 @@ public final class ExecutionPlan {
     private final List<AssignmentExecutable> assignments;
     private final List<ExternalBindingPlan> externalBindings;
     private final Map<String, ExternalBindingPlan> bindingsByName;
-    private final Map<String, ExternalSymbol> declaredButUnusedSymbolsByName;
-    private final int frameSize;
+    private final List<ExternalSymbol> declaredSymbolsInCanonicalOrder;
+    private final Set<String> declaredSymbolNames;
+    private final Object[] frameTemplate;
     private final BoundaryCoercion boundaryCoercion;
     private final ZoneId zoneId;
 
@@ -32,7 +35,7 @@ public final class ExecutionPlan {
             ExecutableNode resultExpression,
             List<AssignmentExecutable> assignments,
             List<ExternalBindingPlan> externalBindings,
-            List<ExternalSymbol> declaredButUnusedSymbols,
+            List<ExternalSymbol> declaredSymbolsInCanonicalOrder,
             int frameSize,
             BoundaryCoercion boundaryCoercion,
             ZoneId zoneId) {
@@ -41,9 +44,15 @@ public final class ExecutionPlan {
         this.externalBindings = List.copyOf(externalBindings);
         bindingsByName = this.externalBindings.stream()
                 .collect(Collectors.toUnmodifiableMap(binding -> binding.symbol().name(), binding -> binding));
-        declaredButUnusedSymbolsByName = declaredButUnusedSymbols.stream()
-                .collect(Collectors.toUnmodifiableMap(ExternalSymbol::name, symbol -> symbol));
-        this.frameSize = frameSize;
+        this.declaredSymbolsInCanonicalOrder = List.copyOf(declaredSymbolsInCanonicalOrder);
+        declaredSymbolNames = this.declaredSymbolsInCanonicalOrder.stream()
+                .map(ExternalSymbol::name)
+                .collect(Collectors.toUnmodifiableSet());
+        Object[] template = ExecutionScope.blankFrame(frameSize);
+        for (ExternalBindingPlan binding : this.externalBindings) {
+            template[binding.frameSlot()] = binding.symbol().defaultValue().value();
+        }
+        this.frameTemplate = template;
         this.boundaryCoercion = Objects.requireNonNull(boundaryCoercion, "boundaryCoercion");
         this.zoneId = Objects.requireNonNull(zoneId, "zoneId");
     }
@@ -65,41 +74,52 @@ public final class ExecutionPlan {
      * plans have no result to invent, so this returns {@code null} for them; a public view over such a
      * plan decides for itself whether that absence is reachable.
      */
-    public Object compute(Map<String, ?> overrides) {
-        ExecutionScope scope = prepare(overrides);
+    public Object compute(Map<String, ?> overrides, Clock clock) {
+        ExecutionScope scope = prepare(overrides, clock);
         return resultExpression == null ? null : resultExpression.execute(scope);
     }
 
-    private ExecutionScope prepare(Map<String, ?> overrides) {
+    private ExecutionScope prepare(Map<String, ?> overrides, Clock clock) {
         Objects.requireNonNull(overrides, "overrides");
-        ExecutionScope scope = new ExecutionScope(frameSize, zoneId);
-        for (ExternalBindingPlan binding : externalBindings) {
-            scope.write(binding.frameSlot(), binding.symbol().defaultValue().value());
-        }
-        for (Map.Entry<String, ?> override : overrides.entrySet()) {
-            ExternalBindingPlan binding = bindingsByName.get(override.getKey());
-            if (binding == null) {
-                validateUnusedSymbolOverride(override.getKey(), override.getValue());
+        Objects.requireNonNull(clock, "clock");
+        rejectSmallestUndeclaredOverride(overrides);
+
+        // Not observable until wrapped in a scope below, so a validation failure here discards this
+        // partially-written array with no assignment or provider ever having run against it.
+        Object[] frame = frameTemplate.clone();
+        for (ExternalSymbol symbol : declaredSymbolsInCanonicalOrder) {
+            String name = symbol.name();
+            if (!overrides.containsKey(name)) {
                 continue;
             }
-            requireOverridable(binding.symbol(), override.getKey());
-            scope.write(
-                    binding.frameSlot(),
-                    binding.symbol().coerceOverride(override.getValue(), boundaryCoercion));
+            requireOverridable(symbol, name);
+            Object coerced = symbol.coerceOverride(overrides.get(name), boundaryCoercion);
+            ExternalBindingPlan binding = bindingsByName.get(name);
+            if (binding != null) {
+                frame[binding.frameSlot()] = coerced;
+            }
         }
+
+        ExecutionScope scope = new ExecutionScope(frame, zoneId, clock);
         for (AssignmentExecutable assignment : assignments) {
             assignment.execute(scope);
         }
         return scope;
     }
 
-    private void validateUnusedSymbolOverride(String name, Object value) {
-        ExternalSymbol symbol = declaredButUnusedSymbolsByName.get(name);
-        if (symbol == null) {
-            throw new IllegalArgumentException("unknown external symbol override: " + name);
+    private void rejectSmallestUndeclaredOverride(Map<String, ?> overrides) {
+        String smallestUndeclared = null;
+        for (String name : overrides.keySet()) {
+            if (declaredSymbolNames.contains(name)) {
+                continue;
+            }
+            if (smallestUndeclared == null || name.compareTo(smallestUndeclared) < 0) {
+                smallestUndeclared = name;
+            }
         }
-        requireOverridable(symbol, name);
-        symbol.coerceOverride(value, boundaryCoercion); // no frame slot to write into: symbol is unused, so only the override is validated
+        if (smallestUndeclared != null) {
+            throw new IllegalArgumentException("unknown external symbol override: " + smallestUndeclared);
+        }
     }
 
     private static void requireOverridable(ExternalSymbol symbol, String name) {

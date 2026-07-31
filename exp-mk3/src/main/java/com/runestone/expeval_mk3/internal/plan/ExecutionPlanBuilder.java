@@ -132,12 +132,14 @@ public final class ExecutionPlanBuilder {
         List<ExternalBindingPlan> externalBindings = model.frameLayout().externalBindings().stream()
                 .map(binding -> new ExternalBindingPlan(binding.requireExternalSymbol(), binding.frameSlot()))
                 .toList();
-        Set<String> frameResidentNames = model.frameLayout().externalBindings().stream()
-                .map(binding -> binding.requireExternalSymbol().name())
+        Set<String> usedSymbolNames = externalBindings.stream()
+                .map(binding -> binding.symbol().name())
                 .collect(Collectors.toSet());
-        List<ExternalSymbol> declaredButUnusedSymbols = environment.externalSymbols().values().stream()
-                .filter(symbol -> !frameResidentNames.contains(symbol.name()))
-                .toList();
+        List<ExternalSymbol> declaredSymbolsInCanonicalOrder = new ArrayList<>(externalBindings.size());
+        externalBindings.forEach(binding -> declaredSymbolsInCanonicalOrder.add(binding.symbol()));
+        environment.externalSymbols().values().stream()
+                .filter(symbol -> !usedSymbolNames.contains(symbol.name()))
+                .forEach(declaredSymbolsInCanonicalOrder::add);
         List<AssignmentExecutable> assignments = model.ast().assignments().stream()
                 .map(assignment -> buildAssignment(assignment, model, environment, deferredChecksByNode))
                 .toList();
@@ -145,7 +147,7 @@ public final class ExecutionPlanBuilder {
                 result,
                 assignments,
                 externalBindings,
-                declaredButUnusedSymbols,
+                declaredSymbolsInCanonicalOrder,
                 model.frameLayout().frameSize(),
                 environment.boundaryCoercion(),
                 environment.zoneId());

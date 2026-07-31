@@ -50,8 +50,8 @@ class ExecutionPlanBuilderPipelineEquivalenceTest {
         assertThat(dump(viaPublicEntryPoint.resultExpression()))
                 .isEqualTo(dump(viaUnoptimizedPath.resultExpression()));
         assertThat(assignmentDumps(viaPublicEntryPoint)).isEqualTo(assignmentDumps(viaUnoptimizedPath));
-        assertThat(viaPublicEntryPoint.compute(java.util.Map.of()))
-                .isEqualTo(viaUnoptimizedPath.compute(java.util.Map.of()));
+        assertThat(viaPublicEntryPoint.compute(java.util.Map.of(), java.time.Clock.systemUTC()))
+                .isEqualTo(viaUnoptimizedPath.compute(java.util.Map.of(), java.time.Clock.systemUTC()));
     }
 
     private static List<String> assignmentDumps(ExecutionPlan plan) {

@@ -935,7 +935,7 @@ class ExpressionCompilerTest {
             return value.substring(0, 1);
         }
 
-        private int invocations() {
+        int invocations() {
             return invocations.get();
         }
 
