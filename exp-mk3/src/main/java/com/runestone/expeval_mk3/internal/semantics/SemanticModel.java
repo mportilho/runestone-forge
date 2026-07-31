@@ -29,6 +29,7 @@ import com.runestone.expeval_mk3.internal.ast.NullCoalesceNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -43,6 +44,8 @@ public final class SemanticModel {
     private final Map<NodeId, ExpressionType> equalityOperandTypes;
     private final Map<NodeId, FunctionDescriptor> functionBindings;
     private final Map<NodeId, NavigationBinding> navigationBindings;
+    private final Map<NodeId, NumericFact> numericFacts;
+    private final List<DeferredCheck> deferredChecks;
     private final FrameLayout frameLayout;
 
     SemanticModel(
@@ -55,6 +58,8 @@ public final class SemanticModel {
             Map<NodeId, ExpressionType> equalityOperandTypes,
             Map<NodeId, FunctionDescriptor> functionBindings,
             Map<NodeId, NavigationBinding> navigationBindings,
+            Map<NodeId, NumericFact> numericFacts,
+            List<DeferredCheck> deferredChecks,
             FrameLayout frameLayout) {
         this.ast = Objects.requireNonNull(ast, "ast");
         this.resolvedTypes = Map.copyOf(resolvedTypes);
@@ -65,6 +70,8 @@ public final class SemanticModel {
         this.equalityOperandTypes = Map.copyOf(equalityOperandTypes);
         this.functionBindings = Map.copyOf(functionBindings);
         this.navigationBindings = Map.copyOf(navigationBindings);
+        this.numericFacts = Map.copyOf(numericFacts);
+        this.deferredChecks = List.copyOf(deferredChecks);
         this.frameLayout = Objects.requireNonNull(frameLayout, "frameLayout");
         ast.assignments().forEach(this::validateAssignment);
         ast.resultExpression().ifPresent(this::validateCompleteExpression);
@@ -104,6 +111,18 @@ public final class SemanticModel {
 
     public Map<NodeId, NavigationBinding> navigationBindings() {
         return navigationBindings;
+    }
+
+    public NumericFact numericFactOf(NodeId nodeId) {
+        return NumericFact.of(numericFacts, nodeId);
+    }
+
+    public Map<NodeId, NumericFact> numericFacts() {
+        return numericFacts;
+    }
+
+    public List<DeferredCheck> deferredChecks() {
+        return deferredChecks;
     }
 
     public FrameLayout frameLayout() {

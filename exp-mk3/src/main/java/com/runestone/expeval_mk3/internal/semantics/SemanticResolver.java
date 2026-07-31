@@ -53,6 +53,8 @@ import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.NullCoalesceNode;
 import com.runestone.expeval_mk3.internal.ast.OffsetDateTimeLiteralValue;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
+import com.runestone.expeval_mk3.internal.ast.PostfixOperator;
+import com.runestone.expeval_mk3.internal.ast.PostfixOperatorOccurrence;
 import com.runestone.expeval_mk3.internal.ast.PropertyNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.StringKeySubscriptNavigationLink;
@@ -76,6 +78,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -110,6 +113,8 @@ public final class SemanticResolver {
         private final Map<NodeId, ExpressionType> equalityOperandTypes = new HashMap<>();
         private final Map<NodeId, FunctionDescriptor> functionBindings = new HashMap<>();
         private final Map<NodeId, NavigationBinding> navigationBindings = new HashMap<>();
+        private final Map<NodeId, NumericFact> numericFacts = new HashMap<>();
+        private final List<DeferredCheck> deferredChecks = new ArrayList<>();
         private final Map<String, SymbolBinding> visibleBindings = new LinkedHashMap<>();
         private final Map<String, CollectionShape> visibleCollectionShapes = new HashMap<>();
         private final List<SymbolBinding> externalBindings = new ArrayList<>();
@@ -159,6 +164,8 @@ public final class SemanticResolver {
                     equalityOperandTypes,
                     functionBindings,
                     navigationBindings,
+                    numericFacts,
+                    deferredChecks,
                     new FrameLayout(externalBindings, nextFrameSlot)), warnings);
         }
 
@@ -209,12 +216,17 @@ public final class SemanticResolver {
                     return;
                 }
                 CollectionShape shape = collectionShapes.get(valueNodeId);
-                if (shape != null && shape.fixed() && shape.fixedSize() < destructuring.elements().size()) {
-                    diagnostic(
-                            DiagnosticCode.SEMANTIC_DESTRUCTURING_SIZE_MISMATCH,
-                            "Destructuring source has fewer elements than targets",
-                            destructuring.sourceSpan());
-                    return;
+                if (shape != null && shape.fixed()) {
+                    if (shape.fixedSize() < destructuring.elements().size()) {
+                        diagnostic(
+                                DiagnosticCode.SEMANTIC_DESTRUCTURING_SIZE_MISMATCH,
+                                "Destructuring source has fewer elements than targets",
+                                destructuring.sourceSpan());
+                        return;
+                    }
+                } else {
+                    deferredChecks.add(new DestructuringMinimumSizeDeferredCheck(
+                            destructuring.id(), destructuring.sourceSpan(), destructuring.elements().size()));
                 }
                 for (IdentifierAssignmentTargetNode element : destructuring.elements()) {
                     SymbolBinding binding = bindInternal(
@@ -327,7 +339,23 @@ public final class SemanticResolver {
             recordValue(literal.id(), resolution.type());
             recordPure(literal.id(), true);
             preparedValues.put(literal.id(), resolution.value());
+            if (resolution.type() == ScalarType.NUMBER) {
+                numericFacts.put(literal.id(), numericFactOfLiteral((BigDecimal) resolution.value()));
+            }
             return Resolution.known(resolution.type());
+        }
+
+        private NumericFact numericFactOfLiteral(BigDecimal value) {
+            RationalParity parity = RationalParity.classify(value);
+            return isIntegralDecimal(value) ? NumericFact.integral(parity) : NumericFact.fractional(parity);
+        }
+
+        private boolean isIntegralDecimal(BigDecimal value) {
+            return value.signum() == 0 || value.stripTrailingZeros().scale() <= 0;
+        }
+
+        private NumericFact numericFactOf(NodeId nodeId) {
+            return NumericFact.of(numericFacts, nodeId);
         }
 
         private LiteralResolution literalResolution(LiteralValue value) {
@@ -432,8 +460,10 @@ public final class SemanticResolver {
 
         private Resolution resolveBinary(BinaryOperationNode binary) {
             return switch (binary.operator()) {
-                case ADD, SUBTRACT, MULTIPLY, DIVIDE, MODULO, ROOT, EXPONENTIATE -> resolveSameTypeBinary(
-                        binary, ScalarType.NUMBER, ScalarType.NUMBER);
+                case ADD, SUBTRACT, MULTIPLY -> resolveArithmetic(binary);
+                case DIVIDE, MODULO -> resolveSameTypeBinary(binary, ScalarType.NUMBER, ScalarType.NUMBER);
+                case EXPONENTIATE -> resolvePower(binary);
+                case ROOT -> resolveRoot(binary);
                 case CONCATENATE -> resolveSameTypeBinary(binary, ScalarType.STRING, ScalarType.STRING);
                 case LOGICAL_AND, LOGICAL_OR, LOGICAL_NAND, LOGICAL_NOR, LOGICAL_XOR, LOGICAL_XNOR -> resolveSameTypeBinary(
                         binary, ScalarType.BOOLEAN, ScalarType.BOOLEAN);
@@ -465,6 +495,121 @@ public final class SemanticResolver {
             recordValue(binary.id(), resultType);
             recordPure(binary.id(), purityOf(binary.left().id()) && purityOf(binary.right().id()));
             return Resolution.known(resultType);
+        }
+
+        private Resolution resolveArithmetic(BinaryOperationNode binary) {
+            Resolution result = resolveSameTypeBinary(binary, ScalarType.NUMBER, ScalarType.NUMBER);
+            if (result.known()) {
+                numericFacts.put(binary.id(), NumericFact.combineAdditive(
+                        numericFactOf(binary.left().id()), numericFactOf(binary.right().id())));
+            }
+            return result;
+        }
+
+        private Resolution resolvePower(BinaryOperationNode binary) {
+            Resolution result = resolveSameTypeBinary(binary, ScalarType.NUMBER, ScalarType.NUMBER);
+            if (!result.known()) {
+                return result;
+            }
+            return classifyPowerDomain(binary) ? result : Resolution.invalidResolution();
+        }
+
+        private boolean classifyPowerDomain(BinaryOperationNode binary) {
+            Optional<BigDecimal> baseConstant = constantValueOf(binary.left());
+            Optional<BigDecimal> exponentConstant = constantValueOf(binary.right());
+            if (baseConstant.isPresent() && exponentConstant.isPresent()) {
+                return classifyConstantPower(binary, baseConstant.get(), exponentConstant.get());
+            }
+            if (baseConstant.isPresent() && baseConstant.get().signum() > 0) {
+                return true;
+            }
+            deferredChecks.add(new PowerRealDomainDeferredCheck(binary.id(), binary.operatorSpan()));
+            return true;
+        }
+
+        private boolean classifyConstantPower(BinaryOperationNode binary, BigDecimal base, BigDecimal exponent) {
+            if (base.signum() == 0) {
+                if (exponent.signum() < 0) {
+                    diagnostic(
+                            DiagnosticCode.SEMANTIC_POWER_UNDEFINED,
+                            "Zero raised to a negative exponent is undefined",
+                            binary.operatorSpan());
+                    return false;
+                }
+                return true;
+            }
+            if (base.signum() < 0 && !RationalParity.classify(exponent).denominatorOdd()) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_POWER_COMPLEX_DOMAIN,
+                        "Negative base with an exponent whose reduced denominator is even requires a complex result",
+                        binary.operatorSpan());
+                return false;
+            }
+            return true;
+        }
+
+        private Resolution resolveRoot(BinaryOperationNode binary) {
+            Resolution result = resolveSameTypeBinary(binary, ScalarType.NUMBER, ScalarType.NUMBER);
+            if (!result.known()) {
+                return result;
+            }
+            return classifyRootDomain(binary) ? result : Resolution.invalidResolution();
+        }
+
+        private boolean classifyRootDomain(BinaryOperationNode binary) {
+            Optional<BigDecimal> degreeConstant = constantValueOf(binary.left());
+            Optional<BigDecimal> radicandConstant = constantValueOf(binary.right());
+            if (degreeConstant.isPresent() && radicandConstant.isPresent()) {
+                return classifyConstantRoot(binary, degreeConstant.get(), radicandConstant.get());
+            }
+            if (degreeConstant.isPresent() && degreeConstant.get().signum() == 0) {
+                diagnostic(DiagnosticCode.SEMANTIC_ROOT_UNDEFINED, "Root degree zero is undefined", binary.operatorSpan());
+                return false;
+            }
+            if (degreeConstant.isPresent() && degreeConstant.get().signum() > 0
+                    && RationalParity.classify(degreeConstant.get()).numeratorOdd()) {
+                return true;
+            }
+            deferredChecks.add(new RootRealDomainDeferredCheck(binary.id(), binary.operatorSpan()));
+            return true;
+        }
+
+        private boolean classifyConstantRoot(BinaryOperationNode binary, BigDecimal degree, BigDecimal radicand) {
+            if (degree.signum() == 0) {
+                diagnostic(DiagnosticCode.SEMANTIC_ROOT_UNDEFINED, "Root degree zero is undefined", binary.operatorSpan());
+                return false;
+            }
+            if (radicand.signum() == 0) {
+                if (degree.signum() < 0) {
+                    diagnostic(
+                            DiagnosticCode.SEMANTIC_ROOT_UNDEFINED,
+                            "Zero radicand with a negative degree is undefined",
+                            binary.operatorSpan());
+                    return false;
+                }
+                return true;
+            }
+            if (radicand.signum() < 0 && !RationalParity.classify(degree).numeratorOdd()) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_ROOT_COMPLEX_DOMAIN,
+                        "Negative radicand with a reduced degree numerator that is even requires a complex result",
+                        binary.operatorSpan());
+                return false;
+            }
+            return true;
+        }
+
+        private Optional<BigDecimal> constantValueOf(ExpressionNode node) {
+            if (node instanceof LiteralNode literal && resolvedTypes.get(literal.id()) == ScalarType.NUMBER) {
+                return Optional.of((BigDecimal) preparedValues.get(literal.id()));
+            }
+            if (node instanceof UnaryOperationNode unary && unary.operator() == UnaryOperator.NEGATE) {
+                return constantValueOf(unary.operand()).map(BigDecimal::negate);
+            }
+            if (node instanceof GroupedExpressionNode grouped) {
+                return constantValueOf(grouped.expression());
+            }
+            return Optional.empty();
         }
 
         private Resolution resolveComparison(BinaryOperationNode binary) {
@@ -575,6 +720,9 @@ public final class SemanticResolver {
             }
             recordValue(unary.id(), operandType);
             recordPure(unary.id(), purityOf(unary.operand().id()));
+            if (unary.operator() == UnaryOperator.NEGATE) {
+                numericFacts.put(unary.id(), numericFactOf(unary.operand().id()).negate());
+            }
             return Resolution.known(operandType);
         }
 
@@ -593,9 +741,53 @@ public final class SemanticResolver {
             if (rejectNullableOperands(postfix.operand())) {
                 return Resolution.invalidResolution();
             }
+            boolean valid = true;
+            NumericFact currentFact = numericFactOf(postfix.operand().id());
+            BigDecimal currentConstant = constantValueOf(postfix.operand()).orElse(null);
+            for (PostfixOperatorOccurrence occurrence : postfix.operations()) {
+                if (occurrence.operator() == PostfixOperator.FACTORIAL) {
+                    if (!classifyFactorial(postfix.id(), occurrence.sourceSpan(), currentConstant)) {
+                        valid = false;
+                    }
+                    currentFact = NumericFact.integralWithoutParity();
+                    currentConstant = null;
+                } else {
+                    currentFact = NumericFact.unknown();
+                    currentConstant = null;
+                }
+            }
+            if (!valid) {
+                return Resolution.invalidResolution();
+            }
             recordValue(postfix.id(), ScalarType.NUMBER);
             recordPure(postfix.id(), purityOf(postfix.operand().id()));
+            numericFacts.put(postfix.id(), currentFact);
             return Resolution.known(ScalarType.NUMBER);
+        }
+
+        private boolean classifyFactorial(NodeId nodeId, SourceSpan occurrenceSpan, BigDecimal constant) {
+            if (constant != null) {
+                if (!isIntegralDecimal(constant)) {
+                    diagnostic(DiagnosticCode.SEMANTIC_FACTORIAL_NOT_INTEGRAL, "Factorial requires an integral value", occurrenceSpan);
+                    return false;
+                }
+                if (constant.signum() < 0) {
+                    diagnostic(DiagnosticCode.SEMANTIC_FACTORIAL_NEGATIVE, "Factorial requires a non-negative value", occurrenceSpan);
+                    return false;
+                }
+                if (constant.compareTo(BigDecimal.valueOf(environment.maxFactorialInput())) > 0) {
+                    diagnostic(
+                            DiagnosticCode.SEMANTIC_FACTORIAL_EXCEEDS_MAXIMUM,
+                            "Factorial exceeds maxFactorialInput " + environment.maxFactorialInput(),
+                            occurrenceSpan);
+                    return false;
+                }
+                return true;
+            }
+            deferredChecks.add(new FactorialIntegralDeferredCheck(nodeId, occurrenceSpan));
+            deferredChecks.add(new FactorialNonNegativeDeferredCheck(nodeId, occurrenceSpan));
+            deferredChecks.add(new FactorialMaxBoundDeferredCheck(nodeId, occurrenceSpan, environment.maxFactorialInput()));
+            return true;
         }
 
         private Resolution resolveBetween(BetweenNode between) {
@@ -935,13 +1127,16 @@ public final class SemanticResolver {
                         index.sourceSpan());
                 return LinkResolution.invalidResolution();
             }
-            if (receiverShape != null && receiverShape.fixed()
-                    && !SubscriptBounds.indexWithinFixedSize(index.index().value(), receiverShape.fixedSize())) {
-                diagnostic(
-                        DiagnosticCode.SEMANTIC_COLLECTION_INDEX_OUT_OF_BOUNDS,
-                        "Collection index is outside the known collection bounds",
-                        index.sourceSpan());
-                return LinkResolution.invalidResolution();
+            if (receiverShape != null && receiverShape.fixed()) {
+                if (!SubscriptBounds.indexWithinFixedSize(index.index().value(), receiverShape.fixedSize())) {
+                    diagnostic(
+                            DiagnosticCode.SEMANTIC_COLLECTION_INDEX_OUT_OF_BOUNDS,
+                            "Collection index is outside the known collection bounds",
+                            index.sourceSpan());
+                    return LinkResolution.invalidResolution();
+                }
+            } else {
+                deferredChecks.add(new SubscriptBoundsDeferredCheck(index.id(), index.sourceSpan()));
             }
             navigationBindings.put(index.id(), new IndexSubscriptNavigationBinding(
                     collectionType.elementType(), RuntimeNullability.NEVER_NULL, receiverPure));
@@ -966,6 +1161,8 @@ public final class SemanticResolver {
                 int start = SubscriptBounds.normalizedSliceBound(slice.start(), size, 0);
                 int end = SubscriptBounds.normalizedSliceBound(slice.end(), size, size);
                 shape = new CollectionShape(Math.max(end - start, 0));
+            } else {
+                deferredChecks.add(new SubscriptBoundsDeferredCheck(slice.id(), slice.sourceSpan()));
             }
             navigationBindings.put(slice.id(), new SliceSubscriptNavigationBinding(
                     collectionType.elementType(), RuntimeNullability.NEVER_NULL, receiverPure));
@@ -1087,6 +1284,10 @@ public final class SemanticResolver {
                         "Wildcard navigation requires a collection, map, or registered object receiver",
                         wildcard.sourceSpan());
                 return LinkResolution.invalidResolution();
+            }
+            if (!resultShape.fixed()) {
+                deferredChecks.add(new MaterializationLimitDeferredCheck(
+                        wildcard.id(), wildcard.sourceSpan(), environment.maxMaterializedSize()));
             }
             RuntimeNullability resultNullability = wildcard.safe()
                     ? RuntimeNullability.MAY_BE_NULL
