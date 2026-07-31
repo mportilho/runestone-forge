@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.internal.plan;
 
+import com.runestone.expeval_mk3.api.CollectionOperationCatalog;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
@@ -37,28 +38,37 @@ import com.runestone.expeval_mk3.internal.ast.PostfixOperator;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperatorOccurrence;
 import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.StringKeySubscriptNavigationLink;
+import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
 import com.runestone.expeval_mk3.internal.runtime.BetweenExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.BinaryExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.CollectionLiteralExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutor;
 import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutors;
+import com.runestone.expeval_mk3.internal.runtime.CollectionOperationRuntimeBinding;
 import com.runestone.expeval_mk3.internal.runtime.ConditionalExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ConstantExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.ContextualMemberExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.CurrentTemporalExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableBranch;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableLambda;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableOperationArguments;
-import com.runestone.expeval_mk3.internal.runtime.ExpressionRuntime;
+import com.runestone.expeval_mk3.internal.runtime.FilterExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.FrameReadExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.FunctionCallExecutableNode;
-import com.runestone.expeval_mk3.internal.runtime.LinkExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.IndexSubscriptExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.MapKeySubscriptExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.MembershipExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.NullCoalesceExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.PostfixExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.RegisteredMethodExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.RegisteredPropertyExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.SliceSubscriptExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.UnaryExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.WildcardExecutableNode;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
 import com.runestone.expeval_mk3.internal.semantics.ContextualMemberNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.DeferredCheck;
@@ -74,7 +84,6 @@ import com.runestone.expeval_mk3.internal.semantics.SliceSubscriptNavigationBind
 import com.runestone.expeval_mk3.internal.semantics.SymbolBinding;
 import com.runestone.expeval_mk3.internal.semantics.WildcardNavigationBinding;
 
-import java.math.MathContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -328,40 +337,33 @@ public final class ExecutionPlanBuilder {
         return switch (binding) {
             case IndexSubscriptNavigationBinding ignored -> {
                 IndexSubscriptNavigationLink index = (IndexSubscriptNavigationLink) link;
-                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.indexedValue(receiver.execute(scope), index));
+                yield new IndexSubscriptExecutableNode(id, span, receiver, index.index().value());
             }
             case SliceSubscriptNavigationBinding ignored -> {
                 SliceSubscriptNavigationLink slice = (SliceSubscriptNavigationLink) link;
-                int maxMaterializedSize = environment.maxMaterializedSize();
-                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.slicedValues(
-                        receiver.execute(scope), slice, maxMaterializedSize));
+                yield new SliceSubscriptExecutableNode(
+                        id, span, receiver, SubscriptBounds.rawValue(slice.start()),
+                        SubscriptBounds.rawValue(slice.end()), environment.maxMaterializedSize());
             }
             case MapKeySubscriptNavigationBinding mapKeyBinding -> {
                 StringKeySubscriptNavigationLink stringKey = (StringKeySubscriptNavigationLink) link;
                 boolean safe = mapKeyBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
-                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.mapKeyValue(
-                        receiver.execute(scope), stringKey.key(), safe, stringKey.sourceSpan()));
+                yield new MapKeySubscriptExecutableNode(id, span, receiver, stringKey.key(), safe);
             }
             case FilterNavigationBinding filterBinding -> {
                 FilterNavigationLink filter = (FilterNavigationLink) link;
                 ExecutableNode predicate = buildNode(filter.predicate(), model, environment, deferredChecksByNode);
-                int maxMaterializedSize = environment.maxMaterializedSize();
-                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.filteredValues(
-                        receiver.execute(scope),
-                        predicate,
-                        filterBinding.currentItemFrameSlot(),
-                        scope,
-                        maxMaterializedSize));
+                yield new FilterExecutableNode(
+                        id, span, receiver, predicate, filterBinding.currentItemFrameSlot(),
+                        environment.maxMaterializedSize());
             }
             case ContextualMemberNavigationBinding memberBinding -> {
                 boolean safe = memberBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
-                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.contextualMemberValue(
-                        receiver.execute(scope), memberBinding.member(), safe));
+                yield new ContextualMemberExecutableNode(id, span, receiver, memberBinding.member(), safe);
             }
             case RegisteredPropertyNavigationBinding propertyBinding -> {
                 boolean safe = propertyBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
-                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.registeredPropertyValue(
-                        receiver.execute(scope), safe, propertyBinding));
+                yield new RegisteredPropertyExecutableNode(id, span, receiver, safe, propertyBinding);
             }
             case RegisteredMethodNavigationBinding methodBinding -> {
                 CallNavigationLink call = (CallNavigationLink) link;
@@ -370,33 +372,25 @@ public final class ExecutionPlanBuilder {
                         .map(ExpressionCallArgument.class::cast)
                         .map(argument -> buildNode(argument.expression(), model, environment, deferredChecksByNode))
                         .toList();
-                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.invokeRegisteredMethod(
-                        receiver.execute(scope), safe, methodBinding, arguments, scope));
+                yield new RegisteredMethodExecutableNode(id, span, receiver, safe, methodBinding, arguments);
             }
             case WildcardNavigationBinding wildcardBinding -> {
                 WildcardNavigationLink wildcard = (WildcardNavigationLink) link;
-                int maxMaterializedSize = environment.maxMaterializedSize();
-                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.wildcardValues(
-                        receiver.execute(scope),
-                        wildcard.safe(),
-                        wildcardBinding,
-                        maxMaterializedSize));
+                yield new WildcardExecutableNode(
+                        id, span, receiver, wildcard.safe(), wildcardBinding, environment.maxMaterializedSize());
             }
             case CollectionOperationBinding operationBinding -> {
                 CallNavigationLink call = (CallNavigationLink) link;
                 ExecutableOperationArguments arguments = buildOperationArguments(call, operationBinding, model, environment, deferredChecksByNode);
                 CollectionOperationExecutor executor = CollectionOperationExecutors.executorFor(operationBinding.identity());
-                MathContext mathContext = environment.mathContext();
-                int maxMaterializedSize = environment.maxMaterializedSize();
-                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.executeCollectionOperation(
-                        executor,
-                        operationBinding,
-                        receiver.execute(scope),
-                        call.safe(),
-                        mathContext,
-                        maxMaterializedSize,
-                        arguments,
-                        scope));
+                CollectionOperationRuntimeBinding runtimeBinding = new CollectionOperationRuntimeBinding(
+                        operationBinding.receiverType(),
+                        operationBinding.identity() == CollectionOperationCatalog.OperationIdentity.SORT_BY
+                                ? operationBinding.lambdaBindings().getFirst().resultType()
+                                : null);
+                yield new CollectionOperationExecutableNode(
+                        id, span, receiver, call.safe(), executor, runtimeBinding,
+                        environment.mathContext(), environment.maxMaterializedSize(), arguments);
             }
         };
     }

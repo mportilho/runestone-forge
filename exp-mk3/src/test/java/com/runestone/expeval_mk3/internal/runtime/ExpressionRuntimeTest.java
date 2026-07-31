@@ -8,6 +8,7 @@ import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.semantics.ContextualMemberNavigationBinding;
 import com.runestone.expeval_mk3.api.SourceSpan;
+import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -65,8 +66,18 @@ class ExpressionRuntimeTest {
         return node(scope -> value);
     }
 
-    private static ExecutableNode node(java.util.function.Function<ExecutionScope, Object> delegate) {
-        return new LinkExecutableNode(new NodeId(1), SPAN, delegate);
+    private static ExecutableNode node(Function<ExecutionScope, Object> delegate) {
+        return new DelegatingTestNode(new NodeId(1), SPAN, delegate);
+    }
+
+    /** Minimal test-only {@link ExecutableNode}: production code names a real class per node shape instead. */
+    private record DelegatingTestNode(NodeId id, SourceSpan sourceSpan, Function<ExecutionScope, Object> delegate)
+            implements ExecutableNode {
+
+        @Override
+        public Object execute(ExecutionScope scope) {
+            return delegate.apply(scope);
+        }
     }
 
     private static FunctionDescriptor functionDescriptor(String methodName) throws NoSuchMethodException {

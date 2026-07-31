@@ -1,7 +1,5 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
-import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
-
 import java.math.MathContext;
 
 /**
@@ -12,7 +10,7 @@ import java.math.MathContext;
 public interface CollectionOperationExecutor {
 
     Object execute(
-            CollectionOperationBinding binding,
+            CollectionOperationRuntimeBinding binding,
             Object receiver,
             MathContext mathContext,
             int maxMaterializedSize,

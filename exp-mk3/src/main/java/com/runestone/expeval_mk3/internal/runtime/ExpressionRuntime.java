@@ -8,11 +8,8 @@ import com.runestone.expeval_mk3.api.FunctionInvocationException;
 import com.runestone.expeval_mk3.api.JavaWildcardChildDescriptor;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ScalarType;
-import com.runestone.expeval_mk3.internal.ast.IndexSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperator;
-import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
-import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationWiring;
 import com.runestone.expeval_mk3.internal.semantics.ContextualMemberNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.RegisteredMethodNavigationBinding;
@@ -70,19 +67,20 @@ public final class ExpressionRuntime {
         return List.copyOf(values);
     }
 
-    public static Object indexedValue(Object receiver, IndexSubscriptNavigationLink index) {
+    public static Object indexedValue(Object receiver, BigInteger index) {
         List<?> values = (List<?>) receiver;
-        int resolvedIndex = SubscriptBounds.normalizedIndex(index.index().value(), values.size());
+        int resolvedIndex = SubscriptBounds.normalizedIndex(index, values.size());
         return Objects.requireNonNull(values.get(resolvedIndex), "collection element");
     }
 
     public static List<Object> slicedValues(
             Object receiver,
-            SliceSubscriptNavigationLink slice,
+            BigInteger startBound,
+            BigInteger endBound,
             int maxMaterializedSize) {
         List<?> values = (List<?>) receiver;
-        int start = SubscriptBounds.normalizedSliceBound(slice.start(), values.size(), 0);
-        int end = SubscriptBounds.normalizedSliceBound(slice.end(), values.size(), values.size());
+        int start = SubscriptBounds.normalizedSliceBound(startBound, values.size(), 0);
+        int end = SubscriptBounds.normalizedSliceBound(endBound, values.size(), values.size());
         if (end < start) {
             end = start;
         }
@@ -280,7 +278,7 @@ public final class ExpressionRuntime {
 
     public static Object executeCollectionOperation(
             CollectionOperationExecutor executor,
-            CollectionOperationBinding binding,
+            CollectionOperationRuntimeBinding binding,
             Object receiver,
             boolean safe,
             MathContext mathContext,
@@ -297,7 +295,7 @@ public final class ExpressionRuntime {
     }
 
     static Object executeAll(
-            CollectionOperationBinding binding,
+            CollectionOperationRuntimeBinding binding,
             Object receiver,
             MathContext mathContext,
             int maxMaterializedSize,
@@ -307,7 +305,7 @@ public final class ExpressionRuntime {
     }
 
     static Object executeAny(
-            CollectionOperationBinding binding,
+            CollectionOperationRuntimeBinding binding,
             Object receiver,
             MathContext mathContext,
             int maxMaterializedSize,
@@ -317,7 +315,7 @@ public final class ExpressionRuntime {
     }
 
     static Object executeCount(
-            CollectionOperationBinding binding,
+            CollectionOperationRuntimeBinding binding,
             Object receiver,
             MathContext mathContext,
             int maxMaterializedSize,
@@ -327,7 +325,7 @@ public final class ExpressionRuntime {
     }
 
     static Object executeKeys(
-            CollectionOperationBinding binding,
+            CollectionOperationRuntimeBinding binding,
             Object receiver,
             MathContext mathContext,
             int maxMaterializedSize,
@@ -337,7 +335,7 @@ public final class ExpressionRuntime {
     }
 
     static Object executeValues(
-            CollectionOperationBinding binding,
+            CollectionOperationRuntimeBinding binding,
             Object receiver,
             MathContext mathContext,
             int maxMaterializedSize,
@@ -347,7 +345,7 @@ public final class ExpressionRuntime {
     }
 
     static Object executeMap(
-            CollectionOperationBinding binding,
+            CollectionOperationRuntimeBinding binding,
             Object receiver,
             MathContext mathContext,
             int maxMaterializedSize,
@@ -357,7 +355,7 @@ public final class ExpressionRuntime {
     }
 
     static Object executeSum(
-            CollectionOperationBinding binding,
+            CollectionOperationRuntimeBinding binding,
             Object receiver,
             MathContext mathContext,
             int maxMaterializedSize,
@@ -367,7 +365,7 @@ public final class ExpressionRuntime {
     }
 
     static Object executeAvg(
-            CollectionOperationBinding binding,
+            CollectionOperationRuntimeBinding binding,
             Object receiver,
             MathContext mathContext,
             int maxMaterializedSize,
@@ -377,7 +375,7 @@ public final class ExpressionRuntime {
     }
 
     static Object executeReduce(
-            CollectionOperationBinding binding,
+            CollectionOperationRuntimeBinding binding,
             Object receiver,
             MathContext mathContext,
             int maxMaterializedSize,
@@ -388,7 +386,7 @@ public final class ExpressionRuntime {
     }
 
     static Object executeSortBy(
-            CollectionOperationBinding binding,
+            CollectionOperationRuntimeBinding binding,
             Object receiver,
             MathContext mathContext,
             int maxMaterializedSize,
@@ -396,7 +394,7 @@ public final class ExpressionRuntime {
             ExecutionScope scope) {
         return sortBy(receiver, (String) arguments.valueArguments().getFirst().execute(scope),
                 arguments.lambdaArguments().getFirst(), scope, maxMaterializedSize,
-                binding.lambdaBindings().getFirst().resultType());
+                binding.sortKeyType());
     }
 
     static boolean all(

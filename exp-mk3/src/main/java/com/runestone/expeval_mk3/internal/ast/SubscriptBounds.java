@@ -26,12 +26,31 @@ public final class SubscriptBounds {
     }
 
     public static int normalizedSliceBound(SubscriptSliceBound bound, int size, int unboundedValue) {
+        return normalizedSliceBound(rawValue(bound), size, unboundedValue);
+    }
+
+    /**
+     * Extracts the raw bound value ({@code null} for the unbounded case) out of the AST bound shape.
+     * Execution plan nodes use this once at build time to avoid retaining {@link SubscriptSliceBound}
+     * itself, which is an AST type.
+     */
+    public static BigInteger rawValue(SubscriptSliceBound bound) {
         Objects.requireNonNull(bound, "bound");
-        if (bound == UnboundedSubscriptSliceBound.INSTANCE) {
+        return bound == UnboundedSubscriptSliceBound.INSTANCE
+                ? null
+                : ((IntegerSubscriptSliceBound) bound).integer().value();
+    }
+
+    /**
+     * Same normalization as {@link #normalizedSliceBound(SubscriptSliceBound, int, int)}, but takes the
+     * already-extracted raw bound value ({@code null} for the unbounded case) instead of the AST bound
+     * shape, so callers that must not retain AST nodes (execution plan nodes) can still normalize.
+     */
+    public static int normalizedSliceBound(BigInteger rawValue, int size, int unboundedValue) {
+        if (rawValue == null) {
             return unboundedValue;
         }
-        BigInteger raw = ((IntegerSubscriptSliceBound) bound).integer().value();
-        BigInteger normalized = normalizedIndexValue(raw, size);
+        BigInteger normalized = normalizedIndexValue(rawValue, size);
         if (normalized.signum() < 0) {
             return 0;
         }
