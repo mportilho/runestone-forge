@@ -5,8 +5,11 @@ import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperator;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
+import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
+import com.runestone.expeval_mk3.internal.diagnostics.RuntimeFailures;
 import com.runestone.expeval_mk3.internal.semantics.DeferredCheck;
 
+import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.List;
 import java.util.Objects;
@@ -120,12 +123,10 @@ public final class BinaryExecutableNode implements ExecutableNode {
             case ADD -> ExpressionRuntime.number(left.execute(scope)).add(ExpressionRuntime.number(right.execute(scope)));
             case SUBTRACT -> ExpressionRuntime.number(left.execute(scope)).subtract(ExpressionRuntime.number(right.execute(scope)));
             case MULTIPLY -> ExpressionRuntime.number(left.execute(scope)).multiply(ExpressionRuntime.number(right.execute(scope)), mathContext);
-            case DIVIDE -> ExpressionRuntime.number(left.execute(scope)).divide(ExpressionRuntime.number(right.execute(scope)), mathContext);
-            case MODULO -> ExpressionRuntime.number(left.execute(scope)).remainder(ExpressionRuntime.number(right.execute(scope)), mathContext);
-            case ROOT -> BigDecimalMath.root(
-                    ExpressionRuntime.number(right.execute(scope)), ExpressionRuntime.number(left.execute(scope)), mathContext);
-            case EXPONENTIATE -> ExpressionRuntime.pow(
-                    ExpressionRuntime.number(left.execute(scope)), ExpressionRuntime.number(right.execute(scope)), mathContext);
+            case DIVIDE -> divide(scope);
+            case MODULO -> modulo(scope);
+            case ROOT -> root(scope);
+            case EXPONENTIATE -> exponentiate(scope);
             case CONCATENATE -> (String) left.execute(scope) + right.execute(scope);
             case LOGICAL_AND -> ExpressionRuntime.bool(left.execute(scope)) && ExpressionRuntime.bool(right.execute(scope));
             case LOGICAL_OR -> ExpressionRuntime.bool(left.execute(scope)) || ExpressionRuntime.bool(right.execute(scope));
@@ -141,6 +142,54 @@ public final class BinaryExecutableNode implements ExecutableNode {
                     left.execute(scope), right.execute(scope), operandType) != negated;
             case REGEX_MATCH, REGEX_NOT_MATCH -> regexPattern.matcher((String) left.execute(scope)).matches() != negated;
         };
+    }
+
+    private BigDecimal divide(ExecutionScope scope) {
+        BigDecimal dividend = ExpressionRuntime.number(left.execute(scope));
+        BigDecimal divisor = ExpressionRuntime.number(right.execute(scope));
+        if (divisor.signum() == 0) {
+            throw RuntimeFailures.undefinedOperation("division by zero", sourceSpan);
+        }
+        try {
+            return dividend.divide(divisor, mathContext);
+        } catch (ArithmeticException exception) {
+            throw RuntimeFailures.calculationFailure("division failed", sourceSpan, exception);
+        }
+    }
+
+    private BigDecimal modulo(ExecutionScope scope) {
+        BigDecimal dividend = ExpressionRuntime.number(left.execute(scope));
+        BigDecimal divisor = ExpressionRuntime.number(right.execute(scope));
+        if (divisor.signum() == 0) {
+            throw RuntimeFailures.undefinedOperation("modulo by zero", sourceSpan);
+        }
+        try {
+            return dividend.remainder(divisor, mathContext);
+        } catch (ArithmeticException exception) {
+            throw RuntimeFailures.calculationFailure("modulo failed", sourceSpan, exception);
+        }
+    }
+
+    private BigDecimal root(ExecutionScope scope) {
+        BigDecimal degree = ExpressionRuntime.number(left.execute(scope));
+        BigDecimal radicand = ExpressionRuntime.number(right.execute(scope));
+        try {
+            return BigDecimalMath.root(radicand, degree, mathContext);
+        } catch (ArithmeticException exception) {
+            throw RuntimeFailures.domainViolation(
+                    DiagnosticCode.RUNTIME_ROOT_DOMAIN_VIOLATION, "root domain violation", sourceSpan, exception);
+        }
+    }
+
+    private BigDecimal exponentiate(ExecutionScope scope) {
+        BigDecimal base = ExpressionRuntime.number(left.execute(scope));
+        BigDecimal exponent = ExpressionRuntime.number(right.execute(scope));
+        try {
+            return ExpressionRuntime.pow(base, exponent, mathContext);
+        } catch (ArithmeticException exception) {
+            throw RuntimeFailures.domainViolation(
+                    DiagnosticCode.RUNTIME_POWER_DOMAIN_VIOLATION, "power domain violation", sourceSpan, exception);
+        }
     }
 
     private int compare(ExecutionScope scope) {

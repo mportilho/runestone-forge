@@ -2,6 +2,7 @@ package com.runestone.expeval_mk3.internal.plan;
 
 import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
+import com.runestone.expeval_mk3.internal.diagnostics.RuntimeFailures;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 import com.runestone.expeval_mk3.internal.semantics.DeferredCheck;
@@ -72,7 +73,7 @@ public final class AssignmentExecutable {
         }
         List<?> values = (List<?>) expression.execute(scope);
         if (values.size() < frameSlots.length) {
-            throw new IllegalStateException("destructuring source does not contain enough elements");
+            throw RuntimeFailures.destructuringInsufficient(frameSlots.length, values.size(), sourceSpan);
         }
         for (int index = 0; index < frameSlots.length; index++) {
             scope.write(frameSlots[index], values.get(index));

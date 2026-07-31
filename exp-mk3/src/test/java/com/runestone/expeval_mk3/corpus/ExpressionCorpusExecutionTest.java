@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionCompilationException;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.api.ExpressionExecutionException;
 import com.runestone.expeval_mk3.api.ExpressionCompiler;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
@@ -282,6 +283,7 @@ class ExpressionCorpusExecutionTest {
         return switch (type) {
             case "ArithmeticException" -> ArithmeticException.class;
             case "IllegalStateException" -> IllegalStateException.class;
+            case "ExpressionExecutionException" -> ExpressionExecutionException.class;
             default -> throw new IllegalArgumentException("Unsupported runtime error type: " + type);
         };
     }

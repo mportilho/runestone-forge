@@ -4,12 +4,12 @@ import ch.obermuhlner.math.big.BigDecimalMath;
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
-import com.runestone.expeval_mk3.api.FunctionInvocationException;
 import com.runestone.expeval_mk3.api.JavaWildcardChildDescriptor;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ScalarType;
-import com.runestone.expeval_mk3.internal.ast.PostfixOperator;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
+import com.runestone.expeval_mk3.internal.diagnostics.ProviderReturnViolation;
+import com.runestone.expeval_mk3.internal.diagnostics.RuntimeFailures;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationWiring;
 import com.runestone.expeval_mk3.internal.semantics.ContextualMemberNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.RegisteredMethodNavigationBinding;
@@ -41,21 +41,37 @@ public final class ExpressionRuntime {
     public static Object invokeFunction(
             FunctionDescriptor descriptor,
             List<ExecutableNode> argumentNodes,
-            ExecutionScope scope) {
+            ExecutionScope scope,
+            SourceSpan callSpan) {
         Object[] arguments = new Object[argumentNodes.size()];
         for (int index = 0; index < argumentNodes.size(); index++) {
-            arguments[index] = Objects.requireNonNull(argumentNodes.get(index).execute(scope), "function argument");
+            Object argument = argumentNodes.get(index).execute(scope);
+            if (argument == null) {
+                throw RuntimeFailures.forbiddenNull(
+                        "function argument must not be null: " + descriptor.languageName(), callSpan);
+            }
+            arguments[index] = argument;
         }
         MethodHandle handle = descriptor.implementationHandle();
         try {
-            return Objects.requireNonNull(handle.invokeWithArguments(arguments), "function result");
+            // The result filter bound into this handle already rejects a null/incompatible/invalid
+            // return as a ProviderReturnViolation before invokeWithArguments returns.
+            return handle.invokeWithArguments(arguments);
         } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
             throw fatal;
+        } catch (ProviderReturnViolation violation) {
+            // The provider ran to completion but its return value fails the resolved return
+            // contract (null, incompatible type, or invalid container); distinct from a
+            // provider-thrown failure.
+            throw RuntimeFailures.providerReturnViolation(descriptor.languageName(), callSpan, violation);
         } catch (Throwable exception) {
+            if (exception instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             // Declared checked exceptions, ordinary runtime exceptions, and nonfatal errors thrown
             // by the provider implementation are all provider-invocation failures; only fatal JVM
             // conditions propagate unchanged.
-            throw FunctionInvocationException.providerFailure(descriptor, exception);
+            throw RuntimeFailures.providerFailure(descriptor.languageName(), callSpan, exception);
         }
     }
 
@@ -566,36 +582,6 @@ public final class ExpressionRuntime {
         if (size > maxMaterializedSize) {
             throw new IllegalStateException("materialized collection exceeds maxMaterializedSize " + maxMaterializedSize);
         }
-    }
-
-    public static BigDecimal executePostfix(
-            BigDecimal initial,
-            List<PostfixOperator> operators,
-            int maxFactorialInput) {
-        BigDecimal result = initial;
-        for (PostfixOperator operator : operators) {
-            result = operator == PostfixOperator.PERCENT
-                    ? result.movePointLeft(2)
-                    : factorial(result, maxFactorialInput);
-        }
-        return result;
-    }
-
-    private static BigDecimal factorial(BigDecimal value, int maxFactorialInput) {
-        BigDecimal normalized = value.stripTrailingZeros();
-        if (normalized.scale() > 0) {
-            throw new ArithmeticException("factorial input must be integral: " + value);
-        }
-        BigInteger integerValue = normalized.toBigInteger();
-        if (integerValue.signum() < 0 || integerValue.compareTo(BigInteger.valueOf(maxFactorialInput)) > 0) {
-            throw new ArithmeticException("factorial input out of range: " + value);
-        }
-        int integer = integerValue.intValue();
-        BigInteger result = BigInteger.ONE;
-        for (int factor = 2; factor <= integer; factor++) {
-            result = result.multiply(BigInteger.valueOf(factor));
-        }
-        return new BigDecimal(result);
     }
 
     public static BigDecimal pow(BigDecimal base, BigDecimal exponent, MathContext mathContext) {

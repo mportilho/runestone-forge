@@ -33,7 +33,7 @@ class NestedCurrentItemRestorationTest {
 
         List<List<BigDecimal>> failingInput = List.of(List.of(BigDecimal.ONE, BigDecimal.ZERO));
         assertThatThrownBy(() -> expression.compute(Map.of("outer", failingInput)))
-                .isInstanceOf(ArithmeticException.class);
+                .isInstanceOf(ExpressionExecutionException.class);
 
         List<List<BigDecimal>> healthyInput = List.of(
                 List.of(BigDecimal.TEN, BigDecimal.valueOf(5)), List.of(BigDecimal.ONE));

@@ -3,6 +3,7 @@ package com.runestone.expeval_mk3.internal.plan;
 import com.runestone.expeval_mk3.api.BoundaryCoercion;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
+import com.runestone.expeval_mk3.internal.diagnostics.RuntimeFailures;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 
@@ -118,13 +119,13 @@ public final class ExecutionPlan {
             }
         }
         if (smallestUndeclared != null) {
-            throw new IllegalArgumentException("unknown external symbol override: " + smallestUndeclared);
+            throw RuntimeFailures.invalidExternalInput("unknown external symbol override: " + smallestUndeclared);
         }
     }
 
     private static void requireOverridable(ExternalSymbol symbol, String name) {
         if (symbol.overwritePolicy() != ExternalSymbolOverwritePolicy.OVERRIDABLE) {
-            throw new IllegalArgumentException("external symbol '" + name + "' is not overridable");
+            throw RuntimeFailures.invalidExternalInput("external symbol '" + name + "' is not overridable");
         }
     }
 }

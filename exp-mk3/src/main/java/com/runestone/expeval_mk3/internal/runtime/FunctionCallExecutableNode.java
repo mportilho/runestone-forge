@@ -23,6 +23,6 @@ public record FunctionCallExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.invokeFunction(descriptor, arguments, scope);
+        return ExpressionRuntime.invokeFunction(descriptor, arguments, scope, sourceSpan);
     }
 }

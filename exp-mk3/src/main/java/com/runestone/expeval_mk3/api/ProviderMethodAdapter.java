@@ -37,6 +37,9 @@ import java.util.concurrent.Flow;
 import java.util.concurrent.Future;
 import java.util.stream.BaseStream;
 
+import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
+import com.runestone.expeval_mk3.internal.diagnostics.ProviderReturnViolation;
+
 final class ProviderMethodAdapter {
 
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
@@ -253,8 +256,9 @@ final class ProviderMethodAdapter {
         return new PreparedValue(objectType, value -> {
             requireNonNull(value);
             if (value.getClass() != rawType) {
-                throw new IllegalArgumentException("provider nominal value must have exact runtime class "
-                        + rawType.getName());
+                throw new ProviderReturnViolation(
+                        DiagnosticCode.RUNTIME_RETURN_TYPE_MISMATCH,
+                        "provider nominal value must have exact runtime class " + rawType.getName());
             }
             return value;
         });
@@ -303,7 +307,8 @@ final class ProviderMethodAdapter {
     private static List<Object> convertCanonicalSequence(Object value, PreparedValue element) throws Throwable {
         requireNonNull(value);
         if (!(value instanceof List<?> values)) {
-            throw new IllegalArgumentException("canonical collection values must be lists");
+            throw new ProviderReturnViolation(
+                    DiagnosticCode.RUNTIME_RETURN_INVALID_CONTAINER, "canonical collection values must be lists");
         }
         ArrayList<Object> converted = new ArrayList<>(values.size());
         for (Object item : values) {
@@ -315,12 +320,14 @@ final class ProviderMethodAdapter {
     private static Map<String, Object> convertCanonicalMap(Object value, PreparedValue mapValue) throws Throwable {
         requireNonNull(value);
         if (!(value instanceof Map<?, ?> values)) {
-            throw new IllegalArgumentException("canonical map values must be maps");
+            throw new ProviderReturnViolation(
+                    DiagnosticCode.RUNTIME_RETURN_INVALID_CONTAINER, "canonical map values must be maps");
         }
         LinkedHashMap<String, Object> converted = new LinkedHashMap<>(values.size());
         for (Map.Entry<?, ?> entry : values.entrySet()) {
             if (!(entry.getKey() instanceof String key)) {
-                throw new IllegalArgumentException("provider maps must have non-null String keys");
+                throw new ProviderReturnViolation(
+                        DiagnosticCode.RUNTIME_RETURN_INVALID_CONTAINER, "provider maps must have non-null String keys");
             }
             converted.put(key, mapValue.convert(entry.getValue()));
         }
@@ -330,7 +337,8 @@ final class ProviderMethodAdapter {
     private static Object toArray(Object value, Class<?> componentType, PreparedValue element) throws Throwable {
         requireNonNull(value);
         if (!(value instanceof List<?> values)) {
-            throw new IllegalArgumentException("canonical collection values must be lists");
+            throw new ProviderReturnViolation(
+                    DiagnosticCode.RUNTIME_RETURN_INVALID_CONTAINER, "canonical collection values must be lists");
         }
         Object array = Array.newInstance(componentType, values.size());
         for (int index = 0; index < values.size(); index++) {
@@ -353,7 +361,8 @@ final class ProviderMethodAdapter {
     private static Object sequenceResult(Object value, PreparedValue element, int maxMaterializedSize) throws Throwable {
         requireNonNull(value);
         if (!(value instanceof Iterable<?> iterable)) {
-            throw new IllegalArgumentException("provider collection result must be iterable");
+            throw new ProviderReturnViolation(
+                    DiagnosticCode.RUNTIME_RETURN_INVALID_CONTAINER, "provider collection result must be iterable");
         }
         if (value instanceof Collection<?> collection) {
             requireWithinLimit(collection.size(), maxMaterializedSize);
@@ -373,7 +382,8 @@ final class ProviderMethodAdapter {
     private static Object mapResult(Object value, PreparedValue mapValue, int maxMaterializedSize) throws Throwable {
         requireNonNull(value);
         if (!(value instanceof Map<?, ?> values)) {
-            throw new IllegalArgumentException("provider map result must be a map");
+            throw new ProviderReturnViolation(
+                    DiagnosticCode.RUNTIME_RETURN_INVALID_CONTAINER, "provider map result must be a map");
         }
         requireWithinLimit(values.size(), maxMaterializedSize);
         TreeMap<String, Object> converted = new TreeMap<>();
@@ -384,7 +394,8 @@ final class ProviderMethodAdapter {
             }
             entryCount++;
             if (!(entry.getKey() instanceof String key)) {
-                throw new IllegalArgumentException("provider maps must have non-null String keys");
+                throw new ProviderReturnViolation(
+                        DiagnosticCode.RUNTIME_RETURN_INVALID_CONTAINER, "provider maps must have non-null String keys");
             }
             converted.put(key, mapValue.convert(entry.getValue()));
         }
@@ -397,20 +408,26 @@ final class ProviderMethodAdapter {
         }
     }
 
-    private static IllegalArgumentException materializationLimitExceeded(int maxMaterializedSize) {
-        return new IllegalArgumentException("provider result exceeds maxMaterializedSize " + maxMaterializedSize);
+    private static ProviderReturnViolation materializationLimitExceeded(int maxMaterializedSize) {
+        return new ProviderReturnViolation(
+                DiagnosticCode.RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED,
+                "provider result exceeds maxMaterializedSize " + maxMaterializedSize);
     }
 
     private static Object requireInstance(Object value, Class<?> expectedType) {
         requireNonNull(value);
         if (!expectedType.isInstance(value)) {
-            throw new IllegalArgumentException("provider boundary value must be an instance of " + expectedType.getName());
+            throw new ProviderReturnViolation(
+                    DiagnosticCode.RUNTIME_RETURN_TYPE_MISMATCH,
+                    "provider boundary value must be an instance of " + expectedType.getName());
         }
         return value;
     }
 
     private static void requireNonNull(Object value) {
-        Objects.requireNonNull(value, NON_NULL_MESSAGE);
+        if (value == null) {
+            throw new ProviderReturnViolation(DiagnosticCode.RUNTIME_RETURN_NULL, NON_NULL_MESSAGE);
+        }
     }
 
     private static void rejectNullableAnnotations(Method method) {

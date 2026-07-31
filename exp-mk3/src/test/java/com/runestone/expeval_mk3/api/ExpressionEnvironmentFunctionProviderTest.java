@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.api;
 
+import com.runestone.expeval_mk3.internal.diagnostics.ProviderReturnViolation;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -208,11 +209,11 @@ public class ExpressionEnvironmentFunctionProviderTest {
 
         assertThatThrownBy(() -> resolve(environment, "echo", ScalarType.STRING)
                 .implementationHandle().invoke((String) null))
-                .isInstanceOf(NullPointerException.class)
+                .isInstanceOf(ProviderReturnViolation.class)
                 .hasMessage("function arguments and results must not be null");
         assertThatThrownBy(() -> resolve(environment, "nullResult")
                 .implementationHandle().invoke())
-                .isInstanceOf(NullPointerException.class)
+                .isInstanceOf(ProviderReturnViolation.class)
                 .hasMessage("function arguments and results must not be null");
     }
 

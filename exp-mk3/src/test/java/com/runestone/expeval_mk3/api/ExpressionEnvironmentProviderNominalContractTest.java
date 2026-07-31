@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.api;
 
+import com.runestone.expeval_mk3.internal.diagnostics.ProviderReturnViolation;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -53,12 +54,12 @@ class ExpressionEnvironmentProviderNominalContractTest {
 
         assertThatThrownBy(() -> resolve(environment, "same", customerType)
                 .implementationHandle().invoke(new PreferredCustomer("stone")))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ProviderReturnViolation.class)
                 .hasMessageContaining("exact runtime class")
                 .hasMessageContaining(Customer.class.getName());
         assertThatThrownBy(() -> resolve(environment, "subtypeResult")
                 .implementationHandle().invoke())
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ProviderReturnViolation.class)
                 .hasMessageContaining("exact runtime class")
                 .hasMessageContaining(Customer.class.getName());
     }

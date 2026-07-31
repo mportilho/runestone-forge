@@ -5,5 +5,5 @@ source: 'items := [1, 2, 3]; items.reduce(0, @ -> 10 / (@.item - 2))'
 coverage: [assignment, collection-literal, identifier, call, lambda, at-symbol, property-access, additive, multiplicative, diagnostic]
 expected:
   runtimeError:
-    type: ArithmeticException
-    messageContains: 'Division by zero'
+    type: ExpressionExecutionException
+    messageContains: 'division by zero'

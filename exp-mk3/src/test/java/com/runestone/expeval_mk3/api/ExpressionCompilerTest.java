@@ -237,7 +237,7 @@ class ExpressionCompilerTest {
         CompiledExpression expression = ExpressionCompiler.compileOrThrow("used + 2", environment);
 
         assertThatThrownBy(() -> expression.compute(Map.of("unused", new BigDecimal("999"))))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ExpressionExecutionException.class);
     }
 
     @Test
@@ -807,7 +807,7 @@ class ExpressionCompilerTest {
 
         assertThat(decimal(expression.compute())).isEqualByComparingTo(BigDecimal.ONE);
         assertThatThrownBy(() -> expression.compute(Map.of("items", List.of(BigDecimal.ONE))))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(ExpressionExecutionException.class)
                 .hasMessageContaining("destructuring source does not contain enough elements");
     }
 
@@ -824,7 +824,7 @@ class ExpressionCompilerTest {
                 "items := [1, 2]; [a, b] := items[?(@ > 1)]; a",
                 ExpressionEnvironment.standard());
         assertThatThrownBy(expression::compute)
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(ExpressionExecutionException.class)
                 .hasMessageContaining("destructuring source does not contain enough elements");
     }
 

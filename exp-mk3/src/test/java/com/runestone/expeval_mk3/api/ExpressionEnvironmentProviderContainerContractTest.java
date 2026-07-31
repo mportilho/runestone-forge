@@ -2,6 +2,7 @@ package com.runestone.expeval_mk3.api;
 
 import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConversionService;
+import com.runestone.expeval_mk3.internal.diagnostics.ProviderReturnViolation;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -141,23 +142,23 @@ class ExpressionEnvironmentProviderContainerContractTest {
                 .build();
 
         assertThatThrownBy(() -> resolve(environment, "nullElement").implementationHandle().invoke())
-                .isInstanceOf(NullPointerException.class)
+                .isInstanceOf(ProviderReturnViolation.class)
                 .hasMessage("function arguments and results must not be null");
         assertThatThrownBy(() -> resolve(environment, "nullMapValue").implementationHandle().invoke())
-                .isInstanceOf(NullPointerException.class)
+                .isInstanceOf(ProviderReturnViolation.class)
                 .hasMessage("function arguments and results must not be null");
         assertThatThrownBy(() -> resolve(environment, "nullMapKey").implementationHandle().invoke())
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ProviderReturnViolation.class)
                 .hasMessageContaining("String keys");
         assertThatThrownBy(() -> resolve(environment, "nonTextRuntimeKey").implementationHandle().invoke())
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ProviderReturnViolation.class)
                 .hasMessageContaining("String keys");
         assertThatThrownBy(() -> resolve(
                         environment,
                         "echo",
                         new MapType(new CollectionType(ScalarType.NUMBER)))
                 .implementationHandle().invoke(Map.of("numbers", Arrays.asList(BigDecimal.ONE, null))))
-                .isInstanceOf(NullPointerException.class)
+                .isInstanceOf(ProviderReturnViolation.class)
                 .hasMessage("function arguments and results must not be null");
     }
 
@@ -171,7 +172,7 @@ class ExpressionEnvironmentProviderContainerContractTest {
                 .build();
 
         assertThatThrownBy(() -> resolve(environment, "values").implementationHandle().invoke())
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ProviderReturnViolation.class)
                 .hasMessageContaining("maxMaterializedSize 2");
         assertThat(InfiniteIterableProvider.produced()).isEqualTo(3);
     }
@@ -185,7 +186,7 @@ class ExpressionEnvironmentProviderContainerContractTest {
                 .build();
 
         assertThatThrownBy(() -> resolve(environment, "values").implementationHandle().invoke())
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(ProviderReturnViolation.class)
                 .hasMessageContaining("maxMaterializedSize 2");
     }
 

@@ -32,8 +32,10 @@ class RuntimeInputPreparationTest {
         overrides.put("mmm", BigDecimal.ONE);
 
         assertThatThrownBy(() -> expression.compute(overrides))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("aaa");
+                .isInstanceOf(ExpressionExecutionException.class)
+                .hasMessageContaining("aaa")
+                .satisfies(exception -> assertThat(((ExpressionExecutionException) exception).diagnostic().code())
+                        .isEqualTo("RUNTIME_INVALID_EXTERNAL_INPUT"));
     }
 
     @Test
@@ -48,8 +50,10 @@ class RuntimeInputPreparationTest {
         overrides.put("aFixed", BigDecimal.TEN);
 
         assertThatThrownBy(() -> expression.compute(overrides))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("aFixed");
+                .isInstanceOf(ExpressionExecutionException.class)
+                .hasMessageContaining("aFixed")
+                .satisfies(exception -> assertThat(((ExpressionExecutionException) exception).diagnostic().code())
+                        .isEqualTo("RUNTIME_INVALID_EXTERNAL_INPUT"));
     }
 
     @Test
@@ -63,7 +67,9 @@ class RuntimeInputPreparationTest {
         CompiledExpression expression = ExpressionCompiler.compileOrThrow("bump(aValid)", environment);
 
         assertThatThrownBy(() -> expression.compute(Map.of("aValid", BigDecimal.TEN, "zInvalid", BigDecimal.TEN)))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(exception -> assertThat(((ExpressionExecutionException) exception).diagnostic().code())
+                        .isEqualTo("RUNTIME_INVALID_EXTERNAL_INPUT"));
 
         assertThat(functions.invocations()).isZero();
     }

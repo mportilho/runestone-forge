@@ -5,5 +5,5 @@ source: 'items := [3, 2, 1]; items.sortBy(@ -> 10 / (@ - 2), "asc")'
 coverage: [assignment, collection-literal, identifier, call, lambda, at-symbol, additive, multiplicative, diagnostic]
 expected:
   runtimeError:
-    type: ArithmeticException
-    messageContains: 'Division by zero'
+    type: ExpressionExecutionException
+    messageContains: 'division by zero'

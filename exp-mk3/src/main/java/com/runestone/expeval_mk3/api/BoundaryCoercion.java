@@ -3,6 +3,8 @@ package com.runestone.expeval_mk3.api;
 import com.runestone.converters.DataConversionService;
 import com.runestone.converters.PreparedDataConversion;
 import com.runestone.converters.impl.stable.DefaultDataConversionService;
+import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
+import com.runestone.expeval_mk3.internal.diagnostics.ProviderReturnViolation;
 
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
@@ -213,13 +215,18 @@ public final class BoundaryCoercion {
 
     private static Object requireConversionValue(Object value, Class<?> sourceType, Class<?> targetType) {
         if (value == null) {
-            throw new NullPointerException("function arguments and results must not be null");
+            throw new ProviderReturnViolation(
+                    DiagnosticCode.RUNTIME_RETURN_NULL, "function arguments and results must not be null");
         }
         if (!sourceType.isInstance(value)) {
-            throw new IllegalArgumentException("boundary value must be an instance of " + sourceType.getName());
+            throw new ProviderReturnViolation(
+                    DiagnosticCode.RUNTIME_RETURN_TYPE_MISMATCH,
+                    "boundary value must be an instance of " + sourceType.getName());
         }
         if (!targetType.isInstance(value)) {
-            throw new IllegalArgumentException("boundary conversion did not produce " + targetType.getName());
+            throw new ProviderReturnViolation(
+                    DiagnosticCode.RUNTIME_RETURN_TYPE_MISMATCH,
+                    "boundary conversion did not produce " + targetType.getName());
         }
         return value;
     }

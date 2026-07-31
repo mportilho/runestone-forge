@@ -1,8 +1,8 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
 import com.runestone.expeval_mk3.api.CollectionType;
+import com.runestone.expeval_mk3.api.ExpressionExecutionException;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
-import com.runestone.expeval_mk3.api.FunctionInvocationException;
 import com.runestone.expeval_mk3.api.FunctionPurity;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
@@ -38,10 +38,12 @@ class ExpressionRuntimeTest {
         FunctionDescriptor descriptor = functionDescriptor("throwsRuntime");
 
         assertThatThrownBy(() -> ExpressionRuntime.invokeFunction(
-                descriptor, List.of(constant(BigDecimal.ONE)), newScope()))
-                .isInstanceOf(FunctionInvocationException.class)
+                descriptor, List.of(constant(BigDecimal.ONE)), newScope(), SPAN))
+                .isInstanceOf(ExpressionExecutionException.class)
                 .hasCauseInstanceOf(IllegalStateException.class)
-                .satisfies(exception -> assertThat(exception.getCause()).hasMessage("boom"));
+                .satisfies(exception -> assertThat(exception.getCause()).hasMessage("boom"))
+                .satisfies(exception -> assertThat(((ExpressionExecutionException) exception).diagnostic().code())
+                        .isEqualTo("RUNTIME_PROVIDER_FAILURE"));
     }
 
     @Test
@@ -49,9 +51,24 @@ class ExpressionRuntimeTest {
         FunctionDescriptor descriptor = functionDescriptor("throwsChecked");
 
         assertThatThrownBy(() -> ExpressionRuntime.invokeFunction(
-                descriptor, List.of(constant(BigDecimal.ONE)), newScope()))
-                .isInstanceOf(FunctionInvocationException.class)
+                descriptor, List.of(constant(BigDecimal.ONE)), newScope(), SPAN))
+                .isInstanceOf(ExpressionExecutionException.class)
                 .hasCauseInstanceOf(IOException.class);
+    }
+
+    @Test
+    void invokeFunctionRestoresInterruptStatusBeforeWrapping() throws Exception {
+        FunctionDescriptor descriptor = functionDescriptor("throwsInterrupted");
+
+        try {
+            assertThatThrownBy(() -> ExpressionRuntime.invokeFunction(
+                    descriptor, List.of(constant(BigDecimal.ONE)), newScope(), SPAN))
+                    .isInstanceOf(ExpressionExecutionException.class)
+                    .hasCauseInstanceOf(InterruptedException.class);
+            assertThat(Thread.interrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     @Test
@@ -59,8 +76,19 @@ class ExpressionRuntimeTest {
         FunctionDescriptor descriptor = functionDescriptor("throwsFatal");
 
         assertThatThrownBy(() -> ExpressionRuntime.invokeFunction(
-                descriptor, List.of(constant(BigDecimal.ONE)), newScope()))
+                descriptor, List.of(constant(BigDecimal.ONE)), newScope(), SPAN))
                 .isInstanceOf(StackOverflowError.class);
+    }
+
+    @Test
+    void invokeFunctionRejectsNullArgumentWithForbiddenNullDiagnostic() throws Exception {
+        FunctionDescriptor descriptor = functionDescriptor("throwsRuntime");
+
+        assertThatThrownBy(() -> ExpressionRuntime.invokeFunction(
+                descriptor, List.of(constant(null)), newScope(), SPAN))
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(exception -> assertThat(((ExpressionExecutionException) exception).diagnostic().code())
+                        .isEqualTo("RUNTIME_FORBIDDEN_NULL"));
     }
 
     private static ExecutableNode constant(Object value) {
@@ -94,6 +122,10 @@ class ExpressionRuntimeTest {
 
         public static BigDecimal throwsChecked(BigDecimal value) throws IOException {
             throw new IOException("io failure");
+        }
+
+        public static BigDecimal throwsInterrupted(BigDecimal value) throws InterruptedException {
+            throw new InterruptedException("interrupted");
         }
 
         public static BigDecimal throwsFatal(BigDecimal value) {
