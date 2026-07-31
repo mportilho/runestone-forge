@@ -80,22 +80,22 @@ public class CollectionOperationsBenchmark {
         @Setup(Level.Trial)
         public void setUp() {
             ExpressionEnvironment environment = ExpressionEnvironment.standard();
-            map = ExpressionCompiler.compile(
+            map = ExpressionCompiler.compileOrThrow(
                     "items := [1, 2, 3, 4, 5, 6, 7, 8]; items.map(@ -> @ + 1)", environment);
-            sum = ExpressionCompiler.compile("items := [1, 2, 3, 4, 5, 6, 7, 8]; items.sum()", environment);
-            mapThenSum = ExpressionCompiler.compile(
+            sum = ExpressionCompiler.compileOrThrow("items := [1, 2, 3, 4, 5, 6, 7, 8]; items.sum()", environment);
+            mapThenSum = ExpressionCompiler.compileOrThrow(
                     "items := [1, 2, 3, 4, 5, 6, 7, 8]; items.map(@ -> @ + 1).sum()", environment);
-            allShortCircuit = ExpressionCompiler.compile(
+            allShortCircuit = ExpressionCompiler.compileOrThrow(
                     "items := [0, 1, 2, 3, 4, 5, 6, 7]; items.all(@ -> @ > 0)", environment);
-            sortBy = ExpressionCompiler.compile(
+            sortBy = ExpressionCompiler.compileOrThrow(
                     "items := [8, 3, 5, 1, 7, 2, 6, 4]; items.sortBy(@ -> @, \"asc\")", environment);
-            reduce = ExpressionCompiler.compile(
+            reduce = ExpressionCompiler.compileOrThrow(
                     "items := [1, 2, 3, 4, 5, 6, 7, 8]; "
                             + "items.reduce(0, @ -> @.accumulator + @.item)",
                     environment);
-            wildcardMaterialization = ExpressionCompiler.compile(
+            wildcardMaterialization = ExpressionCompiler.compileOrThrow(
                     "items := [1, 2, 3, 4, 5, 6, 7, 8]; items[*]", environment);
-            safeCall = ExpressionCompiler.compile(
+            safeCall = ExpressionCompiler.compileOrThrow(
                     "items := [1, 2, 3, 4, 5, 6, 7, 8]; items?.map(@ -> @ + 1)", environment);
         }
     }

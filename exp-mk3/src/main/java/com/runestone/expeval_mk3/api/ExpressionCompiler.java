@@ -24,6 +24,10 @@ public final class ExpressionCompiler {
     }
 
     public static CompiledExpression compile(String source, ExpressionEnvironment environment) {
+        return compileOrThrow(source, environment);
+    }
+
+    public static CompiledExpression compileOrThrow(String source, ExpressionEnvironment environment) {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(environment, "environment");
 

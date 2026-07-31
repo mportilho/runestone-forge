@@ -40,7 +40,7 @@ class ExpressionCorpusExecutionTest {
             return;
         }
 
-        var compiled = ExpressionCompiler.compile(expressionCase.source(), environment(expressionCase));
+        var compiled = ExpressionCompiler.compileOrThrow(expressionCase.source(), environment(expressionCase));
         if (expressionCase.phase() == CasePhase.SEMANTIC) {
             return;
         }
@@ -59,7 +59,7 @@ class ExpressionCorpusExecutionTest {
 
     private static void assertInvalidCase(ExpressionCase expressionCase) {
         if (expressionCase.expectedOutcome() instanceof ExpectedRuntimeError expected) {
-            assertThatThrownBy(() -> ExpressionCompiler.compile(
+            assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(
                             expressionCase.source(), environment(expressionCase))
                     .compute(inputs(expressionCase)))
                     .as(expressionCase.id())
@@ -69,7 +69,7 @@ class ExpressionCorpusExecutionTest {
         }
 
         ExpectedDiagnostic expected = (ExpectedDiagnostic) expressionCase.expectedOutcome();
-        assertThatThrownBy(() -> ExpressionCompiler.compile(expressionCase.source(), environment(expressionCase)))
+        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(expressionCase.source(), environment(expressionCase)))
                 .as(expressionCase.id())
                 .isInstanceOfSatisfying(ExpressionCompilationException.class, failure -> {
                     CompilationDiagnostic actual = failure.diagnostics().getFirst();
