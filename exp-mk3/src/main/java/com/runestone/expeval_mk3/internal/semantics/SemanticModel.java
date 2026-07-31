@@ -119,6 +119,7 @@ public final class SemanticModel {
         return expressionPurity;
     }
 
+    // strict model-boundary accessor; SemanticResolver keeps its own permissive internal helper mid-walk
     public boolean purityOf(NodeId nodeId) {
         Boolean pure = expressionPurity.get(nodeId);
         if (pure == null) {
@@ -143,6 +144,7 @@ public final class SemanticModel {
         return navigationBindings;
     }
 
+    // strict model-boundary accessor; SemanticResolver keeps its own permissive internal helper mid-walk
     public NumericFact numericFactOf(NodeId nodeId) {
         NumericFact fact = numericFacts.get(nodeId);
         if (fact == null) {
@@ -227,8 +229,12 @@ public final class SemanticModel {
             case FunctionCallNode functionCall -> {
                 requireEntry(functionBindings, functionCall, "function binding");
                 functionCall.arguments().forEach(argument -> {
-                    if (argument instanceof ExpressionCallArgument expressionArgument) {
-                        validateCompleteExpression(expressionArgument.expression(), visited);
+                    switch (argument) {
+                        case ExpressionCallArgument expressionArgument ->
+                                validateCompleteExpression(expressionArgument.expression(), visited);
+                        case LambdaCallArgument ignored -> throw new IllegalStateException(
+                                "successful semantic model contains an unsupported lambda argument"
+                                        + " for a global function call " + functionCall.id());
                     }
                 });
             }
