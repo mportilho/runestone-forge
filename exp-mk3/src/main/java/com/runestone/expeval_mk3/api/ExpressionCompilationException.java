@@ -4,21 +4,21 @@ import java.util.List;
 
 public final class ExpressionCompilationException extends IllegalArgumentException {
 
-    private final List<CompilationDiagnostic> diagnostics;
+    private final List<ExpressionDiagnostic> diagnostics;
 
-    ExpressionCompilationException(List<com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic> diagnostics) {
+    ExpressionCompilationException(List<ExpressionDiagnostic> diagnostics) {
         super(message(diagnostics));
-        this.diagnostics = diagnostics.stream().map(CompilationDiagnostic::from).toList();
+        this.diagnostics = List.copyOf(diagnostics);
         if (this.diagnostics.isEmpty()) {
             throw new IllegalArgumentException("diagnostics must not be empty");
         }
     }
 
-    public List<CompilationDiagnostic> diagnostics() {
+    public List<ExpressionDiagnostic> diagnostics() {
         return diagnostics;
     }
 
-    private static String message(List<com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic> diagnostics) {
+    private static String message(List<ExpressionDiagnostic> diagnostics) {
         if (diagnostics == null || diagnostics.isEmpty()) {
             return "Expression compilation failed";
         }

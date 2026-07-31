@@ -2,10 +2,10 @@ package com.runestone.expeval_mk3.internal.parser;
 
 import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorLexer;
 import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorParser;
-import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCategory;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
-import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
-import com.runestone.expeval_mk3.internal.source.SourceSpan;
+import com.runestone.expeval_mk3.api.DiagnosticCategory;
+import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.api.SourceSpan;
 import org.antlr.v4.runtime.BailErrorStrategy;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -103,9 +103,9 @@ public final class ExpressionParser {
         List<ExpressionDiagnostic> diagnostics = new ArrayList<>();
         for (Token token : tokens.getTokens()) {
             if (token.getType() == ExpressionEvaluatorLexer.ERROR_CHAR) {
-                diagnostics.add(new ExpressionDiagnostic(
+                diagnostics.add(ExpressionDiagnostic.error(
                         DiagnosticCategory.PARSE,
-                        DiagnosticCode.PARSE_UNRECOGNIZED_CHARACTER,
+                        DiagnosticCode.PARSE_UNRECOGNIZED_CHARACTER.name(),
                         "Unrecognized character: " + token.getText(),
                         tokenSpan(token)));
             }
@@ -114,12 +114,12 @@ public final class ExpressionParser {
     }
 
     private static final Comparator<ExpressionDiagnostic> DIAGNOSTIC_ORDER = Comparator
-            .comparingInt((ExpressionDiagnostic diagnostic) -> diagnostic.span().offset())
+            .comparingInt((ExpressionDiagnostic diagnostic) -> diagnostic.primarySpan().orElseThrow().offset())
             .thenComparingInt(ExpressionParser::diagnosticPriority)
-            .thenComparingInt(diagnostic -> diagnostic.span().endOffset());
+            .thenComparingInt(diagnostic -> diagnostic.primarySpan().orElseThrow().endOffset());
 
     private static int diagnosticPriority(ExpressionDiagnostic diagnostic) {
-        return diagnostic.code() == DiagnosticCode.PARSE_UNRECOGNIZED_CHARACTER ? 0 : 1;
+        return diagnostic.code().equals(DiagnosticCode.PARSE_UNRECOGNIZED_CHARACTER.name()) ? 0 : 1;
     }
 
     private static SourceSpan tokenSpan(Token token) {
@@ -189,9 +189,9 @@ public final class ExpressionParser {
         @Override
         protected void reportNoViableAlternative(Parser recognizer, NoViableAltException exception) {
             if (isMissingClosingTokenAtEof(recognizer, exception.getOffendingToken(), source)) {
-                diagnostics.add(new ExpressionDiagnostic(
+                diagnostics.add(ExpressionDiagnostic.error(
                         DiagnosticCategory.PARSE,
-                        DiagnosticCode.PARSE_MISSING_TOKEN,
+                        DiagnosticCode.PARSE_MISSING_TOKEN.name(),
                         "Missing token",
                         eofSpan(source)));
                 return;
@@ -254,9 +254,9 @@ public final class ExpressionParser {
 
         @Override
         protected void reportMissingToken(Parser recognizer) {
-            diagnostics.add(new ExpressionDiagnostic(
+            diagnostics.add(ExpressionDiagnostic.error(
                     DiagnosticCategory.PARSE,
-                    DiagnosticCode.PARSE_MISSING_TOKEN,
+                    DiagnosticCode.PARSE_MISSING_TOKEN.name(),
                     "Missing token",
                     insertionSpan(recognizer, source)));
         }
@@ -270,7 +270,7 @@ public final class ExpressionParser {
             SourceSpan span = token == null || token.getType() == Token.EOF
                     ? eofSpan(source)
                     : tokenSpan(token);
-            diagnostics.add(new ExpressionDiagnostic(DiagnosticCategory.PARSE, code, message, span));
+            diagnostics.add(ExpressionDiagnostic.error(DiagnosticCategory.PARSE, code.name(), message, span));
         }
     }
 }

@@ -60,10 +60,10 @@ import com.runestone.expeval_mk3.internal.ast.TimeLiteralValue;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
 import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
-import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCategory;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
-import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
-import com.runestone.expeval_mk3.internal.source.SourceSpan;
+import com.runestone.expeval_mk3.api.DiagnosticCategory;
+import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.api.SourceSpan;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -1505,11 +1505,11 @@ public final class SemanticResolver {
         }
 
         private void diagnostic(DiagnosticCode code, String message, SourceSpan span) {
-            diagnostics.add(new ExpressionDiagnostic(DiagnosticCategory.SEMANTIC, code, message, span));
+            diagnostics.add(ExpressionDiagnostic.error(DiagnosticCategory.SEMANTIC, code.name(), message, span));
         }
 
         private void warning(DiagnosticCode code, String message, SourceSpan span) {
-            warnings.add(new ExpressionDiagnostic(DiagnosticCategory.SEMANTIC, code, message, span));
+            warnings.add(ExpressionDiagnostic.warning(DiagnosticCategory.SEMANTIC, code.name(), message, span));
         }
 
         private static boolean orderable(ExpressionType type) {

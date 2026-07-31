@@ -1,8 +1,8 @@
 package com.runestone.expeval_mk3.internal.parser;
 
-import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCategory;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
-import com.runestone.expeval_mk3.internal.source.SourceSpan;
+import com.runestone.expeval_mk3.api.DiagnosticCategory;
+import com.runestone.expeval_mk3.api.SourceSpan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,8 +36,8 @@ class ExpressionParserTest {
         assertThat(failure.predictionPath()).isEqualTo(PredictionPath.LL_FALLBACK);
         assertThat(failure.diagnostics()).first().satisfies(diagnostic -> {
             assertThat(diagnostic.category()).isEqualTo(DiagnosticCategory.PARSE);
-            assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.PARSE_UNRECOGNIZED_CHARACTER);
-            assertThat(diagnostic.span()).isEqualTo(new SourceSpan(2, 3, 1, 3));
+            assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.PARSE_UNRECOGNIZED_CHARACTER.name());
+            assertThat(diagnostic.primarySpan()).contains(new SourceSpan(2, 3, 1, 3));
         });
     }
 

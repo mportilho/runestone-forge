@@ -8,7 +8,7 @@ import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.MemberName;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.PropertyNavigationLink;
-import com.runestone.expeval_mk3.internal.source.SourceSpan;
+import com.runestone.expeval_mk3.api.SourceSpan;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

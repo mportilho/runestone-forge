@@ -18,7 +18,7 @@ import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationWiring;
 import com.runestone.expeval_mk3.internal.semantics.WildcardNavigationBinding;
-import com.runestone.expeval_mk3.internal.source.SourceSpan;
+import com.runestone.expeval_mk3.api.SourceSpan;
 
 import java.lang.invoke.MethodHandle;
 import java.math.BigDecimal;

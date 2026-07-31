@@ -3,7 +3,7 @@ package com.runestone.expeval_mk3.corpus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.runestone.expeval_mk3.internal.source.SourceSpan;
+import com.runestone.expeval_mk3.api.SourceSpan;
 
 import java.io.IOException;
 import java.net.URISyntaxException;

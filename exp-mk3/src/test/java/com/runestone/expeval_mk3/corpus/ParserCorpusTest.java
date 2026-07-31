@@ -1,7 +1,7 @@
 package com.runestone.expeval_mk3.corpus;
 
-import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCategory;
-import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.api.DiagnosticCategory;
+import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.internal.parser.ExpressionParser;
 import com.runestone.expeval_mk3.internal.parser.ParseFailure;
 import com.runestone.expeval_mk3.internal.parser.ParseResult;
@@ -54,12 +54,12 @@ class ParserCorpusTest {
             assertThat(primary.category().name())
                     .as("%s", expressionCase.path())
                     .isEqualTo(expected.category());
-            assertThat(primary.code().name())
+            assertThat(primary.code())
                     .as("%s", expressionCase.path())
                     .isEqualTo(expected.code());
-            assertThat(primary.span())
+            assertThat(primary.primarySpan())
                     .as("%s", expressionCase.path())
-                    .isEqualTo(expected.requiredSpan());
+                    .contains(expected.requiredSpan());
         }
     }
 

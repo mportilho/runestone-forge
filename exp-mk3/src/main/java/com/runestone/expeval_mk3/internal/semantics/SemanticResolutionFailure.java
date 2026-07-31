@@ -1,6 +1,6 @@
 package com.runestone.expeval_mk3.internal.semantics;
 
-import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 
 import java.util.List;
 

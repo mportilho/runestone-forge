@@ -1,4 +1,4 @@
-package com.runestone.expeval_mk3.internal.source;
+package com.runestone.expeval_mk3.api;
 
 public record SourceSpan(int offset, int endOffset, int line, int column) {
 

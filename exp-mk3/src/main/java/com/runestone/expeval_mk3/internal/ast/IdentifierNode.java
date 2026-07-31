@@ -1,6 +1,6 @@
 package com.runestone.expeval_mk3.internal.ast;
 
-import com.runestone.expeval_mk3.internal.source.SourceSpan;
+import com.runestone.expeval_mk3.api.SourceSpan;
 import java.util.Objects;
 
 public record IdentifierNode(NodeId id, SourceSpan sourceSpan, String name) implements ExpressionNode {

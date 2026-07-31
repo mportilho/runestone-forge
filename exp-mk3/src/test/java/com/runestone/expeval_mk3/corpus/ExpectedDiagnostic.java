@@ -1,6 +1,6 @@
 package com.runestone.expeval_mk3.corpus;
 
-import com.runestone.expeval_mk3.internal.source.SourceSpan;
+import com.runestone.expeval_mk3.api.SourceSpan;
 
 import java.util.List;
 import java.util.Objects;

@@ -2,11 +2,11 @@ package com.runestone.expeval_mk3.internal.ast;
 
 import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorBaseVisitor;
 import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorParser;
-import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCategory;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
-import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.api.DiagnosticCategory;
+import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.internal.parser.ParseSuccess;
-import com.runestone.expeval_mk3.internal.source.SourceSpan;
+import com.runestone.expeval_mk3.api.SourceSpan;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.TerminalNode;
@@ -770,7 +770,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     }
 
     private void addDiagnostic(DiagnosticCode code, String message, SourceSpan span) {
-        diagnostics.add(new ExpressionDiagnostic(DiagnosticCategory.SEMANTIC, code, message, span));
+        diagnostics.add(ExpressionDiagnostic.error(DiagnosticCategory.SEMANTIC, code.name(), message, span));
     }
 
     private static Optional<LocalDate> parseDate(String value) {

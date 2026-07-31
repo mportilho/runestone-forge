@@ -2,8 +2,8 @@ package com.runestone.expeval_mk3.corpus;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.runestone.expeval_mk3.api.CollectionType;
-import com.runestone.expeval_mk3.api.CompilationDiagnostic;
 import com.runestone.expeval_mk3.api.ExpressionCompilationException;
+import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.ExpressionCompiler;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
@@ -72,12 +72,11 @@ class ExpressionCorpusExecutionTest {
         assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(expressionCase.source(), environment(expressionCase)))
                 .as(expressionCase.id())
                 .isInstanceOfSatisfying(ExpressionCompilationException.class, failure -> {
-                    CompilationDiagnostic actual = failure.diagnostics().getFirst();
-                    assertThat(actual.category()).isEqualTo(expected.category());
+                    ExpressionDiagnostic actual = failure.diagnostics().getFirst();
+                    assertThat(actual.category().name()).isEqualTo(expected.category());
                     assertThat(actual.code()).isEqualTo(expected.code());
                     if (!expected.spans().isEmpty()) {
-                        assertThat(actual.offset()).isEqualTo(expected.spans().getFirst().offset());
-                        assertThat(actual.endOffset()).isEqualTo(expected.spans().getFirst().endOffset());
+                        assertThat(actual.primarySpan()).contains(expected.spans().getFirst());
                     }
                 });
     }

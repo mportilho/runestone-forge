@@ -1,6 +1,6 @@
 package com.runestone.expeval_mk3.internal.ast;
 
-import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCategory;
+import com.runestone.expeval_mk3.api.DiagnosticCategory;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.parser.ExpressionParser;
 import com.runestone.expeval_mk3.internal.parser.ParseResult;
@@ -547,15 +547,15 @@ class SemanticAstPipelineTest {
         assertThat(((SemanticAstBuildFailure) buildResult).diagnostics()).satisfiesExactly(
                 diagnostic -> {
                     assertThat(diagnostic.category()).isEqualTo(DiagnosticCategory.SEMANTIC);
-                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.AST_INVALID_DATE_LITERAL);
-                    assertThat(diagnostic.span().offset()).isEqualTo(11);
-                    assertThat(diagnostic.span().endOffset()).isEqualTo(24);
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.AST_INVALID_DATE_LITERAL.name());
+                    assertThat(diagnostic.primarySpan().orElseThrow().offset()).isEqualTo(11);
+                    assertThat(diagnostic.primarySpan().orElseThrow().endOffset()).isEqualTo(24);
                 },
                 diagnostic -> {
                     assertThat(diagnostic.category()).isEqualTo(DiagnosticCategory.SEMANTIC);
-                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.AST_INVALID_DATE_TIME_LITERAL);
-                    assertThat(diagnostic.span().offset()).isEqualTo(41);
-                    assertThat(diagnostic.span().endOffset()).isEqualTo(64);
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.AST_INVALID_DATE_TIME_LITERAL.name());
+                    assertThat(diagnostic.primarySpan().orElseThrow().offset()).isEqualTo(41);
+                    assertThat(diagnostic.primarySpan().orElseThrow().endOffset()).isEqualTo(64);
                 });
     }
 

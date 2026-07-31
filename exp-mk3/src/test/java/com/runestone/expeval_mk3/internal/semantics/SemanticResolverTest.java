@@ -6,6 +6,7 @@ import com.runestone.expeval_mk3.api.CollectionOperationCatalog.MaterializationP
 import com.runestone.expeval_mk3.api.CollectionOperationCatalog.NumericResultFact;
 import com.runestone.expeval_mk3.api.CollectionOperationCatalog.OperationIdentity;
 import com.runestone.expeval_mk3.api.CollectionType;
+import com.runestone.expeval_mk3.api.DiagnosticSeverity;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
@@ -58,11 +59,11 @@ class SemanticResolverTest {
 
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure -> {
             assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic -> {
-                assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_EMPTY_COLLECTION_REQUIRES_CONTEXT);
-                assertThat(diagnostic.span().offset()).isZero();
-                assertThat(diagnostic.span().endOffset()).isEqualTo(2);
-                assertThat(diagnostic.span().line()).isEqualTo(1);
-                assertThat(diagnostic.span().column()).isEqualTo(1);
+                assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_EMPTY_COLLECTION_REQUIRES_CONTEXT.name());
+                assertThat(diagnostic.primarySpan().orElseThrow().offset()).isZero();
+                assertThat(diagnostic.primarySpan().orElseThrow().endOffset()).isEqualTo(2);
+                assertThat(diagnostic.primarySpan().orElseThrow().line()).isEqualTo(1);
+                assertThat(diagnostic.primarySpan().orElseThrow().column()).isEqualTo(1);
             });
         });
     }
@@ -73,9 +74,25 @@ class SemanticResolverTest {
 
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure -> {
             assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic -> {
-                assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_EMPTY_COLLECTION_REQUIRES_CONTEXT);
-                assertThat(diagnostic.span().offset()).isEqualTo(1);
-                assertThat(diagnostic.span().endOffset()).isEqualTo(3);
+                assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_EMPTY_COLLECTION_REQUIRES_CONTEXT.name());
+                assertThat(diagnostic.primarySpan().orElseThrow().offset()).isEqualTo(1);
+                assertThat(diagnostic.primarySpan().orElseThrow().endOffset()).isEqualTo(3);
+            });
+        });
+    }
+
+    @Test
+    void shadowingAnExternalSymbolIsAWarningNotAnError() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast("x := 1; x"), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            assertThat(success.warnings()).singleElement().satisfies(diagnostic -> {
+                assertThat(diagnostic.severity()).isEqualTo(DiagnosticSeverity.WARNING);
+                assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_SYMBOL_SHADOWING.name());
             });
         });
     }
@@ -342,7 +359,7 @@ class SemanticResolverTest {
 
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure ->
                 assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic ->
-                        assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH)));
+                        assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH.name())));
     }
 
     public static final class ImpureFunctions {
