@@ -18,7 +18,7 @@ public record CollectionOperationBinding(
         CollectionOperationCatalog.MaterializationPolicy materializationPolicy,
         CollectionOperationCatalog.NumericResultFact numericResultFact,
         CollectionOperationCatalog.CardinalityPreservation cardinalityPreservation,
-        List<LambdaBinding> lambdaBindings) {
+        List<LambdaBinding> lambdaBindings) implements NavigationBinding {
 
     public CollectionOperationBinding {
         Objects.requireNonNull(identity, "identity");

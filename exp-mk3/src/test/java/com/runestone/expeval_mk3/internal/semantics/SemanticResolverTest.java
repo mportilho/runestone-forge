@@ -302,8 +302,8 @@ class SemanticResolverTest {
 
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
             SemanticModel model = success.model();
-            assertThat(model.collectionOperationBindings()).containsKey(link.id());
-            CollectionOperationBinding binding = model.collectionOperationBindings().get(link.id());
+            assertThat(model.navigationBindings()).containsKey(link.id());
+            CollectionOperationBinding binding = (CollectionOperationBinding) model.navigationBindings().get(link.id());
             assertThat(binding.identity()).isEqualTo(OperationIdentity.SUM);
             assertThat(binding.receiverType())
                     .isEqualTo(new CollectionType(ScalarType.NUMBER));
@@ -502,7 +502,7 @@ class SemanticResolverTest {
         SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
 
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
-            CollectionOperationBinding binding = success.model().collectionOperationBindings().get(link.id());
+            CollectionOperationBinding binding = (CollectionOperationBinding) success.model().navigationBindings().get(link.id());
             assertThat(binding.pure()).isFalse();
             assertThat(binding.lambdaBindings()).singleElement().satisfies(lambda -> assertThat(lambda.pure()).isFalse());
         });
@@ -525,8 +525,8 @@ class SemanticResolverTest {
             assertThat(model.resolvedTypes()).containsEntry(link.id(), new CollectionType(ScalarType.NUMBER));
             assertThat(model.runtimeNullability()).containsEntry(link.id(), RuntimeNullability.MAY_BE_NULL);
             assertThat(model.collectionShapes()).containsEntry(link.id(), new CollectionShape(2));
-            assertThat(model.wildcardNavigationBindings()).containsKey(link.id());
-            WildcardNavigationBinding binding = model.wildcardNavigationBindings().get(link.id());
+            assertThat(model.navigationBindings()).containsKey(link.id());
+            WildcardNavigationBinding binding = (WildcardNavigationBinding) model.navigationBindings().get(link.id());
             assertThat(binding.receiverKind()).isEqualTo(WildcardNavigationBinding.ReceiverKind.OBJECT);
             assertThat(binding.elementType()).isEqualTo(ScalarType.NUMBER);
             assertThat(binding.resultShape()).isEqualTo(new CollectionShape(2));
@@ -608,6 +608,106 @@ class SemanticResolverTest {
         assertSemanticDiagnostic("object[\"A\"]", objectEnvironment);
     }
 
+    @Test
+    void bindsRegisteredObjectPropertyNavigationWithAccessorHandleAndNullability() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaType(PropertyProvider.class)
+                .externalSymbol("object", new PropertyProvider(BigDecimal.TEN), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        ExpressionFileNode ast = ast("object.amount");
+        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        NavigationLink link = navigation.links().getFirst();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            SemanticModel model = success.model();
+            RegisteredPropertyNavigationBinding binding =
+                    (RegisteredPropertyNavigationBinding) model.navigationBindings().get(link.id());
+            assertThat(binding.resultType()).isEqualTo(ScalarType.NUMBER);
+            assertThat(binding.resultNullability()).isEqualTo(RuntimeNullability.NEVER_NULL);
+            assertThat(binding.accessorHandle()).isNotNull();
+            assertThat(model.resolvedTypes()).containsEntry(link.id(), ScalarType.NUMBER);
+        });
+    }
+
+    @Test
+    void rejectsUnregisteredObjectPropertyMember() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaType(PropertyProvider.class)
+                .externalSymbol("object", new PropertyProvider(BigDecimal.TEN), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast("object.missing"), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure ->
+                assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic ->
+                        assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL.name())));
+    }
+
+    @Test
+    void bindsRegisteredObjectMethodNavigationWithInvocationHandleAndNullability() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaTypeMethod(PropertyProvider.class, "scaledAmount", BigDecimal.class)
+                .externalSymbol("object", new PropertyProvider(BigDecimal.TEN), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        ExpressionFileNode ast = ast("object.scaledAmount(2)");
+        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        NavigationLink link = navigation.links().getFirst();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            SemanticModel model = success.model();
+            RegisteredMethodNavigationBinding binding =
+                    (RegisteredMethodNavigationBinding) model.navigationBindings().get(link.id());
+            assertThat(binding.resultType()).isEqualTo(ScalarType.NUMBER);
+            assertThat(binding.resultNullability()).isEqualTo(RuntimeNullability.NEVER_NULL);
+            assertThat(binding.invocationHandle()).isNotNull();
+            assertThat(model.resolvedTypes()).containsEntry(link.id(), ScalarType.NUMBER);
+        });
+    }
+
+    @Test
+    void rejectsUnregisteredObjectMethodMember() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaTypeMethod(PropertyProvider.class, "scaledAmount", BigDecimal.class)
+                .externalSymbol("object", new PropertyProvider(BigDecimal.TEN), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast("object.missing()"), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure ->
+                assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic ->
+                        assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL.name())));
+    }
+
+    @Test
+    void rejectsLambdaArgumentForRegisteredObjectMethod() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaTypeMethod(PropertyProvider.class, "scaledAmount", BigDecimal.class)
+                .externalSymbol("object", new PropertyProvider(BigDecimal.TEN), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        SemanticResolutionResult result = new SemanticResolver()
+                .resolve(ast("object.scaledAmount(@ -> @)"), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure ->
+                assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic ->
+                        assertThat(diagnostic.code())
+                                .isEqualTo(DiagnosticCode.SEMANTIC_LAMBDA_ARGUMENT_UNSUPPORTED.name())));
+    }
+
+    @Test
+    void rejectsPropertyNavigationOnMapReceiver() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertSemanticDiagnostic("m.a", environment);
+    }
+
     private static ExpressionFileNode ast(String source) {
         ParseSuccess parse = (ParseSuccess) new ExpressionParser().parse(source);
         return ((SemanticAstBuildSuccess) new SemanticAstBuilder().build(parse)).file();
@@ -626,7 +726,7 @@ class SemanticResolverTest {
 
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
             SemanticModel model = success.model();
-            assertThat(model.collectionOperationBindings().get(link.id()).identity())
+            assertThat(((CollectionOperationBinding) model.navigationBindings().get(link.id())).identity())
                     .isEqualTo(identity);
             assertThat(model.resolvedTypes()).containsEntry(link.id(), expectedType);
             assertThat(model.runtimeNullability()).containsEntry(link.id(), RuntimeNullability.NEVER_NULL);
@@ -659,7 +759,7 @@ class SemanticResolverTest {
         SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
 
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
-            WildcardNavigationBinding binding = success.model().wildcardNavigationBindings().get(link.id());
+            WildcardNavigationBinding binding = (WildcardNavigationBinding) success.model().navigationBindings().get(link.id());
             assertThat(binding.receiverKind()).isEqualTo(receiverKind);
             assertThat(binding.elementType()).isEqualTo(elementType);
             assertThat(binding.resultNullability()).isEqualTo(nullability);
@@ -723,6 +823,13 @@ class SemanticResolverTest {
 
         public BigDecimal touch(BigDecimal value) {
             return value;
+        }
+    }
+
+    public record PropertyProvider(BigDecimal amount) {
+
+        public BigDecimal scaledAmount(BigDecimal factor) {
+            return amount.multiply(factor);
         }
     }
 

@@ -6,6 +6,9 @@ import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.FunctionLookupResult;
+import com.runestone.expeval_mk3.api.FunctionSignature;
+import com.runestone.expeval_mk3.api.JavaMethodDescriptor;
+import com.runestone.expeval_mk3.api.JavaPropertyDescriptor;
 import com.runestone.expeval_mk3.api.JavaTypeDescriptor;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ObjectType;
@@ -106,8 +109,7 @@ public final class SemanticResolver {
         private final Map<NodeId, SymbolBinding> symbolBindings = new HashMap<>();
         private final Map<NodeId, ExpressionType> equalityOperandTypes = new HashMap<>();
         private final Map<NodeId, FunctionDescriptor> functionBindings = new HashMap<>();
-        private final Map<NodeId, CollectionOperationBinding> collectionOperationBindings = new HashMap<>();
-        private final Map<NodeId, WildcardNavigationBinding> wildcardNavigationBindings = new HashMap<>();
+        private final Map<NodeId, NavigationBinding> navigationBindings = new HashMap<>();
         private final Map<String, SymbolBinding> visibleBindings = new LinkedHashMap<>();
         private final Map<String, CollectionShape> visibleCollectionShapes = new HashMap<>();
         private final List<SymbolBinding> externalBindings = new ArrayList<>();
@@ -156,8 +158,7 @@ public final class SemanticResolver {
                     symbolBindings,
                     equalityOperandTypes,
                     functionBindings,
-                    collectionOperationBindings,
-                    wildcardNavigationBindings,
+                    navigationBindings,
                     new FrameLayout(externalBindings, nextFrameSlot)), warnings);
         }
 
@@ -910,6 +911,9 @@ public final class SemanticResolver {
                 return resolveProperty(property, receiverType, receiverPure, contextualMembers);
             }
             if (link instanceof CallNavigationLink call) {
+                if (receiverType instanceof ObjectType objectType) {
+                    return resolveRegisteredMethod(call, objectType, receiverPure);
+                }
                 return resolveCollectionOperation(call, receiverType, receiverShape, receiverPure);
             }
             diagnostic(
@@ -939,6 +943,8 @@ public final class SemanticResolver {
                         index.sourceSpan());
                 return LinkResolution.invalidResolution();
             }
+            navigationBindings.put(index.id(), new IndexSubscriptNavigationBinding(
+                    collectionType.elementType(), RuntimeNullability.NEVER_NULL, receiverPure));
             return LinkResolution.known(collectionType.elementType(), null, RuntimeNullability.NEVER_NULL, receiverPure);
         }
 
@@ -961,6 +967,8 @@ public final class SemanticResolver {
                 int end = SubscriptBounds.normalizedSliceBound(slice.end(), size, size);
                 shape = new CollectionShape(Math.max(end - start, 0));
             }
+            navigationBindings.put(slice.id(), new SliceSubscriptNavigationBinding(
+                    collectionType.elementType(), RuntimeNullability.NEVER_NULL, receiverPure));
             return LinkResolution.known(
                     new CollectionType(collectionType.elementType()), shape, RuntimeNullability.NEVER_NULL, receiverPure);
         }
@@ -982,6 +990,8 @@ public final class SemanticResolver {
             CollectionShape shape = mapType.valueType() instanceof CollectionType
                     ? CollectionShape.unknown()
                     : null;
+            navigationBindings.put(stringKey.id(), new MapKeySubscriptNavigationBinding(
+                    mapType.valueType(), nullability, receiverPure));
             return LinkResolution.known(mapType.valueType(), shape, nullability, receiverPure);
         }
 
@@ -1024,11 +1034,14 @@ public final class SemanticResolver {
                     "Filter predicate may be null at runtime")) {
                 return LinkResolution.invalidResolution();
             }
+            boolean filterPure = receiverPure && purityOf(filter.predicate().id());
+            navigationBindings.put(filter.id(), new FilterNavigationBinding(
+                    collectionType.elementType(), RuntimeNullability.NEVER_NULL, currentItem.frameSlot(), filterPure));
             return LinkResolution.known(
                     new CollectionType(collectionType.elementType()),
                     CollectionShape.unknown(),
                     RuntimeNullability.NEVER_NULL,
-                    receiverPure && purityOf(filter.predicate().id()));
+                    filterPure);
         }
 
         private LinkResolution resolveWildcard(
@@ -1078,7 +1091,7 @@ public final class SemanticResolver {
             RuntimeNullability resultNullability = wildcard.safe()
                     ? RuntimeNullability.MAY_BE_NULL
                     : RuntimeNullability.NEVER_NULL;
-            wildcardNavigationBindings.put(wildcard.id(), new WildcardNavigationBinding(
+            navigationBindings.put(wildcard.id(), new WildcardNavigationBinding(
                     receiverKind,
                     receiverType,
                     elementType,
@@ -1100,49 +1113,156 @@ public final class SemanticResolver {
                 boolean receiverPure,
                 ContextualItemMembers contextualMembers) {
             if (receiverType == MAP_ENTRY_TYPE) {
-                ExpressionType resultType = switch (property.memberName().value()) {
-                    case MAP_ENTRY_KEY_MEMBER -> ScalarType.STRING;
-                    case MAP_ENTRY_VALUE_MEMBER -> Objects.requireNonNull(contextualMembers.mapEntryValueType(),
-                            "mapEntryValueType");
+                ContextualMemberNavigationBinding.Member member = switch (property.memberName().value()) {
+                    case MAP_ENTRY_KEY_MEMBER -> ContextualMemberNavigationBinding.Member.MAP_ENTRY_KEY;
+                    case MAP_ENTRY_VALUE_MEMBER -> ContextualMemberNavigationBinding.Member.MAP_ENTRY_VALUE;
                     default -> null;
                 };
-                if (resultType == null) {
+                if (member == null) {
                     diagnostic(
                             DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL,
                             "Map entry exposes only @.k and @.v",
                             property.sourceSpan());
                     return LinkResolution.invalidResolution();
                 }
+                ExpressionType resultType = member == ContextualMemberNavigationBinding.Member.MAP_ENTRY_KEY
+                        ? ScalarType.STRING
+                        : Objects.requireNonNull(contextualMembers.mapEntryValueType(), "mapEntryValueType");
                 RuntimeNullability nullability = property.safe()
                         ? RuntimeNullability.MAY_BE_NULL
                         : RuntimeNullability.NEVER_NULL;
+                navigationBindings.put(property.id(), new ContextualMemberNavigationBinding(
+                        member, resultType, nullability, receiverPure));
                 return LinkResolution.known(resultType, null, nullability, receiverPure);
             }
             if (receiverType == REDUCTION_ITEM_TYPE) {
                 ReductionItemTypes reductionTypes = Objects.requireNonNull(
                         contextualMembers.reductionItemTypes(), "reductionItemTypes");
-                ExpressionType resultType = switch (property.memberName().value()) {
-                    case REDUCTION_ACCUMULATOR_MEMBER -> reductionTypes.accumulatorType();
-                    case REDUCTION_ITEM_MEMBER -> reductionTypes.itemType();
+                ContextualMemberNavigationBinding.Member member = switch (property.memberName().value()) {
+                    case REDUCTION_ACCUMULATOR_MEMBER -> ContextualMemberNavigationBinding.Member.REDUCTION_ACCUMULATOR;
+                    case REDUCTION_ITEM_MEMBER -> ContextualMemberNavigationBinding.Member.REDUCTION_ITEM;
                     default -> null;
                 };
-                if (resultType == null) {
+                if (member == null) {
                     diagnostic(
                             DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL,
                             "Reduction item exposes only @.accumulator and @.item",
                             property.sourceSpan());
                     return LinkResolution.invalidResolution();
                 }
+                ExpressionType resultType = member == ContextualMemberNavigationBinding.Member.REDUCTION_ACCUMULATOR
+                        ? reductionTypes.accumulatorType()
+                        : reductionTypes.itemType();
                 RuntimeNullability nullability = property.safe()
                         ? RuntimeNullability.MAY_BE_NULL
                         : RuntimeNullability.NEVER_NULL;
+                navigationBindings.put(property.id(), new ContextualMemberNavigationBinding(
+                        member, resultType, nullability, receiverPure));
                 return LinkResolution.known(resultType, null, nullability, receiverPure);
+            }
+            if (receiverType instanceof MapType) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        "Map values are accessed with a textual subscript, not a property",
+                        property.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            if (receiverType instanceof ObjectType objectType) {
+                return resolveRegisteredProperty(property, objectType, receiverPure);
             }
             diagnostic(
                     DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION,
                     "Property navigation is not supported by this compilation slice",
                     property.sourceSpan());
             return LinkResolution.invalidResolution();
+        }
+
+        private LinkResolution resolveRegisteredProperty(
+                PropertyNavigationLink property,
+                ObjectType objectType,
+                boolean receiverPure) {
+            JavaTypeDescriptor descriptor = environment.javaTypes().find(objectType).orElse(null);
+            JavaPropertyDescriptor propertyDescriptor = descriptor == null
+                    ? null
+                    : descriptor.findProperty(property.memberName().value()).orElse(null);
+            if (propertyDescriptor == null) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL,
+                        "No registered property '" + property.memberName().value() + "' on " + objectType,
+                        property.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            RuntimeNullability nullability = property.safe()
+                    ? RuntimeNullability.MAY_BE_NULL
+                    : RuntimeNullability.NEVER_NULL;
+            navigationBindings.put(property.id(), new RegisteredPropertyNavigationBinding(
+                    objectType,
+                    propertyDescriptor.type(),
+                    nullability,
+                    propertyDescriptor.accessorHandle(),
+                    propertyDescriptor.implementationMetadata(),
+                    receiverPure));
+            return LinkResolution.known(propertyDescriptor.type(), null, nullability, receiverPure);
+        }
+
+        private LinkResolution resolveRegisteredMethod(
+                CallNavigationLink call,
+                ObjectType objectType,
+                boolean receiverPure) {
+            List<ExpressionType> argumentTypes = new ArrayList<>(call.arguments().size());
+            boolean invalid = false;
+            for (CallArgument argument : call.arguments()) {
+                if (!(argument instanceof ExpressionCallArgument expressionArgument)) {
+                    diagnostic(
+                            DiagnosticCode.SEMANTIC_LAMBDA_ARGUMENT_UNSUPPORTED,
+                            "Lambda arguments are not supported for registered object methods",
+                            call.sourceSpan());
+                    invalid = true;
+                    continue;
+                }
+                Resolution argumentResolution = resolveExpression(expressionArgument.expression(), null);
+                if (argumentResolution.invalid() || argumentResolution.pending()) {
+                    invalid = true;
+                    if (argumentResolution.pending()) {
+                        emptyCollectionDiagnostic(argumentResolution.pendingSpan());
+                    }
+                    continue;
+                }
+                if (rejectIfNullable(
+                        expressionArgument.expression(),
+                        DiagnosticCode.SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED,
+                        "Registered method argument may be null at runtime")) {
+                    invalid = true;
+                    continue;
+                }
+                argumentTypes.add(argumentResolution.type());
+            }
+            if (invalid) {
+                return LinkResolution.invalidResolution();
+            }
+            JavaTypeDescriptor descriptor = environment.javaTypes().find(objectType).orElse(null);
+            JavaMethodDescriptor methodDescriptor = descriptor == null
+                    ? null
+                    : descriptor.findMethod(new FunctionSignature(call.memberName().value(), argumentTypes))
+                            .orElse(null);
+            if (methodDescriptor == null) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL,
+                        "No registered method '" + call.memberName().value() + "' on " + objectType
+                                + " for arguments " + argumentTypes,
+                        call.sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            RuntimeNullability nullability = call.safe()
+                    ? RuntimeNullability.MAY_BE_NULL
+                    : RuntimeNullability.NEVER_NULL;
+            navigationBindings.put(call.id(), new RegisteredMethodNavigationBinding(
+                    objectType,
+                    methodDescriptor.returnType(),
+                    nullability,
+                    methodDescriptor.invocationHandle(),
+                    methodDescriptor.implementationMetadata()));
+            return LinkResolution.known(methodDescriptor.returnType(), null, nullability, false);
         }
 
         private LinkResolution resolveCollectionOperation(
@@ -1225,7 +1345,7 @@ public final class SemanticResolver {
                     && receiverPure
                     && arguments.pure()
                     && lambdaBindingsPure(lambdaBindings);
-            collectionOperationBindings.put(call.id(), CollectionOperationBinding.fromDescriptor(
+            navigationBindings.put(call.id(), CollectionOperationBinding.fromDescriptor(
                     descriptor, receiverType, resultType, resultNullability, lambdaBindings, operationPure));
             CollectionShape resultShape = descriptor.cardinalityPreservation()
                     == CollectionOperationCatalog.CardinalityPreservation.PRESERVES_RECEIVER_CARDINALITY

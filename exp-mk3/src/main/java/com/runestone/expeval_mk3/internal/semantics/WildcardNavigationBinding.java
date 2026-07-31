@@ -16,7 +16,7 @@ public record WildcardNavigationBinding(
         CollectionShape resultShape,
         CollectionOperationCatalog.MaterializationPolicy materializationPolicy,
         boolean pure,
-        List<JavaWildcardChildDescriptor> objectChildren) {
+        List<JavaWildcardChildDescriptor> objectChildren) implements NavigationBinding {
 
     public WildcardNavigationBinding {
         Objects.requireNonNull(receiverKind, "receiverKind");

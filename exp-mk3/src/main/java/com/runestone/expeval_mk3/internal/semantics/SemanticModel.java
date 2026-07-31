@@ -28,7 +28,6 @@ import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.NullCoalesceNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
-import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
 
 import java.util.Map;
 import java.util.Objects;
@@ -43,8 +42,7 @@ public final class SemanticModel {
     private final Map<NodeId, SymbolBinding> symbolBindings;
     private final Map<NodeId, ExpressionType> equalityOperandTypes;
     private final Map<NodeId, FunctionDescriptor> functionBindings;
-    private final Map<NodeId, CollectionOperationBinding> collectionOperationBindings;
-    private final Map<NodeId, WildcardNavigationBinding> wildcardNavigationBindings;
+    private final Map<NodeId, NavigationBinding> navigationBindings;
     private final FrameLayout frameLayout;
 
     SemanticModel(
@@ -56,8 +54,7 @@ public final class SemanticModel {
             Map<NodeId, SymbolBinding> symbolBindings,
             Map<NodeId, ExpressionType> equalityOperandTypes,
             Map<NodeId, FunctionDescriptor> functionBindings,
-            Map<NodeId, CollectionOperationBinding> collectionOperationBindings,
-            Map<NodeId, WildcardNavigationBinding> wildcardNavigationBindings,
+            Map<NodeId, NavigationBinding> navigationBindings,
             FrameLayout frameLayout) {
         this.ast = Objects.requireNonNull(ast, "ast");
         this.resolvedTypes = Map.copyOf(resolvedTypes);
@@ -67,8 +64,7 @@ public final class SemanticModel {
         this.symbolBindings = Map.copyOf(symbolBindings);
         this.equalityOperandTypes = Map.copyOf(equalityOperandTypes);
         this.functionBindings = Map.copyOf(functionBindings);
-        this.collectionOperationBindings = Map.copyOf(collectionOperationBindings);
-        this.wildcardNavigationBindings = Map.copyOf(wildcardNavigationBindings);
+        this.navigationBindings = Map.copyOf(navigationBindings);
         this.frameLayout = Objects.requireNonNull(frameLayout, "frameLayout");
         ast.assignments().forEach(this::validateAssignment);
         ast.resultExpression().ifPresent(this::validateCompleteExpression);
@@ -106,12 +102,8 @@ public final class SemanticModel {
         return functionBindings;
     }
 
-    public Map<NodeId, CollectionOperationBinding> collectionOperationBindings() {
-        return collectionOperationBindings;
-    }
-
-    public Map<NodeId, WildcardNavigationBinding> wildcardNavigationBindings() {
-        return wildcardNavigationBindings;
+    public Map<NodeId, NavigationBinding> navigationBindings() {
+        return navigationBindings;
     }
 
     public FrameLayout frameLayout() {
@@ -214,13 +206,13 @@ public final class SemanticModel {
     private void validateNavigationLink(NavigationLink link) {
         requireEntry(resolvedTypes, link.id(), "navigation link resolved type");
         requireEntry(runtimeNullability, link.id(), "navigation link runtime nullability");
+        requireEntry(navigationBindings, link.id(), "navigation binding");
         if (link instanceof FilterNavigationLink filter) {
             requireEntry(symbolBindings, filter.id(), "filter current item binding");
             validateCompleteExpression(filter.predicate());
             return;
         }
         if (link instanceof CallNavigationLink call) {
-            requireEntry(collectionOperationBindings, call.id(), "collection operation binding");
             call.arguments().forEach(argument -> {
                 if (argument instanceof com.runestone.expeval_mk3.internal.ast.ExpressionCallArgument expressionArgument) {
                     validateCompleteExpression(expressionArgument.expression());
@@ -229,10 +221,6 @@ public final class SemanticModel {
                     validateCompleteExpression(lambdaArgument.lambda().body());
                 }
             });
-            return;
-        }
-        if (link instanceof WildcardNavigationLink wildcard) {
-            requireEntry(wildcardNavigationBindings, wildcard.id(), "wildcard navigation binding");
         }
     }
 

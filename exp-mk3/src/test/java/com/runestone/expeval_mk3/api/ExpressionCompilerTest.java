@@ -720,6 +720,20 @@ class ExpressionCompilerTest {
     }
 
     @Test
+    void executesRegisteredObjectPropertyAndMethodNavigationEndToEnd() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaType(PropertyProvider.class)
+                .registerJavaTypeMethod(PropertyProvider.class, "scaledAmount", BigDecimal.class)
+                .externalSymbol("object", new PropertyProvider(BigDecimal.TEN), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertThat(ExpressionCompiler.compileOrThrow("object.amount", environment).compute())
+                .isEqualTo(BigDecimal.TEN);
+        assertThat(ExpressionCompiler.compileOrThrow("object.scaledAmount(2)", environment).compute())
+                .isEqualTo(new BigDecimal("20"));
+    }
+
+    @Test
     void rejectsInvalidNavigatedCollectionOperationCallsBeforeRuntime() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE),
@@ -937,6 +951,13 @@ class ExpressionCompilerTest {
             invocations.set(0);
             seen.clear();
             seenText.clear();
+        }
+    }
+
+    public record PropertyProvider(BigDecimal amount) {
+
+        public BigDecimal scaledAmount(BigDecimal factor) {
+            return amount.multiply(factor);
         }
     }
 

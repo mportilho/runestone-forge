@@ -12,11 +12,13 @@ import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.IndexSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperator;
-import com.runestone.expeval_mk3.internal.ast.PropertyNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationWiring;
+import com.runestone.expeval_mk3.internal.semantics.ContextualMemberNavigationBinding;
+import com.runestone.expeval_mk3.internal.semantics.RegisteredMethodNavigationBinding;
+import com.runestone.expeval_mk3.internal.semantics.RegisteredPropertyNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.WildcardNavigationBinding;
 import com.runestone.expeval_mk3.api.SourceSpan;
 
@@ -36,11 +38,6 @@ import java.util.Objects;
  * the scalar helpers (arithmetic coercion, comparison, structural equality) those operations share.
  */
 public final class ExpressionRuntime {
-
-    private static final String MAP_ENTRY_KEY_MEMBER = "k";
-    private static final String MAP_ENTRY_VALUE_MEMBER = "v";
-    private static final String REDUCTION_ACCUMULATOR_MEMBER = "accumulator";
-    private static final String REDUCTION_ITEM_MEMBER = "item";
 
     private ExpressionRuntime() {
     }
@@ -207,31 +204,67 @@ public final class ExpressionRuntime {
         return List.copyOf(result);
     }
 
-    public static Object propertyValue(Object receiver, PropertyNavigationLink property) {
+    public static Object invokeRegisteredMethod(
+            Object receiver,
+            boolean safe,
+            RegisteredMethodNavigationBinding binding,
+            List<ExecutableNode> argumentNodes,
+            ExecutionScope scope) {
         if (receiver == null) {
-            if (property.safe()) {
+            if (safe) {
                 return null;
             }
             throw new NullPointerException("navigation receiver");
         }
-        if (receiver instanceof MapEntryValue entry) {
-            return switch (property.memberName().value()) {
-                case MAP_ENTRY_KEY_MEMBER -> entry.key();
-                case MAP_ENTRY_VALUE_MEMBER -> entry.value();
-                default -> throw new IllegalStateException(
-                        "unsupported map entry property: " + property.memberName().value());
-            };
+        Object[] arguments = new Object[argumentNodes.size() + 1];
+        arguments[0] = receiver;
+        for (int index = 0; index < argumentNodes.size(); index++) {
+            arguments[index + 1] = Objects.requireNonNull(
+                    argumentNodes.get(index).execute(scope), "registered method argument");
         }
-        return reductionItemProperty(receiver, property);
+        try {
+            return binding.invocationHandle().invokeWithArguments(arguments);
+        } catch (RuntimeException | Error exception) {
+            throw exception;
+        } catch (Throwable exception) {
+            // MethodHandle.invokeWithArguments declares Throwable; this boundary preserves method failures.
+            throw new IllegalStateException(
+                    "registered method invocation failed: " + binding.implementationMetadata().memberName(), exception);
+        }
     }
 
-    private static Object reductionItemProperty(Object receiver, PropertyNavigationLink property) {
-        ReductionItemValue reductionItem = (ReductionItemValue) receiver;
-        return switch (property.memberName().value()) {
-            case REDUCTION_ACCUMULATOR_MEMBER -> reductionItem.accumulator();
-            case REDUCTION_ITEM_MEMBER -> reductionItem.item();
-            default -> throw new IllegalStateException(
-                    "unsupported contextual item property: " + property.memberName().value());
+    public static Object registeredPropertyValue(
+            Object receiver, boolean safe, RegisteredPropertyNavigationBinding binding) {
+        if (receiver == null) {
+            if (safe) {
+                return null;
+            }
+            throw new NullPointerException("navigation receiver");
+        }
+        try {
+            return Objects.requireNonNull(binding.accessorHandle().invoke(receiver), "registered property value");
+        } catch (RuntimeException | Error exception) {
+            throw exception;
+        } catch (Throwable exception) {
+            // MethodHandle.invoke declares Throwable; this boundary preserves accessor failures.
+            throw new IllegalStateException(
+                    "registered property accessor failed: " + binding.implementationMetadata().memberName(), exception);
+        }
+    }
+
+    public static Object contextualMemberValue(
+            Object receiver, ContextualMemberNavigationBinding.Member member, boolean safe) {
+        if (receiver == null) {
+            if (safe) {
+                return null;
+            }
+            throw new NullPointerException("navigation receiver");
+        }
+        return switch (member) {
+            case MAP_ENTRY_KEY -> ((MapEntryValue) receiver).key();
+            case MAP_ENTRY_VALUE -> ((MapEntryValue) receiver).value();
+            case REDUCTION_ACCUMULATOR -> ((ReductionItemValue) receiver).accumulator();
+            case REDUCTION_ITEM -> ((ReductionItemValue) receiver).item();
         };
     }
 

@@ -6,6 +6,7 @@ import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
+import com.runestone.expeval_mk3.api.RuntimeNullability;
 import com.runestone.expeval_mk3.internal.ast.AssignmentNode;
 import com.runestone.expeval_mk3.internal.ast.AssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.BetweenNode;
@@ -34,7 +35,6 @@ import com.runestone.expeval_mk3.internal.ast.NavigationChainNode;
 import com.runestone.expeval_mk3.internal.ast.NavigationLink;
 import com.runestone.expeval_mk3.internal.ast.NullCoalesceNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
-import com.runestone.expeval_mk3.internal.ast.PropertyNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.StringKeySubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
@@ -49,7 +49,15 @@ import com.runestone.expeval_mk3.internal.runtime.ExecutableOperationArguments;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 import com.runestone.expeval_mk3.internal.runtime.ExpressionRuntime;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
+import com.runestone.expeval_mk3.internal.semantics.ContextualMemberNavigationBinding;
+import com.runestone.expeval_mk3.internal.semantics.FilterNavigationBinding;
+import com.runestone.expeval_mk3.internal.semantics.IndexSubscriptNavigationBinding;
+import com.runestone.expeval_mk3.internal.semantics.MapKeySubscriptNavigationBinding;
+import com.runestone.expeval_mk3.internal.semantics.NavigationBinding;
+import com.runestone.expeval_mk3.internal.semantics.RegisteredMethodNavigationBinding;
+import com.runestone.expeval_mk3.internal.semantics.RegisteredPropertyNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.SemanticModel;
+import com.runestone.expeval_mk3.internal.semantics.SliceSubscriptNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.SymbolBinding;
 import com.runestone.expeval_mk3.internal.semantics.WildcardNavigationBinding;
 
@@ -314,53 +322,76 @@ public final class ExecutionPlanBuilder {
             ExecutableNode receiver,
             SemanticModel model,
             ExpressionEnvironment environment) {
-        if (link instanceof IndexSubscriptNavigationLink index) {
-            return scope -> ExpressionRuntime.indexedValue(receiver.execute(scope), index);
-        }
-        if (link instanceof SliceSubscriptNavigationLink slice) {
-            return scope -> ExpressionRuntime.slicedValues(receiver.execute(scope), slice, environment.maxMaterializedSize());
-        }
-        if (link instanceof StringKeySubscriptNavigationLink stringKey) {
-            return scope -> ExpressionRuntime.mapKeyValue(receiver.execute(scope), stringKey.key(), stringKey.safe(), stringKey.sourceSpan());
-        }
-        if (link instanceof FilterNavigationLink filter) {
-            ExecutableNode predicate = buildNode(filter.predicate(), model, environment);
-            SymbolBinding currentItem = required(model.symbolBindings(), filter.id(), "filter current item binding");
-            return scope -> ExpressionRuntime.filteredValues(
-                    receiver.execute(scope),
-                    predicate,
-                    currentItem.frameSlot(),
-                    scope,
-                    environment.maxMaterializedSize());
-        }
-        if (link instanceof WildcardNavigationLink wildcard) {
-            WildcardNavigationBinding binding = required(
-                    model.wildcardNavigationBindings(), wildcard.id(), "wildcard navigation binding");
-            return scope -> ExpressionRuntime.wildcardValues(
-                    receiver.execute(scope),
-                    wildcard.safe(),
-                    binding,
-                    environment.maxMaterializedSize());
-        }
-        if (link instanceof PropertyNavigationLink property) {
-            return scope -> ExpressionRuntime.propertyValue(receiver.execute(scope), property);
-        }
-        if (link instanceof CallNavigationLink call) {
-            CollectionOperationBinding binding = required(
-                    model.collectionOperationBindings(), call.id(), "collection operation binding");
-            ExecutableOperationArguments arguments = buildOperationArguments(call, binding, model, environment);
-            CollectionOperationExecutor executor = CollectionOperationExecutors.executorFor(binding.identity());
-            return scope -> ExpressionRuntime.executeCollectionOperation(
-                    executor,
-                    binding,
-                    receiver.execute(scope),
-                    call.safe(),
-                    environment.mathContext(),
-                    environment.maxMaterializedSize(),
-                    arguments,
-                    scope);
-        }
-        throw new IllegalArgumentException("unsupported planned navigation link: " + link.getClass().getSimpleName());
+        NavigationBinding binding = required(model.navigationBindings(), link.id(), "navigation binding");
+        return switch (binding) {
+            case IndexSubscriptNavigationBinding ignored -> {
+                IndexSubscriptNavigationLink index = (IndexSubscriptNavigationLink) link;
+                yield scope -> ExpressionRuntime.indexedValue(receiver.execute(scope), index);
+            }
+            case SliceSubscriptNavigationBinding ignored -> {
+                SliceSubscriptNavigationLink slice = (SliceSubscriptNavigationLink) link;
+                yield scope -> ExpressionRuntime.slicedValues(
+                        receiver.execute(scope), slice, environment.maxMaterializedSize());
+            }
+            case MapKeySubscriptNavigationBinding mapKeyBinding -> {
+                StringKeySubscriptNavigationLink stringKey = (StringKeySubscriptNavigationLink) link;
+                boolean safe = mapKeyBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
+                yield scope -> ExpressionRuntime.mapKeyValue(
+                        receiver.execute(scope), stringKey.key(), safe, stringKey.sourceSpan());
+            }
+            case FilterNavigationBinding filterBinding -> {
+                FilterNavigationLink filter = (FilterNavigationLink) link;
+                ExecutableNode predicate = buildNode(filter.predicate(), model, environment);
+                yield scope -> ExpressionRuntime.filteredValues(
+                        receiver.execute(scope),
+                        predicate,
+                        filterBinding.currentItemFrameSlot(),
+                        scope,
+                        environment.maxMaterializedSize());
+            }
+            case ContextualMemberNavigationBinding memberBinding -> {
+                boolean safe = memberBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
+                yield scope -> ExpressionRuntime.contextualMemberValue(
+                        receiver.execute(scope), memberBinding.member(), safe);
+            }
+            case RegisteredPropertyNavigationBinding propertyBinding -> {
+                boolean safe = propertyBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
+                yield scope -> ExpressionRuntime.registeredPropertyValue(
+                        receiver.execute(scope), safe, propertyBinding);
+            }
+            case RegisteredMethodNavigationBinding methodBinding -> {
+                CallNavigationLink call = (CallNavigationLink) link;
+                boolean safe = methodBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
+                List<ExecutableNode> arguments = call.arguments().stream()
+                        .map(ExpressionCallArgument.class::cast)
+                        .map(argument -> buildNode(argument.expression(), model, environment))
+                        .toList();
+                yield scope -> ExpressionRuntime.invokeRegisteredMethod(
+                        receiver.execute(scope), safe, methodBinding, arguments, scope);
+            }
+            case WildcardNavigationBinding wildcardBinding -> {
+                WildcardNavigationLink wildcard = (WildcardNavigationLink) link;
+                yield scope -> ExpressionRuntime.wildcardValues(
+                        receiver.execute(scope),
+                        wildcard.safe(),
+                        wildcardBinding,
+                        environment.maxMaterializedSize());
+            }
+            case CollectionOperationBinding operationBinding -> {
+                CallNavigationLink call = (CallNavigationLink) link;
+                ExecutableOperationArguments arguments = buildOperationArguments(call, operationBinding, model, environment);
+                CollectionOperationExecutor executor = CollectionOperationExecutors.executorFor(operationBinding.identity());
+                yield scope -> ExpressionRuntime.executeCollectionOperation(
+                        executor,
+                        operationBinding,
+                        receiver.execute(scope),
+                        call.safe(),
+                        environment.mathContext(),
+                        environment.maxMaterializedSize(),
+                        arguments,
+                        scope);
+            }
+        };
     }
 
     private ExecutableOperationArguments buildOperationArguments(

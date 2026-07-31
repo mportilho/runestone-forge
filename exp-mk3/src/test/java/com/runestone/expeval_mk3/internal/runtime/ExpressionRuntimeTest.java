@@ -5,9 +5,7 @@ import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.FunctionInvocationException;
 import com.runestone.expeval_mk3.api.FunctionPurity;
 import com.runestone.expeval_mk3.api.ScalarType;
-import com.runestone.expeval_mk3.internal.ast.MemberName;
-import com.runestone.expeval_mk3.internal.ast.NodeId;
-import com.runestone.expeval_mk3.internal.ast.PropertyNavigationLink;
+import com.runestone.expeval_mk3.internal.semantics.ContextualMemberNavigationBinding;
 import com.runestone.expeval_mk3.api.SourceSpan;
 import org.junit.jupiter.api.Test;
 
@@ -170,15 +168,12 @@ class ExpressionRuntimeTest {
     @Test
     void reduceAccumulatesAcrossElementsUsingLambda() {
         ExecutionScope scope = newScope();
-        PropertyNavigationLink accumulatorLink = new PropertyNavigationLink(
-                new NodeId(1), SPAN, new MemberName("accumulator"), false);
-        PropertyNavigationLink itemLink = new PropertyNavigationLink(
-                new NodeId(2), SPAN, new MemberName("item"), false);
         ExecutableNode sumStep = executionScope -> {
             Object reductionItem = executionScope.read(CURRENT_ITEM_SLOT);
-            BigDecimal accumulator = ExpressionRuntime.number(
-                    ExpressionRuntime.propertyValue(reductionItem, accumulatorLink));
-            BigDecimal item = ExpressionRuntime.number(ExpressionRuntime.propertyValue(reductionItem, itemLink));
+            BigDecimal accumulator = ExpressionRuntime.number(ExpressionRuntime.contextualMemberValue(
+                    reductionItem, ContextualMemberNavigationBinding.Member.REDUCTION_ACCUMULATOR, false));
+            BigDecimal item = ExpressionRuntime.number(ExpressionRuntime.contextualMemberValue(
+                    reductionItem, ContextualMemberNavigationBinding.Member.REDUCTION_ITEM, false));
             return accumulator.add(item);
         };
         ExecutableLambda lambda = new ExecutableLambda(sumStep, CURRENT_ITEM_SLOT);
