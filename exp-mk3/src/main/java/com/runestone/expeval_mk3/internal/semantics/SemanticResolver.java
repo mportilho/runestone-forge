@@ -160,6 +160,7 @@ public final class SemanticResolver {
                     nullability,
                     preparedValues,
                     collectionShapes,
+                    expressionPurity,
                     symbolBindings,
                     equalityOperandTypes,
                     functionBindings,
@@ -323,6 +324,9 @@ public final class SemanticResolver {
                 recordValue(grouped.id(), resolution.type(), nullabilityOf(grouped.expression().id()));
                 recordPure(grouped.id(), purityOf(grouped.expression().id()));
                 recordCollectionShape(grouped.id(), resolution.type(), collectionShapes.get(grouped.expression().id()));
+                if (resolution.type() == ScalarType.NUMBER) {
+                    numericFacts.put(grouped.id(), numericFactOf(grouped.expression().id()));
+                }
             }
             return resolution;
         }
@@ -1886,11 +1890,19 @@ public final class SemanticResolver {
         private void recordValue(NodeId nodeId, ExpressionType type) {
             resolvedTypes.put(nodeId, type);
             nullability.put(nodeId, RuntimeNullability.NEVER_NULL);
+            recordDefaultNumericFact(nodeId, type);
         }
 
         private void recordValue(NodeId nodeId, ExpressionType type, RuntimeNullability runtimeNullability) {
             resolvedTypes.put(nodeId, type);
             nullability.put(nodeId, runtimeNullability);
+            recordDefaultNumericFact(nodeId, type);
+        }
+
+        private void recordDefaultNumericFact(NodeId nodeId, ExpressionType type) {
+            if (type == ScalarType.NUMBER) {
+                numericFacts.putIfAbsent(nodeId, NumericFact.unknown());
+            }
         }
 
         private void recordPure(NodeId nodeId, boolean pure) {
@@ -1898,6 +1910,7 @@ public final class SemanticResolver {
         }
 
         private boolean purityOf(NodeId nodeId) {
+            // invalidated operands never reach recordPure; a recorded diagnostic already forces failure
             return expressionPurity.getOrDefault(nodeId, true);
         }
 

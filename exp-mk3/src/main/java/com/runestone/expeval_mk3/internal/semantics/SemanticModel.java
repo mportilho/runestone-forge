@@ -3,7 +3,9 @@ package com.runestone.expeval_mk3.internal.semantics;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.RuntimeNullability;
+import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.AssignmentNode;
+import com.runestone.expeval_mk3.internal.ast.AstNode;
 import com.runestone.expeval_mk3.internal.ast.BetweenNode;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperator;
@@ -13,12 +15,16 @@ import com.runestone.expeval_mk3.internal.ast.ConditionalBranchNode;
 import com.runestone.expeval_mk3.internal.ast.ConditionalNode;
 import com.runestone.expeval_mk3.internal.ast.CurrentItemNode;
 import com.runestone.expeval_mk3.internal.ast.CurrentTemporalValueNode;
+import com.runestone.expeval_mk3.internal.ast.DestructuringAssignmentTargetNode;
+import com.runestone.expeval_mk3.internal.ast.ExpressionCallArgument;
 import com.runestone.expeval_mk3.internal.ast.ExpressionFileNode;
 import com.runestone.expeval_mk3.internal.ast.ExpressionNode;
 import com.runestone.expeval_mk3.internal.ast.FilterNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.FunctionCallNode;
 import com.runestone.expeval_mk3.internal.ast.GroupedExpressionNode;
+import com.runestone.expeval_mk3.internal.ast.IdentifierAssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.IdentifierNode;
+import com.runestone.expeval_mk3.internal.ast.IndexSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.NavigationChainNode;
 import com.runestone.expeval_mk3.internal.ast.NavigationLink;
 import com.runestone.expeval_mk3.internal.ast.LambdaCallArgument;
@@ -27,11 +33,17 @@ import com.runestone.expeval_mk3.internal.ast.MembershipNode;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.NullCoalesceNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
+import com.runestone.expeval_mk3.internal.ast.PropertyNavigationLink;
+import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
+import com.runestone.expeval_mk3.internal.ast.StringKeySubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
+import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 public final class SemanticModel {
 
@@ -40,6 +52,7 @@ public final class SemanticModel {
     private final Map<NodeId, RuntimeNullability> runtimeNullability;
     private final Map<NodeId, Object> preparedValues;
     private final Map<NodeId, CollectionShape> collectionShapes;
+    private final Map<NodeId, Boolean> expressionPurity;
     private final Map<NodeId, SymbolBinding> symbolBindings;
     private final Map<NodeId, ExpressionType> equalityOperandTypes;
     private final Map<NodeId, FunctionDescriptor> functionBindings;
@@ -54,6 +67,7 @@ public final class SemanticModel {
             Map<NodeId, RuntimeNullability> runtimeNullability,
             Map<NodeId, Object> preparedValues,
             Map<NodeId, CollectionShape> collectionShapes,
+            Map<NodeId, Boolean> expressionPurity,
             Map<NodeId, SymbolBinding> symbolBindings,
             Map<NodeId, ExpressionType> equalityOperandTypes,
             Map<NodeId, FunctionDescriptor> functionBindings,
@@ -66,6 +80,7 @@ public final class SemanticModel {
         this.runtimeNullability = Map.copyOf(runtimeNullability);
         this.preparedValues = Map.copyOf(preparedValues);
         this.collectionShapes = Map.copyOf(collectionShapes);
+        this.expressionPurity = Map.copyOf(expressionPurity);
         this.symbolBindings = Map.copyOf(symbolBindings);
         this.equalityOperandTypes = Map.copyOf(equalityOperandTypes);
         this.functionBindings = Map.copyOf(functionBindings);
@@ -73,8 +88,11 @@ public final class SemanticModel {
         this.numericFacts = Map.copyOf(numericFacts);
         this.deferredChecks = List.copyOf(deferredChecks);
         this.frameLayout = Objects.requireNonNull(frameLayout, "frameLayout");
-        ast.assignments().forEach(this::validateAssignment);
-        ast.resultExpression().ifPresent(this::validateCompleteExpression);
+        Set<NodeId> visitedNodeIds = new HashSet<>();
+        ast.assignments().forEach(assignment -> validateAssignment(assignment, visitedNodeIds));
+        ast.resultExpression().ifPresent(expression -> validateCompleteExpression(expression, visitedNodeIds));
+        validateFrameLayout();
+        validateDeferredChecks(visitedNodeIds);
     }
 
     public ExpressionFileNode ast() {
@@ -97,6 +115,18 @@ public final class SemanticModel {
         return collectionShapes;
     }
 
+    public Map<NodeId, Boolean> expressionPurity() {
+        return expressionPurity;
+    }
+
+    public boolean purityOf(NodeId nodeId) {
+        Boolean pure = expressionPurity.get(nodeId);
+        if (pure == null) {
+            throw new IllegalStateException("no purity recorded for node " + nodeId);
+        }
+        return pure;
+    }
+
     public Map<NodeId, SymbolBinding> symbolBindings() {
         return symbolBindings;
     }
@@ -114,7 +144,11 @@ public final class SemanticModel {
     }
 
     public NumericFact numericFactOf(NodeId nodeId) {
-        return NumericFact.of(numericFacts, nodeId);
+        NumericFact fact = numericFacts.get(nodeId);
+        if (fact == null) {
+            throw new IllegalStateException("no numeric fact recorded for node " + nodeId);
+        }
+        return fact;
     }
 
     public Map<NodeId, NumericFact> numericFacts() {
@@ -129,128 +163,155 @@ public final class SemanticModel {
         return frameLayout;
     }
 
-    private void validateAssignment(AssignmentNode assignment) {
-        validateCompleteExpression(assignment.expression());
-        if (assignment.target() instanceof com.runestone.expeval_mk3.internal.ast.IdentifierAssignmentTargetNode target) {
-            requireEntry(symbolBindings, target.id(), "assignment target binding");
-            return;
-        }
-        if (assignment.target() instanceof com.runestone.expeval_mk3.internal.ast.DestructuringAssignmentTargetNode target) {
-            target.elements().forEach(element -> requireEntry(symbolBindings, element.id(), "assignment target binding"));
-            return;
-        }
-        throw new IllegalStateException("successful semantic model contains an unsupported assignment target");
-    }
-
-    private void validateCompleteExpression(ExpressionNode expression) {
-        requireEntry(resolvedTypes, expression.id(), "resolved type");
-        requireEntry(runtimeNullability, expression.id(), "runtime nullability");
-        if (expression instanceof LiteralNode literal) {
-            requireEntry(preparedValues, literal.id(), "prepared literal value");
-            return;
-        }
-        if (expression instanceof IdentifierNode identifier) {
-            requireEntry(symbolBindings, identifier.id(), "symbol binding");
-            return;
-        }
-        if (expression instanceof CurrentItemNode currentItem) {
-            requireEntry(symbolBindings, currentItem.id(), "current item binding");
-            return;
-        }
-        if (expression instanceof CurrentTemporalValueNode) {
-            return;
-        }
-        if (expression instanceof CollectionLiteralNode collection) {
-            requireEntry(collectionShapes, collection.id(), "collection shape");
-            collection.elements().forEach(this::validateCompleteExpression);
-            return;
-        }
-        if (expression instanceof GroupedExpressionNode grouped) {
-            validateCompleteExpression(grouped.expression());
-            return;
-        }
-        if (expression instanceof BinaryOperationNode binary) {
-            if (binary.operator() == BinaryOperator.EQUAL || binary.operator() == BinaryOperator.NOT_EQUAL) {
-                requireEntry(equalityOperandTypes, binary.id(), "equality binding");
+    private void validateAssignment(AssignmentNode assignment, Set<NodeId> visited) {
+        validateCompleteExpression(assignment.expression(), visited);
+        switch (assignment.target()) {
+            case IdentifierAssignmentTargetNode target -> {
+                visited.add(target.id());
+                requireEntry(symbolBindings, target, "assignment target binding");
             }
-            validateCompleteExpression(binary.left());
-            validateCompleteExpression(binary.right());
-            return;
+            case DestructuringAssignmentTargetNode target -> {
+                visited.add(target.id());
+                target.elements().forEach(element -> {
+                    visited.add(element.id());
+                    requireEntry(symbolBindings, element, "assignment target binding");
+                });
+            }
         }
-        if (expression instanceof UnaryOperationNode unary) {
-            validateCompleteExpression(unary.operand());
-            return;
-        }
-        if (expression instanceof PostfixOperationNode postfix) {
-            validateCompleteExpression(postfix.operand());
-            return;
-        }
-        if (expression instanceof BetweenNode between) {
-            validateCompleteExpression(between.value());
-            validateCompleteExpression(between.lowerBound());
-            validateCompleteExpression(between.upperBound());
-            return;
-        }
-        if (expression instanceof MembershipNode membership) {
-            validateCompleteExpression(membership.element());
-            validateCompleteExpression(membership.collection());
-            return;
-        }
-        if (expression instanceof NullCoalesceNode coalesce) {
-            coalesce.operands().forEach(this::validateCompleteExpression);
-            return;
-        }
-        if (expression instanceof ConditionalNode conditional) {
-            conditional.branches().forEach(this::validateConditionalBranch);
-            validateCompleteExpression(conditional.elseExpression());
-            return;
-        }
-        if (expression instanceof FunctionCallNode functionCall) {
-            requireEntry(functionBindings, functionCall.id(), "function binding");
-            functionCall.arguments().forEach(argument -> {
-                if (argument instanceof com.runestone.expeval_mk3.internal.ast.ExpressionCallArgument expressionArgument) {
-                    validateCompleteExpression(expressionArgument.expression());
-                }
-            });
-            return;
-        }
-        if (expression instanceof NavigationChainNode navigation) {
-            validateCompleteExpression(navigation.receiver());
-            navigation.links().forEach(this::validateNavigationLink);
-            return;
-        }
-        throw new IllegalStateException("successful semantic model contains an unsupported expression node");
     }
 
-    private void validateNavigationLink(NavigationLink link) {
-        requireEntry(resolvedTypes, link.id(), "navigation link resolved type");
-        requireEntry(runtimeNullability, link.id(), "navigation link runtime nullability");
-        requireEntry(navigationBindings, link.id(), "navigation binding");
-        if (link instanceof FilterNavigationLink filter) {
-            requireEntry(symbolBindings, filter.id(), "filter current item binding");
-            validateCompleteExpression(filter.predicate());
-            return;
+    private void validateCompleteExpression(ExpressionNode expression, Set<NodeId> visited) {
+        visited.add(expression.id());
+        requireEntry(resolvedTypes, expression, "resolved type");
+        requireEntry(runtimeNullability, expression, "runtime nullability");
+        requireEntry(expressionPurity, expression, "purity");
+        requireNumericFactIfNumeric(expression);
+        switch (expression) {
+            case LiteralNode literal -> requireEntry(preparedValues, literal, "prepared literal value");
+            case IdentifierNode identifier -> requireEntry(symbolBindings, identifier, "symbol binding");
+            case CurrentItemNode currentItem -> requireEntry(symbolBindings, currentItem, "current item binding");
+            case CurrentTemporalValueNode ignored -> {
+            }
+            case CollectionLiteralNode collection -> {
+                requireEntry(collectionShapes, collection, "collection shape");
+                collection.elements().forEach(element -> validateCompleteExpression(element, visited));
+            }
+            case GroupedExpressionNode grouped -> validateCompleteExpression(grouped.expression(), visited);
+            case BinaryOperationNode binary -> {
+                if (binary.operator() == BinaryOperator.EQUAL || binary.operator() == BinaryOperator.NOT_EQUAL) {
+                    requireEntry(equalityOperandTypes, binary, "equality binding");
+                }
+                validateCompleteExpression(binary.left(), visited);
+                validateCompleteExpression(binary.right(), visited);
+            }
+            case UnaryOperationNode unary -> validateCompleteExpression(unary.operand(), visited);
+            case PostfixOperationNode postfix -> validateCompleteExpression(postfix.operand(), visited);
+            case BetweenNode between -> {
+                validateCompleteExpression(between.value(), visited);
+                validateCompleteExpression(between.lowerBound(), visited);
+                validateCompleteExpression(between.upperBound(), visited);
+            }
+            case MembershipNode membership -> {
+                validateCompleteExpression(membership.element(), visited);
+                validateCompleteExpression(membership.collection(), visited);
+            }
+            case NullCoalesceNode coalesce ->
+                    coalesce.operands().forEach(operand -> validateCompleteExpression(operand, visited));
+            case ConditionalNode conditional -> {
+                conditional.branches().forEach(branch -> validateConditionalBranch(branch, visited));
+                validateCompleteExpression(conditional.elseExpression(), visited);
+            }
+            case FunctionCallNode functionCall -> {
+                requireEntry(functionBindings, functionCall, "function binding");
+                functionCall.arguments().forEach(argument -> {
+                    if (argument instanceof ExpressionCallArgument expressionArgument) {
+                        validateCompleteExpression(expressionArgument.expression(), visited);
+                    }
+                });
+            }
+            case NavigationChainNode navigation -> {
+                validateCompleteExpression(navigation.receiver(), visited);
+                navigation.links().forEach(link -> validateNavigationLink(link, visited));
+            }
         }
-        if (link instanceof CallNavigationLink call) {
-            call.arguments().forEach(argument -> {
-                if (argument instanceof com.runestone.expeval_mk3.internal.ast.ExpressionCallArgument expressionArgument) {
-                    validateCompleteExpression(expressionArgument.expression());
+    }
+
+    private void validateNavigationLink(NavigationLink link, Set<NodeId> visited) {
+        visited.add(link.id());
+        requireEntry(resolvedTypes, link, "navigation link resolved type");
+        requireEntry(runtimeNullability, link, "navigation link runtime nullability");
+        requireEntry(expressionPurity, link, "navigation link purity");
+        requireEntry(navigationBindings, link, "navigation binding");
+        requireNumericFactIfNumeric(link);
+        switch (link) {
+            case FilterNavigationLink filter -> {
+                requireEntry(symbolBindings, filter, "filter current item binding");
+                validateCompleteExpression(filter.predicate(), visited);
+            }
+            case CallNavigationLink call -> call.arguments().forEach(argument -> {
+                if (argument instanceof ExpressionCallArgument expressionArgument) {
+                    validateCompleteExpression(expressionArgument.expression(), visited);
                 } else if (argument instanceof LambdaCallArgument lambdaArgument) {
-                    requireEntry(symbolBindings, lambdaArgument.lambda().currentItem().id(), "lambda current item binding");
-                    validateCompleteExpression(lambdaArgument.lambda().body());
+                    requireEntry(symbolBindings, lambdaArgument.lambda().currentItem(), "lambda current item binding");
+                    visited.add(lambdaArgument.lambda().currentItem().id());
+                    validateCompleteExpression(lambdaArgument.lambda().body(), visited);
                 }
             });
+            case IndexSubscriptNavigationLink ignored -> {
+            }
+            case PropertyNavigationLink ignored -> {
+            }
+            case SliceSubscriptNavigationLink ignored -> {
+            }
+            case StringKeySubscriptNavigationLink ignored -> {
+            }
+            case WildcardNavigationLink ignored -> {
+            }
         }
     }
 
-    private void validateConditionalBranch(ConditionalBranchNode branch) {
-        validateCompleteExpression(branch.condition());
-        validateCompleteExpression(branch.consequence());
+    private void validateConditionalBranch(ConditionalBranchNode branch, Set<NodeId> visited) {
+        validateCompleteExpression(branch.condition(), visited);
+        validateCompleteExpression(branch.consequence(), visited);
     }
 
-    private static <K, V> void requireEntry(Map<K, V> values, K key, String description) {
-        if (!values.containsKey(key)) {
-            throw new IllegalStateException("successful semantic model is missing " + description + " for " + key);
+    private void validateFrameLayout() {
+        for (SymbolBinding binding : symbolBindings.values()) {
+            if (binding.frameSlot() >= frameLayout.frameSize()) {
+                throw new IllegalStateException(
+                        "successful semantic model has symbol binding '" + binding.name()
+                                + "' with frame slot " + binding.frameSlot()
+                                + " outside canonical frame layout size " + frameLayout.frameSize());
+            }
+            // identity comparison: the resolver reuses the same SymbolBinding instance in both maps
+            if (binding.external() && !frameLayout.externalBindings().contains(binding)) {
+                throw new IllegalStateException(
+                        "successful semantic model has external symbol binding '" + binding.name()
+                                + "' missing from the canonical frame layout");
+            }
+        }
+    }
+
+    private void validateDeferredChecks(Set<NodeId> visited) {
+        for (DeferredCheck check : deferredChecks) {
+            if (!visited.contains(check.nodeId())) {
+                throw new IllegalStateException(
+                        "successful semantic model has a " + check.getClass().getSimpleName()
+                                + " referencing unknown node " + check.nodeId());
+            }
+        }
+    }
+
+    private void requireNumericFactIfNumeric(AstNode node) {
+        if (resolvedTypes.get(node.id()) == ScalarType.NUMBER) {
+            requireEntry(numericFacts, node, "numeric fact");
+        }
+    }
+
+    private static <V> void requireEntry(Map<NodeId, V> values, AstNode node, String description) {
+        if (!values.containsKey(node.id())) {
+            throw new IllegalStateException("successful semantic model is missing " + description + " for "
+                    + node.getClass().getSimpleName() + " " + node.id() + " at " + node.sourceSpan());
         }
     }
 }

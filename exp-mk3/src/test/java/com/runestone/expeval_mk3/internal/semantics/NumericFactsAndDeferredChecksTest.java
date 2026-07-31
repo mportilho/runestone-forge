@@ -10,6 +10,7 @@ import com.runestone.expeval_mk3.internal.ast.BinaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.DestructuringAssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.ExpressionFileNode;
 import com.runestone.expeval_mk3.internal.ast.ExpressionNode;
+import com.runestone.expeval_mk3.internal.ast.GroupedExpressionNode;
 import com.runestone.expeval_mk3.internal.ast.NavigationChainNode;
 import com.runestone.expeval_mk3.internal.ast.NavigationLink;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
@@ -51,6 +52,19 @@ class NumericFactsAndDeferredChecksTest {
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success ->
                 assertThat(success.model().numericFactOf(ast.resultExpression().orElseThrow().id()).shape())
                         .isEqualTo(NumericFactShape.FRACTIONAL_KNOWN));
+    }
+
+    @Test
+    void groupingALiteralPreservesItsNumericFact() {
+        ExpressionFileNode ast = ast("(5)");
+        GroupedExpressionNode grouped = (GroupedExpressionNode) ast.resultExpression().orElseThrow();
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, ExpressionEnvironment.standard());
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            NumericFact fact = success.model().numericFactOf(grouped.id());
+            assertThat(fact.shape()).isEqualTo(NumericFactShape.INTEGRAL_KNOWN);
+            assertThat(fact.parity().signum()).isEqualTo(1);
+        });
     }
 
     @Test
