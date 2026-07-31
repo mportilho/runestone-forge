@@ -201,6 +201,9 @@ public final class SemanticModel {
                 if (binary.operator() == BinaryOperator.EQUAL || binary.operator() == BinaryOperator.NOT_EQUAL) {
                     requireEntry(equalityOperandTypes, binary, "equality binding");
                 }
+                if (binary.operator() == BinaryOperator.REGEX_MATCH || binary.operator() == BinaryOperator.REGEX_NOT_MATCH) {
+                    requireEntry(preparedValues, binary, "prepared regex pattern");
+                }
                 validateCompleteExpression(binary.left(), visited);
                 validateCompleteExpression(binary.right(), visited);
             }

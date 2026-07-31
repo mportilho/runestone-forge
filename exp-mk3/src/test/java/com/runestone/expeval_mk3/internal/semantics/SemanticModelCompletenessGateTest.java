@@ -168,6 +168,18 @@ class SemanticModelCompletenessGateTest {
     }
 
     @Test
+    void rejectsAModelMissingAPreparedRegexPattern() {
+        SemanticModel model = resolve("\"abc\" =~ \"a.c\"");
+        BinaryOperationNode regexMatch = (BinaryOperationNode) ast("\"abc\" =~ \"a.c\"").resultExpression().orElseThrow();
+        Map<NodeId, Object> preparedValues = new HashMap<>(model.preparedValues());
+        preparedValues.remove(regexMatch.id());
+
+        assertThatThrownBy(() -> rebuild(model, builder -> builder.preparedValues = preparedValues))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("prepared regex pattern");
+    }
+
+    @Test
     void rejectsAModelMissingAFunctionBinding() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("x", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
