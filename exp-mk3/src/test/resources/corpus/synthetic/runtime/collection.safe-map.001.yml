@@ -1,7 +1,7 @@
 id: runtime.collection.safe-map.001
 phase: runtime
 kind: valid
-source: 'items := [1, 2]; items?.map(@ -> @ + 1)'
+source: 'items := [1, 2]; items?.map(@ -> @ + 1) ?? []'
 coverage: [assignment, collection-literal, identifier, safe-navigation, call, lambda, at-symbol, additive]
 expected:
   type: COLLECTION

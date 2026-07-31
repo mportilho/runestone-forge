@@ -1,7 +1,7 @@
 id: runtime.object-wildcard.accessor-failure.001
 phase: runtime
 kind: invalid
-source: 'object?.[*]'
+source: 'object?.[*] ?? []'
 environment:
   maxMaterializedSize: 256
   maxFactorialInput: 32

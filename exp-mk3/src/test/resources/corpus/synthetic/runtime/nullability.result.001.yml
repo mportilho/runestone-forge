@@ -1,0 +1,18 @@
+id: semantic.nullability.result.001
+phase: semantic
+kind: invalid
+source: 'm?.["a"]'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    m:
+      type: MAP_NUMBER
+      default:
+        a: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+coverage: [identifier, safe-navigation, subscript-key, string-literal, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_NULLABLE_RESULT_NOT_ALLOWED

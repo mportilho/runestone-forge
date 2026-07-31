@@ -16,9 +16,13 @@ import com.runestone.expeval_mk3.api.RuntimeNullability;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.CollectionLiteralNode;
+import com.runestone.expeval_mk3.internal.ast.ConditionalNode;
 import com.runestone.expeval_mk3.internal.ast.ExpressionFileNode;
+import com.runestone.expeval_mk3.internal.ast.ExpressionNode;
+import com.runestone.expeval_mk3.internal.ast.GroupedExpressionNode;
 import com.runestone.expeval_mk3.internal.ast.NavigationChainNode;
 import com.runestone.expeval_mk3.internal.ast.NavigationLink;
+import com.runestone.expeval_mk3.internal.ast.NullCoalesceNode;
 import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildSuccess;
 import com.runestone.expeval_mk3.internal.ast.SemanticAstBuilder;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
@@ -106,8 +110,8 @@ class SemanticResolverTest {
                         List.of(BigDecimal.ONE, new BigDecimal("2")),
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        ExpressionFileNode ast = ast("items?.sum()");
-        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        ExpressionFileNode ast = ast("items?.sum() ?? 0");
+        NavigationChainNode navigation = navigationChain(ast.resultExpression().orElseThrow());
         NavigationLink link = navigation.links().getFirst();
 
         SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
@@ -144,7 +148,7 @@ class SemanticResolverTest {
     }
 
     @Test
-    void preservesSafeOperationNullabilityThroughGroupingAndAssignment() {
+    void dischargesSafeOperationNullabilityThroughGroupingAndAssignmentViaCoalesce() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol(
                         "items",
@@ -153,8 +157,153 @@ class SemanticResolverTest {
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertResultNullability("(items?.sum())", environment, RuntimeNullability.MAY_BE_NULL);
-        assertResultNullability("value := items?.sum(); value", environment, RuntimeNullability.MAY_BE_NULL);
+        assertResultNullability("(items?.sum() ?? 0)", environment, RuntimeNullability.NEVER_NULL);
+        assertResultNullability("value := items?.sum() ?? 0; value", environment, RuntimeNullability.NEVER_NULL);
+    }
+
+    @Test
+    void rejectsNullableFinalResultAndAssignmentWithoutDischarge() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertSingleDiagnostic(
+                "(items?.sum())", environment, DiagnosticCode.SEMANTIC_NULLABLE_RESULT_NOT_ALLOWED);
+        assertSingleDiagnostic(
+                "value := items?.sum(); value", environment, DiagnosticCode.SEMANTIC_NULLABLE_ASSIGNMENT_NOT_ALLOWED);
+    }
+
+    @Test
+    void rejectsNullableOperandWithoutDischarge() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertSingleDiagnostic(
+                "(m?.[\"a\"] + 1) ?? 0", environment, DiagnosticCode.SEMANTIC_NULLABLE_OPERAND_NOT_ALLOWED);
+    }
+
+    @Test
+    void rejectsNullableCollectionOperationArgumentWithoutDischarge() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertSingleDiagnostic(
+                "(items.reduce(m?.[\"a\"], @ -> @.accumulator + @.item)) ?? 0",
+                environment,
+                DiagnosticCode.SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED);
+    }
+
+    @Test
+    void rejectsNullableReceiverOfNonSafeNavigationWithoutDischarge() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(new CollectionType(ScalarType.NUMBER)),
+                        Map.of("a", List.of(BigDecimal.ONE)), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertSingleDiagnostic(
+                "(m?.[\"a\"][0]) ?? 0", environment, DiagnosticCode.SEMANTIC_NULLABLE_RECEIVER_NOT_ALLOWED);
+    }
+
+    @Test
+    void rejectsNullableFilterPredicateWithoutDischarge() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "items",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("m", new MapType(ScalarType.BOOLEAN), Map.of("flag", Boolean.TRUE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertSingleDiagnostic(
+                "items[?(m?.[\"flag\"])]", environment, DiagnosticCode.SEMANTIC_NULLABLE_PREDICATE_NOT_ALLOWED);
+    }
+
+    @Test
+    void rejectsNullableCollectionLiteralElementWithoutDischarge() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        assertSingleDiagnostic(
+                "[m?.[\"a\"]]", environment, DiagnosticCode.SEMANTIC_NULLABLE_OPERAND_NOT_ALLOWED);
+    }
+
+    @Test
+    void propagatesNullabilityAcrossNestedSafeNavigationLinks() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(new MapType(ScalarType.NUMBER)),
+                        Map.of("a", Map.of("b", BigDecimal.ONE)), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        ExpressionFileNode ast = ast("m?.[\"a\"]?.[\"b\"] ?? 0");
+        NavigationChainNode navigation = navigationChain(ast.resultExpression().orElseThrow());
+        NavigationLink firstLink = navigation.links().get(0);
+        NavigationLink secondLink = navigation.links().get(1);
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            SemanticModel model = success.model();
+            assertThat(model.runtimeNullability()).containsEntry(firstLink.id(), RuntimeNullability.MAY_BE_NULL);
+            assertThat(model.runtimeNullability()).containsEntry(secondLink.id(), RuntimeNullability.MAY_BE_NULL);
+            assertThat(model.runtimeNullability())
+                    .containsEntry(ast.resultExpression().orElseThrow().id(), RuntimeNullability.NEVER_NULL);
+        });
+    }
+
+    @Test
+    void nullCoalesceIsMayBeNullOnlyWhenEveryOperandMayBeNull() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE, "b", BigDecimal.TEN),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        ExpressionFileNode ast = ast("(m?.[\"a\"] ?? m?.[\"b\"]) ?? 0");
+        NullCoalesceNode innerCoalesce = (NullCoalesceNode) ((GroupedExpressionNode)
+                ((NullCoalesceNode) ast.resultExpression().orElseThrow()).operands().getFirst()).expression();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            SemanticModel model = success.model();
+            assertThat(model.runtimeNullability()).containsEntry(innerCoalesce.id(), RuntimeNullability.MAY_BE_NULL);
+            assertThat(model.runtimeNullability())
+                    .containsEntry(ast.resultExpression().orElseThrow().id(), RuntimeNullability.NEVER_NULL);
+        });
+    }
+
+    @Test
+    void conditionalIsMayBeNullWhenAnyBranchMayBeNull() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        ExpressionFileNode ast = ast("(if true then m?.[\"a\"] else 0 endif) ?? 0");
+        ConditionalNode conditional = (ConditionalNode) ((GroupedExpressionNode)
+                ((NullCoalesceNode) ast.resultExpression().orElseThrow()).operands().getFirst()).expression();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            SemanticModel model = success.model();
+            assertThat(model.runtimeNullability()).containsEntry(conditional.id(), RuntimeNullability.MAY_BE_NULL);
+            assertThat(model.runtimeNullability())
+                    .containsEntry(ast.resultExpression().orElseThrow().id(), RuntimeNullability.NEVER_NULL);
+        });
     }
 
     @Test
@@ -181,8 +330,8 @@ class SemanticResolverTest {
                 .registerJavaTypeWildcardChildren(WildcardChildProvider.class, "second", "first")
                 .externalSymbol("object", new WildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        ExpressionFileNode ast = ast("object?.[*]");
-        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        ExpressionFileNode ast = ast("object?.[*] ?? []");
+        NavigationChainNode navigation = navigationChain(ast.resultExpression().orElseThrow());
         NavigationLink link = navigation.links().getFirst();
 
         SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
@@ -225,7 +374,7 @@ class SemanticResolverTest {
                 RuntimeNullability.NEVER_NULL,
                 new CollectionShape(2));
         assertWildcardBinding(
-                "m?.[*]",
+                "m?.[*] ?? []",
                 environment,
                 WildcardNavigationBinding.ReceiverKind.MAP,
                 ScalarType.STRING,
@@ -241,7 +390,7 @@ class SemanticResolverTest {
                 .build();
 
         assertStringKeySubscript("m[\"A\"]", environment, RuntimeNullability.NEVER_NULL);
-        assertStringKeySubscript("m?.[\"A\"]", environment, RuntimeNullability.MAY_BE_NULL);
+        assertStringKeySubscript("m?.[\"A\"] ?? 0", environment, RuntimeNullability.MAY_BE_NULL);
     }
 
     @Test
@@ -320,7 +469,7 @@ class SemanticResolverTest {
             RuntimeNullability nullability,
             CollectionShape shape) {
         ExpressionFileNode ast = ast(source);
-        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        NavigationChainNode navigation = navigationChain(ast.resultExpression().orElseThrow());
         NavigationLink link = navigation.links().getFirst();
 
         SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
@@ -340,7 +489,7 @@ class SemanticResolverTest {
             ExpressionEnvironment environment,
             RuntimeNullability expectedNullability) {
         ExpressionFileNode ast = ast(source);
-        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        NavigationChainNode navigation = navigationChain(ast.resultExpression().orElseThrow());
         NavigationLink link = navigation.links().getFirst();
 
         SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
@@ -352,6 +501,30 @@ class SemanticResolverTest {
             assertThat(model.collectionShapes()).doesNotContainKey(link.id());
             assertThat(model.runtimeNullability()).containsEntry(navigation.id(), expectedNullability);
         });
+    }
+
+    private static NavigationChainNode navigationChain(ExpressionNode expression) {
+        if (expression instanceof NavigationChainNode navigation) {
+            return navigation;
+        }
+        if (expression instanceof NullCoalesceNode coalesce
+                && coalesce.operands().getFirst() instanceof NavigationChainNode navigation) {
+            return navigation;
+        }
+        throw new IllegalArgumentException("expected a navigation chain expression: " + expression);
+    }
+
+    private static void assertSingleDiagnostic(
+            String source, ExpressionEnvironment environment, DiagnosticCode expectedCode) {
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast(source), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure ->
+                assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(expectedCode.name());
+                    assertThat(diagnostic.severity()).isEqualTo(DiagnosticSeverity.ERROR);
+                    assertThat(diagnostic.primarySpan()).isPresent();
+                    assertThat(diagnostic.suggestion()).isPresent();
+                }));
     }
 
     private static void assertSemanticDiagnostic(String source, ExpressionEnvironment environment) {

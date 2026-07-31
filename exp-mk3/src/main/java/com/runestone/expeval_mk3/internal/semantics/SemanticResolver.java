@@ -62,6 +62,7 @@ import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
 import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.api.DiagnosticCategory;
+import com.runestone.expeval_mk3.api.DiagnosticSeverity;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.SourceSpan;
 
@@ -129,9 +130,15 @@ public final class SemanticResolver {
             if (ast.resultExpression().isEmpty()) {
                 diagnostic(DiagnosticCode.SEMANTIC_EMPTY_EXPRESSION, "Expression file has no result expression", ast.sourceSpan());
             } else {
-                Resolution resolution = resolveExpression(ast.resultExpression().orElseThrow(), null);
+                ExpressionNode result = ast.resultExpression().orElseThrow();
+                Resolution resolution = resolveExpression(result, null);
                 if (resolution.pending()) {
                     emptyCollectionDiagnostic(resolution.pendingSpan());
+                } else if (resolution.known()) {
+                    rejectIfNullable(
+                            result,
+                            DiagnosticCode.SEMANTIC_NULLABLE_RESULT_NOT_ALLOWED,
+                            "Result expression may be null at runtime");
                 }
             }
             if (!diagnostics.isEmpty()) {
@@ -160,11 +167,18 @@ public final class SemanticResolver {
             if (value.invalid()) {
                 return;
             }
+            RuntimeNullability valueNullability = nullabilityOf(assignment.expression().id());
+            if (rejectIfNullable(
+                    assignment.expression(),
+                    DiagnosticCode.SEMANTIC_NULLABLE_ASSIGNMENT_NOT_ALLOWED,
+                    "Assignment right-hand side may be null at runtime")) {
+                valueNullability = RuntimeNullability.NEVER_NULL;
+            }
             bindAssignmentTarget(
                     assignment.target(),
                     value.type(),
                     assignment.expression().id(),
-                    nullabilityOf(assignment.expression().id()));
+                    valueNullability);
         }
 
         private void bindAssignmentTarget(
@@ -356,6 +370,7 @@ public final class SemanticResolver {
 
             ExpressionType elementType = expectedElementType;
             List<ExpressionNode> pendingElements = new ArrayList<>();
+            boolean anyElementNullable = false;
             for (ExpressionNode element : collection.elements()) {
                 Resolution elementResolution = resolveExpression(element, elementType);
                 if (elementResolution.invalid()) {
@@ -365,6 +380,10 @@ public final class SemanticResolver {
                     pendingElements.add(element);
                     continue;
                 }
+                anyElementNullable |= rejectIfNullable(
+                        element,
+                        DiagnosticCode.SEMANTIC_NULLABLE_OPERAND_NOT_ALLOWED,
+                        "Collection literal element may be null at runtime");
                 if (elementType == null) {
                     elementType = elementResolution.type();
                 } else if (!elementType.equals(elementResolution.type())) {
@@ -382,7 +401,16 @@ public final class SemanticResolver {
                 return Resolution.pendingResolution(pendingElements.getFirst().sourceSpan());
             }
             for (ExpressionNode pendingElement : pendingElements) {
-                resolveExpression(pendingElement, elementType);
+                Resolution pendingResolution = resolveExpression(pendingElement, elementType);
+                if (pendingResolution.known()) {
+                    anyElementNullable |= rejectIfNullable(
+                            pendingElement,
+                            DiagnosticCode.SEMANTIC_NULLABLE_OPERAND_NOT_ALLOWED,
+                            "Collection literal element may be null at runtime");
+                }
+            }
+            if (anyElementNullable) {
+                return Resolution.invalidResolution();
             }
             CollectionType collectionType = new CollectionType(elementType);
             recordValue(collection.id(), collectionType);
@@ -420,6 +448,9 @@ public final class SemanticResolver {
                         binary.operatorSpan());
                 return Resolution.invalidResolution();
             }
+            if (rejectNullableOperands(binary.left(), binary.right())) {
+                return Resolution.invalidResolution();
+            }
             recordValue(binary.id(), resultType);
             recordPure(binary.id(), purityOf(binary.left().id()) && purityOf(binary.right().id()));
             return Resolution.known(resultType);
@@ -436,6 +467,9 @@ public final class SemanticResolver {
                         DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
                         "Comparison operands must have the same orderable type",
                         binary.operatorSpan());
+                return Resolution.invalidResolution();
+            }
+            if (rejectNullableOperands(binary.left(), binary.right())) {
                 return Resolution.invalidResolution();
             }
             recordValue(binary.id(), ScalarType.BOOLEAN);
@@ -468,6 +502,9 @@ public final class SemanticResolver {
                         binary.operatorSpan());
                 return Resolution.invalidResolution();
             }
+            if (rejectNullableOperands(binary.left(), binary.right())) {
+                return Resolution.invalidResolution();
+            }
             equalityOperandTypes.put(binary.id(), left.type());
             recordValue(binary.id(), ScalarType.BOOLEAN);
             recordPure(binary.id(), purityOf(binary.left().id()) && purityOf(binary.right().id()));
@@ -495,6 +532,9 @@ public final class SemanticResolver {
                         binary.operatorSpan());
                 return Resolution.invalidResolution();
             }
+            if (rejectNullableOperands(binary.left(), binary.right())) {
+                return Resolution.invalidResolution();
+            }
             try {
                 preparedValues.put(binary.id(), Pattern.compile((String) preparedValues.get(binary.right().id())));
             } catch (PatternSyntaxException exception) {
@@ -519,6 +559,9 @@ public final class SemanticResolver {
                         unary.operatorSpan());
                 return Resolution.invalidResolution();
             }
+            if (rejectNullableOperands(unary.operand())) {
+                return Resolution.invalidResolution();
+            }
             recordValue(unary.id(), operandType);
             recordPure(unary.id(), purityOf(unary.operand().id()));
             return Resolution.known(operandType);
@@ -534,6 +577,9 @@ public final class SemanticResolver {
                         DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
                         "Postfix numeric operator requires a number",
                         postfix.sourceSpan());
+                return Resolution.invalidResolution();
+            }
+            if (rejectNullableOperands(postfix.operand())) {
                 return Resolution.invalidResolution();
             }
             recordValue(postfix.id(), ScalarType.NUMBER);
@@ -553,6 +599,9 @@ public final class SemanticResolver {
                         DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
                         "Between operands must have the same orderable type",
                         between.operatorSpan());
+                return Resolution.invalidResolution();
+            }
+            if (rejectNullableOperands(between.value(), between.lowerBound(), between.upperBound())) {
                 return Resolution.invalidResolution();
             }
             recordValue(between.id(), ScalarType.BOOLEAN);
@@ -592,6 +641,9 @@ public final class SemanticResolver {
                         membership.operatorSpan());
                 return Resolution.invalidResolution();
             }
+            if (rejectNullableOperands(membership.element(), membership.collection())) {
+                return Resolution.invalidResolution();
+            }
             recordValue(membership.id(), ScalarType.BOOLEAN);
             recordPure(membership.id(), purityOf(membership.element().id()) && purityOf(membership.collection().id()));
             return Resolution.known(ScalarType.BOOLEAN);
@@ -600,6 +652,7 @@ public final class SemanticResolver {
         private Resolution resolveNullCoalesce(NullCoalesceNode coalesce, ExpressionType expectedType) {
             ExpressionType resultType = expectedType;
             List<ExpressionNode> pending = new ArrayList<>();
+            boolean anyOperandNeverNull = false;
             for (ExpressionNode operand : coalesce.operands()) {
                 Resolution resolution = resolveExpression(operand, resultType);
                 if (resolution.invalid()) {
@@ -609,6 +662,7 @@ public final class SemanticResolver {
                     pending.add(operand);
                     continue;
                 }
+                anyOperandNeverNull |= nullabilityOf(operand.id()) == RuntimeNullability.NEVER_NULL;
                 if (resultType == null) {
                     resultType = resolution.type();
                 } else if (!resultType.equals(resolution.type())) {
@@ -624,9 +678,15 @@ public final class SemanticResolver {
                         : Resolution.pendingResolution(pending.getFirst().sourceSpan());
             }
             for (ExpressionNode operand : pending) {
-                resolveExpression(operand, resultType);
+                Resolution resolution = resolveExpression(operand, resultType);
+                if (resolution.known()) {
+                    anyOperandNeverNull |= nullabilityOf(operand.id()) == RuntimeNullability.NEVER_NULL;
+                }
             }
-            recordValue(coalesce.id(), resultType);
+            recordValue(
+                    coalesce.id(),
+                    resultType,
+                    anyOperandNeverNull ? RuntimeNullability.NEVER_NULL : RuntimeNullability.MAY_BE_NULL);
             recordPure(coalesce.id(), allPure(coalesce.operands()));
             return Resolution.known(resultType);
         }
@@ -634,6 +694,7 @@ public final class SemanticResolver {
         private Resolution resolveConditional(ConditionalNode conditional, ExpressionType expectedType) {
             ExpressionType resultType = expectedType;
             List<ExpressionNode> pendingConsequences = new ArrayList<>();
+            boolean anyBranchMayBeNull = false;
             for (ConditionalBranchNode branch : conditional.branches()) {
                 Resolution condition = resolveExpression(branch.condition(), ScalarType.BOOLEAN);
                 if (!condition.invalid() && (!condition.known() || condition.type() != ScalarType.BOOLEAN)) {
@@ -641,21 +702,38 @@ public final class SemanticResolver {
                             DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
                             "Conditional branch condition must be boolean",
                             branch.condition().sourceSpan());
+                } else if (condition.known()) {
+                    rejectIfNullable(
+                            branch.condition(),
+                            DiagnosticCode.SEMANTIC_NULLABLE_PREDICATE_NOT_ALLOWED,
+                            "Conditional branch condition may be null at runtime");
                 }
                 Resolution consequence = resolveExpression(branch.consequence(), resultType);
                 resultType = mergeConditionalType(resultType, consequence, pendingConsequences, branch.consequence());
+                if (consequence.known()) {
+                    anyBranchMayBeNull |= nullabilityOf(branch.consequence().id()) == RuntimeNullability.MAY_BE_NULL;
+                }
             }
             Resolution elseResolution = resolveExpression(conditional.elseExpression(), resultType);
             resultType = mergeConditionalType(resultType, elseResolution, pendingConsequences, conditional.elseExpression());
+            if (elseResolution.known()) {
+                anyBranchMayBeNull |= nullabilityOf(conditional.elseExpression().id()) == RuntimeNullability.MAY_BE_NULL;
+            }
             if (resultType == null) {
                 return pendingConsequences.isEmpty()
                         ? Resolution.invalidResolution()
                         : Resolution.pendingResolution(pendingConsequences.getFirst().sourceSpan());
             }
             for (ExpressionNode pendingConsequence : pendingConsequences) {
-                resolveExpression(pendingConsequence, resultType);
+                Resolution resolution = resolveExpression(pendingConsequence, resultType);
+                if (resolution.known()) {
+                    anyBranchMayBeNull |= nullabilityOf(pendingConsequence.id()) == RuntimeNullability.MAY_BE_NULL;
+                }
             }
-            recordValue(conditional.id(), resultType);
+            recordValue(
+                    conditional.id(),
+                    resultType,
+                    anyBranchMayBeNull ? RuntimeNullability.MAY_BE_NULL : RuntimeNullability.NEVER_NULL);
             recordPure(conditional.id(), conditionalPure(conditional));
             return Resolution.known(resultType);
         }
@@ -704,6 +782,13 @@ public final class SemanticResolver {
                     }
                     continue;
                 }
+                if (rejectIfNullable(
+                        expressionArgument.expression(),
+                        DiagnosticCode.SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED,
+                        "Function argument may be null at runtime")) {
+                    invalid = true;
+                    continue;
+                }
                 argumentTypes.add(argumentResolution.type());
             }
             if (invalid) {
@@ -732,11 +817,18 @@ public final class SemanticResolver {
 
             ExpressionType currentType = receiver.type();
             CollectionShape currentShape = collectionShapes.get(navigation.receiver().id());
-            RuntimeNullability currentNullability = nullability.getOrDefault(
-                    navigation.receiver().id(), RuntimeNullability.NEVER_NULL);
+            RuntimeNullability currentNullability = nullabilityOf(navigation.receiver().id());
+            SourceSpan currentReceiverSpan = navigation.receiver().sourceSpan();
             boolean currentPure = purityOf(navigation.receiver().id());
             ContextualItemMembers currentContextualMembers = contextualItemMembers(navigation.receiver(), currentType);
             for (NavigationLink link : navigation.links()) {
+                if (!link.safe() && currentNullability == RuntimeNullability.MAY_BE_NULL) {
+                    nullableDiagnostic(
+                            DiagnosticCode.SEMANTIC_NULLABLE_RECEIVER_NOT_ALLOWED,
+                            "Navigation receiver may be null at runtime",
+                            currentReceiverSpan);
+                    return Resolution.invalidResolution();
+                }
                 LinkResolution linkResolution = resolveNavigationLink(
                         link, currentType, currentShape, currentPure, currentContextualMembers);
                 if (linkResolution.invalid()) {
@@ -747,6 +839,7 @@ public final class SemanticResolver {
                 currentNullability = linkResolution.nullability();
                 currentPure = linkResolution.pure();
                 currentContextualMembers = linkResolution.contextualItemMembers();
+                currentReceiverSpan = link.sourceSpan();
                 recordValue(link.id(), currentType, currentNullability);
                 recordPure(link.id(), currentPure);
                 recordCollectionShape(link.id(), currentType, currentShape);
@@ -913,6 +1006,12 @@ public final class SemanticResolver {
                         DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
                         "Filter predicate must be boolean",
                         filter.predicate().sourceSpan());
+                return LinkResolution.invalidResolution();
+            }
+            if (rejectIfNullable(
+                    filter.predicate(),
+                    DiagnosticCode.SEMANTIC_NULLABLE_PREDICATE_NOT_ALLOWED,
+                    "Filter predicate may be null at runtime")) {
                 return LinkResolution.invalidResolution();
             }
             return LinkResolution.known(
@@ -1192,11 +1291,16 @@ public final class SemanticResolver {
                         expression.sourceSpan());
                 return ValueArgumentResolution.invalidResolution();
             }
-            RuntimeNullability valueNullability = nullabilityOf(expression.id());
-            if (valueNullability != RuntimeNullability.NEVER_NULL || containsContextualItem(value.type())) {
+            if (rejectIfNullable(
+                    expression,
+                    DiagnosticCode.SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED,
+                    "Collection operation value argument may be null at runtime")) {
+                return ValueArgumentResolution.invalidResolution();
+            }
+            if (containsContextualItem(value.type())) {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
-                        "Collection operation value argument must be a known non-null source value",
+                        "Collection operation value argument must be a known source value",
                         expression.sourceSpan());
                 return ValueArgumentResolution.invalidResolution();
             }
@@ -1243,14 +1347,20 @@ public final class SemanticResolver {
                         lambda.body().sourceSpan());
                 return LambdaResolution.invalidResolution();
             }
-            RuntimeNullability bodyNullability = nullabilityOf(lambda.body().id());
-            if (bodyNullability != RuntimeNullability.NEVER_NULL || containsContextualItem(body.type())) {
+            if (rejectIfNullable(
+                    lambda.body(),
+                    DiagnosticCode.SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED,
+                    "Lambda result may be null at runtime")) {
+                return LambdaResolution.invalidResolution();
+            }
+            if (containsContextualItem(body.type())) {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
-                        "Lambda result must be a known non-null source value",
+                        "Lambda result must be a known source value",
                         lambda.body().sourceSpan());
                 return LambdaResolution.invalidResolution();
             }
+            RuntimeNullability bodyNullability = nullabilityOf(lambda.body().id());
             return LambdaResolution.valid(new CollectionOperationBinding.LambdaBinding(
                     lambda, body.type(), bodyNullability, currentItem.frameSlot(), purityOf(lambda.body().id())));
         }
@@ -1495,7 +1605,37 @@ public final class SemanticResolver {
         }
 
         private RuntimeNullability nullabilityOf(NodeId nodeId) {
-            return nullability.getOrDefault(nodeId, RuntimeNullability.NEVER_NULL);
+            RuntimeNullability value = nullability.get(nodeId);
+            if (value == null) {
+                throw new IllegalStateException("no runtime nullability recorded for " + nodeId);
+            }
+            return value;
+        }
+
+        private boolean rejectNullableOperands(ExpressionNode... operands) {
+            boolean rejected = false;
+            for (ExpressionNode operand : operands) {
+                rejected |= rejectIfNullable(
+                        operand,
+                        DiagnosticCode.SEMANTIC_NULLABLE_OPERAND_NOT_ALLOWED,
+                        "Operator operand may be null at runtime");
+            }
+            return rejected;
+        }
+
+        private boolean rejectIfNullable(ExpressionNode expression, DiagnosticCode code, String message) {
+            if (nullabilityOf(expression.id()) != RuntimeNullability.MAY_BE_NULL) {
+                return false;
+            }
+            nullableDiagnostic(code, message, expression.sourceSpan());
+            return true;
+        }
+
+        private void nullableDiagnostic(DiagnosticCode code, String message, SourceSpan span) {
+            diagnostics.add(ExpressionDiagnostic.builder(DiagnosticCategory.SEMANTIC, DiagnosticSeverity.ERROR, code.name(), message)
+                    .primarySpan(span)
+                    .suggestion("Discharge the possible null value with '??' before using it here")
+                    .build());
         }
 
         private void recordCollectionShape(NodeId nodeId, ExpressionType type, CollectionShape shape) {

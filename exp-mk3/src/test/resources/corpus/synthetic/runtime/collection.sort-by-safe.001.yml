@@ -1,7 +1,7 @@
 id: runtime.collection.sort-by-safe.001
 phase: runtime
 kind: valid
-source: 'items := [2, 1]; items?.sortBy(@ -> @, "asc")'
+source: 'items := [2, 1]; items?.sortBy(@ -> @, "asc") ?? []'
 coverage: [assignment, collection-literal, identifier, safe-navigation, call, lambda, at-symbol]
 expected:
   type: COLLECTION

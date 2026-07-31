@@ -445,7 +445,7 @@ class ExpressionCompilerTest {
                         "items := [1]; items.sortBy(@ -> items?.sum(), \"asc\")",
                         environment))
                 .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED"));
     }
 
     @Test
@@ -519,7 +519,7 @@ class ExpressionCompilerTest {
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
         assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("items := [1]; items.map(@ -> items?.sum())", environment))
                 .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED"));
         assertThat(functions.invocations()).isZero();
     }
 
@@ -572,7 +572,7 @@ class ExpressionCompilerTest {
     void safeMapCallPreservesTheRealReceiverBehaviorWhenNotNull() {
         ExpressionEnvironment environment = ExpressionEnvironment.standard();
 
-        assertThat(ExpressionCompiler.compileOrThrow("items := [1, 2]; items?.map(@ -> @ + 1)", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("items := [1, 2]; items?.map(@ -> @ + 1) ?? []", environment).compute())
                 .isEqualTo(List.of(new BigDecimal("2"), new BigDecimal("3")));
         assertThat(ExpressionCompiler.compileOrThrow("one := [1]; empty := one[1:1]; empty.map(@ -> @ + 1)", environment)
                 .compute()).isEqualTo(List.of());
@@ -608,7 +608,7 @@ class ExpressionCompilerTest {
 
         assertThat(ExpressionCompiler.compileOrThrow("m[\"A\"]", environment).compute())
                 .isEqualTo(BigDecimal.ONE);
-        assertThat(ExpressionCompiler.compileOrThrow("m?.[\"b\"]", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("m?.[\"b\"] ?? 0", environment).compute())
                 .isEqualTo(new BigDecimal("2"));
     }
 
@@ -622,7 +622,7 @@ class ExpressionCompilerTest {
         assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("m[\"missing\"]", environment).compute())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("map key not found: missing");
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("m?.[\"missing\"]", environment).compute())
+        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("m?.[\"missing\"] ?? 0", environment).compute())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("map key not found: missing");
     }
@@ -670,7 +670,7 @@ class ExpressionCompilerTest {
                 .registerJavaTypeWildcardChildren(FailingWildcardChildProvider.class, "first")
                 .externalSymbol("object", new FailingWildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("object?.[*]", failingAccessor).compute())
+        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("object?.[*] ?? []", failingAccessor).compute())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("first failed");
 
@@ -725,7 +725,7 @@ class ExpressionCompilerTest {
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("items?.sum()", environment).compute()))
+        assertThat(decimal(ExpressionCompiler.compileOrThrow("items?.sum() ?? 0", environment).compute()))
                 .isEqualByComparingTo(new BigDecimal("3"));
     }
 

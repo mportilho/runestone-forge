@@ -1,7 +1,7 @@
 id: runtime.collection.reduce-safe.001
 phase: runtime
 kind: valid
-source: 'items := [1, 2]; items?.reduce(0, @ -> @.accumulator + @.item)'
+source: 'items := [1, 2]; items?.reduce(0, @ -> @.accumulator + @.item) ?? 0'
 coverage: [assignment, collection-literal, identifier, safe-navigation, call, lambda, at-symbol, property-access, additive]
 expected:
   type: NUMBER
