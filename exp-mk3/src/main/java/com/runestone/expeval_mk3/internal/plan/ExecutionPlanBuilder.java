@@ -1,9 +1,6 @@
 package com.runestone.expeval_mk3.internal.plan;
 
-import ch.obermuhlner.math.big.BigDecimalMath;
-import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
-import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.RuntimeNullability;
@@ -33,23 +30,39 @@ import com.runestone.expeval_mk3.internal.ast.LiteralNode;
 import com.runestone.expeval_mk3.internal.ast.MembershipNode;
 import com.runestone.expeval_mk3.internal.ast.NavigationChainNode;
 import com.runestone.expeval_mk3.internal.ast.NavigationLink;
+import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.ast.NullCoalesceNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
+import com.runestone.expeval_mk3.internal.ast.PostfixOperator;
+import com.runestone.expeval_mk3.internal.ast.PostfixOperatorOccurrence;
 import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.StringKeySubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
-import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
 import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
+import com.runestone.expeval_mk3.internal.runtime.BetweenExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.BinaryExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.CollectionLiteralExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutor;
 import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutors;
+import com.runestone.expeval_mk3.internal.runtime.ConditionalExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.ConstantExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.CurrentTemporalExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableBranch;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableLambda;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableOperationArguments;
-import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 import com.runestone.expeval_mk3.internal.runtime.ExpressionRuntime;
+import com.runestone.expeval_mk3.internal.runtime.FrameReadExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.FunctionCallExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.LinkExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.MembershipExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.NullCoalesceExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.PostfixExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.UnaryExecutableNode;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
 import com.runestone.expeval_mk3.internal.semantics.ContextualMemberNavigationBinding;
+import com.runestone.expeval_mk3.internal.semantics.DeferredCheck;
+import com.runestone.expeval_mk3.internal.semantics.DestructuringMinimumSizeDeferredCheck;
 import com.runestone.expeval_mk3.internal.semantics.FilterNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.IndexSubscriptNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.MapKeySubscriptNavigationBinding;
@@ -61,22 +74,52 @@ import com.runestone.expeval_mk3.internal.semantics.SliceSubscriptNavigationBind
 import com.runestone.expeval_mk3.internal.semantics.SymbolBinding;
 import com.runestone.expeval_mk3.internal.semantics.WildcardNavigationBinding;
 
+import java.math.MathContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+/**
+ * Builds the immutable, non-optimized {@link ExecutionPlan} from a successful {@code SemanticModel}.
+ * Every violation of the Etapa 4 completeness contract (missing type, binding, prepared value, or
+ * numeric fact) is an internal bug in this builder, never a late user diagnostic; it fails as an
+ * {@link IllegalStateException} instead of inferring, resolving, or rediscovering the missing decision.
+ */
 public final class ExecutionPlanBuilder {
 
+    private static final List<PlanTransformation> TRANSFORMATIONS = List.of();
+
+    /**
+     * Builds the plan that will actually run: the non-optimized form with any installed transformation
+     * applied. No transformation is installed in this phase, so this currently returns the same plan
+     * shape as {@link #buildUnoptimized}.
+     */
     public ExecutionPlan build(SemanticModel model, ExpressionEnvironment environment) {
+        ExecutionPlan plan = buildUnoptimized(model, environment);
+        for (PlanTransformation transformation : TRANSFORMATIONS) {
+            plan = transformation.apply(plan);
+        }
+        return plan;
+    }
+
+    /**
+     * Builds the plan directly from the basic, non-optimized nodes and runtime, skipping the
+     * transformation step. Etapas 7-8 use this path as the equivalence oracle against transformed plans;
+     * this phase installs no transformation, so {@link #build} and this method produce the same plan
+     * shape.
+     */
+    ExecutionPlan buildUnoptimized(SemanticModel model, ExpressionEnvironment environment) {
         Objects.requireNonNull(model, "model");
         Objects.requireNonNull(environment, "environment");
-        ExpressionNode result = model.ast().resultExpression().orElseThrow(
-                () -> new IllegalArgumentException("semantic model must have a result expression"));
+        Map<NodeId, List<DeferredCheck>> deferredChecksByNode = model.deferredChecks().stream()
+                .collect(Collectors.groupingBy(DeferredCheck::nodeId));
+        ExecutableNode result = model.ast().resultExpression()
+                .map(expression -> buildNode(expression, model, environment, deferredChecksByNode))
+                .orElse(null);
         List<ExternalBindingPlan> externalBindings = model.frameLayout().externalBindings().stream()
                 .map(binding -> new ExternalBindingPlan(binding.requireExternalSymbol(), binding.frameSlot()))
                 .toList();
@@ -86,11 +129,11 @@ public final class ExecutionPlanBuilder {
         List<ExternalSymbol> declaredButUnusedSymbols = environment.externalSymbols().values().stream()
                 .filter(symbol -> !frameResidentNames.contains(symbol.name()))
                 .toList();
-        List<Consumer<ExecutionScope>> assignments = model.ast().assignments().stream()
-                .map(assignment -> buildAssignment(assignment, model, environment))
+        List<AssignmentExecutable> assignments = model.ast().assignments().stream()
+                .map(assignment -> buildAssignment(assignment, model, environment, deferredChecksByNode))
                 .toList();
         return new ExecutionPlan(
-                buildNode(result, model, environment),
+                result,
                 assignments,
                 externalBindings,
                 declaredButUnusedSymbols,
@@ -99,220 +142,176 @@ public final class ExecutionPlanBuilder {
                 environment.zoneId());
     }
 
-    private Consumer<ExecutionScope> buildAssignment(
+    private AssignmentExecutable buildAssignment(
             AssignmentNode assignment,
             SemanticModel model,
-            ExpressionEnvironment environment) {
-        ExecutableNode expression = buildNode(assignment.expression(), model, environment);
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
+        ExecutableNode expression = buildNode(assignment.expression(), model, environment, deferredChecksByNode);
         AssignmentTargetNode target = assignment.target();
         if (target instanceof IdentifierAssignmentTargetNode identifier) {
             SymbolBinding binding = required(model.symbolBindings(), identifier.id(), "assignment target binding");
-            return scope -> scope.write(binding.frameSlot(), expression.execute(scope));
+            return AssignmentExecutable.identifier(target.id(), target.sourceSpan(), binding.frameSlot(), expression);
         }
         if (target instanceof DestructuringAssignmentTargetNode destructuring) {
-            List<SymbolBinding> bindings = destructuring.elements().stream()
-                    .map(element -> required(model.symbolBindings(), element.id(), "assignment target binding"))
-                    .toList();
-            return scope -> {
-                List<?> values = (List<?>) expression.execute(scope);
-                if (values.size() < bindings.size()) {
-                    throw new IllegalStateException("destructuring source does not contain enough elements");
-                }
-                for (int index = 0; index < bindings.size(); index++) {
-                    scope.write(bindings.get(index).frameSlot(), values.get(index));
-                }
-            };
+            int[] frameSlots = destructuring.elements().stream()
+                    .mapToInt(element -> required(model.symbolBindings(), element.id(), "assignment target binding")
+                            .frameSlot())
+                    .toArray();
+            DestructuringMinimumSizeDeferredCheck minimumSizeCheck = deferredChecksByNode
+                    .getOrDefault(destructuring.id(), List.of()).stream()
+                    .filter(DestructuringMinimumSizeDeferredCheck.class::isInstance)
+                    .map(DestructuringMinimumSizeDeferredCheck.class::cast)
+                    .findFirst()
+                    .orElse(null);
+            return AssignmentExecutable.destructuring(
+                    target.id(), target.sourceSpan(), frameSlots, expression, minimumSizeCheck);
         }
         throw new IllegalArgumentException("unsupported assignment target: " + target.getClass().getSimpleName());
     }
 
-    private ExecutableNode buildNode(ExpressionNode node, SemanticModel model, ExpressionEnvironment environment) {
+    private ExecutableNode buildNode(
+            ExpressionNode node,
+            SemanticModel model,
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
         return switch (node) {
-            case LiteralNode literal -> {
-                Object value = required(model.preparedValues(), literal.id(), "prepared literal value");
-                yield scope -> value;
-            }
-            case CollectionLiteralNode collection -> {
-                List<ExecutableNode> elements = collection.elements().stream()
-                        .map(element -> buildNode(element, model, environment))
-                        .toList();
-                yield scope -> ExpressionRuntime.materialize(elements, scope);
-            }
-            case IdentifierNode identifier -> {
-                SymbolBinding binding = required(model.symbolBindings(), identifier.id(), "symbol binding");
-                yield scope -> scope.read(binding.frameSlot());
-            }
-            case CurrentItemNode currentItem -> {
-                SymbolBinding binding = required(model.symbolBindings(), currentItem.id(), "current item binding");
-                yield scope -> scope.read(binding.frameSlot());
-            }
-            case CurrentTemporalValueNode currentTemporalValue -> switch (currentTemporalValue.kind()) {
-                case DATE -> ExecutionScope::currentDate;
-                case TIME -> ExecutionScope::currentTime;
-                case DATE_TIME -> ExecutionScope::currentDateTime;
-            };
-            case GroupedExpressionNode grouped -> buildNode(grouped.expression(), model, environment);
-            case BinaryOperationNode binary -> buildBinary(binary, model, requireEnvironment(environment));
-            case UnaryOperationNode unary -> {
-                ExecutableNode operand = buildNode(unary.operand(), model, environment);
-                yield scope -> unary.operator() == UnaryOperator.NEGATE
-                        ? ExpressionRuntime.number(operand.execute(scope)).negate()
-                        : !ExpressionRuntime.bool(operand.execute(scope));
-            }
-            case PostfixOperationNode postfix -> {
-                ExecutableNode operand = buildNode(postfix.operand(), model, environment);
-                yield scope -> ExpressionRuntime.executePostfix(
-                        ExpressionRuntime.number(operand.execute(scope)), postfix, requireEnvironment(environment));
-            }
-            case BetweenNode between -> buildBetween(between, model, environment);
-            case MembershipNode membership -> buildMembership(membership, model, environment);
-            case NullCoalesceNode coalesce -> {
-                List<ExecutableNode> operands = coalesce.operands().stream()
-                        .map(operand -> buildNode(operand, model, environment))
-                        .toList();
-                yield scope -> {
-                    for (ExecutableNode operand : operands) {
-                        Object value = operand.execute(scope);
-                        if (value != null) {
-                            return value;
-                        }
-                    }
-                    return null;
-                };
-            }
-            case ConditionalNode conditional -> buildConditional(conditional, model, environment);
-            case FunctionCallNode functionCall -> buildFunctionCall(functionCall, model, environment);
-            case NavigationChainNode navigation -> buildNavigationChain(navigation, model, environment);
+            case LiteralNode literal -> new ConstantExecutableNode(
+                    literal.id(), literal.sourceSpan(),
+                    required(model.preparedValues(), literal.id(), "prepared literal value"));
+            case CollectionLiteralNode collection -> new CollectionLiteralExecutableNode(
+                    collection.id(), collection.sourceSpan(),
+                    collection.elements().stream()
+                            .map(element -> buildNode(element, model, environment, deferredChecksByNode))
+                            .toList());
+            case IdentifierNode identifier -> new FrameReadExecutableNode(
+                    identifier.id(), identifier.sourceSpan(),
+                    required(model.symbolBindings(), identifier.id(), "symbol binding").frameSlot());
+            case CurrentItemNode currentItem -> new FrameReadExecutableNode(
+                    currentItem.id(), currentItem.sourceSpan(),
+                    required(model.symbolBindings(), currentItem.id(), "current item binding").frameSlot());
+            case CurrentTemporalValueNode currentTemporalValue -> new CurrentTemporalExecutableNode(
+                    currentTemporalValue.id(), currentTemporalValue.sourceSpan(), currentTemporalValue.kind());
+            case GroupedExpressionNode grouped -> buildNode(grouped.expression(), model, environment, deferredChecksByNode);
+            case BinaryOperationNode binary -> buildBinary(binary, model, requireEnvironment(environment), deferredChecksByNode);
+            case UnaryOperationNode unary -> new UnaryExecutableNode(
+                    unary.id(), unary.sourceSpan(), unary.operator(),
+                    buildNode(unary.operand(), model, environment, deferredChecksByNode));
+            case PostfixOperationNode postfix -> buildPostfix(postfix, model, requireEnvironment(environment), deferredChecksByNode);
+            case BetweenNode between -> buildBetween(between, model, environment, deferredChecksByNode);
+            case MembershipNode membership -> buildMembership(membership, model, environment, deferredChecksByNode);
+            case NullCoalesceNode coalesce -> new NullCoalesceExecutableNode(
+                    coalesce.id(), coalesce.sourceSpan(),
+                    coalesce.operands().stream()
+                            .map(operand -> buildNode(operand, model, environment, deferredChecksByNode))
+                            .toList());
+            case ConditionalNode conditional -> buildConditional(conditional, model, environment, deferredChecksByNode);
+            case FunctionCallNode functionCall -> buildFunctionCall(functionCall, model, environment, deferredChecksByNode);
+            case NavigationChainNode navigation -> buildNavigationChain(navigation, model, environment, deferredChecksByNode);
         };
     }
 
     private ExecutableNode buildBinary(
             BinaryOperationNode binary,
             SemanticModel model,
-            ExpressionEnvironment environment) {
-        ExecutableNode left = buildNode(binary.left(), model, environment);
-        ExecutableNode right = buildNode(binary.right(), model, environment);
-        return switch (binary.operator()) {
-            case ADD -> scope -> ExpressionRuntime.number(left.execute(scope)).add(ExpressionRuntime.number(right.execute(scope)));
-            case SUBTRACT -> scope -> ExpressionRuntime.number(left.execute(scope)).subtract(ExpressionRuntime.number(right.execute(scope)));
-            case MULTIPLY -> scope -> ExpressionRuntime.number(left.execute(scope)).multiply(ExpressionRuntime.number(right.execute(scope)), environment.mathContext());
-            case DIVIDE -> scope -> ExpressionRuntime.number(left.execute(scope)).divide(ExpressionRuntime.number(right.execute(scope)), environment.mathContext());
-            case MODULO -> scope -> ExpressionRuntime.number(left.execute(scope)).remainder(ExpressionRuntime.number(right.execute(scope)), environment.mathContext());
-            case ROOT -> scope -> BigDecimalMath.root(
-                    ExpressionRuntime.number(right.execute(scope)), ExpressionRuntime.number(left.execute(scope)), environment.mathContext());
-            case EXPONENTIATE -> scope -> ExpressionRuntime.pow(
-                    ExpressionRuntime.number(left.execute(scope)), ExpressionRuntime.number(right.execute(scope)), environment.mathContext());
-            case CONCATENATE -> scope -> (String) left.execute(scope) + right.execute(scope);
-            case LOGICAL_AND -> scope -> ExpressionRuntime.bool(left.execute(scope)) && ExpressionRuntime.bool(right.execute(scope));
-            case LOGICAL_OR -> scope -> ExpressionRuntime.bool(left.execute(scope)) || ExpressionRuntime.bool(right.execute(scope));
-            case LOGICAL_NAND -> scope -> {
-                boolean leftValue = ExpressionRuntime.bool(left.execute(scope));
-                boolean rightValue = ExpressionRuntime.bool(right.execute(scope));
-                return !(leftValue && rightValue);
-            };
-            case LOGICAL_NOR -> scope -> {
-                boolean leftValue = ExpressionRuntime.bool(left.execute(scope));
-                boolean rightValue = ExpressionRuntime.bool(right.execute(scope));
-                return !(leftValue || rightValue);
-            };
-            case LOGICAL_XOR -> scope -> ExpressionRuntime.bool(left.execute(scope)) ^ ExpressionRuntime.bool(right.execute(scope));
-            case LOGICAL_XNOR -> scope -> !(ExpressionRuntime.bool(left.execute(scope)) ^ ExpressionRuntime.bool(right.execute(scope)));
-            case GREATER_THAN -> comparison(left, right, model.resolvedTypes().get(binary.left().id()), comparison -> comparison > 0);
-            case GREATER_THAN_OR_EQUAL -> comparison(left, right, model.resolvedTypes().get(binary.left().id()), comparison -> comparison >= 0);
-            case LESS_THAN -> comparison(left, right, model.resolvedTypes().get(binary.left().id()), comparison -> comparison < 0);
-            case LESS_THAN_OR_EQUAL -> comparison(left, right, model.resolvedTypes().get(binary.left().id()), comparison -> comparison <= 0);
-            case EQUAL, NOT_EQUAL -> equality(binary, left, right, model);
-            case REGEX_MATCH, REGEX_NOT_MATCH -> regex(binary, left, model);
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
+        ExecutableNode left = buildNode(binary.left(), model, environment, deferredChecksByNode);
+        ExecutableNode right = buildNode(binary.right(), model, environment, deferredChecksByNode);
+        BinaryOperator operator = binary.operator();
+        return switch (operator) {
+            case ADD, SUBTRACT, MULTIPLY, DIVIDE, MODULO, ROOT, EXPONENTIATE, CONCATENATE -> BinaryExecutableNode.arithmetic(
+                    binary.id(), binary.sourceSpan(), operator, left, right, environment.mathContext(),
+                    deferredChecksByNode.getOrDefault(binary.id(), List.of()));
+            case LOGICAL_AND, LOGICAL_OR, LOGICAL_NAND, LOGICAL_NOR, LOGICAL_XOR, LOGICAL_XNOR ->
+                    BinaryExecutableNode.logical(binary.id(), binary.sourceSpan(), operator, left, right);
+            case GREATER_THAN, GREATER_THAN_OR_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL -> BinaryExecutableNode.comparison(
+                    binary.id(), binary.sourceSpan(), operator, left, right, model.resolvedTypes().get(binary.left().id()));
+            case EQUAL, NOT_EQUAL -> BinaryExecutableNode.equality(
+                    binary.id(), binary.sourceSpan(), operator, left, right,
+                    required(model.equalityOperandTypes(), binary.id(), "equality operand type"));
+            case REGEX_MATCH, REGEX_NOT_MATCH -> BinaryExecutableNode.regex(
+                    binary.id(), binary.sourceSpan(), operator, left,
+                    (Pattern) required(model.preparedValues(), binary.id(), "prepared regex pattern"));
         };
     }
 
-    private ExecutableNode equality(
-            BinaryOperationNode binary,
-            ExecutableNode left,
-            ExecutableNode right,
-            SemanticModel model) {
-        ExpressionType operandType = required(model.equalityOperandTypes(), binary.id(), "equality operand type");
-        boolean negated = binary.operator() == BinaryOperator.NOT_EQUAL;
-        return scope -> ExpressionRuntime.structuralEquals(left.execute(scope), right.execute(scope), operandType) != negated;
+    private ExecutableNode buildPostfix(
+            PostfixOperationNode postfix,
+            SemanticModel model,
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
+        ExecutableNode operand = buildNode(postfix.operand(), model, environment, deferredChecksByNode);
+        List<PostfixOperator> operators = postfix.operations().stream().map(PostfixOperatorOccurrence::operator).toList();
+        return new PostfixExecutableNode(
+                postfix.id(), postfix.sourceSpan(), operand, operators, environment.maxFactorialInput(),
+                deferredChecksByNode.getOrDefault(postfix.id(), List.of()));
     }
 
-    private ExecutableNode regex(BinaryOperationNode binary, ExecutableNode left, SemanticModel model) {
-        Pattern pattern = (Pattern) required(model.preparedValues(), binary.id(), "prepared regex pattern");
-        boolean negated = binary.operator() == BinaryOperator.REGEX_NOT_MATCH;
-        return scope -> pattern.matcher((String) left.execute(scope)).matches() != negated;
+    private ExecutableNode buildBetween(
+            BetweenNode between,
+            SemanticModel model,
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
+        return new BetweenExecutableNode(
+                between.id(),
+                between.sourceSpan(),
+                between.negated(),
+                buildNode(between.value(), model, environment, deferredChecksByNode),
+                buildNode(between.lowerBound(), model, environment, deferredChecksByNode),
+                buildNode(between.upperBound(), model, environment, deferredChecksByNode),
+                model.resolvedTypes().get(between.value().id()));
     }
 
-    private ExecutableNode comparison(
-            ExecutableNode left,
-            ExecutableNode right,
-            ExpressionType type,
-            java.util.function.IntPredicate predicate) {
-        return scope -> predicate.test(ExpressionRuntime.compareValues(left.execute(scope), right.execute(scope), type));
+    private ExecutableNode buildMembership(
+            MembershipNode membership,
+            SemanticModel model,
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
+        return new MembershipExecutableNode(
+                membership.id(),
+                membership.sourceSpan(),
+                membership.negated(),
+                buildNode(membership.element(), model, environment, deferredChecksByNode),
+                buildNode(membership.collection(), model, environment, deferredChecksByNode),
+                model.resolvedTypes().get(membership.collection().id()));
     }
 
-    private ExecutableNode buildBetween(BetweenNode between, SemanticModel model, ExpressionEnvironment environment) {
-        ExecutableNode valueNode = buildNode(between.value(), model, environment);
-        ExecutableNode lowerNode = buildNode(between.lowerBound(), model, environment);
-        ExecutableNode upperNode = buildNode(between.upperBound(), model, environment);
-        ExpressionType type = model.resolvedTypes().get(between.value().id());
-        return scope -> {
-            Object value = valueNode.execute(scope);
-            if (ExpressionRuntime.compareValues(value, lowerNode.execute(scope), type) < 0) {
-                return between.negated();
-            }
-            boolean inside = ExpressionRuntime.compareValues(value, upperNode.execute(scope), type) <= 0;
-            return inside != between.negated();
-        };
-    }
-
-    private ExecutableNode buildMembership(MembershipNode membership, SemanticModel model, ExpressionEnvironment environment) {
-        ExecutableNode elementNode = buildNode(membership.element(), model, environment);
-        ExecutableNode collectionNode = buildNode(membership.collection(), model, environment);
-        ExpressionType collectionType = model.resolvedTypes().get(membership.collection().id());
-        return scope -> {
-            Object element = elementNode.execute(scope);
-            boolean contains;
-            if (collectionType instanceof CollectionType type) {
-                contains = false;
-                for (Object value : (List<?>) collectionNode.execute(scope)) {
-                    if (ExpressionRuntime.structuralEquals(element, value, type.elementType())) {
-                        contains = true;
-                        break;
-                    }
-                }
-            } else {
-                contains = ((Map<?, ?>) collectionNode.execute(scope)).containsKey(element);
-            }
-            return contains != membership.negated();
-        };
-    }
-
-    private ExecutableNode buildConditional(ConditionalNode conditional, SemanticModel model, ExpressionEnvironment environment) {
+    private ExecutableNode buildConditional(
+            ConditionalNode conditional,
+            SemanticModel model,
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
         List<ExecutableBranch> branches = conditional.branches().stream()
                 .map(branch -> new ExecutableBranch(
-                        buildNode(branch.condition(), model, environment),
-                        buildNode(branch.consequence(), model, environment)))
+                        buildNode(branch.condition(), model, environment, deferredChecksByNode),
+                        buildNode(branch.consequence(), model, environment, deferredChecksByNode)))
                 .toList();
-        ExecutableNode elseExpression = buildNode(conditional.elseExpression(), model, environment);
-        return scope -> ExpressionRuntime.executeConditional(branches, elseExpression, scope);
+        ExecutableNode elseExpression = buildNode(conditional.elseExpression(), model, environment, deferredChecksByNode);
+        return new ConditionalExecutableNode(conditional.id(), conditional.sourceSpan(), branches, elseExpression);
     }
 
-    private ExecutableNode buildFunctionCall(FunctionCallNode functionCall, SemanticModel model, ExpressionEnvironment environment) {
+    private ExecutableNode buildFunctionCall(
+            FunctionCallNode functionCall,
+            SemanticModel model,
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
         FunctionDescriptor descriptor = required(model.functionBindings(), functionCall.id(), "function binding");
         List<ExecutableNode> arguments = functionCall.arguments().stream()
                 .map(ExpressionCallArgument.class::cast)
-                .map(argument -> buildNode(argument.expression(), model, environment))
+                .map(argument -> buildNode(argument.expression(), model, environment, deferredChecksByNode))
                 .toList();
-        return scope -> ExpressionRuntime.invokeFunction(descriptor, arguments, scope);
+        return new FunctionCallExecutableNode(functionCall.id(), functionCall.sourceSpan(), descriptor, arguments);
     }
 
     private ExecutableNode buildNavigationChain(
             NavigationChainNode navigation,
             SemanticModel model,
-            ExpressionEnvironment environment) {
-        ExecutableNode current = buildNode(navigation.receiver(), model, environment);
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
+        ExecutableNode current = buildNode(navigation.receiver(), model, environment, deferredChecksByNode);
         for (NavigationLink link : navigation.links()) {
-            current = buildNavigationLink(link, current, model, environment);
+            current = buildNavigationLink(link, current, model, environment, deferredChecksByNode);
         }
         return current;
     }
@@ -321,75 +320,83 @@ public final class ExecutionPlanBuilder {
             NavigationLink link,
             ExecutableNode receiver,
             SemanticModel model,
-            ExpressionEnvironment environment) {
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
         NavigationBinding binding = required(model.navigationBindings(), link.id(), "navigation binding");
+        NodeId id = link.id();
+        var span = link.sourceSpan();
         return switch (binding) {
             case IndexSubscriptNavigationBinding ignored -> {
                 IndexSubscriptNavigationLink index = (IndexSubscriptNavigationLink) link;
-                yield scope -> ExpressionRuntime.indexedValue(receiver.execute(scope), index);
+                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.indexedValue(receiver.execute(scope), index));
             }
             case SliceSubscriptNavigationBinding ignored -> {
                 SliceSubscriptNavigationLink slice = (SliceSubscriptNavigationLink) link;
-                yield scope -> ExpressionRuntime.slicedValues(
-                        receiver.execute(scope), slice, environment.maxMaterializedSize());
+                int maxMaterializedSize = environment.maxMaterializedSize();
+                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.slicedValues(
+                        receiver.execute(scope), slice, maxMaterializedSize));
             }
             case MapKeySubscriptNavigationBinding mapKeyBinding -> {
                 StringKeySubscriptNavigationLink stringKey = (StringKeySubscriptNavigationLink) link;
                 boolean safe = mapKeyBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
-                yield scope -> ExpressionRuntime.mapKeyValue(
-                        receiver.execute(scope), stringKey.key(), safe, stringKey.sourceSpan());
+                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.mapKeyValue(
+                        receiver.execute(scope), stringKey.key(), safe, stringKey.sourceSpan()));
             }
             case FilterNavigationBinding filterBinding -> {
                 FilterNavigationLink filter = (FilterNavigationLink) link;
-                ExecutableNode predicate = buildNode(filter.predicate(), model, environment);
-                yield scope -> ExpressionRuntime.filteredValues(
+                ExecutableNode predicate = buildNode(filter.predicate(), model, environment, deferredChecksByNode);
+                int maxMaterializedSize = environment.maxMaterializedSize();
+                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.filteredValues(
                         receiver.execute(scope),
                         predicate,
                         filterBinding.currentItemFrameSlot(),
                         scope,
-                        environment.maxMaterializedSize());
+                        maxMaterializedSize));
             }
             case ContextualMemberNavigationBinding memberBinding -> {
                 boolean safe = memberBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
-                yield scope -> ExpressionRuntime.contextualMemberValue(
-                        receiver.execute(scope), memberBinding.member(), safe);
+                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.contextualMemberValue(
+                        receiver.execute(scope), memberBinding.member(), safe));
             }
             case RegisteredPropertyNavigationBinding propertyBinding -> {
                 boolean safe = propertyBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
-                yield scope -> ExpressionRuntime.registeredPropertyValue(
-                        receiver.execute(scope), safe, propertyBinding);
+                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.registeredPropertyValue(
+                        receiver.execute(scope), safe, propertyBinding));
             }
             case RegisteredMethodNavigationBinding methodBinding -> {
                 CallNavigationLink call = (CallNavigationLink) link;
                 boolean safe = methodBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
                 List<ExecutableNode> arguments = call.arguments().stream()
                         .map(ExpressionCallArgument.class::cast)
-                        .map(argument -> buildNode(argument.expression(), model, environment))
+                        .map(argument -> buildNode(argument.expression(), model, environment, deferredChecksByNode))
                         .toList();
-                yield scope -> ExpressionRuntime.invokeRegisteredMethod(
-                        receiver.execute(scope), safe, methodBinding, arguments, scope);
+                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.invokeRegisteredMethod(
+                        receiver.execute(scope), safe, methodBinding, arguments, scope));
             }
             case WildcardNavigationBinding wildcardBinding -> {
                 WildcardNavigationLink wildcard = (WildcardNavigationLink) link;
-                yield scope -> ExpressionRuntime.wildcardValues(
+                int maxMaterializedSize = environment.maxMaterializedSize();
+                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.wildcardValues(
                         receiver.execute(scope),
                         wildcard.safe(),
                         wildcardBinding,
-                        environment.maxMaterializedSize());
+                        maxMaterializedSize));
             }
             case CollectionOperationBinding operationBinding -> {
                 CallNavigationLink call = (CallNavigationLink) link;
-                ExecutableOperationArguments arguments = buildOperationArguments(call, operationBinding, model, environment);
+                ExecutableOperationArguments arguments = buildOperationArguments(call, operationBinding, model, environment, deferredChecksByNode);
                 CollectionOperationExecutor executor = CollectionOperationExecutors.executorFor(operationBinding.identity());
-                yield scope -> ExpressionRuntime.executeCollectionOperation(
+                MathContext mathContext = environment.mathContext();
+                int maxMaterializedSize = environment.maxMaterializedSize();
+                yield new LinkExecutableNode(id, span, scope -> ExpressionRuntime.executeCollectionOperation(
                         executor,
                         operationBinding,
                         receiver.execute(scope),
                         call.safe(),
-                        environment.mathContext(),
-                        environment.maxMaterializedSize(),
+                        mathContext,
+                        maxMaterializedSize,
                         arguments,
-                        scope);
+                        scope));
             }
         };
     }
@@ -398,20 +405,21 @@ public final class ExecutionPlanBuilder {
             CallNavigationLink call,
             CollectionOperationBinding binding,
             SemanticModel model,
-            ExpressionEnvironment environment) {
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
         ArrayList<ExecutableNode> valueArguments = new ArrayList<>();
         ArrayList<ExecutableLambda> lambdaArguments = new ArrayList<>();
         int lambdaIndex = 0;
         for (CallArgument argument : call.arguments()) {
             if (argument instanceof ExpressionCallArgument expressionArgument) {
-                valueArguments.add(buildNode(expressionArgument.expression(), model, environment));
+                valueArguments.add(buildNode(expressionArgument.expression(), model, environment, deferredChecksByNode));
                 continue;
             }
             LambdaCallArgument lambdaArgument = (LambdaCallArgument) argument;
             CollectionOperationBinding.LambdaBinding lambdaBinding = binding.lambdaBindings().get(lambdaIndex++);
             LambdaNode lambda = lambdaArgument.lambda();
             lambdaArguments.add(new ExecutableLambda(
-                    buildNode(lambda.body(), model, environment), lambdaBinding.currentItemFrameSlot()));
+                    buildNode(lambda.body(), model, environment, deferredChecksByNode), lambdaBinding.currentItemFrameSlot()));
         }
         return new ExecutableOperationArguments(valueArguments, lambdaArguments);
     }

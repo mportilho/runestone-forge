@@ -2,7 +2,6 @@ package com.runestone.expeval_mk3.internal.runtime;
 
 import ch.obermuhlner.math.big.BigDecimalMath;
 import com.runestone.expeval_mk3.api.CollectionType;
-import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.FunctionInvocationException;
@@ -10,7 +9,6 @@ import com.runestone.expeval_mk3.api.JavaWildcardChildDescriptor;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.IndexSubscriptNavigationLink;
-import com.runestone.expeval_mk3.internal.ast.PostfixOperationNode;
 import com.runestone.expeval_mk3.internal.ast.PostfixOperator;
 import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
@@ -574,13 +572,13 @@ public final class ExpressionRuntime {
 
     public static BigDecimal executePostfix(
             BigDecimal initial,
-            PostfixOperationNode postfix,
-            ExpressionEnvironment environment) {
+            List<PostfixOperator> operators,
+            int maxFactorialInput) {
         BigDecimal result = initial;
-        for (var operation : postfix.operations()) {
-            result = operation.operator() == PostfixOperator.PERCENT
+        for (PostfixOperator operator : operators) {
+            result = operator == PostfixOperator.PERCENT
                     ? result.movePointLeft(2)
-                    : factorial(result, environment.maxFactorialInput());
+                    : factorial(result, maxFactorialInput);
         }
         return result;
     }

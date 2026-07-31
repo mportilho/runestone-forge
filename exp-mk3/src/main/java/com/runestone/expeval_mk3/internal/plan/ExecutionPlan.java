@@ -10,13 +10,17 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+/**
+ * The immutable, thread-shareable, unoptimized execution plan produced by {@link ExecutionPlanBuilder}
+ * from a successful {@code SemanticModel}. It does not retain a parse tree, the {@code SemanticModel},
+ * source text, or the whole {@code ExpressionEnvironment}.
+ */
 public final class ExecutionPlan {
 
     private final ExecutableNode resultExpression;
-    private final List<Consumer<ExecutionScope>> assignments;
+    private final List<AssignmentExecutable> assignments;
     private final List<ExternalBindingPlan> externalBindings;
     private final Map<String, ExternalBindingPlan> bindingsByName;
     private final Map<String, ExternalSymbol> declaredButUnusedSymbolsByName;
@@ -26,13 +30,13 @@ public final class ExecutionPlan {
 
     ExecutionPlan(
             ExecutableNode resultExpression,
-            List<Consumer<ExecutionScope>> assignments,
+            List<AssignmentExecutable> assignments,
             List<ExternalBindingPlan> externalBindings,
             List<ExternalSymbol> declaredButUnusedSymbols,
             int frameSize,
             BoundaryCoercion boundaryCoercion,
             ZoneId zoneId) {
-        this.resultExpression = Objects.requireNonNull(resultExpression, "resultExpression");
+        this.resultExpression = resultExpression;
         this.assignments = List.copyOf(assignments);
         this.externalBindings = List.copyOf(externalBindings);
         bindingsByName = this.externalBindings.stream()
@@ -44,7 +48,29 @@ public final class ExecutionPlan {
         this.zoneId = Objects.requireNonNull(zoneId, "zoneId");
     }
 
+    public boolean hasResult() {
+        return resultExpression != null;
+    }
+
+    List<AssignmentExecutable> assignments() {
+        return assignments;
+    }
+
+    ExecutableNode resultExpression() {
+        return resultExpression;
+    }
+
+    /**
+     * Runs assignments in source order and, when present, the final result expression. Assignment-only
+     * plans have no result to invent, so this returns {@code null} for them; a public view over such a
+     * plan decides for itself whether that absence is reachable.
+     */
     public Object compute(Map<String, ?> overrides) {
+        ExecutionScope scope = prepare(overrides);
+        return resultExpression == null ? null : resultExpression.execute(scope);
+    }
+
+    private ExecutionScope prepare(Map<String, ?> overrides) {
         Objects.requireNonNull(overrides, "overrides");
         ExecutionScope scope = new ExecutionScope(frameSize, zoneId);
         for (ExternalBindingPlan binding : externalBindings) {
@@ -61,10 +87,10 @@ public final class ExecutionPlan {
                     binding.frameSlot(),
                     binding.symbol().coerceOverride(override.getValue(), boundaryCoercion));
         }
-        for (Consumer<ExecutionScope> assignment : assignments) {
-            assignment.accept(scope);
+        for (AssignmentExecutable assignment : assignments) {
+            assignment.execute(scope);
         }
-        return resultExpression.execute(scope);
+        return scope;
     }
 
     private void validateUnusedSymbolOverride(String name, Object value) {

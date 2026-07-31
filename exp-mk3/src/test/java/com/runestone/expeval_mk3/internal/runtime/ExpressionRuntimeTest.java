@@ -5,6 +5,7 @@ import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.FunctionInvocationException;
 import com.runestone.expeval_mk3.api.FunctionPurity;
 import com.runestone.expeval_mk3.api.ScalarType;
+import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.semantics.ContextualMemberNavigationBinding;
 import com.runestone.expeval_mk3.api.SourceSpan;
 import org.junit.jupiter.api.Test;
@@ -61,7 +62,11 @@ class ExpressionRuntimeTest {
     }
 
     private static ExecutableNode constant(Object value) {
-        return scope -> value;
+        return node(scope -> value);
+    }
+
+    private static ExecutableNode node(java.util.function.Function<ExecutionScope, Object> delegate) {
+        return new LinkExecutableNode(new NodeId(1), SPAN, delegate);
     }
 
     private static FunctionDescriptor functionDescriptor(String methodName) throws NoSuchMethodException {
@@ -155,8 +160,8 @@ class ExpressionRuntimeTest {
     @Test
     void mapAppliesLambdaToEveryElement() {
         ExecutionScope scope = newScope();
-        ExecutableNode doubleValue = executionScope ->
-                ExpressionRuntime.number(executionScope.read(CURRENT_ITEM_SLOT)).multiply(BigDecimal.TWO);
+        ExecutableNode doubleValue = node(executionScope ->
+                ExpressionRuntime.number(executionScope.read(CURRENT_ITEM_SLOT)).multiply(BigDecimal.TWO));
         ExecutableLambda lambda = new ExecutableLambda(doubleValue, CURRENT_ITEM_SLOT);
 
         List<Object> result = ExpressionRuntime.map(
@@ -168,14 +173,14 @@ class ExpressionRuntimeTest {
     @Test
     void reduceAccumulatesAcrossElementsUsingLambda() {
         ExecutionScope scope = newScope();
-        ExecutableNode sumStep = executionScope -> {
+        ExecutableNode sumStep = node(executionScope -> {
             Object reductionItem = executionScope.read(CURRENT_ITEM_SLOT);
             BigDecimal accumulator = ExpressionRuntime.number(ExpressionRuntime.contextualMemberValue(
                     reductionItem, ContextualMemberNavigationBinding.Member.REDUCTION_ACCUMULATOR, false));
             BigDecimal item = ExpressionRuntime.number(ExpressionRuntime.contextualMemberValue(
                     reductionItem, ContextualMemberNavigationBinding.Member.REDUCTION_ITEM, false));
             return accumulator.add(item);
-        };
+        });
         ExecutableLambda lambda = new ExecutableLambda(sumStep, CURRENT_ITEM_SLOT);
 
         Object result = ExpressionRuntime.reduce(
@@ -187,7 +192,7 @@ class ExpressionRuntimeTest {
     @Test
     void sortByOrdersAscendingAndDescendingByLambdaKey() {
         ExecutionScope scope = newScope();
-        ExecutableNode identity = executionScope -> executionScope.read(CURRENT_ITEM_SLOT);
+        ExecutableNode identity = node(executionScope -> executionScope.read(CURRENT_ITEM_SLOT));
         ExecutableLambda selector = new ExecutableLambda(identity, CURRENT_ITEM_SLOT);
         List<Object> values = List.of(BigDecimal.TEN, BigDecimal.ONE, BigDecimal.valueOf(5));
 
@@ -199,7 +204,7 @@ class ExpressionRuntimeTest {
     }
 
     private static ExecutableNode positiveCheckNode() {
-        return executionScope -> ExpressionRuntime.number(executionScope.read(CURRENT_ITEM_SLOT))
-                .compareTo(BigDecimal.ZERO) > 0;
+        return node(executionScope -> ExpressionRuntime.number(executionScope.read(CURRENT_ITEM_SLOT))
+                .compareTo(BigDecimal.ZERO) > 0);
     }
 }
