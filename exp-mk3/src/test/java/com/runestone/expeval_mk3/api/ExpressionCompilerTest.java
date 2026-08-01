@@ -51,11 +51,114 @@ class ExpressionCompilerTest {
     }
 
     @Test
-    void compileDelegatesToCompileOrThrowWithTheSameBehavior() {
-        assertThat(ExpressionCompiler.compile("1 + 2", ExpressionEnvironment.standard()).compute())
-                .isEqualTo(new BigDecimal("3"));
-        assertThatThrownBy(() -> ExpressionCompiler.compile("1 +", ExpressionEnvironment.standard()))
-                .isInstanceOf(ExpressionCompilationException.class);
+    void compileReturnsACleanSuccessWithNoWarnings() {
+        ExpressionCompilationResult result = ExpressionCompiler.compile("1 + 2", ExpressionEnvironment.standard());
+
+        assertThat(result).isInstanceOfSatisfying(ExpressionCompilationResult.Success.class, success -> {
+            assertThat(success.diagnostics()).isEmpty();
+            assertThat(success.compiledExpression().compilationDiagnostics()).isEmpty();
+            assertThat(success.compiledExpression().compute()).isEqualTo(new BigDecimal("3"));
+        });
+    }
+
+    @Test
+    void compileReturnsASuccessCarryingTheSymbolShadowingWarningOnBothTheResultAndTheArtifact() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        ExpressionCompilationResult result = ExpressionCompiler.compile("x := 1; x", environment);
+
+        assertThat(result).isInstanceOfSatisfying(ExpressionCompilationResult.Success.class, success -> {
+            assertThat(success.diagnostics()).singleElement().satisfies(diagnostic -> {
+                assertThat(diagnostic.severity()).isEqualTo(DiagnosticSeverity.WARNING);
+                assertThat(diagnostic.code()).isEqualTo("SEMANTIC_SYMBOL_SHADOWING");
+            });
+            assertThat(success.compiledExpression().compilationDiagnostics()).isEqualTo(success.diagnostics());
+        });
+    }
+
+    @Test
+    void compileReturnsAFailureOnParsingErrorsWithoutThrowing() {
+        ExpressionCompilationResult result = ExpressionCompiler.compile("1 +", ExpressionEnvironment.standard());
+
+        assertThat(result).isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
+                assertThat(failure.diagnostics()).isNotEmpty().allSatisfy(diagnostic ->
+                        assertThat(diagnostic.severity()).isEqualTo(DiagnosticSeverity.ERROR)));
+    }
+
+    @Test
+    void compileReturnsAFailureOnSemanticErrorsWithoutThrowing() {
+        ExpressionCompilationResult result = ExpressionCompiler.compile("missing", ExpressionEnvironment.standard());
+
+        assertThat(result).isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
+                assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic ->
+                        assertThat(diagnostic.code()).isEqualTo("SEMANTIC_UNKNOWN_SYMBOL")));
+    }
+
+    @Test
+    void compileFailureRetainsBothWarningsAndErrorsWhenBothAreProduced() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        ExpressionCompilationResult result = ExpressionCompiler.compile("x := 1; x + missing", environment);
+
+        assertThat(result).isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure -> {
+            assertThat(failure.diagnostics()).anySatisfy(diagnostic ->
+                    assertThat(diagnostic.severity()).isEqualTo(DiagnosticSeverity.WARNING));
+            assertThat(failure.diagnostics()).anySatisfy(diagnostic ->
+                    assertThat(diagnostic.severity()).isEqualTo(DiagnosticSeverity.ERROR));
+        });
+    }
+
+    @Test
+    void compileFailureRetainsWarningsForTheAssignmentsOnlyNoResultExpressionCase() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        ExpressionCompilationResult result = ExpressionCompiler.compile("x := 1;", environment);
+
+        assertThat(result).isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure -> {
+            assertThat(failure.diagnostics()).anySatisfy(diagnostic ->
+                    assertThat(diagnostic.code()).isEqualTo("SEMANTIC_ASSIGNMENTS_ONLY_COMPUTE_NOT_SUPPORTED"));
+            assertThat(failure.diagnostics()).anySatisfy(diagnostic ->
+                    assertThat(diagnostic.code()).isEqualTo("SEMANTIC_SYMBOL_SHADOWING"));
+        });
+    }
+
+    @Test
+    void compilationResultDiagnosticListsAreImmutable() {
+        ExpressionCompilationResult.Success success = (ExpressionCompilationResult.Success)
+                ExpressionCompiler.compile("1 + 2", ExpressionEnvironment.standard());
+        ExpressionCompilationResult.Failure failure = (ExpressionCompilationResult.Failure)
+                ExpressionCompiler.compile("1 +", ExpressionEnvironment.standard());
+
+        assertThatThrownBy(() -> success.diagnostics().add(null)).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> success.compiledExpression().compilationDiagnostics().add(null))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> failure.diagnostics().add(null)).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void compileOrThrowReturnsAnArtifactWithTheSameWarningsAsResultOrientedCompilation() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        CompiledExpression expression = ExpressionCompiler.compileOrThrow("x := 1; x", environment);
+
+        assertThat(expression.compilationDiagnostics()).singleElement().satisfies(diagnostic ->
+                assertThat(diagnostic.code()).isEqualTo("SEMANTIC_SYMBOL_SHADOWING"));
+    }
+
+    @Test
+    void compileOrThrowExceptionExposesTheSameFailureDiagnosticsAsResultOrientedCompilation() {
+        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("missing", ExpressionEnvironment.standard()))
+                .isInstanceOfSatisfying(ExpressionCompilationException.class, exception ->
+                        assertThat(exception.diagnostics()).singleElement().satisfies(diagnostic ->
+                                assertThat(diagnostic.code()).isEqualTo("SEMANTIC_UNKNOWN_SYMBOL")));
     }
 
     @Test

@@ -152,7 +152,9 @@ public final class SemanticResolver {
                 }
             }
             if (!diagnostics.isEmpty()) {
-                return new SemanticResolutionFailure(diagnostics);
+                List<ExpressionDiagnostic> failureDiagnostics = new ArrayList<>(diagnostics);
+                failureDiagnostics.addAll(warnings);
+                return new SemanticResolutionFailure(failureDiagnostics);
             }
             return new SemanticResolutionSuccess(new SemanticModel(
                     ast,
