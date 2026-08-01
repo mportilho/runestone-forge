@@ -34,9 +34,9 @@ class DecimalScalarSemanticsRuntimeTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .mathContext(new MathContext(3, RoundingMode.HALF_UP))
                 .build();
-        assertThat((BigDecimal) ExpressionCompiler.compileOrThrow("1.111111 + 2.222222", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("1.111111 + 2.222222", environment).asMath().compute())
                 .isEqualByComparingTo("3.33");
-        assertThat((BigDecimal) ExpressionCompiler.compileOrThrow("5.555555 - 2.222222", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("5.555555 - 2.222222", environment).asMath().compute())
                 .isEqualByComparingTo("3.33");
     }
 
@@ -45,11 +45,11 @@ class DecimalScalarSemanticsRuntimeTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .mathContext(new MathContext(2, RoundingMode.HALF_UP))
                 .build();
-        assertThat((BigDecimal) ExpressionCompiler.compileOrThrow("10.12345 mod 3", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("10.12345 mod 3", environment).asMath().compute())
                 .isEqualByComparingTo("1.12345");
-        assertThat((BigDecimal) ExpressionCompiler.compileOrThrow("-10 mod 3", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("-10 mod 3", environment).asMath().compute())
                 .isEqualByComparingTo("-1");
-        assertThat((BigDecimal) ExpressionCompiler.compileOrThrow("10 mod -3", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("10 mod -3", environment).asMath().compute())
                 .isEqualByComparingTo("1");
     }
 
@@ -58,11 +58,11 @@ class DecimalScalarSemanticsRuntimeTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .mathContext(new MathContext(1, RoundingMode.HALF_UP))
                 .build();
-        assertThat((BigDecimal) ExpressionCompiler.compileOrThrow("123.456%", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("123.456%", environment).asMath().compute())
                 .isEqualByComparingTo("1.23456");
-        assertThat((BigDecimal) ExpressionCompiler.compileOrThrow("5!", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("5!", environment).asMath().compute())
                 .isEqualByComparingTo("120");
-        assertThat((Boolean) ExpressionCompiler.compileOrThrow("1.00001 > 1.00000", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("1.00001 > 1.00000", environment).asLogical().compute())
                 .isTrue();
     }
 
@@ -75,6 +75,6 @@ class DecimalScalarSemanticsRuntimeTest {
     }
 
     private static Object compute(String source) {
-        return ExpressionCompiler.compileOrThrow(source, ExpressionEnvironment.standard()).compute();
+        return ExpressionCompiler.compileOrThrow(source, ExpressionEnvironment.standard()).asResult().compute();
     }
 }

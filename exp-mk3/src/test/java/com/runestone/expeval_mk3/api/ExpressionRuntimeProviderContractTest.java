@@ -23,8 +23,9 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void wrapsADeclaredCheckedExceptionAsAProviderFailurePreservingCause() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "throwsChecked(1)", environmentFrom(FailingProviders.class));
+        MathExpression expression = ExpressionCompiler.compileOrThrow(
+                "throwsChecked(1)", environmentFrom(FailingProviders.class))
+                .asMath();
 
         assertThatThrownBy(expression::compute)
                 .isInstanceOf(ExpressionExecutionException.class)
@@ -35,8 +36,9 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void wrapsAnOrdinaryRuntimeExceptionAsAProviderFailurePreservingCause() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "throwsRuntime(1)", environmentFrom(FailingProviders.class));
+        MathExpression expression = ExpressionCompiler.compileOrThrow(
+                "throwsRuntime(1)", environmentFrom(FailingProviders.class))
+                .asMath();
 
         assertThatThrownBy(expression::compute)
                 .isInstanceOf(ExpressionExecutionException.class)
@@ -52,8 +54,9 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void restoresInterruptedStatusBeforeWrappingAnInterruptedException() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "throwsInterrupted(1)", environmentFrom(FailingProviders.class));
+        MathExpression expression = ExpressionCompiler.compileOrThrow(
+                "throwsInterrupted(1)", environmentFrom(FailingProviders.class))
+                .asMath();
 
         try {
             assertThatThrownBy(expression::compute)
@@ -67,16 +70,18 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void propagatesAFatalJvmConditionUnwrapped() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "throwsFatal(1)", environmentFrom(FailingProviders.class));
+        MathExpression expression = ExpressionCompiler.compileOrThrow(
+                "throwsFatal(1)", environmentFrom(FailingProviders.class))
+                .asMath();
 
         assertThatThrownBy(expression::compute).isInstanceOf(StackOverflowError.class);
     }
 
     @Test
     void rejectsANullProviderReturnAsADistinctReturnContractCode() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "returnsNull(1)", environmentFrom(ReturnContractProviders.class));
+        MathExpression expression = ExpressionCompiler.compileOrThrow(
+                "returnsNull(1)", environmentFrom(ReturnContractProviders.class))
+                .asMath();
 
         assertThatThrownBy(expression::compute)
                 .isInstanceOf(ExpressionExecutionException.class)
@@ -86,8 +91,9 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void rejectsAProviderCollectionElementOfTheWrongTypeAsADistinctReturnContractCode() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "returnsListWithWrongElementType(1)", environmentFrom(ReturnContractProviders.class));
+        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+                "returnsListWithWrongElementType(1)", environmentFrom(ReturnContractProviders.class))
+                .asResult();
 
         assertThatThrownBy(expression::compute)
                 .isInstanceOf(ExpressionExecutionException.class)
@@ -97,8 +103,9 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void rejectsANestedInvalidContainerInsideAProviderCollectionReturnAsADistinctReturnContractCode() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "returnsNestedInvalidContainer(1)", environmentFrom(ReturnContractProviders.class));
+        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+                "returnsNestedInvalidContainer(1)", environmentFrom(ReturnContractProviders.class))
+                .asResult();
 
         assertThatThrownBy(expression::compute)
                 .isInstanceOf(ExpressionExecutionException.class)
@@ -108,8 +115,9 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void rejectsANonStringMapKeyInAProviderMapReturnAsADistinctReturnContractCode() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "returnsMapWithNonStringKey(1)", environmentFrom(ReturnContractProviders.class));
+        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+                "returnsMapWithNonStringKey(1)", environmentFrom(ReturnContractProviders.class))
+                .asResult();
 
         assertThatThrownBy(expression::compute)
                 .isInstanceOf(ExpressionExecutionException.class)
@@ -123,7 +131,8 @@ class ExpressionRuntimeProviderContractTest {
                 .functionsFrom(ReturnContractProviders.class, FunctionPurity.IMPURE)
                 .maxMaterializedSize(1)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("returnsOverLimitList(1)", environment);
+        ResultExpression expression = ExpressionCompiler.compileOrThrow("returnsOverLimitList(1)", environment)
+                .asResult();
 
         assertThatThrownBy(expression::compute)
                 .isInstanceOf(ExpressionExecutionException.class)
@@ -137,8 +146,9 @@ class ExpressionRuntimeProviderContractTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "combine(track(1), boom(2), track(3))", environment);
+        MathExpression expression = ExpressionCompiler.compileOrThrow(
+                "combine(track(1), boom(2), track(3))", environment)
+                .asMath();
 
         assertThatThrownBy(expression::compute).isInstanceOf(ExpressionExecutionException.class);
 
@@ -151,7 +161,8 @@ class ExpressionRuntimeProviderContractTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("bump(1)", environment);
+        MathExpression expression = ExpressionCompiler.compileOrThrow("bump(1)", environment)
+                .asMath();
 
         for (int call = 1; call <= 5; call++) {
             expression.compute();

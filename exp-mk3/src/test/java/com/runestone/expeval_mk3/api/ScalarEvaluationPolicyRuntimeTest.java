@@ -21,7 +21,7 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void andSkipsTheRightOperandWhenTheLeftIsFalse() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("false and truthy(1)", environment(probe));
+        LogicalExpression expression = ExpressionCompiler.compileOrThrow("false and truthy(1)", environment(probe)).asLogical();
 
         assertThat(expression.compute()).isEqualTo(Boolean.FALSE);
         assertThat(probe.order()).isEmpty();
@@ -30,7 +30,7 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void andSkipsARightOperandThatWouldFail() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("false and boom(1)", environment(probe));
+        LogicalExpression expression = ExpressionCompiler.compileOrThrow("false and boom(1)", environment(probe)).asLogical();
 
         assertThat(expression.compute()).isEqualTo(Boolean.FALSE);
         assertThat(probe.order()).isEmpty();
@@ -39,7 +39,7 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void orSkipsTheRightOperandWhenTheLeftIsTrue() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("true or truthy(1)", environment(probe));
+        LogicalExpression expression = ExpressionCompiler.compileOrThrow("true or truthy(1)", environment(probe)).asLogical();
 
         assertThat(expression.compute()).isEqualTo(Boolean.TRUE);
         assertThat(probe.order()).isEmpty();
@@ -48,7 +48,7 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void orSkipsARightOperandThatWouldFail() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("true or boom(1)", environment(probe));
+        LogicalExpression expression = ExpressionCompiler.compileOrThrow("true or boom(1)", environment(probe)).asLogical();
 
         assertThat(expression.compute()).isEqualTo(Boolean.TRUE);
         assertThat(probe.order()).isEmpty();
@@ -57,7 +57,7 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void nandEvaluatesBothOperandsEagerlyUnlikeAnd() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("false nand truthy(1)", environment(probe));
+        LogicalExpression expression = ExpressionCompiler.compileOrThrow("false nand truthy(1)", environment(probe)).asLogical();
 
         assertThat(expression.compute()).isEqualTo(Boolean.TRUE);
         assertThat(probe.order()).containsExactly(1);
@@ -66,7 +66,7 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void norEvaluatesBothOperandsEagerlyUnlikeOr() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("true nor truthy(1)", environment(probe));
+        LogicalExpression expression = ExpressionCompiler.compileOrThrow("true nor truthy(1)", environment(probe)).asLogical();
 
         assertThat(expression.compute()).isEqualTo(Boolean.FALSE);
         assertThat(probe.order()).containsExactly(1);
@@ -75,12 +75,12 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void xorAndXnorEvaluateLeftThenRight() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression xor = ExpressionCompiler.compileOrThrow("truthy(1) xor truthy(2)", environment(probe));
+        LogicalExpression xor = ExpressionCompiler.compileOrThrow("truthy(1) xor truthy(2)", environment(probe)).asLogical();
         assertThat(xor.compute()).isEqualTo(Boolean.FALSE);
         assertThat(probe.order()).containsExactly(1, 2);
 
         EffectProbe xnorProbe = new EffectProbe();
-        CompiledExpression xnor = ExpressionCompiler.compileOrThrow("truthy(1) xnor truthy(2)", environment(xnorProbe));
+        LogicalExpression xnor = ExpressionCompiler.compileOrThrow("truthy(1) xnor truthy(2)", environment(xnorProbe)).asLogical();
         assertThat(xnor.compute()).isEqualTo(Boolean.TRUE);
         assertThat(xnorProbe.order()).containsExactly(1, 2);
     }
@@ -88,7 +88,7 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void eagerBinaryStopsEvaluatingOnTheFirstFailure() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("boom(1) nand truthy(2)", environment(probe));
+        LogicalExpression expression = ExpressionCompiler.compileOrThrow("boom(1) nand truthy(2)", environment(probe)).asLogical();
 
         assertThatThrownBy(expression::compute).isInstanceOf(ExpressionExecutionException.class);
         assertThat(probe.order()).containsExactly(1);
@@ -97,28 +97,28 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void coalesceStopsAtTheFirstNonNullOperand() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("track(1) ?? track(2)", environment(probe));
+        MathExpression expression = ExpressionCompiler.compileOrThrow("track(1) ?? track(2)", environment(probe)).asMath();
 
-        assertThat((BigDecimal) expression.compute()).isEqualByComparingTo(BigDecimal.ONE);
+        assertThat(expression.compute()).isEqualByComparingTo(BigDecimal.ONE);
         assertThat(probe.order()).containsExactly(1);
     }
 
     @Test
     void conditionalEvaluatesConditionsInOrderAndOnlyTheSelectedBranch() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
+        MathExpression expression = ExpressionCompiler.compileOrThrow(
                 "if falsy(1) then track(10) elsif truthy(2) then track(20) else track(30) endif",
-                environment(probe));
+                environment(probe)).asMath();
 
-        assertThat((BigDecimal) expression.compute()).isEqualByComparingTo(new BigDecimal("20"));
+        assertThat(expression.compute()).isEqualByComparingTo(new BigDecimal("20"));
         assertThat(probe.order()).containsExactly(1, 2, 20);
     }
 
     @Test
     void betweenSkipsTheUpperBoundWhenTheLowerComparisonFails() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "tap(0, 1) between tap(1, 2) and tap(10, 3)", environment(probe));
+        LogicalExpression expression = ExpressionCompiler.compileOrThrow(
+                "tap(0, 1) between tap(1, 2) and tap(10, 3)", environment(probe)).asLogical();
 
         assertThat(expression.compute()).isEqualTo(Boolean.FALSE);
         assertThat(probe.order()).containsExactly(1, 2);
@@ -127,8 +127,8 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void betweenSkipsAnUpperBoundThatWouldFailWhenTheLowerComparisonFails() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "tap(0, 1) between tap(1, 2) and tapBoom(3)", environment(probe));
+        LogicalExpression expression = ExpressionCompiler.compileOrThrow(
+                "tap(0, 1) between tap(1, 2) and tapBoom(3)", environment(probe)).asLogical();
 
         assertThat(expression.compute()).isEqualTo(Boolean.FALSE);
         assertThat(probe.order()).containsExactly(1, 2);
@@ -137,8 +137,8 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void betweenEvaluatesTheUpperBoundWhenTheLowerComparisonPermits() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "tap(5, 1) between tap(1, 2) and tap(10, 3)", environment(probe));
+        LogicalExpression expression = ExpressionCompiler.compileOrThrow(
+                "tap(5, 1) between tap(1, 2) and tap(10, 3)", environment(probe)).asLogical();
 
         assertThat(expression.compute()).isEqualTo(Boolean.TRUE);
         assertThat(probe.order()).containsExactly(1, 2, 3);
@@ -147,8 +147,8 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void collectionLiteralElementsEvaluateLeftToRight() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "[track(1), track(2), track(3)]", environment(probe));
+        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+                "[track(1), track(2), track(3)]", environment(probe)).asResult();
 
         expression.compute();
         assertThat(probe.order()).containsExactly(1, 2, 3);
@@ -157,10 +157,10 @@ class ScalarEvaluationPolicyRuntimeTest {
     @Test
     void destructuringEvaluatesItsSourceExactlyOnceAndBindsTheTextualOrder() {
         EffectProbe probe = new EffectProbe();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "[a, b] := source(9); a - b", environment(probe));
+        MathExpression expression = ExpressionCompiler.compileOrThrow(
+                "[a, b] := source(9); a - b", environment(probe)).asMath();
 
-        assertThat((BigDecimal) expression.compute()).isEqualByComparingTo(new BigDecimal("-10"));
+        assertThat(expression.compute()).isEqualByComparingTo(new BigDecimal("-10"));
         assertThat(probe.sourceCallCount()).isEqualTo(1);
 
         expression.compute();

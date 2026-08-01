@@ -25,7 +25,7 @@ class RuntimeInputPreparationTest {
 
     @Test
     void rejectsTheLexicographicallySmallestUnknownOverrideKeyFirstRegardlessOfMapIterationOrder() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("1 + 2", ExpressionEnvironment.standard());
+        MathExpression expression = ExpressionCompiler.compileOrThrow("1 + 2", ExpressionEnvironment.standard()).asMath();
         Map<String, Object> overrides = new LinkedHashMap<>();
         overrides.put("zzz", BigDecimal.ONE);
         overrides.put("aaa", BigDecimal.ONE);
@@ -44,7 +44,7 @@ class RuntimeInputPreparationTest {
                 .externalSymbol("bFixed", BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
                 .externalSymbol("aFixed", BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("aFixed + bFixed", environment);
+        MathExpression expression = ExpressionCompiler.compileOrThrow("aFixed + bFixed", environment).asMath();
         Map<String, Object> overrides = new LinkedHashMap<>();
         overrides.put("bFixed", BigDecimal.TEN);
         overrides.put("aFixed", BigDecimal.TEN);
@@ -64,7 +64,7 @@ class RuntimeInputPreparationTest {
                 .externalSymbol("aValid", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .externalSymbol("zInvalid", BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("bump(aValid)", environment);
+        MathExpression expression = ExpressionCompiler.compileOrThrow("bump(aValid)", environment).asMath();
 
         assertThatThrownBy(() -> expression.compute(Map.of("aValid", BigDecimal.TEN, "zInvalid", BigDecimal.TEN)))
                 .isInstanceOf(ExpressionExecutionException.class)
@@ -82,7 +82,7 @@ class RuntimeInputPreparationTest {
                 .externalSymbol("aValid", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .externalSymbol("zNullable", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("bump(aValid)", environment);
+        MathExpression expression = ExpressionCompiler.compileOrThrow("bump(aValid)", environment).asMath();
         Map<String, Object> overrides = new LinkedHashMap<>();
         overrides.put("aValid", BigDecimal.TEN);
         overrides.put("zNullable", null);
@@ -103,7 +103,7 @@ class RuntimeInputPreparationTest {
                         List.of(BigDecimal.ONE),
                         ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("trackNumber(items[0])", environment);
+        MathExpression expression = ExpressionCompiler.compileOrThrow("trackNumber(items[0])", environment).asMath();
 
         assertThatThrownBy(() -> expression.compute(Map.of("items", Arrays.asList(BigDecimal.ONE, null))))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -114,8 +114,9 @@ class RuntimeInputPreparationTest {
     @Test
     void neverConsultsTheClockWhenNoCurrentTemporalValueIsUsed() {
         CountingClock clock = new CountingClock(Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC));
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "1 + 2", ExpressionEnvironment.standard(), RuntimeServices.withClock(clock));
+        MathExpression expression = ExpressionCompiler.compileOrThrow(
+                        "1 + 2", ExpressionEnvironment.standard(), RuntimeServices.withClock(clock))
+                .asMath();
 
         expression.compute();
 
@@ -127,8 +128,9 @@ class RuntimeInputPreparationTest {
         Instant instantWithNanos = Instant.parse("2024-03-15T10:20:30.123456789Z");
         CountingClock clock = new CountingClock(Clock.fixed(instantWithNanos, ZoneOffset.UTC));
         ExpressionEnvironment environment = ExpressionEnvironment.builder().zoneId(ZoneOffset.UTC).build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "currDateTime", environment, RuntimeServices.withClock(clock));
+        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+                        "currDateTime", environment, RuntimeServices.withClock(clock))
+                .asResult();
 
         Object result = expression.compute();
 

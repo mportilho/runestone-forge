@@ -25,7 +25,7 @@ class ExpressionCompilerTest {
     void compileOrThrowReturnsAUsableCompiledExpressionOnSuccess() {
         CompiledExpression expression = ExpressionCompiler.compileOrThrow("1 + 2", ExpressionEnvironment.standard());
 
-        assertThat(expression.compute()).isEqualTo(new BigDecimal("3"));
+        assertThat(expression.asResult().compute()).isEqualTo(new BigDecimal("3"));
     }
 
     @Test
@@ -41,10 +41,10 @@ class ExpressionCompilerTest {
     }
 
     @Test
-    void compileOrThrowSucceedsForAnAssignmentOnlyFileButItsBareComputeRejectsTheMissingResult() {
+    void compileOrThrowSucceedsForAnAssignmentOnlyFileButItsAsResultViewRejectsTheMissingResult() {
         CompiledExpression expression = ExpressionCompiler.compileOrThrow("x := 1;", ExpressionEnvironment.standard());
 
-        assertThatThrownBy(expression::compute)
+        assertThatThrownBy(expression::asResult)
                 .isInstanceOfSatisfying(ExpressionViewException.class, exception ->
                         assertThat(exception.reason()).isEqualTo(ExpressionViewException.Reason.NO_RESULT_EXPRESSION));
         assertThat(expression.asAssignments().compute()).isEqualTo(Map.of("x", new BigDecimal("1")));
@@ -57,7 +57,7 @@ class ExpressionCompilerTest {
         assertThat(result).isInstanceOfSatisfying(ExpressionCompilationResult.Success.class, success -> {
             assertThat(success.diagnostics()).isEmpty();
             assertThat(success.compiledExpression().compilationDiagnostics()).isEmpty();
-            assertThat(success.compiledExpression().compute()).isEqualTo(new BigDecimal("3"));
+            assertThat(success.compiledExpression().asResult().compute()).isEqualTo(new BigDecimal("3"));
         });
     }
 
@@ -165,7 +165,7 @@ class ExpressionCompilerTest {
     void compilesAndComputesAnImmutableCollectionLiteral() {
         CompiledExpression expression = ExpressionCompiler.compileOrThrow("[1, 2.5]", ExpressionEnvironment.standard());
 
-        Object result = expression.compute();
+        Object result = expression.asResult().compute();
 
         assertThat(result).isEqualTo(List.of(new BigDecimal("1"), new BigDecimal("2.5")));
         assertThatThrownBy(() -> ((List<Object>) result).add(BigDecimal.ZERO))
@@ -176,33 +176,33 @@ class ExpressionCompilerTest {
     void computesScalarLiteralsWithCanonicalPublicValues() {
         ExpressionEnvironment environment = ExpressionEnvironment.standard();
 
-        assertThat(ExpressionCompiler.compileOrThrow("42", environment).compute()).isEqualTo(new BigDecimal("42"));
-        assertThat(ExpressionCompiler.compileOrThrow("2.50", environment).compute()).isEqualTo(new BigDecimal("2.50"));
-        assertThat(ExpressionCompiler.compileOrThrow("true", environment).compute()).isEqualTo(true);
-        assertThat(ExpressionCompiler.compileOrThrow("\"text\"", environment).compute()).isEqualTo("text");
-        assertThat(ExpressionCompiler.compileOrThrow("d\"2024-01-02\"", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("42", environment).asMath().compute()).isEqualByComparingTo(new BigDecimal("42"));
+        assertThat(ExpressionCompiler.compileOrThrow("2.50", environment).asMath().compute()).isEqualByComparingTo(new BigDecimal("2.50"));
+        assertThat(ExpressionCompiler.compileOrThrow("true", environment).asLogical().compute()).isEqualTo(true);
+        assertThat(ExpressionCompiler.compileOrThrow("\"text\"", environment).asResult().compute()).isEqualTo("text");
+        assertThat(ExpressionCompiler.compileOrThrow("d\"2024-01-02\"", environment).asResult().compute())
                 .isEqualTo(LocalDate.of(2024, 1, 2));
-        assertThat(ExpressionCompiler.compileOrThrow("t\"10:30\"", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("t\"10:30\"", environment).asResult().compute())
                 .isEqualTo(LocalTime.of(10, 30));
-        assertThat(ExpressionCompiler.compileOrThrow("dt\"2024-01-02T10:30:00\"", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("dt\"2024-01-02T10:30:00\"", environment).asResult().compute())
                 .isEqualTo(LocalDateTime.of(2024, 1, 2, 10, 30));
     }
 
     @Test
     void comparesCollectionsStructurallyAndInOrder() {
-        assertThat(ExpressionCompiler.compileOrThrow("[1, 2.0] = [1.00, 2]", ExpressionEnvironment.standard()).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("[1, 2.0] = [1.00, 2]", ExpressionEnvironment.standard()).asLogical().compute())
                 .isEqualTo(true);
-        assertThat(ExpressionCompiler.compileOrThrow("[1, 2] = [2, 1]", ExpressionEnvironment.standard()).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("[1, 2] = [2, 1]", ExpressionEnvironment.standard()).asLogical().compute())
                 .isEqualTo(false);
-        assertThat(ExpressionCompiler.compileOrThrow("[1, 2] <> [1, 3]", ExpressionEnvironment.standard()).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("[1, 2] <> [1, 3]", ExpressionEnvironment.standard()).asLogical().compute())
                 .isEqualTo(true);
     }
 
     @Test
     void infersAnEmptyCollectionFromItsEqualityOperand() {
-        assertThat(ExpressionCompiler.compileOrThrow("[] = [1]", ExpressionEnvironment.standard()).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("[] = [1]", ExpressionEnvironment.standard()).asLogical().compute())
                 .isEqualTo(false);
-        assertThat(ExpressionCompiler.compileOrThrow("[1] <> []", ExpressionEnvironment.standard()).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("[1] <> []", ExpressionEnvironment.standard()).asLogical().compute())
                 .isEqualTo(true);
     }
 
@@ -220,8 +220,8 @@ class ExpressionCompilerTest {
                 .externalSymbol("right", mapType, right, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(ExpressionCompiler.compileOrThrow("left = right", environment).compute()).isEqualTo(true);
-        Object publicMap = ExpressionCompiler.compileOrThrow("left", environment).compute();
+        assertThat(ExpressionCompiler.compileOrThrow("left = right", environment).asLogical().compute()).isEqualTo(true);
+        Object publicMap = ExpressionCompiler.compileOrThrow("left", environment).asResult().compute();
         assertThatThrownBy(() -> ((Map<String, Object>) publicMap).put("third", List.of(BigDecimal.TEN)))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
@@ -230,12 +230,12 @@ class ExpressionCompilerTest {
     void enforcesTheMaterializationLimitAtCompilation() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder().maxMaterializedSize(2).build();
 
-        assertThat(ExpressionCompiler.compileOrThrow("[1, 2]", environment).compute()).isEqualTo(List.of(
+        assertThat(ExpressionCompiler.compileOrThrow("[1, 2]", environment).asResult().compute()).isEqualTo(List.of(
                 new BigDecimal("1"), new BigDecimal("2")));
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("[1, 2, 3]", environment))
-                .isInstanceOf(ExpressionCompilationException.class)
-                .satisfies(error -> assertThat(((ExpressionCompilationException) error).diagnostics().getFirst().code())
-                        .isEqualTo("SEMANTIC_MATERIALIZATION_LIMIT_EXCEEDED"));
+        assertThat(ExpressionCompiler.compile("[1, 2, 3]", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
+                        assertThat(failure.diagnostics().getFirst().code())
+                                .isEqualTo("SEMANTIC_MATERIALIZATION_LIMIT_EXCEEDED"));
     }
 
     @Test
@@ -247,7 +247,7 @@ class ExpressionCompilerTest {
                         List.of(BigDecimal.ZERO),
                         ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("items", environment);
+        ResultExpression expression = ExpressionCompiler.compileOrThrow("items", environment).asResult();
         List<BigDecimal> override = new java.util.ArrayList<>(List.of(BigDecimal.ONE));
 
         Object first = expression.compute(Map.of("items", override));
@@ -268,7 +268,7 @@ class ExpressionCompilerTest {
                         List.of(BigDecimal.ZERO),
                         ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("items", environment);
+        ResultExpression expression = ExpressionCompiler.compileOrThrow("items", environment).asResult();
 
         List<Object> results = IntStream.range(0, 100)
                 .parallel()
@@ -282,8 +282,8 @@ class ExpressionCompilerTest {
 
     @Test
     void preservesTheRootDiagnosticForAnInvalidCollectionElement() {
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("[missing]", ExpressionEnvironment.standard()))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("[missing]", ExpressionEnvironment.standard()))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic ->
                                 assertThat(diagnostic.code()).isEqualTo("SEMANTIC_UNKNOWN_SYMBOL")));
     }
@@ -292,18 +292,18 @@ class ExpressionCompilerTest {
     void computesScalarOperatorsThroughTheCompiledPlan() {
         ExpressionEnvironment environment = ExpressionEnvironment.standard();
 
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("1 + 2 * 3 - 4 / 2", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("1 + 2 * 3 - 4 / 2", environment).asMath().compute())
                 .isEqualByComparingTo(new BigDecimal("5"));
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("2^-3", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("2^-3", environment).asMath().compute())
                 .isEqualByComparingTo(new BigDecimal("0.125"));
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("50%", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("50%", environment).asMath().compute())
                 .isEqualByComparingTo(new BigDecimal("0.5"));
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("5!", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("5!", environment).asMath().compute())
                 .isEqualByComparingTo(new BigDecimal("120"));
-        assertThat(ExpressionCompiler.compileOrThrow("\"run\" || \"estone\"", environment).compute()).isEqualTo("runestone");
-        assertThat(ExpressionCompiler.compileOrThrow("3 between 1 and 5", environment).compute()).isEqualTo(true);
-        assertThat(ExpressionCompiler.compileOrThrow("\"abc123\" =~ \"[a-z]+\\\\d+\"", environment).compute()).isEqualTo(true);
-        assertThat(ExpressionCompiler.compileOrThrow("2 in [1, 2, 3]", environment).compute()).isEqualTo(true);
+        assertThat(ExpressionCompiler.compileOrThrow("\"run\" || \"estone\"", environment).asResult().compute()).isEqualTo("runestone");
+        assertThat(ExpressionCompiler.compileOrThrow("3 between 1 and 5", environment).asLogical().compute()).isEqualTo(true);
+        assertThat(ExpressionCompiler.compileOrThrow("\"abc123\" =~ \"[a-z]+\\\\d+\"", environment).asLogical().compute()).isEqualTo(true);
+        assertThat(ExpressionCompiler.compileOrThrow("2 in [1, 2, 3]", environment).asLogical().compute()).isEqualTo(true);
     }
 
     @Test
@@ -312,10 +312,10 @@ class ExpressionCompilerTest {
                 .externalSymbol("fixed", new BigDecimal("10"), ExternalSymbolOverwritePolicy.FIXED)
                 .externalSymbol("input", new BigDecimal("2"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("fixed + input * 3", environment);
+        MathExpression expression = ExpressionCompiler.compileOrThrow("fixed + input * 3", environment).asMath();
 
-        assertThat(decimal(expression.compute())).isEqualByComparingTo(new BigDecimal("16"));
-        assertThat(decimal(expression.compute(Map.of("input", new BigDecimal("4")))))
+        assertThat(expression.compute()).isEqualByComparingTo(new BigDecimal("16"));
+        assertThat(expression.compute(Map.of("input", new BigDecimal("4"))))
                 .isEqualByComparingTo(new BigDecimal("22"));
     }
 
@@ -325,9 +325,9 @@ class ExpressionCompilerTest {
                 .externalSymbol("used", new BigDecimal("1"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .externalSymbol("unused", new BigDecimal("1"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("used + 2", environment);
+        MathExpression expression = ExpressionCompiler.compileOrThrow("used + 2", environment).asMath();
 
-        assertThat(decimal(expression.compute(Map.of("unused", new BigDecimal("999")))))
+        assertThat(expression.compute(Map.of("unused", new BigDecimal("999"))))
                 .isEqualByComparingTo(new BigDecimal("3"));
     }
 
@@ -337,7 +337,7 @@ class ExpressionCompilerTest {
                 .externalSymbol("used", new BigDecimal("1"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .externalSymbol("unused", new BigDecimal("1"), ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("used + 2", environment);
+        MathExpression expression = ExpressionCompiler.compileOrThrow("used + 2", environment).asMath();
 
         assertThatThrownBy(() -> expression.compute(Map.of("unused", new BigDecimal("999"))))
                 .isInstanceOf(ExpressionExecutionException.class);
@@ -350,12 +350,12 @@ class ExpressionCompilerTest {
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .externalSymbol("base", new BigDecimal("4"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("x := base + 1; if(x > 5, bump(x), x)", environment);
+        MathExpression expression = ExpressionCompiler.compileOrThrow("x := base + 1; if(x > 5, bump(x), x)", environment).asMath();
 
-        assertThat(decimal(expression.compute())).isEqualByComparingTo(new BigDecimal("5"));
+        assertThat(expression.compute()).isEqualByComparingTo(new BigDecimal("5"));
         assertThat(functions.invocations()).isZero();
 
-        assertThat(decimal(expression.compute(Map.of("base", new BigDecimal("6")))))
+        assertThat(expression.compute(Map.of("base", new BigDecimal("6"))))
                 .isEqualByComparingTo(new BigDecimal("8"));
         assertThat(functions.invocations()).isOne();
     }
@@ -370,13 +370,13 @@ class ExpressionCompilerTest {
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("items[0]", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("items[0]", environment).asMath().compute())
                 .isEqualByComparingTo(BigDecimal.ONE);
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("items[-1]", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("items[-1]", environment).asMath().compute())
                 .isEqualByComparingTo(new BigDecimal("3"));
-        assertThat(ExpressionCompiler.compileOrThrow("items[1:]", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("items[1:]", environment).asResult().compute())
                 .isEqualTo(List.of(new BigDecimal("2"), new BigDecimal("3")));
-        assertThat(ExpressionCompiler.compileOrThrow("items[?(@ > 1)]", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("items[?(@ > 1)]", environment).asResult().compute())
                 .isEqualTo(List.of(new BigDecimal("2"), new BigDecimal("3")));
     }
 
@@ -391,15 +391,15 @@ class ExpressionCompilerTest {
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("items.count()", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("items.count()", environment).asMath().compute())
                 .isEqualByComparingTo(new BigDecimal("3"));
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("items.sum()", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("items.sum()", environment).asMath().compute())
                 .isEqualByComparingTo(new BigDecimal("6.000"));
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("items.avg()", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("items.avg()", environment).asMath().compute())
                 .isEqualByComparingTo(new BigDecimal("2.000"));
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("one := [1]; empty := one[1:1]; empty.sum()", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("one := [1]; empty := one[1:1]; empty.sum()", environment).asMath().compute())
                 .isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("one := [1]; one.avg()", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("one := [1]; one.avg()", environment).asMath().compute())
                 .isEqualByComparingTo(BigDecimal.ONE);
     }
 
@@ -411,19 +411,19 @@ class ExpressionCompilerTest {
                 .build();
 
         assertThat(ExpressionCompiler.compileOrThrow("items := [1, 2, 3, 4]; items.all(@ -> lessThanThree(@))", environment)
-                .compute()).isEqualTo(false);
+                .asLogical().compute()).isEqualTo(false);
         assertThat(functions.invocations()).isEqualTo(3);
 
         functions.reset();
         assertThat(ExpressionCompiler.compileOrThrow("items := [1, 2, 3, 4]; items.any(@ -> greaterThanTwo(@))", environment)
-                .compute()).isEqualTo(true);
+                .asLogical().compute()).isEqualTo(true);
         assertThat(functions.invocations()).isEqualTo(3);
 
         functions.reset();
         assertThat(ExpressionCompiler.compileOrThrow("one := [1]; empty := one[1:1]; empty.all(@ -> lessThanThree(@))", environment)
-                .compute()).isEqualTo(true);
+                .asLogical().compute()).isEqualTo(true);
         assertThat(ExpressionCompiler.compileOrThrow("one := [1]; empty := one[1:1]; empty.any(@ -> greaterThanTwo(@))", environment)
-                .compute()).isEqualTo(false);
+                .asLogical().compute()).isEqualTo(false);
         assertThat(functions.invocations()).isZero();
     }
 
@@ -439,12 +439,12 @@ class ExpressionCompilerTest {
                 .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(ExpressionCompiler.compileOrThrow("m.all(@ -> lessThanThree(@.v))", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("m.all(@ -> lessThanThree(@.v))", environment).asLogical().compute())
                 .isEqualTo(false);
         assertThat(functions.invocations()).isEqualTo(3);
 
         functions.reset();
-        assertThat(ExpressionCompiler.compileOrThrow("m.any(@ -> isKeyB(@.k))", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("m.any(@ -> isKeyB(@.k))", environment).asLogical().compute())
                 .isEqualTo(true);
         assertThat(functions.seenText()).containsExactly("A", "b");
         assertThat(functions.invocations()).isEqualTo(2);
@@ -458,7 +458,7 @@ class ExpressionCompilerTest {
                 .build();
 
         Object result = ExpressionCompiler.compileOrThrow("items := [1, 2, 3]; items.map(@ -> trackNumber(@))", environment)
-                .compute();
+                .asResult().compute();
 
         assertThat(result).isEqualTo(List.of(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3")));
         assertThat(functions.seen()).containsExactly(new BigDecimal("1"), new BigDecimal("2"), new BigDecimal("3"));
@@ -474,16 +474,16 @@ class ExpressionCompilerTest {
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
 
-        assertThat(decimal(ExpressionCompiler.compileOrThrow(
+        assertThat(ExpressionCompiler.compileOrThrow(
                         "items := [1, 2, 3]; items.reduce(0, @ -> @.accumulator + trackNumber(@.item))",
                         environment)
-                .compute())).isEqualByComparingTo(new BigDecimal("6"));
+                .asMath().compute()).isEqualByComparingTo(new BigDecimal("6"));
         assertThat(functions.seen()).containsExactly(BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3"));
 
         assertThat(ExpressionCompiler.compileOrThrow(
                         "texts := [\"a\", \"b\", \"c\"]; texts.reduce(\"\", @ -> @.accumulator || @.item)",
                         environment)
-                .compute()).isEqualTo("abc");
+                .asResult().compute()).isEqualTo("abc");
     }
 
     @Test
@@ -493,12 +493,12 @@ class ExpressionCompilerTest {
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
 
-        Object result = ExpressionCompiler.compileOrThrow(
+        BigDecimal result = ExpressionCompiler.compileOrThrow(
                         "one := [1]; empty := one[1:1]; empty.reduce(10, @ -> trackNumber(@.item))",
                         environment)
-                .compute();
+                .asMath().compute();
 
-        assertThat(decimal(result)).isEqualByComparingTo(BigDecimal.TEN);
+        assertThat(result).isEqualByComparingTo(BigDecimal.TEN);
         assertThat(functions.invocations()).isZero();
     }
 
@@ -512,7 +512,7 @@ class ExpressionCompilerTest {
         Object result = ExpressionCompiler.compileOrThrow(
                         "items := [3, 1, 2]; items.sortBy(@ -> trackNumber(@), \"asc\")",
                         environment)
-                .compute();
+                .asResult().compute();
 
         assertThat(result).isEqualTo(List.of(BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3")));
         assertThat(functions.seen()).containsExactly(new BigDecimal("3"), BigDecimal.ONE, new BigDecimal("2"));
@@ -531,11 +531,11 @@ class ExpressionCompilerTest {
         assertThat(ExpressionCompiler.compileOrThrow(
                         "texts := [\"b2\", \"a1\", \"b1\"]; texts.sortBy(@ -> firstChar(@), \"asc\")",
                         environment)
-                .compute()).isEqualTo(List.of("a1", "b2", "b1"));
+                .asResult().compute()).isEqualTo(List.of("a1", "b2", "b1"));
         assertThat(ExpressionCompiler.compileOrThrow(
                         "items := [1, 3, 2]; items.sortBy(@ -> @, \"desc\")",
                         environment)
-                .compute()).isEqualTo(List.of(new BigDecimal("3"), new BigDecimal("2"), BigDecimal.ONE));
+                .asResult().compute()).isEqualTo(List.of(new BigDecimal("3"), new BigDecimal("2"), BigDecimal.ONE));
     }
 
     @Test
@@ -545,16 +545,16 @@ class ExpressionCompilerTest {
         assertThat(ExpressionCompiler.compileOrThrow(
                         "dates := [d\"2024-01-02\", d\"2024-01-01\"]; dates.sortBy(@ -> @, \"asc\")",
                         environment)
-                .compute()).isEqualTo(List.of(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 2)));
+                .asResult().compute()).isEqualTo(List.of(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 1, 2)));
         assertThat(ExpressionCompiler.compileOrThrow(
                         "times := [t\"10:30\", t\"09:15\"]; times.sortBy(@ -> @, \"asc\")",
                         environment)
-                .compute()).isEqualTo(List.of(LocalTime.of(9, 15), LocalTime.of(10, 30)));
+                .asResult().compute()).isEqualTo(List.of(LocalTime.of(9, 15), LocalTime.of(10, 30)));
         assertThat(ExpressionCompiler.compileOrThrow(
                         "datetimes := [dt\"2024-01-02T10:30:00\", dt\"2024-01-01T09:15:00\"]; "
                                 + "datetimes.sortBy(@ -> @, \"asc\")",
                         environment)
-                .compute()).isEqualTo(List.of(
+                .asResult().compute()).isEqualTo(List.of(
                         LocalDateTime.of(2024, 1, 1, 9, 15),
                         LocalDateTime.of(2024, 1, 2, 10, 30)));
     }
@@ -563,25 +563,25 @@ class ExpressionCompilerTest {
     void rejectsInvalidReduceAndSortByContractsBeforeRuntime() {
         ExpressionEnvironment environment = ExpressionEnvironment.standard();
 
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(
+        assertThat(ExpressionCompiler.compile(
                         "items := [1]; items.reduce(0, @ -> \"x\")",
                         environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(
+        assertThat(ExpressionCompiler.compile(
                         "items := [1]; items.sortBy(@ -> @, \"up\")",
                         environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(
+        assertThat(ExpressionCompiler.compile(
                         "items := [true]; items.sortBy(@ -> @, \"asc\")",
                         environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(
+        assertThat(ExpressionCompiler.compile(
                         "items := [1]; items.sortBy(@ -> items?.sum(), \"asc\")",
                         environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED"));
     }
 
@@ -597,8 +597,9 @@ class ExpressionCompilerTest {
                         List.of(BigDecimal.ONE, new BigDecimal("2")),
                         ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "items.sortBy(@ -> trackNumber(@), \"asc\")", environment);
+        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+                        "items.sortBy(@ -> trackNumber(@), \"asc\")", environment)
+                .asResult();
 
         assertThatThrownBy(() -> expression.compute(Map.of(
                         "items", List.of(BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3")))))
@@ -616,9 +617,9 @@ class ExpressionCompilerTest {
                 .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(ExpressionCompiler.compileOrThrow("m.map(@ -> @.k)", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("m.map(@ -> @.k)", environment).asResult().compute())
                 .isEqualTo(List.of("A", "b"));
-        assertThat(ExpressionCompiler.compileOrThrow("m.map(@ -> @.v + 10)", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("m.map(@ -> @.v + 10)", environment).asResult().compute())
                 .isEqualTo(List.of(new BigDecimal("11"), new BigDecimal("12")));
     }
 
@@ -632,14 +633,14 @@ class ExpressionCompilerTest {
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(ExpressionCompiler.compileOrThrow("outer.map(@ -> @[?(@ > 1)].count())", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("outer.map(@ -> @[?(@ > 1)].count())", environment).asResult().compute())
                 .isEqualTo(List.of(BigDecimal.ONE, BigDecimal.ONE));
 
         ExpressionEnvironment shallowEnvironment = ExpressionEnvironment.builder()
                 .maxCurrentItemDepth(1)
                 .build();
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("outer := [[1]]; outer.map(@ -> @.map(@ -> @))", shallowEnvironment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("outer := [[1]]; outer.map(@ -> @.map(@ -> @))", shallowEnvironment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code())
                                 .isEqualTo("SEMANTIC_CURRENT_ITEM_DEPTH_EXCEEDED"));
     }
@@ -651,11 +652,11 @@ class ExpressionCompilerTest {
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
 
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("items := [1]; items.all(@ -> @)", environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("items := [1]; items.all(@ -> @)", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("items := [1]; items.map(@ -> items?.sum())", environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("items := [1]; items.map(@ -> items?.sum())", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED"));
         assertThat(functions.invocations()).isZero();
     }
@@ -668,18 +669,18 @@ class ExpressionCompilerTest {
                 .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("m.map(@ -> [@])", environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("m.map(@ -> [@])", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("m.any(@ -> @ = @)", environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("m.any(@ -> @ = @)", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OBJECT_EQUALITY_NOT_SUPPORTED"));
     }
 
     @Test
     void rejectsLambdaArgumentsForGlobalFunctions() {
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("unknown(@ -> @)", ExpressionEnvironment.standard()))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("unknown(@ -> @)", ExpressionEnvironment.standard()))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code())
                                 .isEqualTo("SEMANTIC_LAMBDA_ARGUMENT_UNSUPPORTED"));
     }
@@ -696,7 +697,7 @@ class ExpressionCompilerTest {
                         List.of(BigDecimal.ONE, new BigDecimal("2")),
                         ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("items.map(@ -> trackNumber(@))", environment);
+        ResultExpression expression = ExpressionCompiler.compileOrThrow("items.map(@ -> trackNumber(@))", environment).asResult();
 
         assertThatThrownBy(() -> expression.compute(Map.of(
                         "items", List.of(BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3")))))
@@ -709,10 +710,10 @@ class ExpressionCompilerTest {
     void safeMapCallPreservesTheRealReceiverBehaviorWhenNotNull() {
         ExpressionEnvironment environment = ExpressionEnvironment.standard();
 
-        assertThat(ExpressionCompiler.compileOrThrow("items := [1, 2]; items?.map(@ -> @ + 1) ?? []", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("items := [1, 2]; items?.map(@ -> @ + 1) ?? []", environment).asResult().compute())
                 .isEqualTo(List.of(new BigDecimal("2"), new BigDecimal("3")));
         assertThat(ExpressionCompiler.compileOrThrow("one := [1]; empty := one[1:1]; empty.map(@ -> @ + 1)", environment)
-                .compute()).isEqualTo(List.of());
+                .asResult().compute()).isEqualTo(List.of());
     }
 
     @Test
@@ -724,13 +725,13 @@ class ExpressionCompilerTest {
                 .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("m.count()", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("m.count()", environment).asMath().compute())
                 .isEqualByComparingTo(new BigDecimal("2"));
-        assertThat(ExpressionCompiler.compileOrThrow("m.keys()", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("m.keys()", environment).asResult().compute())
                 .isEqualTo(List.of("A", "b"));
-        assertThat(ExpressionCompiler.compileOrThrow("m.values()", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("m.values()", environment).asResult().compute())
                 .isEqualTo(List.of(BigDecimal.ONE, new BigDecimal("2")));
-        assertThatThrownBy(() -> ((List<Object>) ExpressionCompiler.compileOrThrow("m.keys()", environment).compute()).add("x"))
+        assertThatThrownBy(() -> ((List<Object>) ExpressionCompiler.compileOrThrow("m.keys()", environment).asResult().compute()).add("x"))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
@@ -743,10 +744,10 @@ class ExpressionCompilerTest {
                 .externalSymbol("m", new MapType(ScalarType.NUMBER), source, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(ExpressionCompiler.compileOrThrow("m[\"A\"]", environment).compute())
-                .isEqualTo(BigDecimal.ONE);
-        assertThat(ExpressionCompiler.compileOrThrow("m?.[\"b\"] ?? 0", environment).compute())
-                .isEqualTo(new BigDecimal("2"));
+        assertThat(ExpressionCompiler.compileOrThrow("m[\"A\"]", environment).asMath().compute())
+                .isEqualByComparingTo(BigDecimal.ONE);
+        assertThat(ExpressionCompiler.compileOrThrow("m?.[\"b\"] ?? 0", environment).asMath().compute())
+                .isEqualByComparingTo(new BigDecimal("2"));
     }
 
     @Test
@@ -756,10 +757,10 @@ class ExpressionCompilerTest {
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("m[\"missing\"]", environment).compute())
+        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("m[\"missing\"]", environment).asMath().compute())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("map key not found: missing");
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("m?.[\"missing\"] ?? 0", environment).compute())
+        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("m?.[\"missing\"] ?? 0", environment).asMath().compute())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("map key not found: missing");
     }
@@ -780,13 +781,13 @@ class ExpressionCompilerTest {
                 .externalSymbol("object", new WildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        Object collectionResult = ExpressionCompiler.compileOrThrow("items[*]", environment).compute();
+        Object collectionResult = ExpressionCompiler.compileOrThrow("items[*]", environment).asResult().compute();
         assertThat(collectionResult).isEqualTo(List.of(BigDecimal.ONE, new BigDecimal("2")));
         assertThatThrownBy(() -> ((List<Object>) collectionResult).add(BigDecimal.TEN))
                 .isInstanceOf(UnsupportedOperationException.class);
-        assertThat(ExpressionCompiler.compileOrThrow("m[*]", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("m[*]", environment).asResult().compute())
                 .isEqualTo(List.of(BigDecimal.ONE, new BigDecimal("2")));
-        assertThat(ExpressionCompiler.compileOrThrow("object[*]", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("object[*]", environment).asResult().compute())
                 .isEqualTo(List.of(new BigDecimal("2"), BigDecimal.ONE));
     }
 
@@ -797,7 +798,7 @@ class ExpressionCompilerTest {
                 .externalSymbol("object", new WildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(ExpressionCompiler.compileOrThrow("object[*]", environment).compute())
+        assertThat(ExpressionCompiler.compileOrThrow("object[*]", environment).asResult().compute())
                 .isEqualTo(List.of(BigDecimal.ONE, new BigDecimal("2")));
     }
 
@@ -807,7 +808,7 @@ class ExpressionCompilerTest {
                 .registerJavaTypeWildcardChildren(FailingWildcardChildProvider.class, "first")
                 .externalSymbol("object", new FailingWildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("object?.[*] ?? []", failingAccessor).compute())
+        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("object?.[*] ?? []", failingAccessor).asResult().compute())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("first failed");
 
@@ -816,8 +817,8 @@ class ExpressionCompilerTest {
                 .registerJavaTypeWildcardChildren(WildcardChildProvider.class, "first", "second")
                 .externalSymbol("object", new WildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("object[*]", limited))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("object[*]", limited))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code())
                                 .isEqualTo("SEMANTIC_MATERIALIZATION_LIMIT_EXCEEDED"));
     }
@@ -830,10 +831,10 @@ class ExpressionCompilerTest {
                 .externalSymbol("object", new PropertyProvider(BigDecimal.TEN), ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(ExpressionCompiler.compileOrThrow("object.amount", environment).compute())
-                .isEqualTo(BigDecimal.TEN);
-        assertThat(ExpressionCompiler.compileOrThrow("object.scaledAmount(2)", environment).compute())
-                .isEqualTo(new BigDecimal("20"));
+        assertThat(ExpressionCompiler.compileOrThrow("object.amount", environment).asMath().compute())
+                .isEqualByComparingTo(BigDecimal.TEN);
+        assertThat(ExpressionCompiler.compileOrThrow("object.scaledAmount(2)", environment).asMath().compute())
+                .isEqualByComparingTo(new BigDecimal("20"));
     }
 
     @Test
@@ -843,26 +844,26 @@ class ExpressionCompilerTest {
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("sum([1])", environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("sum([1])", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_UNKNOWN_FUNCTION"));
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("items := [1]; items.keys()", environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("items := [1]; items.keys()", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("m.sum()", environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("m.sum()", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("texts := [\"x\"]; texts.sum()", environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("texts := [\"x\"]; texts.sum()", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("items := [1]; empty := items[1:1]; empty.avg()", environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("items := [1]; empty := items[1:1]; empty.avg()", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("items := [1]; items.sum(2)", environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("items := [1]; items.sum(2)", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("items := [true]; items.all()", environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("items := [true]; items.all()", environment))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
     }
 
@@ -876,23 +877,23 @@ class ExpressionCompilerTest {
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("items?.sum() ?? 0", environment).compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("items?.sum() ?? 0", environment).asMath().compute())
                 .isEqualByComparingTo(new BigDecimal("3"));
     }
 
     @Test
     void destructuresCollectionPrefixesAndRejectsInvalidTargets() {
-        assertThat(decimal(ExpressionCompiler.compileOrThrow("[a, b] := [10, 20, 30]; a + b", ExpressionEnvironment.standard())
-                .compute()))
+        assertThat(ExpressionCompiler.compileOrThrow("[a, b] := [10, 20, 30]; a + b", ExpressionEnvironment.standard())
+                .asMath().compute())
                 .isEqualByComparingTo(new BigDecimal("30"));
 
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("[a, a] := [1, 2]; a", ExpressionEnvironment.standard()))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("[a, a] := [1, 2]; a", ExpressionEnvironment.standard()))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code())
                                 .isEqualTo("SEMANTIC_DUPLICATE_ASSIGNMENT_TARGET"));
 
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("[a, b, c] := [1, 2]; a", ExpressionEnvironment.standard()))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+        assertThat(ExpressionCompiler.compile("[a, b, c] := [1, 2]; a", ExpressionEnvironment.standard()))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code())
                                 .isEqualTo("SEMANTIC_DESTRUCTURING_SIZE_MISMATCH"));
     }
@@ -906,9 +907,9 @@ class ExpressionCompilerTest {
                         List.of(BigDecimal.ONE, new BigDecimal("2")),
                         ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("[a, b] := items; a", environment);
+        MathExpression expression = ExpressionCompiler.compileOrThrow("[a, b] := items; a", environment).asMath();
 
-        assertThat(decimal(expression.compute())).isEqualByComparingTo(BigDecimal.ONE);
+        assertThat(expression.compute()).isEqualByComparingTo(BigDecimal.ONE);
         assertThatThrownBy(() -> expression.compute(Map.of("items", List.of(BigDecimal.ONE))))
                 .isInstanceOf(ExpressionExecutionException.class)
                 .hasMessageContaining("destructuring source does not contain enough elements");
@@ -916,16 +917,17 @@ class ExpressionCompilerTest {
 
     @Test
     void propagatesSliceCardinalityAndDefersFilterCardinality() {
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(
+        assertThat(ExpressionCompiler.compile(
                         "items := [1, 2, 3, 4]; [a, b, c] := items[1:3]; a",
                         ExpressionEnvironment.standard()))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code())
                                 .isEqualTo("SEMANTIC_DESTRUCTURING_SIZE_MISMATCH"));
 
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
-                "items := [1, 2]; [a, b] := items[?(@ > 1)]; a",
-                ExpressionEnvironment.standard());
+        MathExpression expression = ExpressionCompiler.compileOrThrow(
+                        "items := [1, 2]; [a, b] := items[?(@ > 1)]; a",
+                        ExpressionEnvironment.standard())
+                .asMath();
         assertThatThrownBy(expression::compute)
                 .isInstanceOf(ExpressionExecutionException.class)
                 .hasMessageContaining("destructuring source does not contain enough elements");
@@ -941,7 +943,7 @@ class ExpressionCompilerTest {
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
-        Object result = ExpressionCompiler.compileOrThrow("outer[?(@[?(@ > 2)] = [3])]", environment).compute();
+        Object result = ExpressionCompiler.compileOrThrow("outer[?(@[?(@ > 2)] = [3])]", environment).asResult().compute();
 
         assertThat(result).isEqualTo(List.of(List.of(new BigDecimal("3"))));
     }
@@ -952,10 +954,10 @@ class ExpressionCompilerTest {
                 .maxCurrentItemDepth(1)
                 .build();
 
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(
+        assertThat(ExpressionCompiler.compile(
                         "outer := [[1]]; inner := [1]; outer[?(inner[?(@ = 1)] = [1])]",
                         environment))
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code())
                                 .isEqualTo("SEMANTIC_CURRENT_ITEM_DEPTH_EXCEEDED"));
     }
@@ -967,25 +969,25 @@ class ExpressionCompilerTest {
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
 
-        assertThat(ExpressionCompiler.compileOrThrow("false and markTrue()", environment).compute()).isEqualTo(false);
+        assertThat(ExpressionCompiler.compileOrThrow("false and markTrue()", environment).asLogical().compute()).isEqualTo(false);
         assertThat(functions.invocations()).isZero();
 
-        assertThat(ExpressionCompiler.compileOrThrow("true or markTrue()", environment).compute()).isEqualTo(true);
+        assertThat(ExpressionCompiler.compileOrThrow("true or markTrue()", environment).asLogical().compute()).isEqualTo(true);
         assertThat(functions.invocations()).isZero();
 
-        assertThat(ExpressionCompiler.compileOrThrow("false xor markTrue()", environment).compute()).isEqualTo(true);
+        assertThat(ExpressionCompiler.compileOrThrow("false xor markTrue()", environment).asLogical().compute()).isEqualTo(true);
         assertThat(functions.invocations()).isOne();
 
-        assertThat(ExpressionCompiler.compileOrThrow("false nand markTrue()", environment).compute()).isEqualTo(true);
+        assertThat(ExpressionCompiler.compileOrThrow("false nand markTrue()", environment).asLogical().compute()).isEqualTo(true);
         assertThat(functions.invocations()).isEqualTo(2);
 
-        assertThat(ExpressionCompiler.compileOrThrow("true nor markTrue()", environment).compute()).isEqualTo(false);
+        assertThat(ExpressionCompiler.compileOrThrow("true nor markTrue()", environment).asLogical().compute()).isEqualTo(false);
         assertThat(functions.invocations()).isEqualTo(3);
 
-        assertThat(ExpressionCompiler.compileOrThrow("1 ?? markNumber()", environment).compute()).isEqualTo(new BigDecimal("1"));
+        assertThat(ExpressionCompiler.compileOrThrow("1 ?? markNumber()", environment).asMath().compute()).isEqualByComparingTo(new BigDecimal("1"));
         assertThat(functions.invocations()).isEqualTo(3);
 
-        assertThat(ExpressionCompiler.compileOrThrow("0 between 1 and markNumber()", environment).compute()).isEqualTo(false);
+        assertThat(ExpressionCompiler.compileOrThrow("0 between 1 and markNumber()", environment).asLogical().compute()).isEqualTo(false);
         assertThat(functions.invocations()).isEqualTo(3);
     }
 
@@ -1080,9 +1082,5 @@ class ExpressionCompilerTest {
         public BigDecimal first() {
             throw new IllegalStateException("first failed");
         }
-    }
-
-    private static BigDecimal decimal(Object value) {
-        return (BigDecimal) value;
     }
 }

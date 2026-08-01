@@ -2,7 +2,7 @@ package com.runestone.expeval_mk3.corpus;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.runestone.expeval_mk3.api.CollectionType;
-import com.runestone.expeval_mk3.api.ExpressionCompilationException;
+import com.runestone.expeval_mk3.api.ExpressionCompilationResult;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.ExpressionExecutionException;
 import com.runestone.expeval_mk3.api.ExpressionCompiler;
@@ -49,7 +49,7 @@ class ExpressionCorpusExecutionTest {
         }
 
         ExpectedResult expected = (ExpectedResult) expressionCase.expectedOutcome();
-        Object actual = compiled.compute(inputs(expressionCase));
+        Object actual = compiled.asResult().compute(inputs(expressionCase));
         assertExpectedValue(expressionCase.id(), expected.type(), expected.result(), actual);
     }
 
@@ -64,6 +64,7 @@ class ExpressionCorpusExecutionTest {
         if (expressionCase.expectedOutcome() instanceof ExpectedRuntimeError expected) {
             assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(
                             expressionCase.source(), environment(expressionCase))
+                    .asResult()
                     .compute(inputs(expressionCase)))
                     .as(expressionCase.id())
                     .isInstanceOf(runtimeErrorType(expected.type()))
@@ -72,9 +73,11 @@ class ExpressionCorpusExecutionTest {
         }
 
         ExpectedDiagnostic expected = (ExpectedDiagnostic) expressionCase.expectedOutcome();
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(expressionCase.source(), environment(expressionCase)))
+        ExpressionCompilationResult result =
+                ExpressionCompiler.compile(expressionCase.source(), environment(expressionCase));
+        assertThat(result)
                 .as(expressionCase.id())
-                .isInstanceOfSatisfying(ExpressionCompilationException.class, failure -> {
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure -> {
                     ExpressionDiagnostic actual = failure.diagnostics().getFirst();
                     assertThat(actual.category().name()).isEqualTo(expected.category());
                     assertThat(actual.code()).isEqualTo(expected.code());
