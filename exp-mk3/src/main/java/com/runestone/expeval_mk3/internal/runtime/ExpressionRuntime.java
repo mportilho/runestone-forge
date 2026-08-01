@@ -140,10 +140,7 @@ public final class ExpressionRuntime {
             Object previous = scope.replace(currentItemSlot, item);
             try {
                 if (bool(predicate.execute(scope))) {
-                    if (result.size() == maxMaterializedSize) {
-                        throw new IllegalStateException(
-                                "materialized collection exceeds maxMaterializedSize " + maxMaterializedSize);
-                    }
+                    requireMaterializedSize(result.size() + 1, maxMaterializedSize);
                     result.add(item);
                 }
             } finally {

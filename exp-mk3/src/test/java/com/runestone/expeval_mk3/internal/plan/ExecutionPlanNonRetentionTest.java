@@ -63,6 +63,11 @@ class ExecutionPlanNonRetentionTest {
         Deque<Object> queue = new ArrayDeque<>();
         enqueue(queue, plan.resultExpression());
         plan.assignments().forEach(assignment -> enqueue(queue, expressionOf(assignment)));
+        privateFieldValue(plan, "externalBindings", List.class).forEach(binding -> enqueue(queue, binding));
+        privateFieldValue(plan, "declaredSymbolsInCanonicalOrder", List.class).forEach(symbol -> enqueue(queue, symbol));
+        for (Object frameValue : privateFieldValue(plan, "frameTemplate", Object[].class)) {
+            enqueue(queue, frameValue);
+        }
 
         while (!queue.isEmpty()) {
             Object value = queue.poll();
@@ -120,6 +125,17 @@ class ExecutionPlanNonRetentionTest {
             Field field = AssignmentExecutable.class.getDeclaredField("expression");
             field.setAccessible(true);
             return field.get(assignment);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T privateFieldValue(ExecutionPlan plan, String fieldName, Class<T> fieldType) {
+        try {
+            Field field = ExecutionPlan.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return (T) fieldType.cast(field.get(plan));
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);
         }
