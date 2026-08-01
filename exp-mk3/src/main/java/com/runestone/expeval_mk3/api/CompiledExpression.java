@@ -30,4 +30,16 @@ public final class CompiledExpression {
     public List<ExpressionDiagnostic> compilationDiagnostics() {
         return compilationDiagnostics;
     }
+
+    public ResultExpression asResult() {
+        return new ResultExpression(plan, runtimeServices);
+    }
+
+    public MathExpression asMath() {
+        return new MathExpression(plan, runtimeServices);
+    }
+
+    public LogicalExpression asLogical() {
+        return new LogicalExpression(plan, runtimeServices);
+    }
 }

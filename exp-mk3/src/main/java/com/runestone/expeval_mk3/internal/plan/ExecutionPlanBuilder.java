@@ -2,6 +2,7 @@ package com.runestone.expeval_mk3.internal.plan;
 
 import com.runestone.expeval_mk3.api.CollectionOperationCatalog;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
+import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.RuntimeNullability;
@@ -129,6 +130,9 @@ public final class ExecutionPlanBuilder {
         ExecutableNode result = model.ast().resultExpression()
                 .map(expression -> buildNode(expression, model, environment, deferredChecksByNode))
                 .orElse(null);
+        ExpressionType resultType = model.ast().resultExpression()
+                .map(expression -> required(model.resolvedTypes(), expression.id(), "result expression type"))
+                .orElse(null);
         List<ExternalBindingPlan> externalBindings = model.frameLayout().externalBindings().stream()
                 .map(binding -> new ExternalBindingPlan(binding.requireExternalSymbol(), binding.frameSlot()))
                 .toList();
@@ -145,12 +149,14 @@ public final class ExecutionPlanBuilder {
                 .toList();
         return new ExecutionPlan(
                 result,
+                resultType,
                 assignments,
                 externalBindings,
                 declaredSymbolsInCanonicalOrder,
                 model.frameLayout().frameSize(),
                 environment.boundaryCoercion(),
-                environment.zoneId());
+                environment.zoneId(),
+                environment.maxMaterializedSize());
     }
 
     private AssignmentExecutable buildAssignment(

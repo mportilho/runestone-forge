@@ -1,8 +1,10 @@
 package com.runestone.expeval_mk3.internal.plan;
 
 import com.runestone.expeval_mk3.api.BoundaryCoercion;
+import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
+import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.diagnostics.RuntimeFailures;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
@@ -23,6 +25,7 @@ import java.util.stream.Collectors;
 public final class ExecutionPlan {
 
     private final ExecutableNode resultExpression;
+    private final ExpressionType resultType;
     private final List<AssignmentExecutable> assignments;
     private final List<ExternalBindingPlan> externalBindings;
     private final Map<String, ExternalBindingPlan> bindingsByName;
@@ -31,16 +34,23 @@ public final class ExecutionPlan {
     private final Object[] frameTemplate;
     private final BoundaryCoercion boundaryCoercion;
     private final ZoneId zoneId;
+    private final int maxMaterializedSize;
 
     ExecutionPlan(
             ExecutableNode resultExpression,
+            ExpressionType resultType,
             List<AssignmentExecutable> assignments,
             List<ExternalBindingPlan> externalBindings,
             List<ExternalSymbol> declaredSymbolsInCanonicalOrder,
             int frameSize,
             BoundaryCoercion boundaryCoercion,
-            ZoneId zoneId) {
+            ZoneId zoneId,
+            int maxMaterializedSize) {
+        if ((resultExpression == null) != (resultType == null)) {
+            throw new IllegalStateException("resultType must be present if and only if resultExpression is present");
+        }
         this.resultExpression = resultExpression;
+        this.resultType = resultType;
         this.assignments = List.copyOf(assignments);
         this.externalBindings = List.copyOf(externalBindings);
         bindingsByName = this.externalBindings.stream()
@@ -56,10 +66,29 @@ public final class ExecutionPlan {
         this.frameTemplate = template;
         this.boundaryCoercion = Objects.requireNonNull(boundaryCoercion, "boundaryCoercion");
         this.zoneId = Objects.requireNonNull(zoneId, "zoneId");
+        this.maxMaterializedSize = maxMaterializedSize;
     }
 
     public boolean hasResult() {
         return resultExpression != null;
+    }
+
+    /**
+     * The result expression's resolved public type, or {@code null} for an assignment-only plan.
+     */
+    public ExpressionType resultType() {
+        return resultType;
+    }
+
+    /**
+     * The result expression's source position, or {@code null} for an assignment-only plan.
+     */
+    public SourceSpan resultSourceSpan() {
+        return resultExpression == null ? null : resultExpression.sourceSpan();
+    }
+
+    public int maxMaterializedSize() {
+        return maxMaterializedSize;
     }
 
     List<AssignmentExecutable> assignments() {
