@@ -15,5 +15,5 @@ inputs:
 coverage: [exponentiation, identifier, diagnostic]
 expected:
   runtimeError:
-    type: ExpressionExecutionException
-    messageContains: 'reduced denominator is even'
+    code: RUNTIME_POWER_COMPLEX_DOMAIN
+    span: {offset: 0, endOffset: 10, line: 1, column: 1}

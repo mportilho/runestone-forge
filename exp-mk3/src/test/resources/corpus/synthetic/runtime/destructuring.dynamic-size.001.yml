@@ -5,5 +5,5 @@ source: 'items := [1, 2]; [a, b] := items[?(@ > 1)]; a'
 coverage: [assignment, destructuring, collection-literal, identifier, filter, at-symbol, comparison, diagnostic]
 expected:
   runtimeError:
-    type: ExpressionExecutionException
-    messageContains: 'destructuring source does not contain enough elements'
+    code: RUNTIME_DESTRUCTURING_SIZE_TOO_SMALL
+    span: {offset: 17, endOffset: 23, line: 1, column: 18}

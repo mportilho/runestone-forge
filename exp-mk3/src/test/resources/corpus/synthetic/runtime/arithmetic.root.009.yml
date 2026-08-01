@@ -15,5 +15,5 @@ inputs:
 coverage: [root, identifier, diagnostic]
 expected:
   runtimeError:
-    type: ExpressionExecutionException
-    messageContains: 'reduced degree numerator that is even'
+    code: RUNTIME_ROOT_COMPLEX_DOMAIN
+    span: {offset: 0, endOffset: 15, line: 1, column: 1}

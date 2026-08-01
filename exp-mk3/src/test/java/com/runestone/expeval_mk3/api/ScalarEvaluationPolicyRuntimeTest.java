@@ -145,6 +145,26 @@ class ScalarEvaluationPolicyRuntimeTest {
     }
 
     @Test
+    void inEvaluatesTheReceiverAndEveryCollectionElementLeftToRightEagerly() {
+        EffectProbe probe = new EffectProbe();
+        LogicalExpression expression = ExpressionCompiler.compileOrThrow(
+                "track(2) in [track(1), track(2), track(3)]", environment(probe)).asLogical();
+
+        assertThat(expression.compute()).isEqualTo(Boolean.TRUE);
+        assertThat(probe.order()).containsExactly(2, 1, 2, 3);
+    }
+
+    @Test
+    void notInEvaluatesTheReceiverAndEveryCollectionElementLeftToRightEagerly() {
+        EffectProbe probe = new EffectProbe();
+        LogicalExpression expression = ExpressionCompiler.compileOrThrow(
+                "track(2) not in [track(1), track(2), track(3)]", environment(probe)).asLogical();
+
+        assertThat(expression.compute()).isEqualTo(Boolean.FALSE);
+        assertThat(probe.order()).containsExactly(2, 1, 2, 3);
+    }
+
+    @Test
     void collectionLiteralElementsEvaluateLeftToRight() {
         EffectProbe probe = new EffectProbe();
         ResultExpression expression = ExpressionCompiler.compileOrThrow(

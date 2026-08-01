@@ -15,5 +15,5 @@ inputs:
 coverage: [exponentiation, identifier, unary, diagnostic]
 expected:
   runtimeError:
-    type: ExpressionExecutionException
-    messageContains: 'zero raised to a negative exponent is undefined'
+    code: RUNTIME_POWER_UNDEFINED
+    span: {offset: 0, endOffset: 9, line: 1, column: 1}

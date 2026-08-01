@@ -72,6 +72,24 @@ class ExpressionCorpusExecutionTest {
             return;
         }
 
+        if (expressionCase.expectedOutcome() instanceof ExpectedRuntimeDiagnostic expected) {
+            assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(
+                            expressionCase.source(), environment(expressionCase))
+                    .asResult()
+                    .compute(inputs(expressionCase)))
+                    .as(expressionCase.id())
+                    .isInstanceOf(ExpressionExecutionException.class)
+                    .satisfies(thrown -> {
+                        ExpressionDiagnostic actual = ((ExpressionExecutionException) thrown).diagnostic();
+                        assertThat(actual.category().name()).as(expressionCase.id()).isEqualTo("RUNTIME");
+                        assertThat(actual.code()).as(expressionCase.id()).isEqualTo(expected.code());
+                        if (!expected.spans().isEmpty()) {
+                            assertThat(actual.primarySpan()).as(expressionCase.id()).contains(expected.spans().getFirst());
+                        }
+                    });
+            return;
+        }
+
         ExpectedDiagnostic expected = (ExpectedDiagnostic) expressionCase.expectedOutcome();
         ExpressionCompilationResult result =
                 ExpressionCompiler.compile(expressionCase.source(), environment(expressionCase));

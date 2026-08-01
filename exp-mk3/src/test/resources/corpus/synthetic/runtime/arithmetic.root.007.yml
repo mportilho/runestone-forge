@@ -15,5 +15,5 @@ inputs:
 coverage: [root, identifier, diagnostic]
 expected:
   runtimeError:
-    type: ExpressionExecutionException
-    messageContains: 'root degree zero is undefined'
+    code: RUNTIME_ROOT_UNDEFINED
+    span: {offset: 0, endOffset: 13, line: 1, column: 1}
