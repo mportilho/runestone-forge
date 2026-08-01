@@ -1,0 +1,6 @@
+id: runtime.arithmetic.modulo.negative-dividend.001
+phase: runtime
+kind: valid
+source: '-10 mod 3'
+coverage: [multiplicative, unary]
+expected: {type: NUMBER, result: "-1"}

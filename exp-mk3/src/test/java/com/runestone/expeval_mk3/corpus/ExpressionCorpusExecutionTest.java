@@ -17,6 +17,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -105,6 +107,12 @@ class ExpressionCorpusExecutionTest {
         JsonNode maxCurrentItemDepth = environment.get("maxCurrentItemDepth");
         if (maxCurrentItemDepth != null) {
             builder.maxCurrentItemDepth(maxCurrentItemDepth.intValue());
+        }
+        JsonNode mathContext = environment.get("mathContext");
+        if (mathContext != null) {
+            builder.mathContext(new MathContext(
+                    mathContext.get("precision").intValue(),
+                    RoundingMode.valueOf(mathContext.get("roundingMode").textValue())));
         }
     }
 

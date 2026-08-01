@@ -120,8 +120,8 @@ public final class BinaryExecutableNode implements ExecutableNode {
     @Override
     public Object execute(ExecutionScope scope) {
         return switch (operator) {
-            case ADD -> ExpressionRuntime.number(left.execute(scope)).add(ExpressionRuntime.number(right.execute(scope)));
-            case SUBTRACT -> ExpressionRuntime.number(left.execute(scope)).subtract(ExpressionRuntime.number(right.execute(scope)));
+            case ADD -> ExpressionRuntime.number(left.execute(scope)).add(ExpressionRuntime.number(right.execute(scope)), mathContext);
+            case SUBTRACT -> ExpressionRuntime.number(left.execute(scope)).subtract(ExpressionRuntime.number(right.execute(scope)), mathContext);
             case MULTIPLY -> ExpressionRuntime.number(left.execute(scope)).multiply(ExpressionRuntime.number(right.execute(scope)), mathContext);
             case DIVIDE -> divide(scope);
             case MODULO -> modulo(scope);
@@ -164,7 +164,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
             throw RuntimeFailures.undefinedOperation("modulo by zero", sourceSpan);
         }
         try {
-            return dividend.remainder(divisor, mathContext);
+            return dividend.remainder(divisor);
         } catch (ArithmeticException exception) {
             throw RuntimeFailures.calculationFailure("modulo failed", sourceSpan, exception);
         }
