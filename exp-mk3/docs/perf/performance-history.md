@@ -1,5 +1,80 @@
 # Performance History
 
+## 2026-08-01 - Issue 105 Phase 5 JMH Baseline
+
+Purpose: record a reproducible Phase 5 baseline — not a before/after optimization claim and not a
+CI performance gate — for hot arithmetic-view compute, hot logical-view compute, full uncached
+compilation, and fixed-size Public Materialization, using the final result-oriented compiler and
+view APIs (`ExpressionCompiler`, `MathExpression`, `LogicalExpression`, `ResultExpression`).
+
+Benchmark: `Phase5BaselineBenchmark` (`exp-mk3/src/test/java/com/runestone/expeval_mk3/perf/jmh`).
+
+Four cases:
+
+- `arithmeticCompute` — `a + b * 2` compiled once in `@Setup(Level.Trial)` to a `MathExpression`,
+  then `compute(Map.of("a", 3, "b", 5))` measured per operation (hot path with runtime overrides).
+- `logicalCompute` — `(a > 0) xor (b > 0) xor c` compiled once to a `LogicalExpression`, then
+  `compute(overrides)` measured per operation. `xor` never short-circuits, so every operand is
+  evaluated on every call, unlike `and`/`or`.
+- `fullUncachedCompilation` — `ExpressionCompiler.compile("a + b * 2", environment)` executed in
+  full (parsing, AST construction, semantic resolution, planning, result construction) on every
+  measured operation. No compiled artifact is reused across invocations; only the environment and
+  source string are built outside the measured method, in `@Setup(Level.Trial)`.
+- `materializationCompute` — `[1, 2, 3, 4, 5, 6, 7, 8]` compiled once to a `ResultExpression`, then
+  `compute()` measured per operation, exercising `PublicMaterialization`'s defensive-copy path over
+  a fixed-size (8-element) list on every call.
+
+All benchmark results are consumed through a JMH `Blackhole` so the JVM cannot eliminate the work.
+The existing cold-parsing `ParsingBenchmark#coldParser` `SingleShot` measurement (startup
+characterization) remains separate and is not folded into this warmed, per-operation baseline.
+
+Command used:
+
+```bash
+mvn -q -N install
+mvn -q -pl runestone-toolkit -am install -DskipTests
+mvn -q -pl exp-mk3 -am -DskipTests test-compile
+cd exp-mk3 && mvn -q dependency:build-classpath -Dmdep.outputFile="target/jmh-cp.txt" -DincludeScope=test && cd ..
+java -cp "runestone-toolkit/target/classes:exp-mk3/target/test-classes:exp-mk3/target/classes:$(tr -d '\n' < exp-mk3/target/jmh-cp.txt)" \
+  org.openjdk.jmh.Main "Phase5BaselineBenchmark" \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/performance-benchmark/exp-mk3-phase5-baseline-issue-105.json" \
+  -foe true
+```
+
+Environment:
+
+- Commit: `c600db38d01028f7ea6a3f76d7a415bbfb3a5aa3`
+- JDK: OpenJDK 26.0.1 (Homebrew build, mixed mode, sharing)
+- JMH: 1.37
+- OS: Linux 7.0.0-28-generic x86_64
+- JVM args: `-Xms1g -Xmx1g`
+- Warmup: 5 iterations, 500 ms each
+- Measurement: 10 iterations, 500 ms each
+- Forks: 3
+- Profiler: `gc`
+
+Results:
+
+| Benchmark | Score | Error | Units | B/op |
+|---|---:|---:|---|---:|
+| `arithmeticCompute` | 174.96 | 3.33 | ns/op | 216.0 |
+| `logicalCompute` | 220.68 | 25.31 | ns/op | 208.0 |
+| `fullUncachedCompilation` | 9008.50 | 359.04 | ns/op | 16393.7 |
+| `materializationCompute` | 157.56 | 7.97 | ns/op | 386.7 |
+
+Verdict: baseline recorded, all four cases measured from the same run protocol and environment so
+the table is internally comparable. `fullUncachedCompilation` at ~9.0 µs/op is roughly two orders
+of magnitude above the ~150-220 ns/op hot-path cases, consistent with running the whole compile
+pipeline (parse, AST build, semantic resolution, planning, result construction) per operation
+rather than hitting a cached artifact. No pass/fail threshold or CI gate is attached to these
+numbers; this is a reference point for later Phase 5/6 work. Generated JSON was inspected during
+analysis and is not versioned here.
+
+`mvn -pl exp-mk3 -am test` was run and green (647 tests, 0 failures/errors) both before this
+benchmark was added and again after, confirming the functional/concurrency gate was unaffected.
+
 ## 2026-07-28 - Issue 80 Collection Operations Baseline
 
 Purpose: baseline for the unified collection language runtime gate. The benchmark compiles each expression once in `@Setup(Level.Trial)` and measures hot `CompiledExpression.compute()` execution through resolved Operacao de Colecao runtime plans.
