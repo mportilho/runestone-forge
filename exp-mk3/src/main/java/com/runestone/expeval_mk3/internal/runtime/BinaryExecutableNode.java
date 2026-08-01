@@ -1,11 +1,9 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
-import ch.obermuhlner.math.big.BigDecimalMath;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperator;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
-import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.diagnostics.RuntimeFailures;
 import com.runestone.expeval_mk3.internal.semantics.DeferredCheck;
 
@@ -173,23 +171,13 @@ public final class BinaryExecutableNode implements ExecutableNode {
     private BigDecimal root(ExecutionScope scope) {
         BigDecimal degree = ExpressionRuntime.number(left.execute(scope));
         BigDecimal radicand = ExpressionRuntime.number(right.execute(scope));
-        try {
-            return BigDecimalMath.root(radicand, degree, mathContext);
-        } catch (ArithmeticException exception) {
-            throw RuntimeFailures.domainViolation(
-                    DiagnosticCode.RUNTIME_ROOT_DOMAIN_VIOLATION, "root domain violation", sourceSpan, exception);
-        }
+        return RealDomainArithmetic.root(degree, radicand, mathContext, sourceSpan);
     }
 
     private BigDecimal exponentiate(ExecutionScope scope) {
         BigDecimal base = ExpressionRuntime.number(left.execute(scope));
         BigDecimal exponent = ExpressionRuntime.number(right.execute(scope));
-        try {
-            return ExpressionRuntime.pow(base, exponent, mathContext);
-        } catch (ArithmeticException exception) {
-            throw RuntimeFailures.domainViolation(
-                    DiagnosticCode.RUNTIME_POWER_DOMAIN_VIOLATION, "power domain violation", sourceSpan, exception);
-        }
+        return RealDomainArithmetic.pow(base, exponent, mathContext, sourceSpan);
     }
 
     private int compare(ExecutionScope scope) {

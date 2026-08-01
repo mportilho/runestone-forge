@@ -1,0 +1,19 @@
+id: runtime.arithmetic.exponentiation.009
+phase: runtime
+kind: invalid
+source: 'base ^ -2'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    base:
+      type: NUMBER
+      default: {type: NUMBER, value: "1"}
+      overwritePolicy: OVERRIDABLE
+inputs:
+  base: {type: NUMBER, value: "0"}
+coverage: [exponentiation, identifier, unary, diagnostic]
+expected:
+  runtimeError:
+    type: ExpressionExecutionException
+    messageContains: 'zero raised to a negative exponent is undefined'

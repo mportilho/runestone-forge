@@ -1,0 +1,19 @@
+id: runtime.arithmetic.exponentiation.008
+phase: runtime
+kind: invalid
+source: 'base ^ 0.5'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    base:
+      type: NUMBER
+      default: {type: NUMBER, value: "1"}
+      overwritePolicy: OVERRIDABLE
+inputs:
+  base: {type: NUMBER, value: "-8"}
+coverage: [exponentiation, identifier, diagnostic]
+expected:
+  runtimeError:
+    type: ExpressionExecutionException
+    messageContains: 'reduced denominator is even'

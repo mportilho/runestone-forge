@@ -1,0 +1,9 @@
+id: semantic.power.undefined.001
+phase: semantic
+kind: invalid
+source: '0 ^ -2'
+coverage: [exponentiation, unary, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_POWER_UNDEFINED

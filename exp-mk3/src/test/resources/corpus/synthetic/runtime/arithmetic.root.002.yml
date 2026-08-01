@@ -1,0 +1,10 @@
+id: runtime.arithmetic.root.002
+phase: runtime
+kind: valid
+source: '3 root (-2)'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  mathContext: {precision: 5, roundingMode: CEILING}
+coverage: [root, unary, parentheses]
+expected: {type: NUMBER, result: "-1.2599"}

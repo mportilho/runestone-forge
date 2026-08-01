@@ -1,0 +1,6 @@
+id: runtime.arithmetic.root.006
+phase: runtime
+kind: valid
+source: '3 root 0'
+coverage: [root]
+expected: {type: NUMBER, result: "0"}

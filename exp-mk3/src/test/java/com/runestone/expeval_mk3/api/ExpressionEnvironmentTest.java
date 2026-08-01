@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -464,6 +465,26 @@ class ExpressionEnvironmentTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> ExpressionEnvironment.builder().maxFactorialInput(-1))
                 .withMessage("maxFactorialInput must not be negative");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> ExpressionEnvironment.builder().mathContext(MathContext.UNLIMITED))
+                .withMessage("mathContext must have positive precision");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> ExpressionEnvironment.builder()
+                        .mathContext(new MathContext(10, RoundingMode.UNNECESSARY)))
+                .withMessage("mathContext must not use RoundingMode.UNNECESSARY");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> ExpressionEnvironment.builder().transcendentalMathContext(MathContext.UNLIMITED))
+                .withMessage("transcendentalMathContext must have positive precision");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> ExpressionEnvironment.builder()
+                        .transcendentalMathContext(new MathContext(10, RoundingMode.UNNECESSARY)))
+                .withMessage("transcendentalMathContext must not use RoundingMode.UNNECESSARY");
+        ExpressionEnvironment supportedContexts = ExpressionEnvironment.builder()
+                .mathContext(new MathContext(5, RoundingMode.FLOOR))
+                .transcendentalMathContext(new MathContext(7, RoundingMode.CEILING))
+                .build();
+        assertThat(supportedContexts.mathContext()).isEqualTo(new MathContext(5, RoundingMode.FLOOR));
+        assertThat(supportedContexts.transcendentalMathContext()).isEqualTo(new MathContext(7, RoundingMode.CEILING));
         ExpressionEnvironment zeroLimits = ExpressionEnvironment.builder()
                 .maxCurrentItemDepth(0)
                 .maxMaterializedSize(0)

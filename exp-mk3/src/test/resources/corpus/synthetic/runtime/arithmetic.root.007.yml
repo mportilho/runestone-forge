@@ -1,0 +1,19 @@
+id: runtime.arithmetic.root.007
+phase: runtime
+kind: invalid
+source: 'degree root 8'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    degree:
+      type: NUMBER
+      default: {type: NUMBER, value: "1"}
+      overwritePolicy: OVERRIDABLE
+inputs:
+  degree: {type: NUMBER, value: "0"}
+coverage: [root, identifier, diagnostic]
+expected:
+  runtimeError:
+    type: ExpressionExecutionException
+    messageContains: 'root degree zero is undefined'

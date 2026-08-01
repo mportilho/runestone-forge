@@ -58,8 +58,8 @@ class DeferredCheckCoverageTest {
             case FactorialIntegralDeferredCheck ignored -> DiagnosticCode.RUNTIME_FACTORIAL_NOT_INTEGRAL;
             case FactorialNonNegativeDeferredCheck ignored -> DiagnosticCode.RUNTIME_FACTORIAL_NEGATIVE;
             case FactorialMaxBoundDeferredCheck ignored -> DiagnosticCode.RUNTIME_FACTORIAL_EXCEEDS_MAXIMUM;
-            case PowerRealDomainDeferredCheck ignored -> DiagnosticCode.RUNTIME_POWER_DOMAIN_VIOLATION;
-            case RootRealDomainDeferredCheck ignored -> DiagnosticCode.RUNTIME_ROOT_DOMAIN_VIOLATION;
+            case PowerRealDomainDeferredCheck ignored -> DiagnosticCode.RUNTIME_POWER_COMPLEX_DOMAIN;
+            case RootRealDomainDeferredCheck ignored -> DiagnosticCode.RUNTIME_ROOT_COMPLEX_DOMAIN;
             case DestructuringMinimumSizeDeferredCheck ignored -> DiagnosticCode.RUNTIME_DESTRUCTURING_SIZE_TOO_SMALL;
             case SubscriptBoundsDeferredCheck ignored -> DiagnosticCode.RUNTIME_SUBSCRIPT_OUT_OF_BOUNDS;
             case MaterializationLimitDeferredCheck ignored -> DiagnosticCode.RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED;

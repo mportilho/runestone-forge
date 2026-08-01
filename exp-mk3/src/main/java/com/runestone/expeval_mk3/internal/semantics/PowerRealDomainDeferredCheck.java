@@ -20,6 +20,6 @@ public record PowerRealDomainDeferredCheck(NodeId nodeId, SourceSpan sourceSpan)
 
     @Override
     public DiagnosticCode runtimeCode() {
-        return DiagnosticCode.RUNTIME_POWER_DOMAIN_VIOLATION;
+        return DiagnosticCode.RUNTIME_POWER_COMPLEX_DOMAIN;
     }
 }

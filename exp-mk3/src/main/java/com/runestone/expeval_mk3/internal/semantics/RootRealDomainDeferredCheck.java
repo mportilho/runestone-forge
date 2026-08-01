@@ -20,6 +20,6 @@ public record RootRealDomainDeferredCheck(NodeId nodeId, SourceSpan sourceSpan) 
 
     @Override
     public DiagnosticCode runtimeCode() {
-        return DiagnosticCode.RUNTIME_ROOT_DOMAIN_VIOLATION;
+        return DiagnosticCode.RUNTIME_ROOT_COMPLEX_DOMAIN;
     }
 }

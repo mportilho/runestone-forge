@@ -1,0 +1,6 @@
+id: runtime.arithmetic.exponentiation.002
+phase: runtime
+kind: valid
+source: '0 ^ 0'
+coverage: [exponentiation]
+expected: {type: NUMBER, result: "1"}

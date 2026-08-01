@@ -1,6 +1,5 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
-import ch.obermuhlner.math.big.BigDecimalMath;
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
@@ -582,23 +581,6 @@ public final class ExpressionRuntime {
         if (size > maxMaterializedSize) {
             throw new IllegalStateException("materialized collection exceeds maxMaterializedSize " + maxMaterializedSize);
         }
-    }
-
-    public static BigDecimal pow(BigDecimal base, BigDecimal exponent, MathContext mathContext) {
-        BigDecimal normalizedExponent = exponent.stripTrailingZeros();
-        if (normalizedExponent.scale() <= 0) {
-            BigInteger integerValue = normalizedExponent.toBigInteger();
-            if (integerValue.compareTo(BigInteger.valueOf(Integer.MAX_VALUE)) > 0
-                    || integerValue.compareTo(BigInteger.valueOf((long) Integer.MIN_VALUE + 1)) < 0) {
-                return BigDecimalMath.pow(base, exponent, mathContext);
-            }
-            int integerExponent = integerValue.intValue();
-            if (integerExponent >= 0) {
-                return base.pow(integerExponent, mathContext);
-            }
-            return BigDecimal.ONE.divide(base.pow(-integerExponent, mathContext), mathContext);
-        }
-        return BigDecimalMath.pow(base, exponent, mathContext);
     }
 
     public static boolean structuralEquals(Object left, Object right, ExpressionType type) {

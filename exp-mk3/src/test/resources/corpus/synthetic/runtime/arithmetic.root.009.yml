@@ -1,0 +1,19 @@
+id: runtime.arithmetic.root.009
+phase: runtime
+kind: invalid
+source: '2 root radicand'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    radicand:
+      type: NUMBER
+      default: {type: NUMBER, value: "1"}
+      overwritePolicy: OVERRIDABLE
+inputs:
+  radicand: {type: NUMBER, value: "-8"}
+coverage: [root, identifier, diagnostic]
+expected:
+  runtimeError:
+    type: ExpressionExecutionException
+    messageContains: 'reduced degree numerator that is even'

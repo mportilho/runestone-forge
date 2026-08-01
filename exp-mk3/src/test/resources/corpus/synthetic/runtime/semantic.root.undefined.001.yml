@@ -1,0 +1,9 @@
+id: semantic.root.undefined.001
+phase: semantic
+kind: invalid
+source: '0 root 8'
+coverage: [root, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_ROOT_UNDEFINED

@@ -3,6 +3,7 @@ package com.runestone.expeval_mk3.api;
 import com.runestone.converters.DataConversionService;
 
 import java.math.MathContext;
+import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -169,14 +170,25 @@ public final class ExpressionEnvironment {
         }
 
         public Builder mathContext(MathContext mathContext) {
-            this.mathContext = Objects.requireNonNull(mathContext, "mathContext");
+            this.mathContext = requireUsableMathContext(mathContext, "mathContext");
             return this;
         }
 
         public Builder transcendentalMathContext(MathContext transcendentalMathContext) {
-            this.transcendentalMathContext = Objects.requireNonNull(
+            this.transcendentalMathContext = requireUsableMathContext(
                     transcendentalMathContext, "transcendentalMathContext");
             return this;
+        }
+
+        private static MathContext requireUsableMathContext(MathContext mathContext, String parameterName) {
+            Objects.requireNonNull(mathContext, parameterName);
+            if (mathContext.getPrecision() <= 0) {
+                throw new IllegalArgumentException(parameterName + " must have positive precision");
+            }
+            if (mathContext.getRoundingMode() == RoundingMode.UNNECESSARY) {
+                throw new IllegalArgumentException(parameterName + " must not use RoundingMode.UNNECESSARY");
+            }
+            return mathContext;
         }
 
         public Builder maxCurrentItemDepth(int maxCurrentItemDepth) {
