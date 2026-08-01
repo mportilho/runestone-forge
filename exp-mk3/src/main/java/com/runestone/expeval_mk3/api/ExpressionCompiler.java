@@ -4,7 +4,6 @@ import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildFailure;
 import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildResult;
 import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildSuccess;
 import com.runestone.expeval_mk3.internal.ast.SemanticAstBuilder;
-import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.parser.ExpressionParser;
 import com.runestone.expeval_mk3.internal.parser.ParseFailure;
 import com.runestone.expeval_mk3.internal.parser.ParseResult;
@@ -17,8 +16,6 @@ import com.runestone.expeval_mk3.internal.semantics.SemanticResolutionResult;
 import com.runestone.expeval_mk3.internal.semantics.SemanticResolutionSuccess;
 import com.runestone.expeval_mk3.internal.semantics.SemanticResolver;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 
 public final class ExpressionCompiler {
@@ -68,15 +65,6 @@ public final class ExpressionCompiler {
         }
         SemanticResolutionSuccess success = (SemanticResolutionSuccess) semanticResult;
         SemanticModel model = success.model();
-        if (model.ast().resultExpression().isEmpty()) {
-            List<ExpressionDiagnostic> failureDiagnostics = new ArrayList<>(List.of(ExpressionDiagnostic.error(
-                    DiagnosticCategory.SEMANTIC,
-                    DiagnosticCode.SEMANTIC_ASSIGNMENTS_ONLY_COMPUTE_NOT_SUPPORTED.name(),
-                    "Expression file has only assignments and no result expression; computing such files is not supported yet",
-                    model.ast().sourceSpan())));
-            failureDiagnostics.addAll(success.warnings());
-            return new ExpressionCompilationResult.Failure(failureDiagnostics);
-        }
         CompiledExpression compiledExpression = new CompiledExpression(
                 new ExecutionPlanBuilder().build(model, environment), runtimeServices, success.warnings());
         return new ExpressionCompilationResult.Success(compiledExpression, success.warnings());

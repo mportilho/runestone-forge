@@ -86,6 +86,7 @@ import com.runestone.expeval_mk3.internal.semantics.SymbolBinding;
 import com.runestone.expeval_mk3.internal.semantics.WildcardNavigationBinding;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -147,16 +148,46 @@ public final class ExecutionPlanBuilder {
         List<AssignmentExecutable> assignments = model.ast().assignments().stream()
                 .map(assignment -> buildAssignment(assignment, model, environment, deferredChecksByNode))
                 .toList();
+        List<AssignedSymbol> assignedSymbolsInCreationOrder = buildAssignedSymbolsInCreationOrder(model);
         return new ExecutionPlan(
                 result,
                 resultType,
                 assignments,
                 externalBindings,
                 declaredSymbolsInCanonicalOrder,
+                assignedSymbolsInCreationOrder,
                 model.frameLayout().frameSize(),
                 environment.boundaryCoercion(),
                 environment.zoneId(),
                 environment.maxMaterializedSize());
+    }
+
+    /**
+     * Walks assignment targets in source order, keeping only each internal symbol's first occurrence:
+     * reassignment reuses the same {@code SymbolBinding} (frame slot and type), so later occurrences of an
+     * already-seen name contribute nothing new to the ordering.
+     */
+    private List<AssignedSymbol> buildAssignedSymbolsInCreationOrder(SemanticModel model) {
+        Map<String, AssignedSymbol> byName = new LinkedHashMap<>();
+        for (AssignmentNode assignment : model.ast().assignments()) {
+            for (IdentifierAssignmentTargetNode identifier : targetIdentifiers(assignment.target())) {
+                byName.computeIfAbsent(identifier.name(), name -> {
+                    SymbolBinding binding = required(model.symbolBindings(), identifier.id(), "assignment target binding");
+                    return new AssignedSymbol(name, binding.type(), binding.frameSlot(), identifier.sourceSpan());
+                });
+            }
+        }
+        return List.copyOf(byName.values());
+    }
+
+    private static List<IdentifierAssignmentTargetNode> targetIdentifiers(AssignmentTargetNode target) {
+        if (target instanceof IdentifierAssignmentTargetNode identifier) {
+            return List.of(identifier);
+        }
+        if (target instanceof DestructuringAssignmentTargetNode destructuring) {
+            return destructuring.elements();
+        }
+        throw new IllegalArgumentException("unsupported assignment target: " + target.getClass().getSimpleName());
     }
 
     private AssignmentExecutable buildAssignment(

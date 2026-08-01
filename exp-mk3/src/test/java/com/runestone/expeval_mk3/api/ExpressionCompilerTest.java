@@ -41,13 +41,13 @@ class ExpressionCompilerTest {
     }
 
     @Test
-    void compileOrThrowThrowsExpressionCompilationExceptionForAnAssignmentOnlyFile() {
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("x := 1;", ExpressionEnvironment.standard()))
-                .isInstanceOf(ExpressionCompilationException.class)
-                .satisfies(exception -> assertThat(((ExpressionCompilationException) exception).diagnostics())
-                        .singleElement()
-                        .satisfies(diagnostic -> assertThat(diagnostic.code())
-                                .isEqualTo("SEMANTIC_ASSIGNMENTS_ONLY_COMPUTE_NOT_SUPPORTED")));
+    void compileOrThrowSucceedsForAnAssignmentOnlyFileButItsBareComputeRejectsTheMissingResult() {
+        CompiledExpression expression = ExpressionCompiler.compileOrThrow("x := 1;", ExpressionEnvironment.standard());
+
+        assertThatThrownBy(expression::compute)
+                .isInstanceOfSatisfying(ExpressionViewException.class, exception ->
+                        assertThat(exception.reason()).isEqualTo(ExpressionViewException.Reason.NO_RESULT_EXPRESSION));
+        assertThat(expression.asAssignments().compute()).isEqualTo(Map.of("x", new BigDecimal("1")));
     }
 
     @Test
@@ -113,18 +113,18 @@ class ExpressionCompilerTest {
     }
 
     @Test
-    void compileFailureRetainsWarningsForTheAssignmentsOnlyNoResultExpressionCase() {
+    void compileSucceedsWithWarningsForTheAssignmentsOnlyNoResultExpressionCase() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("x", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
         ExpressionCompilationResult result = ExpressionCompiler.compile("x := 1;", environment);
 
-        assertThat(result).isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure -> {
-            assertThat(failure.diagnostics()).anySatisfy(diagnostic ->
-                    assertThat(diagnostic.code()).isEqualTo("SEMANTIC_ASSIGNMENTS_ONLY_COMPUTE_NOT_SUPPORTED"));
-            assertThat(failure.diagnostics()).anySatisfy(diagnostic ->
+        assertThat(result).isInstanceOfSatisfying(ExpressionCompilationResult.Success.class, success -> {
+            assertThat(success.diagnostics()).singleElement().satisfies(diagnostic ->
                     assertThat(diagnostic.code()).isEqualTo("SEMANTIC_SYMBOL_SHADOWING"));
+            assertThat(success.compiledExpression().asAssignments().compute())
+                    .isEqualTo(Map.of("x", new BigDecimal("1")));
         });
     }
 

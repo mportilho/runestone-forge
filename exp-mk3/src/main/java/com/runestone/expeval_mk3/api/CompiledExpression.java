@@ -24,6 +24,7 @@ public final class CompiledExpression {
     }
 
     public Object compute(Map<String, ?> overrides) {
+        ExpressionViewSupport.requireResultType(plan);
         return plan.compute(overrides, runtimeServices.clock());
     }
 
@@ -41,5 +42,9 @@ public final class CompiledExpression {
 
     public LogicalExpression asLogical() {
         return new LogicalExpression(plan, runtimeServices);
+    }
+
+    public AssignmentsExpression asAssignments() {
+        return new AssignmentsExpression(plan, runtimeServices);
     }
 }

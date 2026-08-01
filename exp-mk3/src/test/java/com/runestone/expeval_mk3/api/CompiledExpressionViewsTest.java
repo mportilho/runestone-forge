@@ -1,14 +1,5 @@
 package com.runestone.expeval_mk3.api;
 
-import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildSuccess;
-import com.runestone.expeval_mk3.internal.ast.SemanticAstBuilder;
-import com.runestone.expeval_mk3.internal.parser.ExpressionParser;
-import com.runestone.expeval_mk3.internal.parser.ParseSuccess;
-import com.runestone.expeval_mk3.internal.plan.ExecutionPlan;
-import com.runestone.expeval_mk3.internal.plan.ExecutionPlanBuilder;
-import com.runestone.expeval_mk3.internal.runtime.RuntimeServices;
-import com.runestone.expeval_mk3.internal.semantics.SemanticResolutionSuccess;
-import com.runestone.expeval_mk3.internal.semantics.SemanticResolver;
 import com.runestone.expeval_mk3.support.EnvironmentConfigurations;
 import org.junit.jupiter.api.Test;
 
@@ -185,7 +176,7 @@ class CompiledExpressionViewsTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
-        CompiledExpression expression = compiledExpressionForAssignmentsOnlySource("x := markNumber();", environment);
+        CompiledExpression expression = ExpressionCompiler.compileOrThrow("x := markNumber();", environment);
 
         assertThatThrownBy(expression::asResult)
                 .isInstanceOfSatisfying(ExpressionViewException.class, exception -> {
@@ -230,23 +221,6 @@ class CompiledExpressionViewsTest {
         } catch (ReflectiveOperationException exception) {
             throw new RuntimeException(exception);
         }
-    }
-
-    /**
-     * Builds a {@code CompiledExpression} for an assignments-only source, bypassing
-     * {@link ExpressionCompiler}'s current rejection of such files at compile time, so the views'
-     * defensive {@link ExpressionViewException.Reason#NO_RESULT_EXPRESSION} handling can be exercised
-     * against a genuine no-result {@code ExecutionPlan}.
-     */
-    private static CompiledExpression compiledExpressionForAssignmentsOnlySource(
-            String source, ExpressionEnvironment environment) {
-        ParseSuccess parseSuccess = (ParseSuccess) new ExpressionParser().parse(source);
-        SemanticAstBuildSuccess astSuccess =
-                (SemanticAstBuildSuccess) new SemanticAstBuilder().build(parseSuccess);
-        SemanticResolutionSuccess resolutionSuccess =
-                (SemanticResolutionSuccess) new SemanticResolver().resolve(astSuccess.file(), environment);
-        ExecutionPlan plan = new ExecutionPlanBuilder().build(resolutionSuccess.model(), environment);
-        return new CompiledExpression(plan, RuntimeServices.systemDefault(), resolutionSuccess.warnings());
     }
 
     public static final class CountingFunctions {

@@ -11,6 +11,7 @@ import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 
 import java.time.Clock;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -31,6 +32,7 @@ public final class ExecutionPlan {
     private final Map<String, ExternalBindingPlan> bindingsByName;
     private final List<ExternalSymbol> declaredSymbolsInCanonicalOrder;
     private final Set<String> declaredSymbolNames;
+    private final List<AssignedSymbol> assignedSymbolsInCreationOrder;
     private final Object[] frameTemplate;
     private final BoundaryCoercion boundaryCoercion;
     private final ZoneId zoneId;
@@ -42,6 +44,7 @@ public final class ExecutionPlan {
             List<AssignmentExecutable> assignments,
             List<ExternalBindingPlan> externalBindings,
             List<ExternalSymbol> declaredSymbolsInCanonicalOrder,
+            List<AssignedSymbol> assignedSymbolsInCreationOrder,
             int frameSize,
             BoundaryCoercion boundaryCoercion,
             ZoneId zoneId,
@@ -53,6 +56,7 @@ public final class ExecutionPlan {
         this.resultType = resultType;
         this.assignments = List.copyOf(assignments);
         this.externalBindings = List.copyOf(externalBindings);
+        this.assignedSymbolsInCreationOrder = List.copyOf(assignedSymbolsInCreationOrder);
         bindingsByName = this.externalBindings.stream()
                 .collect(Collectors.toUnmodifiableMap(binding -> binding.symbol().name(), binding -> binding));
         this.declaredSymbolsInCanonicalOrder = List.copyOf(declaredSymbolsInCanonicalOrder);
@@ -91,6 +95,14 @@ public final class ExecutionPlan {
         return maxMaterializedSize;
     }
 
+    /**
+     * Every internal symbol reachable through the assignments view, in first-creation source order.
+     * Reassignment reuses the same frame slot and does not move a symbol's position.
+     */
+    public List<AssignedSymbol> assignedSymbolsInCreationOrder() {
+        return assignedSymbolsInCreationOrder;
+    }
+
     List<AssignmentExecutable> assignments() {
         return assignments;
     }
@@ -107,6 +119,19 @@ public final class ExecutionPlan {
     public Object compute(Map<String, ?> overrides, Clock clock) {
         ExecutionScope scope = prepare(overrides, clock);
         return resultExpression == null ? null : resultExpression.execute(scope);
+    }
+
+    /**
+     * Runs assignments in source order only, deliberately skipping any final result expression, and
+     * returns each assigned symbol's final raw value in {@link #assignedSymbolsInCreationOrder()} order.
+     */
+    public List<Object> computeAssignedValues(Map<String, ?> overrides, Clock clock) {
+        ExecutionScope scope = prepare(overrides, clock);
+        List<Object> values = new ArrayList<>(assignedSymbolsInCreationOrder.size());
+        for (AssignedSymbol symbol : assignedSymbolsInCreationOrder) {
+            values.add(scope.read(symbol.frameSlot()));
+        }
+        return values;
     }
 
     private ExecutionScope prepare(Map<String, ?> overrides, Clock clock) {
