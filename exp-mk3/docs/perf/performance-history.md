@@ -1,5 +1,89 @@
 # Performance History
 
+## 2026-08-02 - Issue 111 Phase 6 Navigation Characterization Baseline
+
+Purpose: record a reproducible Phase 6 characterization baseline — not a before/after optimization
+claim and not a CI performance gate — for the four navigation constructs Phase 8's specialization
+work targets: filter, subscript/slice, property-and-method chain over a registered Java type, and
+two-level nested lambda. No pass/fail threshold or comparison is attached; that belongs to Phases
+7-9 and 12 per the issue's briefing.
+
+Benchmark: `Phase6NavigationBenchmark` (`exp-mk3/src/test/java/com/runestone/expeval_mk3/perf/jmh`).
+
+Six cases:
+
+- `filter` — `items := [1, 2, 3, 4, 5, 6, 7, 8]; items[?(@ > 4)]` compiled once in
+  `@Setup(Level.Trial)` to a `ResultExpression` over `ExpressionEnvironment.standard()`, then
+  `compute()` measured per operation (filter predicate `[?(@ > k)]`).
+- `subscript` — `items := [1, 2, 3, 4, 5, 6, 7, 8]; items[4]`, same environment, single-index
+  access.
+- `slice` — `items := [1, 2, 3, 4, 5, 6, 7, 8]; items[2:6]`, same environment, closed-range slice.
+- `propertyChain` — `customer.address.city`, a two-level property chain over a registered Java
+  record type (`CustomerProfile` holding a nested `Address` record), both registered via
+  `registerJavaTypeWithPublicMethods`/`registerJavaType` and the `customer` external symbol fixed
+  to a `CustomerProfile` instance.
+- `methodChain` — `customer.scorePlus(customer.score)`, a method call whose argument is itself a
+  property read, over the same registered `CustomerProfile` type.
+- `nestedLambda` — `outer := [[1, 2], [3, 4]]; outer.map(@ -> @.map(@ -> @ + 1))`, two levels of
+  nested `@` current-item binding, requiring `maxCurrentItemDepth` above `2`; the benchmark sets it
+  to `3` explicitly (the environment-wide default is `32`; the corpus's semantic-error case
+  deliberately caps it at `1` to trigger `SEMANTIC_CURRENT_ITEM_DEPTH_EXCEEDED`, which this
+  benchmark avoids).
+
+All benchmark results are consumed through a JMH `Blackhole` so the JVM cannot eliminate the work.
+Compilation happens once per trial in `@Setup(Level.Trial)`; only `compute()` is measured.
+
+Command used:
+
+```bash
+mvn -q -N install
+mvn -q -pl runestone-toolkit -am install -DskipTests
+mvn -q -pl exp-mk3 -am clean test-compile -DskipTests
+cd exp-mk3 && mvn -q dependency:build-classpath -Dmdep.outputFile="target/jmh-cp.txt" -DincludeScope=test && cd ..
+java -cp "runestone-toolkit/target/classes:exp-mk3/target/test-classes:exp-mk3/target/classes:$(tr -d '\n' < exp-mk3/target/jmh-cp.txt)" \
+  org.openjdk.jmh.Main "Phase6NavigationBenchmark" \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/performance-benchmark/exp-mk3-phase6-navigation-issue-111.json" \
+  -foe true
+```
+
+Environment:
+
+- Commit: `01978023ef7846139001cf1c0e921efdd9f09562`
+- JDK: OpenJDK 26.0.1 (Homebrew build, mixed mode, sharing)
+- JMH: 1.37
+- OS: Linux 7.0.0-28-generic x86_64
+- JVM args: `-Xms1g -Xmx1g`
+- Warmup: 5 iterations, 500 ms each
+- Measurement: 10 iterations, 500 ms each
+- Forks: 3
+- Profiler: `gc`
+
+Results:
+
+| Benchmark | Score | Error | Units | B/op |
+|---|---:|---:|---|---:|
+| `filter` | 430.55 | 32.33 | ns/op | 488.0 |
+| `subscript` | 150.07 | 7.82 | ns/op | 240.0 |
+| `slice` | 298.14 | 13.39 | ns/op | 512.0 |
+| `propertyChain` | 41.11 | 1.05 | ns/op | 56.0 |
+| `methodChain` | 226.92 | 7.21 | ns/op | 314.7 |
+| `nestedLambda` | 625.10 | 17.70 | ns/op | 1106.7 |
+
+Verdict: characterization recorded, all six cases measured from the same run protocol and
+environment so the table is internally comparable. `propertyChain` at ~41 ns/op is the cheapest
+case (single `MethodHandle`-adapted accessor hop); `subscript` and `methodChain` sit in the
+150-230 ns/op range; `slice` and `filter` cost more (298 and 431 ns/op) consistent with allocating
+a new materialized collection per call; `nestedLambda` is the most expensive case at ~625 ns/op and
+~1107 B/op, consistent with two levels of lambda invocation plus an inner collection allocation per
+outer element. No pass/fail threshold or CI gate is attached to these numbers; this is a reference
+point for Phase 8's specialization work on these constructs. Generated JSON was inspected during
+analysis and is not versioned here.
+
+`mvn -pl exp-mk3 -am test` was run and green both before this benchmark was added and again after,
+confirming the functional/concurrency gate was unaffected.
+
 ## 2026-08-01 - Issue 105 Phase 5 JMH Baseline
 
 Purpose: record a reproducible Phase 5 baseline — not a before/after optimization claim and not a
