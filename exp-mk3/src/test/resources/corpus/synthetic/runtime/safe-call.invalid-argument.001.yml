@@ -1,0 +1,22 @@
+id: runtime.safe-call.invalid-argument.001
+phase: runtime
+kind: invalid
+source: 'provider?.echo(atributos?.["ausente"]) ?? 0'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    provider:
+      type: OBJECT_NAVIGATION_CONTRACT_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+    atributos:
+      type: MAP_NUMBER
+      default:
+        a: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+coverage: [identifier, call, safe-navigation, subscript-key, string-literal, coalesce, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED

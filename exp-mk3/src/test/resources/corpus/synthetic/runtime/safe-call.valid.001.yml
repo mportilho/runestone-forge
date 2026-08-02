@@ -1,0 +1,16 @@
+id: runtime.safe-call.valid.001
+phase: runtime
+kind: valid
+source: 'provider?.describe() ?? "x"'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    provider:
+      type: OBJECT_NAVIGATION_CONTRACT_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, call, safe-navigation, coalesce, string-literal]
+expected:
+  type: STRING
+  result: "described"

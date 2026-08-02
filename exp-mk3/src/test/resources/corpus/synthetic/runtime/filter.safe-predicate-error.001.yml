@@ -1,0 +1,23 @@
+id: runtime.filter.safe-predicate-error.001
+phase: runtime
+kind: invalid
+source: 'items?.[?(degree root @ > 0)] ?? []'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    items:
+      type: COLLECTION_NUMBER
+      default: [{type: NUMBER, value: "1"}, {type: NUMBER, value: "2"}]
+      overwritePolicy: FIXED
+    degree:
+      type: NUMBER
+      default: {type: NUMBER, value: "1"}
+      overwritePolicy: OVERRIDABLE
+inputs:
+  degree: {type: NUMBER, value: "0"}
+coverage: [identifier, filter, at-symbol, root, comparison, safe-navigation, coalesce, empty-collection, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_ROOT_UNDEFINED
+    span: {offset: 10, endOffset: 23, line: 1, column: 11}

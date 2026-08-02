@@ -41,4 +41,36 @@ class NestedCurrentItemRestorationTest {
         assertThat(expression.compute(Map.of("outer", healthyInput)))
                 .isEqualTo(List.of(new BigDecimal("3"), new BigDecimal("10")));
     }
+
+    /**
+     * Extends the same proof to three levels of nesting at {@code maxCurrentItemDepth}'s exact boundary:
+     * each level uses its own frame slot, the computed sums only match if every level's {@code @} bound the
+     * correct element, and a mid-iteration failure at the innermost level must still restore all three slots
+     * before the shared plan is reused for a healthy call.
+     */
+    @Test
+    void aThreeLevelNestingAtTheDepthLimitRestoresEveryFrameAfterAMidIterationFailure() {
+        CollectionType tripleNestedNumberCollection =
+                new CollectionType(new CollectionType(new CollectionType(ScalarType.NUMBER)));
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .maxCurrentItemDepth(3)
+                .externalSymbol("outer", tripleNestedNumberCollection,
+                        List.of(List.of(List.of(BigDecimal.ONE))),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+                        "outer.map(@ -> @.map(@ -> @.map(@ -> 100 / @).sum()).sum())", environment)
+                .asResult();
+
+        List<List<List<BigDecimal>>> failingInput = List.of(
+                List.of(List.of(BigDecimal.TEN, BigDecimal.ZERO)));
+        assertThatThrownBy(() -> expression.compute(Map.of("outer", failingInput)))
+                .isInstanceOf(ExpressionExecutionException.class);
+
+        List<List<List<BigDecimal>>> healthyInput = List.of(
+                List.of(List.of(BigDecimal.TEN, BigDecimal.valueOf(2)), List.of(BigDecimal.valueOf(4))),
+                List.of(List.of(BigDecimal.valueOf(5))));
+        assertThat(expression.compute(Map.of("outer", healthyInput)))
+                .isEqualTo(List.of(new BigDecimal("85"), new BigDecimal("20")));
+    }
 }

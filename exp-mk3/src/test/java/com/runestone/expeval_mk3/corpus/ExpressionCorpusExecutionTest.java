@@ -161,13 +161,30 @@ class ExpressionCorpusExecutionTest {
     private static void applyJavaObjectSymbol(
             ExpressionEnvironment.Builder builder, String symbolName, String type, JsonNode declaration) {
         if ("OBJECT_COLLECTION_METHOD_PROVIDER".equals(type)) {
-            // This provider declares a method, not wildcard children, so it reads no child list.
+            // This provider declares methods, not wildcard children, so it reads no child list.
             builder
                     .registerJavaTypeMethod(CollectionMethodProvider.class, "itens")
+                    .registerJavaTypeMethod(CollectionMethodProvider.class, "valores")
+                    .registerJavaTypeMethod(CollectionMethodProvider.class, "mapa")
                     .externalSymbol(
                             symbolName,
                             new ObjectType(CollectionMethodProvider.class.getName()),
                             new CollectionMethodProvider(),
+                            ExternalSymbolOverwritePolicy.FIXED);
+            return;
+        }
+        if ("OBJECT_NAVIGATION_CONTRACT_PROVIDER".equals(type)) {
+            builder
+                    .registerJavaType(NavigationContractProvider.class)
+                    .registerJavaTypeMethod(NavigationContractProvider.class, "describe")
+                    .registerJavaTypeMethod(NavigationContractProvider.class, "fail")
+                    .registerJavaTypeMethod(NavigationContractProvider.class, "echo", BigDecimal.class)
+                    .registerJavaTypeMethod(NavigationContractProvider.class, "attributes")
+                    .registerJavaTypeMethod(CollectionMethodProvider.class, "itens")
+                    .externalSymbol(
+                            symbolName,
+                            new ObjectType(NavigationContractProvider.class.getName()),
+                            new NavigationContractProvider(),
                             ExternalSymbolOverwritePolicy.FIXED);
             return;
         }
@@ -354,12 +371,65 @@ class ExpressionCorpusExecutionTest {
                     new BigDecimal("4"),
                     new BigDecimal("5"));
         }
+
+        public BigDecimal[] valores() {
+            return new BigDecimal[] {BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3")};
+        }
+
+        public Map<String, BigDecimal> mapa() {
+            Map<String, BigDecimal> values = new LinkedHashMap<>();
+            values.put("a", BigDecimal.ONE);
+            values.put("b", new BigDecimal("2"));
+            return values;
+        }
     }
 
     public static final class FailingWildcardChildProvider {
 
         public BigDecimal first() {
             throw new IllegalStateException("first failed");
+        }
+    }
+
+    /**
+     * Deliberately violates the registered-member non-null contract and the invocation-failure boundary so
+     * a safe navigation link over each member form (property, call, argument, nested receiver) proves it
+     * does not mask the corresponding runtime or semantic failure.
+     */
+    public static final class NavigationContractProvider {
+
+        public String getName() {
+            return "Ana";
+        }
+
+        public String getMissing() {
+            return null;
+        }
+
+        public String getBroken() {
+            throw new IllegalStateException("broken accessor");
+        }
+
+        public CollectionMethodProvider getCatalog() {
+            return new CollectionMethodProvider();
+        }
+
+        public String describe() {
+            return "described";
+        }
+
+        public String fail() {
+            throw new IllegalStateException("call failed");
+        }
+
+        public BigDecimal echo(BigDecimal value) {
+            return value;
+        }
+
+        public Map<String, BigDecimal> attributes() {
+            Map<String, BigDecimal> values = new LinkedHashMap<>();
+            values.put("present", null);
+            return values;
         }
     }
 }

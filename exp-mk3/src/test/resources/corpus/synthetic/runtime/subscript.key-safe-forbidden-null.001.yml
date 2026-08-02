@@ -1,0 +1,17 @@
+id: runtime.subscript.key-safe-forbidden-null.001
+phase: runtime
+kind: invalid
+source: 'provider.attributes()?.["present"] ?? 0'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    provider:
+      type: OBJECT_NAVIGATION_CONTRACT_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, call, subscript-key, string-literal, safe-navigation, coalesce, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_FORBIDDEN_NULL
+    span: {offset: 21, endOffset: 34, line: 1, column: 22}

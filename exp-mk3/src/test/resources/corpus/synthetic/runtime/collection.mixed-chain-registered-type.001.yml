@@ -1,0 +1,16 @@
+id: runtime.collection.mixed-chain-registered-type.001
+phase: runtime
+kind: valid
+source: 'provider.catalog.itens()[0:4][?(@ > 1)].sum()'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    provider:
+      type: OBJECT_NAVIGATION_CONTRACT_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, property-access, call, subscript-slice, filter, at-symbol, comparison]
+expected:
+  type: NUMBER
+  result: "9"

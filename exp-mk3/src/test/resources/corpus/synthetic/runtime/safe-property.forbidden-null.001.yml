@@ -1,0 +1,17 @@
+id: runtime.safe-property.forbidden-null.001
+phase: runtime
+kind: invalid
+source: 'provider?.missing ?? "x"'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    provider:
+      type: OBJECT_NAVIGATION_CONTRACT_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, property-access, safe-navigation, coalesce, string-literal, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_FORBIDDEN_NULL
+    span: {offset: 8, endOffset: 17, line: 1, column: 9}

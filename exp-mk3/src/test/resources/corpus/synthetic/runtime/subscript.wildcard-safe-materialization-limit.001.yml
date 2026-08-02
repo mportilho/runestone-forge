@@ -1,0 +1,17 @@
+id: runtime.subscript.wildcard-safe-materialization-limit.001
+phase: runtime
+kind: invalid
+source: 'obj.itens()?.[*] ?? []'
+environment:
+  maxMaterializedSize: 3
+  maxFactorialInput: 32
+  symbols:
+    obj:
+      type: OBJECT_COLLECTION_METHOD_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, call, wildcard, safe-navigation, coalesce, empty-collection, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED
+    span: {offset: 11, endOffset: 16, line: 1, column: 12}

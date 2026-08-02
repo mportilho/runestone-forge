@@ -1,0 +1,21 @@
+id: runtime.nullability.chain-property-safe.001
+phase: runtime
+kind: valid
+source: 'provider?.catalog?.itens() ?? []'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    provider:
+      type: OBJECT_NAVIGATION_CONTRACT_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, property-access, call, safe-navigation, coalesce, empty-collection]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "1"}
+    - {type: NUMBER, value: "2"}
+    - {type: NUMBER, value: "3"}
+    - {type: NUMBER, value: "4"}
+    - {type: NUMBER, value: "5"}

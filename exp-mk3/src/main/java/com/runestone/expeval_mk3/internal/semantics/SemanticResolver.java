@@ -1035,7 +1035,10 @@ public final class SemanticResolver {
                     nullableDiagnostic(
                             DiagnosticCode.SEMANTIC_NULLABLE_RECEIVER_NOT_ALLOWED,
                             "Navigation receiver may be null at runtime",
-                            currentReceiverSpan);
+                            currentReceiverSpan,
+                            "A '?.' link does not propagate to the rest of the chain: every step after a "
+                                    + "nullable receiver needs its own safe link, e.g. 'a?.b?.c', or the nullable "
+                                    + "value must be discharged before continuing, e.g. '(a?.b ?? d).c'");
                     return Resolution.invalidResolution();
                 }
                 LinkResolution linkResolution = resolveNavigationLink(
@@ -2015,9 +2018,13 @@ public final class SemanticResolver {
         }
 
         private void nullableDiagnostic(DiagnosticCode code, String message, SourceSpan span) {
+            nullableDiagnostic(code, message, span, "Discharge the possible null value with '??' before using it here");
+        }
+
+        private void nullableDiagnostic(DiagnosticCode code, String message, SourceSpan span, String suggestion) {
             diagnostics.add(ExpressionDiagnostic.builder(DiagnosticCategory.SEMANTIC, DiagnosticSeverity.ERROR, code.name(), message)
                     .primarySpan(span)
-                    .suggestion("Discharge the possible null value with '??' before using it here")
+                    .suggestion(suggestion)
                     .build());
         }
 

@@ -402,6 +402,23 @@ class SemanticResolverTest {
     }
 
     @Test
+    void nonPropagationDiagnosticSuggestsBothTheSafeChainAndTheDischargeRewrite() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(new CollectionType(ScalarType.NUMBER)),
+                        Map.of("a", List.of(BigDecimal.ONE)), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast("(m?.[\"a\"][0]) ?? 0"), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure ->
+                assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic -> {
+                    assertThat(diagnostic.suggestion()).isPresent();
+                    String suggestion = diagnostic.suggestion().orElseThrow();
+                    assertThat(suggestion).contains("a?.b?.c").contains("(a?.b ?? d).c");
+                }));
+    }
+
+    @Test
     void rejectsNullableFilterPredicateWithoutDischarge() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol(

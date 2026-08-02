@@ -1,0 +1,17 @@
+id: runtime.safe-property.unknown-member.001
+phase: runtime
+kind: invalid
+source: 'provider?.unknown'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    provider:
+      type: OBJECT_NAVIGATION_CONTRACT_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, property-access, safe-navigation, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_UNKNOWN_MEMBER
