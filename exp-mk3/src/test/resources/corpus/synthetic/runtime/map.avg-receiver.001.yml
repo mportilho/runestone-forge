@@ -16,4 +16,4 @@ coverage: [identifier, call, diagnostic]
 expected:
   diagnostic:
     category: SEMANTIC
-    code: SEMANTIC_OPERATOR_TYPE_MISMATCH
+    code: SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED

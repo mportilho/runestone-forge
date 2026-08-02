@@ -9,4 +9,4 @@ coverage: [assignment, collection-literal, string-literal, identifier, call, dia
 expected:
   diagnostic:
     category: SEMANTIC
-    code: SEMANTIC_OPERATOR_TYPE_MISMATCH
+    code: SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED

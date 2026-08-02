@@ -16,4 +16,4 @@ coverage: [identifier, call, lambda, at-symbol, collection-literal, diagnostic]
 expected:
   diagnostic:
     category: SEMANTIC
-    code: SEMANTIC_OPERATOR_TYPE_MISMATCH
+    code: SEMANTIC_OPERATION_ARGUMENT_MISMATCH

@@ -643,7 +643,7 @@ class SemanticResolverTest {
 
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure ->
                 assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic ->
-                        assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL.name())));
+                        assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_UNKNOWN_MEMBER.name())));
     }
 
     @Test
@@ -701,7 +701,38 @@ class SemanticResolverTest {
 
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure ->
                 assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic ->
-                        assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL.name())));
+                        assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_UNKNOWN_MEMBER.name())));
+    }
+
+    @Test
+    void rejectsMethodCallOnMapEntryWithoutLeakingItsInternalClassName() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE),
+                        ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast("m.map(@ -> @.badMethod())"), environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure ->
+                assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_UNKNOWN_MEMBER.name());
+                    assertThat(diagnostic.message()).doesNotContain("com.runestone").contains("@.k").contains("@.v");
+                }));
+    }
+
+    @Test
+    void rejectsMethodCallOnReductionItemWithoutLeakingItsInternalClassName() {
+        SemanticResolutionResult result = new SemanticResolver()
+                .resolve(ast("items := [1]; items.reduce(0, @ -> @.badMethod())"), ExpressionEnvironment.standard());
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure ->
+                assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic -> {
+                    assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_UNKNOWN_MEMBER.name());
+                    assertThat(diagnostic.message())
+                            .doesNotContain("com.runestone")
+                            .contains("@.accumulator")
+                            .contains("@.item");
+                }));
     }
 
     @Test
@@ -838,7 +869,8 @@ class SemanticResolverTest {
 
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionFailure.class, failure ->
                 assertThat(failure.diagnostics()).singleElement().satisfies(diagnostic ->
-                        assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH.name())));
+                        assertThat(diagnostic.code())
+                                .isEqualTo(DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED.name())));
     }
 
     public static final class ImpureFunctions {

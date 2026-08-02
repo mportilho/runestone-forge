@@ -4,4 +4,4 @@ kind: invalid
 source: 'items := [1]; items.reduce(0)'
 coverage: [assignment, collection-literal, identifier, call, diagnostic]
 expected:
-  diagnostic: {category: SEMANTIC, code: SEMANTIC_OPERATOR_TYPE_MISMATCH}
+  diagnostic: {category: SEMANTIC, code: SEMANTIC_OPERATION_ARGUMENT_MISMATCH}

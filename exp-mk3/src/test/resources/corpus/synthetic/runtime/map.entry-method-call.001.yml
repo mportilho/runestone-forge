@@ -1,7 +1,7 @@
-id: semantic.map.sort-by-receiver.001
+id: semantic.map.entry-method-call.001
 phase: semantic
 kind: invalid
-source: 'm.sortBy(@ -> @.v, "asc")'
+source: 'm.map(@ -> @.badMethod())'
 environment:
   maxMaterializedSize: 256
   maxFactorialInput: 32
@@ -12,8 +12,9 @@ environment:
         b: {type: NUMBER, value: "2"}
         A: {type: NUMBER, value: "1"}
       overwritePolicy: FIXED
-coverage: [identifier, call, lambda, at-symbol, property-access, string-literal, diagnostic]
+coverage: [identifier, call, lambda, at-symbol, diagnostic]
 expected:
   diagnostic:
     category: SEMANTIC
-    code: SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED
+    code: SEMANTIC_UNKNOWN_MEMBER
+    span: {offset: 12, endOffset: 24, line: 1, column: 13}

@@ -1109,6 +1109,12 @@ public final class SemanticResolver {
                 return resolveProperty(property, receiverType, receiverPure, contextualMembers);
             }
             if (link instanceof CallNavigationLink call) {
+                if (receiverType == MAP_ENTRY_TYPE) {
+                    return resolveContextualMemberCall(call, "Map entry exposes only @.k and @.v");
+                }
+                if (receiverType == REDUCTION_ITEM_TYPE) {
+                    return resolveContextualMemberCall(call, "Reduction item exposes only @.accumulator and @.item");
+                }
                 if (receiverType instanceof ObjectType objectType) {
                     return resolveRegisteredMethod(call, objectType, receiverPure);
                 }
@@ -1128,7 +1134,7 @@ public final class SemanticResolver {
                 boolean receiverPure) {
             if (!(receiverType instanceof CollectionType collectionType)) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED,
                         "Index subscript requires a collection receiver",
                         index.sourceSpan());
                 return LinkResolution.invalidResolution();
@@ -1164,7 +1170,7 @@ public final class SemanticResolver {
                 boolean receiverPure) {
             if (!(receiverType instanceof CollectionType collectionType)) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED,
                         "Slice subscript requires a collection receiver",
                         slice.sourceSpan());
                 return LinkResolution.invalidResolution();
@@ -1195,7 +1201,7 @@ public final class SemanticResolver {
                 boolean receiverPure) {
             if (!(receiverType instanceof MapType mapType)) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED,
                         "String key subscript requires a map receiver",
                         stringKey.sourceSpan());
                 return LinkResolution.invalidResolution();
@@ -1214,7 +1220,7 @@ public final class SemanticResolver {
         private LinkResolution resolveFilter(FilterNavigationLink filter, ExpressionType receiverType, boolean receiverPure) {
             if (!(receiverType instanceof CollectionType collectionType)) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED,
                         "Filter requires a collection receiver",
                         filter.sourceSpan());
                 return LinkResolution.invalidResolution();
@@ -1231,7 +1237,11 @@ public final class SemanticResolver {
                     "@" + depth, collectionType.elementType(), currentItemFrameSlot(depth));
             symbolBindings.put(filter.id(), currentItem);
             currentItemBindings.add(currentItem);
-            Resolution predicate = resolveExpression(filter.predicate(), ScalarType.BOOLEAN);
+            // Resolved untyped rather than hinted with the expected BOOLEAN type: a literal predicate
+            // would otherwise fail inside resolveLiteral's generic expected-type check and report
+            // SEMANTIC_OPERATOR_TYPE_MISMATCH instead of the classified diagnostic below, making the
+            // reported cause depend on whether the predicate happens to be a literal.
+            Resolution predicate = resolveExpression(filter.predicate(), null);
             currentItemBindings.remove(currentItemBindings.size() - 1);
             if (predicate.invalid() || predicate.pending()) {
                 invalidForPending(predicate);
@@ -1239,7 +1249,7 @@ public final class SemanticResolver {
             }
             if (predicate.type() != ScalarType.BOOLEAN) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_OPERATION_ARGUMENT_MISMATCH,
                         "Filter predicate must be boolean",
                         filter.predicate().sourceSpan());
                 return LinkResolution.invalidResolution();
@@ -1286,7 +1296,7 @@ public final class SemanticResolver {
                 JavaTypeDescriptor descriptor = environment.javaTypes().find(objectType).orElse(null);
                 if (descriptor == null || descriptor.wildcardChildType().isEmpty()) {
                     diagnostic(
-                            DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                            DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED,
                             "Object wildcard navigation requires explicitly registered homogeneous child members",
                             wildcard.sourceSpan());
                     return LinkResolution.invalidResolution();
@@ -1304,7 +1314,7 @@ public final class SemanticResolver {
                 resultShape = new CollectionShape(objectChildren.size());
             } else {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED,
                         "Wildcard navigation requires a collection, map, or registered object receiver",
                         wildcard.sourceSpan());
                 return LinkResolution.invalidResolution();
@@ -1345,7 +1355,7 @@ public final class SemanticResolver {
                 };
                 if (member == null) {
                     diagnostic(
-                            DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL,
+                            DiagnosticCode.SEMANTIC_UNKNOWN_MEMBER,
                             "Map entry exposes only @.k and @.v",
                             property.sourceSpan());
                     return LinkResolution.invalidResolution();
@@ -1370,7 +1380,7 @@ public final class SemanticResolver {
                 };
                 if (member == null) {
                     diagnostic(
-                            DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL,
+                            DiagnosticCode.SEMANTIC_UNKNOWN_MEMBER,
                             "Reduction item exposes only @.accumulator and @.item",
                             property.sourceSpan());
                     return LinkResolution.invalidResolution();
@@ -1387,7 +1397,7 @@ public final class SemanticResolver {
             }
             if (receiverType instanceof MapType) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED,
                         "Map values are accessed with a textual subscript, not a property",
                         property.sourceSpan());
                 return LinkResolution.invalidResolution();
@@ -1412,7 +1422,7 @@ public final class SemanticResolver {
                     : descriptor.findProperty(property.memberName().value()).orElse(null);
             if (propertyDescriptor == null) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL,
+                        DiagnosticCode.SEMANTIC_UNKNOWN_MEMBER,
                         "No registered property '" + property.memberName().value() + "' on " + objectType,
                         property.sourceSpan());
                 return LinkResolution.invalidResolution();
@@ -1472,7 +1482,7 @@ public final class SemanticResolver {
                             .orElse(null);
             if (methodDescriptor == null) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_UNKNOWN_SYMBOL,
+                        DiagnosticCode.SEMANTIC_UNKNOWN_MEMBER,
                         "No registered method '" + call.memberName().value() + "' on " + objectType
                                 + " for arguments " + argumentTypes,
                         call.sourceSpan());
@@ -1492,6 +1502,12 @@ public final class SemanticResolver {
             return LinkResolution.known(methodDescriptor.returnType(), null, nullability, methodPure);
         }
 
+        private LinkResolution resolveContextualMemberCall(CallNavigationLink call, String message) {
+            resolveUnsupportedOperationArguments(call);
+            diagnostic(DiagnosticCode.SEMANTIC_UNKNOWN_MEMBER, message, call.sourceSpan());
+            return LinkResolution.invalidResolution();
+        }
+
         private LinkResolution resolveCollectionOperation(
                 CallNavigationLink call,
                 ExpressionType receiverType,
@@ -1500,7 +1516,7 @@ public final class SemanticResolver {
             CollectionOperationCatalog.ReceiverKind receiverKind = receiverKind(receiverType);
             if (receiverKind == null) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED,
                         "Collection operation requires a collection or map receiver",
                         call.sourceSpan());
                 return LinkResolution.invalidResolution();
@@ -1510,14 +1526,14 @@ public final class SemanticResolver {
                     .orElse(null);
             if (descriptor == null) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_UNKNOWN_FUNCTION,
+                        DiagnosticCode.SEMANTIC_UNKNOWN_MEMBER,
                         "No collection operation registered for " + call.memberName().value(),
                         call.sourceSpan());
                 return LinkResolution.invalidResolution();
             }
             if (!descriptor.receivers().contains(receiverKind)) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED,
                         "Collection operation '" + descriptor.name() + "' is not compatible with receiver type",
                         call.sourceSpan());
                 return LinkResolution.invalidResolution();
@@ -1533,7 +1549,7 @@ public final class SemanticResolver {
             if (call.arguments().size() != descriptor.arguments().size()) {
                 resolveUnsupportedOperationArguments(call);
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_OPERATION_ARGUMENT_MISMATCH,
                         "Collection operation '" + descriptor.name() + "' does not accept these arguments",
                         call.sourceSpan());
                 return LinkResolution.invalidResolution();
@@ -1548,7 +1564,7 @@ public final class SemanticResolver {
                     && (!(receiverType instanceof CollectionType collectionType)
                     || collectionType.elementType() != ScalarType.NUMBER)) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED,
                         "Collection operation '" + descriptor.name() + "' requires numeric collection items",
                         call.sourceSpan());
                 return LinkResolution.invalidResolution();
@@ -1607,7 +1623,7 @@ public final class SemanticResolver {
                 if (!(argument instanceof LambdaCallArgument lambdaArgument)) {
                     resolveUnsupportedOperationArguments(call);
                     diagnostic(
-                            DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                            DiagnosticCode.SEMANTIC_OPERATION_ARGUMENT_MISMATCH,
                             "Collection operation '" + descriptor.name() + "' requires a lambda argument",
                             call.sourceSpan());
                     return OperationArgumentResolution.invalidResolution();
@@ -1630,20 +1646,24 @@ public final class SemanticResolver {
                 List<ExpressionType> valueArgumentTypes) {
             if (!(argument instanceof ExpressionCallArgument expressionArgument)) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_OPERATION_ARGUMENT_MISMATCH,
                         "Collection operation '" + descriptor.name() + "' requires a value argument",
                         call.sourceSpan());
                 return ValueArgumentResolution.invalidResolution();
             }
             ExpressionNode expression = expressionArgument.expression();
-            Resolution value = resolveExpression(expression, expectedArgumentType(contract, valueArgumentTypes));
+            // Resolved untyped rather than hinted with the contract's expected type: a literal argument
+            // would otherwise fail inside resolveLiteral's generic expected-type check and report
+            // SEMANTIC_OPERATOR_TYPE_MISMATCH instead of the classified diagnostic below, making the
+            // reported cause depend on whether the argument happens to be a literal.
+            Resolution value = resolveExpression(expression, null);
             if (value.invalid() || value.pending()) {
                 invalidForPending(value);
                 return ValueArgumentResolution.invalidResolution();
             }
             if (!typeMatches(contract, value.type(), valueArgumentTypes)) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_OPERATION_ARGUMENT_MISMATCH,
                         "Collection operation value argument is not compatible with its contract",
                         expression.sourceSpan());
                 return ValueArgumentResolution.invalidResolution();
@@ -1656,14 +1676,14 @@ public final class SemanticResolver {
             }
             if (containsContextualItem(value.type())) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_OPERATION_ARGUMENT_MISMATCH,
                         "Collection operation value argument must be a known source value",
                         expression.sourceSpan());
                 return ValueArgumentResolution.invalidResolution();
             }
             if (!valueConstraintMatches(contract, expression)) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_OPERATION_ARGUMENT_MISMATCH,
                         "Collection operation value argument violates its literal value constraint",
                         expression.sourceSpan());
                 return ValueArgumentResolution.invalidResolution();
@@ -1691,7 +1711,9 @@ public final class SemanticResolver {
                     currentItemSlot);
             symbolBindings.put(lambda.currentItem().id(), currentItem);
             currentItemBindings.add(currentItem);
-            Resolution body = resolveExpression(lambda.body(), expectedArgumentType(contract, valueArgumentTypes));
+            // Resolved untyped for the same reason as resolveValueArgument: a literal lambda body must
+            // not be pre-empted by resolveLiteral's generic expected-type check.
+            Resolution body = resolveExpression(lambda.body(), null);
             currentItemBindings.remove(currentItemBindings.size() - 1);
             if (body.invalid() || body.pending()) {
                 invalidForPending(body);
@@ -1699,7 +1721,7 @@ public final class SemanticResolver {
             }
             if (!typeMatches(contract, body.type(), valueArgumentTypes)) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_OPERATION_ARGUMENT_MISMATCH,
                         "Lambda result is not compatible with collection operation contract",
                         lambda.body().sourceSpan());
                 return LambdaResolution.invalidResolution();
@@ -1712,7 +1734,7 @@ public final class SemanticResolver {
             }
             if (containsContextualItem(body.type())) {
                 diagnostic(
-                        DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
+                        DiagnosticCode.SEMANTIC_OPERATION_ARGUMENT_MISMATCH,
                         "Lambda result must be a known source value",
                         lambda.body().sourceSpan());
                 return LambdaResolution.invalidResolution();
@@ -1720,17 +1742,6 @@ public final class SemanticResolver {
             RuntimeNullability bodyNullability = nullabilityOf(lambda.body().id());
             return LambdaResolution.valid(new CollectionOperationBinding.LambdaBinding(
                     lambda, body.type(), bodyNullability, currentItem.frameSlot(), purityOf(lambda.body().id())));
-        }
-
-        private static ExpressionType expectedArgumentType(
-                CollectionOperationCatalog.ArgumentContract contract,
-                List<ExpressionType> valueArgumentTypes) {
-            return switch (contract.typeRule()) {
-                case BOOLEAN -> ScalarType.BOOLEAN;
-                case STRING -> ScalarType.STRING;
-                case SAME_AS_ARGUMENT_0 -> valueArgumentTypes.getFirst();
-                case ANY_KNOWN_TYPE, ORDERABLE_SCALAR -> null;
-            };
         }
 
         private static boolean typeMatches(

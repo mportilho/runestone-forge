@@ -567,17 +567,17 @@ class ExpressionCompilerTest {
                         "items := [1]; items.reduce(0, @ -> \"x\")",
                         environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATION_ARGUMENT_MISMATCH"));
         assertThat(ExpressionCompiler.compile(
                         "items := [1]; items.sortBy(@ -> @, \"up\")",
                         environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATION_ARGUMENT_MISMATCH"));
         assertThat(ExpressionCompiler.compile(
                         "items := [true]; items.sortBy(@ -> @, \"asc\")",
                         environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATION_ARGUMENT_MISMATCH"));
         assertThat(ExpressionCompiler.compile(
                         "items := [1]; items.sortBy(@ -> items?.sum(), \"asc\")",
                         environment))
@@ -654,7 +654,7 @@ class ExpressionCompilerTest {
 
         assertThat(ExpressionCompiler.compile("items := [1]; items.all(@ -> @)", environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATION_ARGUMENT_MISMATCH"));
         assertThat(ExpressionCompiler.compile("items := [1]; items.map(@ -> items?.sum())", environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED"));
@@ -671,7 +671,7 @@ class ExpressionCompilerTest {
 
         assertThat(ExpressionCompiler.compile("m.map(@ -> [@])", environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATION_ARGUMENT_MISMATCH"));
         assertThat(ExpressionCompiler.compile("m.any(@ -> @ = @)", environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OBJECT_EQUALITY_NOT_SUPPORTED"));
@@ -899,22 +899,25 @@ class ExpressionCompilerTest {
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_UNKNOWN_FUNCTION"));
         assertThat(ExpressionCompiler.compile("items := [1]; items.keys()", environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+                        assertThat(failure.diagnostics().getFirst().code())
+                                .isEqualTo("SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED"));
         assertThat(ExpressionCompiler.compile("m.sum()", environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+                        assertThat(failure.diagnostics().getFirst().code())
+                                .isEqualTo("SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED"));
         assertThat(ExpressionCompiler.compile("texts := [\"x\"]; texts.sum()", environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+                        assertThat(failure.diagnostics().getFirst().code())
+                                .isEqualTo("SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED"));
         assertThat(ExpressionCompiler.compile("items := [1]; empty := items[1:1]; empty.avg()", environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
                         assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
         assertThat(ExpressionCompiler.compile("items := [1]; items.sum(2)", environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATION_ARGUMENT_MISMATCH"));
         assertThat(ExpressionCompiler.compile("items := [true]; items.all()", environment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH"));
+                        assertThat(failure.diagnostics().getFirst().code()).isEqualTo("SEMANTIC_OPERATION_ARGUMENT_MISMATCH"));
     }
 
     @Test
