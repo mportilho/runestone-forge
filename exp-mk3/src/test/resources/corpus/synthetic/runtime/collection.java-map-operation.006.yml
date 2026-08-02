@@ -1,0 +1,18 @@
+id: runtime.collection.java-map-operation.006
+phase: runtime
+kind: valid
+source: 'obj.mapa().map(@ -> @.v + 10)'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    obj:
+      type: OBJECT_COLLECTION_METHOD_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, call, lambda, at-symbol, property-access, additive]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "11"}
+    - {type: NUMBER, value: "12"}

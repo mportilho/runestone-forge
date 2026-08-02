@@ -1,0 +1,18 @@
+id: runtime.collection.java-map-operation.004
+phase: runtime
+kind: valid
+source: 'obj.mapa().keys()'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    obj:
+      type: OBJECT_COLLECTION_METHOD_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, call]
+expected:
+  type: COLLECTION
+  result:
+    - {type: STRING, value: "a"}
+    - {type: STRING, value: "b"}

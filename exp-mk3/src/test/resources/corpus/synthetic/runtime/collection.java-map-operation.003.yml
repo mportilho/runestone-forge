@@ -1,0 +1,16 @@
+id: runtime.collection.java-map-operation.003
+phase: runtime
+kind: valid
+source: 'obj.mapa().any(@ -> @.k = "b")'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    obj:
+      type: OBJECT_COLLECTION_METHOD_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, call, lambda, at-symbol, property-access, comparison, string-literal]
+expected:
+  type: BOOLEAN
+  result: true
