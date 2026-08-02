@@ -74,35 +74,56 @@ public final class ExpressionRuntime {
         }
     }
 
-    public static List<Object> materialize(List<ExecutableNode> elements, ExecutionScope scope) {
+    public static List<Object> materialize(List<ExecutableNode> elements, ExecutionScope scope, SourceSpan sourceSpan) {
         ArrayList<Object> values = new ArrayList<>(elements.size());
         for (ExecutableNode element : elements) {
-            values.add(Objects.requireNonNull(element.execute(scope), "collection element"));
+            values.add(requiredElement(element.execute(scope), sourceSpan));
         }
         return List.copyOf(values);
     }
 
-    public static Object indexedValue(Object receiver, BigInteger index) {
+    public static Object indexedValue(Object receiver, BigInteger index, boolean safe, SourceSpan sourceSpan) {
+        if (receiver == null) {
+            if (safe) {
+                return null;
+            }
+            throw nullReceiverInvariant(sourceSpan);
+        }
         List<?> values = (List<?>) receiver;
-        int resolvedIndex = SubscriptBounds.normalizedIndex(index, values.size());
-        return Objects.requireNonNull(values.get(resolvedIndex), "collection element");
+        int resolvedIndex = SubscriptBounds.normalizedIndexOrOutOfBounds(index, values.size());
+        if (resolvedIndex == SubscriptBounds.INDEX_OUT_OF_BOUNDS) {
+            // ADR 0018: an out-of-range index is legitimate absence on a safe link and a failure on a strict one.
+            if (safe) {
+                return null;
+            }
+            throw RuntimeFailures.subscriptOutOfBounds(index, values.size(), sourceSpan);
+        }
+        return requiredElement(values.get(resolvedIndex), sourceSpan);
     }
 
-    public static List<Object> slicedValues(
+    public static Object slicedValues(
             Object receiver,
             BigInteger startBound,
             BigInteger endBound,
-            int maxMaterializedSize) {
+            boolean safe,
+            int maxMaterializedSize,
+            SourceSpan sourceSpan) {
+        if (receiver == null) {
+            if (safe) {
+                return null;
+            }
+            throw nullReceiverInvariant(sourceSpan);
+        }
         List<?> values = (List<?>) receiver;
         int start = SubscriptBounds.normalizedSliceBound(startBound, values.size(), 0);
         int end = SubscriptBounds.normalizedSliceBound(endBound, values.size(), values.size());
         if (end < start) {
             end = start;
         }
-        requireMaterializedSize(end - start, maxMaterializedSize);
+        requireMaterializedSize(end - start, maxMaterializedSize, sourceSpan);
         ArrayList<Object> result = new ArrayList<>(end - start);
         for (int index = start; index < end; index++) {
-            result.add(Objects.requireNonNull(values.get(index), "collection element"));
+            result.add(requiredElement(values.get(index), sourceSpan));
         }
         return List.copyOf(result);
     }
@@ -114,33 +135,46 @@ public final class ExpressionRuntime {
             if (safe) {
                 return null;
             }
-            throw new NullPointerException("navigation receiver at " + sourceSpan);
+            throw nullReceiverInvariant(sourceSpan);
         }
         Map<?, ?> values = (Map<?, ?>) receiver;
         Object value = values.get(key);
         if (value == null) {
             if (!values.containsKey(key)) {
-                throw new IllegalArgumentException("map key not found: " + key + " at " + sourceSpan);
+                // ADR 0018: an absent key is legitimate absence on a safe link and a failure on a strict one.
+                if (safe) {
+                    return null;
+                }
+                throw RuntimeFailures.mapKeyNotFound(key, sourceSpan);
             }
-            throw new NullPointerException("map value at " + sourceSpan);
+            // A present key bound to null violates the map value contract on both link forms.
+            throw RuntimeFailures.forbiddenNull("map value must not be null: " + key, sourceSpan);
         }
         return value;
     }
 
-    public static List<Object> filteredValues(
+    public static Object filteredValues(
             Object receiver,
+            boolean safe,
             ExecutableNode predicate,
             int currentItemSlot,
             ExecutionScope scope,
-            int maxMaterializedSize) {
+            int maxMaterializedSize,
+            SourceSpan sourceSpan) {
+        if (receiver == null) {
+            if (safe) {
+                return null;
+            }
+            throw nullReceiverInvariant(sourceSpan);
+        }
         List<?> values = (List<?>) receiver;
         ArrayList<Object> result = new ArrayList<>();
         for (Object value : values) {
-            Object item = Objects.requireNonNull(value, "collection element");
+            Object item = requiredElement(value, sourceSpan);
             Object previous = scope.replace(currentItemSlot, item);
             try {
                 if (bool(predicate.execute(scope))) {
-                    requireMaterializedSize(result.size() + 1, maxMaterializedSize);
+                    requireMaterializedSize(result.size() + 1, maxMaterializedSize, sourceSpan);
                     result.add(item);
                 }
             } finally {
@@ -154,119 +188,141 @@ public final class ExpressionRuntime {
             Object receiver,
             boolean safe,
             WildcardNavigationBinding binding,
-            int maxMaterializedSize) {
+            int maxMaterializedSize,
+            SourceSpan sourceSpan) {
         if (receiver == null) {
             if (safe) {
                 return null;
             }
-            throw new NullPointerException("navigation receiver");
+            throw nullReceiverInvariant(sourceSpan);
         }
         return switch (binding.receiverKind()) {
-            case COLLECTION -> collectionWildcardValues(receiver, maxMaterializedSize);
-            case MAP -> mapWildcardValues(receiver, maxMaterializedSize);
-            case OBJECT -> objectWildcardValues(receiver, binding.objectChildren(), maxMaterializedSize);
+            case COLLECTION -> collectionWildcardValues(receiver, maxMaterializedSize, sourceSpan);
+            case MAP -> mapWildcardValues(receiver, maxMaterializedSize, sourceSpan);
+            case OBJECT -> objectWildcardValues(receiver, binding.objectChildren(), maxMaterializedSize, sourceSpan);
         };
     }
 
-    private static List<Object> collectionWildcardValues(Object receiver, int maxMaterializedSize) {
+    private static List<Object> collectionWildcardValues(
+            Object receiver, int maxMaterializedSize, SourceSpan sourceSpan) {
         List<?> values = (List<?>) receiver;
-        requireMaterializedSize(values.size(), maxMaterializedSize);
+        requireMaterializedSize(values.size(), maxMaterializedSize, sourceSpan);
         ArrayList<Object> result = new ArrayList<>(values.size());
         for (Object value : values) {
-            result.add(Objects.requireNonNull(value, "collection element"));
+            result.add(requiredElement(value, sourceSpan));
         }
         return List.copyOf(result);
     }
 
-    private static List<Object> mapWildcardValues(Object receiver, int maxMaterializedSize) {
+    private static List<Object> mapWildcardValues(Object receiver, int maxMaterializedSize, SourceSpan sourceSpan) {
         Map<?, ?> values = (Map<?, ?>) receiver;
-        requireMaterializedSize(values.size(), maxMaterializedSize);
+        requireMaterializedSize(values.size(), maxMaterializedSize, sourceSpan);
         ArrayList<String> keys = new ArrayList<>(values.size());
         for (Object key : values.keySet()) {
-            keys.add((String) Objects.requireNonNull(key, "map key"));
+            keys.add((String) requiredMapKey(key, sourceSpan));
         }
         Collections.sort(keys);
         ArrayList<Object> result = new ArrayList<>(keys.size());
         for (String key : keys) {
-            result.add(Objects.requireNonNull(values.get(key), "map value"));
+            result.add(requiredMapValue(values.get(key), sourceSpan));
         }
         return List.copyOf(result);
     }
 
+    @SuppressWarnings("removal")
     private static List<Object> objectWildcardValues(
             Object receiver,
             List<JavaWildcardChildDescriptor> children,
-            int maxMaterializedSize) {
-        requireMaterializedSize(children.size(), maxMaterializedSize);
+            int maxMaterializedSize,
+            SourceSpan sourceSpan) {
+        requireMaterializedSize(children.size(), maxMaterializedSize, sourceSpan);
         ArrayList<Object> result = new ArrayList<>(children.size());
         for (JavaWildcardChildDescriptor child : children) {
+            Object value;
             try {
-                result.add(Objects.requireNonNull(child.accessorHandle().invoke(receiver), "wildcard child value"));
-            } catch (RuntimeException | Error exception) {
-                throw exception;
+                value = child.accessorHandle().invoke(receiver);
+            } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                throw fatal;
             } catch (Throwable exception) {
-                // MethodHandle.invoke declares Throwable; this boundary preserves accessor failures.
-                throw new IllegalStateException("wildcard child accessor failed: " + child.name(), exception);
+                // MethodHandle.invoke declares Throwable; every nonfatal accessor failure is a member
+                // access failure, including one a safe link must not mask.
+                throw RuntimeFailures.memberAccessFailure(child.name(), sourceSpan, exception);
             }
+            result.add(requiredMemberValue(value, child.name(), sourceSpan));
         }
         return List.copyOf(result);
     }
 
+    @SuppressWarnings("removal")
     public static Object invokeRegisteredMethod(
             Object receiver,
             boolean safe,
             RegisteredMethodNavigationBinding binding,
             List<ExecutableNode> argumentNodes,
-            ExecutionScope scope) {
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
         if (receiver == null) {
             if (safe) {
                 return null;
             }
-            throw new NullPointerException("navigation receiver");
+            throw nullReceiverInvariant(sourceSpan);
         }
         Object[] arguments = new Object[argumentNodes.size() + 1];
         arguments[0] = receiver;
+        // Argument nodes run outside the invocation try block so a navigation failure inside an
+        // argument keeps its own diagnostic instead of being relabelled a member access failure.
         for (int index = 0; index < argumentNodes.size(); index++) {
-            arguments[index + 1] = Objects.requireNonNull(
-                    argumentNodes.get(index).execute(scope), "registered method argument");
+            Object argument = argumentNodes.get(index).execute(scope);
+            if (argument == null) {
+                throw RuntimeFailures.forbiddenNull(
+                        "registered method argument must not be null: "
+                                + binding.implementationMetadata().memberName(), sourceSpan);
+            }
+            arguments[index + 1] = argument;
         }
         try {
             return binding.invocationHandle().invokeWithArguments(arguments);
-        } catch (RuntimeException | Error exception) {
-            throw exception;
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
         } catch (Throwable exception) {
             // MethodHandle.invokeWithArguments declares Throwable; this boundary preserves method failures.
-            throw new IllegalStateException(
-                    "registered method invocation failed: " + binding.implementationMetadata().memberName(), exception);
+            throw RuntimeFailures.memberAccessFailure(
+                    binding.implementationMetadata().memberName(), sourceSpan, exception);
         }
     }
 
+    @SuppressWarnings("removal")
     public static Object registeredPropertyValue(
-            Object receiver, boolean safe, RegisteredPropertyNavigationBinding binding) {
+            Object receiver,
+            boolean safe,
+            RegisteredPropertyNavigationBinding binding,
+            SourceSpan sourceSpan) {
         if (receiver == null) {
             if (safe) {
                 return null;
             }
-            throw new NullPointerException("navigation receiver");
+            throw nullReceiverInvariant(sourceSpan);
         }
+        String memberName = binding.implementationMetadata().memberName();
+        Object value;
         try {
-            return Objects.requireNonNull(binding.accessorHandle().invoke(receiver), "registered property value");
-        } catch (RuntimeException | Error exception) {
-            throw exception;
+            value = binding.accessorHandle().invoke(receiver);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
         } catch (Throwable exception) {
             // MethodHandle.invoke declares Throwable; this boundary preserves accessor failures.
-            throw new IllegalStateException(
-                    "registered property accessor failed: " + binding.implementationMetadata().memberName(), exception);
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
         }
+        return requiredMemberValue(value, memberName, sourceSpan);
     }
 
     public static Object contextualMemberValue(
-            Object receiver, ContextualMemberNavigationBinding.Member member, boolean safe) {
+            Object receiver, ContextualMemberNavigationBinding.Member member, boolean safe, SourceSpan sourceSpan) {
         if (receiver == null) {
             if (safe) {
                 return null;
             }
-            throw new NullPointerException("navigation receiver");
+            throw nullReceiverInvariant(sourceSpan);
         }
         return switch (member) {
             case MAP_ENTRY_KEY -> ((MapEntryValue) receiver).key();
@@ -296,14 +352,15 @@ public final class ExpressionRuntime {
             MathContext mathContext,
             int maxMaterializedSize,
             ExecutableOperationArguments arguments,
-            ExecutionScope scope) {
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
         if (receiver == null) {
             if (safe) {
                 return null;
             }
-            throw new NullPointerException("navigation receiver");
+            throw nullReceiverInvariant(sourceSpan);
         }
-        return executor.execute(binding, receiver, mathContext, maxMaterializedSize, arguments, scope);
+        return executor.execute(binding, receiver, mathContext, maxMaterializedSize, arguments, scope, sourceSpan);
     }
 
     static Object executeAll(
@@ -312,8 +369,9 @@ public final class ExpressionRuntime {
             MathContext mathContext,
             int maxMaterializedSize,
             ExecutableOperationArguments arguments,
-            ExecutionScope scope) {
-        return all(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType());
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
+        return all(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType(), sourceSpan);
     }
 
     static Object executeAny(
@@ -322,8 +380,9 @@ public final class ExpressionRuntime {
             MathContext mathContext,
             int maxMaterializedSize,
             ExecutableOperationArguments arguments,
-            ExecutionScope scope) {
-        return any(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType());
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
+        return any(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType(), sourceSpan);
     }
 
     static Object executeCount(
@@ -332,7 +391,8 @@ public final class ExpressionRuntime {
             MathContext mathContext,
             int maxMaterializedSize,
             ExecutableOperationArguments arguments,
-            ExecutionScope scope) {
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
         return count(receiver);
     }
 
@@ -342,8 +402,9 @@ public final class ExpressionRuntime {
             MathContext mathContext,
             int maxMaterializedSize,
             ExecutableOperationArguments arguments,
-            ExecutionScope scope) {
-        return mapKeys(receiver, maxMaterializedSize);
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
+        return mapKeys(receiver, maxMaterializedSize, sourceSpan);
     }
 
     static Object executeValues(
@@ -352,8 +413,9 @@ public final class ExpressionRuntime {
             MathContext mathContext,
             int maxMaterializedSize,
             ExecutableOperationArguments arguments,
-            ExecutionScope scope) {
-        return mapValues(receiver, maxMaterializedSize);
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
+        return mapValues(receiver, maxMaterializedSize, sourceSpan);
     }
 
     static Object executeMap(
@@ -362,8 +424,10 @@ public final class ExpressionRuntime {
             MathContext mathContext,
             int maxMaterializedSize,
             ExecutableOperationArguments arguments,
-            ExecutionScope scope) {
-        return map(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType(), maxMaterializedSize);
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
+        return map(receiver, arguments.lambdaArguments().getFirst(), scope, binding.receiverType(),
+                maxMaterializedSize, sourceSpan);
     }
 
     static Object executeSum(
@@ -372,8 +436,9 @@ public final class ExpressionRuntime {
             MathContext mathContext,
             int maxMaterializedSize,
             ExecutableOperationArguments arguments,
-            ExecutionScope scope) {
-        return sum(receiver);
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
+        return sum(receiver, sourceSpan);
     }
 
     static Object executeAvg(
@@ -382,8 +447,9 @@ public final class ExpressionRuntime {
             MathContext mathContext,
             int maxMaterializedSize,
             ExecutableOperationArguments arguments,
-            ExecutionScope scope) {
-        return avg(receiver, mathContext);
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
+        return avg(receiver, mathContext, sourceSpan);
     }
 
     static Object executeReduce(
@@ -392,9 +458,10 @@ public final class ExpressionRuntime {
             MathContext mathContext,
             int maxMaterializedSize,
             ExecutableOperationArguments arguments,
-            ExecutionScope scope) {
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
         return reduce(receiver, arguments.valueArguments().getFirst().execute(scope),
-                arguments.lambdaArguments().getFirst(), scope);
+                arguments.lambdaArguments().getFirst(), scope, sourceSpan);
     }
 
     static Object executeSortBy(
@@ -403,27 +470,29 @@ public final class ExpressionRuntime {
             MathContext mathContext,
             int maxMaterializedSize,
             ExecutableOperationArguments arguments,
-            ExecutionScope scope) {
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
         return sortBy(receiver, (String) arguments.valueArguments().getFirst().execute(scope),
                 arguments.lambdaArguments().getFirst(), scope, maxMaterializedSize,
-                binding.sortKeyType());
+                binding.sortKeyType(), sourceSpan);
     }
 
     static boolean all(
             Object receiver,
             ExecutableLambda lambda,
             ExecutionScope scope,
-            ExpressionType receiverType) {
+            ExpressionType receiverType,
+            SourceSpan sourceSpan) {
         if (receiverType instanceof CollectionType) {
             for (Object value : (List<?>) receiver) {
-                if (!bool(lambda.execute(scope, Objects.requireNonNull(value, "collection element")))) {
+                if (!bool(lambda.execute(scope, requiredElement(value, sourceSpan)))) {
                     return false;
                 }
             }
             return true;
         }
         for (Map.Entry<?, ?> entry : ((Map<?, ?>) receiver).entrySet()) {
-            if (!bool(lambda.execute(scope, mapEntryValue(entry)))) {
+            if (!bool(lambda.execute(scope, mapEntryValue(entry, sourceSpan)))) {
                 return false;
             }
         }
@@ -434,17 +503,18 @@ public final class ExpressionRuntime {
             Object receiver,
             ExecutableLambda lambda,
             ExecutionScope scope,
-            ExpressionType receiverType) {
+            ExpressionType receiverType,
+            SourceSpan sourceSpan) {
         if (receiverType instanceof CollectionType) {
             for (Object value : (List<?>) receiver) {
-                if (bool(lambda.execute(scope, Objects.requireNonNull(value, "collection element")))) {
+                if (bool(lambda.execute(scope, requiredElement(value, sourceSpan)))) {
                     return true;
                 }
             }
             return false;
         }
         for (Map.Entry<?, ?> entry : ((Map<?, ?>) receiver).entrySet()) {
-            if (bool(lambda.execute(scope, mapEntryValue(entry)))) {
+            if (bool(lambda.execute(scope, mapEntryValue(entry, sourceSpan)))) {
                 return true;
             }
         }
@@ -456,21 +526,22 @@ public final class ExpressionRuntime {
             ExecutableLambda lambda,
             ExecutionScope scope,
             ExpressionType receiverType,
-            int maxMaterializedSize) {
+            int maxMaterializedSize,
+            SourceSpan sourceSpan) {
         int size = receiverType instanceof CollectionType
                 ? ((List<?>) receiver).size()
                 : ((Map<?, ?>) receiver).size();
-        requireMaterializedSize(size, maxMaterializedSize);
+        requireMaterializedSize(size, maxMaterializedSize, sourceSpan);
         ArrayList<Object> result = new ArrayList<>(size);
         if (receiverType instanceof CollectionType) {
             for (Object value : (List<?>) receiver) {
-                result.add(Objects.requireNonNull(
-                        lambda.execute(scope, Objects.requireNonNull(value, "collection element")),
-                        "map lambda result"));
+                result.add(requiredLambdaResult(
+                        lambda.execute(scope, requiredElement(value, sourceSpan)), "map", sourceSpan));
             }
         } else {
             for (Map.Entry<?, ?> entry : ((Map<?, ?>) receiver).entrySet()) {
-                result.add(Objects.requireNonNull(lambda.execute(scope, mapEntryValue(entry)), "map lambda result"));
+                result.add(requiredLambdaResult(
+                        lambda.execute(scope, mapEntryValue(entry, sourceSpan)), "map", sourceSpan));
             }
         }
         return List.copyOf(result);
@@ -480,15 +551,17 @@ public final class ExpressionRuntime {
             Object receiver,
             Object initialValue,
             ExecutableLambda lambda,
-            ExecutionScope scope) {
-        Object accumulator = Objects.requireNonNull(initialValue, "reduce initial value");
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
+        if (initialValue == null) {
+            throw RuntimeFailures.forbiddenNull("reduce initial value must not be null", sourceSpan);
+        }
+        Object accumulator = initialValue;
         List<?> values = (List<?>) receiver;
         for (int index = 0; index < values.size(); index++) {
-            Object value = values.get(index);
-            Object item = Objects.requireNonNull(value, "collection element");
-            accumulator = Objects.requireNonNull(
-                    lambda.execute(scope, new ReductionItemValue(accumulator, item)),
-                    "reduce lambda result");
+            Object item = requiredElement(values.get(index), sourceSpan);
+            accumulator = requiredLambdaResult(
+                    lambda.execute(scope, new ReductionItemValue(accumulator, item)), "reduce", sourceSpan);
         }
         return accumulator;
     }
@@ -499,19 +572,25 @@ public final class ExpressionRuntime {
             ExecutableLambda lambda,
             ExecutionScope scope,
             int maxMaterializedSize,
-            ExpressionType keyType) {
-        int directionMultiplier = switch (Objects.requireNonNull(direction, "sort direction")) {
+            ExpressionType keyType,
+            SourceSpan sourceSpan) {
+        // The semantic layer rejects a literal direction outside asc/desc; only a computed value can
+        // still be invalid here, which ADR 0018 routes to an invalid operation argument at runtime.
+        if (direction == null) {
+            throw RuntimeFailures.forbiddenNull("sortBy direction must not be null", sourceSpan);
+        }
+        int directionMultiplier = switch (direction) {
             case "asc" -> 1;
             case "desc" -> -1;
-            default -> throw new IllegalArgumentException("unsupported sort direction: " + direction);
+            default -> throw RuntimeFailures.invalidOperationArgument(
+                    "sortBy direction must be \"asc\" or \"desc\": " + direction, sourceSpan);
         };
         List<?> values = (List<?>) receiver;
-        requireMaterializedSize(values.size(), maxMaterializedSize);
+        requireMaterializedSize(values.size(), maxMaterializedSize, sourceSpan);
         ArrayList<SortItem> keyedValues = new ArrayList<>(values.size());
         for (int index = 0; index < values.size(); index++) {
-            Object value = values.get(index);
-            Object item = Objects.requireNonNull(value, "collection element");
-            Object key = Objects.requireNonNull(lambda.execute(scope, item), "sortBy selector result");
+            Object item = requiredElement(values.get(index), sourceSpan);
+            Object key = requiredLambdaResult(lambda.execute(scope, item), "sortBy selector", sourceSpan);
             keyedValues.add(new SortItem(item, key));
         }
         keyedValues.sort((left, right) -> directionMultiplier == 1
@@ -525,10 +604,9 @@ public final class ExpressionRuntime {
         return List.copyOf(result);
     }
 
-    private static MapEntryValue mapEntryValue(Map.Entry<?, ?> entry) {
-        return new MapEntryValue(
-                (String) Objects.requireNonNull(entry.getKey(), "map key"),
-                Objects.requireNonNull(entry.getValue(), "map value"));
+    private static MapEntryValue mapEntryValue(Map.Entry<?, ?> entry, SourceSpan sourceSpan) {
+        String key = (String) requiredMapKey(entry.getKey(), sourceSpan);
+        return new MapEntryValue(key, requiredMapValue(entry.getValue(), sourceSpan));
     }
 
     private static BigDecimal count(Object receiver) {
@@ -538,46 +616,90 @@ public final class ExpressionRuntime {
         return BigDecimal.valueOf(((Map<?, ?>) receiver).size());
     }
 
-    private static List<Object> mapKeys(Object receiver, int maxMaterializedSize) {
+    private static List<Object> mapKeys(Object receiver, int maxMaterializedSize, SourceSpan sourceSpan) {
         Map<?, ?> values = (Map<?, ?>) receiver;
-        requireMaterializedSize(values.size(), maxMaterializedSize);
+        requireMaterializedSize(values.size(), maxMaterializedSize, sourceSpan);
         ArrayList<Object> result = new ArrayList<>(values.size());
         for (Object key : values.keySet()) {
-            result.add(Objects.requireNonNull(key, "map key"));
+            result.add(requiredMapKey(key, sourceSpan));
         }
         return List.copyOf(result);
     }
 
-    private static List<Object> mapValues(Object receiver, int maxMaterializedSize) {
+    private static List<Object> mapValues(Object receiver, int maxMaterializedSize, SourceSpan sourceSpan) {
         Map<?, ?> values = (Map<?, ?>) receiver;
-        requireMaterializedSize(values.size(), maxMaterializedSize);
+        requireMaterializedSize(values.size(), maxMaterializedSize, sourceSpan);
         ArrayList<Object> result = new ArrayList<>(values.size());
         for (Object value : values.values()) {
-            result.add(Objects.requireNonNull(value, "map value"));
+            result.add(requiredMapValue(value, sourceSpan));
         }
         return List.copyOf(result);
     }
 
-    private static BigDecimal sum(Object receiver) {
+    private static BigDecimal sum(Object receiver, SourceSpan sourceSpan) {
         BigDecimal result = BigDecimal.ZERO;
         for (Object value : (List<?>) receiver) {
-            result = result.add(number(Objects.requireNonNull(value, "collection element")));
+            result = result.add(number(requiredElement(value, sourceSpan)));
         }
         return result;
     }
 
-    private static BigDecimal avg(Object receiver, MathContext mathContext) {
+    private static BigDecimal avg(Object receiver, MathContext mathContext, SourceSpan sourceSpan) {
         List<?> values = (List<?>) receiver;
         if (CollectionOperationWiring.isAverageOfEmptyCollectionUndefined(values.size())) {
-            throw new IllegalStateException("average over an empty collection is not defined");
+            throw RuntimeFailures.undefinedOperation("average over an empty collection is not defined", sourceSpan);
         }
-        return sum(values).divide(BigDecimal.valueOf(values.size()), mathContext);
+        return sum(values, sourceSpan).divide(BigDecimal.valueOf(values.size()), mathContext);
     }
 
-    private static void requireMaterializedSize(int size, int maxMaterializedSize) {
+    private static void requireMaterializedSize(int size, int maxMaterializedSize, SourceSpan sourceSpan) {
         if (size > maxMaterializedSize) {
-            throw new IllegalStateException("materialized collection exceeds maxMaterializedSize " + maxMaterializedSize);
+            throw RuntimeFailures.materializationLimitExceeded(size, maxMaterializedSize, sourceSpan);
         }
+    }
+
+    private static Object requiredElement(Object value, SourceSpan sourceSpan) {
+        if (value == null) {
+            throw RuntimeFailures.forbiddenNull("collection element must not be null", sourceSpan);
+        }
+        return value;
+    }
+
+    private static Object requiredMapKey(Object key, SourceSpan sourceSpan) {
+        if (key == null) {
+            throw RuntimeFailures.forbiddenNull("map key must not be null", sourceSpan);
+        }
+        return key;
+    }
+
+    private static Object requiredMapValue(Object value, SourceSpan sourceSpan) {
+        if (value == null) {
+            throw RuntimeFailures.forbiddenNull("map value must not be null", sourceSpan);
+        }
+        return value;
+    }
+
+    private static Object requiredMemberValue(Object value, String memberName, SourceSpan sourceSpan) {
+        if (value == null) {
+            throw RuntimeFailures.forbiddenNull("member value must not be null: " + memberName, sourceSpan);
+        }
+        return value;
+    }
+
+    private static Object requiredLambdaResult(Object value, String operationName, SourceSpan sourceSpan) {
+        if (value == null) {
+            throw RuntimeFailures.forbiddenNull(operationName + " result must not be null", sourceSpan);
+        }
+        return value;
+    }
+
+    /**
+     * A null receiver on a strict link is unreachable: the semantic resolver rejects a nullable receiver
+     * before the plan is built. ADR 0018 keeps this an internal invariant guard on purpose, so it must
+     * not be turned into a public diagnostic code.
+     */
+    private static IllegalStateException nullReceiverInvariant(SourceSpan sourceSpan) {
+        return new IllegalStateException("internal invariant: null navigation receiver on a strict link at " + sourceSpan);
     }
 
     public static boolean structuralEquals(Object left, Object right, ExpressionType type) {

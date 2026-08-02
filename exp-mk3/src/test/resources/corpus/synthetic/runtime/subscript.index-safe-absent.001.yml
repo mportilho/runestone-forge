@@ -1,0 +1,16 @@
+id: runtime.subscript.index-safe-absent.001
+phase: runtime
+kind: valid
+source: 'items?.[7] ?? 0'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    items:
+      type: COLLECTION_NUMBER
+      default: [{type: NUMBER, value: "10"}, {type: NUMBER, value: "20"}, {type: NUMBER, value: "30"}]
+      overwritePolicy: FIXED
+coverage: [identifier, subscript-index, safe-navigation, coalesce]
+expected:
+  type: NUMBER
+  result: "0"

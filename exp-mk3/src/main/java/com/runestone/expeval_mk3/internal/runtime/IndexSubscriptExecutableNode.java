@@ -6,9 +6,13 @@ import com.runestone.expeval_mk3.internal.ast.NodeId;
 import java.math.BigInteger;
 import java.util.Objects;
 
-/** {@code [i]} on a list receiver: resolves a possibly-negative literal index against the receiver's size. */
+/**
+ * {@code [i]} on a list receiver: resolves a possibly-negative literal index against the receiver's size.
+ * Per ADR 0018 {@code safe} tolerates an out-of-range index by yielding null; the strict form fails.
+ */
 public record IndexSubscriptExecutableNode(
-        NodeId id, SourceSpan sourceSpan, ExecutableNode receiver, BigInteger index) implements ExecutableNode {
+        NodeId id, SourceSpan sourceSpan, ExecutableNode receiver, BigInteger index, boolean safe)
+        implements ExecutableNode {
 
     public IndexSubscriptExecutableNode {
         Objects.requireNonNull(id, "id");
@@ -19,6 +23,6 @@ public record IndexSubscriptExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.indexedValue(receiver.execute(scope), index);
+        return ExpressionRuntime.indexedValue(receiver.execute(scope), index, safe, sourceSpan);
     }
 }

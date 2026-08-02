@@ -1,0 +1,17 @@
+id: runtime.subscript.index-out-of-bounds.001
+phase: runtime
+kind: invalid
+source: 'items[7]'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    items:
+      type: COLLECTION_NUMBER
+      default: [{type: NUMBER, value: "10"}, {type: NUMBER, value: "20"}, {type: NUMBER, value: "30"}]
+      overwritePolicy: FIXED
+coverage: [identifier, subscript-index, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_SUBSCRIPT_OUT_OF_BOUNDS
+    span: {offset: 5, endOffset: 8, line: 1, column: 6}

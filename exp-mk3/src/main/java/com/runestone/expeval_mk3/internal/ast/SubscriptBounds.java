@@ -5,6 +5,9 @@ import java.util.Objects;
 
 public final class SubscriptBounds {
 
+    /** Sentinel returned by {@link #normalizedIndexOrOutOfBounds}; no valid normalized index is negative. */
+    public static final int INDEX_OUT_OF_BOUNDS = -1;
+
     private SubscriptBounds() {
     }
 
@@ -13,16 +16,19 @@ public final class SubscriptBounds {
         return normalized.signum() >= 0 && normalized.compareTo(BigInteger.valueOf(size)) < 0;
     }
 
-    public static int normalizedIndex(BigInteger rawIndex, int size) {
+    /**
+     * Normalizes a possibly-negative literal index against {@code size} and returns
+     * {@link #INDEX_OUT_OF_BOUNDS} when the normalized index falls outside {@code [0, size)}. Out of
+     * range is an ordinary answer here rather than an exception because ADR 0018 makes it a failure
+     * only on a strict link; a safe link turns the same answer into a runtime null.
+     */
+    public static int normalizedIndexOrOutOfBounds(BigInteger rawIndex, int size) {
         BigInteger normalized = normalizedIndexValue(rawIndex, size);
         if (normalized.signum() < 0 || normalized.compareTo(BigInteger.valueOf(size)) >= 0) {
-            throw new IndexOutOfBoundsException("collection index out of bounds: " + rawIndex);
+            return INDEX_OUT_OF_BOUNDS;
         }
-        try {
-            return normalized.intValueExact();
-        } catch (ArithmeticException exception) {
-            throw new IndexOutOfBoundsException("collection index out of bounds: " + rawIndex);
-        }
+        // A normalized index below size is always an int; size itself is an int.
+        return normalized.intValueExact();
     }
 
     public static int normalizedSliceBound(SubscriptSliceBound bound, int size, int unboundedValue) {

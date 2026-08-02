@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
 import com.runestone.expeval_mk3.api.CollectionType;
+import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.ExpressionExecutionException;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.FunctionPurity;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.Clock;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
@@ -139,18 +141,97 @@ class ExpressionRuntimeTest {
         values.put("present", null);
 
         assertThatThrownBy(() -> ExpressionRuntime.mapKeyValue(values, "present", false, SPAN))
-                .isInstanceOf(NullPointerException.class)
-                .hasMessage("map value at SourceSpan[offset=2, endOffset=13, line=1, column=3]");
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(exception -> assertThat(((ExpressionExecutionException) exception).diagnostic().code())
+                        .isEqualTo("RUNTIME_FORBIDDEN_NULL"));
     }
 
     @Test
-    void safeMapStringKeySubscriptOnlyProtectsNullReceivers() {
-        assertThat(ExpressionRuntime.mapKeyValue(null, "present", true, SPAN)).isNull();
-
+    void strictMapStringKeySubscriptFailsWithMapKeyNotFoundDiagnostic() {
         assertThatThrownBy(() -> ExpressionRuntime.mapKeyValue(
-                Map.of("present", BigDecimal.ONE), "missing", true, SPAN))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("map key not found: missing");
+                Map.of("present", BigDecimal.ONE), "missing", false, SPAN))
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(exception -> {
+                    ExpressionDiagnostic diagnostic = ((ExpressionExecutionException) exception).diagnostic();
+                    assertThat(diagnostic.code()).isEqualTo("RUNTIME_MAP_KEY_NOT_FOUND");
+                    assertThat(diagnostic.primarySpan()).contains(SPAN);
+                });
+    }
+
+    @Test
+    void safeMapStringKeySubscriptToleratesAbsentKeyAndNullReceiver() {
+        assertThat(ExpressionRuntime.mapKeyValue(null, "present", true, SPAN)).isNull();
+        assertThat(ExpressionRuntime.mapKeyValue(Map.of("present", BigDecimal.ONE), "missing", true, SPAN)).isNull();
+    }
+
+    @Test
+    void strictIndexSubscriptFailsWithSubscriptOutOfBoundsDiagnostic() {
+        assertThatThrownBy(() -> ExpressionRuntime.indexedValue(
+                List.of(BigDecimal.ONE), BigInteger.valueOf(7), false, SPAN))
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(exception -> {
+                    ExpressionDiagnostic diagnostic = ((ExpressionExecutionException) exception).diagnostic();
+                    assertThat(diagnostic.code()).isEqualTo("RUNTIME_SUBSCRIPT_OUT_OF_BOUNDS");
+                    assertThat(diagnostic.primarySpan()).contains(SPAN);
+                });
+    }
+
+    @Test
+    void safeIndexSubscriptToleratesOutOfRangeIndex() {
+        assertThat(ExpressionRuntime.indexedValue(List.of(BigDecimal.ONE), BigInteger.valueOf(7), true, SPAN)).isNull();
+        assertThat(ExpressionRuntime.indexedValue(List.of(BigDecimal.ONE), BigInteger.valueOf(-7), true, SPAN)).isNull();
+        assertThat(ExpressionRuntime.indexedValue(List.of(BigDecimal.ONE), BigInteger.valueOf(-1), true, SPAN))
+                .isEqualTo(BigDecimal.ONE);
+    }
+
+    @Test
+    void sliceSubscriptClampsBoundsIdenticallyOnBothLinkForms() {
+        List<Object> values = List.of(BigDecimal.ONE, BigDecimal.TWO, BigDecimal.TEN);
+
+        for (boolean safe : new boolean[] {false, true}) {
+            assertThat(slice(values, BigInteger.valueOf(-2), null, safe))
+                    .containsExactly(BigDecimal.TWO, BigDecimal.TEN);
+            assertThat(slice(values, BigInteger.valueOf(2), BigInteger.ONE, safe)).isEmpty();
+            assertThat(slice(values, BigInteger.valueOf(9), BigInteger.valueOf(99), safe)).isEmpty();
+            assertThat(slice(values, null, null, safe)).isEqualTo(values);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object> slice(List<Object> values, BigInteger start, BigInteger end, boolean safe) {
+        return (List<Object>) ExpressionRuntime.slicedValues(values, start, end, safe, 10, SPAN);
+    }
+
+    @Test
+    void sortByRejectsComputedDirectionOutsideAscendingAndDescending() {
+        ExecutionScope scope = newScope();
+        ExecutableLambda selector = new ExecutableLambda(
+                node(executionScope -> executionScope.read(CURRENT_ITEM_SLOT)), CURRENT_ITEM_SLOT);
+
+        assertThatThrownBy(() -> ExpressionRuntime.sortBy(
+                List.of(BigDecimal.ONE), "cima", selector, scope, 10, ScalarType.NUMBER, SPAN))
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(exception -> {
+                    ExpressionDiagnostic diagnostic = ((ExpressionExecutionException) exception).diagnostic();
+                    assertThat(diagnostic.code()).isEqualTo("RUNTIME_INVALID_OPERATION_ARGUMENT");
+                    assertThat(diagnostic.primarySpan()).contains(SPAN);
+                });
+    }
+
+    @Test
+    void materializationLimitFailureCarriesTheLinkSourceSpan() {
+        ExecutionScope scope = newScope();
+        ExecutableLambda identity = new ExecutableLambda(
+                node(executionScope -> executionScope.read(CURRENT_ITEM_SLOT)), CURRENT_ITEM_SLOT);
+
+        assertThatThrownBy(() -> ExpressionRuntime.map(
+                List.of(BigDecimal.ONE, BigDecimal.TWO), identity, scope, NUMBER_COLLECTION, 1, SPAN))
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(exception -> {
+                    ExpressionDiagnostic diagnostic = ((ExpressionExecutionException) exception).diagnostic();
+                    assertThat(diagnostic.code()).isEqualTo("RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED");
+                    assertThat(diagnostic.primarySpan()).contains(SPAN);
+                });
     }
 
     @Test
@@ -160,7 +241,7 @@ class ExpressionRuntimeTest {
                 positiveCheckNode(), CURRENT_ITEM_SLOT);
 
         boolean result = ExpressionRuntime.all(
-                List.of(BigDecimal.ONE, BigDecimal.TEN), isPositive, scope, NUMBER_COLLECTION);
+                List.of(BigDecimal.ONE, BigDecimal.TEN), isPositive, scope, NUMBER_COLLECTION, SPAN);
 
         assertThat(result).isTrue();
     }
@@ -172,7 +253,7 @@ class ExpressionRuntimeTest {
                 positiveCheckNode(), CURRENT_ITEM_SLOT);
 
         boolean result = ExpressionRuntime.all(
-                List.of(BigDecimal.ONE, BigDecimal.valueOf(-1)), isPositive, scope, NUMBER_COLLECTION);
+                List.of(BigDecimal.ONE, BigDecimal.valueOf(-1)), isPositive, scope, NUMBER_COLLECTION, SPAN);
 
         assertThat(result).isFalse();
     }
@@ -184,7 +265,7 @@ class ExpressionRuntimeTest {
                 positiveCheckNode(), CURRENT_ITEM_SLOT);
 
         boolean result = ExpressionRuntime.any(
-                List.of(BigDecimal.valueOf(-1), BigDecimal.TEN), isPositive, scope, NUMBER_COLLECTION);
+                List.of(BigDecimal.valueOf(-1), BigDecimal.TEN), isPositive, scope, NUMBER_COLLECTION, SPAN);
 
         assertThat(result).isTrue();
     }
@@ -196,7 +277,7 @@ class ExpressionRuntimeTest {
                 positiveCheckNode(), CURRENT_ITEM_SLOT);
 
         boolean result = ExpressionRuntime.any(
-                List.of(BigDecimal.valueOf(-1), BigDecimal.valueOf(-2)), isPositive, scope, NUMBER_COLLECTION);
+                List.of(BigDecimal.valueOf(-1), BigDecimal.valueOf(-2)), isPositive, scope, NUMBER_COLLECTION, SPAN);
 
         assertThat(result).isFalse();
     }
@@ -209,7 +290,7 @@ class ExpressionRuntimeTest {
         ExecutableLambda lambda = new ExecutableLambda(doubleValue, CURRENT_ITEM_SLOT);
 
         List<Object> result = ExpressionRuntime.map(
-                List.of(BigDecimal.ONE, BigDecimal.TEN), lambda, scope, NUMBER_COLLECTION, 10);
+                List.of(BigDecimal.ONE, BigDecimal.TEN), lambda, scope, NUMBER_COLLECTION, 10, SPAN);
 
         assertThat(result).containsExactly(BigDecimal.valueOf(2), BigDecimal.valueOf(20));
     }
@@ -220,15 +301,15 @@ class ExpressionRuntimeTest {
         ExecutableNode sumStep = node(executionScope -> {
             Object reductionItem = executionScope.read(CURRENT_ITEM_SLOT);
             BigDecimal accumulator = ExpressionRuntime.number(ExpressionRuntime.contextualMemberValue(
-                    reductionItem, ContextualMemberNavigationBinding.Member.REDUCTION_ACCUMULATOR, false));
+                    reductionItem, ContextualMemberNavigationBinding.Member.REDUCTION_ACCUMULATOR, false, SPAN));
             BigDecimal item = ExpressionRuntime.number(ExpressionRuntime.contextualMemberValue(
-                    reductionItem, ContextualMemberNavigationBinding.Member.REDUCTION_ITEM, false));
+                    reductionItem, ContextualMemberNavigationBinding.Member.REDUCTION_ITEM, false, SPAN));
             return accumulator.add(item);
         });
         ExecutableLambda lambda = new ExecutableLambda(sumStep, CURRENT_ITEM_SLOT);
 
         Object result = ExpressionRuntime.reduce(
-                List.of(BigDecimal.ONE, BigDecimal.TEN), BigDecimal.ZERO, lambda, scope);
+                List.of(BigDecimal.ONE, BigDecimal.TEN), BigDecimal.ZERO, lambda, scope, SPAN);
 
         assertThat(result).isEqualTo(BigDecimal.valueOf(11));
     }
@@ -240,8 +321,9 @@ class ExpressionRuntimeTest {
         ExecutableLambda selector = new ExecutableLambda(identity, CURRENT_ITEM_SLOT);
         List<Object> values = List.of(BigDecimal.TEN, BigDecimal.ONE, BigDecimal.valueOf(5));
 
-        List<Object> ascending = ExpressionRuntime.sortBy(values, "asc", selector, scope, 10, ScalarType.NUMBER);
-        List<Object> descending = ExpressionRuntime.sortBy(values, "desc", selector, scope, 10, ScalarType.NUMBER);
+        List<Object> ascending = ExpressionRuntime.sortBy(values, "asc", selector, scope, 10, ScalarType.NUMBER, SPAN);
+        List<Object> descending = ExpressionRuntime.sortBy(
+                values, "desc", selector, scope, 10, ScalarType.NUMBER, SPAN);
 
         assertThat(ascending).containsExactly(BigDecimal.ONE, BigDecimal.valueOf(5), BigDecimal.TEN);
         assertThat(descending).containsExactly(BigDecimal.TEN, BigDecimal.valueOf(5), BigDecimal.ONE);

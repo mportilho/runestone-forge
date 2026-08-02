@@ -1,0 +1,17 @@
+id: runtime.subscript.slice-materialization-limit.001
+phase: runtime
+kind: invalid
+source: 'obj.itens()[0:5]'
+environment:
+  maxMaterializedSize: 3
+  maxFactorialInput: 32
+  symbols:
+    obj:
+      type: OBJECT_COLLECTION_METHOD_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, call, subscript-slice, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED
+    span: {offset: 11, endOffset: 16, line: 1, column: 12}

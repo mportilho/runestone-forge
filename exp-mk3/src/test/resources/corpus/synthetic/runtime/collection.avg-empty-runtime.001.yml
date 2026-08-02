@@ -1,0 +1,17 @@
+id: runtime.collection.avg-empty-runtime.001
+phase: runtime
+kind: invalid
+source: 'items[?(@ > 100)].avg()'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    items:
+      type: COLLECTION_NUMBER
+      default: [{type: NUMBER, value: "10"}, {type: NUMBER, value: "20"}, {type: NUMBER, value: "30"}]
+      overwritePolicy: FIXED
+coverage: [identifier, filter, at-symbol, call, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_UNDEFINED_OPERATION
+    span: {offset: 17, endOffset: 23, line: 1, column: 18}

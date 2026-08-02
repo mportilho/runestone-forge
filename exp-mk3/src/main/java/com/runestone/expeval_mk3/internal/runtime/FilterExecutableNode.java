@@ -13,6 +13,7 @@ public record FilterExecutableNode(
         NodeId id,
         SourceSpan sourceSpan,
         ExecutableNode receiver,
+        boolean safe,
         ExecutableNode predicate,
         int currentItemFrameSlot,
         int maxMaterializedSize) implements ExecutableNode {
@@ -30,6 +31,6 @@ public record FilterExecutableNode(
     @Override
     public Object execute(ExecutionScope scope) {
         return ExpressionRuntime.filteredValues(
-                receiver.execute(scope), predicate, currentItemFrameSlot, scope, maxMaterializedSize);
+                receiver.execute(scope), safe, predicate, currentItemFrameSlot, scope, maxMaterializedSize, sourceSpan);
     }
 }

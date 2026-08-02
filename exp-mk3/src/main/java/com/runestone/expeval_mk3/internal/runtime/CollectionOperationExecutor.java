@@ -1,5 +1,7 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
+import com.runestone.expeval_mk3.api.SourceSpan;
+
 import java.math.MathContext;
 
 /**
@@ -15,5 +17,6 @@ public interface CollectionOperationExecutor {
             MathContext mathContext,
             int maxMaterializedSize,
             ExecutableOperationArguments arguments,
-            ExecutionScope scope);
+            ExecutionScope scope,
+            SourceSpan sourceSpan);
 }

@@ -572,6 +572,12 @@ public final class CollectionOperationCatalog {
         REDUCTION_ITEM
     }
 
+    /**
+     * Allowed text values for an operation's value argument. The semantic resolver can only classify a
+     * literal payload, so per ADR 0018 a computed argument value is accepted at compile time and must be
+     * rejected at execution time as {@code RUNTIME_INVALID_OPERATION_ARGUMENT}: a new constant here needs
+     * a matching runtime check in {@code ExpressionRuntime}, otherwise computed values go unvalidated.
+     */
     public enum ValueConstraint {
         NONE_REQUIRED(Set.of()),
         SORT_DIRECTION(Set.of("asc", "desc"));

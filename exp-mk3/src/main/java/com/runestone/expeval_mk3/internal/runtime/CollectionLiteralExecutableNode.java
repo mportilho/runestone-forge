@@ -20,6 +20,6 @@ public record CollectionLiteralExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.materialize(elements, scope);
+        return ExpressionRuntime.materialize(elements, scope, sourceSpan);
     }
 }

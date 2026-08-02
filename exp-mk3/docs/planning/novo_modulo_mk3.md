@@ -308,10 +308,12 @@ cria ExecutionScope
 
 ## 15. Navegação em objetos
 
+> **Superseded em parte.** O ADR 0010 (Tipagem Conhecida) eliminou `UnknownType`: não existe elo sem metadados, e o inline cache reflexivo descrito abaixo não faz parte da v2 — tipo ou membro desconhecido é erro semântico. A Etapa 6 decidiu também que **navegação por campo público está fora da v2** (a exposição é componente de record, getter bean e método registrado) e que subscripts seguem o ADR 0018. Os demais pontos permanecem válidos.
+
 `PropertyChainNode` → `ExecutablePropertyChain`, com upgrade de mecânica:
 
-- **Com metadados Java** (`registerJavaType`): cada elo da cadeia resolve em compilação para um acessor compilado — record component/getter/campo via `LambdaMetafactory` ou `VarHandle`; método via `MethodHandle` adaptado. Zero reflexão em runtime.
-- **Sem metadados** (`UnknownType`): cada elo vira um **inline cache polimórfico por call-site** (mono → bi → megamórfico): na primeira execução resolve por reflexão, memoiza `(Class receptora → accessor compilado)`; execuções seguintes na mesma classe custam uma comparação de classe + invocação direta.
+- **Com metadados Java** (`registerJavaType`): cada elo da cadeia resolve em compilação para um acessor compilado — record component/getter via `LambdaMetafactory` ou `VarHandle`; método via `MethodHandle` adaptado. Zero reflexão em runtime.
+- ~~**Sem metadados** (`UnknownType`): inline cache polimórfico por call-site.~~ Removido pelo ADR 0010.
 - `?.` (`SAFE_NAV`) compila para checagem de null antes do elo — sem try/catch. Cobre propriedades (`obj?.prop`), métodos (`obj?.method()`) e subscripts (`obj?.[i]`, `obj?.[a:b]`, `obj?.[?(...)]`).
 - Subscripts: `[i]` (com índice negativo = a partir do fim, agora natural pois `[-10:20]` lexa corretamente na nova gramática), slices `[a:b]`/`[a:]`/`[:b]`, `["key"]`, `[*]`, `[?(...)]`. A forma segura `?.[...]` retorna `null` apenas quando o receptor do elo é `null`; não mascara coleção não indexável, índice fora do intervalo, chave inválida ou erro no predicado.
 - Filtros `[?( ... )]`: o predicado é um `ExecutableNode` comum (a gramática nova reusa `expression`), com `@` ligado ao slot reservado. Sem materialização quando seguido de agregação fundível.

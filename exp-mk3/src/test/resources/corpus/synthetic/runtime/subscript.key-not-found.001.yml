@@ -1,0 +1,18 @@
+id: runtime.subscript.key-not-found.001
+phase: runtime
+kind: invalid
+source: 'atributos["ausente"]'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    atributos:
+      type: MAP_NUMBER
+      default:
+        a: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+coverage: [identifier, subscript-key, string-literal, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_MAP_KEY_NOT_FOUND
+    span: {offset: 9, endOffset: 20, line: 1, column: 10}

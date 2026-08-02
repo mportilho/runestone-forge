@@ -751,18 +751,19 @@ class ExpressionCompilerTest {
     }
 
     @Test
-    void mapStringKeySubscriptDoesNotMaskMissingKeys() {
+    void strictMapStringKeySubscriptFailsOnMissingKeyWhileTheSafeFormYieldsNull() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("A", BigDecimal.ONE),
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
         assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("m[\"missing\"]", environment).asMath().compute())
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("map key not found: missing");
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("m?.[\"missing\"] ?? 0", environment).asMath().compute())
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("map key not found: missing");
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(thrown -> assertThat(((ExpressionExecutionException) thrown).diagnostic().code())
+                        .isEqualTo("RUNTIME_MAP_KEY_NOT_FOUND"));
+        // ADR 0018: the safe link reads the same absence as legitimate and discharges it with `??`.
+        assertThat(ExpressionCompiler.compileOrThrow("m?.[\"missing\"] ?? 0", environment).asMath().compute())
+                .isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test
@@ -809,8 +810,10 @@ class ExpressionCompilerTest {
                 .externalSymbol("object", new FailingWildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
                 .build();
         assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("object?.[*] ?? []", failingAccessor).asResult().compute())
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("first failed");
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(thrown -> assertThat(((ExpressionExecutionException) thrown).diagnostic().code())
+                        .isEqualTo("RUNTIME_MEMBER_ACCESS_FAILURE"))
+                .hasRootCauseMessage("first failed");
 
         ExpressionEnvironment limited = ExpressionEnvironment.builder()
                 .maxMaterializedSize(1)

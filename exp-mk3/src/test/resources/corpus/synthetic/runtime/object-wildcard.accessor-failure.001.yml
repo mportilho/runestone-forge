@@ -12,8 +12,8 @@ environment:
         wildcardChildren: [first]
         ordered: true
       overwritePolicy: FIXED
-coverage: [identifier, wildcard, safe-navigation]
+coverage: [identifier, wildcard, safe-navigation, coalesce, diagnostic]
 expected:
   runtimeError:
-    type: IllegalStateException
-    messageContains: 'first failed'
+    code: RUNTIME_MEMBER_ACCESS_FAILURE
+    span: {offset: 6, endOffset: 11, line: 1, column: 7}

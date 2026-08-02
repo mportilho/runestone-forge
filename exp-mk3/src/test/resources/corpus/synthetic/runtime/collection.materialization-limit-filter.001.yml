@@ -1,0 +1,17 @@
+id: runtime.collection.materialization-limit-filter.001
+phase: runtime
+kind: invalid
+source: 'obj.itens()[?(@ > 0)]'
+environment:
+  maxMaterializedSize: 3
+  maxFactorialInput: 32
+  symbols:
+    obj:
+      type: OBJECT_COLLECTION_METHOD_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, call, filter, at-symbol, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED
+    span: {offset: 11, endOffset: 21, line: 1, column: 12}

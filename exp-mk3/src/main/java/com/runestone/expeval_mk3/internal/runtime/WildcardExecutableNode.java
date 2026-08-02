@@ -24,6 +24,7 @@ public record WildcardExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.wildcardValues(receiver.execute(scope), safe, binding, maxMaterializedSize);
+        return ExpressionRuntime.wildcardValues(
+                receiver.execute(scope), safe, binding, maxMaterializedSize, sourceSpan);
     }
 }

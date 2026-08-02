@@ -1,0 +1,17 @@
+id: runtime.subscript.key-safe-absent.001
+phase: runtime
+kind: valid
+source: 'atributos?.["ausente"] ?? 0'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    atributos:
+      type: MAP_NUMBER
+      default:
+        a: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+coverage: [identifier, subscript-key, string-literal, safe-navigation, coalesce]
+expected:
+  type: NUMBER
+  result: "0"

@@ -1133,20 +1133,28 @@ public final class SemanticResolver {
                         index.sourceSpan());
                 return LinkResolution.invalidResolution();
             }
-            if (receiverShape != null && receiverShape.fixed()) {
-                if (!SubscriptBounds.indexWithinFixedSize(index.index().value(), receiverShape.fixedSize())) {
-                    diagnostic(
-                            DiagnosticCode.SEMANTIC_COLLECTION_INDEX_OUT_OF_BOUNDS,
-                            "Collection index is outside the known collection bounds",
-                            index.sourceSpan());
-                    return LinkResolution.invalidResolution();
+            // ADR 0018: strictness is a property of the link. A safe link tolerates an out-of-range
+            // index as legitimate absence, so it gets neither the static diagnostic nor the deferred
+            // bounds check; both belong to the strict form only.
+            if (!index.safe()) {
+                if (receiverShape != null && receiverShape.fixed()) {
+                    if (!SubscriptBounds.indexWithinFixedSize(index.index().value(), receiverShape.fixedSize())) {
+                        diagnostic(
+                                DiagnosticCode.SEMANTIC_COLLECTION_INDEX_OUT_OF_BOUNDS,
+                                "Collection index is outside the known collection bounds",
+                                index.sourceSpan());
+                        return LinkResolution.invalidResolution();
+                    }
+                } else {
+                    deferredChecks.add(new SubscriptBoundsDeferredCheck(index.id(), index.sourceSpan()));
                 }
-            } else {
-                deferredChecks.add(new SubscriptBoundsDeferredCheck(index.id(), index.sourceSpan()));
             }
+            RuntimeNullability nullability = index.safe()
+                    ? RuntimeNullability.MAY_BE_NULL
+                    : RuntimeNullability.NEVER_NULL;
             navigationBindings.put(index.id(), new IndexSubscriptNavigationBinding(
-                    collectionType.elementType(), RuntimeNullability.NEVER_NULL, receiverPure));
-            return LinkResolution.known(collectionType.elementType(), null, RuntimeNullability.NEVER_NULL, receiverPure);
+                    collectionType.elementType(), nullability, receiverPure));
+            return LinkResolution.known(collectionType.elementType(), null, nullability, receiverPure);
         }
 
         private LinkResolution resolveSliceSubscript(
@@ -1170,10 +1178,15 @@ public final class SemanticResolver {
             } else {
                 deferredChecks.add(new SubscriptBoundsDeferredCheck(slice.id(), slice.sourceSpan()));
             }
+            // ADR 0018: slice bounds never produce null, but a safe link still tolerates a null
+            // receiver for its own link, so the safe form is possibly null like every other link form.
+            RuntimeNullability nullability = slice.safe()
+                    ? RuntimeNullability.MAY_BE_NULL
+                    : RuntimeNullability.NEVER_NULL;
             navigationBindings.put(slice.id(), new SliceSubscriptNavigationBinding(
-                    collectionType.elementType(), RuntimeNullability.NEVER_NULL, receiverPure));
+                    collectionType.elementType(), nullability, receiverPure));
             return LinkResolution.known(
-                    new CollectionType(collectionType.elementType()), shape, RuntimeNullability.NEVER_NULL, receiverPure);
+                    new CollectionType(collectionType.elementType()), shape, nullability, receiverPure);
         }
 
         private LinkResolution resolveStringKeySubscript(
@@ -1238,12 +1251,17 @@ public final class SemanticResolver {
                 return LinkResolution.invalidResolution();
             }
             boolean filterPure = receiverPure && purityOf(filter.predicate().id());
+            // A filtered result is never null, but a safe link tolerates a null receiver for its own
+            // link, so the safe form is possibly null like every other link form.
+            RuntimeNullability nullability = filter.safe()
+                    ? RuntimeNullability.MAY_BE_NULL
+                    : RuntimeNullability.NEVER_NULL;
             navigationBindings.put(filter.id(), new FilterNavigationBinding(
-                    collectionType.elementType(), RuntimeNullability.NEVER_NULL, currentItem.frameSlot(), filterPure));
+                    collectionType.elementType(), nullability, currentItem.frameSlot(), filterPure));
             return LinkResolution.known(
                     new CollectionType(collectionType.elementType()),
                     CollectionShape.unknown(),
-                    RuntimeNullability.NEVER_NULL,
+                    nullability,
                     filterPure);
         }
 
@@ -1733,7 +1751,10 @@ public final class SemanticResolver {
                 return true;
             }
             if (!(expression instanceof LiteralNode literal) || !(literal.value() instanceof StringLiteralValue value)) {
-                return false;
+                // An argument value that is not a literal cannot be classified here. It splits like a
+                // subscript bound: the literal payload is a compilation diagnostic, while a computed
+                // value becomes RUNTIME_INVALID_OPERATION_ARGUMENT at execution time.
+                return true;
             }
             return contract.valueConstraint().allowedTextValues().contains(value.value());
         }

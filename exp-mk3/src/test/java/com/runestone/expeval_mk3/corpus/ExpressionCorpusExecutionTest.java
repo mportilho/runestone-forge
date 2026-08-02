@@ -160,6 +160,17 @@ class ExpressionCorpusExecutionTest {
 
     private static void applyJavaObjectSymbol(
             ExpressionEnvironment.Builder builder, String symbolName, String type, JsonNode declaration) {
+        if ("OBJECT_COLLECTION_METHOD_PROVIDER".equals(type)) {
+            // This provider declares a method, not wildcard children, so it reads no child list.
+            builder
+                    .registerJavaTypeMethod(CollectionMethodProvider.class, "itens")
+                    .externalSymbol(
+                            symbolName,
+                            new ObjectType(CollectionMethodProvider.class.getName()),
+                            new CollectionMethodProvider(),
+                            ExternalSymbolOverwritePolicy.FIXED);
+            return;
+        }
         List<String> wildcardChildren = textList(declaration.get("wildcardChildren"));
         boolean ordered = declaration.path("ordered").asBoolean(true);
         if ("OBJECT_WILDCARD_CHILD_PROVIDER".equals(type)) {
@@ -325,6 +336,23 @@ class ExpressionCorpusExecutionTest {
 
         public BigDecimal second() {
             return new BigDecimal("2");
+        }
+    }
+
+    /**
+     * Returns a collection larger than the corpus cases' {@code maxMaterializedSize} so a navigation
+     * link over a member-returned collection can reach the runtime materialization limit; a collection
+     * arriving as an external symbol is already bounded by the boundary coercion.
+     */
+    public static final class CollectionMethodProvider {
+
+        public List<BigDecimal> itens() {
+            return List.of(
+                    BigDecimal.ONE,
+                    new BigDecimal("2"),
+                    new BigDecimal("3"),
+                    new BigDecimal("4"),
+                    new BigDecimal("5"));
         }
     }
 

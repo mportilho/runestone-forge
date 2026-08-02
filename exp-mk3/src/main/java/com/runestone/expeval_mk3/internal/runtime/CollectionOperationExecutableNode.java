@@ -35,6 +35,7 @@ public record CollectionOperationExecutableNode(
     @Override
     public Object execute(ExecutionScope scope) {
         return ExpressionRuntime.executeCollectionOperation(
-                executor, binding, receiver.execute(scope), safe, mathContext, maxMaterializedSize, arguments, scope);
+                executor, binding, receiver.execute(scope), safe, mathContext, maxMaterializedSize, arguments, scope,
+                sourceSpan);
     }
 }

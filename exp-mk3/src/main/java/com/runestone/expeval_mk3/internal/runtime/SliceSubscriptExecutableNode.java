@@ -17,6 +17,7 @@ public record SliceSubscriptExecutableNode(
         ExecutableNode receiver,
         BigInteger startBound,
         BigInteger endBound,
+        boolean safe,
         int maxMaterializedSize) implements ExecutableNode {
 
     public SliceSubscriptExecutableNode {
@@ -27,6 +28,7 @@ public record SliceSubscriptExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.slicedValues(receiver.execute(scope), startBound, endBound, maxMaterializedSize);
+        return ExpressionRuntime.slicedValues(
+                receiver.execute(scope), startBound, endBound, safe, maxMaterializedSize, sourceSpan);
     }
 }

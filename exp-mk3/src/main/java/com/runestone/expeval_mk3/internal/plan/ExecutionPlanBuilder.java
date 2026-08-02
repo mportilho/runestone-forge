@@ -376,13 +376,13 @@ public final class ExecutionPlanBuilder {
         return switch (binding) {
             case IndexSubscriptNavigationBinding ignored -> {
                 IndexSubscriptNavigationLink index = (IndexSubscriptNavigationLink) link;
-                yield new IndexSubscriptExecutableNode(id, span, receiver, index.index().value());
+                yield new IndexSubscriptExecutableNode(id, span, receiver, index.index().value(), index.safe());
             }
             case SliceSubscriptNavigationBinding ignored -> {
                 SliceSubscriptNavigationLink slice = (SliceSubscriptNavigationLink) link;
                 yield new SliceSubscriptExecutableNode(
                         id, span, receiver, SubscriptBounds.rawValue(slice.start()),
-                        SubscriptBounds.rawValue(slice.end()), environment.maxMaterializedSize());
+                        SubscriptBounds.rawValue(slice.end()), slice.safe(), environment.maxMaterializedSize());
             }
             case MapKeySubscriptNavigationBinding mapKeyBinding -> {
                 StringKeySubscriptNavigationLink stringKey = (StringKeySubscriptNavigationLink) link;
@@ -393,7 +393,7 @@ public final class ExecutionPlanBuilder {
                 FilterNavigationLink filter = (FilterNavigationLink) link;
                 ExecutableNode predicate = buildNode(filter.predicate(), model, environment, deferredChecksByNode);
                 yield new FilterExecutableNode(
-                        id, span, receiver, predicate, filterBinding.currentItemFrameSlot(),
+                        id, span, receiver, filter.safe(), predicate, filterBinding.currentItemFrameSlot(),
                         environment.maxMaterializedSize());
             }
             case ContextualMemberNavigationBinding memberBinding -> {

@@ -72,7 +72,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 - `ExternalSymbolCatalog`: todo símbolo externo exige default não nulo e política de sobrescrita; o tipo é declarado e validado contra o default, ou inferido do default. Declarações sem default, sem política, ou com tipo desconhecido não fazem parte da v2.
 - `FunctionCatalog`: descoberta por reflexão → `FunctionDescriptor` (`MethodHandle` adaptado em registro, tipos, retorno, flags `foldable`/`pure`); despacho por aridade+tipos como estrutura de consulta para o resolver. **Nesta etapa a invocação pode ser `invokeExact` simples**; `LambdaMetafactory` e inline caches ficam para a Etapa 8.
 - Built-ins completos desde já no escopo de catálogo (§9): matemática **incluindo `abs` e `sqrt`** (obrigatórios — saíram da gramática), transcendentais, strings, datas/horas, comparáveis, financeiras, e as funções de asserção `asNumber/asText/asBool/asDate/asTime/asDateTime` (`pure`, `foldable`). Asserções de coleção devem declarar elemento conhecido, como `asCollectionOfNumber`, em vez de `asCollection` genérico. Validação no builder: `addMathFunctions()` sem `abs`/`sqrt` presentes é erro de construção.
-- `JavaTypeCatalog` (`registerJavaType`), `CollectionOperationCatalog` instalado automaticamente em todo ambiente com operações oficiais mínimas (`map`, `sum`, `count`, `keys`, `values`, `any`, `all`) e `DataConversionService`/`RuntimeCoercionService` com a matriz de coerções de borda.
+- `JavaTypeCatalog` (`registerJavaType`), `CollectionOperationCatalog` instalado automaticamente em todo ambiente com as dez operações oficiais do ADR 0016 (`all`, `any`, `avg`, `count`, `keys`, `map`, `reduce`, `sortBy`, `sum`, `values`) e `DataConversionService`/`RuntimeCoercionService` com a matriz de coerções de borda.
 
 **Critérios de aceite:** o mesmo ambiente preserva seu `environmentId` e builds separados recebem IDs diferentes; catálogo resolve overloads deterministicamente; todas as funções built-in com testes unitários próprios (independentes do runtime de expressões).
 
@@ -139,16 +139,20 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 
 ## Etapa 6 — Navegação em objetos, subscripts, filtros e coleções (M2)
 
-**Objetivo:** completar a linguagem — a parte com mais superfície de casos de borda (§15).
+**Objetivo:** completar a linguagem — a parte com mais superfície de casos de borda (§15). O detalhamento normativo está em `docs/planning/etapa-6/` e no ADR 0018.
+
+A navegação já foi implementada antecipadamente ponta a ponta durante as Etapas 3.5–5. A Etapa 6 é, portanto, um **gap plan**: seu produto é contrato — diagnóstico estável, metadata semântica e verificação —, não funcionalidade nova.
 
 **Entregas**
-- `ExecutablePropertyChain`: consome bindings e metadados Java resolvidos na Etapa 4; acessores podem usar `MethodHandle` adaptado nesta etapa (`LambdaMetafactory`/`VarHandle` ficam para a Etapa 8). Tipo ou membro desconhecido não tem fallback reflexivo no runtime.
-- `?.` para propriedades, métodos e todas as formas de subscript, com a semântica exata da §3.3/§15: protege **apenas** receptor `null`; erros de tipo/índice/chave/predicado continuam diagnósticos normais.
-- Subscripts completos: `[i]` com índice negativo a partir do fim, `[a:b]`/`[a:]`/`[:b]`, `["key"]`, o único curinga `[*]` e `[?(...)]`; todas as formas admitem o prefixo seguro `?.`.
+- Cadeia de navegação executável consumindo bindings e metadados Java resolvidos na Etapa 4; acessores usam `MethodHandle` adaptado nesta etapa (`LambdaMetafactory`/`VarHandle` ficam para a Etapa 8). Não existe fallback reflexivo no runtime: tipo ou membro desconhecido é erro semântico (ADR 0010), e navegação por campo público está fora da v2.
+- `?.` para propriedades, métodos e todas as formas de subscript: tolera receptor `null` e ausência legítima **do próprio elo**, e nada além disso — receptor não subscritável, falha de acessor, erro de predicado e limite de materialização continuam diagnósticos normais. `?.` não propaga pela cadeia — `a?.b.c` é erro semântico.
+- Subscripts completos conforme o ADR 0018 (payload literal; índice e chave estritos no elo estrito e tolerados no elo seguro; fatia presa ao intervalo válido nas duas formas): `[i]` com índice negativo a partir do fim, `[a:b]`/`[a:]`/`[:b]`, `["key"]`, o único curinga `[*]` e `[?(...)]`; todas as formas admitem o prefixo seguro `?.`.
 - Filtros e lambdas: predicado é `ExecutableNode` comum; `@` como slot de frame com disciplina save/restore para aninhamento; enforcement de `maxCurrentItemDepth`.
 - Chamadas navegadas `.sum()`, `.map(@ -> e)`, `.keys()`, `.values()` etc. são classificadas pelo resolvedor como operações de coleção conforme o tipo do receptor, com loops indexados para listas (sem streams no caminho quente); sem fusão ainda.
+- Toda falha de navegação roteada pelo seam comum de diagnóstico, com código estável, `SourceSpan` do elo e causa preservada; nenhuma exceção crua sobrevive no runtime.
+- Pureza de método registrado declarada e propagada no binding (pré-requisito do folding de prefixo de navegação na Etapa 7); membros registrados, valores de mapa, elementos e retornos de provider nunca nulos.
 
-**Critérios de aceite:** corpus completo executa; matriz de testes de `?.` (cada forma × receptor null × erro real não mascarado); filtros aninhados até `maxCurrentItemDepth` com valores de `@` corretos por nível; testes de coleção sobre `List`, array e `Map`.
+**Critérios de aceite:** corpus completo executa sem exclusão; matriz de testes de `?.` (cada forma × receptor null × erro real não mascarado); filtros aninhados até `maxCurrentItemDepth` com valores de `@` corretos por nível; testes de coleção sobre `List`, array e `Map`; benchmarks de filtro, subscript, cadeia e lambda aninhada registrados como caracterização, sem limiar.
 
 **Depende de:** Etapa 5.
 

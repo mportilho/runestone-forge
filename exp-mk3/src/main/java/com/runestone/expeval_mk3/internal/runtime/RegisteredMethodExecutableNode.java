@@ -26,6 +26,7 @@ public record RegisteredMethodExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.invokeRegisteredMethod(receiver.execute(scope), safe, binding, arguments, scope);
+        return ExpressionRuntime.invokeRegisteredMethod(
+                receiver.execute(scope), safe, binding, arguments, scope, sourceSpan);
     }
 }

@@ -97,7 +97,7 @@ A Java-backed Tipo Objeto declared by the Ambiente de Expressao for nominal use 
 _Avoid_: Reflected class, automatic object shape
 
 **Valor Nulo de Runtime**:
-A runtime absence value introduced by safe navigation. It is not a source literal, cannot be supplied as an external symbol override, and does not have a normal expression type; Java nulls from external data, members, functions, maps, or collections are boundary/runtime contract violations rather than normal expression values. Null coalescence is the explicit way to discharge possible runtime null before a value reaches a non-null context.
+A runtime absence value introduced by safe navigation, whether from a null receiver or from an absent element or map key tolerated by that link. It is not a source literal, cannot be supplied as an external symbol override, and does not have a normal expression type; Java nulls from external data, members, functions, maps, or collections are boundary/runtime contract violations rather than normal expression values. Null coalescence is the explicit way to discharge possible runtime null before a value reaches a non-null context.
 _Avoid_: Null literal, bottom type, unknown value
 
 **Nulidade de Runtime**:
@@ -193,8 +193,12 @@ A source-ordered access path from an expression receiver through property, unres
 _Avoid_: Nested getter calls, path string, reflection chain
 
 **Navegacao Segura**:
-The per-link navigation behavior that returns null only when that link's receiver is null, without hiding invalid members, invalid subscripts, or predicate errors.
-_Avoid_: Null-safe chain, error suppression, optional property access
+The per-link navigation behavior that tolerates a null receiver and legitimate absence at that link, returning null instead of failing, without hiding an unsupported receiver, a failing accessor, a predicate error, or an exceeded materialization limit. It does not propagate along the chain: a safe link makes its result possibly null, so every following link must declare itself safe or the possible null must be discharged before it.
+_Avoid_: Null-safe chain, error suppression, optional property access, whole-chain short circuit
+
+**Subscrito**:
+The bracketed navigation link family made of index, slice, textual key, wildcard, and filter forms, whose index, slice-bound, and key payloads are source literals rather than computed values. Index and textual key name one element: a strict link fails when it is absent and a safe link yields null, while a slice clamps its bounds to the receiver on either link form and may yield an empty collection.
+_Avoid_: Dynamic index, computed key, array access operator
 
 **Vinculo de Navegacao**:
 The semantic resolution of one navigation link against a known receiver type, selecting a registered object member, explicit map key subscript, collection operation, or typed subscript behavior before planning. Property navigation does not access map keys.

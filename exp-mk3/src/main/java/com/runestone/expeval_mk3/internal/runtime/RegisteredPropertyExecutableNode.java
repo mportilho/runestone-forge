@@ -23,6 +23,6 @@ public record RegisteredPropertyExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.registeredPropertyValue(receiver.execute(scope), safe, binding);
+        return ExpressionRuntime.registeredPropertyValue(receiver.execute(scope), safe, binding, sourceSpan);
     }
 }

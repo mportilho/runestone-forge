@@ -23,6 +23,6 @@ public record ContextualMemberExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.contextualMemberValue(receiver.execute(scope), member, safe);
+        return ExpressionRuntime.contextualMemberValue(receiver.execute(scope), member, safe, sourceSpan);
     }
 }
