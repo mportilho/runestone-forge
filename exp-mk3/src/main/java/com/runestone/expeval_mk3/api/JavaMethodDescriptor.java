@@ -14,18 +14,21 @@ public final class JavaMethodDescriptor {
     private final ExpressionType returnType;
     private final MethodHandle invocationHandle;
     private final JavaMemberImplementationMetadata implementationMetadata;
+    private final FunctionPurity purity;
 
     JavaMethodDescriptor(
             String languageName,
             List<ExpressionType> parameterTypes,
             ExpressionType returnType,
             MethodHandle invocationHandle,
-            JavaMemberImplementationMetadata implementationMetadata) {
+            JavaMemberImplementationMetadata implementationMetadata,
+            FunctionPurity purity) {
         this.languageName = FunctionSignature.validateLanguageName(languageName);
         this.parameterTypes = ExpressionTypes.copyOf(parameterTypes, "parameterTypes");
         this.returnType = Objects.requireNonNull(returnType, "returnType");
         this.invocationHandle = Objects.requireNonNull(invocationHandle, "invocationHandle");
         this.implementationMetadata = Objects.requireNonNull(implementationMetadata, "implementationMetadata");
+        this.purity = Objects.requireNonNull(purity, "purity");
         if (invocationHandle.type().parameterCount() != this.parameterTypes.size() + 1) {
             throw new IllegalArgumentException("invocation handle arity must match receiver plus parameter types");
         }
@@ -49,6 +52,14 @@ public final class JavaMethodDescriptor {
 
     public JavaMemberImplementationMetadata implementationMetadata() {
         return implementationMetadata;
+    }
+
+    public FunctionPurity purity() {
+        return purity;
+    }
+
+    public boolean pure() {
+        return purity.pure();
     }
 
     public int arity() {

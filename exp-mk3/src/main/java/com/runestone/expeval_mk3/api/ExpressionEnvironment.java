@@ -284,6 +284,12 @@ public final class ExpressionEnvironment {
             return this;
         }
 
+        public Builder registerJavaTypeMethod(
+                Class<?> javaType, String methodName, FunctionPurity purity, Class<?>... javaParameterTypes) {
+            javaTypes.registerJavaTypeMethod(javaType, methodName, purity, javaParameterTypes);
+            return this;
+        }
+
         public Builder registerJavaTypeWildcardChildren(Class<?> javaType, String... memberNames) {
             javaTypes.registerJavaTypeWildcardChildren(javaType, memberNames);
             return this;

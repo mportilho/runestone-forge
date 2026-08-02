@@ -18,7 +18,8 @@ public record RegisteredMethodNavigationBinding(
         ExpressionType resultType,
         RuntimeNullability resultNullability,
         MethodHandle invocationHandle,
-        JavaMemberImplementationMetadata implementationMetadata) implements NavigationBinding {
+        JavaMemberImplementationMetadata implementationMetadata,
+        boolean pure) implements NavigationBinding {
 
     public RegisteredMethodNavigationBinding {
         Objects.requireNonNull(receiverType, "receiverType");

@@ -841,6 +841,53 @@ class ExpressionCompilerTest {
     }
 
     @Test
+    void registeredMethodReturningNullViolatesTheNonNullContractAtRuntime() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaTypeMethod(NullReturningMethodProvider.class, "violatesNonNullContract")
+                .externalSymbol("object", new NullReturningMethodProvider(), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        String expression = "object.violatesNonNullContract()";
+
+        assertThatThrownBy(() -> ExpressionCompiler
+                .compileOrThrow(expression, environment)
+                .asResult()
+                .compute())
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(thrown -> assertForbiddenNullPointsAtMember(
+                        ((ExpressionExecutionException) thrown).diagnostic(), expression, "violatesNonNullContract"));
+    }
+
+    @Test
+    void registeredMethodReturningNullCollectionViolatesTheNonNullContractAtRuntime() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaTypeMethod(NullReturningMethodProvider.class, "violatesNonNullCollectionContract")
+                .externalSymbol("object", new NullReturningMethodProvider(), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        String expression = "object.violatesNonNullCollectionContract()";
+
+        assertThatThrownBy(() -> ExpressionCompiler
+                .compileOrThrow(expression, environment)
+                .asResult()
+                .compute())
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(thrown -> assertForbiddenNullPointsAtMember(
+                        ((ExpressionExecutionException) thrown).diagnostic(),
+                        expression,
+                        "violatesNonNullCollectionContract"));
+    }
+
+    private static void assertForbiddenNullPointsAtMember(
+            ExpressionDiagnostic diagnostic, String expression, String memberName) {
+        assertThat(diagnostic.code()).isEqualTo("RUNTIME_FORBIDDEN_NULL");
+        int memberStart = expression.indexOf(memberName);
+        int memberEnd = memberStart + memberName.length();
+        assertThat(diagnostic.primarySpan()).hasValueSatisfying(span -> {
+            assertThat(span.offset()).isLessThanOrEqualTo(memberStart);
+            assertThat(span.endOffset()).isGreaterThanOrEqualTo(memberEnd);
+        });
+    }
+
+    @Test
     void rejectsInvalidNavigatedCollectionOperationCallsBeforeRuntime() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE),
@@ -1066,6 +1113,17 @@ class ExpressionCompilerTest {
 
         public BigDecimal scaledAmount(BigDecimal factor) {
             return amount.multiply(factor);
+        }
+    }
+
+    public static final class NullReturningMethodProvider {
+
+        public String violatesNonNullContract() {
+            return null;
+        }
+
+        public List<BigDecimal> violatesNonNullCollectionContract() {
+            return null;
         }
     }
 

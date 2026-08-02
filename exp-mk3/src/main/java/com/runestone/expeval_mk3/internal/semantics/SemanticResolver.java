@@ -1481,13 +1481,15 @@ public final class SemanticResolver {
             RuntimeNullability nullability = call.safe()
                     ? RuntimeNullability.MAY_BE_NULL
                     : RuntimeNullability.NEVER_NULL;
+            boolean methodPure = receiverPure && methodDescriptor.pure();
             navigationBindings.put(call.id(), new RegisteredMethodNavigationBinding(
                     objectType,
                     methodDescriptor.returnType(),
                     nullability,
                     methodDescriptor.invocationHandle(),
-                    methodDescriptor.implementationMetadata()));
-            return LinkResolution.known(methodDescriptor.returnType(), null, nullability, false);
+                    methodDescriptor.implementationMetadata(),
+                    methodPure));
+            return LinkResolution.known(methodDescriptor.returnType(), null, nullability, methodPure);
         }
 
         private LinkResolution resolveCollectionOperation(

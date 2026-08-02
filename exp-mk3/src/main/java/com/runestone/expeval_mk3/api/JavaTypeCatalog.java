@@ -102,7 +102,13 @@ public final class JavaTypeCatalog {
         }
 
         public Builder registerJavaTypeMethod(Class<?> javaType, String methodName, Class<?>... javaParameterTypes) {
-            registration(javaType).addMethod(methodName, javaParameterTypes);
+            registration(javaType).addMethod(methodName, FunctionPurity.IMPURE, javaParameterTypes);
+            return this;
+        }
+
+        public Builder registerJavaTypeMethod(
+                Class<?> javaType, String methodName, FunctionPurity purity, Class<?>... javaParameterTypes) {
+            registration(javaType).addMethod(methodName, purity, javaParameterTypes);
             return this;
         }
 
@@ -153,8 +159,15 @@ public final class JavaTypeCatalog {
             includePublicMethods = true;
         }
 
-        private void addMethod(String methodName, Class<?>... javaParameterTypes) {
-            explicitMethods.add(new MethodKey(methodName, javaParameterTypes));
+        private void addMethod(String methodName, FunctionPurity purity, Class<?>... javaParameterTypes) {
+            MethodKey key = new MethodKey(methodName, purity, javaParameterTypes);
+            for (MethodKey existing : explicitMethods) {
+                if (existing.name().equals(key.name()) && existing.parameterTypes().equals(key.parameterTypes())) {
+                    throw new IllegalArgumentException(
+                            "duplicate explicit Java method registration: " + key.name() + key.parameterTypes());
+                }
+            }
+            explicitMethods.add(key);
         }
 
         private void addWildcardChildren(String... memberNames) {
@@ -216,10 +229,12 @@ public final class JavaTypeCatalog {
         private Map<FunctionSignature, JavaMethodDescriptor> discoverMethods() {
             List<Method> selectedMethods = new ArrayList<>();
             Set<Method> selectedMethodSet = new LinkedHashSet<>();
+            Map<Method, FunctionPurity> purities = new LinkedHashMap<>();
             for (MethodKey explicitMethod : explicitMethods) {
                 Method method = explicitMethod.resolve(javaType);
                 if (selectedMethodSet.add(method)) {
                     selectedMethods.add(method);
+                    purities.put(method, explicitMethod.purity());
                 }
             }
             if (includePublicMethods) {
@@ -229,6 +244,7 @@ public final class JavaTypeCatalog {
                     }
                     if (isSupportedPublicMethod(method) && selectedMethodSet.add(method)) {
                         selectedMethods.add(method);
+                        purities.put(method, FunctionPurity.IMPURE);
                     }
                 }
             }
@@ -236,7 +252,8 @@ public final class JavaTypeCatalog {
 
             Map<FunctionSignature, JavaMethodDescriptor> descriptors = new LinkedHashMap<>();
             for (Method method : selectedMethods) {
-                JavaMethodDescriptor descriptor = createMethodDescriptor(javaType, method, method.isVarArgs());
+                JavaMethodDescriptor descriptor = createMethodDescriptor(
+                        javaType, method, method.isVarArgs(), purities.get(method));
                 JavaMethodDescriptor previous = descriptors.putIfAbsent(descriptor.signature(), descriptor);
                 if (previous != null) {
                     throw new IllegalArgumentException("duplicate Java member method signature: "
@@ -313,7 +330,8 @@ public final class JavaTypeCatalog {
         }
     }
 
-    private static JavaMethodDescriptor createMethodDescriptor(Class<?> javaType, Method method, boolean allowVarargs) {
+    private static JavaMethodDescriptor createMethodDescriptor(
+            Class<?> javaType, Method method, boolean allowVarargs, FunctionPurity purity) {
         List<ExpressionType> parameterTypes = parameterTypes(method, allowVarargs);
         ExpressionType returnType = JavaMemberTypes.expressionType(method.getGenericReturnType(), method.getReturnType(), true);
         try {
@@ -330,7 +348,8 @@ public final class JavaTypeCatalog {
                     parameterTypes,
                     returnType,
                     handle,
-                    JavaMemberImplementationMetadata.forMethod("method", method));
+                    JavaMemberImplementationMetadata.forMethod("method", method),
+                    purity);
         } catch (IllegalAccessException exception) {
             throw new IllegalArgumentException("Java member method is not accessible: " + method, exception);
         }
@@ -392,7 +411,12 @@ public final class JavaTypeCatalog {
     }
 
     private static List<?> sequenceResult(Object value, ExpressionType elementType) {
-        Objects.requireNonNull(value, "Java member results must not be null");
+        if (value == null) {
+            // Non-nullity is the caller's contract to enforce (RUNTIME_FORBIDDEN_NULL with source
+            // span); this adapter only shapes an actual Java result, so it must let null pass through
+            // rather than fail eagerly with an untyped NullPointerException.
+            return null;
+        }
         ArrayList<Object> snapshot = new ArrayList<>();
         if (value.getClass().isArray()) {
             int length = Array.getLength(value);
@@ -590,10 +614,14 @@ public final class JavaTypeCatalog {
         return Character.toLowerCase(value.charAt(0)) + value.substring(1);
     }
 
-    private record MethodKey(String name, List<Class<?>> parameterTypes) {
+    private record MethodKey(String name, List<Class<?>> parameterTypes, FunctionPurity purity) {
 
-        private MethodKey(String name, Class<?>... parameterTypes) {
-            this(FunctionSignature.validateLanguageName(name), copyParameterTypes(parameterTypes));
+        private MethodKey {
+            Objects.requireNonNull(purity, "purity");
+        }
+
+        private MethodKey(String name, FunctionPurity purity, Class<?>... parameterTypes) {
+            this(FunctionSignature.validateLanguageName(name), copyParameterTypes(parameterTypes), purity);
         }
 
         private Method resolve(Class<?> javaType) {

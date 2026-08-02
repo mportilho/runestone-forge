@@ -627,6 +627,7 @@ class SemanticResolverTest {
             assertThat(binding.resultType()).isEqualTo(ScalarType.NUMBER);
             assertThat(binding.resultNullability()).isEqualTo(RuntimeNullability.NEVER_NULL);
             assertThat(binding.accessorHandle()).isNotNull();
+            assertThat(binding.pure()).isTrue();
             assertThat(model.resolvedTypes()).containsEntry(link.id(), ScalarType.NUMBER);
         });
     }
@@ -664,7 +665,28 @@ class SemanticResolverTest {
             assertThat(binding.resultType()).isEqualTo(ScalarType.NUMBER);
             assertThat(binding.resultNullability()).isEqualTo(RuntimeNullability.NEVER_NULL);
             assertThat(binding.invocationHandle()).isNotNull();
+            assertThat(binding.pure()).isFalse();
             assertThat(model.resolvedTypes()).containsEntry(link.id(), ScalarType.NUMBER);
+        });
+    }
+
+    @Test
+    void propagatesDeclaredRegisteredMethodPurityToTheNavigationBinding() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .registerJavaTypeMethod(PropertyProvider.class, "scaledAmount", FunctionPurity.PURE, BigDecimal.class)
+                .externalSymbol("object", new PropertyProvider(BigDecimal.TEN), ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        ExpressionFileNode ast = ast("object.scaledAmount(2)");
+        NavigationChainNode navigation = (NavigationChainNode) ast.resultExpression().orElseThrow();
+        NavigationLink link = navigation.links().getFirst();
+
+        SemanticResolutionResult result = new SemanticResolver().resolve(ast, environment);
+
+        assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success -> {
+            SemanticModel model = success.model();
+            RegisteredMethodNavigationBinding binding =
+                    (RegisteredMethodNavigationBinding) model.navigationBindings().get(link.id());
+            assertThat(binding.pure()).isTrue();
         });
     }
 

@@ -164,6 +164,58 @@ class JavaTypeCatalogTest {
     }
 
     @Test
+    @DisplayName("explicit method registration declares purity with impure default; batch registration is always impure")
+    void explicitMethodRegistrationDeclaresPurityWithImpureDefaultBatchRegistrationIsAlwaysImpure() {
+        JavaTypeCatalog catalog = JavaTypeCatalog.builder()
+                .registerJavaTypeMethod(MethodProvider.class, "privatePrice", BigDecimal.class)
+                .registerJavaTypeMethod(MethodProvider.class, "label", FunctionPurity.PURE)
+                .registerJavaTypeWithPublicMethods(MethodProvider.class)
+                .build();
+
+        JavaTypeDescriptor descriptor = catalog.find(MethodProvider.class).orElseThrow();
+
+        assertThat(descriptor.findMethod(signature("privatePrice", ScalarType.NUMBER)).orElseThrow().purity())
+                .isEqualTo(FunctionPurity.IMPURE);
+        assertThat(descriptor.findMethod(signature("label")).orElseThrow().purity())
+                .isEqualTo(FunctionPurity.PURE);
+        assertThat(descriptor.findMethod(signature("calculate", ScalarType.NUMBER)).orElseThrow().pure())
+                .isFalse();
+        assertThat(descriptor.findMethod(signature("value", ScalarType.STRING)).orElseThrow().pure())
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("an explicitly declared purity takes precedence over the same method's batch discovery")
+    void explicitlyDeclaredPurityTakesPrecedenceOverTheSameMethodsBatchDiscovery() {
+        JavaTypeCatalog catalog = JavaTypeCatalog.builder()
+                .registerJavaTypeMethod(MethodProvider.class, "calculate", FunctionPurity.PURE, BigDecimal.class)
+                .registerJavaTypeWithPublicMethods(MethodProvider.class)
+                .build();
+
+        JavaTypeDescriptor descriptor = catalog.find(MethodProvider.class).orElseThrow();
+
+        assertThat(descriptor.findMethod(signature("calculate", ScalarType.NUMBER)).orElseThrow().purity())
+                .isEqualTo(FunctionPurity.PURE);
+    }
+
+    @Test
+    @DisplayName("registering the same explicit method twice fails catalog construction, even with matching purity")
+    void registeringTheSameExplicitMethodTwiceFailsCatalogConstructionEvenWithMatchingPurity() {
+        assertThatThrownBy(() -> JavaTypeCatalog.builder()
+                .registerJavaTypeMethod(MethodProvider.class, "calculate", FunctionPurity.PURE, BigDecimal.class)
+                .registerJavaTypeMethod(MethodProvider.class, "calculate", FunctionPurity.IMPURE, BigDecimal.class))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("duplicate explicit Java method registration")
+                .hasMessageContaining("calculate");
+        assertThatThrownBy(() -> JavaTypeCatalog.builder()
+                .registerJavaTypeMethod(MethodProvider.class, "calculate", BigDecimal.class)
+                .registerJavaTypeMethod(MethodProvider.class, "calculate", BigDecimal.class))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("duplicate explicit Java method registration")
+                .hasMessageContaining("calculate");
+    }
+
+    @Test
     @DisplayName("varargs methods are excluded from public mode but supported when explicitly registered")
     void varargsMethodsAreExcludedFromPublicModeButSupportedWhenExplicitlyRegistered() throws Throwable {
         JavaTypeDescriptor publicOnly = JavaTypeCatalog.builder()

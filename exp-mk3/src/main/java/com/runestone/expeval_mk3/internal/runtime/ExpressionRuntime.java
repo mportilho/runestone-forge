@@ -280,15 +280,17 @@ public final class ExpressionRuntime {
             }
             arguments[index + 1] = argument;
         }
+        String memberName = binding.implementationMetadata().memberName();
+        Object result;
         try {
-            return binding.invocationHandle().invokeWithArguments(arguments);
+            result = binding.invocationHandle().invokeWithArguments(arguments);
         } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
             throw fatal;
         } catch (Throwable exception) {
             // MethodHandle.invokeWithArguments declares Throwable; this boundary preserves method failures.
-            throw RuntimeFailures.memberAccessFailure(
-                    binding.implementationMetadata().memberName(), sourceSpan, exception);
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
         }
+        return requiredMemberValue(result, memberName, sourceSpan);
     }
 
     @SuppressWarnings("removal")
