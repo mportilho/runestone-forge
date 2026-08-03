@@ -160,18 +160,20 @@ A navegação já foi implementada antecipadamente ponta a ponta durante as Etap
 
 ## Etapa 7 — Otimizações de compilação
 
-**Objetivo:** aplicar transformações opcionais entre a forma sem otimizações e o plano executado. A partir daqui vale a regra: **todo plano otimizado é validado por equivalência contra a forma sem otimizações da Etapa 5**, gerada pela mesma pipeline e selecionável apenas internamente.
+**Objetivo:** aplicar transformações opcionais entre a forma sem otimizações e o plano executado. A partir daqui vale a regra: **todo plano otimizado é validado por equivalência contra a forma sem otimizações da Etapa 5**, gerada pela mesma pipeline e selecionável apenas internamente. O detalhamento normativo está em `docs/planning/etapa-7/` e no ADR 0019.
 
 **Entregas, na ordem interna sugerida**
-1. Constant folding completo (binários, unários, postfix, between constante, `??` com esquerda constante não-nula respeitando efeitos, funções `foldable`, coleções constantes, condicionais com condição constante, prefixos constantes de navegação). Registrar `foldedVariableReads` no plano desde já (pré-requisito da auditoria, Etapa 10).
-2. Reescritas/strength reduction somente com prova de equivalência em valor, escala, arredondamento, domínio, falha, ordem e efeitos. `not not x → x` é candidato simples; reescritas de `%`, potência, raiz e identidades aritméticas não são presumidas válidas sob `MathContext` e ADR 0017.
+1. Constant folding completo (binários, unários, postfix, between constante, `??` com esquerda constante não-nula respeitando efeitos, funções `foldable`, coleções constantes, condicionais com condição constante, prefixos constantes de navegação, leitura de símbolo externo não sobrescrevível). Subexpressão constante que falha ao dobrar permanece **não dobrada**, para falhar em execução como o oráculo; a Checagem Diferida só é descartada quando a dobra tem sucesso. Registrar `foldedVariableReads` no plano desde já (pré-requisito da auditoria, Etapa 10).
+2. Reescritas/strength reduction somente com prova de equivalência em valor, escala, arredondamento, domínio, falha, ordem e efeitos. `not not x → x` é a única autorizada; reescritas de `%`, potência, raiz e identidades aritméticas não são presumidas válidas sob `MathContext` e ADR 0017.
 3. Elisão de `as*` quando o tipo já foi provado (§9) — as asserções redundantes viram no-ops.
-4. `in` com lado direito constante → `HashSet` ou array ordenado + busca binária, por tamanho.
-5. CSE sobre subexpressões puras (slots internos sintéticos no frame).
-6. Eliminação de atribuições mortas (com warning; preservadas em `asAssignments()`).
-7. Reordenação segura de curto-circuito (nunca operandos com efeitos).
+4. `in` com lado direito constante → `HashSet` para `STRING`/`BOOLEAN`/temporais e array ordenado + busca binária para `NUMBER`, acima de um limiar único de tamanho. `HashSet<BigDecimal>` é proibido porque `structuralEquals` compara números por `compareTo`.
+5. CSE sobre subexpressões puras, com memo preguiçosa no lugar (sem içamento) em slots apensos ao frame no plano — **condicionado a medição**: se não pagar em benchmark, sai da etapa por decisão registrada.
 
-**Critérios de aceite:** teste de propriedade "plano otimizado ≡ forma sem otimizações" (entradas aleatórias, corpus inteiro, incluindo funções com efeitos, falhas, escala e domínio real); comparação JMH por benchmark contra a baseline da Etapa 5, com limiar definido a partir da variabilidade observada e exceção somente quando documentada.
+A transformação acontece na construção do plano (`build` otimizado × `buildOracle`), não em passe posterior sobre `ExecutableNode`: a interface não tem protocolo de travessia/reconstrução, e `PlanTransformation` é removida.
+
+Saíram da Etapa 7: **eliminação de atribuições mortas**, porque uma atribuição só é morta para `asResult()` enquanto `asAssignments()` lê todo slot, e a Etapa 9 exige um único plano compartilhado entre visões; e **reordenação segura de curto-circuito**, que passa a candidata da Etapa 8 condicionada a perfil.
+
+**Critérios de aceite:** teste de propriedade "plano otimizado ≡ forma sem otimizações" (entradas aleatórias, corpus inteiro, incluindo funções com efeitos, falhas, escala e domínio real); benchmarks novos com conteúdo dobrável (os existentes são todos dirigidos por símbolo externo e mediriam ≈0%); gate de não-regressão dentro da banda de ±1% do protocolo vigente para os benchmarks existentes, com exceção somente quando documentada.
 
 **Depende de:** Etapa 6 (folding de navegação precisa dela).
 
@@ -187,6 +189,7 @@ A navegação já foi implementada antecipadamente ponta a ponta durante as Etap
 - Invocação de funções sem reflexão: `LambdaMetafactory` para aridades 1–4, `invokeExact` com handle pré-adaptado no resto; pré-alocação de arrays de varargs por call-site quando justificado por perfil.
 - Navegação: acessores via `LambdaMetafactory`/`VarHandle` com metadados registrados; `?.` como checagem de null, sem try/catch e sem fallback reflexivo por tipo desconhecido.
 - Pool opcional de `ExecutionScope` por thread — **implementar somente se o perfil de alocação justificar** (§13).
+- Reordenação segura de curto-circuito, herdada da Etapa 7 e igualmente condicionada a perfil (nunca operandos com efeitos); o critério de aceite continua sendo equivalência contra o oráculo do ADR 0019.
 
 **Critérios de aceite (gates JMH da §21):** expressões decimais comuns com ganho mensurável sobre o baseline da Etapa 5; alocação decimal limitada aos valores necessários de resultado/intermediários inevitáveis; navegação com metadados ≈ getter direto + indireção constante; equivalência com a forma sem otimizações mantida.
 

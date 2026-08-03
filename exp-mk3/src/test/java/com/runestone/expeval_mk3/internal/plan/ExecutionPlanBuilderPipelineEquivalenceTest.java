@@ -1,6 +1,8 @@
 package com.runestone.expeval_mk3.internal.plan;
 
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
+import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.api.ExpressionExecutionException;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.ExpressionFileNode;
@@ -8,25 +10,24 @@ import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildSuccess;
 import com.runestone.expeval_mk3.internal.ast.SemanticAstBuilder;
 import com.runestone.expeval_mk3.internal.parser.ExpressionParser;
 import com.runestone.expeval_mk3.internal.parser.ParseSuccess;
-import com.runestone.expeval_mk3.internal.runtime.ExecutableBranch;
-import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
 import com.runestone.expeval_mk3.internal.semantics.SemanticModel;
 import com.runestone.expeval_mk3.internal.semantics.SemanticResolutionSuccess;
 import com.runestone.expeval_mk3.internal.semantics.SemanticResolver;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.time.Clock;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Proves the internal pipeline required by issue #94: skipping the (currently empty) transformation
- * step via {@code buildUnoptimized} produces the same plan shape as the public {@code build} entry
- * point, both for the assignments and for the result expression. This is the equivalence oracle future
- * optimization phases build on, so the comparison walks node identity/source-span/family rather than
- * only checking the computed value.
+ * Proves ADR 0019's equivalence contract for issue #113: {@code build} and {@code buildOracle} agree in
+ * value and in failure, for the same {@code SemanticModel}, the same environment, and the same inputs.
+ * No transformation is installed yet, so the two forms coincide trivially; this is exactly what makes
+ * the harness safe to introduce now, ahead of the optimizations it will police. Prior to this ticket this
+ * test asserted the two forms produced the same node shape; shape stops being the right thing to assert
+ * from the first optimization onward, so it was replaced by value and failure equivalence.
  */
 class ExecutionPlanBuilderPipelineEquivalenceTest {
 
@@ -35,88 +36,47 @@ class ExecutionPlanBuilderPipelineEquivalenceTest {
                     + "(d > 0 and a between 0 and 10) or (a = 1) or (a ^ 2 = 1) or (sqrt(a) > 0) "
                     + "or (a in b) or (e < 0) or (if(a > 0, true, false))";
 
+    private static final String FAILING_SOURCE = "a := 1 / 0; a";
+
     @Test
-    void buildAndBuildUnoptimizedProduceStructurallyIdenticalPlans() {
+    void buildAndBuildOracleAgreeOnValue() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("dummy", ScalarType.NUMBER, BigDecimal.ZERO, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
         SemanticModel model = resolve(SOURCE, environment);
         ExecutionPlanBuilder builder = new ExecutionPlanBuilder();
 
-        ExecutionPlan viaPublicEntryPoint = builder.build(model, environment);
-        ExecutionPlan viaUnoptimizedPath = builder.buildUnoptimized(model, environment);
+        ExecutionPlan optimized = builder.build(model, environment);
+        ExecutionPlan oracle = builder.buildOracle(model, environment);
 
-        assertThat(viaPublicEntryPoint.hasResult()).isTrue();
-        assertThat(dump(viaPublicEntryPoint.resultExpression()))
-                .isEqualTo(dump(viaUnoptimizedPath.resultExpression()));
-        assertThat(assignmentDumps(viaPublicEntryPoint)).isEqualTo(assignmentDumps(viaUnoptimizedPath));
-        assertThat(viaPublicEntryPoint.compute(java.util.Map.of(), java.time.Clock.systemUTC()))
-                .isEqualTo(viaUnoptimizedPath.compute(java.util.Map.of(), java.time.Clock.systemUTC()));
+        assertThat(optimized.hasResult()).isTrue();
+        assertThat(optimized.compute(Map.of(), Clock.systemUTC()))
+                .isEqualTo(oracle.compute(Map.of(), Clock.systemUTC()));
     }
 
-    private static List<String> assignmentDumps(ExecutionPlan plan) {
-        return plan.assignments().stream()
-                .map(assignment -> assignment.id() + "@" + assignment.sourceSpan())
-                .collect(Collectors.toList());
+    @Test
+    void buildAndBuildOracleAgreeOnFailureCodeAndSourceSpan() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
+        SemanticModel model = resolve(FAILING_SOURCE, environment);
+        ExecutionPlanBuilder builder = new ExecutionPlanBuilder();
+
+        ExecutionPlan optimized = builder.build(model, environment);
+        ExecutionPlan oracle = builder.buildOracle(model, environment);
+
+        ExpressionDiagnostic optimizedFailure = diagnosticOf(() -> optimized.compute(Map.of(), Clock.systemUTC()));
+        ExpressionDiagnostic oracleFailure = diagnosticOf(() -> oracle.compute(Map.of(), Clock.systemUTC()));
+
+        assertThat(optimizedFailure.code()).isEqualTo(oracleFailure.code());
+        assertThat(optimizedFailure.primarySpan()).isEqualTo(oracleFailure.primarySpan());
     }
 
-    /** Structural dump: family class, node identity, source span, and children, in evaluation order. */
-    private static String dump(ExecutableNode node) {
-        if (node == null) {
-            return "<none>";
-        }
-        StringBuilder builder = new StringBuilder();
-        builder.append(node.getClass().getSimpleName())
-                .append('[').append(node.id()).append('@').append(node.sourceSpan()).append(']');
-        for (ExecutableNode child : children(node)) {
-            builder.append('(').append(dump(child)).append(')');
-        }
-        return builder.toString();
-    }
-
-    private static List<ExecutableNode> children(ExecutableNode node) {
-        List<ExecutableNode> children = new java.util.ArrayList<>();
-        for (var recordComponent : node.getClass().getRecordComponents() != null
-                ? node.getClass().getRecordComponents() : new java.lang.reflect.RecordComponent[0]) {
-            Object value = invoke(recordComponent, node);
-            collect(value, children);
-        }
-        if (node.getClass().getRecordComponents() == null) {
-            for (var field : node.getClass().getDeclaredFields()) {
-                field.setAccessible(true);
-                collect(readField(field, node), children);
-            }
-        }
-        return children;
-    }
-
-    private static void collect(Object value, List<ExecutableNode> children) {
-        if (value instanceof ExecutableNode child) {
-            children.add(child);
-        } else if (value instanceof ExecutableBranch branch) {
-            children.add(branch.condition());
-            children.add(branch.consequence());
-        } else if (value instanceof List<?> list) {
-            for (Object element : list) {
-                collect(element, children);
-            }
-        }
-    }
-
-    private static Object invoke(java.lang.reflect.RecordComponent component, Object target) {
+    private static ExpressionDiagnostic diagnosticOf(Runnable computation) {
         try {
-            return component.getAccessor().invoke(target);
-        } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException(exception);
+            computation.run();
+        } catch (ExpressionExecutionException exception) {
+            return exception.diagnostic();
         }
-    }
-
-    private static Object readField(java.lang.reflect.Field field, Object target) {
-        try {
-            return field.get(target);
-        } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException(exception);
-        }
+        throw new AssertionError("expected an ExpressionExecutionException, but computation succeeded");
     }
 
     private static SemanticModel resolve(String source, ExpressionEnvironment environment) {

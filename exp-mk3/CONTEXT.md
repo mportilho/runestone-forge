@@ -287,3 +287,19 @@ _Avoid_: Token position, raw ANTLR location
 **Diagnostico de Expressao**:
 A stable, categorized and severity-marked explanation of a compilation warning/error or execution failure, identified by a testable code and tied to a primary source span whenever the failure originates in source text. It may include related spans, notes, or a suggestion; compilation errors block a planejable semantic model while warnings do not.
 _Avoid_: Exception message, ANTLR error text
+
+**Oraculo Sem Otimizacoes**:
+The form of a Plano Imutavel that applies no optimizing transformation, built by the same pipeline as the optimized form and selectable only inside the module. It is the reference semantics against which every optimized plan is proven equivalent in value, scale, rounding, domain, failure, observable order, and observable effects.
+_Avoid_: Interpreter mode, debug plan, public execution mode, legacy plan
+
+**Dobra de Constante**:
+The replacement of a pure subexpression whose operands are all known during compilation by its already computed value. A subexpression that fails while being folded is left unfolded so that it fails during execution exactly as the Oraculo Sem Otimizacoes would.
+_Avoid_: Compile-time error for failing constants, poisoned constant, precomputed cache
+
+**Leitura Dobrada**:
+The record kept in a Plano Imutavel of each symbol read that became a constant during Dobra de Constante, carrying the symbol name, its Identificador de No, its Trecho de Fonte, and the folded value. It exists so that auditing can explain a value that no longer appears as a read during execution.
+_Avoid_: Execution trace entry, variable snapshot, audit event
+
+**Elisao de Assercao**:
+The removal of an assertion function call whose asserted type is exactly the argument's already proven type, turning the call into no operation because the underlying boundary conversion returns the value itself in that case.
+_Avoid_: Type cast removal, unchecked coercion, silent conversion

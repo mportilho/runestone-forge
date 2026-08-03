@@ -95,35 +95,55 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * Builds the immutable, non-optimized {@link ExecutionPlan} from a successful {@code SemanticModel}.
- * Every violation of the Etapa 4 completeness contract (missing type, binding, prepared value, or
- * numeric fact) is an internal bug in this builder, never a late user diagnostic; it fails as an
+ * Builds the immutable {@link ExecutionPlan} from a successful {@code SemanticModel}, in one of two
+ * modes selected by a single internal {@code folding} field: {@link #build} produces the optimized plan
+ * and {@link #buildOracle} produces the Unoptimized Oracle that {@code build} is validated against (ADR
+ * 0019). The transformation happens during construction, not as a rewrite pass over a built
+ * {@link ExecutableNode} tree: that family of nodes has no traversal or reconstruction protocol, and
+ * adding one would only pay to rebuild what this builder already built with the full semantic metadata
+ * in hand. Every violation of the Etapa 4 completeness contract (missing type, binding, prepared value,
+ * or numeric fact) is an internal bug in this builder, never a late user diagnostic; it fails as an
  * {@link IllegalStateException} instead of inferring, resolving, or rediscovering the missing decision.
  */
 public final class ExecutionPlanBuilder {
 
-    private static final List<PlanTransformation> TRANSFORMATIONS = List.of();
+    private final boolean folding;
 
-    /**
-     * Builds the plan that will actually run: the non-optimized form with any installed transformation
-     * applied. No transformation is installed in this phase, so this currently returns the same plan
-     * shape as {@link #buildUnoptimized}.
-     */
-    public ExecutionPlan build(SemanticModel model, ExpressionEnvironment environment) {
-        ExecutionPlan plan = buildUnoptimized(model, environment);
-        for (PlanTransformation transformation : TRANSFORMATIONS) {
-            plan = transformation.apply(plan);
-        }
-        return plan;
+    public ExecutionPlanBuilder() {
+        this(true);
+    }
+
+    private ExecutionPlanBuilder(boolean folding) {
+        this.folding = folding;
     }
 
     /**
-     * Builds the plan directly from the basic, non-optimized nodes and runtime, skipping the
-     * transformation step. Etapas 7-8 use this path as the equivalence oracle against transformed plans;
-     * this phase installs no transformation, so {@link #build} and this method produce the same plan
-     * shape.
+     * Builds the optimized plan that the public compilation entry point uses.
      */
-    ExecutionPlan buildUnoptimized(SemanticModel model, ExpressionEnvironment environment) {
+    public ExecutionPlan build(SemanticModel model, ExpressionEnvironment environment) {
+        return withFolding(true).buildPlan(model, environment);
+    }
+
+    /**
+     * Builds the Unoptimized Oracle from the same pipeline as {@link #build}, so that any difference
+     * between the two forms can only come from an optimization and never from a second implementation
+     * drifting away. Selection is internal to the module: there is no public flag, system property, or
+     * duplicated runtime built on this path.
+     */
+    ExecutionPlan buildOracle(SemanticModel model, ExpressionEnvironment environment) {
+        return withFolding(false).buildPlan(model, environment);
+    }
+
+    /**
+     * Returns {@code this} when it already carries the requested mode, and a fresh instance with that
+     * mode otherwise; keeps {@code folding} the single, genuinely consulted mode selector rather than a
+     * field one entry point writes and the other ignores.
+     */
+    private ExecutionPlanBuilder withFolding(boolean folding) {
+        return this.folding == folding ? this : new ExecutionPlanBuilder(folding);
+    }
+
+    private ExecutionPlan buildPlan(SemanticModel model, ExpressionEnvironment environment) {
         Objects.requireNonNull(model, "model");
         Objects.requireNonNull(environment, "environment");
         Map<NodeId, List<DeferredCheck>> deferredChecksByNode = model.deferredChecks().stream()
