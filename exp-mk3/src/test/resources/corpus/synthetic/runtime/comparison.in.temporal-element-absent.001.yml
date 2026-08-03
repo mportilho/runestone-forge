@@ -1,0 +1,6 @@
+id: runtime.comparison.in.temporal-element-absent.001
+phase: runtime
+kind: valid
+source: 'd"2024-01-03" in [d"2024-01-01", d"2024-01-02"]'
+coverage: [in, collection-literal, date-literal]
+expected: {type: BOOLEAN, result: false}

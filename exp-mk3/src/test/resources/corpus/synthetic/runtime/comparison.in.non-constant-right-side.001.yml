@@ -1,0 +1,14 @@
+id: runtime.comparison.in.non-constant-right-side.001
+phase: runtime
+kind: valid
+source: '2 in items'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    items:
+      type: COLLECTION_NUMBER
+      default: [{type: NUMBER, value: "1"}, {type: NUMBER, value: "2"}, {type: NUMBER, value: "3"}]
+      overwritePolicy: OVERRIDABLE
+coverage: [in, identifier, int-literal]
+expected: {type: BOOLEAN, result: true}

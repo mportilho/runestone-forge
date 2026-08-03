@@ -1,0 +1,6 @@
+id: runtime.comparison.in.boolean-element-absent.001
+phase: runtime
+kind: valid
+source: 'true in [false]'
+coverage: [in, collection-literal, boolean-literal]
+expected: {type: BOOLEAN, result: false}

@@ -1,0 +1,16 @@
+id: runtime.comparison.in.map-right-side.001
+phase: runtime
+kind: valid
+source: '"b" in m'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    m:
+      type: MAP_NUMBER
+      default:
+        b: {type: NUMBER, value: "2"}
+        A: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+coverage: [in, identifier, string-literal]
+expected: {type: BOOLEAN, result: true}

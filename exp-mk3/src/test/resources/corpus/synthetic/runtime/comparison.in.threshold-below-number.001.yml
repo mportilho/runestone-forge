@@ -1,0 +1,6 @@
+id: runtime.comparison.in.threshold-below-number.001
+phase: runtime
+kind: valid
+source: '5 in [1, 2, 3, 4, 5, 6, 7]'
+coverage: [in, collection-literal, int-literal]
+expected: {type: BOOLEAN, result: true}
