@@ -33,6 +33,7 @@ public final class ExecutionPlan {
     private final List<ExternalSymbol> declaredSymbolsInCanonicalOrder;
     private final Set<String> declaredSymbolNames;
     private final List<AssignedSymbol> assignedSymbolsInCreationOrder;
+    private final List<FoldedRead> foldedVariableReads;
     private final Object[] frameTemplate;
     private final BoundaryCoercion boundaryCoercion;
     private final ZoneId zoneId;
@@ -45,6 +46,7 @@ public final class ExecutionPlan {
             List<ExternalBindingPlan> externalBindings,
             List<ExternalSymbol> declaredSymbolsInCanonicalOrder,
             List<AssignedSymbol> assignedSymbolsInCreationOrder,
+            List<FoldedRead> foldedVariableReads,
             int frameSize,
             BoundaryCoercion boundaryCoercion,
             ZoneId zoneId,
@@ -57,6 +59,7 @@ public final class ExecutionPlan {
         this.assignments = List.copyOf(assignments);
         this.externalBindings = List.copyOf(externalBindings);
         this.assignedSymbolsInCreationOrder = List.copyOf(assignedSymbolsInCreationOrder);
+        this.foldedVariableReads = List.copyOf(foldedVariableReads);
         bindingsByName = this.externalBindings.stream()
                 .collect(Collectors.toUnmodifiableMap(binding -> binding.symbol().name(), binding -> binding));
         this.declaredSymbolsInCanonicalOrder = List.copyOf(declaredSymbolsInCanonicalOrder);
@@ -101,6 +104,14 @@ public final class ExecutionPlan {
      */
     public List<AssignedSymbol> assignedSymbolsInCreationOrder() {
         return assignedSymbolsInCreationOrder;
+    }
+
+    /**
+     * Every symbol read that collapsed into a compile-time constant (ADR 0019, issue #117), in build
+     * order. Construction-time metadata only, with no public consumer before the Etapa 10 audit.
+     */
+    List<FoldedRead> foldedVariableReads() {
+        return foldedVariableReads;
     }
 
     List<AssignmentExecutable> assignments() {

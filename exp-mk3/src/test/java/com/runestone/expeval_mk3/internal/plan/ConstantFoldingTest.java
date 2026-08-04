@@ -106,7 +106,7 @@ class ConstantFoldingTest {
     @Test
     void doesNotFoldAPostfixExpressionWithANonConstantOperand() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
         SemanticModel model = resolve("x!", environment);
 

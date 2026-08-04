@@ -45,7 +45,7 @@ class NavigationExecutionUsesResolvedBindingsTest {
                         "customer",
                         new ObjectType(EnvironmentConfigurations.CustomerProfile.class.getName()),
                         new EnvironmentConfigurations.CustomerProfile("Ana", BigDecimal.TEN),
-                        ExternalSymbolOverwritePolicy.FIXED)
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .registerJavaType(EnvironmentConfigurations.CustomerProfile.class)
                 .build();
         ExpressionFileNode ast = ast("customer.name");

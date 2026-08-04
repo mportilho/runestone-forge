@@ -9,4 +9,11 @@ public sealed interface NavigationBinding
         permits CollectionOperationBinding, ContextualMemberNavigationBinding, FilterNavigationBinding,
         IndexSubscriptNavigationBinding, MapKeySubscriptNavigationBinding, RegisteredMethodNavigationBinding,
         RegisteredPropertyNavigationBinding, SliceSubscriptNavigationBinding, WildcardNavigationBinding {
+
+    /**
+     * Whether this link, together with everything to its left in the chain, is safe to evaluate at
+     * plan-build time (ADR 0019, issue #117): declared once per link kind at resolution and consumed,
+     * never rediscovered, by navigation-prefix constant folding.
+     */
+    boolean pure();
 }

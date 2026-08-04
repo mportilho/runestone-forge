@@ -70,7 +70,7 @@ class ExecutionPlanBuilderTest {
     @Test
     void attachesTheFactorialDeferredChecksToThePostfixNodeForANonConstantOperand() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
         SemanticModel model = resolve("x!", environment);
 
@@ -86,8 +86,8 @@ class ExecutionPlanBuilderTest {
     @Test
     void attachesThePowerRealDomainDeferredCheckToTheExponentiationNodeForANonConstantBase() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.valueOf(-2), ExternalSymbolOverwritePolicy.FIXED)
-                .externalSymbol("y", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.valueOf(-2), ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("y", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
         SemanticModel model = resolve("x ^ y", environment);
 
