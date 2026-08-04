@@ -10,7 +10,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Objects;
 
-public final class ExecutionScope {
+public class ExecutionScope {
 
     private static final Object UNBOUND = new Object();
 

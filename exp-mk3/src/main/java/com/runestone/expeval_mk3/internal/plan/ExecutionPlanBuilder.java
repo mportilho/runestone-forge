@@ -51,6 +51,7 @@ import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutors;
 import com.runestone.expeval_mk3.internal.runtime.CollectionOperationRuntimeBinding;
 import com.runestone.expeval_mk3.internal.runtime.ConditionalExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ConstantExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.ConstantFolder;
 import com.runestone.expeval_mk3.internal.runtime.ContextualMemberExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.CurrentTemporalExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableBranch;
@@ -262,9 +263,10 @@ public final class ExecutionPlanBuilder {
                     currentTemporalValue.id(), currentTemporalValue.sourceSpan(), currentTemporalValue.kind());
             case GroupedExpressionNode grouped -> buildNode(grouped.expression(), model, environment, deferredChecksByNode);
             case BinaryOperationNode binary -> buildBinary(binary, model, requireEnvironment(environment), deferredChecksByNode);
-            case UnaryOperationNode unary -> new UnaryExecutableNode(
-                    unary.id(), unary.sourceSpan(), unary.operator(),
-                    buildNode(unary.operand(), model, environment, deferredChecksByNode));
+            case UnaryOperationNode unary -> {
+                ExecutableNode operand = buildNode(unary.operand(), model, environment, deferredChecksByNode);
+                yield fold(new UnaryExecutableNode(unary.id(), unary.sourceSpan(), unary.operator(), operand), operand);
+            }
             case PostfixOperationNode postfix -> buildPostfix(postfix, model, requireEnvironment(environment), deferredChecksByNode);
             case BetweenNode between -> buildBetween(between, model, environment, deferredChecksByNode);
             case MembershipNode membership -> buildMembership(membership, model, environment, deferredChecksByNode);
@@ -288,19 +290,20 @@ public final class ExecutionPlanBuilder {
         ExecutableNode right = buildNode(binary.right(), model, environment, deferredChecksByNode);
         BinaryOperator operator = binary.operator();
         return switch (operator) {
-            case ADD, SUBTRACT, MULTIPLY, DIVIDE, MODULO, ROOT, EXPONENTIATE, CONCATENATE -> BinaryExecutableNode.arithmetic(
+            case ADD, SUBTRACT, MULTIPLY, DIVIDE, MODULO, ROOT, EXPONENTIATE, CONCATENATE -> fold(BinaryExecutableNode.arithmetic(
                     binary.id(), binary.sourceSpan(), operator, left, right, environment.mathContext(),
-                    deferredChecksByNode.getOrDefault(binary.id(), List.of()));
-            case LOGICAL_AND, LOGICAL_OR, LOGICAL_NAND, LOGICAL_NOR, LOGICAL_XOR, LOGICAL_XNOR ->
-                    BinaryExecutableNode.logical(binary.id(), binary.sourceSpan(), operator, left, right);
-            case GREATER_THAN, GREATER_THAN_OR_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL -> BinaryExecutableNode.comparison(
-                    binary.id(), binary.sourceSpan(), operator, left, right, model.resolvedTypes().get(binary.left().id()));
-            case EQUAL, NOT_EQUAL -> BinaryExecutableNode.equality(
+                    deferredChecksByNode.getOrDefault(binary.id(), List.of())), left, right);
+            case LOGICAL_AND, LOGICAL_OR, LOGICAL_NAND, LOGICAL_NOR, LOGICAL_XOR, LOGICAL_XNOR -> fold(
+                    BinaryExecutableNode.logical(binary.id(), binary.sourceSpan(), operator, left, right), left, right);
+            case GREATER_THAN, GREATER_THAN_OR_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL -> fold(BinaryExecutableNode.comparison(
+                    binary.id(), binary.sourceSpan(), operator, left, right, model.resolvedTypes().get(binary.left().id())),
+                    left, right);
+            case EQUAL, NOT_EQUAL -> fold(BinaryExecutableNode.equality(
                     binary.id(), binary.sourceSpan(), operator, left, right,
-                    required(model.equalityOperandTypes(), binary.id(), "equality operand type"));
-            case REGEX_MATCH, REGEX_NOT_MATCH -> BinaryExecutableNode.regex(
+                    required(model.equalityOperandTypes(), binary.id(), "equality operand type")), left, right);
+            case REGEX_MATCH, REGEX_NOT_MATCH -> fold(BinaryExecutableNode.regex(
                     binary.id(), binary.sourceSpan(), operator, left,
-                    (Pattern) required(model.preparedValues(), binary.id(), "prepared regex pattern"));
+                    (Pattern) required(model.preparedValues(), binary.id(), "prepared regex pattern")), left);
         };
     }
 
@@ -311,9 +314,9 @@ public final class ExecutionPlanBuilder {
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
         ExecutableNode operand = buildNode(postfix.operand(), model, environment, deferredChecksByNode);
         List<PostfixOperator> operators = postfix.operations().stream().map(PostfixOperatorOccurrence::operator).toList();
-        return new PostfixExecutableNode(
+        return fold(new PostfixExecutableNode(
                 postfix.id(), postfix.sourceSpan(), operand, operators, environment.maxFactorialInput(),
-                deferredChecksByNode.getOrDefault(postfix.id(), List.of()));
+                deferredChecksByNode.getOrDefault(postfix.id(), List.of())), operand);
     }
 
     private ExecutableNode buildBetween(
@@ -321,14 +324,17 @@ public final class ExecutionPlanBuilder {
             SemanticModel model,
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
-        return new BetweenExecutableNode(
+        ExecutableNode value = buildNode(between.value(), model, environment, deferredChecksByNode);
+        ExecutableNode lowerBound = buildNode(between.lowerBound(), model, environment, deferredChecksByNode);
+        ExecutableNode upperBound = buildNode(between.upperBound(), model, environment, deferredChecksByNode);
+        return fold(new BetweenExecutableNode(
                 between.id(),
                 between.sourceSpan(),
                 between.negated(),
-                buildNode(between.value(), model, environment, deferredChecksByNode),
-                buildNode(between.lowerBound(), model, environment, deferredChecksByNode),
-                buildNode(between.upperBound(), model, environment, deferredChecksByNode),
-                model.resolvedTypes().get(between.value().id()));
+                value,
+                lowerBound,
+                upperBound,
+                model.resolvedTypes().get(between.value().id())), value, lowerBound, upperBound);
     }
 
     private ExecutableNode buildMembership(
@@ -475,6 +481,15 @@ public final class ExecutionPlanBuilder {
                     buildNode(lambda.body(), model, environment, deferredChecksByNode), lambdaBinding.currentItemFrameSlot()));
         }
         return new ExecutableOperationArguments(valueArguments, lambdaArguments);
+    }
+
+    /**
+     * Attempts eager constant folding (ADR 0019, issue #115) of an eager, non-lazy construct whose
+     * required children are named explicitly, since {@code ExecutableNode} has no generic child
+     * traversal. In oracle mode this is a no-op: {@code built} is always returned unchanged.
+     */
+    private ExecutableNode fold(ExecutableNode built, ExecutableNode... requiredConstantChildren) {
+        return folding ? ConstantFolder.fold(built, requiredConstantChildren) : built;
     }
 
     private static ExpressionEnvironment requireEnvironment(ExpressionEnvironment environment) {
