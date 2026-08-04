@@ -248,11 +248,13 @@ public final class ExecutionPlanBuilder {
             case LiteralNode literal -> new ConstantExecutableNode(
                     literal.id(), literal.sourceSpan(),
                     required(model.preparedValues(), literal.id(), "prepared literal value"));
-            case CollectionLiteralNode collection -> new CollectionLiteralExecutableNode(
-                    collection.id(), collection.sourceSpan(),
-                    collection.elements().stream()
-                            .map(element -> buildNode(element, model, environment, deferredChecksByNode))
-                            .toList());
+            case CollectionLiteralNode collection -> {
+                List<ExecutableNode> elements = collection.elements().stream()
+                        .map(element -> buildNode(element, model, environment, deferredChecksByNode))
+                        .toList();
+                yield fold(new CollectionLiteralExecutableNode(collection.id(), collection.sourceSpan(), elements),
+                        elements.toArray(ExecutableNode[]::new));
+            }
             case IdentifierNode identifier -> new FrameReadExecutableNode(
                     identifier.id(), identifier.sourceSpan(),
                     required(model.symbolBindings(), identifier.id(), "symbol binding").frameSlot());
@@ -270,11 +272,11 @@ public final class ExecutionPlanBuilder {
             case PostfixOperationNode postfix -> buildPostfix(postfix, model, requireEnvironment(environment), deferredChecksByNode);
             case BetweenNode between -> buildBetween(between, model, environment, deferredChecksByNode);
             case MembershipNode membership -> buildMembership(membership, model, environment, deferredChecksByNode);
-            case NullCoalesceNode coalesce -> new NullCoalesceExecutableNode(
+            case NullCoalesceNode coalesce -> foldNullCoalesce(new NullCoalesceExecutableNode(
                     coalesce.id(), coalesce.sourceSpan(),
                     coalesce.operands().stream()
                             .map(operand -> buildNode(operand, model, environment, deferredChecksByNode))
-                            .toList());
+                            .toList()));
             case ConditionalNode conditional -> buildConditional(conditional, model, environment, deferredChecksByNode);
             case FunctionCallNode functionCall -> buildFunctionCall(functionCall, model, environment, deferredChecksByNode);
             case NavigationChainNode navigation -> buildNavigationChain(navigation, model, environment, deferredChecksByNode);
@@ -362,7 +364,7 @@ public final class ExecutionPlanBuilder {
                         buildNode(branch.consequence(), model, environment, deferredChecksByNode)))
                 .toList();
         ExecutableNode elseExpression = buildNode(conditional.elseExpression(), model, environment, deferredChecksByNode);
-        return new ConditionalExecutableNode(conditional.id(), conditional.sourceSpan(), branches, elseExpression);
+        return foldConditional(new ConditionalExecutableNode(conditional.id(), conditional.sourceSpan(), branches, elseExpression));
     }
 
     private ExecutableNode buildFunctionCall(
@@ -375,7 +377,9 @@ public final class ExecutionPlanBuilder {
                 .map(ExpressionCallArgument.class::cast)
                 .map(argument -> buildNode(argument.expression(), model, environment, deferredChecksByNode))
                 .toList();
-        return new FunctionCallExecutableNode(functionCall.id(), functionCall.sourceSpan(), descriptor, arguments);
+        FunctionCallExecutableNode built = new FunctionCallExecutableNode(
+                functionCall.id(), functionCall.sourceSpan(), descriptor, arguments);
+        return descriptor.foldable() ? fold(built, arguments.toArray(ExecutableNode[]::new)) : built;
     }
 
     private ExecutableNode buildNavigationChain(
@@ -490,6 +494,22 @@ public final class ExecutionPlanBuilder {
      */
     private ExecutableNode fold(ExecutableNode built, ExecutableNode... requiredConstantChildren) {
         return folding ? ConstantFolder.fold(built, requiredConstantChildren) : built;
+    }
+
+    /**
+     * Attempts the structural fold of {@code ??} (ADR 0019, issue #116). In oracle mode this is a
+     * no-op: {@code built} is always returned unchanged.
+     */
+    private ExecutableNode foldNullCoalesce(NullCoalesceExecutableNode built) {
+        return folding ? ConstantFolder.foldNullCoalesce(built) : built;
+    }
+
+    /**
+     * Attempts the structural fold of the conditional (ADR 0019, issue #116). In oracle mode this is a
+     * no-op: {@code built} is always returned unchanged.
+     */
+    private ExecutableNode foldConditional(ConditionalExecutableNode built) {
+        return folding ? ConstantFolder.foldConditional(built) : built;
     }
 
     private static ExpressionEnvironment requireEnvironment(ExpressionEnvironment environment) {
