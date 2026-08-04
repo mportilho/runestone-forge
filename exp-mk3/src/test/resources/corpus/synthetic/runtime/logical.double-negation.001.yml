@@ -1,0 +1,6 @@
+id: runtime.logical.double-negation.001
+phase: runtime
+kind: valid
+source: '!!true'
+coverage: [unary, boolean-literal]
+expected: {type: BOOLEAN, result: true}

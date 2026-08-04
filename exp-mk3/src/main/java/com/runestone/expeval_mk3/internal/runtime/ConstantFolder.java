@@ -1,5 +1,8 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
+import com.runestone.expeval_mk3.api.FunctionDescriptor;
+import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,6 +27,15 @@ import java.util.List;
  * be reached — not a value computation.
  */
 public final class ConstantFolder {
+
+    /**
+     * The only implementation the elision in {@link #foldAssertion} is authorized to trust. A
+     * language-name check alone would be provenance-blind: it cannot distinguish the genuine
+     * built-in from a custom function that happens to reuse the name {@code asNumber} and its
+     * signature but does real, non-identity work. Matching the exact declaring class instead ties
+     * the elision to the one implementation whose no-op behavior this fold actually verified.
+     */
+    private static final String SCALAR_ASSERTION_OWNER = "com.runestone.expeval_mk3.api.AssertionBuiltInFunctions";
 
     private ConstantFolder() {
     }
@@ -85,5 +97,41 @@ public final class ConstantFolder {
         return remaining.isEmpty()
                 ? built.elseExpression()
                 : new ConditionalExecutableNode(built.id(), built.sourceSpan(), List.copyOf(remaining), built.elseExpression());
+    }
+
+    /**
+     * A scalar assertion (one of the six {@code asNumber}/{@code asText}/{@code asBool}/{@code asDate}/
+     * {@code asTime}/{@code asDateTime} built-ins, issue #118) is elided to its bare argument when the
+     * overload semantic resolution bound is the one whose parameter type already equals its return
+     * type: the boundary coercion it would perform on that overload returns the argument unchanged, so
+     * the call is a proven no-op regardless of whether the argument is itself constant. Any other
+     * overload keeps the call, since the boundary conversion it performs there does real work,
+     * including work that can fail with the diagnostic the Unoptimized Oracle would also raise.
+     */
+    public static ExecutableNode foldAssertion(FunctionCallExecutableNode built) {
+        FunctionDescriptor descriptor = built.descriptor();
+        if (descriptor.arity() == 1
+                && SCALAR_ASSERTION_OWNER.equals(descriptor.implementationMetadata().owner())
+                && descriptor.parameterTypes().getFirst().equals(descriptor.returnType())) {
+            return built.arguments().getFirst();
+        }
+        return built;
+    }
+
+    /**
+     * {@code not not x} cancels to {@code x} regardless of whether {@code x} is constant: the operand
+     * of a {@code not} that is itself a {@code not} is statically guaranteed non-nullable boolean
+     * (semantic resolution rejects a nullable unary operand), so re-observing it through two
+     * cancelling negations can never change what executing it would do or throw. This is the only
+     * algebraic rewrite issue #118 authorizes; it is applied once per built node, so a longer chain
+     * cancels pairwise as each enclosing {@code not} is built.
+     */
+    public static ExecutableNode foldDoubleNegation(UnaryExecutableNode built) {
+        if (built.operator() == UnaryOperator.LOGICAL_NOT
+                && built.operand() instanceof UnaryExecutableNode inner
+                && inner.operator() == UnaryOperator.LOGICAL_NOT) {
+            return inner.operand();
+        }
+        return built;
     }
 }

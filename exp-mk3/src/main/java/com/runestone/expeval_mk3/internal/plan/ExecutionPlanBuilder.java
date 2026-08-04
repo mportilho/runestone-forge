@@ -272,7 +272,9 @@ public final class ExecutionPlanBuilder {
                     buildBinary(binary, model, requireEnvironment(environment), deferredChecksByNode, foldedReads);
             case UnaryOperationNode unary -> {
                 ExecutableNode operand = buildNode(unary.operand(), model, environment, deferredChecksByNode, foldedReads);
-                yield fold(new UnaryExecutableNode(unary.id(), unary.sourceSpan(), unary.operator(), operand), operand);
+                UnaryExecutableNode built = new UnaryExecutableNode(unary.id(), unary.sourceSpan(), unary.operator(), operand);
+                ExecutableNode doubleNegationElided = foldDoubleNegation(built);
+                yield doubleNegationElided != built ? doubleNegationElided : fold(built, operand);
             }
             case PostfixOperationNode postfix ->
                     buildPostfix(postfix, model, requireEnvironment(environment), deferredChecksByNode, foldedReads);
@@ -409,6 +411,10 @@ public final class ExecutionPlanBuilder {
                 .toList();
         FunctionCallExecutableNode built = new FunctionCallExecutableNode(
                 functionCall.id(), functionCall.sourceSpan(), descriptor, arguments);
+        ExecutableNode assertionElided = foldAssertion(built);
+        if (assertionElided != built) {
+            return assertionElided;
+        }
         return descriptor.foldable() ? fold(built, arguments.toArray(ExecutableNode[]::new)) : built;
     }
 
@@ -576,6 +582,22 @@ public final class ExecutionPlanBuilder {
      */
     private ExecutableNode foldConditional(ConditionalExecutableNode built) {
         return folding ? ConstantFolder.foldConditional(built) : built;
+    }
+
+    /**
+     * Attempts the scalar assertion elision (ADR 0019, issue #118). In oracle mode this is a no-op:
+     * {@code built} is always returned unchanged.
+     */
+    private ExecutableNode foldAssertion(FunctionCallExecutableNode built) {
+        return folding ? ConstantFolder.foldAssertion(built) : built;
+    }
+
+    /**
+     * Attempts the double-negation elision (ADR 0019, issue #118). In oracle mode this is a no-op:
+     * {@code built} is always returned unchanged.
+     */
+    private ExecutableNode foldDoubleNegation(UnaryExecutableNode built) {
+        return folding ? ConstantFolder.foldDoubleNegation(built) : built;
     }
 
     private static ExpressionEnvironment requireEnvironment(ExpressionEnvironment environment) {

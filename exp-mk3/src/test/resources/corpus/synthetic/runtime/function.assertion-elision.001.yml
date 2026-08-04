@@ -1,0 +1,6 @@
+id: runtime.function.assertion-elision.001
+phase: runtime
+kind: valid
+source: 'asNumber(5) + 1'
+coverage: [function-call, additive]
+expected: {type: NUMBER, result: "6"}
