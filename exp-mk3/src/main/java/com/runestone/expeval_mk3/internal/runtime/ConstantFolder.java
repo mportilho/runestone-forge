@@ -1,10 +1,16 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
+import com.runestone.expeval_mk3.api.CollectionType;
+import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
+import com.runestone.expeval_mk3.api.MapType;
+import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The single seam {@code ExecutionPlanBuilder} uses to attempt constant folding (ADR 0019, issues
@@ -36,6 +42,14 @@ public final class ConstantFolder {
      * the elision to the one implementation whose no-op behavior this fold actually verified.
      */
     private static final String SCALAR_ASSERTION_OWNER = "com.runestone.expeval_mk3.api.AssertionBuiltInFunctions";
+
+    /**
+     * The single size at which {@code in} switches from a linear scan over the pre-evaluated constant
+     * to a downloaded lookup structure (issue #119); the same value for both the sorted-array and the
+     * hash-set representation, since two distinct thresholds would not have paid for themselves in
+     * testing.
+     */
+    private static final int MEMBERSHIP_DOWNLOAD_THRESHOLD = 8;
 
     private ConstantFolder() {
     }
@@ -133,5 +147,40 @@ public final class ConstantFolder {
             return inner.operand();
         }
         return built;
+    }
+
+    /**
+     * A constant right-hand collection at or above {@link #MEMBERSHIP_DOWNLOAD_THRESHOLD} downloads to
+     * a lookup structure chosen by element type (issue #119): {@code NUMBER} downloads to a sorted
+     * array searched by {@code compareTo}, and {@code STRING}/{@code BOOLEAN}/{@code DATE}/{@code TIME}/
+     * {@code DATETIME} download to a hash set — exactly the types {@link ExpressionRuntime#structuralEquals}
+     * compares by {@code equals}. A collection or map element never downloads, because
+     * {@code List.equals}/{@code Map.equals} compare contained numbers by {@code equals} and would
+     * diverge from the recursive structural equality {@code in} actually uses. A constant map
+     * right-hand side is left untouched: its {@code containsKey} lookup is already efficient, and the
+     * constant itself was already pre-evaluated by the External Symbol fold (issue #117). Below the
+     * threshold, the pre-evaluated constant collection is kept and {@code built}'s own linear scan is
+     * used, since the reconstruction it already eliminates is the only thing worth paying for there.
+     */
+    public static ExecutableNode foldMembership(MembershipExecutableNode built) {
+        if (!(built.collection() instanceof ConstantExecutableNode constantCollection)
+                || !(built.collectionType() instanceof CollectionType collectionType)) {
+            return built;
+        }
+        ExpressionType elementType = collectionType.elementType();
+        if (elementType instanceof CollectionType || elementType instanceof MapType) {
+            return built;
+        }
+        List<?> elements = (List<?>) constantCollection.value();
+        if (elements.size() < MEMBERSHIP_DOWNLOAD_THRESHOLD) {
+            return built;
+        }
+        if (elementType == ScalarType.NUMBER) {
+            List<BigDecimal> sortedElements = elements.stream().map(BigDecimal.class::cast).sorted().toList();
+            return new SortedNumberMembershipExecutableNode(
+                    built.id(), built.sourceSpan(), built.negated(), built.element(), sortedElements);
+        }
+        return new HashLookupMembershipExecutableNode(
+                built.id(), built.sourceSpan(), built.negated(), built.element(), Set.copyOf(elements));
     }
 }

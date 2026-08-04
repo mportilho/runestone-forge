@@ -373,13 +373,14 @@ public final class ExecutionPlanBuilder {
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
             List<FoldedRead> foldedReads) {
-        return new MembershipExecutableNode(
+        MembershipExecutableNode built = new MembershipExecutableNode(
                 membership.id(),
                 membership.sourceSpan(),
                 membership.negated(),
                 buildNode(membership.element(), model, environment, deferredChecksByNode, foldedReads),
                 buildNode(membership.collection(), model, environment, deferredChecksByNode, foldedReads),
                 model.resolvedTypes().get(membership.collection().id()));
+        return foldMembership(built);
     }
 
     private ExecutableNode buildConditional(
@@ -598,6 +599,14 @@ public final class ExecutionPlanBuilder {
      */
     private ExecutableNode foldDoubleNegation(UnaryExecutableNode built) {
         return folding ? ConstantFolder.foldDoubleNegation(built) : built;
+    }
+
+    /**
+     * Attempts the membership download to a sorted array or hash set (ADR 0019, issue #119). In oracle
+     * mode this is a no-op: {@code built} is always returned unchanged.
+     */
+    private ExecutableNode foldMembership(MembershipExecutableNode built) {
+        return folding ? ConstantFolder.foldMembership(built) : built;
     }
 
     private static ExpressionEnvironment requireEnvironment(ExpressionEnvironment environment) {

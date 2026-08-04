@@ -1,0 +1,6 @@
+id: runtime.comparison.in.single-element.001
+phase: runtime
+kind: valid
+source: '5 in [5]'
+coverage: [in, collection-literal, int-literal]
+expected: {type: BOOLEAN, result: true}
