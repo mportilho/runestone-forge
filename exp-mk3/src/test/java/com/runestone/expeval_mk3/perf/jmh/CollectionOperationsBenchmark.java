@@ -105,7 +105,7 @@ public class CollectionOperationsBenchmark {
                             "items := [1, 2, 3, 4, 5, 6, 7, 8]; items[*]", environment)
                     .asResult();
             safeCall = ExpressionCompiler.compileOrThrow(
-                            "items := [1, 2, 3, 4, 5, 6, 7, 8]; items?.map(@ -> @ + 1)", environment)
+                            "items := [1, 2, 3, 4, 5, 6, 7, 8]; items?.map(@ -> @ + 1) ?? []", environment)
                     .asResult();
         }
     }
