@@ -35,7 +35,7 @@ import java.util.Map;
 class PlanOptimizationEquivalenceTest {
 
     private static final String SOURCE =
-            "p := track(x); q := track(y); r := p / q; s := sqrt(p); t := p!; r + s + t";
+            "p := track(x); q := track(y); r := p / q; s := sqrt(p); t := p!; u := sqrt(x) + sqrt(x); r + s + t + u";
 
     @Property
     void buildAndBuildOracleAgreeOnValueFailureOrderAndEffects(

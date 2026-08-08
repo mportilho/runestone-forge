@@ -303,3 +303,7 @@ _Avoid_: Execution trace entry, variable snapshot, audit event
 **Elisao de Assercao**:
 The removal of an assertion function call whose asserted type is exactly the argument's already proven type, turning the call into no operation because the underlying boundary conversion returns the value itself in that case.
 _Avoid_: Type cast removal, unchecked coercion, silent conversion
+
+**Subexpressao Comum Memoizada**:
+A pure subtree occurring two or more times in the same expression, neither reading Item Atual nor an internal (assignable) symbol, computed at most once per call and cached in a frame slot appended past the semantic Layout de Frame, seeded with the Escopo de Execucao's UNBOUND sentinel. Each occurrence still executes in its own lazy position instead of being hoisted: the first one actually reached at runtime computes and stores the value, and every later occurrence, in that same call, reads it back.
+_Avoid_: Common subexpression elimination cache, hoisted subexpression, global memo

@@ -65,6 +65,7 @@ import com.runestone.expeval_mk3.internal.runtime.FunctionCallExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.IndexSubscriptExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.MapKeySubscriptExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.MembershipExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.MemoizedExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.NullCoalesceExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.PostfixExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.RegisteredMethodExecutableNode;
@@ -151,11 +152,14 @@ public final class ExecutionPlanBuilder {
         Map<NodeId, List<DeferredCheck>> deferredChecksByNode = model.deferredChecks().stream()
                 .collect(Collectors.groupingBy(DeferredCheck::nodeId));
         List<FoldedRead> foldedReads = new ArrayList<>();
+        CommonSubexpressionAnalysis commonSubexpressions =
+                folding ? CommonSubexpressionAnalyzer.analyze(model) : CommonSubexpressionAnalysis.EMPTY;
+        Map<NodeId, Integer> memoSlots = commonSubexpressions.memoSlotsByNodeId();
         ExecutableNode result = model.ast().resultExpression()
-                .map(expression -> buildNode(expression, model, environment, deferredChecksByNode, foldedReads))
+                .map(expression -> buildNode(expression, model, environment, deferredChecksByNode, foldedReads, memoSlots))
                 .orElse(null);
         ExpressionType resultType = model.ast().resultExpression()
-                .map(expression -> required(model.resolvedTypes(), expression.id(), "result expression type"))
+                .map(expression -> BindingLookup.required(model.resolvedTypes(), expression.id(), "result expression type"))
                 .orElse(null);
         List<ExternalBindingPlan> externalBindings = model.frameLayout().externalBindings().stream()
                 .map(binding -> new ExternalBindingPlan(binding.requireExternalSymbol(), binding.frameSlot()))
@@ -169,7 +173,7 @@ public final class ExecutionPlanBuilder {
                 .filter(symbol -> !usedSymbolNames.contains(symbol.name()))
                 .forEach(declaredSymbolsInCanonicalOrder::add);
         List<AssignmentExecutable> assignments = model.ast().assignments().stream()
-                .map(assignment -> buildAssignment(assignment, model, environment, deferredChecksByNode, foldedReads))
+                .map(assignment -> buildAssignment(assignment, model, environment, deferredChecksByNode, foldedReads, memoSlots))
                 .toList();
         List<AssignedSymbol> assignedSymbolsInCreationOrder = buildAssignedSymbolsInCreationOrder(model);
         return new ExecutionPlan(
@@ -180,7 +184,7 @@ public final class ExecutionPlanBuilder {
                 declaredSymbolsInCanonicalOrder,
                 assignedSymbolsInCreationOrder,
                 foldedReads,
-                model.frameLayout().frameSize(),
+                model.frameLayout().frameSize() + commonSubexpressions.memoSlotCount(),
                 environment.boundaryCoercion(),
                 environment.zoneId(),
                 environment.maxMaterializedSize());
@@ -196,7 +200,7 @@ public final class ExecutionPlanBuilder {
         for (AssignmentNode assignment : model.ast().assignments()) {
             for (IdentifierAssignmentTargetNode identifier : targetIdentifiers(assignment.target())) {
                 byName.computeIfAbsent(identifier.name(), name -> {
-                    SymbolBinding binding = required(model.symbolBindings(), identifier.id(), "assignment target binding");
+                    SymbolBinding binding = BindingLookup.required(model.symbolBindings(), identifier.id(), "assignment target binding");
                     return new AssignedSymbol(name, binding.type(), binding.frameSlot(), identifier.sourceSpan());
                 });
             }
@@ -219,16 +223,17 @@ public final class ExecutionPlanBuilder {
             SemanticModel model,
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
-            List<FoldedRead> foldedReads) {
-        ExecutableNode expression = buildNode(assignment.expression(), model, environment, deferredChecksByNode, foldedReads);
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
+        ExecutableNode expression = buildNode(assignment.expression(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
         AssignmentTargetNode target = assignment.target();
         if (target instanceof IdentifierAssignmentTargetNode identifier) {
-            SymbolBinding binding = required(model.symbolBindings(), identifier.id(), "assignment target binding");
+            SymbolBinding binding = BindingLookup.required(model.symbolBindings(), identifier.id(), "assignment target binding");
             return AssignmentExecutable.identifier(target.id(), target.sourceSpan(), binding.frameSlot(), expression);
         }
         if (target instanceof DestructuringAssignmentTargetNode destructuring) {
             int[] frameSlots = destructuring.elements().stream()
-                    .mapToInt(element -> required(model.symbolBindings(), element.id(), "assignment target binding")
+                    .mapToInt(element -> BindingLookup.required(model.symbolBindings(), element.id(), "assignment target binding")
                             .frameSlot())
                     .toArray();
             DestructuringMinimumSizeDeferredCheck minimumSizeCheck = deferredChecksByNode
@@ -248,14 +253,25 @@ public final class ExecutionPlanBuilder {
             SemanticModel model,
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
-            List<FoldedRead> foldedReads) {
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
+        return memoize(node.id(), buildNodeWithoutMemo(node, model, environment, deferredChecksByNode, foldedReads, memoSlots), memoSlots);
+    }
+
+    private ExecutableNode buildNodeWithoutMemo(
+            ExpressionNode node,
+            SemanticModel model,
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
         return switch (node) {
             case LiteralNode literal -> new ConstantExecutableNode(
                     literal.id(), literal.sourceSpan(),
-                    required(model.preparedValues(), literal.id(), "prepared literal value"));
+                    BindingLookup.required(model.preparedValues(), literal.id(), "prepared literal value"));
             case CollectionLiteralNode collection -> {
                 List<ExecutableNode> elements = collection.elements().stream()
-                        .map(element -> buildNode(element, model, environment, deferredChecksByNode, foldedReads))
+                        .map(element -> buildNode(element, model, environment, deferredChecksByNode, foldedReads, memoSlots))
                         .toList();
                 yield fold(new CollectionLiteralExecutableNode(collection.id(), collection.sourceSpan(), elements),
                         elements.toArray(ExecutableNode[]::new));
@@ -263,31 +279,31 @@ public final class ExecutionPlanBuilder {
             case IdentifierNode identifier -> buildIdentifierRead(identifier, model, foldedReads);
             case CurrentItemNode currentItem -> new FrameReadExecutableNode(
                     currentItem.id(), currentItem.sourceSpan(),
-                    required(model.symbolBindings(), currentItem.id(), "current item binding").frameSlot());
+                    BindingLookup.required(model.symbolBindings(), currentItem.id(), "current item binding").frameSlot());
             case CurrentTemporalValueNode currentTemporalValue -> new CurrentTemporalExecutableNode(
                     currentTemporalValue.id(), currentTemporalValue.sourceSpan(), currentTemporalValue.kind());
             case GroupedExpressionNode grouped ->
-                    buildNode(grouped.expression(), model, environment, deferredChecksByNode, foldedReads);
+                    buildNode(grouped.expression(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
             case BinaryOperationNode binary ->
-                    buildBinary(binary, model, requireEnvironment(environment), deferredChecksByNode, foldedReads);
+                    buildBinary(binary, model, requireEnvironment(environment), deferredChecksByNode, foldedReads, memoSlots);
             case UnaryOperationNode unary -> {
-                ExecutableNode operand = buildNode(unary.operand(), model, environment, deferredChecksByNode, foldedReads);
+                ExecutableNode operand = buildNode(unary.operand(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
                 UnaryExecutableNode built = new UnaryExecutableNode(unary.id(), unary.sourceSpan(), unary.operator(), operand);
                 ExecutableNode doubleNegationElided = foldDoubleNegation(built);
                 yield doubleNegationElided != built ? doubleNegationElided : fold(built, operand);
             }
             case PostfixOperationNode postfix ->
-                    buildPostfix(postfix, model, requireEnvironment(environment), deferredChecksByNode, foldedReads);
-            case BetweenNode between -> buildBetween(between, model, environment, deferredChecksByNode, foldedReads);
-            case MembershipNode membership -> buildMembership(membership, model, environment, deferredChecksByNode, foldedReads);
+                    buildPostfix(postfix, model, requireEnvironment(environment), deferredChecksByNode, foldedReads, memoSlots);
+            case BetweenNode between -> buildBetween(between, model, environment, deferredChecksByNode, foldedReads, memoSlots);
+            case MembershipNode membership -> buildMembership(membership, model, environment, deferredChecksByNode, foldedReads, memoSlots);
             case NullCoalesceNode coalesce -> foldNullCoalesce(new NullCoalesceExecutableNode(
                     coalesce.id(), coalesce.sourceSpan(),
                     coalesce.operands().stream()
-                            .map(operand -> buildNode(operand, model, environment, deferredChecksByNode, foldedReads))
+                            .map(operand -> buildNode(operand, model, environment, deferredChecksByNode, foldedReads, memoSlots))
                             .toList()));
-            case ConditionalNode conditional -> buildConditional(conditional, model, environment, deferredChecksByNode, foldedReads);
-            case FunctionCallNode functionCall -> buildFunctionCall(functionCall, model, environment, deferredChecksByNode, foldedReads);
-            case NavigationChainNode navigation -> buildNavigationChain(navigation, model, environment, deferredChecksByNode, foldedReads);
+            case ConditionalNode conditional -> buildConditional(conditional, model, environment, deferredChecksByNode, foldedReads, memoSlots);
+            case FunctionCallNode functionCall -> buildFunctionCall(functionCall, model, environment, deferredChecksByNode, foldedReads, memoSlots);
+            case NavigationChainNode navigation -> buildNavigationChain(navigation, model, environment, deferredChecksByNode, foldedReads, memoSlots);
         };
     }
 
@@ -298,7 +314,7 @@ public final class ExecutionPlanBuilder {
      */
     private ExecutableNode buildIdentifierRead(
             IdentifierNode identifier, SemanticModel model, List<FoldedRead> foldedReads) {
-        SymbolBinding binding = required(model.symbolBindings(), identifier.id(), "symbol binding");
+        SymbolBinding binding = BindingLookup.required(model.symbolBindings(), identifier.id(), "symbol binding");
         if (folding && binding.external()
                 && binding.requireExternalSymbol().overwritePolicy() == ExternalSymbolOverwritePolicy.FIXED) {
             Object value = binding.requireExternalSymbol().defaultValue().value();
@@ -313,9 +329,10 @@ public final class ExecutionPlanBuilder {
             SemanticModel model,
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
-            List<FoldedRead> foldedReads) {
-        ExecutableNode left = buildNode(binary.left(), model, environment, deferredChecksByNode, foldedReads);
-        ExecutableNode right = buildNode(binary.right(), model, environment, deferredChecksByNode, foldedReads);
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
+        ExecutableNode left = buildNode(binary.left(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
+        ExecutableNode right = buildNode(binary.right(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
         BinaryOperator operator = binary.operator();
         return switch (operator) {
             case ADD, SUBTRACT, MULTIPLY, DIVIDE, MODULO, ROOT, EXPONENTIATE, CONCATENATE -> fold(BinaryExecutableNode.arithmetic(
@@ -328,10 +345,10 @@ public final class ExecutionPlanBuilder {
                     left, right);
             case EQUAL, NOT_EQUAL -> fold(BinaryExecutableNode.equality(
                     binary.id(), binary.sourceSpan(), operator, left, right,
-                    required(model.equalityOperandTypes(), binary.id(), "equality operand type")), left, right);
+                    BindingLookup.required(model.equalityOperandTypes(), binary.id(), "equality operand type")), left, right);
             case REGEX_MATCH, REGEX_NOT_MATCH -> fold(BinaryExecutableNode.regex(
                     binary.id(), binary.sourceSpan(), operator, left,
-                    (Pattern) required(model.preparedValues(), binary.id(), "prepared regex pattern")), left);
+                    (Pattern) BindingLookup.required(model.preparedValues(), binary.id(), "prepared regex pattern")), left);
         };
     }
 
@@ -340,8 +357,9 @@ public final class ExecutionPlanBuilder {
             SemanticModel model,
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
-            List<FoldedRead> foldedReads) {
-        ExecutableNode operand = buildNode(postfix.operand(), model, environment, deferredChecksByNode, foldedReads);
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
+        ExecutableNode operand = buildNode(postfix.operand(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
         List<PostfixOperator> operators = postfix.operations().stream().map(PostfixOperatorOccurrence::operator).toList();
         return fold(new PostfixExecutableNode(
                 postfix.id(), postfix.sourceSpan(), operand, operators, environment.maxFactorialInput(),
@@ -353,10 +371,11 @@ public final class ExecutionPlanBuilder {
             SemanticModel model,
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
-            List<FoldedRead> foldedReads) {
-        ExecutableNode value = buildNode(between.value(), model, environment, deferredChecksByNode, foldedReads);
-        ExecutableNode lowerBound = buildNode(between.lowerBound(), model, environment, deferredChecksByNode, foldedReads);
-        ExecutableNode upperBound = buildNode(between.upperBound(), model, environment, deferredChecksByNode, foldedReads);
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
+        ExecutableNode value = buildNode(between.value(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
+        ExecutableNode lowerBound = buildNode(between.lowerBound(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
+        ExecutableNode upperBound = buildNode(between.upperBound(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
         return fold(new BetweenExecutableNode(
                 between.id(),
                 between.sourceSpan(),
@@ -372,13 +391,14 @@ public final class ExecutionPlanBuilder {
             SemanticModel model,
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
-            List<FoldedRead> foldedReads) {
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
         MembershipExecutableNode built = new MembershipExecutableNode(
                 membership.id(),
                 membership.sourceSpan(),
                 membership.negated(),
-                buildNode(membership.element(), model, environment, deferredChecksByNode, foldedReads),
-                buildNode(membership.collection(), model, environment, deferredChecksByNode, foldedReads),
+                buildNode(membership.element(), model, environment, deferredChecksByNode, foldedReads, memoSlots),
+                buildNode(membership.collection(), model, environment, deferredChecksByNode, foldedReads, memoSlots),
                 model.resolvedTypes().get(membership.collection().id()));
         return foldMembership(built);
     }
@@ -388,14 +408,15 @@ public final class ExecutionPlanBuilder {
             SemanticModel model,
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
-            List<FoldedRead> foldedReads) {
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
         List<ExecutableBranch> branches = conditional.branches().stream()
                 .map(branch -> new ExecutableBranch(
-                        buildNode(branch.condition(), model, environment, deferredChecksByNode, foldedReads),
-                        buildNode(branch.consequence(), model, environment, deferredChecksByNode, foldedReads)))
+                        buildNode(branch.condition(), model, environment, deferredChecksByNode, foldedReads, memoSlots),
+                        buildNode(branch.consequence(), model, environment, deferredChecksByNode, foldedReads, memoSlots)))
                 .toList();
         ExecutableNode elseExpression =
-                buildNode(conditional.elseExpression(), model, environment, deferredChecksByNode, foldedReads);
+                buildNode(conditional.elseExpression(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
         return foldConditional(new ConditionalExecutableNode(conditional.id(), conditional.sourceSpan(), branches, elseExpression));
     }
 
@@ -404,11 +425,12 @@ public final class ExecutionPlanBuilder {
             SemanticModel model,
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
-            List<FoldedRead> foldedReads) {
-        FunctionDescriptor descriptor = required(model.functionBindings(), functionCall.id(), "function binding");
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
+        FunctionDescriptor descriptor = BindingLookup.required(model.functionBindings(), functionCall.id(), "function binding");
         List<ExecutableNode> arguments = functionCall.arguments().stream()
                 .map(ExpressionCallArgument.class::cast)
-                .map(argument -> buildNode(argument.expression(), model, environment, deferredChecksByNode, foldedReads))
+                .map(argument -> buildNode(argument.expression(), model, environment, deferredChecksByNode, foldedReads, memoSlots))
                 .toList();
         FunctionCallExecutableNode built = new FunctionCallExecutableNode(
                 functionCall.id(), functionCall.sourceSpan(), descriptor, arguments);
@@ -424,10 +446,11 @@ public final class ExecutionPlanBuilder {
             SemanticModel model,
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
-            List<FoldedRead> foldedReads) {
-        ExecutableNode current = buildNode(navigation.receiver(), model, environment, deferredChecksByNode, foldedReads);
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
+        ExecutableNode current = buildNode(navigation.receiver(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
         for (NavigationLink link : navigation.links()) {
-            current = buildNavigationLink(link, current, model, environment, deferredChecksByNode, foldedReads);
+            current = buildNavigationLink(link, current, model, environment, deferredChecksByNode, foldedReads, memoSlots);
         }
         return current;
     }
@@ -447,8 +470,9 @@ public final class ExecutionPlanBuilder {
             SemanticModel model,
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
-            List<FoldedRead> foldedReads) {
-        NavigationBinding binding = required(model.navigationBindings(), link.id(), "navigation binding");
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
+        NavigationBinding binding = BindingLookup.required(model.navigationBindings(), link.id(), "navigation binding");
         NodeId id = link.id();
         var span = link.sourceSpan();
         return switch (binding) {
@@ -472,7 +496,7 @@ public final class ExecutionPlanBuilder {
             }
             case FilterNavigationBinding filterBinding -> {
                 FilterNavigationLink filter = (FilterNavigationLink) link;
-                ExecutableNode predicate = buildNode(filter.predicate(), model, environment, deferredChecksByNode, foldedReads);
+                ExecutableNode predicate = buildNode(filter.predicate(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
                 yield new FilterExecutableNode(
                         id, span, receiver, filter.safe(), predicate, filterBinding.currentItemFrameSlot(),
                         environment.maxMaterializedSize());
@@ -492,7 +516,7 @@ public final class ExecutionPlanBuilder {
                 boolean safe = methodBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
                 List<ExecutableNode> arguments = call.arguments().stream()
                         .map(ExpressionCallArgument.class::cast)
-                        .map(argument -> buildNode(argument.expression(), model, environment, deferredChecksByNode, foldedReads))
+                        .map(argument -> buildNode(argument.expression(), model, environment, deferredChecksByNode, foldedReads, memoSlots))
                         .toList();
                 ExecutableNode built = new RegisteredMethodExecutableNode(id, span, receiver, safe, methodBinding, arguments);
                 ExecutableNode[] requiredConstants = new ExecutableNode[arguments.size() + 1];
@@ -510,7 +534,7 @@ public final class ExecutionPlanBuilder {
             case CollectionOperationBinding operationBinding -> {
                 CallNavigationLink call = (CallNavigationLink) link;
                 ExecutableOperationArguments arguments =
-                        buildOperationArguments(call, operationBinding, model, environment, deferredChecksByNode, foldedReads);
+                        buildOperationArguments(call, operationBinding, model, environment, deferredChecksByNode, foldedReads, memoSlots);
                 CollectionOperationExecutor executor = CollectionOperationExecutors.executorFor(operationBinding.identity());
                 CollectionOperationRuntimeBinding runtimeBinding = new CollectionOperationRuntimeBinding(
                         operationBinding.receiverType(),
@@ -530,23 +554,40 @@ public final class ExecutionPlanBuilder {
             SemanticModel model,
             ExpressionEnvironment environment,
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
-            List<FoldedRead> foldedReads) {
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
         ArrayList<ExecutableNode> valueArguments = new ArrayList<>();
         ArrayList<ExecutableLambda> lambdaArguments = new ArrayList<>();
         int lambdaIndex = 0;
         for (CallArgument argument : call.arguments()) {
             if (argument instanceof ExpressionCallArgument expressionArgument) {
-                valueArguments.add(buildNode(expressionArgument.expression(), model, environment, deferredChecksByNode, foldedReads));
+                valueArguments.add(buildNode(expressionArgument.expression(), model, environment, deferredChecksByNode, foldedReads, memoSlots));
                 continue;
             }
             LambdaCallArgument lambdaArgument = (LambdaCallArgument) argument;
             CollectionOperationBinding.LambdaBinding lambdaBinding = binding.lambdaBindings().get(lambdaIndex++);
             LambdaNode lambda = lambdaArgument.lambda();
             lambdaArguments.add(new ExecutableLambda(
-                    buildNode(lambda.body(), model, environment, deferredChecksByNode, foldedReads),
+                    buildNode(lambda.body(), model, environment, deferredChecksByNode, foldedReads, memoSlots),
                     lambdaBinding.currentItemFrameSlot()));
         }
         return new ExecutableOperationArguments(valueArguments, lambdaArguments);
+    }
+
+    /**
+     * Wraps {@code built} in a {@link MemoizedExecutableNode} when {@code nodeId} is one occurrence of
+     * an eligible Subexpressao Comum Memoizada (ADR 0019, issue #121): {@code memoSlots} is empty in
+     * Oracle mode, so this is a no-op there. A node that already folded to a {@link ConstantExecutableNode},
+     * or that is already a single frame slot load ({@link FrameReadExecutableNode}, e.g. a repeated
+     * identifier or Item Atual read), is never wrapped: both are already the cheapest possible read, and
+     * a memo slot would only add a frame read and a branch on top for no benefit.
+     */
+    private ExecutableNode memoize(NodeId nodeId, ExecutableNode built, Map<NodeId, Integer> memoSlots) {
+        Integer slot = memoSlots.get(nodeId);
+        if (slot == null || built instanceof ConstantExecutableNode || built instanceof FrameReadExecutableNode) {
+            return built;
+        }
+        return new MemoizedExecutableNode(nodeId, built.sourceSpan(), slot, built);
     }
 
     /**
@@ -613,11 +654,4 @@ public final class ExecutionPlanBuilder {
         return Objects.requireNonNull(environment, "environment");
     }
 
-    private static <K, V> V required(Map<K, V> values, K key, String description) {
-        V value = values.get(key);
-        if (value == null) {
-            throw new IllegalStateException("semantic model is missing " + description + " for " + key);
-        }
-        return value;
-    }
 }

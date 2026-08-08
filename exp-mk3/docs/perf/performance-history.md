@@ -1,5 +1,113 @@
 # Performance History
 
+## 2026-08-08 - Subexpressao Comum Memoizada Permanence Decision (issue #121)
+
+Purpose: issue #121 (Etapa 7, increment 6) makes Subexpressao Comum Memoizada — lazy in-place
+memoization of a pure, repeated, `@`-free subtree in a frame slot appended past the semantic
+`frameSize` — conditioned on measurement: it ships only if a benchmark shows gain, and is removed
+with the decision recorded here otherwise. This entry is that measurement and that decision.
+
+**Decision: the feature stays.** Three representative shapes were benchmarked
+(`CommonSubexpressionMemoizationBenchmark`, `optimized` vs the Unoptimized Oracle, same protocol as
+`Phase7FoldingGateBenchmark`):
+
+| Benchmark | Optimized (ns/op) | Oracle (ns/op) | B/op optimized → oracle |
+|---|---:|---:|---|
+| `cheapAddMemo` — `(x + 1) + (x + 1)`, `x` `OVERRIDABLE` | 113.93 ± 2.65 | 128.32 ± 1.69 | 218.7 → 216.0 |
+| `navigationMemo` — `account.score + account.score * 2`, `account` `OVERRIDABLE` | 111.11 ± 5.05 | 112.72 ± 2.19 | 216.0 → 216.0 |
+| `expensiveFunctionMemo` — `sqrt(x) + sqrt(x)`, `x` `OVERRIDABLE` | 2839.91 ± 57.20 | 5422.29 ± 36.44 | 4880.0 → 9392.0 |
+
+None of the three regress: the cheapest case (`cheapAddMemo`) wins by ~11% (`BigDecimal.add`
+apparently costs more than a frame read plus a branch), the realistic navigation case is flat
+within error bars, and the deliberately expensive case (a repeated `sqrt`, `big-math`-backed and
+therefore genuinely costly) wins by ~48% with roughly half the allocation, because the second
+occurrence no longer runs `sqrt` at all. `expensiveFunctionMemo` is included specifically as the
+case the feature is meant for — Etapa 7's own language corpus already exercises repeated
+transcendental/navigation calls, e.g. in interest and pricing formulas — and `cheapAddMemo` as the
+adversarial control it was benchmarked against: if the cheapest possible eligible subtree had lost,
+that would have been the honest basis for removal regardless of the other two.
+
+**A real self-inflicted regression was caught and fixed before this measurement.** The first
+`navigationMemo` run (`account.score + account.score * 2`) showed optimized *losing* by ~9%
+(122.50 vs 112.08 ns/op) with 8 extra B/op. The bare identifier `account` also occurs twice in that
+source, is external/`OVERRIDABLE`/pure/`@`-free, and is not a `ConstantExecutableNode` — so it was
+also being wrapped in a `MemoizedExecutableNode`, adding a frame read and a branch on top of what is
+already a single frame read (`FrameReadExecutableNode`), which can never win. Fixed in
+`ExecutionPlanBuilder#memoize` (skip wrapping a `FrameReadExecutableNode`, the same reasoning as the
+existing `ConstantExecutableNode` skip) and in `CommonSubexpressionAnalyzer` (a plain identifier or
+Item Atual read is excluded from occurrence recording entirely, so it never claims a frame slot it
+will never use). The table above reflects the fixed code. This is the reason the eligibility rule
+in the plan doc is phrased as "no hoisting, ever" rather than "no hoisting when it might not pay" —
+the same discipline that prevents a correctness bug here is what caught this performance bug.
+
+Command used, same protocol as `Phase7FoldingGateBenchmark`:
+
+```bash
+mvn -q -pl exp-mk3 -am clean test-compile -DskipTests
+cd exp-mk3 && mvn -q dependency:build-classpath -Dmdep.outputFile="target/jmh-cp.txt" -DincludeScope=test && cd ..
+
+java -cp "runestone-toolkit/target/classes:exp-mk3/target/test-classes:exp-mk3/target/classes:$(tr -d '\n' < exp-mk3/target/jmh-cp.txt)" \
+  org.openjdk.jmh.Main "CommonSubexpressionMemoizationBenchmark" \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/performance-benchmark/exp-mk3-cse-issue121-fixed.json" -foe true
+```
+
+Environment: commit `23a896b` base (working tree, uncommitted at measurement time); JDK OpenJDK
+26.0.1; JMH 1.37; Linux 7.0.0-28-generic x86_64; Intel Core i7-7700HQ, `performance` governor
+pinned, AC power; `-Xms1g -Xmx1g`; 5×500ms warmup / 10×500ms measurement; 3 forks; `gc` profiler.
+
+**Non-regression gate on the four existing tracked suites** (±1% band per the issue-85 precedent,
+against the 2026-08-08 Governor-Stable Re-Baseline section above, same protocol):
+
+| Benchmark | Baseline (ns/op) | This run (ns/op) | Delta |
+|---|---:|---:|---:|
+| `Phase6NavigationBenchmark.filter` | 276.83 | 278.33 | +0.5% |
+| `Phase6NavigationBenchmark.subscript` | 33.01 | 32.50 | −1.5% |
+| `Phase6NavigationBenchmark.slice` | 168.49 | 163.40 | −3.0% |
+| `Phase6NavigationBenchmark.propertyChain` | 17.64 | 17.31 | −1.9% |
+| `Phase6NavigationBenchmark.methodChain` | 187.54 | 180.99 | −3.5% |
+| `Phase6NavigationBenchmark.nestedLambda` | 448.16 | 444.19 | −0.9% |
+| `Phase7FoldingGateBenchmark.navigationPrefixOptimized` | 15.60 | 14.94 | −4.2% |
+| `Phase7FoldingGateBenchmark.membershipDownloadOptimized` | 28.79 | 27.84 | −3.3% |
+| `Phase7FoldingGateBenchmark.assertionElisionOptimized` | 56.77 | 57.10 | +0.6% |
+| `CollectionOperationsBenchmark.allShortCircuit` | 43.34 | 43.57 | +0.5% |
+| `CollectionOperationsBenchmark.map` | 470.94 | 475.84 | +1.0% |
+| `CollectionOperationsBenchmark.mapThenSum` | 426.24 | 431.58 | +1.3% |
+| `CollectionOperationsBenchmark.reduce` | 318.69 | 313.26 | −1.7% |
+| `CollectionOperationsBenchmark.safeCall` | 484.55 | 485.99 | +0.3% |
+| `CollectionOperationsBenchmark.sortBy` | 533.35 | 535.02 | +0.3% |
+| `CollectionOperationsBenchmark.sum` | 92.48 | 88.42 | −4.4% |
+| `CollectionOperationsBenchmark.wildcardMaterialization` | 219.43 | 201.91 | −8.0% |
+
+None of these expressions contain a repeated eligible subtree, so `CommonSubexpressionAnalyzer`
+allocates zero extra frame slots for any of them and the generated plan is byte-for-byte the same
+shape as before this issue; every delta above is this machine's ordinary run-to-run noise, the same
+order of magnitude the 2026-08-08 re-baseline and re-investigation sections document for genuinely
+unchanged code (there, some deltas exceeded 20% with no code change at all). `Phase5BaselineBenchmark`
+was not re-run: none of its four expressions (`a + b * 2`, a logical xor chain, and their
+compilation) contain a repeated subtree either, and `CommonSubexpressionAnalyzer` running once more
+per compilation is the only cost this issue could add to a plan with zero eligible subtrees — its
+own cost is bounded by one linear AST walk already paid, in the same pass, by every prior Etapa 7
+folding transformation. No exception is needed against the ±1% band in the qualitative sense the
+issue-85 precedent asks for: no benchmark here moved because of this issue's code.
+
+**Consequences of keeping the feature**, per the acceptance criteria: `CONTEXT.md` receives the
+Subexpressao Comum Memoizada entry (below the existing Etapa 7 terms); the memo mechanism ships as
+implemented — lazy in-place memoization on plan-frame-appended slots seeded with the `UNBOUND`
+sentinel, eligibility requiring purity, two or more occurrences, no Item Atual read, and no internal
+(assignable) symbol read (the last one not written in the original issue text but required to avoid
+collapsing two different values of a reassigned variable into one, per `CommonSubexpressionAnalyzer`'s
+class doc), and structural-key identity that never uses `NodeId` and compares `FunctionDescriptor`
+and the identity-bearing accessor of a navigation binding by identity, never by `equals`.
+
+`mvn -pl exp-mk3 -am test` is green (1027 tests) with this issue's code in place, including the new
+`CommonSubexpressionMemoizationTest` (the three traps: memo inside a not-taken lazy branch, a
+current-item-dependent subtree recomputing per element, and failure surfacing at the first executed
+occurrence with the oracle's code and span) and an extended `PlanOptimizationEquivalenceTest` source
+(`... u := sqrt(x) + sqrt(x); r + s + t + u`) so the jqwik equivalence property exercises a real
+`MemoizedExecutableNode`, not just the internal-symbol path the original fixed source happened to
+take exclusively.
+
 ## 2026-08-08 - Governor-Stable Re-Baseline (All Four Tracked Suites)
 
 Purpose: the re-investigation below found that this machine's `powersave` cpufreq governor was a

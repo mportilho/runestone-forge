@@ -40,6 +40,7 @@ public class ExecutionScope {
         return value;
     }
 
+    /** Rejects {@code null}; see {@link #writeMemo} for the one frame-slot family that must accept it. */
     public void write(int slot, Object value) {
         frame[slot] = Objects.requireNonNull(value, "value");
     }
@@ -52,6 +53,28 @@ public class ExecutionScope {
 
     public void restore(int slot, Object previous) {
         frame[slot] = Objects.requireNonNull(previous, "previous");
+    }
+
+    /**
+     * Whether a Subexpressao Comum Memoizada slot still holds the {@code UNBOUND} sentinel, i.e. no
+     * occurrence has computed it yet for this call.
+     */
+    public boolean isMemoUnbound(int slot) {
+        return frame[slot] == UNBOUND;
+    }
+
+    /**
+     * Writes a memoized value in place, unlike {@link #write} this accepts {@code null}: an eligible
+     * memo subtree can legitimately evaluate to null (e.g. through safe navigation), and {@code null}
+     * remains distinct from the {@code UNBOUND} sentinel.
+     */
+    public void writeMemo(int slot, Object value) {
+        frame[slot] = value;
+    }
+
+    /** Reads a memoized value already known bound by a prior {@link #isMemoUnbound} check. */
+    public Object readMemo(int slot) {
+        return frame[slot];
     }
 
     public LocalDate currentDate() {
