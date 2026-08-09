@@ -307,3 +307,15 @@ _Avoid_: Type cast removal, unchecked coercion, silent conversion
 **Subexpressao Comum Memoizada**:
 A pure subtree occurring two or more times in the same expression, neither reading Item Atual nor an internal (assignable) symbol, computed at most once per call and cached in a frame slot appended past the semantic Layout de Frame, seeded with the Escopo de Execucao's UNBOUND sentinel. Each occurrence still executes in its own lazy position instead of being hoisted: the first one actually reached at runtime computes and stores the value, and every later occurrence, in that same call, reads it back.
 _Avoid_: Common subexpression elimination cache, hoisted subexpression, global memo
+
+**No Especializado**:
+The executable node chosen during plan construction from the operator together with the already resolved types, numeric facts, and runtime nullability of its operands, so that a decision the semantic model already made is not repeated on every execution. Specialization is additive: the general node of each family remains as the node the Oraculo Sem Otimizacoes builds, and a specialized node is only installed when it is proven equivalent to it.
+_Avoid_: Replacement of the general node, runtime type dispatch, per-call operator switch
+
+**Invocacao Sem Reflexao**:
+The call of a registered function or registered Java member through an entry point prepared once while an Ambiente de Expressao is built and shared by every plan compiled against it, without collecting arguments into an array and without the slow generic handle path. It is a property of the environment rather than of a compiled expression, and it assumes the environment is long-lived.
+_Avoid_: Runtime reflection, per-call-site generated invoker, dynamic method lookup
+
+**Elisao de Coercao de Borda**:
+The removal of an argument or result conversion filter of a registered function when the resolved type is already exactly the canonical type that the conversion would produce, making the conversion a proven identity. It never removes the non-null validation of a provider result, which is a boundary contract rather than a conversion.
+_Avoid_: Unchecked argument passing, disabled boundary validation, implicit cast
