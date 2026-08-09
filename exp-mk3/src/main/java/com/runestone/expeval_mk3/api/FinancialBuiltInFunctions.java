@@ -82,7 +82,7 @@ final class FinancialBuiltInFunctions {
         BigDecimal currentRate = ratePlusOne;
         for (BigDecimal cashFlow : BuiltInFunctionSupport.numbers(cashFlows)) {
             npv = npv.add(cashFlow.divide(currentRate, mathContext));
-            currentRate = currentRate.multiply(ratePlusOne);
+            currentRate = currentRate.multiply(ratePlusOne, mathContext);
         }
         return npv;
     }

@@ -144,7 +144,7 @@ Equivalencia significa, para a mesma fonte, o mesmo ambiente e as mesmas entrada
 
 Antes da etapa, como issue preparatoria:
 
-0. **Simetria de `MathContext`.** Aplicar o `MathContext` do ambiente onde a operacao produz valor novo por aritmetica: acumulacao de `sum`, `modulo`, e os lacos de acumulacao dos built-ins que hoje nao usam. **Nao** aplicar a `negate`, porque trocar o sinal e exato e arredondar ali truncaria um literal que a linguagem aceitou como exato. Muda valores, portanto nao pode acontecer dentro de uma etapa cuja regra e nao mudar valor. Fecha com registro de decisao proprio e benchmark pareado do laco de `sum`; se custar acima da banda, a assimetria fica e vira decisao registrada em vez de defeito silencioso.
+0. **Simetria de `MathContext` (ADR 0021).** `MathContext` se aplica onde a operacao e obrigada a arredondar (`/`, `^`, `root`, transcendentais) ou onde a escala cresce sob repeticao (`*`, sempre, incluindo o laco de taxa composta em `npv`). `+`, `-`, `negate`, `abs` e `modulo` permanecem exatos — remover o `MathContext` hoje aplicado a `+`/`-` e a correcao, nao adiciona-lo a `sum`/`modulo`. `sum` permanece acumulacao exata e `avg` arredonda uma unica vez, na divisao final; a assimetria original se dissolve em vez de ser fechada por adicao de contexto. Muda valores (em `+`/`-` e em `npv`), portanto nao pode acontecer dentro de uma etapa cuja regra e nao mudar valor. Fecha com registro de decisao proprio (ADR 0021); sem condicao de custo, porque remover uma chamada de `MathContext` nao pode ficar mais lento.
 
 Na etapa:
 

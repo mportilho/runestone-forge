@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted; `MathContext` applicability clause (paragraph on ordinary arithmetic) amended by ADR 0021
 
 ## Context
 

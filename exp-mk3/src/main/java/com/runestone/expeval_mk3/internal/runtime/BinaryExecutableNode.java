@@ -118,8 +118,8 @@ public final class BinaryExecutableNode implements ExecutableNode {
     @Override
     public Object execute(ExecutionScope scope) {
         return switch (operator) {
-            case ADD -> ExpressionRuntime.number(left.execute(scope)).add(ExpressionRuntime.number(right.execute(scope)), mathContext);
-            case SUBTRACT -> ExpressionRuntime.number(left.execute(scope)).subtract(ExpressionRuntime.number(right.execute(scope)), mathContext);
+            case ADD -> ExpressionRuntime.number(left.execute(scope)).add(ExpressionRuntime.number(right.execute(scope)));
+            case SUBTRACT -> ExpressionRuntime.number(left.execute(scope)).subtract(ExpressionRuntime.number(right.execute(scope)));
             case MULTIPLY -> ExpressionRuntime.number(left.execute(scope)).multiply(ExpressionRuntime.number(right.execute(scope)), mathContext);
             case DIVIDE -> divide(scope);
             case MODULO -> modulo(scope);

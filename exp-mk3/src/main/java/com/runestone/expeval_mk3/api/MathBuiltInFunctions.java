@@ -75,7 +75,7 @@ final class MathBuiltInFunctions {
         BigDecimal[] numbers = BuiltInFunctionSupport.numbers(values);
         BigDecimal reciprocalSum = ZERO;
         for (BigDecimal number : numbers) {
-            reciprocalSum = reciprocalSum.add(ONE.divide(number, mathContext), mathContext);
+            reciprocalSum = reciprocalSum.add(ONE.divide(number, mathContext));
         }
         return BigDecimal.valueOf(numbers.length).divide(reciprocalSum, mathContext);
     }
@@ -106,17 +106,17 @@ final class MathBuiltInFunctions {
             }
             BigDecimal decimalSum = BigDecimal.valueOf(sum);
             BigDecimal mean = decimalSum.divide(BigDecimal.valueOf(size), mathContext);
-            BigDecimal numerator = BigDecimal.valueOf(sumSquares).subtract(decimalSum.multiply(mean, mathContext), mathContext);
+            BigDecimal numerator = BigDecimal.valueOf(sumSquares).subtract(decimalSum.multiply(mean, mathContext));
             return numerator.divide(divisor, mathContext);
         }
         BigDecimal sum = ZERO;
         BigDecimal sumSquares = ZERO;
         for (BigDecimal number : numbers) {
             sum = sum.add(number);
-            sumSquares = sumSquares.add(number.multiply(number, mathContext), mathContext);
+            sumSquares = sumSquares.add(number.multiply(number, mathContext));
         }
         BigDecimal mean = sum.divide(BigDecimal.valueOf(size), mathContext);
-        BigDecimal numerator = sumSquares.subtract(sum.multiply(mean, mathContext), mathContext);
+        BigDecimal numerator = sumSquares.subtract(sum.multiply(mean, mathContext));
         return numerator.divide(divisor, mathContext);
     }
 
@@ -142,7 +142,7 @@ final class MathBuiltInFunctions {
         BigDecimal mean = sum.divide(BigDecimal.valueOf(size), mathContext);
         BigDecimal deviation = ZERO;
         for (BigDecimal number : numbers) {
-            deviation = deviation.add(number.subtract(mean, mathContext).abs(mathContext), mathContext);
+            deviation = deviation.add(number.subtract(mean).abs());
         }
         return deviation.divide(BigDecimal.valueOf(size), mathContext);
     }

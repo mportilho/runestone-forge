@@ -5,6 +5,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -78,6 +80,25 @@ class StandardBuiltInFunctionsTest {
                 ScalarType.BOOLEAN),
                 BigDecimal.ZERO, BigDecimal.ONE, BigDecimal.valueOf(-100), BigDecimal.ZERO, false))
                 .isEqualByComparingTo(new BigDecimal("100"));
+    }
+
+    @Test
+    @DisplayName("npv rounds its per-period compounding rate under mathContext (ADR 0021)")
+    void npvRoundsItsPerPeriodCompoundingRateUnderMathContext() throws Throwable {
+        // Under a narrow context, leaving the compounding rate unrounded (the pre-fix bug)
+        // yields 246.61 for this input; rounding it each period (the fix) yields 246.57.
+        MathContext narrowContext = new MathContext(4, RoundingMode.HALF_UP);
+        ExpressionEnvironment environment = ExpressionEnvironment.builder().mathContext(narrowContext).build();
+        FunctionCatalog functions = environment.functions();
+
+        BigDecimal result = (BigDecimal) invoke(functions, "npv",
+                List.of(ScalarType.NUMBER, new CollectionType(ScalarType.NUMBER)),
+                new BigDecimal("0.333333"),
+                List.of(
+                        new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100"),
+                        new BigDecimal("100"), new BigDecimal("100"), new BigDecimal("100")));
+
+        assertThat(result).isEqualByComparingTo(new BigDecimal("246.57"));
     }
 
     @Test

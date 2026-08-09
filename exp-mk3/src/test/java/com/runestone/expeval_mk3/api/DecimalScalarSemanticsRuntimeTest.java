@@ -11,7 +11,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Proves issue #98's decimal scalar rules through the public compile/compute pipeline: equality and
  * ordering ignore scale-only differences, {@code mod} is exact regardless of {@code mathContext}, and
- * arithmetic results keep their naturally produced scale instead of a global normalization.
+ * arithmetic results keep their naturally produced scale instead of a global normalization. Also proves
+ * ADR 0021: {@code +}/{@code -} are exact regardless of {@code mathContext}, while {@code *} always rounds.
  */
 class DecimalScalarSemanticsRuntimeTest {
 
@@ -29,15 +30,26 @@ class DecimalScalarSemanticsRuntimeTest {
         assertThat((Boolean) compute("1.00 > 1")).isFalse();
     }
 
+    private static final ExpressionEnvironment NARROW_CONTEXT_ENVIRONMENT = ExpressionEnvironment.builder()
+            .mathContext(new MathContext(3, RoundingMode.HALF_UP))
+            .build();
+
     @Test
-    void additionAndSubtractionApplyTheConfiguredMathContext() {
-        ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .mathContext(new MathContext(3, RoundingMode.HALF_UP))
-                .build();
-        assertThat(ExpressionCompiler.compileOrThrow("1.111111 + 2.222222", environment).asMath().compute())
-                .isEqualByComparingTo("3.33");
-        assertThat(ExpressionCompiler.compileOrThrow("5.555555 - 2.222222", environment).asMath().compute())
-                .isEqualByComparingTo("3.33");
+    void additionAndSubtractionAreExactRegardlessOfMathContext() {
+        // ADR 0021: + and - have a bounded, non-compounding result scale (max(scale1, scale2));
+        // rounding them would only discard exact digits, so a narrow mathContext must not truncate them.
+        assertThat(ExpressionCompiler.compileOrThrow("1.111111 + 2.222222", NARROW_CONTEXT_ENVIRONMENT).asMath().compute())
+                .isEqualByComparingTo("3.333333");
+        assertThat(ExpressionCompiler.compileOrThrow("5.555555 - 2.222222", NARROW_CONTEXT_ENVIRONMENT).asMath().compute())
+                .isEqualByComparingTo("3.333333");
+    }
+
+    @Test
+    void multiplyAppliesTheConfiguredMathContextEvenForASingleOperation() {
+        // ADR 0021: * has a compounding result scale (scale1 + scale2); it always rounds, unlike +/-,
+        // because a scale-dependent rounding rule would not be a statable contract.
+        assertThat(ExpressionCompiler.compileOrThrow("1.111111 * 2.222222", NARROW_CONTEXT_ENVIRONMENT).asMath().compute())
+                .isEqualByComparingTo("2.47");
     }
 
     @Test
