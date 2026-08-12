@@ -9,9 +9,7 @@ import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildSuccess;
 import com.runestone.expeval_mk3.internal.ast.SemanticAstBuilder;
 import com.runestone.expeval_mk3.internal.parser.ExpressionParser;
 import com.runestone.expeval_mk3.internal.parser.ParseSuccess;
-import com.runestone.expeval_mk3.internal.runtime.BinaryExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.CollectionLiteralExecutableNode;
-import com.runestone.expeval_mk3.internal.runtime.ConditionalExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ConstantExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.FunctionCallExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.NullCoalesceExecutableNode;
@@ -114,7 +112,7 @@ class LazyConstantFoldingTest {
 
         ExecutionPlan plan = new ExecutionPlanBuilder().build(model, environment);
 
-        assertThat(plan.resultExpression()).isInstanceOf(ConditionalExecutableNode.class);
+        assertThat(plan.resultExpression()).isNotInstanceOf(ConstantExecutableNode.class);
     }
 
     @Test
@@ -150,9 +148,7 @@ class LazyConstantFoldingTest {
 
         ExecutionPlan plan = new ExecutionPlanBuilder().build(model, environment);
 
-        assertThat(plan.resultExpression()).isInstanceOf(ConditionalExecutableNode.class);
-        ConditionalExecutableNode conditional = (ConditionalExecutableNode) plan.resultExpression();
-        assertThat(conditional.branches()).hasSize(1);
+        assertThat(plan.resultExpression()).isNotInstanceOf(ConstantExecutableNode.class);
         PlanEquivalenceHarness.assertEquivalent(model, environment, Map.of("flag", true), Clock.systemUTC());
         PlanEquivalenceHarness.assertEquivalent(model, environment, Map.of("flag", false), Clock.systemUTC());
     }
@@ -234,7 +230,7 @@ class LazyConstantFoldingTest {
         ExecutionPlan eagerPlan = new ExecutionPlanBuilder().build(eagerModel, environment);
         ExecutionPlan lazyPlan = new ExecutionPlanBuilder().build(lazyModel, environment);
 
-        assertThat(eagerPlan.resultExpression()).isInstanceOf(BinaryExecutableNode.class);
+        assertThat(eagerPlan.resultExpression()).isNotInstanceOf(ConstantExecutableNode.class);
         assertThat(lazyPlan.resultExpression()).isInstanceOf(ConstantExecutableNode.class);
     }
 

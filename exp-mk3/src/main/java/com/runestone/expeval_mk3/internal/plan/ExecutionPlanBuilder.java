@@ -8,6 +8,7 @@ import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.MapType;
+import com.runestone.expeval_mk3.api.RuntimeNullability;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.AssignmentNode;
 import com.runestone.expeval_mk3.internal.ast.AssignmentTargetNode;
@@ -45,8 +46,10 @@ import com.runestone.expeval_mk3.internal.ast.StringKeySubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
+import com.runestone.expeval_mk3.internal.runtime.AddDecimalExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.BetweenExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.BinaryExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.BinaryNullCoalesceExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.CollectionLiteralExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutor;
@@ -70,6 +73,8 @@ import com.runestone.expeval_mk3.internal.runtime.IndexSubscriptExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.MapKeySubscriptExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.MembershipExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.MemoizedExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.ModuloDecimalExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.MultiplyDecimalExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.NullCoalesceExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.NumberComparisonExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.NumberEqualityExecutableNode;
@@ -79,6 +84,8 @@ import com.runestone.expeval_mk3.internal.runtime.PostfixExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.RegisteredMethodExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.RegisteredPropertyExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.SliceSubscriptExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.SubtractDecimalExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.TwoBranchConditionalExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.UnaryExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.WildcardExecutableNode;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
@@ -327,11 +334,8 @@ public final class ExecutionPlanBuilder {
                     buildPostfix(postfix, model, requireEnvironment(environment), deferredChecksByNode, foldedReads, memoSlots);
             case BetweenNode between -> buildBetween(between, model, environment, deferredChecksByNode, foldedReads, memoSlots);
             case MembershipNode membership -> buildMembership(membership, model, environment, deferredChecksByNode, foldedReads, memoSlots);
-            case NullCoalesceNode coalesce -> foldNullCoalesce(new NullCoalesceExecutableNode(
-                    coalesce.id(), coalesce.sourceSpan(),
-                    coalesce.operands().stream()
-                            .map(operand -> buildNode(operand, model, environment, deferredChecksByNode, foldedReads, memoSlots))
-                            .toList()));
+            case NullCoalesceNode coalesce ->
+                    buildNullCoalesce(coalesce, model, environment, deferredChecksByNode, foldedReads, memoSlots);
             case ConditionalNode conditional -> buildConditional(conditional, model, environment, deferredChecksByNode, foldedReads, memoSlots);
             case FunctionCallNode functionCall -> buildFunctionCall(functionCall, model, environment, deferredChecksByNode, foldedReads, memoSlots);
             case NavigationChainNode navigation -> buildNavigationChain(navigation, model, environment, deferredChecksByNode, foldedReads, memoSlots);
@@ -366,7 +370,9 @@ public final class ExecutionPlanBuilder {
         ExecutableNode right = buildNode(binary.right(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
         BinaryOperator operator = binary.operator();
         return switch (operator) {
-            case ADD, SUBTRACT, MULTIPLY, DIVIDE, MODULO, ROOT, EXPONENTIATE, CONCATENATE -> fold(BinaryExecutableNode.arithmetic(
+            case ADD, SUBTRACT, MULTIPLY, MODULO -> fold(buildDecimalBinary(
+                    binary, operator, left, right, model, environment, deferredChecksByNode), left, right);
+            case DIVIDE, ROOT, EXPONENTIATE, CONCATENATE -> fold(BinaryExecutableNode.arithmetic(
                     binary.id(), binary.sourceSpan(), operator, left, right, environment.mathContext(),
                     deferredChecksByNode.getOrDefault(binary.id(), List.of()),
                     powerDomainProven(binary, model, deferredChecksByNode)), left, right);
@@ -379,6 +385,52 @@ public final class ExecutionPlanBuilder {
                     binary.id(), binary.sourceSpan(), operator, left,
                     (Pattern) BindingLookup.required(model.preparedValues(), binary.id(), "prepared regex pattern")), left);
         };
+    }
+
+    private ExecutableNode buildDecimalBinary(
+            BinaryOperationNode binary,
+            BinaryOperator operator,
+            ExecutableNode left,
+            ExecutableNode right,
+            SemanticModel model,
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
+        BindingLookup.required(model.numericFacts(), binary.id(), "numeric fact");
+        if (optimizing) {
+            return switch (operator) {
+                case ADD -> new AddDecimalExecutableNode(binary.id(), binary.sourceSpan(), left, right);
+                case SUBTRACT -> new SubtractDecimalExecutableNode(binary.id(), binary.sourceSpan(), left, right);
+                case MULTIPLY -> new MultiplyDecimalExecutableNode(
+                        binary.id(), binary.sourceSpan(), left, right, environment.mathContext());
+                case MODULO -> new ModuloDecimalExecutableNode(binary.id(), binary.sourceSpan(), left, right);
+                default -> throw new IllegalArgumentException("unsupported decimal binary operator: " + operator);
+            };
+        }
+        return BinaryExecutableNode.arithmetic(
+                binary.id(), binary.sourceSpan(), operator, left, right, environment.mathContext(),
+                deferredChecksByNode.getOrDefault(binary.id(), List.of()), false);
+    }
+
+    private ExecutableNode buildNullCoalesce(
+            NullCoalesceNode coalesce,
+            SemanticModel model,
+            ExpressionEnvironment environment,
+            Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
+            List<FoldedRead> foldedReads,
+            Map<NodeId, Integer> memoSlots) {
+        List<ExecutableNode> operands = coalesce.operands().stream()
+                .map(operand -> buildNode(operand, model, environment, deferredChecksByNode, foldedReads, memoSlots))
+                .toList();
+        NullCoalesceExecutableNode generic = new NullCoalesceExecutableNode(
+                coalesce.id(), coalesce.sourceSpan(), operands);
+        ExecutableNode folded = foldNullCoalesce(generic);
+        if (folded != generic || !optimizing || operands.size() != 2
+                || BindingLookup.required(model.runtimeNullability(), coalesce.operands().getFirst().id(),
+                        "runtime nullability") != RuntimeNullability.MAY_BE_NULL) {
+            return folded;
+        }
+        return new BinaryNullCoalesceExecutableNode(
+                coalesce.id(), coalesce.sourceSpan(), operands.getFirst(), operands.getLast());
     }
 
     /**
@@ -475,14 +527,10 @@ public final class ExecutionPlanBuilder {
         ExecutableNode value = buildNode(between.value(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
         ExecutableNode lowerBound = buildNode(between.lowerBound(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
         ExecutableNode upperBound = buildNode(between.upperBound(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
-        return fold(new BetweenExecutableNode(
-                between.id(),
-                between.sourceSpan(),
-                between.negated(),
-                value,
-                lowerBound,
-                upperBound,
-                model.resolvedTypes().get(between.value().id())), value, lowerBound, upperBound);
+        ExpressionType operandType = BindingLookup.required(model.resolvedTypes(), between.value().id(), "between operand type");
+        ExecutableNode built = new BetweenExecutableNode(
+                between.id(), between.sourceSpan(), between.negated(), value, lowerBound, upperBound, operandType);
+        return fold(built, value, lowerBound, upperBound);
     }
 
     private ExecutableNode buildMembership(
@@ -516,7 +564,18 @@ public final class ExecutionPlanBuilder {
                 .toList();
         ExecutableNode elseExpression =
                 buildNode(conditional.elseExpression(), model, environment, deferredChecksByNode, foldedReads, memoSlots);
-        return foldConditional(new ConditionalExecutableNode(conditional.id(), conditional.sourceSpan(), branches, elseExpression));
+        ConditionalExecutableNode generic = new ConditionalExecutableNode(
+                conditional.id(), conditional.sourceSpan(), branches, elseExpression);
+        ExecutableNode folded = foldConditional(generic);
+        if (!optimizing || !(folded instanceof ConditionalExecutableNode remaining)) {
+            return folded;
+        }
+        return switch (remaining.branches().size()) {
+            case 2 -> new TwoBranchConditionalExecutableNode(
+                    remaining.id(), remaining.sourceSpan(), remaining.branches().getFirst(),
+                    remaining.branches().getLast(), remaining.elseExpression());
+            default -> remaining;
+        };
     }
 
     private ExecutableNode buildFunctionCall(

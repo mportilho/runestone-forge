@@ -1,5 +1,81 @@
 # Performance History
 
+## 2026-08-12 - Issue 128: Familias Especializadas Restantes
+
+Purpose: issue #128 measured each remaining Etapa 8 node-specialization candidate against the
+Unoptimized Oracle built from the same `SemanticModel`. The retained changes are additive:
+`buildOracle` still constructs `NullCoalesceExecutableNode`, `ConditionalExecutableNode`, and
+`BinaryExecutableNode`, while the optimized builder selects a fixed binary coalescence node when the
+left operand is `MAY_BE_NULL`, a fixed two-branch conditional node after the existing lazy fold, and
+switch-free decimal nodes for add, subtract, multiply, and modulo. No algebraic rewrite or decimal to
+`long` conversion is present.
+
+The first complete run used one oversized environment for every case. It made input preparation
+dominate the mechanisms (roughly 1.2-2.0 us/op) and left most confidence intervals overlapping. The
+reviewed run below corrected the benchmark, giving each parameter only the overridable symbols its
+expression uses. This is the isolation used for the decision. The binary-concatenation and
+three-branch-conditional parameters are negative controls: neither is specialized.
+
+Command used:
+
+```bash
+mvn -pl exp-mk3 -am -DskipTests test-compile
+mvn -q -pl exp-mk3 dependency:build-classpath -Dmdep.outputFile="target/jmh-cp.txt" -DincludeScope=test
+java -cp "runestone-toolkit/target/classes:exp-mk3/target/test-classes:exp-mk3/target/classes:$(tr -d '\n' < exp-mk3/target/jmh-cp.txt)" \
+  org.openjdk.jmh.Main "RemainingNodeSpecializationBenchmark" \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/performance-benchmark/exp-mk3-remaining-specialization-issue-128-isolated.json" \
+  -foe true
+```
+
+After review, retained candidates and the one-branch conditional were rerun against the final tree
+with the same protocol and:
+
+```bash
+java ... org.openjdk.jmh.Main "RemainingNodeSpecializationBenchmark" \
+  -p "benchmarkCase=COALESCE_BINARY,CONDITIONAL_ONE,CONDITIONAL_TWO,DECIMAL_ADD,DECIMAL_SUBTRACT,DECIMAL_MULTIPLY,DECIMAL_MODULO" \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/performance-benchmark/exp-mk3-remaining-specialization-issue-128-final.json" -foe true
+```
+
+Environment: OpenJDK 26.0.1 (module release target 21), JMH 1.37, `-Xms1g -Xmx1g`, 5x500ms
+warmup, 10x500ms measurement, 3 forks, `gc` profiler.
+
+| Family / shape | Optimized (ns/op) | Oracle (ns/op) | Delta | B/op optimized -> Oracle | Decision |
+|---|---:|---:|---:|---:|---|
+| Binary null coalescence | 25.077 +/- 0.469 | 28.458 +/- 0.434 | **-11.9%** | 56 -> 56 | Keep |
+| Number `between` | 23.220 +/- 0.500 | 23.236 +/- 0.383 | -0.1% | 32 -> 32 | Remove |
+| String `between` | 33.178 +/- 0.702 | 33.928 +/- 0.936 | -2.2% | 32 -> 32 | Remove |
+| Binary concat control | 38.400 +/- 0.651 | 38.798 +/- 0.777 | -1.0% | 112 -> 112 | Never targeted |
+| Four-operand concat | 104.232 +/- 1.672 | 92.085 +/- 1.388 | **+13.2%** | 216 -> 248 | Remove |
+| One-branch conditional | 20.493 +/- 0.532 | 20.632 +/- 0.349 | -0.7% | 32 -> 32 | Remove |
+| Two-branch conditional | 23.879 +/- 0.285 | 27.333 +/- 0.678 | **-12.6%** | 40 -> 40 | Keep |
+| Three-branch conditional control | 30.921 +/- 0.573 | 30.741 +/- 0.389 | +0.6% | 48 -> 48 | Generic |
+| Decimal add | 21.962 +/- 0.798 | 26.872 +/- 2.397 | **-18.3%** | 24 -> 56 | Keep |
+| Decimal subtract | 26.339 +/- 1.193 | 28.252 +/- 0.598 | **-6.8%** | 64 -> 96 | Keep |
+| Decimal multiply | 24.650 +/- 0.408 | 28.029 +/- 0.463 | **-12.1%** | 64 -> 96 | Keep |
+| Decimal divide | 646.658 +/- 11.363 | 648.776 +/- 9.564 | -0.3% | 1805 -> 1816 | Remove |
+| Decimal modulo | 28.390 +/- 0.673 | 34.398 +/- 0.793 | **-17.5%** | 24 -> 56 | Keep |
+
+**Decisions:** binary coalescence and the fixed two-branch conditional stay. The one-branch
+conditional was removed after the final-tree remeasurement put it inside the neutral band (-0.7%).
+`between` is removed:
+NUMBER is neutral and the small STRING point estimate overlaps the Oracle error band. N-ary
+concatenation is removed despite saving 32 B/op because the hand-built `StringBuilder` path is 13.2%
+slower; two-operand concatenation remains untouched on `StringConcatFactory`. Decimal add, subtract,
+multiply, and modulo stay because each has a non-overlapping 6.8%-18.3% latency gain and saves 32
+B/op. Decimal division is removed as predicted: `BigDecimal.divide` dominates and removing the outer
+switch is neutral. The source-level scale, `MathContext`, zero checks, failure diagnostics, operand
+order, and lazy evaluation policies remain unchanged.
+
+The complete-family result is preserved at
+`/tmp/performance-benchmark/exp-mk3-remaining-specialization-issue-128-isolated.json`; retained
+variants were remeasured after review against the final selection logic at
+`/tmp/performance-benchmark/exp-mk3-remaining-specialization-issue-128-final.json`. The focused
+`PlanEquivalenceHarness` suite covers specialized and generic shapes plus ordered effect probes for
+coalescence and conditionals.
+
 ## 2026-08-12 - Issue 127: Pontos de Entrada Preparados para Navegacao Registrada
 
 Purpose: issue #127 (Etapa 8, increment 5) extends Invocacao Sem Reflexao from global functions to

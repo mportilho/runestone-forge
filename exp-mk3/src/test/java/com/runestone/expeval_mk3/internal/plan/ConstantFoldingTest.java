@@ -10,8 +10,8 @@ import com.runestone.expeval_mk3.internal.ast.SemanticAstBuilder;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.parser.ExpressionParser;
 import com.runestone.expeval_mk3.internal.parser.ParseSuccess;
-import com.runestone.expeval_mk3.internal.runtime.BetweenExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.BinaryExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.BetweenExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ConstantExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.PostfixExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.UnaryExecutableNode;
@@ -58,7 +58,7 @@ class ConstantFoldingTest {
 
         ExecutionPlan plan = new ExecutionPlanBuilder().build(model, environment);
 
-        assertThat(plan.resultExpression()).isInstanceOf(BinaryExecutableNode.class);
+        assertThat(plan.resultExpression()).isNotInstanceOf(ConstantExecutableNode.class);
     }
 
     @Test
