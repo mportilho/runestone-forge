@@ -93,6 +93,111 @@ class ExpressionRuntimeTest {
                         .isEqualTo("RUNTIME_FORBIDDEN_NULL"));
     }
 
+    @Test
+    void invokeFunctionCallsArityZeroThroughGeneratedEntryPoint() throws Exception {
+        Method method = FunctionUnderTest.class.getDeclaredMethod("arityZero");
+        FunctionDescriptor descriptor = FunctionDescriptor.fromMethod(
+                "arityZero", method, List.of(), ScalarType.NUMBER, FunctionPurity.PURE);
+
+        Object result = ExpressionRuntime.invokeFunction(descriptor, List.of(), newScope(), SPAN);
+
+        assertThat(result).isEqualTo(BigDecimal.valueOf(42));
+    }
+
+    @Test
+    void invokeFunctionCallsArityTwoThroughGeneratedEntryPoint() throws Exception {
+        Method method = FunctionUnderTest.class.getDeclaredMethod("sumTwo", BigDecimal.class, BigDecimal.class);
+        FunctionDescriptor descriptor = FunctionDescriptor.fromMethod(
+                "sumTwo", method, List.of(ScalarType.NUMBER, ScalarType.NUMBER), ScalarType.NUMBER,
+                FunctionPurity.PURE);
+
+        Object result = ExpressionRuntime.invokeFunction(
+                descriptor, List.of(constant(BigDecimal.ONE), constant(BigDecimal.TEN)), newScope(), SPAN);
+
+        assertThat(result).isEqualTo(BigDecimal.valueOf(11));
+    }
+
+    @Test
+    void invokeFunctionCallsArityFourThroughGeneratedEntryPoint() throws Exception {
+        Method method = FunctionUnderTest.class.getDeclaredMethod(
+                "sumFour", BigDecimal.class, BigDecimal.class, BigDecimal.class, BigDecimal.class);
+        FunctionDescriptor descriptor = FunctionDescriptor.fromMethod(
+                "sumFour",
+                method,
+                List.of(ScalarType.NUMBER, ScalarType.NUMBER, ScalarType.NUMBER, ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.PURE);
+
+        Object result = ExpressionRuntime.invokeFunction(
+                descriptor,
+                List.of(constant(BigDecimal.ONE), constant(BigDecimal.TWO), constant(BigDecimal.valueOf(3)),
+                        constant(BigDecimal.valueOf(4))),
+                newScope(),
+                SPAN);
+
+        assertThat(result).isEqualTo(BigDecimal.valueOf(10));
+    }
+
+    @Test
+    void invokeFunctionCallsArityAboveFourThroughArrayEntryPoint() throws Exception {
+        Method method = FunctionUnderTest.class.getDeclaredMethod(
+                "sumFive", BigDecimal.class, BigDecimal.class, BigDecimal.class, BigDecimal.class, BigDecimal.class);
+        FunctionDescriptor descriptor = FunctionDescriptor.fromMethod(
+                "sumFive",
+                method,
+                List.of(ScalarType.NUMBER, ScalarType.NUMBER, ScalarType.NUMBER, ScalarType.NUMBER,
+                        ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.PURE);
+
+        Object result = ExpressionRuntime.invokeFunction(
+                descriptor,
+                List.of(constant(BigDecimal.ONE), constant(BigDecimal.ONE), constant(BigDecimal.ONE),
+                        constant(BigDecimal.ONE), constant(BigDecimal.ONE)),
+                newScope(),
+                SPAN);
+
+        assertThat(result).isEqualTo(BigDecimal.valueOf(5));
+    }
+
+    @Test
+    void invokeFunctionClassifiesFailureIdenticallyAboveAndBelowTheDirectArityCutoff() throws Exception {
+        Method fourArgMethod = FunctionUnderTest.class.getDeclaredMethod(
+                "throwsRuntimeArityFour", BigDecimal.class, BigDecimal.class, BigDecimal.class, BigDecimal.class);
+        FunctionDescriptor fourArgDescriptor = FunctionDescriptor.fromMethod(
+                "throwsRuntimeArityFour",
+                fourArgMethod,
+                List.of(ScalarType.NUMBER, ScalarType.NUMBER, ScalarType.NUMBER, ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.IMPURE);
+        Method fiveArgMethod = FunctionUnderTest.class.getDeclaredMethod(
+                "throwsRuntimeArityFive", BigDecimal.class, BigDecimal.class, BigDecimal.class, BigDecimal.class,
+                BigDecimal.class);
+        FunctionDescriptor fiveArgDescriptor = FunctionDescriptor.fromMethod(
+                "throwsRuntimeArityFive",
+                fiveArgMethod,
+                List.of(ScalarType.NUMBER, ScalarType.NUMBER, ScalarType.NUMBER, ScalarType.NUMBER,
+                        ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.IMPURE);
+        List<ExecutableNode> four = List.of(
+                constant(BigDecimal.ONE), constant(BigDecimal.ONE), constant(BigDecimal.ONE), constant(BigDecimal.ONE));
+        List<ExecutableNode> five = List.of(
+                constant(BigDecimal.ONE), constant(BigDecimal.ONE), constant(BigDecimal.ONE), constant(BigDecimal.ONE),
+                constant(BigDecimal.ONE));
+
+        assertThatThrownBy(() -> ExpressionRuntime.invokeFunction(fourArgDescriptor, four, newScope(), SPAN))
+                .isInstanceOf(ExpressionExecutionException.class)
+                .hasCauseInstanceOf(IllegalStateException.class)
+                .satisfies(exception -> assertThat(((ExpressionExecutionException) exception).diagnostic().code())
+                        .isEqualTo("RUNTIME_PROVIDER_FAILURE"));
+        assertThatThrownBy(() -> ExpressionRuntime.invokeFunction(fiveArgDescriptor, five, newScope(), SPAN))
+                .isInstanceOf(ExpressionExecutionException.class)
+                .hasCauseInstanceOf(IllegalStateException.class)
+                .satisfies(exception -> assertThat(((ExpressionExecutionException) exception).diagnostic().code())
+                        .isEqualTo("RUNTIME_PROVIDER_FAILURE"));
+    }
+
     private static ExecutableNode constant(Object value) {
         return node(scope -> value);
     }
@@ -132,6 +237,31 @@ class ExpressionRuntimeTest {
 
         public static BigDecimal throwsFatal(BigDecimal value) {
             throw new StackOverflowError();
+        }
+
+        public static BigDecimal arityZero() {
+            return BigDecimal.valueOf(42);
+        }
+
+        public static BigDecimal sumTwo(BigDecimal a, BigDecimal b) {
+            return a.add(b);
+        }
+
+        public static BigDecimal sumFour(BigDecimal a, BigDecimal b, BigDecimal c, BigDecimal d) {
+            return a.add(b).add(c).add(d);
+        }
+
+        public static BigDecimal sumFive(BigDecimal a, BigDecimal b, BigDecimal c, BigDecimal d, BigDecimal e) {
+            return a.add(b).add(c).add(d).add(e);
+        }
+
+        public static BigDecimal throwsRuntimeArityFour(BigDecimal a, BigDecimal b, BigDecimal c, BigDecimal d) {
+            throw new IllegalStateException("boom");
+        }
+
+        public static BigDecimal throwsRuntimeArityFive(
+                BigDecimal a, BigDecimal b, BigDecimal c, BigDecimal d, BigDecimal e) {
+            throw new IllegalStateException("boom");
         }
     }
 

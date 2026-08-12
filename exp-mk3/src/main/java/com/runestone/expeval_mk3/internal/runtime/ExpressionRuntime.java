@@ -36,42 +36,114 @@ public final class ExpressionRuntime {
     private ExpressionRuntime() {
     }
 
-    @SuppressWarnings("removal")
     public static Object invokeFunction(
             FunctionDescriptor descriptor,
             List<ExecutableNode> argumentNodes,
             ExecutionScope scope,
             SourceSpan callSpan) {
-        Object[] arguments = new Object[argumentNodes.size()];
-        for (int index = 0; index < argumentNodes.size(); index++) {
-            Object argument = argumentNodes.get(index).execute(scope);
-            if (argument == null) {
-                throw RuntimeFailures.forbiddenNull(
-                        "function argument must not be null: " + descriptor.languageName(), callSpan);
+        // Arity 0-4 evaluates arguments positionally and calls its FunctionDescriptor entry point
+        // directly, with no Object[] allocation; arity 5+ falls back to the array-based entry
+        // point. Argument evaluation and null-checking happen before the try block so
+        // RuntimeFailures.forbiddenNull is not reclassified as a provider failure below.
+        switch (argumentNodes.size()) {
+            case 0:
+                try {
+                    return descriptor.invoke();
+                } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                    throw fatal;
+                } catch (Throwable exception) {
+                    throw classify(descriptor, callSpan, exception);
+                }
+            case 1: {
+                Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
+                try {
+                    return descriptor.invoke(argument0);
+                } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                    throw fatal;
+                } catch (Throwable exception) {
+                    throw classify(descriptor, callSpan, exception);
+                }
             }
-            arguments[index] = argument;
+            case 2: {
+                Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
+                Object argument1 = requiredArgument(argumentNodes, 1, scope, descriptor, callSpan);
+                try {
+                    return descriptor.invoke(argument0, argument1);
+                } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                    throw fatal;
+                } catch (Throwable exception) {
+                    throw classify(descriptor, callSpan, exception);
+                }
+            }
+            case 3: {
+                Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
+                Object argument1 = requiredArgument(argumentNodes, 1, scope, descriptor, callSpan);
+                Object argument2 = requiredArgument(argumentNodes, 2, scope, descriptor, callSpan);
+                try {
+                    return descriptor.invoke(argument0, argument1, argument2);
+                } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                    throw fatal;
+                } catch (Throwable exception) {
+                    throw classify(descriptor, callSpan, exception);
+                }
+            }
+            case 4: {
+                Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
+                Object argument1 = requiredArgument(argumentNodes, 1, scope, descriptor, callSpan);
+                Object argument2 = requiredArgument(argumentNodes, 2, scope, descriptor, callSpan);
+                Object argument3 = requiredArgument(argumentNodes, 3, scope, descriptor, callSpan);
+                try {
+                    return descriptor.invoke(argument0, argument1, argument2, argument3);
+                } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                    throw fatal;
+                } catch (Throwable exception) {
+                    throw classify(descriptor, callSpan, exception);
+                }
+            }
+            default: {
+                Object[] arguments = new Object[argumentNodes.size()];
+                for (int index = 0; index < argumentNodes.size(); index++) {
+                    arguments[index] = requiredArgument(argumentNodes, index, scope, descriptor, callSpan);
+                }
+                try {
+                    return descriptor.invokeArray(arguments);
+                } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                    throw fatal;
+                } catch (Throwable exception) {
+                    throw classify(descriptor, callSpan, exception);
+                }
+            }
         }
-        MethodHandle handle = descriptor.implementationHandle();
-        try {
-            // The result filter bound into this handle already rejects a null/incompatible/invalid
-            // return as a ProviderReturnViolation before invokeWithArguments returns.
-            return handle.invokeWithArguments(arguments);
-        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
-            throw fatal;
-        } catch (ProviderReturnViolation violation) {
+    }
+
+    private static Object requiredArgument(
+            List<ExecutableNode> argumentNodes,
+            int index,
+            ExecutionScope scope,
+            FunctionDescriptor descriptor,
+            SourceSpan callSpan) {
+        Object argument = argumentNodes.get(index).execute(scope);
+        if (argument == null) {
+            throw RuntimeFailures.forbiddenNull(
+                    "function argument must not be null: " + descriptor.languageName(), callSpan);
+        }
+        return argument;
+    }
+
+    private static RuntimeException classify(FunctionDescriptor descriptor, SourceSpan callSpan, Throwable exception) {
+        if (exception instanceof ProviderReturnViolation violation) {
             // The provider ran to completion but its return value fails the resolved return
             // contract (null, incompatible type, or invalid container); distinct from a
             // provider-thrown failure.
-            throw RuntimeFailures.providerReturnViolation(descriptor.languageName(), callSpan, violation);
-        } catch (Throwable exception) {
-            if (exception instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            // Declared checked exceptions, ordinary runtime exceptions, and nonfatal errors thrown
-            // by the provider implementation are all provider-invocation failures; only fatal JVM
-            // conditions propagate unchanged.
-            throw RuntimeFailures.providerFailure(descriptor.languageName(), callSpan, exception);
+            return RuntimeFailures.providerReturnViolation(descriptor.languageName(), callSpan, violation);
         }
+        if (exception instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+        }
+        // Declared checked exceptions, ordinary runtime exceptions, and nonfatal errors thrown by
+        // the provider implementation are all provider-invocation failures; fatal JVM conditions
+        // are rethrown unchanged by the caller's ThreadDeath|VirtualMachineError|LinkageError catch.
+        return RuntimeFailures.providerFailure(descriptor.languageName(), callSpan, exception);
     }
 
     public static List<Object> materialize(List<ExecutableNode> elements, ExecutionScope scope, SourceSpan sourceSpan) {

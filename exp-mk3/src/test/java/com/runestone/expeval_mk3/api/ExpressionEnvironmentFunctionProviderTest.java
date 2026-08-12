@@ -218,6 +218,21 @@ public class ExpressionEnvironmentFunctionProviderTest {
     }
 
     @Test
+    @DisplayName("provider non-null result validation survives boundary coercion elision through the generated entry point")
+    void providerNonNullResultValidationSurvivesBoundaryCoercionElisionThroughTheGeneratedEntryPoint() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(NullProvider.class, FunctionPurity.PURE)
+                .build();
+
+        assertThatThrownBy(() -> resolve(environment, "echo", ScalarType.STRING).invoke((String) null))
+                .isInstanceOf(ProviderReturnViolation.class)
+                .hasMessage("function arguments and results must not be null");
+        assertThatThrownBy(() -> resolve(environment, "nullResult").invoke())
+                .isInstanceOf(ProviderReturnViolation.class)
+                .hasMessage("function arguments and results must not be null");
+    }
+
+    @Test
     @DisplayName("one invalid provider makes the whole environment build fail")
     void oneInvalidProviderMakesTheWholeEnvironmentBuildFail() {
         ExpressionEnvironment.Builder builder = ExpressionEnvironment.builder()

@@ -195,6 +195,16 @@ class ReflectedFunctionImporterTest {
     }
 
     @Test
+    @DisplayName("boundary coercion filter survives through the generated entry point for a non-canonical parameter type")
+    void boundaryCoercionFilterSurvivesThroughTheGeneratedEntryPointForANonCanonicalParameterType() throws Throwable {
+        List<FunctionDescriptor> descriptors = ReflectedFunctionImporter.toList(ReflectedFunctionImporter
+                .importAll(NumericAdapterProvider.class, FunctionPurity.FOLDABLE));
+        FunctionDescriptor addInt = descriptor(descriptors, "addInt", ScalarType.NUMBER);
+
+        assertThat(addInt.invoke(new BigDecimal("41"))).isEqualTo(new BigDecimal("42"));
+    }
+
+    @Test
     @DisplayName("applies renames and rejects missing or conflicting renames")
     void appliesRenamesAndRejectsMissingOrConflictingRenames() {
         List<FunctionDescriptor> descriptors = ReflectedFunctionImporter.toList(ReflectedFunctionImporter

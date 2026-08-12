@@ -32,6 +32,45 @@ Safe navigation stays a null check performed before invocation. It is not implem
 
 The alternative of using `invokeExact` at every arity, with no class generation at all, is recorded as rejected for the long-lived-environment case and remains the correct design if that precondition ever stops holding.
 
+## Amendment (issue #125 implementation)
+
+`LambdaMetafactory.metafactory` only accepts a *direct* method handle as its implementation
+argument; internally it calls `Lookup.revealDirect`, which throws for any handle produced by
+`asType`, `bindTo`, `filterArguments`, or `filterReturnValue`. Verified empirically (see
+`docs/perf/performance-history.md`, issue #125 entry) before writing any production code:
+`MethodHandles.filterArguments(direct, 0, MethodHandles.identity(BigDecimal.class))` — the same
+combinator `ProviderMethodAdapter.PreparedMethod.adapt` applies — already fails to link, as does
+`bindTo(instance)`. Both are on the path every function descriptor takes today: `fromMethod` always
+calls `asType`, and `ReflectedFunctionImporter` always calls `PreparedMethod.adapt`, plus `bindTo`
+for exposed-instance providers.
+
+This does not invalidate the decision to generate entry points once at environment build time, or
+the `invokeExact`-for-arity-5+ mechanism — both stand as written above. It invalidates the specific
+claim that arities one through four are *always* linked through `LambdaMetafactory`. The corrected
+mechanism, implemented in `FunctionDescriptor`:
+
+- Linking through `LambdaMetafactory` is attempted for every arity zero through four, against
+  whatever handle boundary-coercion elision (below) leaves behind. It succeeds whenever that handle
+  happens to be direct — in practice, a static-method provider whose declared parameter and return
+  types are already every canonical `ExpressionType`'s Java type, so no coercion filter is ever
+  applied and `PreparedMethod.adapt` returns the original `unreflect`-produced handle unchanged.
+- When linking fails (any argument or the return still carries a filter, or the provider is an
+  exposed instance method), the fallback is a plain `MethodHandle` pre-adapted once, at the same
+  build-time point, to `MethodType.genericMethodType(arity)`, invoked through a fixed `invokeExact`
+  call site per arity. This is array-free and reflection-free exactly like the `LambdaMetafactory`
+  route; it is ADR 0020's own "alternative... rejected for the long-lived-environment case" — here
+  it is revived per call site, not per environment, because the constraint that rules it back in is
+  handle directness, not environment lifetime, and the two mechanisms are indistinguishable to a
+  node executing a call, which is what the original Decision text promised.
+
+Boundary coercion filters are elided per the Decision text (argument side only, in
+`ProviderMethodAdapter`) whenever the provider's declared Java parameter type already is
+`ExpressionJavaTypes.valueType` of the parameter's `ExpressionType`. The result filter is never
+elided, because it is where the provider non-null/type/container-shape return contract is enforced,
+and eliding it was never required to remove the per-call `BigDecimal` allocation that motivated it:
+`BoundaryCoercion.prepareJavaConversion(BigDecimal.class, BigDecimal.class)` already returns a
+validating, non-allocating identity conversion, with or without this issue's changes.
+
 ## Consequences
 
 Invocation performance becomes a property of the environment rather than of the compiled expression. Two plans compiled against the same environment share the same entry points; two environments built from identical configuration do not, which is consistent with instance-scoped environment identity but means that measuring invocation cost requires holding the environment fixed.

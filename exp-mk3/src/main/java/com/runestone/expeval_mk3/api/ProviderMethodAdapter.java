@@ -175,7 +175,7 @@ final class ProviderMethodAdapter {
         ValueConversion conversion = direction == Direction.ARGUMENT
                 ? value -> toArray(value, componentType, element)
                 : value -> arrayResult(value, element, maxMaterializedSize);
-        return new PreparedValue(new CollectionType(element.expressionType()), conversion);
+        return new PreparedValue(new CollectionType(element.expressionType()), conversion, false);
     }
 
     private static PreparedValue prepareContainer(
@@ -205,7 +205,7 @@ final class ProviderMethodAdapter {
             ValueConversion conversion = direction == Direction.ARGUMENT
                     ? mapArgument(rawType, mapValue, boundaryCoercion)
                     : value -> mapResult(value, mapValue, maxMaterializedSize);
-            return new PreparedValue(new MapType(mapValue.expressionType()), conversion);
+            return new PreparedValue(new MapType(mapValue.expressionType()), conversion, false);
         }
         if (arguments.length != 1) {
             throw new IllegalArgumentException("container provider method type must declare one element type");
@@ -222,7 +222,7 @@ final class ProviderMethodAdapter {
         ValueConversion conversion = direction == Direction.ARGUMENT
                 ? sequenceArgument(rawType, element, boundaryCoercion)
                 : value -> sequenceResult(value, element, maxMaterializedSize);
-        return new PreparedValue(expressionType, conversion);
+        return new PreparedValue(expressionType, conversion, false);
     }
 
     private static PreparedValue scalar(Class<?> rawType) {
@@ -239,7 +239,10 @@ final class ProviderMethodAdapter {
             expressionType = ScalarType.DATETIME;
         }
         Class<?> boxedType = ExpressionJavaTypes.boxed(rawType);
-        return new PreparedValue(expressionType, value -> requireInstance(value, boxedType));
+        // A canonical scalar's raw Java type is, by construction (isCanonicalScalar), always
+        // exactly ExpressionJavaTypes.valueType(expressionType); an argument filter here is a
+        // proven identity and elidable per ADR 0020's boundary-coercion-elision contract.
+        return new PreparedValue(expressionType, value -> requireInstance(value, boxedType), true);
     }
 
     private static PreparedValue numeric(
@@ -249,7 +252,10 @@ final class ProviderMethodAdapter {
         BoundaryCoercion.PreparedJavaConversion conversion = direction == Direction.ARGUMENT
                 ? boundaryCoercion.prepareJavaConversion(BigDecimal.class, rawType)
                 : boundaryCoercion.prepareJavaConversion(rawType, BigDecimal.class);
-        return new PreparedValue(ScalarType.NUMBER, conversion::convert);
+        // Elidable only when the provider's declared numeric type already is the canonical
+        // NUMBER Java type; every other numeric Java type still needs the real conversion.
+        boolean identity = ExpressionJavaTypes.boxed(rawType) == BigDecimal.class;
+        return new PreparedValue(ScalarType.NUMBER, conversion::convert, identity);
     }
 
     private static PreparedValue nominal(Class<?> rawType, ObjectType objectType) {
@@ -261,7 +267,7 @@ final class ProviderMethodAdapter {
                         "provider nominal value must have exact runtime class " + rawType.getName());
             }
             return value;
-        });
+        }, false);
     }
 
     private static ValueConversion sequenceArgument(
@@ -520,6 +526,12 @@ final class ProviderMethodAdapter {
             MethodHandle adapted = implementation;
             for (int index = 0; index < parameters.size(); index++) {
                 PreparedValue parameter = parameters.get(index);
+                if (parameter.argumentConversionIsIdentity()) {
+                    // The provider's declared parameter type is already the canonical Java type
+                    // for this ExpressionType (ADR 0020's boundary-coercion-elision contract): the
+                    // conversion filter would be a proven no-op, so it is never applied.
+                    continue;
+                }
                 MethodHandle filter = CONVERT.bindTo(parameter).asType(MethodType.methodType(
                         implementation.type().parameterType(index),
                         ExpressionJavaTypes.valueType(parameter.expressionType())));
@@ -532,7 +544,7 @@ final class ProviderMethodAdapter {
         }
     }
 
-    record PreparedValue(ExpressionType expressionType, ValueConversion conversion) {
+    record PreparedValue(ExpressionType expressionType, ValueConversion conversion, boolean argumentConversionIsIdentity) {
 
         PreparedValue {
             Objects.requireNonNull(expressionType, "expressionType");

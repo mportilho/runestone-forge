@@ -1,5 +1,83 @@
 # Performance History
 
+## 2026-08-11 - Issue 125 Etapa 8 Pilot: Invocacao Sem Reflexao e Elisao de Coercao de Borda
+
+Purpose: issue #125 (Etapa 8, increment 2, the etapa's own pilot) replaces per-call `Object[]`
+allocation plus `MethodHandle.invokeWithArguments` for global function calls with entry points
+generated once per `FunctionDescriptor` at `ExpressionEnvironment` build time, and elides
+provably-identity argument boundary-coercion filters. This entry is the pilot's pass/fail
+measurement, per the etapa's stop rule ("se o piloto do incremento dois não pagar, o trabalho segue
+para o incremento quatro assim mesmo").
+
+**A design assumption in ADR 0020 was found false before any production code was written.**
+`LambdaMetafactory.metafactory` only accepts a *direct* `MethodHandle` (it calls
+`Lookup.revealDirect` internally); every handle this module builds for a function call has already
+passed through `asType` (`FunctionDescriptor.fromMethod`), or through
+`ProviderMethodAdapter.PreparedMethod.adapt`'s `filterArguments`/`filterReturnValue` chain and,
+for exposed-instance providers, `bindTo` (`ReflectedFunctionImporter`). Verified with a 20-line
+scratch probe (`MethodHandles.filterArguments` on a direct handle, then `bindTo`) before writing
+`FunctionDescriptor`: both fail to link with `LambdaConversionException: ... is not direct or
+cannot be cracked`. The adopted mechanism (recorded as an amendment in ADR 0020, not a reversal of
+its Decision): attempt `LambdaMetafactory` linking for every arity 0-4 against whatever handle
+boundary-coercion elision leaves behind, and fall back to a `MethodHandle` pre-adapted once to
+`MethodType.genericMethodType(arity)`, invoked through a fixed `invokeExact` call site per arity,
+when linking fails. Both routes are array-free and reflection-free; the executing node does not
+know which one backs a given call, exactly as ADR 0020 requires. Arity 5+ always uses `invokeExact`
+against a pre-adapted `asSpreader` handle, as originally decided.
+
+**Decision: the pilot pays, clearly, at every arity.** Measured with `FunctionInvocationBenchmark`,
+before/after on the same working tree (issue #125's changes stashed for "before", same protocol as
+issue #85 above), not the `optimized`/Oracle pairing used elsewhere in this etapa: `build` and
+`buildOracle` route a function call through the same `FunctionDescriptor`, hence the same entry
+point, so that pairing cannot discriminate this specific mechanism (ADR 0020's Consequences:
+"measuring invocation cost requires holding the environment fixed"). The `optimized`/`oracle`
+benchmark methods in `FunctionInvocationBenchmark` exist for family consistency with the other
+Etapa 8 gates and as a permanent regression net going forward, not as this decision's evidence.
+
+Command used (same protocol as issues #80/#85/#121):
+
+```bash
+mvn -q -pl exp-mk3 -am -DskipTests test-compile
+mvn -q -pl exp-mk3 dependency:build-classpath -Dmdep.outputFile="target/jmh-cp.txt" -DincludeScope=test
+java -cp "runestone-toolkit/target/classes:exp-mk3/target/test-classes:exp-mk3/target/classes:$(tr -d '\n' < exp-mk3/target/jmh-cp.txt)" \
+  org.openjdk.jmh.Main "FunctionInvocationBenchmark" \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/performance-benchmark/exp-mk3-function-invocation-issue-125-{before,after}.json" \
+  -foe true
+```
+
+Environment: JDK Temurin 21 (build environment), JMH 1.37, `-Xms1g -Xmx1g`, 5×500ms warmup,
+10×500ms measurement, 3 forks, `gc` profiler. All four states call a static provider whose
+parameters and return are already the canonical `BigDecimal` NUMBER type, with each argument an
+`OVERRIDABLE` external symbol (not a literal) so Constant Folding cannot fold the call away.
+
+| Benchmark (`optimized` state) | Before (ns/op) | After (ns/op) | Delta | B/op before → after |
+|---|---:|---:|---:|---|
+| `arityOne` — `identity1(a0)` | 185.52 ± 2.87 | 64.05 ± 3.16 | **-65.5%** | 336 → 104 |
+| `arityTwo` — `sum2(a0, a1)` | 266.02 ± 1.71 | 148.54 ± 4.47 | **-44.2%** | 445 → 192 |
+| `arityFour` — `sum4(a0, a1, a2, a3)` | 433.81 ± 5.22 | 281.66 ± 3.68 | **-35.1%** | 536 → 296 |
+| `arityFive` — `sum5(a0, a1, a2, a3, a4)` | 504.32 ± 6.97 | 360.67 ± 6.06 | **-28.5%** | 621 → 392 |
+
+Every arity wins, all far outside the ±1% noise band, and the gain shrinks monotonically from
+arity one to arity five — consistent with the mechanism: arity 1-4 gets the full benefit (no
+`Object[]`, and for this fully-canonical provider, `LambdaMetafactory`-linked direct dispatch), while
+arity 5+ still allocates the argument array (unchanged per ADR 0020, "the arities [invokeExact]
+covers" was never claimed array-free) and only gains the pre-adapted-handle/no-per-call-filter part
+of the win. `arityFour`'s residual allocation drop (536→296 B/op, more than the ~104 B/op removed
+per eliminated argument-boundary-conversion path) is consistent with removing the `Object[]` header
+plus four elided `PreparedValue.convert` boundary lambdas that no longer run.
+
+**Continuity decision, per the etapa's stop rule**: the pilot paid, so work continues into increment
+four (comparison/equality specialization) on schedule; the "if it fails, proceed anyway" branch of
+the rule was not needed.
+
+`mvn -pl exp-mk3 -am test` was run and green (all tracked suites, including
+`ExecutionPlanCorpusEquivalenceTest`, `PlanOptimizationEquivalenceTest`'s jqwik property, and the
+extended `ExpressionRuntimeTest`/`ReflectedFunctionImporterTest` coverage for arities 0-5 and
+non-canonical-argument/provider-null-return contract cases) both before this change (pre-issue-125,
+during the stash used for the "before" measurement) and after.
+
 ## 2026-08-08 - Subexpressao Comum Memoizada Permanence Decision (issue #121)
 
 Purpose: issue #121 (Etapa 7, increment 6) makes Subexpressao Comum Memoizada — lazy in-place
