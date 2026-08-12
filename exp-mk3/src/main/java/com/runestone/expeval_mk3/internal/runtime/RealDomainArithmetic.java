@@ -27,6 +27,22 @@ final class RealDomainArithmetic {
         return pow(base, exponent, mathContext, sourceSpan, BigMathAdapter.DEFAULT);
     }
 
+    /**
+     * Skips sign inspection and rational-parity classification entirely (issue #124): the resolver
+     * already proved this exact node's base non-negative at every execution (a positive-literal base
+     * with an arbitrary exponent, {@code PowerRealDomainDeferredCheck} not emitted), so re-deriving that
+     * proof on every call would only repeat work already done once, at compile time.
+     */
+    static BigDecimal powWithProvenDomain(
+            BigDecimal base, BigDecimal exponent, MathContext mathContext, SourceSpan sourceSpan) {
+        return powWithProvenDomain(base, exponent, mathContext, sourceSpan, BigMathAdapter.DEFAULT);
+    }
+
+    static BigDecimal powWithProvenDomain(
+            BigDecimal base, BigDecimal exponent, MathContext mathContext, SourceSpan sourceSpan, BigMathAdapter adapter) {
+        return callPow(adapter, base, exponent, mathContext, sourceSpan);
+    }
+
     static BigDecimal pow(
             BigDecimal base,
             BigDecimal exponent,

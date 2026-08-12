@@ -116,6 +116,16 @@ final class ExpressionCaseEnvironments {
                             ExternalSymbolOverwritePolicy.FIXED);
             return;
         }
+        if ("OBJECT_POST_FIXED_CONTRACT_PROVIDER".equals(type)) {
+            builder
+                    .registerJavaType(ExpressionCorpusExecutionTest.PostFixedContractProvider.class)
+                    .externalSymbol(
+                            symbolName,
+                            new ObjectType(ExpressionCorpusExecutionTest.PostFixedContractProvider.class.getName()),
+                            new ExpressionCorpusExecutionTest.PostFixedContractProvider(),
+                            ExternalSymbolOverwritePolicy.FIXED);
+            return;
+        }
         if ("OBJECT_NAVIGATION_CONTRACT_PROVIDER".equals(type)) {
             builder
                     .registerJavaType(ExpressionCorpusExecutionTest.NavigationContractProvider.class)

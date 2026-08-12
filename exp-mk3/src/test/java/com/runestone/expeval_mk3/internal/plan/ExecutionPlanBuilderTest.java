@@ -98,6 +98,39 @@ class ExecutionPlanBuilderTest {
     }
 
     @Test
+    void marksTheExponentiationNodeDomainProvenForAKnownStrictlyPositiveConstantBase() throws Exception {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("y", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        SemanticModel model = resolve("2 ^ y", environment);
+
+        ExecutionPlan plan = new ExecutionPlanBuilder().build(model, environment);
+
+        assertThat(plan.resultExpression().deferredChecks())
+                .doesNotHaveAnyElementsOfTypes(PowerRealDomainDeferredCheck.class);
+        assertThat(domainProven(plan.resultExpression())).isTrue();
+    }
+
+    @Test
+    void leavesTheExponentiationNodeNotDomainProvenForANonConstantBase() throws Exception {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.valueOf(-2), ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("y", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        SemanticModel model = resolve("x ^ y", environment);
+
+        ExecutionPlan plan = new ExecutionPlanBuilder().build(model, environment);
+
+        assertThat(domainProven(plan.resultExpression())).isFalse();
+    }
+
+    private static boolean domainProven(com.runestone.expeval_mk3.internal.runtime.ExecutableNode node) throws Exception {
+        Field field = com.runestone.expeval_mk3.internal.runtime.BinaryExecutableNode.class.getDeclaredField("domainProven");
+        field.setAccessible(true);
+        return field.getBoolean(node);
+    }
+
+    @Test
     void attachesTheDestructuringMinimumSizeDeferredCheckToTheAssignmentForAnUnknownShapeSource() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol(

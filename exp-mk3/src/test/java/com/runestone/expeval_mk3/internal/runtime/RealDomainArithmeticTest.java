@@ -147,6 +147,27 @@ class RealDomainArithmeticTest {
         assertThat(adapter.powCalls.getFirst()[1]).isEqualByComparingTo(new BigDecimal("-3"));
     }
 
+    // --- pow: domainProven fast path (issue #124) ---
+
+    @Test
+    void domainProvenSkipsClassificationAndCallsAdapterDirectly() {
+        RecordingAdapter adapter = new RecordingAdapter();
+        BigDecimal result = RealDomainArithmetic.powWithProvenDomain(
+                new BigDecimal("2"), new BigDecimal("0.5"), HALF_UP_CONTEXT, SPAN, adapter);
+        assertThat(result).isEqualByComparingTo(BigDecimalMath.pow(new BigDecimal("2"), new BigDecimal("0.5"), HALF_UP_CONTEXT));
+        assertThat(adapter.powCalls).hasSize(1);
+        assertThat(adapter.powContexts.getFirst()).isEqualTo(HALF_UP_CONTEXT);
+    }
+
+    @Property
+    void domainProvenMatchesClassifyingPathForEveryPositiveBaseAndExponent(
+            @ForAll("nonZeroDecimals") BigDecimal exponent) {
+        BigDecimal base = new BigDecimal("7");
+        BigDecimal classified = RealDomainArithmetic.pow(base, exponent, HALF_UP_CONTEXT, SPAN, BigMathAdapter.DEFAULT);
+        BigDecimal proven = RealDomainArithmetic.powWithProvenDomain(base, exponent, HALF_UP_CONTEXT, SPAN, BigMathAdapter.DEFAULT);
+        assertThat(proven).isEqualByComparingTo(classified);
+    }
+
     // --- root: zero and degree conventions ---
 
     @Test

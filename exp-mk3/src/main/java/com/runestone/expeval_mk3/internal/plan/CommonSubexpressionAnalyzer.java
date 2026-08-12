@@ -269,34 +269,35 @@ final class CommonSubexpressionAnalyzer {
     private NodeAnalysis analyzeNavigationLink(NavigationLink link, NodeAnalysis receiver) {
         NavigationBinding binding = BindingLookup.required(model.navigationBindings(), link.id(), "navigation binding");
         return switch (binding) {
-            case IndexSubscriptNavigationBinding ignored -> {
+            case IndexSubscriptNavigationBinding indexBinding -> {
                 IndexSubscriptNavigationLink index = (IndexSubscriptNavigationLink) link;
-                StructuralKey key =
-                        StructuralKey.of("IndexSubscript", receiver.key(), index.index().value(), index.safe());
+                StructuralKey key = StructuralKey.of(
+                        "IndexSubscript", receiver.key(), index.index().value(), indexBinding.safe());
                 yield new NodeAnalysis(key, receiver.containsCurrentItem(), receiver.containsInternalSymbol());
             }
-            case SliceSubscriptNavigationBinding ignored -> {
+            case SliceSubscriptNavigationBinding sliceBinding -> {
                 SliceSubscriptNavigationLink slice = (SliceSubscriptNavigationLink) link;
                 StructuralKey key = StructuralKey.of(
                         "SliceSubscript", receiver.key(),
-                        SubscriptBounds.rawValue(slice.start()), SubscriptBounds.rawValue(slice.end()), slice.safe());
+                        SubscriptBounds.rawValue(slice.start()), SubscriptBounds.rawValue(slice.end()),
+                        sliceBinding.safe());
                 yield new NodeAnalysis(key, receiver.containsCurrentItem(), receiver.containsInternalSymbol());
             }
-            case MapKeySubscriptNavigationBinding ignored -> {
+            case MapKeySubscriptNavigationBinding mapKeyBinding -> {
                 StringKeySubscriptNavigationLink stringKey = (StringKeySubscriptNavigationLink) link;
                 StructuralKey key =
-                        StructuralKey.of("MapKeySubscript", receiver.key(), stringKey.key(), stringKey.safe());
+                        StructuralKey.of("MapKeySubscript", receiver.key(), stringKey.key(), mapKeyBinding.safe());
                 yield new NodeAnalysis(key, receiver.containsCurrentItem(), receiver.containsInternalSymbol());
             }
             case ContextualMemberNavigationBinding memberBinding -> {
-                StructuralKey key =
-                        StructuralKey.of("ContextualMember", receiver.key(), memberBinding.member(), link.safe());
+                StructuralKey key = StructuralKey.of(
+                        "ContextualMember", receiver.key(), memberBinding.member(), memberBinding.safe());
                 yield new NodeAnalysis(key, receiver.containsCurrentItem(), receiver.containsInternalSymbol());
             }
             case RegisteredPropertyNavigationBinding propertyBinding -> {
                 StructuralKey key = StructuralKey.of(
                         "RegisteredProperty", receiver.key(), new IdentityKey(propertyBinding.accessorHandle()),
-                        link.safe());
+                        propertyBinding.safe());
                 yield new NodeAnalysis(key, receiver.containsCurrentItem(), receiver.containsInternalSymbol());
             }
             case RegisteredMethodNavigationBinding methodBinding -> {
@@ -307,7 +308,7 @@ final class CommonSubexpressionAnalyzer {
                         .toList();
                 StructuralKey key = StructuralKey.of(
                         "RegisteredMethod", receiver.key(), new IdentityKey(methodBinding.invocationHandle()),
-                        link.safe(), keysOf(arguments));
+                        methodBinding.safe(), keysOf(arguments));
                 yield new NodeAnalysis(
                         key,
                         receiver.containsCurrentItem() || anyCurrentItem(arguments),

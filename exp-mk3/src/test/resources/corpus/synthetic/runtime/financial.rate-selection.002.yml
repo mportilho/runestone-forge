@@ -1,0 +1,35 @@
+id: runtime.financial.rate-selection.002
+phase: runtime
+kind: valid
+source: 'taxa := if contrato.indice = "PRE" then taxaPre else taxaPos + spread endif; fator := (1 + taxa / 100) ^ (prazo / 12); saldo * fator + pmt(taxa / 100, prazo, saldo)'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  mathContext: {precision: 12, roundingMode: HALF_UP}
+  symbols:
+    contrato:
+      type: OBJECT_POST_FIXED_CONTRACT_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+    taxaPre:
+      type: NUMBER
+      default: {type: NUMBER, value: "12"}
+      overwritePolicy: OVERRIDABLE
+    taxaPos:
+      type: NUMBER
+      default: {type: NUMBER, value: "15"}
+      overwritePolicy: OVERRIDABLE
+    spread:
+      type: NUMBER
+      default: {type: NUMBER, value: "3"}
+      overwritePolicy: OVERRIDABLE
+    saldo:
+      type: NUMBER
+      default: {type: NUMBER, value: "10000"}
+      overwritePolicy: OVERRIDABLE
+    prazo:
+      type: NUMBER
+      default: {type: NUMBER, value: "12"}
+      overwritePolicy: OVERRIDABLE
+coverage: [if-classic, assignment, property-access, exponentiation, function-call, identifier]
+expected: {type: NUMBER, result: "9713.72191118"}

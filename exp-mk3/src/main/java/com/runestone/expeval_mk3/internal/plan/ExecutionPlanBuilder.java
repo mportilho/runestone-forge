@@ -6,7 +6,6 @@ import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
-import com.runestone.expeval_mk3.api.RuntimeNullability;
 import com.runestone.expeval_mk3.internal.ast.AssignmentNode;
 import com.runestone.expeval_mk3.internal.ast.AssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.BetweenNode;
@@ -81,6 +80,8 @@ import com.runestone.expeval_mk3.internal.semantics.FilterNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.IndexSubscriptNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.MapKeySubscriptNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.NavigationBinding;
+import com.runestone.expeval_mk3.internal.semantics.NumericFact;
+import com.runestone.expeval_mk3.internal.semantics.PowerRealDomainDeferredCheck;
 import com.runestone.expeval_mk3.internal.semantics.RegisteredMethodNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.RegisteredPropertyNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.SemanticModel;
@@ -99,32 +100,51 @@ import java.util.stream.Collectors;
 
 /**
  * Builds the immutable {@link ExecutionPlan} from a successful {@code SemanticModel}, in one of two
- * modes selected by a single internal {@code folding} field: {@link #build} produces the optimized plan
- * and {@link #buildOracle} produces the Unoptimized Oracle that {@code build} is validated against (ADR
- * 0019). The transformation happens during construction, not as a rewrite pass over a built
- * {@link ExecutableNode} tree: that family of nodes has no traversal or reconstruction protocol, and
- * adding one would only pay to rebuild what this builder already built with the full semantic metadata
- * in hand. Every violation of the Etapa 4 completeness contract (missing type, binding, prepared value,
- * or numeric fact) is an internal bug in this builder, never a late user diagnostic; it fails as an
- * {@link IllegalStateException} instead of inferring, resolving, or rediscovering the missing decision.
+ * modes selected by a single internal {@code optimizing} field: {@link #build} produces the optimized
+ * plan and {@link #buildOracle} produces the Unoptimized Oracle that {@code build} is validated against
+ * (ADR 0019). {@code optimizing} gates every transformation this builder is authorized to apply on top
+ * of the metadata {@code SemanticModel} already computed and validated — Dobra de Constante today, and
+ * specialized-node choice in later Etapa 8 tickets. The transformation happens during construction, not
+ * as a rewrite pass over a built {@link ExecutableNode} tree: that family of nodes has no traversal or
+ * reconstruction protocol, and adding one would only pay to rebuild what this builder already built with
+ * the full semantic metadata in hand. Every violation of the Etapa 4 completeness contract (missing type,
+ * binding, prepared value, or numeric fact) is an internal bug in this builder, never a late user
+ * diagnostic; it fails as an {@link IllegalStateException} instead of inferring, resolving, or
+ * rediscovering the missing decision.
+ *
+ * <p>Etapa 8 entry gate (issue #124), each item verified before any specialization work in this class:
+ * resolved type and Runtime Nullability present for every operand node — read via {@link #buildNode}'s
+ * {@code BindingLookup.required} lookup into {@code model.runtimeNullability()}, proven by
+ * {@code ExecutionPlanBuilderNavigationSeamTest#planBuildingFailsInsteadOfRederivingMissingRuntimeNullability};
+ * Numeric Fact present for every {@code NUMBER} node, consumed by {@link #powerDomainProven} rather than
+ * merely checked, proven by {@code RealDomainArithmeticTest}'s {@code domainProven*} cases; every
+ * {@code PowerRealDomainDeferredCheck} has a runtime consumer, proven the same way; purity recorded for
+ * every node and navigation link, read throughout via {@code binding.pure()}, proven by
+ * {@code SemanticModelCompletenessGateTest}; canonical Frame Layout with memo slots appended past
+ * {@code frameSize}, proven by {@code CommonSubexpressionAnalyzer}'s frame layout tests; single origin
+ * for the {@code safe} bit between this builder and {@link CommonSubexpressionAnalyzer}, both now
+ * routed through {@link NavigationBinding#safe()}. The remaining gate items —
+ * resolved type on every node and the Etapa 4 completeness contract as a whole — are proven exhaustively
+ * by {@code SemanticModelCompletenessGateTest} at the {@code SemanticModel} construction boundary this
+ * builder always receives already validated.
  */
 public final class ExecutionPlanBuilder {
 
-    private final boolean folding;
+    private final boolean optimizing;
 
     public ExecutionPlanBuilder() {
         this(true);
     }
 
-    private ExecutionPlanBuilder(boolean folding) {
-        this.folding = folding;
+    private ExecutionPlanBuilder(boolean optimizing) {
+        this.optimizing = optimizing;
     }
 
     /**
      * Builds the optimized plan that the public compilation entry point uses.
      */
     public ExecutionPlan build(SemanticModel model, ExpressionEnvironment environment) {
-        return withFolding(true).buildPlan(model, environment);
+        return withOptimizing(true).buildPlan(model, environment);
     }
 
     /**
@@ -134,16 +154,16 @@ public final class ExecutionPlanBuilder {
      * duplicated runtime built on this path.
      */
     ExecutionPlan buildOracle(SemanticModel model, ExpressionEnvironment environment) {
-        return withFolding(false).buildPlan(model, environment);
+        return withOptimizing(false).buildPlan(model, environment);
     }
 
     /**
      * Returns {@code this} when it already carries the requested mode, and a fresh instance with that
-     * mode otherwise; keeps {@code folding} the single, genuinely consulted mode selector rather than a
-     * field one entry point writes and the other ignores.
+     * mode otherwise; keeps {@code optimizing} the single, genuinely consulted mode selector rather than
+     * a field one entry point writes and the other ignores.
      */
-    private ExecutionPlanBuilder withFolding(boolean folding) {
-        return this.folding == folding ? this : new ExecutionPlanBuilder(folding);
+    private ExecutionPlanBuilder withOptimizing(boolean optimizing) {
+        return this.optimizing == optimizing ? this : new ExecutionPlanBuilder(optimizing);
     }
 
     private ExecutionPlan buildPlan(SemanticModel model, ExpressionEnvironment environment) {
@@ -153,7 +173,7 @@ public final class ExecutionPlanBuilder {
                 .collect(Collectors.groupingBy(DeferredCheck::nodeId));
         List<FoldedRead> foldedReads = new ArrayList<>();
         CommonSubexpressionAnalysis commonSubexpressions =
-                folding ? CommonSubexpressionAnalyzer.analyze(model) : CommonSubexpressionAnalysis.EMPTY;
+                optimizing ? CommonSubexpressionAnalyzer.analyze(model) : CommonSubexpressionAnalysis.EMPTY;
         Map<NodeId, Integer> memoSlots = commonSubexpressions.memoSlotsByNodeId();
         ExecutableNode result = model.ast().resultExpression()
                 .map(expression -> buildNode(expression, model, environment, deferredChecksByNode, foldedReads, memoSlots))
@@ -255,6 +275,7 @@ public final class ExecutionPlanBuilder {
             Map<NodeId, List<DeferredCheck>> deferredChecksByNode,
             List<FoldedRead> foldedReads,
             Map<NodeId, Integer> memoSlots) {
+        BindingLookup.required(model.runtimeNullability(), node.id(), "runtime nullability");
         return memoize(node.id(), buildNodeWithoutMemo(node, model, environment, deferredChecksByNode, foldedReads, memoSlots), memoSlots);
     }
 
@@ -315,7 +336,7 @@ public final class ExecutionPlanBuilder {
     private ExecutableNode buildIdentifierRead(
             IdentifierNode identifier, SemanticModel model, List<FoldedRead> foldedReads) {
         SymbolBinding binding = BindingLookup.required(model.symbolBindings(), identifier.id(), "symbol binding");
-        if (folding && binding.external()
+        if (optimizing && binding.external()
                 && binding.requireExternalSymbol().overwritePolicy() == ExternalSymbolOverwritePolicy.FIXED) {
             Object value = binding.requireExternalSymbol().defaultValue().value();
             foldedReads.add(new FoldedRead(identifier.name(), identifier.id(), identifier.sourceSpan(), value));
@@ -337,7 +358,8 @@ public final class ExecutionPlanBuilder {
         return switch (operator) {
             case ADD, SUBTRACT, MULTIPLY, DIVIDE, MODULO, ROOT, EXPONENTIATE, CONCATENATE -> fold(BinaryExecutableNode.arithmetic(
                     binary.id(), binary.sourceSpan(), operator, left, right, environment.mathContext(),
-                    deferredChecksByNode.getOrDefault(binary.id(), List.of())), left, right);
+                    deferredChecksByNode.getOrDefault(binary.id(), List.of()),
+                    powerDomainProven(binary, model, deferredChecksByNode)), left, right);
             case LOGICAL_AND, LOGICAL_OR, LOGICAL_NAND, LOGICAL_NOR, LOGICAL_XOR, LOGICAL_XNOR -> fold(
                     BinaryExecutableNode.logical(binary.id(), binary.sourceSpan(), operator, left, right), left, right);
             case GREATER_THAN, GREATER_THAN_OR_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL -> fold(BinaryExecutableNode.comparison(
@@ -350,6 +372,28 @@ public final class ExecutionPlanBuilder {
                     binary.id(), binary.sourceSpan(), operator, left,
                     (Pattern) BindingLookup.required(model.preparedValues(), binary.id(), "prepared regex pattern")), left);
         };
+    }
+
+    /**
+     * Consumes {@code SemanticModel#numericFacts} and the resolver's own {@code PowerRealDomainDeferredCheck}
+     * decision (issue #124): {@code true} only when the base's Numeric Fact carries a known strictly
+     * positive sign AND the resolver did not emit a deferred check for this node — the exact "proven real
+     * for any exponent" branch of {@code classifyPowerDomain}. Reading the AST base's Numeric Fact here,
+     * before folding runs, avoids being misled by a base that only becomes a folded constant later (e.g.
+     * {@code (2 + 2) ^ x}, whose sum has no known parity even though it folds to a positive constant).
+     */
+    private static boolean powerDomainProven(
+            BinaryOperationNode binary, SemanticModel model, Map<NodeId, List<DeferredCheck>> deferredChecksByNode) {
+        if (binary.operator() != BinaryOperator.EXPONENTIATE) {
+            return false;
+        }
+        boolean checkEmitted = deferredChecksByNode.getOrDefault(binary.id(), List.of()).stream()
+                .anyMatch(PowerRealDomainDeferredCheck.class::isInstance);
+        if (checkEmitted) {
+            return false;
+        }
+        NumericFact baseFact = NumericFact.of(model.numericFacts(), binary.left().id());
+        return baseFact.hasParity() && baseFact.parity().signum() > 0;
     }
 
     private ExecutableNode buildPostfix(
@@ -478,19 +522,21 @@ public final class ExecutionPlanBuilder {
         return switch (binding) {
             case IndexSubscriptNavigationBinding indexBinding -> {
                 IndexSubscriptNavigationLink index = (IndexSubscriptNavigationLink) link;
-                ExecutableNode built = new IndexSubscriptExecutableNode(id, span, receiver, index.index().value(), index.safe());
+                boolean safe = indexBinding.safe();
+                ExecutableNode built = new IndexSubscriptExecutableNode(id, span, receiver, index.index().value(), safe);
                 yield foldNavigationLink(indexBinding.pure(), built, receiver);
             }
             case SliceSubscriptNavigationBinding sliceBinding -> {
                 SliceSubscriptNavigationLink slice = (SliceSubscriptNavigationLink) link;
+                boolean safe = sliceBinding.safe();
                 ExecutableNode built = new SliceSubscriptExecutableNode(
                         id, span, receiver, SubscriptBounds.rawValue(slice.start()),
-                        SubscriptBounds.rawValue(slice.end()), slice.safe(), environment.maxMaterializedSize());
+                        SubscriptBounds.rawValue(slice.end()), safe, environment.maxMaterializedSize());
                 yield foldNavigationLink(sliceBinding.pure(), built, receiver);
             }
             case MapKeySubscriptNavigationBinding mapKeyBinding -> {
                 StringKeySubscriptNavigationLink stringKey = (StringKeySubscriptNavigationLink) link;
-                boolean safe = mapKeyBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
+                boolean safe = mapKeyBinding.safe();
                 ExecutableNode built = new MapKeySubscriptExecutableNode(id, span, receiver, stringKey.key(), safe);
                 yield foldNavigationLink(mapKeyBinding.pure(), built, receiver);
             }
@@ -502,18 +548,18 @@ public final class ExecutionPlanBuilder {
                         environment.maxMaterializedSize());
             }
             case ContextualMemberNavigationBinding memberBinding -> {
-                boolean safe = memberBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
+                boolean safe = memberBinding.safe();
                 ExecutableNode built = new ContextualMemberExecutableNode(id, span, receiver, memberBinding.member(), safe);
                 yield foldNavigationLink(memberBinding.pure(), built, receiver);
             }
             case RegisteredPropertyNavigationBinding propertyBinding -> {
-                boolean safe = propertyBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
+                boolean safe = propertyBinding.safe();
                 ExecutableNode built = new RegisteredPropertyExecutableNode(id, span, receiver, safe, propertyBinding);
                 yield foldNavigationLink(propertyBinding.pure(), built, receiver);
             }
             case RegisteredMethodNavigationBinding methodBinding -> {
                 CallNavigationLink call = (CallNavigationLink) link;
-                boolean safe = methodBinding.resultNullability() == RuntimeNullability.MAY_BE_NULL;
+                boolean safe = methodBinding.safe();
                 List<ExecutableNode> arguments = call.arguments().stream()
                         .map(ExpressionCallArgument.class::cast)
                         .map(argument -> buildNode(argument.expression(), model, environment, deferredChecksByNode, foldedReads, memoSlots))
@@ -596,7 +642,7 @@ public final class ExecutionPlanBuilder {
      * traversal. In oracle mode this is a no-op: {@code built} is always returned unchanged.
      */
     private ExecutableNode fold(ExecutableNode built, ExecutableNode... requiredConstantChildren) {
-        return folding ? ConstantFolder.fold(built, requiredConstantChildren) : built;
+        return optimizing ? ConstantFolder.fold(built, requiredConstantChildren) : built;
     }
 
     /**
@@ -615,7 +661,7 @@ public final class ExecutionPlanBuilder {
      * no-op: {@code built} is always returned unchanged.
      */
     private ExecutableNode foldNullCoalesce(NullCoalesceExecutableNode built) {
-        return folding ? ConstantFolder.foldNullCoalesce(built) : built;
+        return optimizing ? ConstantFolder.foldNullCoalesce(built) : built;
     }
 
     /**
@@ -623,7 +669,7 @@ public final class ExecutionPlanBuilder {
      * no-op: {@code built} is always returned unchanged.
      */
     private ExecutableNode foldConditional(ConditionalExecutableNode built) {
-        return folding ? ConstantFolder.foldConditional(built) : built;
+        return optimizing ? ConstantFolder.foldConditional(built) : built;
     }
 
     /**
@@ -631,7 +677,7 @@ public final class ExecutionPlanBuilder {
      * {@code built} is always returned unchanged.
      */
     private ExecutableNode foldAssertion(FunctionCallExecutableNode built) {
-        return folding ? ConstantFolder.foldAssertion(built) : built;
+        return optimizing ? ConstantFolder.foldAssertion(built) : built;
     }
 
     /**
@@ -639,7 +685,7 @@ public final class ExecutionPlanBuilder {
      * {@code built} is always returned unchanged.
      */
     private ExecutableNode foldDoubleNegation(UnaryExecutableNode built) {
-        return folding ? ConstantFolder.foldDoubleNegation(built) : built;
+        return optimizing ? ConstantFolder.foldDoubleNegation(built) : built;
     }
 
     /**
@@ -647,7 +693,7 @@ public final class ExecutionPlanBuilder {
      * mode this is a no-op: {@code built} is always returned unchanged.
      */
     private ExecutableNode foldMembership(MembershipExecutableNode built) {
-        return folding ? ConstantFolder.foldMembership(built) : built;
+        return optimizing ? ConstantFolder.foldMembership(built) : built;
     }
 
     private static ExpressionEnvironment requireEnvironment(ExpressionEnvironment environment) {

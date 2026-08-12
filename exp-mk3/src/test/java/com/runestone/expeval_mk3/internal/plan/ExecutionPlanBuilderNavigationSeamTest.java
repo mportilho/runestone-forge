@@ -66,8 +66,25 @@ class ExecutionPlanBuilderNavigationSeamTest {
                 .build();
     }
 
+    @Test
+    void planBuildingFailsInsteadOfRederivingMissingRuntimeNullability() throws Exception {
+        ExpressionFileNode ast = ast("items[0]");
+        SemanticModel model = resolve(ast);
+        clearRuntimeNullability(model);
+
+        assertThatThrownBy(() -> new ExecutionPlanBuilder().build(model, environment()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("runtime nullability");
+    }
+
     private static void clearNavigationBindings(SemanticModel model) throws Exception {
         Field field = SemanticModel.class.getDeclaredField("navigationBindings");
+        field.setAccessible(true);
+        field.set(model, Map.of());
+    }
+
+    private static void clearRuntimeNullability(SemanticModel model) throws Exception {
+        Field field = SemanticModel.class.getDeclaredField("runtimeNullability");
         field.setAccessible(true);
         field.set(model, Map.of());
     }

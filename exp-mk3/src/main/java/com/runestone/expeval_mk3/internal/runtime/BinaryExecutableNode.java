@@ -31,6 +31,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
     private final boolean negated;
     private final Pattern regexPattern;
     private final List<DeferredCheck> deferredChecks;
+    private final boolean domainProven;
 
     private BinaryExecutableNode(
             NodeId id,
@@ -42,7 +43,8 @@ public final class BinaryExecutableNode implements ExecutableNode {
             ExpressionType operandType,
             boolean negated,
             Pattern regexPattern,
-            List<DeferredCheck> deferredChecks) {
+            List<DeferredCheck> deferredChecks,
+            boolean domainProven) {
         this.id = Objects.requireNonNull(id, "id");
         this.sourceSpan = Objects.requireNonNull(sourceSpan, "sourceSpan");
         this.operator = Objects.requireNonNull(operator, "operator");
@@ -53,24 +55,32 @@ public final class BinaryExecutableNode implements ExecutableNode {
         this.negated = negated;
         this.regexPattern = regexPattern;
         this.deferredChecks = List.copyOf(Objects.requireNonNull(deferredChecks, "deferredChecks"));
+        this.domainProven = domainProven;
     }
 
+    /**
+     * {@code domainProven} is {@code true} only for {@code EXPONENTIATE} where the plan builder has
+     * already consumed the resolver's own proof (issue #124): the base's {@code NumericFact} carries a
+     * known strictly positive sign and no {@code PowerRealDomainDeferredCheck} was emitted for this node.
+     * Any other case — negative or unknown-sign base, or a check the resolver did emit — leaves
+     * {@code domainProven} false and takes the classifying path in {@link RealDomainArithmetic}.
+     */
     public static BinaryExecutableNode arithmetic(
             NodeId id, SourceSpan sourceSpan, BinaryOperator operator,
             ExecutableNode left, ExecutableNode right, MathContext mathContext,
-            List<DeferredCheck> deferredChecks) {
+            List<DeferredCheck> deferredChecks, boolean domainProven) {
         return new BinaryExecutableNode(
                 id, sourceSpan, operator, left,
                 Objects.requireNonNull(right, "right"),
                 Objects.requireNonNull(mathContext, "mathContext"),
-                null, false, null, deferredChecks);
+                null, false, null, deferredChecks, domainProven);
     }
 
     public static BinaryExecutableNode logical(
             NodeId id, SourceSpan sourceSpan, BinaryOperator operator, ExecutableNode left, ExecutableNode right) {
         return new BinaryExecutableNode(
                 id, sourceSpan, operator, left, Objects.requireNonNull(right, "right"),
-                null, null, false, null, List.of());
+                null, null, false, null, List.of(), false);
     }
 
     public static BinaryExecutableNode comparison(
@@ -79,7 +89,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
         return new BinaryExecutableNode(
                 id, sourceSpan, operator, left,
                 Objects.requireNonNull(right, "right"),
-                null, Objects.requireNonNull(operandType, "operandType"), false, null, List.of());
+                null, Objects.requireNonNull(operandType, "operandType"), false, null, List.of(), false);
     }
 
     public static BinaryExecutableNode equality(
@@ -89,7 +99,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
                 id, sourceSpan, operator, left,
                 Objects.requireNonNull(right, "right"),
                 null, Objects.requireNonNull(operandType, "operandType"),
-                operator == BinaryOperator.NOT_EQUAL, null, List.of());
+                operator == BinaryOperator.NOT_EQUAL, null, List.of(), false);
     }
 
     public static BinaryExecutableNode regex(
@@ -97,7 +107,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
         return new BinaryExecutableNode(
                 id, sourceSpan, operator, left, null, null, null,
                 operator == BinaryOperator.REGEX_NOT_MATCH,
-                Objects.requireNonNull(regexPattern, "regexPattern"), List.of());
+                Objects.requireNonNull(regexPattern, "regexPattern"), List.of(), false);
     }
 
     @Override
@@ -177,7 +187,9 @@ public final class BinaryExecutableNode implements ExecutableNode {
     private BigDecimal exponentiate(ExecutionScope scope) {
         BigDecimal base = ExpressionRuntime.number(left.execute(scope));
         BigDecimal exponent = ExpressionRuntime.number(right.execute(scope));
-        return RealDomainArithmetic.pow(base, exponent, mathContext, sourceSpan);
+        return domainProven
+                ? RealDomainArithmetic.powWithProvenDomain(base, exponent, mathContext, sourceSpan)
+                : RealDomainArithmetic.pow(base, exponent, mathContext, sourceSpan);
     }
 
     private int compare(ExecutionScope scope) {

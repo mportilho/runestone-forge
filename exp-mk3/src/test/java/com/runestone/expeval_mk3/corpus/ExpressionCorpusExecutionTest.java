@@ -174,6 +174,17 @@ class ExpressionCorpusExecutionTest {
     }
 
     /**
+     * A {@code contrato} fixture whose {@code indice} is not {@code "PRE"}, exercising the canonical
+     * Etapa 8 corpus expression's {@code else} branch (issue #124).
+     */
+    public static final class PostFixedContractProvider {
+
+        public String getIndice() {
+            return "POS";
+        }
+    }
+
+    /**
      * Deliberately violates the registered-member non-null contract and the invocation-failure boundary so
      * a safe navigation link over each member form (property, call, argument, nested receiver) proves it
      * does not mask the corresponding runtime or semantic failure.
@@ -182,6 +193,10 @@ class ExpressionCorpusExecutionTest {
 
         public String getName() {
             return "Ana";
+        }
+
+        public String getIndice() {
+            return "PRE";
         }
 
         public String getMissing() {
