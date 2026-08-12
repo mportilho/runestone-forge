@@ -37,6 +37,17 @@ class PlanOptimizationEquivalenceTest {
     private static final String SOURCE =
             "p := track(x); q := track(y); r := p / q; s := sqrt(p); t := p!; u := sqrt(x) + sqrt(x); r + s + t + u";
 
+    /**
+     * Issue #126's own comparison/equality specialization pilot, reusing this same property test's
+     * generated pairs so the specialized paths ({@code NumberComparisonExecutableNode},
+     * {@code NumberEqualityExecutableNode}) are exercised generatively rather than only by fixed
+     * corpus cases, matching the ticket's "extended jqwik suite" testing expectation. {@code x} and
+     * {@code y} are generated at different scales specifically to keep landing on the numeric equality
+     * risk the ticket calls out: a scale difference alone must never flip {@code =}/{@code <>}.
+     */
+    private static final String COMPARISON_AND_EQUALITY_SOURCE =
+            "(x > y) = (y < x) and (x >= y) = (y <= x) and (x = x) and (x <> y or x = y)";
+
     @Property
     void buildAndBuildOracleAgreeOnValueFailureOrderAndEffects(
             @ForAll @BigRange(min = "-20", max = "20") @Scale(2) BigDecimal x,
@@ -44,6 +55,19 @@ class PlanOptimizationEquivalenceTest {
         EffectProbe probe = new EffectProbe();
         ExpressionEnvironment environment = environment(probe);
         SemanticModel model = resolve(SOURCE, environment);
+        Map<String, Object> inputs = Map.of("x", x, "y", y);
+
+        PlanEquivalenceHarness.assertEquivalent(
+                model, environment, inputs, Clock.systemUTC(), probe::reset, probe::orderSnapshot);
+    }
+
+    @Property
+    void buildAndBuildOracleAgreeOnComparisonAndEqualityAcrossScales(
+            @ForAll @BigRange(min = "-20", max = "20") @Scale(2) BigDecimal x,
+            @ForAll @BigRange(min = "-20", max = "20") @Scale(0) BigDecimal y) {
+        EffectProbe probe = new EffectProbe();
+        ExpressionEnvironment environment = environment(probe);
+        SemanticModel model = resolve(COMPARISON_AND_EQUALITY_SOURCE, environment);
         Map<String, Object> inputs = Map.of("x", x, "y", y);
 
         PlanEquivalenceHarness.assertEquivalent(

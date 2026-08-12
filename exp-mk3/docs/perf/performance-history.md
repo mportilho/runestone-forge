@@ -1,5 +1,89 @@
 # Performance History
 
+## 2026-08-11 - Issue 126 Etapa 8 Pilot: Comparacao e Igualdade Sem Duplo Despacho
+
+Purpose: issue #126 (Etapa 8, increment 3, the etapa's second pilot) replaces the runtime type
+re-dispatch inside `ExpressionRuntime.compareValues`/`structuralEquals` for order comparison and
+equality with a node choice made once at plan-build time, from `SemanticModel#resolvedTypes` /
+`equalityOperandTypes`. Four new node classes were added, all additive alongside the generic
+`BinaryExecutableNode` the Unoptimized Oracle still builds for every case (ADR 0019, following the
+issue #119 `in`-constant precedent): `NumberComparisonExecutableNode` and
+`ComparableComparisonExecutableNode` for order comparison (`NUMBER` vs. the remaining orderable types
+— `STRING`, `DATE`, `TIME`, `DATETIME`), `NumberEqualityExecutableNode` and
+`EqualsEqualityExecutableNode` for equality (`NUMBER` vs. the remaining equals-coincident scalars).
+`COLLECTION` and `MAP` equality deliberately decline specialization and keep the generic node even
+while `optimizing`: the outer dispatch this family exists to skip costs one `instanceof` check against
+the recursive element/value walk the generic node's structural comparison already performs — the same
+"does not pay for itself" call issue #119's membership download made for collection and map elements.
+No typed `ExecutableNode` entry point was introduced: the generic `Object execute(ExecutionScope)`
+already differentiates optimized from Oracle in this benchmark, so no paired measurement existed to
+justify widening the interface, per the etapa's own gate on typed entry points.
+
+Unlike issue #125's `FunctionInvocationBenchmark`, the `optimized`/`oracle` pair here **does**
+discriminate the mechanism directly (`buildOracle` always builds `BinaryExecutableNode`; `build`
+builds the specialized node whenever the operand type is not `COLLECTION`/`MAP`), so this single run
+is the pilot's pass/fail signal — no git-stash before/after protocol needed. Each state in
+`ComparisonAndEqualityBenchmark` chains sixteen comparisons/equalities over the same two operands
+(`OVERRIDABLE` external symbols, never literals, so Constant Folding cannot fold a chain away) so the
+per-dispatch delta clears measurement noise instead of being swamped by fixed plan overhead.
+
+**A first run of this benchmark chained the three equality states with `or`, and every override was
+chosen to make the first chained term `true`.** `BinaryExecutableNode`'s `LOGICAL_OR` branch is Java's
+short-circuiting `||`, so all three equality states measured one equality dispatch per invocation, not
+sixteen, while the comparison states (chained with `and`, all-true terms, no short-circuit) measured
+the full sixteen. That asymmetry, not a genuinely smaller mechanism, produced an artificially small
+first-run equality delta (-3% to -4%) next to comparison's -26% to -38%. Caught before being trusted as
+the pilot's answer; fixed by chaining every equality state with `and` instead (still all-true operands,
+so `&&` never short-circuits and all sixteen dispatches run, matching the comparison states exactly).
+The corrected numbers below are the ones this decision is based on.
+
+Command used:
+
+```bash
+mvn -q -N install
+mvn -q -pl exp-mk3 -am install -DskipTests
+mvn -q -pl exp-mk3 dependency:build-classpath -Dmdep.outputFile="exp-mk3/target/jmh-cp.txt" -DincludeScope=test
+java -cp "runestone-toolkit/target/classes:exp-mk3/target/test-classes:exp-mk3/target/classes:$(tr -d '\n' < exp-mk3/target/jmh-cp.txt)" \
+  org.openjdk.jmh.Main "ComparisonAndEqualityBenchmark" \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/performance-benchmark/exp-mk3-comparison-equality-issue-126.json" \
+  -foe true
+```
+
+Environment: JDK 26.0.1 (build environment; JDK 21 is the module's compile/target level), JMH 1.37,
+`-Xms1g -Xmx1g`, 5×500ms warmup, 10×500ms measurement, 3 forks, `gc` profiler.
+
+| Benchmark | Optimized (ns/op) | Oracle (ns/op) | Delta | B/op optimized → oracle |
+|---|---:|---:|---:|---|
+| `numberComparison` — 16× `a > b` | 277.24 ± 5.56 | 380.83 ± 7.92 | **-27.2%** | 208 → 200 |
+| `stringComparison` — 16× `s > t` | 221.87 ± 3.54 | 361.25 ± 15.14 | **-38.6%** | 160 → 152 |
+| `numberEquality` — 16× `a = b` | 275.78 ± 3.17 | 381.26 ± 8.93 | **-27.6%** | 208 → 200 |
+| `numberEqualityScaleMismatch` — 16× `a = c` (different scales) | 284.92 ± 5.49 | 481.88 ± 19.76 | **-40.9%** | 208 → 200 |
+| `stringEquality` — 16× `s = t` | 221.74 ± 9.05 | 298.12 ± 9.84 | **-25.6%** | 160 → 152 |
+
+Verdict: **the pilot pays, clearly, in both families** (-25.6% to -40.9%, all five states far outside
+the ±1% noise band). Comparison and equality land in the same range once measured correctly, which is
+the expected result: both mechanisms removed are the same shape — a runtime type re-check
+(`ExpressionRuntime.compareValues`/`structuralEquals`) ahead of a cast, replaced by a node choice made
+once at construction. The scale-mismatch state shows the largest gain of the five; it is not a
+different mechanism, just the same `NumberEqualityExecutableNode` measured with different-scale
+operands, confirming the specialized `compareTo` path pays under the exact input shape the ticket's own
+risk note calls out as most likely to break silently.
+
+**Decision: both specialized families are kept.** Both margins are unambiguous and clear the ticket's
+stop rule ("se a medição pareada não mostrar ganho, a família sai") by a wide margin rather than
+triggering it. `COLLECTION`/`MAP` equality was never built in
+either specialized form, so there is nothing to discard there — it was a design-time decision, not a
+measured one. No typed entry point was added to `ExecutableNode`: this benchmark already isolates the
+mechanism through the generic `execute(ExecutionScope)` signature, so introducing a typed default
+method now would have no paired measurement behind it, exactly what the etapa's `ExecutableNode`
+contract forbids.
+
+`mvn -pl exp-mk3 -am test` was run and green both before this benchmark was added and again after,
+confirming the functional/equivalence gate (`PlanEquivalenceHarness`, the extended jqwik property
+suite, and the fixed corpus) was unaffected.
+
 ## 2026-08-11 - Issue 125 Etapa 8 Pilot: Invocacao Sem Reflexao e Elisao de Coercao de Borda
 
 Purpose: issue #125 (Etapa 8, increment 2, the etapa's own pilot) replaces per-call `Object[]`

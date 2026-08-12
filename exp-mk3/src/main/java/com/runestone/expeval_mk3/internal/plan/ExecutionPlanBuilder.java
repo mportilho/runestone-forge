@@ -1,11 +1,14 @@
 package com.runestone.expeval_mk3.internal.plan;
 
 import com.runestone.expeval_mk3.api.CollectionOperationCatalog;
+import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
+import com.runestone.expeval_mk3.api.MapType;
+import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.AssignmentNode;
 import com.runestone.expeval_mk3.internal.ast.AssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.BetweenNode;
@@ -49,11 +52,13 @@ import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutableN
 import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutor;
 import com.runestone.expeval_mk3.internal.runtime.CollectionOperationExecutors;
 import com.runestone.expeval_mk3.internal.runtime.CollectionOperationRuntimeBinding;
+import com.runestone.expeval_mk3.internal.runtime.ComparableComparisonExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ConditionalExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ConstantExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ConstantFolder;
 import com.runestone.expeval_mk3.internal.runtime.ContextualMemberExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.CurrentTemporalExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.EqualsEqualityExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableBranch;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableLambda;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
@@ -66,6 +71,8 @@ import com.runestone.expeval_mk3.internal.runtime.MapKeySubscriptExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.MembershipExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.MemoizedExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.NullCoalesceExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.NumberComparisonExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.NumberEqualityExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.PostfixExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.RegisteredMethodExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.RegisteredPropertyExecutableNode;
@@ -103,8 +110,9 @@ import java.util.stream.Collectors;
  * modes selected by a single internal {@code optimizing} field: {@link #build} produces the optimized
  * plan and {@link #buildOracle} produces the Unoptimized Oracle that {@code build} is validated against
  * (ADR 0019). {@code optimizing} gates every transformation this builder is authorized to apply on top
- * of the metadata {@code SemanticModel} already computed and validated — Dobra de Constante today, and
- * specialized-node choice in later Etapa 8 tickets. The transformation happens during construction, not
+ * of the metadata {@code SemanticModel} already computed and validated — Dobra de Constante (Etapa 7),
+ * comparison/equality specialized-node choice (issue #126), and any later Etapa 8 specialization the
+ * same way. The transformation happens during construction, not
  * as a rewrite pass over a built {@link ExecutableNode} tree: that family of nodes has no traversal or
  * reconstruction protocol, and adding one would only pay to rebuild what this builder already built with
  * the full semantic metadata in hand. Every violation of the Etapa 4 completeness contract (missing type,
@@ -362,16 +370,61 @@ public final class ExecutionPlanBuilder {
                     powerDomainProven(binary, model, deferredChecksByNode)), left, right);
             case LOGICAL_AND, LOGICAL_OR, LOGICAL_NAND, LOGICAL_NOR, LOGICAL_XOR, LOGICAL_XNOR -> fold(
                     BinaryExecutableNode.logical(binary.id(), binary.sourceSpan(), operator, left, right), left, right);
-            case GREATER_THAN, GREATER_THAN_OR_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL -> fold(BinaryExecutableNode.comparison(
-                    binary.id(), binary.sourceSpan(), operator, left, right, model.resolvedTypes().get(binary.left().id())),
-                    left, right);
-            case EQUAL, NOT_EQUAL -> fold(BinaryExecutableNode.equality(
-                    binary.id(), binary.sourceSpan(), operator, left, right,
-                    BindingLookup.required(model.equalityOperandTypes(), binary.id(), "equality operand type")), left, right);
+            case GREATER_THAN, GREATER_THAN_OR_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL ->
+                    fold(buildComparison(binary, operator, left, right, model), left, right);
+            case EQUAL, NOT_EQUAL -> fold(buildEquality(binary, operator, left, right, model), left, right);
             case REGEX_MATCH, REGEX_NOT_MATCH -> fold(BinaryExecutableNode.regex(
                     binary.id(), binary.sourceSpan(), operator, left,
                     (Pattern) BindingLookup.required(model.preparedValues(), binary.id(), "prepared regex pattern")), left);
         };
+    }
+
+    /**
+     * Chooses the order comparison node from the left operand's resolved type (issue #126), never
+     * re-inspected at execution time: {@code NUMBER} to {@link NumberComparisonExecutableNode}, and
+     * every other orderable type — {@code STRING}, {@code DATE}, {@code TIME}, {@code DATETIME}, the
+     * only remaining possibilities per {@code SemanticResolver#orderable} — to
+     * {@link ComparableComparisonExecutableNode}. The Unoptimized Oracle always builds the generic
+     * {@link BinaryExecutableNode#comparison}, so this choice happens only when {@code optimizing}.
+     */
+    private ExecutableNode buildComparison(
+            BinaryOperationNode binary, BinaryOperator operator, ExecutableNode left, ExecutableNode right, SemanticModel model) {
+        ExpressionType operandType = model.resolvedTypes().get(binary.left().id());
+        if (!optimizing) {
+            return BinaryExecutableNode.comparison(binary.id(), binary.sourceSpan(), operator, left, right, operandType);
+        }
+        return operandType == ScalarType.NUMBER
+                ? new NumberComparisonExecutableNode(binary.id(), binary.sourceSpan(), operator, left, right)
+                : new ComparableComparisonExecutableNode(binary.id(), binary.sourceSpan(), operator, left, right);
+    }
+
+    /**
+     * Chooses the equality node from the equality operand type resolved at plan-build time (issue
+     * #126), never re-inspected at execution time: {@code NUMBER} to
+     * {@link NumberEqualityExecutableNode} ({@code compareTo}, matching
+     * {@link com.runestone.expeval_mk3.internal.runtime.ExpressionRuntime#structuralEquals}'s own
+     * {@code NUMBER} rule), and every equals-coincident scalar — {@code STRING}, {@code BOOLEAN},
+     * {@code DATE}, {@code TIME}, {@code DATETIME} — to {@link EqualsEqualityExecutableNode}. A
+     * {@code COLLECTION} or {@code MAP} operand type declines specialization and keeps the generic
+     * {@link BinaryExecutableNode#equality} even while {@code optimizing}: the outer dispatch this
+     * family exists to skip only costs one {@code instanceof} check against the recursive
+     * element/value walk the generic node's structural comparison already performs, the same
+     * "does not pay for itself" call issue #119's membership download made for collection and map
+     * elements. The Unoptimized Oracle always builds the generic node regardless of operand type.
+     */
+    private ExecutableNode buildEquality(
+            BinaryOperationNode binary, BinaryOperator operator, ExecutableNode left, ExecutableNode right, SemanticModel model) {
+        ExpressionType operandType = BindingLookup.required(model.equalityOperandTypes(), binary.id(), "equality operand type");
+        if (optimizing) {
+            boolean negated = operator == BinaryOperator.NOT_EQUAL;
+            if (operandType == ScalarType.NUMBER) {
+                return new NumberEqualityExecutableNode(binary.id(), binary.sourceSpan(), negated, left, right);
+            }
+            if (!(operandType instanceof CollectionType) && !(operandType instanceof MapType)) {
+                return new EqualsEqualityExecutableNode(binary.id(), binary.sourceSpan(), negated, left, right);
+            }
+        }
+        return BinaryExecutableNode.equality(binary.id(), binary.sourceSpan(), operator, left, right, operandType);
     }
 
     /**
