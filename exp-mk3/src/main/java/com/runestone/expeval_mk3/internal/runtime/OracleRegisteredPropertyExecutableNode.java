@@ -6,15 +6,15 @@ import com.runestone.expeval_mk3.internal.semantics.RegisteredPropertyNavigation
 
 import java.util.Objects;
 
-/** {@code .property} on a registered {@code ObjectType} through its environment-prepared entry point. */
-public record RegisteredPropertyExecutableNode(
+/** Unoptimized Oracle route retaining generic MethodHandle property invocation. */
+public record OracleRegisteredPropertyExecutableNode(
         NodeId id,
         SourceSpan sourceSpan,
         ExecutableNode receiver,
         boolean safe,
         RegisteredPropertyNavigationBinding binding) implements ExecutableNode {
 
-    public RegisteredPropertyExecutableNode {
+    public OracleRegisteredPropertyExecutableNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(receiver, "receiver");
@@ -23,6 +23,6 @@ public record RegisteredPropertyExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.registeredPropertyValue(receiver.execute(scope), safe, binding, sourceSpan);
+        return ExpressionRuntime.oracleRegisteredPropertyValue(receiver.execute(scope), safe, binding, sourceSpan);
     }
 }

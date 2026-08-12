@@ -1437,8 +1437,7 @@ public final class SemanticResolver {
                     objectType,
                     propertyDescriptor.type(),
                     nullability,
-                    propertyDescriptor.accessorHandle(),
-                    propertyDescriptor.implementationMetadata(),
+                    propertyDescriptor,
                     receiverPure));
             return LinkResolution.known(propertyDescriptor.type(), null, nullability, receiverPure);
         }
@@ -1499,8 +1498,7 @@ public final class SemanticResolver {
                     objectType,
                     methodDescriptor.returnType(),
                     nullability,
-                    methodDescriptor.invocationHandle(),
-                    methodDescriptor.implementationMetadata(),
+                    methodDescriptor,
                     methodPure));
             return LinkResolution.known(methodDescriptor.returnType(), null, nullability, methodPure);
         }

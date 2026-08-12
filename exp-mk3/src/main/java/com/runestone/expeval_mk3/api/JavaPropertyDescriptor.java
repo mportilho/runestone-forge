@@ -11,6 +11,7 @@ public final class JavaPropertyDescriptor {
     private final String name;
     private final ExpressionType type;
     private final MethodHandle accessorHandle;
+    private final InvocationEntryPoint entryPoint;
     private final JavaMemberImplementationMetadata implementationMetadata;
 
     JavaPropertyDescriptor(
@@ -21,6 +22,7 @@ public final class JavaPropertyDescriptor {
         this.name = FunctionSignature.validateLanguageName(name);
         this.type = Objects.requireNonNull(type, "type");
         this.accessorHandle = Objects.requireNonNull(accessorHandle, "accessorHandle");
+        this.entryPoint = InvocationEntryPoint.prepare(accessorHandle);
         this.implementationMetadata = Objects.requireNonNull(implementationMetadata, "implementationMetadata");
     }
 
@@ -34,6 +36,10 @@ public final class JavaPropertyDescriptor {
 
     public MethodHandle accessorHandle() {
         return accessorHandle;
+    }
+
+    public Object invoke(Object receiver) throws Throwable {
+        return entryPoint.invoke(Objects.requireNonNull(receiver, "receiver"));
     }
 
     public JavaMemberImplementationMetadata implementationMetadata() {

@@ -13,6 +13,7 @@ public final class JavaMethodDescriptor {
     private final List<ExpressionType> parameterTypes;
     private final ExpressionType returnType;
     private final MethodHandle invocationHandle;
+    private final InvocationEntryPoint entryPoint;
     private final JavaMemberImplementationMetadata implementationMetadata;
     private final FunctionPurity purity;
 
@@ -27,6 +28,7 @@ public final class JavaMethodDescriptor {
         this.parameterTypes = ExpressionTypes.copyOf(parameterTypes, "parameterTypes");
         this.returnType = Objects.requireNonNull(returnType, "returnType");
         this.invocationHandle = Objects.requireNonNull(invocationHandle, "invocationHandle");
+        this.entryPoint = InvocationEntryPoint.prepare(invocationHandle);
         this.implementationMetadata = Objects.requireNonNull(implementationMetadata, "implementationMetadata");
         this.purity = Objects.requireNonNull(purity, "purity");
         if (invocationHandle.type().parameterCount() != this.parameterTypes.size() + 1) {
@@ -48,6 +50,42 @@ public final class JavaMethodDescriptor {
 
     public MethodHandle invocationHandle() {
         return invocationHandle;
+    }
+
+    public Object invoke(Object receiver) throws Throwable {
+        return entryPoint.invoke(Objects.requireNonNull(receiver, "receiver"));
+    }
+
+    public Object invoke(Object receiver, Object argument0) throws Throwable {
+        return entryPoint.invoke(
+                Objects.requireNonNull(receiver, "receiver"),
+                Objects.requireNonNull(argument0, "argument0"));
+    }
+
+    public Object invoke(Object receiver, Object argument0, Object argument1) throws Throwable {
+        return entryPoint.invoke(
+                Objects.requireNonNull(receiver, "receiver"),
+                Objects.requireNonNull(argument0, "argument0"),
+                Objects.requireNonNull(argument1, "argument1"));
+    }
+
+    public Object invoke(Object receiver, Object argument0, Object argument1, Object argument2) throws Throwable {
+        return entryPoint.invoke(
+                Objects.requireNonNull(receiver, "receiver"),
+                Objects.requireNonNull(argument0, "argument0"),
+                Objects.requireNonNull(argument1, "argument1"),
+                Objects.requireNonNull(argument2, "argument2"));
+    }
+
+    public Object invokeArray(Object[] receiverAndArguments) throws Throwable {
+        Objects.requireNonNull(receiverAndArguments, "receiverAndArguments");
+        if (receiverAndArguments.length != parameterTypes.size() + 1) {
+            throw new IllegalArgumentException("receiver and argument count must match method arity");
+        }
+        for (int index = 0; index < receiverAndArguments.length; index++) {
+            Objects.requireNonNull(receiverAndArguments[index], "receiverAndArguments[" + index + "]");
+        }
+        return entryPoint.invokeArray(receiverAndArguments);
     }
 
     public JavaMemberImplementationMetadata implementationMetadata() {

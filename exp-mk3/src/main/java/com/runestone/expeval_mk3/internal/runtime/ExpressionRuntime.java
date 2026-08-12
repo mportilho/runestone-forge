@@ -3,6 +3,7 @@ package com.runestone.expeval_mk3.internal.runtime;
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
+import com.runestone.expeval_mk3.api.JavaMethodDescriptor;
 import com.runestone.expeval_mk3.api.JavaWildcardChildDescriptor;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ScalarType;
@@ -31,6 +32,7 @@ import java.util.Objects;
  * {@link ExecutionScope}: collection/scalar operation dispatch, navigation value access, and
  * the scalar helpers (arithmetic coercion, comparison, structural equality) those operations share.
  */
+@SuppressWarnings("removal")
 public final class ExpressionRuntime {
 
     private ExpressionRuntime() {
@@ -325,8 +327,57 @@ public final class ExpressionRuntime {
         return List.copyOf(result);
     }
 
-    @SuppressWarnings("removal")
     public static Object invokeRegisteredMethod(
+            Object receiver,
+            boolean safe,
+            RegisteredMethodNavigationBinding binding,
+            List<ExecutableNode> argumentNodes,
+            ExecutionScope scope,
+            SourceSpan sourceSpan) {
+        if (receiver == null) {
+            if (safe) {
+                return null;
+            }
+            throw nullReceiverInvariant(sourceSpan);
+        }
+        String memberName = binding.implementationMetadata().memberName();
+        JavaMethodDescriptor descriptor = binding.descriptor();
+        Object result = switch (argumentNodes.size()) {
+            case 0 -> invokeRegisteredMethodEntryPoint(descriptor, receiver, memberName, sourceSpan);
+            case 1 -> {
+                Object argument0 = requiredRegisteredMethodArgument(
+                        argumentNodes, 0, scope, memberName, sourceSpan);
+                yield invokeRegisteredMethodEntryPoint(descriptor, receiver, argument0, memberName, sourceSpan);
+            }
+            case 2 -> {
+                Object argument0 = requiredRegisteredMethodArgument(
+                        argumentNodes, 0, scope, memberName, sourceSpan);
+                Object argument1 = requiredRegisteredMethodArgument(
+                        argumentNodes, 1, scope, memberName, sourceSpan);
+                yield invokeRegisteredMethodEntryPoint(
+                        descriptor, receiver, argument0, argument1, memberName, sourceSpan);
+            }
+            case 3 -> {
+                Object argument0 = requiredRegisteredMethodArgument(
+                        argumentNodes, 0, scope, memberName, sourceSpan);
+                Object argument1 = requiredRegisteredMethodArgument(
+                        argumentNodes, 1, scope, memberName, sourceSpan);
+                Object argument2 = requiredRegisteredMethodArgument(
+                        argumentNodes, 2, scope, memberName, sourceSpan);
+                yield invokeRegisteredMethodEntryPoint(
+                        descriptor, receiver, argument0, argument1, argument2, memberName, sourceSpan);
+            }
+            default -> invokeRegisteredMethodEntryPoint(
+                    descriptor,
+                    registeredMethodArguments(receiver, argumentNodes, scope, memberName, sourceSpan),
+                    memberName,
+                    sourceSpan);
+        };
+        return requiredMemberValue(result, memberName, sourceSpan);
+    }
+
+    @SuppressWarnings("removal")
+    public static Object oracleInvokeRegisteredMethod(
             Object receiver,
             boolean safe,
             RegisteredMethodNavigationBinding binding,
@@ -365,8 +416,31 @@ public final class ExpressionRuntime {
         return requiredMemberValue(result, memberName, sourceSpan);
     }
 
-    @SuppressWarnings("removal")
     public static Object registeredPropertyValue(
+            Object receiver,
+            boolean safe,
+            RegisteredPropertyNavigationBinding binding,
+            SourceSpan sourceSpan) {
+        if (receiver == null) {
+            if (safe) {
+                return null;
+            }
+            throw nullReceiverInvariant(sourceSpan);
+        }
+        String memberName = binding.implementationMetadata().memberName();
+        Object value;
+        try {
+            value = binding.descriptor().invoke(receiver);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
+        return requiredMemberValue(value, memberName, sourceSpan);
+    }
+
+    @SuppressWarnings("removal")
+    public static Object oracleRegisteredPropertyValue(
             Object receiver,
             boolean safe,
             RegisteredPropertyNavigationBinding binding,
@@ -388,6 +462,105 @@ public final class ExpressionRuntime {
             throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
         }
         return requiredMemberValue(value, memberName, sourceSpan);
+    }
+
+    private static Object requiredRegisteredMethodArgument(
+            List<ExecutableNode> argumentNodes,
+            int index,
+            ExecutionScope scope,
+            String memberName,
+            SourceSpan sourceSpan) {
+        Object argument = argumentNodes.get(index).execute(scope);
+        if (argument == null) {
+            throw RuntimeFailures.forbiddenNull(
+                    "registered method argument must not be null: " + memberName, sourceSpan);
+        }
+        return argument;
+    }
+
+    private static Object[] registeredMethodArguments(
+            Object receiver,
+            List<ExecutableNode> argumentNodes,
+            ExecutionScope scope,
+            String memberName,
+            SourceSpan sourceSpan) {
+        Object[] arguments = new Object[argumentNodes.size() + 1];
+        arguments[0] = receiver;
+        for (int index = 0; index < argumentNodes.size(); index++) {
+            arguments[index + 1] = requiredRegisteredMethodArgument(
+                    argumentNodes, index, scope, memberName, sourceSpan);
+        }
+        return arguments;
+    }
+
+    private static Object invokeRegisteredMethodEntryPoint(
+            JavaMethodDescriptor descriptor, Object receiver, String memberName, SourceSpan sourceSpan) {
+        try {
+            return descriptor.invoke(receiver);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
+    }
+
+    private static Object invokeRegisteredMethodEntryPoint(
+            JavaMethodDescriptor descriptor,
+            Object receiver,
+            Object argument0,
+            String memberName,
+            SourceSpan sourceSpan) {
+        try {
+            return descriptor.invoke(receiver, argument0);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
+    }
+
+    private static Object invokeRegisteredMethodEntryPoint(
+            JavaMethodDescriptor descriptor,
+            Object receiver,
+            Object argument0,
+            Object argument1,
+            String memberName,
+            SourceSpan sourceSpan) {
+        try {
+            return descriptor.invoke(receiver, argument0, argument1);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
+    }
+
+    private static Object invokeRegisteredMethodEntryPoint(
+            JavaMethodDescriptor descriptor,
+            Object receiver,
+            Object argument0,
+            Object argument1,
+            Object argument2,
+            String memberName,
+            SourceSpan sourceSpan) {
+        try {
+            return descriptor.invoke(receiver, argument0, argument1, argument2);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
+    }
+
+    private static Object invokeRegisteredMethodEntryPoint(
+            JavaMethodDescriptor descriptor, Object[] arguments, String memberName, SourceSpan sourceSpan) {
+        try {
+            return descriptor.invokeArray(arguments);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
     }
 
     public static Object contextualMemberValue(

@@ -1,5 +1,55 @@
 # Performance History
 
+## 2026-08-12 - Issue 127: Pontos de Entrada Preparados para Navegacao Registrada
+
+Purpose: issue #127 (Etapa 8, increment 5) extends Invocacao Sem Reflexao from global functions to
+registered Java properties and methods. Each `JavaPropertyDescriptor` and `JavaMethodDescriptor`
+now prepares one entry point while the Ambiente de Expressao's Java type catalog is built, shared by
+every optimized plan compiled against that environment. The same `InvocationEntryPoint` mechanism is
+used by function and member descriptors: `LambdaMetafactory` is attempted for total MethodHandle
+arities zero through four and a pre-adapted `invokeExact` handle is used when linking is unavailable;
+larger arities use the pre-adapted spreader route. For instance members, the receiver is parameter
+zero and therefore participates in that total arity.
+
+Unlike issue #125's function benchmark, this `optimized`/Oracle pair directly discriminates the
+mechanism. `ExecutionPlanBuilder.build` selects registered-member nodes that invoke the descriptor's
+prepared entry point, while `buildOracle` retains additive Oracle-only nodes using the previous
+`MethodHandle.invoke`/`invokeWithArguments` routes. Both consume the same setup-resolved navigation
+binding; no runtime lookup or reflection was introduced. The states use `OVERRIDABLE` object and
+argument symbols so Constant Folding cannot remove the navigation.
+
+Command used:
+
+```bash
+mvn -pl exp-mk3 -am -DskipTests test-compile
+mvn -q -pl exp-mk3 dependency:build-classpath \
+  -Dmdep.outputFile="/tmp/opencode/exp-mk3-jmh-cp.txt" -DincludeScope=test
+java -cp "runestone-toolkit/target/classes:exp-mk3/target/test-classes:exp-mk3/target/classes:$(tr -d '\n' < /tmp/opencode/exp-mk3-jmh-cp.txt)" \
+  org.openjdk.jmh.Main "RegisteredNavigationInvocationBenchmark" \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/opencode/registered-navigation-issue-127-reviewed.json" -foe true
+```
+
+Environment: OpenJDK 26.0.1, JMH 1.37, `-Xms1g -Xmx1g`, 5x500ms warmup, 10x500ms
+measurement, 3 forks, `gc` profiler. `property` evaluates `account.balance`; `method` evaluates
+`account.add(increment)` with a canonical `BigDecimal` parameter and receiver.
+
+| Mechanism | Optimized (ns/op) | Oracle (ns/op) | Delta | B/op optimized -> Oracle |
+|---|---:|---:|---:|---:|
+| Registered property | 127.723 +/- 4.285 | 134.445 +/- 2.223 | **-5.0%** | 168.002 -> 168.002 |
+| Registered method | 165.064 +/- 9.141 | 328.117 +/- 7.995 | **-49.7%** | 208.002 -> 440.005 |
+
+**Decision: keep both prepared navigation entry points.** Both optimized confidence intervals are
+strictly below their Oracle counterparts. Property access improves without changing allocation;
+method invocation removes the per-call receiver-plus-arguments array and the generic handle entry,
+cutting time nearly in half and allocation by about 53%. This satisfies the issue's paired gate and
+replaces the macro plan's untestable historical "getter direto" criterion with direct same-run
+optimized/Oracle evidence.
+
+The focused registered-navigation test, the unchanged Etapa 6 safe-navigation corpus matrix, full
+Corpus de Expressoes equivalence, and the module/full-reactor suites were green after the change.
+
 ## 2026-08-11 - Issue 126 Etapa 8 Pilot: Comparacao e Igualdade Sem Duplo Despacho
 
 Purpose: issue #126 (Etapa 8, increment 3, the etapa's second pilot) replaces the runtime type

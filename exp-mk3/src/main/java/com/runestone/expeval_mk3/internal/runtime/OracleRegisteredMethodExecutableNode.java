@@ -7,8 +7,8 @@ import com.runestone.expeval_mk3.internal.semantics.RegisteredMethodNavigationBi
 import java.util.List;
 import java.util.Objects;
 
-/** {@code .method(args)} on a registered {@code ObjectType} through its environment-prepared entry point. */
-public record RegisteredMethodExecutableNode(
+/** Unoptimized Oracle route retaining generic MethodHandle method invocation. */
+public record OracleRegisteredMethodExecutableNode(
         NodeId id,
         SourceSpan sourceSpan,
         ExecutableNode receiver,
@@ -16,7 +16,7 @@ public record RegisteredMethodExecutableNode(
         RegisteredMethodNavigationBinding binding,
         List<ExecutableNode> arguments) implements ExecutableNode {
 
-    public RegisteredMethodExecutableNode {
+    public OracleRegisteredMethodExecutableNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(receiver, "receiver");
@@ -26,7 +26,7 @@ public record RegisteredMethodExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.invokeRegisteredMethod(
+        return ExpressionRuntime.oracleInvokeRegisteredMethod(
                 receiver.execute(scope), safe, binding, arguments, scope, sourceSpan);
     }
 }

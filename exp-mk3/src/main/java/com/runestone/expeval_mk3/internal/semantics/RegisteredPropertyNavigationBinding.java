@@ -2,6 +2,7 @@ package com.runestone.expeval_mk3.internal.semantics;
 
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.JavaMemberImplementationMetadata;
+import com.runestone.expeval_mk3.api.JavaPropertyDescriptor;
 import com.runestone.expeval_mk3.api.RuntimeNullability;
 
 import java.lang.invoke.MethodHandle;
@@ -16,15 +17,21 @@ public record RegisteredPropertyNavigationBinding(
         ExpressionType receiverType,
         ExpressionType resultType,
         RuntimeNullability resultNullability,
-        MethodHandle accessorHandle,
-        JavaMemberImplementationMetadata implementationMetadata,
+        JavaPropertyDescriptor descriptor,
         boolean pure) implements NavigationBinding {
 
     public RegisteredPropertyNavigationBinding {
         Objects.requireNonNull(receiverType, "receiverType");
         Objects.requireNonNull(resultType, "resultType");
         Objects.requireNonNull(resultNullability, "resultNullability");
-        Objects.requireNonNull(accessorHandle, "accessorHandle");
-        Objects.requireNonNull(implementationMetadata, "implementationMetadata");
+        Objects.requireNonNull(descriptor, "descriptor");
+    }
+
+    public MethodHandle accessorHandle() {
+        return descriptor.accessorHandle();
+    }
+
+    public JavaMemberImplementationMetadata implementationMetadata() {
+        return descriptor.implementationMetadata();
     }
 }

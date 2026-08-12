@@ -47,7 +47,8 @@ for exposed-instance providers.
 This does not invalidate the decision to generate entry points once at environment build time, or
 the `invokeExact`-for-arity-5+ mechanism — both stand as written above. It invalidates the specific
 claim that arities one through four are *always* linked through `LambdaMetafactory`. The corrected
-mechanism, implemented in `FunctionDescriptor`:
+mechanism, implemented in the shared `InvocationEntryPoint` used by function and registered-member
+descriptors:
 
 - Linking through `LambdaMetafactory` is attempted for every arity zero through four, against
   whatever handle boundary-coercion elision (below) leaves behind. It succeeds whenever that handle

@@ -73,6 +73,8 @@ import com.runestone.expeval_mk3.internal.runtime.MemoizedExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.NullCoalesceExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.NumberComparisonExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.NumberEqualityExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.OracleRegisteredMethodExecutableNode;
+import com.runestone.expeval_mk3.internal.runtime.OracleRegisteredPropertyExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.PostfixExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.RegisteredMethodExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.RegisteredPropertyExecutableNode;
@@ -607,7 +609,9 @@ public final class ExecutionPlanBuilder {
             }
             case RegisteredPropertyNavigationBinding propertyBinding -> {
                 boolean safe = propertyBinding.safe();
-                ExecutableNode built = new RegisteredPropertyExecutableNode(id, span, receiver, safe, propertyBinding);
+                ExecutableNode built = optimizing
+                        ? new RegisteredPropertyExecutableNode(id, span, receiver, safe, propertyBinding)
+                        : new OracleRegisteredPropertyExecutableNode(id, span, receiver, safe, propertyBinding);
                 yield foldNavigationLink(propertyBinding.pure(), built, receiver);
             }
             case RegisteredMethodNavigationBinding methodBinding -> {
@@ -617,7 +621,9 @@ public final class ExecutionPlanBuilder {
                         .map(ExpressionCallArgument.class::cast)
                         .map(argument -> buildNode(argument.expression(), model, environment, deferredChecksByNode, foldedReads, memoSlots))
                         .toList();
-                ExecutableNode built = new RegisteredMethodExecutableNode(id, span, receiver, safe, methodBinding, arguments);
+                ExecutableNode built = optimizing
+                        ? new RegisteredMethodExecutableNode(id, span, receiver, safe, methodBinding, arguments)
+                        : new OracleRegisteredMethodExecutableNode(id, span, receiver, safe, methodBinding, arguments);
                 ExecutableNode[] requiredConstants = new ExecutableNode[arguments.size() + 1];
                 requiredConstants[0] = receiver;
                 for (int i = 0; i < arguments.size(); i++) {
