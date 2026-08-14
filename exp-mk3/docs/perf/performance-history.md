@@ -1,5 +1,153 @@
 # Performance History
 
+## 2026-08-13 - Etapa 8 Final Performance Gate (issue #130)
+
+Purpose: close Etapa 8 without adding another optimization. All four tracked suites and every JMH
+benchmark introduced by the etapa were rebuilt once and run back-to-back from commit `2bbe766`, then
+the retained and rejected mechanisms, ADR 0020, the module glossary, and both Etapa 8 plans were
+checked against the resulting tree.
+
+Commands used:
+
+```bash
+mvn -pl exp-mk3 -am -DskipTests test-compile
+mvn -q -pl exp-mk3 dependency:build-classpath -Dmdep.outputFile="target/jmh-cp.txt" -DincludeScope=test
+
+java -cp "runestone-toolkit/target/classes:exp-mk3/target/test-classes:exp-mk3/target/classes:$(tr -d '\n' < exp-mk3/target/jmh-cp.txt)" \
+  org.openjdk.jmh.Main \
+  "(Phase5BaselineBenchmark|Phase6NavigationBenchmark|Phase7FoldingGateBenchmark\\.(navigationPrefix|membershipDownload|assertionElision)|CollectionOperationsBenchmark)" \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/opencode/issue-130-tracked-hotpaths.json" -foe true
+
+java ... org.openjdk.jmh.Main "Phase7FoldingGateBenchmark.richConstantCompilation" \
+  -wi 15 -i 15 -w 1s -r 1s -f 3 -tu ns -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/opencode/issue-130-phase7-compilation.json" -foe true
+
+java ... org.openjdk.jmh.Main \
+  "(FunctionInvocationBenchmark|ComparisonAndEqualityBenchmark|RegisteredNavigationInvocationBenchmark|RemainingNodeSpecializationBenchmark|ExecutionScopePoolBenchmark)" \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/opencode/issue-130-etapa8-benchmarks.json" -foe true
+```
+
+Environment: OpenJDK 26.0.1 (module release target 21), JMH 1.37, Linux 7.0.0-29-generic x86_64,
+Intel Core i7-7700HQ, AC power, turbo enabled, `-Xms1g -Xmx1g`, and `gc` profiler. The unprivileged
+session exposed the governor as `powersave`; changing it required interactive sudo. Every result in
+this gate used that same environment back-to-back. Consequently, historical day-to-day deltas are
+classified by code cause rather than by the obsolete standalone +/-1% rule, and same-run
+optimized/Oracle pairs decide ambiguous cases, as required by issue #130.
+
+### Four tracked suites
+
+The reference column is the 2026-08-08 governor-stable re-baseline. Every tracked point moved in the
+faster direction; there is no historical latency regression to attribute. The large improvements
+with an identified Etapa 8 cause are the decimal arithmetic and comparison nodes in Phase 5,
+prepared registered-member invocation in Phase 6, and the same invocation/allocation reductions in
+collection operations. Remaining improvements have no isolated Etapa 8 cause and are classified as
+machine/run drift, not as optimization claims.
+
+| Benchmark | Reference (ns/op) | Final (ns/op) | Delta | B/op final | Classification |
+|---|---:|---:|---:|---:|---|
+| `Phase5.arithmeticCompute` | 213.54 | 168.42 +/- 2.93 | -21.1% | 160 | identified: decimal specialization |
+| `Phase5.logicalCompute` | 263.60 | 233.46 +/- 3.21 | -11.4% | 208 | identified: comparison/equality specialization |
+| `Phase5.fullUncachedCompilation` | 12572.19 | 11631.99 +/- 1914.64 | -7.5% | 17706.5 | no regression; drift |
+| `Phase5.materializationCompute` | 121.94 | 98.76 +/- 4.48 | -19.0% | 184 | no regression; drift |
+| `Phase6.filter` | 276.83 | 241.51 +/- 7.49 | -12.8% | 336 | no regression; drift |
+| `Phase6.subscript` | 33.01 | 29.52 +/- 0.40 | -10.6% | 24 | no regression; drift |
+| `Phase6.slice` | 168.49 | 150.90 +/- 4.56 | -10.4% | 280 | no regression; drift |
+| `Phase6.propertyChain` | 17.64 | 16.62 +/- 1.13 | -5.8% | 24 | prepared property route plus drift |
+| `Phase6.methodChain` | 187.54 | 23.36 +/- 0.81 | -87.5% | 64 | identified: prepared method route |
+| `Phase6.nestedLambda` | 448.16 | 326.29 +/- 17.73 | -27.2% | 616 | identified: prepared invocation |
+| `Collection.allShortCircuit` | 43.34 | 32.91 +/- 0.39 | -24.1% | 24 | identified: comparison specialization |
+| `Collection.map` | 470.94 | 275.97 +/- 5.77 | -41.4% | 392 | identified: invocation/allocation reduction |
+| `Collection.mapThenSum` | 426.24 | 259.15 +/- 8.11 | -39.2% | 424 | identified: invocation/allocation reduction |
+| `Collection.reduce` | 318.69 | 169.79 +/- 3.43 | -46.7% | 408 | identified: invocation/allocation reduction |
+| `Collection.safeCall` | 484.55 | 286.72 +/- 4.69 | -40.8% | 392 | identified: invocation/allocation reduction |
+| `Collection.sortBy` | 533.35 | 449.15 +/- 8.99 | -15.8% | 653.3 | identified: invocation/allocation reduction |
+| `Collection.sum` | 92.48 | 80.57 +/- 1.08 | -12.9% | 184 | no regression; drift |
+| `Collection.wildcardMaterialization` | 219.43 | 186.93 +/- 2.87 | -14.8% | 360 | no regression; drift |
+
+Phase 7 remains directly protected by its Oracle pairs:
+
+| Shape | Optimized (ns/op) | Oracle (ns/op) | Delta | B/op optimized -> Oracle |
+|---|---:|---:|---:|---:|
+| Navigation-prefix fold | 13.78 +/- 0.20 | 21.19 +/- 0.42 | -35.0% | 24 -> 24 |
+| Membership download | 25.58 +/- 0.45 | 276.57 +/- 4.06 | -90.8% | 16 -> 504 |
+| Assertion elision | 51.62 +/- 0.67 | 61.69 +/- 1.04 | -16.3% | 104 -> 104 |
+| Rich constant compilation | 138487 +/- 2215 | 135255 +/- 12465 | +2.4% | 139837 -> 127947 |
+
+The compilation point's intervals overlap widely. It has no identified execution-code regression
+and its paired Oracle measurement classifies it as neutral machine/GC noise rather than a failure.
+
+### Etapa 8 benchmarks and final decisions
+
+The table is a compact point-estimate summary. Confidence intervals are retained in the three JSON
+result files named above and in each mechanism's authoritative permanence entry immediately below in
+this history; every keep/remove decision uses those intervals rather than point estimates alone.
+
+| Mechanism | Optimized (ns/op) | Oracle (ns/op) | Delta | B/op optimized -> Oracle | Final decision |
+|---|---:|---:|---:|---:|---|
+| Number comparison, 16x | 328.51 | 471.01 | -30.3% | 208 -> 200 | keep |
+| String comparison, 16x | 262.32 | 421.04 | -37.7% | 160 -> 152 | keep |
+| Number equality, 16x | 318.05 | 451.40 | -29.5% | 208 -> 200 | keep |
+| Scale-mismatch number equality, 16x | 330.92 | 560.49 | -41.0% | 208 -> 200 | keep |
+| String equality, 16x | 251.42 | 352.62 | -28.7% | 160 -> 152 | keep |
+| Registered property | 131.61 | 134.16 | -1.9% | 168 -> 168 | keep; issue #127 pair was decisive at -5.0% |
+| Registered method | 154.08 | 314.70 | -51.0% | 208 -> 440 | keep |
+| Binary null coalescence | 23.70 | 27.38 | -13.5% | 56 -> 56 | keep |
+| Two-branch conditional | 23.95 | 25.73 | -6.9% | 40 -> 40 | keep |
+| Decimal add | 21.39 | 26.73 | -20.0% | 24 -> 56 | keep |
+| Decimal subtract | 24.80 | 27.22 | -8.9% | 64 -> 96 | keep; allocation and prior pair confirm |
+| Decimal multiply | 24.15 | 27.83 | -13.2% | 64 -> 96 | keep |
+| Decimal modulo | 26.95 | 32.62 | -17.4% | 24 -> 56 | keep |
+
+`FunctionInvocationBenchmark` produced 72.76/72.90, 169.28/171.82, 325.12/324.68, and
+420.80/406.57 ns/op for optimized/Oracle at arities 1, 2, 4, and 5, with identical allocation in
+each pair. Those two plan forms intentionally share one `FunctionDescriptor` entry point and cannot
+discriminate the mechanism. The arity-two -1.5% and arity-five +3.5% points therefore have no
+code-path cause and are classified as ordering noise; the issue #125 same-tree before/after
+measurement remains the valid evidence (-28.5% to -65.5% and lower allocation).
+
+The rejected candidate shapes are still present in `RemainingNodeSpecializationBenchmark` as
+negative controls. Their final-tree optimized/Oracle point estimates were: number `between` -1.4%,
+string `between` +4.0%, N-ary concat -2.6%, one-branch conditional -0.3%, and decimal division -2.0%.
+Both arms now build the same generic node for those shapes, so these deltas are expected run noise,
+not evidence to restore a removed implementation. The provisional measurements that decided removal
+remain in the issue #128 entry: `between` was neutral, N-ary concat regressed 13.2%, one-branch
+conditional was neutral, and decimal division was neutral. Binary concat and three-branch
+conditional remain explicit never-specialized controls. Their final-tree pairs were
+37.62/38.24 ns/op (-1.6%) and 30.57/29.82 ns/op (+2.5%), respectively. Both forms build the same
+generic node in each control, so both deltas are classified as same-path run noise, with no code
+cause and no regression verdict.
+
+`ExecutionScopePoolBenchmark` measured the retained fresh-scope implementation at
+`1597.36 +/- 20.82 ns/op`, `2232.02 B/op`, reproducing issue #129's pre-pool arm. The provisional
+pool remains removed because it saved only 3.58%, not the declared 20% allocation threshold.
+
+### Consolidated verdict
+
+Etapa 8 passes its final performance gate. Kept: prepared reflection-free function and registered
+member invocation, exact argument-coercion elision, comparison/equality specialization, binary null
+coalescence, fixed two-branch conditional, and decimal add/subtract/multiply/modulo specialization.
+Removed by measurement: number/string `between`, N-ary concat, one-branch conditional, decimal
+division, and the `ExecutionScope` pool. No typed `ExecutableNode` entry point was introduced because
+no benchmark required it. No public flag, system property, or API selects the Oracle or invocation
+route.
+
+The seven macro-plan corrections are confirmed in the final docs: specialization is additive;
+power/root specialization and short-circuit reordering are out; small-constant caching is out;
+historical direct-getter criteria were replaced by paired gates; preallocated varargs arrays and
+`VarHandle` accessors have no target. ADR 0020 remains accurate with its issue #125 amendment. The
+three glossary terms describe mechanisms that actually remain. The detailed plan, decision record,
+and macro plan were updated where they still described measured-out candidates or the scope pool as
+pending.
+
+`mvn -pl exp-mk3 -am test` passed after the documentation reconciliation: 343 upstream toolkit tests
+and 1062 `exp-mk3` tests, with zero failures or errors. The 50 reported skips are diagnostic Corpus de
+Expressoes cases that have no executable plan for the equivalence executor, not disabled or excluded
+tests; no `@Disabled` test exists. This run includes the complete executable corpus in optimized and
+Oracle forms, both jqwik plan-equivalence properties (1000 tries each), shared-plan concurrency, and
+plan non-retention.
+
 ## 2026-08-13 - Issue 129: ExecutionScope Pool Permanence Decision
 
 Purpose: issue #129 evaluated whether reusing an `ExecutionScope` and its frame pays on the Etapa 8

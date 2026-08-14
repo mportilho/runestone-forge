@@ -91,10 +91,23 @@ Este documento consolida as decisoes tomadas durante o planejamento da Etapa 8 d
 
 ## Pool de Escopo
 
-- Permanece como ultimo incremento, condicionado a medicao, com condicao numerica declarada de antemao e nao com "se o perfil justificar".
+- Foi o ultimo incremento e foi removido por medicao, sob a condicao numerica declarada de antemao.
 - Condicao: medido na expressao canonica, pareado, o pool so fica se reduzir `B/op` em pelo menos vinte por cento e nao piorar `ns/op` fora da banda de erro.
 - Armadilha registrada: os slots de memo da issue #121 sao apensos ao frame e semeados com `UNBOUND`, entao um frame reaproveitado exige limpeza por chamada, e esse preenchimento pode consumir o ganho.
 - Risco de despacho registrado: `ExecutionScope` nao e `final` e ja e subclasseada por `ConstantFoldSentinelScope`, entao todo `scope.read` ja e chamada virtual. Uma segunda forma concreta torna o call-site megamorfico, e o pool pode perder no despacho enquanto ganha na alocacao. A medicao precisa ser lida sabendo disso.
+- Resultado da issue #129: a implementacao provisoria economizou 80 B/op, ou 3,58%, e portanto
+  falhou o limiar de 20%. Foi removida sem deixar rota desabilitada, flag, propriedade, API de reset
+  ou `ThreadLocal` em producao.
+
+## Familias Restantes Resolvidas por Medicao
+
+- Ficaram: coalescencia binaria, condicional fixa de dois ramos e adicao, subtracao, multiplicacao e
+  modulo decimais.
+- Sairam: `between` numerico/textual, concatenacao N-aria, condicional de um ramo e divisao decimal.
+- A forma binaria de concatenacao e a condicional de tres ramos nunca foram especializadas e
+  permanecem controles genericos no benchmark.
+- Nenhum ponto de entrada tipado entrou em `ExecutableNode`: a interface generica ja discriminou os
+  mecanismos medidos, logo nao houve evidencia para alarga-la.
 
 ## Verificacao e Desempenho
 
@@ -120,4 +133,6 @@ Este documento consolida as decisoes tomadas durante o planejamento da Etapa 8 d
 
 ## Decisoes Ainda Pendentes
 
-- Nenhuma pendencia aberta. As decisoes diferidas sao todas resolvidas por medicao: permanencia de cada familia especializada, permanencia do pool de escopo, permanencia da simetria de `MathContext` sob custo, e continuidade da etapa apos os dois pilotos.
+- Nenhuma pendencia aberta. Todas as decisoes diferidas foram resolvidas e registradas por medicao em
+  `docs/perf/performance-history.md`; o fechamento consolidado e a regra de nao regressao foram
+  aplicados na issue #130.

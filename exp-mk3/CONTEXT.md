@@ -313,9 +313,9 @@ The executable node chosen during plan construction from the operator together w
 _Avoid_: Replacement of the general node, runtime type dispatch, per-call operator switch
 
 **Invocacao Sem Reflexao**:
-The call of a registered function or registered Java member through an entry point prepared once while an Ambiente de Expressao is built and shared by every plan compiled against it, without collecting arguments into an array and without the slow generic handle path. It is a property of the environment rather than of a compiled expression, and it assumes the environment is long-lived.
+The call of a registered function or registered Java member through an entry point prepared once while an Ambiente de Expressao is built and shared by every plan compiled against it, without the slow generic handle path. Arities up to four avoid argument-array collection; larger arities retain a spreader array behind a pre-adapted exact handle. It is a property of the environment rather than of a compiled expression, and it assumes the environment is long-lived.
 _Avoid_: Runtime reflection, per-call-site generated invoker, dynamic method lookup
 
 **Elisao de Coercao de Borda**:
-The removal of an argument or result conversion filter of a registered function when the resolved type is already exactly the canonical type that the conversion would produce, making the conversion a proven identity. It never removes the non-null validation of a provider result, which is a boundary contract rather than a conversion.
+The removal of an argument conversion filter of a registered function when the resolved type is already exactly the canonical type that the conversion would produce, making the conversion a proven identity. The result filter always remains because it enforces the provider's non-null, type, and container-shape boundary contract.
 _Avoid_: Unchecked argument passing, disabled boundary validation, implicit cast

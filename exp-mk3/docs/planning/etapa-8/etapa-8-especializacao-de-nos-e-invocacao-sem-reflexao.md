@@ -10,6 +10,16 @@ Reduzir o custo por execucao de um Plano Imutavel sem alterar valor, escala, arr
 
 A Etapa 8 nao cria cache de compilacao, nao instrumenta auditoria, nao funde pipelines de colecao, nao reordena operandos de curto-circuito e nao especializa potencia nem raiz.
 
+## Resultado Final
+
+A etapa foi fechada na issue #130. Ficaram por medicao: Invocacao Sem Reflexao para funcoes e
+membros registrados, Elisao de Coercao de Borda de argumentos provadamente identicos, especializacao
+de comparacao e igualdade escalar, coalescencia binaria, condicional fixa de dois ramos e aritmetica
+decimal de adicao, subtracao, multiplicacao e modulo. Sairam por medicao: `between`, concatenacao
+N-aria, condicional de um ramo, divisao decimal e o pool de Escopo de Execucao. Nenhum ponto de
+entrada tipado foi adicionado a `ExecutableNode`, pois nenhum benchmark demonstrou essa necessidade.
+Os numeros e as decisoes locais estao em `docs/perf/performance-history.md`.
+
 ## Autoridade e Premissas
 
 - ADRs aceitos, `CONTEXT.md`, o Corpus de Expressoes e os planos detalhados vigentes definem o contrato.
@@ -51,7 +61,7 @@ A tabela e orientada por entregas, nao por classes.
 | Invocacao de funcao | `Object[]` novo por chamada, `invokeWithArguments`, filtro de conversao de borda por argumento e por retorno, `BigDecimal.valueOf` por chamada nos adaptadores de retorno | Substituir |
 | Acessor de propriedade e metodo registrado | `MethodHandle.invoke` / `invokeWithArguments`, montados no build do ambiente | Substituir por ponto de entrada gerado |
 | `?.` | Branch de null, sem `try/catch`, sem fallback reflexivo | Preservar |
-| `ExecutionScope` | Frame clonado do template e escopo novo por chamada; classe nao `final`, subclasseada por `ConstantFoldSentinelScope` | Pool condicionado a medicao |
+| `ExecutionScope` | Frame clonado do template e escopo novo por chamada; classe nao `final`, subclasseada por `ConstantFoldSentinelScope` | Pool medido, rejeitado e removido |
 | Benchmark de invocacao de funcao e de acesso a membro isolado | Ausente | Implementar |
 
 ## Gate de Entrada
@@ -110,11 +120,14 @@ A expectativa baixa da aritmetica decimal esta registrada de proposito: a medica
 
 ## Contrato de Pool de Escopo
 
-Condicionado a medicao no incremento seis.
+Medido e removido no incremento sete.
 
 - Condicao declarada de antemao: medido na expressao canonica, pareado, o pool so fica se reduzir `B/op` em pelo menos vinte por cento **e** nao piorar `ns/op` fora da banda de erro. Fora disso sai por decisao registrada no historico de desempenho, no formato da issue #121.
 - Um frame reaproveitado exige limpeza por chamada, incluindo re-semeadura dos slots de memo com o sentinela `UNBOUND`; esse preenchimento pode consumir o ganho.
 - Risco de despacho a ser considerado na leitura da medicao: `ExecutionScope` nao e `final` e ja e subclasseada por `ConstantFoldSentinelScope`, entao todo `scope.read` ja e chamada virtual bimorfica. Uma segunda forma concreta de escopo torna o call-site megamorfico, e o pool pode perder no despacho enquanto ganha na alocacao.
+- Resultado: a implementacao provisoria reduziu `B/op` em apenas 3,58%, muito abaixo dos 20%
+  exigidos, e por isso foi removida integralmente. Nao ficou `ThreadLocal`, reset mutavel, flag nem
+  propriedade de sistema.
 
 ## Verificacao
 
@@ -129,7 +142,8 @@ Equivalencia significa, para a mesma fonte, o mesmo ambiente e as mesmas entrada
 - Caso de argumento cujo tipo resolvido **nao** e exatamente o tipo canonico, provando que o filtro de borda permanece.
 - Caso de `?.` sobre membro registrado nas duas rotas de invocacao.
 - Caso provando que o dominio real de potencia continua sendo verificado apos o consumo da Checagem Diferida, tanto onde o resolver provou quanto onde nao provou.
-- Se o pool entrar: caso de memo em chamada subsequente do mesmo escopo reaproveitado, provando re-semeadura do sentinela.
+- O pool nao entrou; o teste provisorio de re-semeadura foi removido com a implementacao que ele
+  exercitava, e os testes de memo e concorrencia continuam cobrindo o escopo novo por chamada.
 
 ## Benchmarks e Gate
 
@@ -154,7 +168,7 @@ Na etapa:
 4. **Comparacao e igualdade sem duplo despacho**, segundo piloto. Provavelmente e aqui que os pontos de entrada tipados se pagam.
 5. **Acessores de navegacao** por ponto de entrada gerado.
 6. **Familias restantes por medicao**, na ordem da tabela de No Especializado a partir de Coalescencia Nula, ja que comparacao e igualdade fecharam no incremento quatro.
-7. **Pool de `ExecutionScope`**, sob a condicao declarada.
+7. **Pool de `ExecutionScope`**, implementado provisoriamente, medido sob a condicao declarada e removido.
 8. **Fechamento.** Re-execucao das quatro suites, gate, registro no historico, ADR 0020, `CONTEXT.md` e correcoes do plano-mestre.
 
 Regra de parada: se o piloto do incremento dois nao pagar, o trabalho segue para o incremento quatro assim mesmo, porque invocacao e despacho de comparacao sao mecanismos independentes e um nao prediz o outro. Se os dois falharem, a etapa encerra por decisao registrada, sem os incrementos restantes.
