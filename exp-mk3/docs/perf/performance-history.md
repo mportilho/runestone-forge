@@ -1,5 +1,58 @@
 # Performance History
 
+## 2026-08-13 - Issue 129: ExecutionScope Pool Permanence Decision
+
+Purpose: issue #129 evaluated whether reusing an `ExecutionScope` and its frame pays on the Etapa 8
+canonical expression after the invocation and navigation allocation reductions had landed. The gate
+was declared before implementation: keep the pool only if it reduces allocation by at least 20%
+without making `ns/op` worse outside the error band.
+
+The provisional implementation kept one idle `ExecutionScope` per thread and `ExecutionPlan`. It
+removed the cached scope from its slot while executing, so a reentrant call allocated an independent
+scope instead of corrupting the outer frame. Reuse copied the complete immutable frame template back
+over the frame before applying overrides. That copy re-seeded every appended memo slot with `UNBOUND`
+and cleared assignment and current-item slots; it also cleared the cached current-time instant and
+installed the call's `Clock`. The implementation reused the existing concrete `ExecutionScope`
+rather than adding a subclass, so it did not make `scope.read` megamorphic alongside
+`ConstantFoldSentinelScope`.
+
+`ExecutionScopePoolBenchmark` executes the canonical expression directly through a prebuilt optimized
+`ExecutionPlan`, with its `Clock`, overrides, environment, and plan held in JMH state. The before and
+after arms were run back-to-back from the same working tree; only the provisional production pool
+changed between them.
+
+Command used for each arm:
+
+```bash
+mvn -pl exp-mk3 -am -DskipTests test-compile
+mvn -q -pl exp-mk3 dependency:build-classpath -Dmdep.outputFile="target/jmh-cp.txt" -DincludeScope=test
+java -cp "runestone-toolkit/target/classes:exp-mk3/target/test-classes:exp-mk3/target/classes:$(tr -d '\n' < exp-mk3/target/jmh-cp.txt)" \
+  org.openjdk.jmh.Main "ExecutionScopePoolBenchmark" \
+  -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/opencode/exp-mk3-scope-pool-issue-129-<variant>.json" -foe true
+```
+
+`<variant>` was `before` for the fresh-scope arm and `after` for the provisional pooled arm.
+
+Environment: OpenJDK 26.0.1 (module release target 21), JMH 1.37, `-Xms1g -Xmx1g`, 5x500ms
+warmup, 10x500ms measurement, 3 forks, `gc` profiler. The host exposed only the `powersave` governor
+to the unprivileged session; changing it required interactive sudo. Both paired arms used that same
+governor back-to-back. This limitation can affect latency, but not the exact steady-state allocation
+counts on which the gate already fails by a wide margin.
+
+| Variant | ns/op | B/op | Allocation delta |
+|---|---:|---:|---:|
+| Fresh scope and cloned frame | 1600.239 +/- 23.060 | 2232.022 | baseline |
+| Reused scope and copied frame | 1623.476 +/- 16.606 | 2152.023 | **-3.58%** |
+
+**Decision: remove the pool.** It saves only 80 B/op (3.58%), far below the required 20%. Its latency
+point estimate is 1.45% slower, although the confidence intervals overlap, so no latency regression
+outside the error band is claimed. The allocation condition independently and decisively fails.
+`ExecutionPlan` therefore continues cloning its frame template and constructing a fresh
+`ExecutionScope` per call; no disabled pool, flag, property, mutable reset API, or `ThreadLocal`
+remains in production. The benchmark remains as the reproducible canonical measurement.
+
 ## 2026-08-12 - Issue 128: Familias Especializadas Restantes
 
 Purpose: issue #128 measured each remaining Etapa 8 node-specialization candidate against the
