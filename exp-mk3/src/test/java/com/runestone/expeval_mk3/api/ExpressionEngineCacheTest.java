@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.api;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -20,9 +21,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Issue #134: {@link ExpressionEngine} as the sole public compilation boundary and the identity,
- * isolation, and validation contract of its per-engine cache and {@link CacheConfig}. Single-flight
- * under genuine concurrency, capacity, and expiration have their own dedicated proofs (issues #135
- * and #136); this suite covers what a single-threaded caller can observe about sharing and isolation.
+ * isolation, and validation contract of its per-engine cache and {@link CacheConfig}, plus this suite's
+ * addition of issue #135's single-threaded incompatible-view proof. Genuine concurrent single-flight has
+ * its own dedicated proof in {@link SingleFlightCompilationTest} (issue #135); capacity and expiration
+ * have their own dedicated proof (issue #136). This suite covers what a single-threaded caller can
+ * observe about sharing and isolation.
  */
 class ExpressionEngineCacheTest {
 
@@ -100,6 +103,33 @@ class ExpressionEngineCacheTest {
 
         assertThat(second).isNotSameAs(first);
         assertThat(second.diagnostics()).isEqualTo(first.diagnostics());
+        // Together with aCompileHitReturnsTheSameFailureInstanceAsTheResidentGeneration (same Failure resident on
+        // every hit), the fresh stack trace below shows the cache never holds a Throwable as a value: only the
+        // immutable diagnostics are resident, and compileOrThrow rebuilds the exception from them on every call.
+        assertThat(second.getStackTrace()).as("each failure hit captures its own fresh stack trace")
+                .isNotEqualTo(first.getStackTrace());
+    }
+
+    @Test
+    void anIncompatibleViewFailsWithoutRecompilingOrExecutingProviders() {
+        ExpressionEngineTest.CountingFunctions functions = new ExpressionEngineTest.CountingFunctions();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .functionsFrom(functions, FunctionPurity.IMPURE)
+                .build();
+        ExpressionEngine engine = ExpressionEngine.builder().build();
+        String source = "x := bump(1);";
+        CompiledExpression assignmentsOnly = engine.compileOrThrow(source, environment);
+
+        assertRejectsWithNoResultExpression(assignmentsOnly::asResult);
+        assertRejectsWithNoResultExpression(assignmentsOnly::asMath);
+        assertRejectsWithNoResultExpression(assignmentsOnly::asLogical);
+
+        assertThat(functions.invocations())
+                .as("view rejection is decided from the plan's static shape and never runs the assignment's function")
+                .isZero();
+        assertThat(engine.compileOrThrow(source, environment))
+                .as("repeated view rejections never trigger recompilation")
+                .isSameAs(assignmentsOnly);
     }
 
     @Test
@@ -211,6 +241,11 @@ class ExpressionEngineCacheTest {
         assertThat(config.maximumEntries()).isEqualTo(16);
         assertThat(config.hasExpireAfterAccess()).isTrue();
         assertThat(config.expireAfterAccess()).isEqualTo(Duration.ofMinutes(5));
+    }
+
+    private static void assertRejectsWithNoResultExpression(ThrowingCallable view) {
+        assertThatThrownBy(view).isInstanceOfSatisfying(ExpressionViewException.class, exception ->
+                assertThat(exception.reason()).isEqualTo(ExpressionViewException.Reason.NO_RESULT_EXPRESSION));
     }
 
     private static ExpressionCompilationException catchCompilationException(Runnable runnable) {
