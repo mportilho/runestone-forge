@@ -7,6 +7,7 @@ import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.LogicalExpression;
 import com.runestone.expeval_mk3.api.MathExpression;
 import com.runestone.expeval_mk3.api.ResultExpression;
+import com.runestone.expeval_mk3.api.UncachedCompilation;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -48,7 +49,7 @@ public class Phase5BaselineBenchmark {
 
     @Benchmark
     public void fullUncachedCompilation(CompilationInputs inputs, Blackhole blackhole) {
-        ExpressionCompilationResult result = ExpressionCompiler.compile(inputs.source, inputs.environment);
+        ExpressionCompilationResult result = UncachedCompilation.compile(inputs.source, inputs.environment);
         blackhole.consume(result);
     }
 
