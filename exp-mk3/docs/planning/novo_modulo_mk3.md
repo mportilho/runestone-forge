@@ -32,11 +32,12 @@ texto da expressão
 A gramática nova tem **um único ponto de entrada** (`start: assignmentExpression* expression? EOF`). Não existem mais `mathStart` / `logicalStart` / `assignmentStart`. A consequência arquitetural correta é: **compilar uma vez e tipar na borda**.
 
 ```java
-CompiledExpression ce = ExpressionCompiler.compile("a + b * 2", env);
+ExpressionEngine engine = ExpressionEngine.defaultEngine();
+CompiledExpression ce = engine.compileOrThrow("a + b * 2", env);
 
 MathExpression math = ce.asMath();          // valida: resultado compatível com NUMBER
 LogicalExpression log = ce.asLogical();     // valida: resultado compatível com BOOLEAN
-AssignmentExpression asg = ce.asAssignments(); // valida: há atribuições
+AssignmentsExpression asg = ce.asAssignments(); // valida: há atribuições
 
 BigDecimal r = math.compute(Map.of("a", 10, "b", 5));
 ```
@@ -236,7 +237,7 @@ Exemplos:
 
 ### Trilha futura: tier de compilação
 
-Para os planos mais quentes (contagem de execuções no cache), um **Tier 1** opcional compõe a árvore executável em uma única lambda via `LambdaMetafactory`/composição de `MethodHandle`s, ou gera bytecode com `Lookup.defineHiddenClass` — eliminando o overhead de travessia. O Tier 0 (árvore especializada) permanece o padrão e o fallback.
+Se ativado por demanda medida, um **Tier 1** opcional introduz e valida sua propria politica de observacao dos planos quentes antes de compor a árvore executável em uma única lambda via `LambdaMetafactory`/composição de `MethodHandle`s, ou gerar bytecode com `Lookup.defineHiddenClass` — eliminando o overhead de travessia. O Tier 0 (árvore especializada) permanece o padrão e o fallback; nenhuma contagem e antecipada no caminho quente enquanto o Tier 1 nao existir.
 
 ---
 
@@ -329,14 +330,16 @@ cria ExecutionScope
 
 ---
 
-## 17. Cache — dois níveis, uma chave menor
+## 17. Cache — por engine, uma chave menor
 
 Com a compilação unificada, o cache melhora estruturalmente:
 
-- **Chave**: `(source, environmentId)` — `resultType` sai da chave (era necessário na v1 porque cada tipo tinha um parse diferente). O compartilhamento ocorre apenas ao reutilizar a mesma instância de ambiente; dentro dela, o mesmo texto usado como `MathExpression` e como `LogicalExpression` compartilha **um único plano** e as visões só validam.
-- **Valor**: `CompiledExpression` (plano + metadados semânticos mínimos para as validações de visão e para auditoria). AST e parse tree **não** são retidas.
-- Caffeine mantido: engine default singleton + engines isolados; `CacheConfig` com tamanho máximo, TTL opcional e *weigher* por número de nós do plano (planos grandes pesam mais).
-- Contador de execuções por entrada alimenta a decisão de promover ao Tier 1 (seção 10), quando habilitado.
+- **Chave**: `(source, environmentId)` com igualdade textual exata, sem normalizacao ou hash exclusivo — `resultType` sai da chave (era necessário na v1 porque cada tipo tinha um parse diferente). O compartilhamento ocorre apenas ao reutilizar a mesma instância de ambiente; dentro dela, o mesmo texto usado como `MathExpression` e como `LogicalExpression` compartilha **um único plano** enquanto a geracao esta residente, e as visões só validam.
+- **Valor**: `ExpressionCompilationResult` completo. Sucesso retém a `CompiledExpression` (plano + metadados semânticos mínimos para as validações de visão e para auditoria); falhas sintáticas e semânticas determinísticas também são cacheadas, sem cache negativo separado. AST e parse tree **não** são retidas.
+- Um unico Caffeine por engine: `ExpressionEngine.defaultEngine()` fornece o singleton padrao e `ExpressionEngine.builder()` cria engines isolados com `Clock` UTC e `CacheConfig.defaults()` quando nao configurados. `CacheConfig` possui builder imutavel, limita a quantidade positiva de resultados (1024 no engine default), sem *weigher*, e admite expiracao positiva desde o ultimo acesso opcional e desabilitada por default. Nao existe segundo nivel global nem compartilhamento de entrada entre engines.
+- Chamadas concorrentes da mesma chave executam o pipeline uma unica vez por geracao, inclusive em falha. Expiracao ou eviction permitem uma geracao futura sem invalidar expressoes ja entregues; falhas internas inesperadas nao instalam entrada. O cache nao participa de `compute`.
+- Nenhum contador de execucoes e instalado antecipadamente; o Tier 1 opcional introduz e mede sua propria politica de observacao apenas se for ativado.
+- A API publica nao expoe bypass do cache, estatisticas, invalidacao, manutencao ou lifecycle na primeira versao. Um seam interno preserva a compilacao realmente sem cache para o carregador, testes e JMH.
 
 ---
 

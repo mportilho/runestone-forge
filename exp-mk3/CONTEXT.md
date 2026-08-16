@@ -20,6 +20,10 @@ _Avoid_: Nullable compiled expression, compilation exception as the primary resu
 A compiled, thread-safe, reusable representation of an expression that is executed with an isolated scope for each call.
 _Avoid_: Compiled tree, executable expression internals
 
+**Engine de Expressao**:
+The long-lived compilation boundary that owns runtime services and bounded reuse of compiled expressions, sharing one resident compilation generation for the same source and Ambiente de Expressao within that engine without participating in each execution.
+_Avoid_: Per-request compiler, execution-result cache, process-wide plan registry
+
 **Visao de Expressao**:
 A validated public projection over one Plano Imutavel that defines which result is executed and exposed, such as a general result, number, boolean, or final assignment map, without recompiling the source.
 _Avoid_: Compilation mode, result cast, independent compiled plan

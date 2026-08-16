@@ -12,7 +12,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 |---|---|---|
 | **M1 — Walking skeleton** | `compile → compute` funcionando para aritmética/lógica decimal, sem otimizações | 0–5 |
 | **M2 — Feature-complete** | Toda a linguagem da gramática coberta: navegação, filtros, coleções, `?.`, `@` | 6 |
-| **M3 — Desempenho** | Folding/CSE, nós especializados preservando semântica decimal, cache dois níveis, metas JMH atingidas | 7–9 |
+| **M3 — Desempenho** | Folding/CSE, nós especializados preservando semântica decimal, cache de compilação por engine, metas JMH atingidas | 7–9 |
 | **M4 — GA** | Auditoria, diagnósticos de migração v1→v2, endurecimento e verificação diferencial | 10–12 |
 | **Fase 2 (pós-GA)** | Parser Pratt, Tier 1 de compilação, fusão de pipelines de coleção | 13 |
 
@@ -201,16 +201,17 @@ Saíram da Etapa 7: **eliminação de atribuições mortas**, porque uma atribui
 
 ## Etapa 9 — Cache de compilação (M3)
 
-**Objetivo:** amortização da compilação (§17) e fechamento do marco de desempenho.
+**Objetivo:** estabelecer o Engine de Expressão como fronteira longeva de compilação, com reuso limitado e deduplicação concorrente por `(source, environmentId)`, e fechar o marco de desempenho sem adicionar custo ao caminho de execução. Na carga financeira principal, que compila poucas fórmulas e as executa muitas vezes, o cache é proteção contra recompilação de integração e duplicação de planos, não a fonte do ganho por contrato.
 
 **Entregas**
-- Cache Caffeine com chave `(source, environmentId)` — sem tipo de visão e com compartilhamento limitado à reutilização da mesma instância de ambiente; valor compilado compartilhado por `asResult()`/`asMath()`/`asLogical()`/`asAssignments()` (plano + warnings/metadados mínimos de visão/auditoria; AST, `SemanticModel`, fonte duplicada e parse tree não retidos no valor — verificar por teste de heap).
-- Engine default singleton + engines isolados; `CacheConfig` (tamanho máximo, TTL opcional, weigher por número de nós).
+- Um cache Caffeine limitado por Engine de Expressão, com chave textual exata `(source, environmentId)` — sem normalização, tipo de visão ou segundo nível global, e com compartilhamento limitado à reutilização da mesma instância de ambiente dentro daquele engine. O valor é o `ExpressionCompilationResult` completo: sucessos e falhas determinísticas obedecem ao mesmo single-flight e à mesma política de capacidade/expiração, sem cache negativo separado; falhas internas inesperadas não instalam entrada. Em sucesso, o valor compilado é compartilhado por `asResult()`/`asMath()`/`asLogical()`/`asAssignments()` (plano + warnings/metadados mínimos de visão/auditoria; AST, `SemanticModel`, fonte duplicada e parse tree não retidos no valor).
+- `ExpressionEngine` como único ponto público de compilação, com `defaultEngine()` singleton e `builder()` para engines isolados; ambos oferecem `compile`/`compileOrThrow`. O builder recebe `Clock` (default UTC) e `CacheConfig`; este possui `defaults()` e builder imutável, limita por quantidade positiva de resultados (default 1024), sem weigher, e admite apenas expiração ociosa positiva opcional, desabilitada por default. A fachada estática `ExpressionCompiler` deixa de ser API pública; não há bypass público, cache desabilitável, estatísticas, invalidação, manutenção ou lifecycle para expor na primeira versão.
 - `RuntimeServices`, incluindo `Clock`, pertence ao engine/expressão compilada e não à identidade do ambiente nem ao Plano Imutável.
-- Contador de execuções por entrada (insumo do Tier 1 futuro).
-- Medição separada de compilação sem cache × hit de cache no JMH; custo de startup/ATN permanece benchmark separado e é revisitado com o corpus final.
+- Nenhum contador de execuções na Etapa 9: a observação necessária à promoção nasce e é medida com o Tier 1 opcional da Etapa 13, sem antecipar escrita compartilhada no caminho quente.
+- Parser compartilhado pelo módulo, com warm-up síncrono único na construção do primeiro engine sobre expressões internas fixas e liberação da fonte, tokens e parse tree do contexto da thread depois da materialização da AST. O carregador do cache usa o mesmo seam interno de compilação sem cache que testes e JMH; esse seam não é público.
+- JMH pareado separando pipeline interno sem cache, miss pelo engine, hit puro e hit seguido de `asMath()`; startup/warm-up permanece caracterização separada. O miss admite no máximo 10% de overhead fora das bandas; hit puro exige pelo menos 20x menos latência e 99% menos alocação; hit com visão exige pelo menos 10x menos latência e 95% menos alocação.
 
-**Critérios de aceite:** todas as visões compatíveis criadas do mesmo `CompiledExpression` compartilham um único plano e uma visão incompatível falha sem recompilar; hit de cache na ordem do custo de um lookup + validação de visão; ausência de retenção de parse tree/AST/`SemanticModel` e fonte duplicada no valor confirmada.
+**Critérios de aceite:** todas as visões compatíveis criadas do mesmo `CompiledExpression` compartilham um único plano e uma visão incompatível falha sem recompilar; chamadas concorrentes da mesma chave executam uma única compilação por geração, tanto em sucesso quanto em falha; eviction permite nova geração sem invalidar referências antigas; falha interna não é cacheada; hit devolve o mesmo Resultado de Compilação e falha de `compileOrThrow` cria exceção nova; engines distintos nunca compartilham entrada nem `Clock`; capacidade e expiração ociosa obedecem ao `CacheConfig`; warm-up único e liberação do parser são provados sem `sleep` ou GC; gates deterministas confirmam que apenas a chave retém a fonte e que valor e contexto reutilizável do parser não retêm parse tree/AST/`SemanticModel`; os quatro gates JMH são atendidos; `compute` não consulta o cache nem atualiza contador.
 
 **Depende de:** Etapa 5 (funcional) e 8 (números finais).
 
@@ -268,7 +269,7 @@ Saíram da Etapa 7: **eliminação de atribuições mortas**, porque uma atribui
 Três trilhas já previstas na estratégia, cada uma ativável por demanda medida:
 
 1. **Parser Pratt artesanal** (§3.2): tabela de binding powers derivada da cadeia única de precedência; o `.g4` permanece como especificação executável com testes diferenciais ANTLR × Pratt sobre o corpus antes de qualquer troca no caminho quente.
-2. **Tier 1 de compilação** (§10): promoção dos planos mais quentes (pelo contador da Etapa 9) para lambda composta via `LambdaMetafactory`/`MethodHandle` ou bytecode com `defineHiddenClass`; Tier 0 e a forma interna sem otimizações permanecem fallback/oráculo, e todos preservam ADR 0017/`big-math`.
+2. **Tier 1 de compilação** (§10): se ativado por demanda medida, introduz e valida sua propria politica de observacao dos planos quentes antes de promove-los para lambda composta via `LambdaMetafactory`/`MethodHandle` ou bytecode com `defineHiddenClass`; Tier 0 e a forma interna sem otimizações permanecem fallback/oráculo, e todos preservam ADR 0017/`big-math`.
 3. **Fusão de pipelines de coleção** (§11.6): `values.map(@ -> f).sum()` em loop único, validada por equivalência contra a forma não fundida.
 
 ---
