@@ -1250,3 +1250,58 @@ Results:
 Verdict per the skill's lower-is-better thresholds: **6 of 8 benchmarks land outside the ±1% noise band, all as regressions** (`allShortCircuit`, `mapThenSum`, `reduce`, `safeCall`, `sortBy` beyond -1%; `sum` inside noise). Mechanical `run-jmh.sh`/`compare-results.py` output classifies this **DISCARD** on pure ns/op grounds.
 
 This is a real, small (~1-5%) per-call regression, most likely the extra indirection of invoking a captured `CollectionOperationExecutor` lambda instance instead of a direct call inside a `tableswitch`-compiled `switch` expression, even though the executor lookup itself was moved to plan-build time to avoid a per-`compute()` registry hit. The regression is a documented, deliberate trade for the issue's explicit ask: a single source of truth for "which `OperationIdentity` is accepted at which layer," replacing three independently hand-synchronized switches that could silently disagree. No further optimization attempted in this pass (e.g. dispatching through an array indexed by `identity.ordinal()` instead of an `EnumMap` + lambda might close some of the gap) — flagged here for a follow-up if the regression proves unacceptable under sustained load.
+
+## 2026-08-16 - Issue 137 Etapa 9 Closure: Cache Gates and Startup/Warm-up Characterization
+
+Purpose: close Etapa 9 (issue #131) by measuring the four paired Etapa 9 gates declared in `decisoes-etapa-9-cache-de-compilacao.md` — cache-free pipeline, `ExpressionEngine` miss, pure hit, and hit followed by `asMath()` — from the same source (`"a + b * 2"`) and the same `ExpressionEnvironment`, plus the separate startup/warm-up characterization (no threshold). New benchmark: `CompilationCacheBenchmark`. The miss path is prepared outside the measured window by a benchmark-only invalidation seam (`CompilationCache.invalidate`, reached via the test-only `EngineCacheInvalidation` bridge); the measured source and environment are never altered to fabricate a miss.
+
+**Investigation and fix before the gate numbers were trustworthy:** the first measured run showed `engineMiss` at roughly 75-80% slower than the cache-free pipeline, wildly outside the declared 10% gate, with large run-to-run variance. `async-profiler` (CPU, flat output) on an isolated, non-JMH reproduction of the same invalidate-then-compile cycle showed ~38% of samples inside `java.util.concurrent.ForkJoinPool.signalWork`/`deactivate` and `pthread_cond_signal`/`__lll_lock_wake` — Caffeine's default `Cache` dispatches post-write maintenance (buffer draining, W-TinyLFU admission bookkeeping, eviction) onto `ForkJoinPool.commonPool()`, and the cross-thread wake-up on every single insert cost several microseconds, matching the measured overhead almost exactly. Since this module's compilation cache is small, bounded, and never on `compute`'s hot path, dispatching maintenance asynchronously buys no real concurrency benefit here. `CompilationCache` was changed to build Caffeine with a direct executor (`Runnable::run`) so maintenance runs inline on the calling thread; see the added note in `decisoes-etapa-9-cache-de-compilacao.md`. Re-profiling after the fix showed no more `ForkJoinPool` signaling; the remaining cost is spread thinly across the same parse/AST/semantic/plan work already visible in `fullUncachedCompilation`, plus Caffeine's own atomic bounded-map insert (hashing, node allocation, admission-window bookkeeping) — a small, expected, and irreducible cost of a genuine single-flight bounded cache, not an implementation defect.
+
+Command used for the final recorded run (`CompilationCacheBenchmark`, 10 forks for a tighter confidence interval than the standard 3; standard parameters otherwise):
+
+```bash
+mvn -pl exp-mk3 -am -DskipTests test-compile
+mvn -q -pl exp-mk3 dependency:build-classpath -Dmdep.outputFile="exp-mk3/target/jmh-cp.txt" -DincludeScope=test
+java -cp "runestone-toolkit/target/classes:exp-mk3/target/test-classes:exp-mk3/target/classes:$(tr -d '\n' < exp-mk3/target/jmh-cp.txt)" \
+  org.openjdk.jmh.Main "CompilationCacheBenchmark" \
+  -wi 5 -i 15 -w 500ms -r 500ms -f 10 -tu ns \
+  -jvmArgs "-Xms1g -Xmx1g" -prof gc \
+  -rf json -rff "/tmp/performance-benchmark/exp-mk3-cache-issue-137-final.json" \
+  -foe true
+```
+
+`ParsingBenchmark` (startup/warm-up characterization) was run with the module's standard `run-jmh.sh` parameters (3 forks, 5×500ms warmup, 10×500ms measurement).
+
+Environment:
+
+- JDK: OpenJDK 26.0.1 (Homebrew build), mixed mode
+- JMH: 1.37
+- OS: Linux 7.0.0-29-generic x86_64
+- JVM args: `-Xms1g -Xmx1g`
+- Profiler: `gc` (plus `async-profiler` CPU flat profiling used only for the diagnosis above, not for the recorded gate numbers)
+- Commit: `3a6803e3a8bd925e8578c8cee69f2fac2dbfe7d7` (plus this issue's uncommitted `CompilationCache`/`ExpressionEngine`/benchmark changes)
+
+Results (`CompilationCacheBenchmark`, 10 forks × 15 iterations = 150 samples per benchmark):
+
+| Benchmark | Score | Error | Units | B/op |
+|---|---:|---:|---|---:|
+| `pipelineUncached` | 8876.15 | 55.36 | ns/op | 17,799.5 |
+| `engineMiss` | 9864.73 | 430.50 | ns/op | 18,429.8 |
+| `engineHitPure` | 10.25 | 0.18 | ns/op | ≈0 |
+| `engineHitAsMath` | 13.74 | 0.16 | ns/op | 24.0 |
+
+Results (`ParsingBenchmark`, standard 3-fork protocol, startup/warm-up characterization, no gate):
+
+| Benchmark | Score | Error | Units | B/op |
+|---|---:|---:|---|---:|
+| `coldParser` (single-shot, first parse) | 623,231.2 | 82,981.6 | ns/op | 28,815.5 |
+| `warmParser` (after `ParserWarmUp`) | 9,081.7 | 81.1 | ns/op | 20,066.8 |
+
+Gate verdicts:
+
+- **Miss ≤ 10% slower than the direct pipeline:** central overhead is `9864.73 / 8876.15 - 1 ≈ 11.1%`, nominally above 10%, but the declared gate only counts a failure outside the error bands (`decisoes-etapa-9-cache-de-compilacao.md`: "so conta como falha fora das bandas de erro"). The 10% threshold, `8876.15 * 1.10 ≈ 9763.8`, falls inside `engineMiss`'s own confidence interval (`[9434.2, 10295.2]`), so the measurement is statistically consistent with meeting the gate. **PASS** on the declared rule, recorded with the exact margin rather than rounded away.
+- **Hit puro ≥ 20x faster and ≥ 99% less allocation:** `8876.15 / 10.25 ≈ 866x` faster (>> 20x); allocation goes from 17,799.5 B/op to ≈0 B/op (>> 99% reduction). **PASS** by a wide margin.
+- **Hit + `asMath()` ≥ 10x faster and ≥ 95% less allocation:** `8876.15 / 13.74 ≈ 646x` faster (>> 10x); allocation goes from 17,799.5 B/op to 24.0 B/op, a 99.87% reduction (>> 95%). **PASS** by a wide margin.
+- **Startup/warm-up:** characterization only, no threshold. `coldParser` at ~623 µs for the very first parse in a fresh JVM versus `warmParser` at ~9.1 µs confirms `ParserWarmUp`'s one-time synchronous warm-up amortizes ANTLR's ATN/DFA construction cost, consistent with the Etapa 5 baseline's `fullUncachedCompilation` finding that most of a cold compile's cost is parser-side.
+
+`mvn -pl exp-mk3 -am test` was green (1102 tests, 0 failures/errors, 50 skipped) both immediately before this benchmark work and again after the `CompilationCache` executor change, confirming the async-executor fix did not alter single-flight, capacity/expiration, or non-retention behavior.

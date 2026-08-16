@@ -53,6 +53,11 @@ public final class ExpressionEngine {
         return ((ExpressionCompilationResult.Success) result).compiledExpression();
     }
 
+    /** Test/benchmark-only seam; see {@link CompilationCache#invalidate}. */
+    CompilationCache cache() {
+        return cache;
+    }
+
     /** Deferred so the default engine, and its warm-up, is built only when first requested. */
     private static final class DefaultEngineHolder {
         private static final ExpressionEngine INSTANCE = new ExpressionEngine(CacheConfig.defaults(), Clock.systemUTC());

@@ -31,9 +31,7 @@ public final class CompilationCache {
 
     /**
      * Test-only seam: lets a suite advance expiration deterministically with a fake {@link MonotonicTicker}
-     * instead of sleeping real time, and runs Caffeine's post-write maintenance inline on the calling
-     * thread so capacity and expiration effects are observable immediately after the triggering call,
-     * instead of eventually on a background pool as production does.
+     * instead of sleeping real time.
      */
     public CompilationCache(
             CacheConfig config,
@@ -42,13 +40,21 @@ public final class CompilationCache {
         Objects.requireNonNull(config, "config");
         this.compiler = Objects.requireNonNull(compiler, "compiler");
         Objects.requireNonNull(ticker, "ticker");
-        this.cache = newBuilder(config, ticker).executor(Runnable::run).build();
+        this.cache = newBuilder(config, ticker).build();
     }
 
+    /**
+     * A direct executor keeps Caffeine's post-write maintenance (admission window bookkeeping, buffer
+     * draining, eviction) inline on the calling thread. This module's compilation cache is small, bounded,
+     * and never on {@code compute}'s hot path, so the alternative default, dispatching that maintenance
+     * onto {@code ForkJoinPool.commonPool()}, buys no real concurrency here: it only adds cross-thread
+     * wake-up latency, measured at several microseconds per operation, to every miss and eviction.
+     */
     private static Caffeine<Object, Object> newBuilder(CacheConfig config, MonotonicTicker ticker) {
         Caffeine<Object, Object> builder = Caffeine.newBuilder()
                 .maximumSize(config.maximumEntries())
-                .ticker(ticker::read);
+                .ticker(ticker::read)
+                .executor(Runnable::run);
         if (config.hasExpireAfterAccess()) {
             builder = builder.expireAfterAccess(config.expireAfterAccess());
         }
@@ -58,5 +64,13 @@ public final class CompilationCache {
     public ExpressionCompilationResult get(String source, ExpressionEnvironment environment) {
         CompilationCacheKey key = new CompilationCacheKey(source, environment.environmentId());
         return cache.get(key, ignoredKey -> compiler.apply(source, environment));
+    }
+
+    /**
+     * Test/benchmark-only seam: ends the resident generation for one key so a subsequent {@link #get}
+     * observes a miss, without exposing invalidation on {@code ExpressionEngine}'s public API.
+     */
+    public void invalidate(String source, ExpressionEnvironment environment) {
+        cache.invalidate(new CompilationCacheKey(source, environment.environmentId()));
     }
 }

@@ -44,6 +44,7 @@ Este documento registra incrementalmente as decisoes tomadas durante o planejame
 - O engine default usa `maximumEntries = 1024`.
 - Expiracao e opcional e desabilitada por default. Quando configurada, usa tempo desde o ultimo acesso, para que uma formula ativa nao recompile periodicamente apenas por idade.
 - O mecanismo de expiracao do cache usa tempo monotono proprio do Caffeine e nao o `Clock` dos RuntimeServices, que pertence a semantica dos valores temporais da linguagem.
+- O Caffeine do engine usa um executor direto (`Runnable::run`) para sua manutencao interna (drenagem de buffers, bookkeeping de admissao, eviction), em vez do `ForkJoinPool.commonPool()` default. O fechamento da Etapa 9 (issue #137) mediu esse ponto: despachar manutencao para o pool comum custava microssegundos por operacao de sinalizacao entre threads, o suficiente para violar o gate de miss por larga margem em um cache pequeno que nunca esta no caminho quente. Executar a manutencao inline no thread chamador elimina esse custo sem abrir mao de capacidade ou expiracao.
 
 ## Superficie Operacional
 
@@ -58,6 +59,7 @@ Este documento registra incrementalmente as decisoes tomadas durante o planejame
 - Cada cache miss libera a fonte, tokens e parse tree mantidos no contexto da thread depois de materializar a Arvore Semantica de Expressao, preservando o reuso de lexer/parser quando tecnicamente possivel.
 - O criterio de nao retencao cobre o pipeline completo. Nao basta provar que o valor Caffeine nao possui campos de AST, Modelo Semantico, parse tree ou fonte duplicada enquanto o `ThreadLocal` do parser ainda retiver esses objetos.
 - Um seam interno de compilacao sem cache e a unica implementacao do pipeline. O carregador Caffeine, testes e JMH o usam diretamente; ele nao e API publica.
+- `CompilationCache.invalidate(source, environment)` (issue #137) e o mesmo tipo de seam: encerra a geracao residente de uma chave para que o benchmark JMH prepare um miss fora da janela medida, sem alterar a fonte medida. `ExpressionEngine` ganha um acessor `cache()` de pacote apenas para alcancar esse seam a partir do bridge de teste `EngineCacheInvalidation` (espelhando `UncachedCompilation`). Nenhum dos dois e API publica: `invalidate` fica em `internal.cache`, `cache()` e de pacote em `api`, e `ExpressionEngine` continua sem qualquer metodo de invalidacao, estatistica ou bypass no seu contrato publico.
 
 ## Geracoes, Chave e Falhas Inesperadas
 
@@ -120,6 +122,7 @@ ExpressionEngine engine = ExpressionEngine.builder()
 - O hit seguido de `asMath()` deve ser pelo menos 10 vezes mais rapido e alocar pelo menos 95% menos que o pipeline direto.
 - Startup e warm-up permanecem benchmark separado de caracterizacao, sem limiar.
 - Resultados usam o protocolo vigente das etapas anteriores e sao registrados em `docs/perf/performance-history.md` com ambiente, comando, commit, `ns/op` e `B/op`.
+- O fechamento (issue #137) mediu `engineMiss` com 10 forks (em vez dos 3 forks vigentes), depois que a primeira medicao com o protocolo padrao mostrou um custo real de execucao assincrona no `ForkJoinPool.commonPool()` (corrigido, ver secao de Capacidade e Expiracao) e, mesmo apos a correcao, uma variancia grande demais para decidir o gate de miss com confianca. Mais forks reduzem o erro amostral sem mudar o metodo medido; o numero registrado no historico e o resultado de 10 forks, citado como tal.
 
 Falha em qualquer gate bloqueia o fechamento e exige perfil, correcao ou simplificacao. O cache nao e removido automaticamente, pois sua fronteira arquitetural ja foi escolhida, mas nenhum limiar e dispensado sem evidencia de que o benchmark ou a premissa estava errado e sem atualizacao explicita desta decisao. Nao existe fallback publico para a fachada estatica anterior.
 
