@@ -26,11 +26,33 @@ public final class CompilationCache {
             CacheConfig config, BiFunction<String, ExpressionEnvironment, ExpressionCompilationResult> compiler) {
         Objects.requireNonNull(config, "config");
         this.compiler = Objects.requireNonNull(compiler, "compiler");
-        Caffeine<Object, Object> builder = Caffeine.newBuilder().maximumSize(config.maximumEntries());
+        this.cache = newBuilder(config, MonotonicTicker.SYSTEM).build();
+    }
+
+    /**
+     * Test-only seam: lets a suite advance expiration deterministically with a fake {@link MonotonicTicker}
+     * instead of sleeping real time, and runs Caffeine's post-write maintenance inline on the calling
+     * thread so capacity and expiration effects are observable immediately after the triggering call,
+     * instead of eventually on a background pool as production does.
+     */
+    public CompilationCache(
+            CacheConfig config,
+            BiFunction<String, ExpressionEnvironment, ExpressionCompilationResult> compiler,
+            MonotonicTicker ticker) {
+        Objects.requireNonNull(config, "config");
+        this.compiler = Objects.requireNonNull(compiler, "compiler");
+        Objects.requireNonNull(ticker, "ticker");
+        this.cache = newBuilder(config, ticker).executor(Runnable::run).build();
+    }
+
+    private static Caffeine<Object, Object> newBuilder(CacheConfig config, MonotonicTicker ticker) {
+        Caffeine<Object, Object> builder = Caffeine.newBuilder()
+                .maximumSize(config.maximumEntries())
+                .ticker(ticker::read);
         if (config.hasExpireAfterAccess()) {
             builder = builder.expireAfterAccess(config.expireAfterAccess());
         }
-        this.cache = builder.build();
+        return builder;
     }
 
     public ExpressionCompilationResult get(String source, ExpressionEnvironment environment) {

@@ -40,6 +40,15 @@ class CompilationCacheTest {
     }
 
     @Test
+    void theCacheKeyRetainsTheExactSourceReferenceItWasBuiltFrom() {
+        String source = new String("1 + 2".toCharArray());
+        CompilationCacheKey key = new CompilationCacheKey(source, "environment-id");
+
+        assertThat(key.source()).as("the key intentionally retains the caller's exact source reference")
+                .isSameAs(source);
+    }
+
+    @Test
     void aHitReturnsTheResidentResultWithoutCallingTheCompilerAgain() {
         AtomicInteger calls = new AtomicInteger();
         CompilationCache cache = new CompilationCache(CacheConfig.defaults(), (source, environment) -> {
