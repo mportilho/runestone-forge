@@ -38,19 +38,25 @@ public final class ExpressionParser {
         Objects.requireNonNull(source, "source");
 
         ParserContext parserContext = context.get();
-        parserContext.reset(source);
-        List<ExpressionDiagnostic> lexicalDiagnostics = collectLexicalDiagnostics(parserContext.tokens);
-
         try {
-            ExpressionEvaluatorParser.StartContext tree = parseSll(parserContext);
-            if (lexicalDiagnostics.isEmpty()) {
-                return new ParseSuccess(tree, PredictionPath.SLL);
-            }
-        } catch (ParseCancellationException | RecognitionException exception) {
-            // SLL failures are intentionally discarded; LL retry emits user-facing diagnostics.
-        }
+            parserContext.reset(source);
+            List<ExpressionDiagnostic> lexicalDiagnostics = collectLexicalDiagnostics(parserContext.tokens);
 
-        return parseLl(parserContext, lexicalDiagnostics);
+            try {
+                ExpressionEvaluatorParser.StartContext tree = parseSll(parserContext);
+                if (lexicalDiagnostics.isEmpty()) {
+                    return new ParseSuccess(tree, PredictionPath.SLL);
+                }
+            } catch (ParseCancellationException | RecognitionException exception) {
+                // SLL failures are intentionally discarded; LL retry emits user-facing diagnostics.
+            }
+
+            return parseLl(parserContext, lexicalDiagnostics);
+        } finally {
+            // The lexer/parser pair stays put for reuse; only the previous source, its buffered
+            // tokens, and any input reference they hold are released from the thread context.
+            parserContext.release();
+        }
     }
 
     public void warmUp() {
@@ -174,6 +180,12 @@ public final class ExpressionParser {
             tokens.setTokenSource(lexer);
             tokens.fill();
             parser.setInputStream(tokens);
+        }
+
+        private void release() {
+            source = null;
+            lexer.setInputStream(CharStreams.fromString(""));
+            tokens.setTokenSource(lexer);
         }
     }
 
