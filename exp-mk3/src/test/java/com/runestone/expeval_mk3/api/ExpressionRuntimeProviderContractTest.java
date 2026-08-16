@@ -23,7 +23,7 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void wrapsADeclaredCheckedExceptionAsAProviderFailurePreservingCause() {
-        MathExpression expression = ExpressionCompiler.compileOrThrow(
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "throwsChecked(1)", environmentFrom(FailingProviders.class))
                 .asMath();
 
@@ -36,7 +36,7 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void wrapsAnOrdinaryRuntimeExceptionAsAProviderFailurePreservingCause() {
-        MathExpression expression = ExpressionCompiler.compileOrThrow(
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "throwsRuntime(1)", environmentFrom(FailingProviders.class))
                 .asMath();
 
@@ -54,7 +54,7 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void restoresInterruptedStatusBeforeWrappingAnInterruptedException() {
-        MathExpression expression = ExpressionCompiler.compileOrThrow(
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "throwsInterrupted(1)", environmentFrom(FailingProviders.class))
                 .asMath();
 
@@ -70,7 +70,7 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void propagatesAFatalJvmConditionUnwrapped() {
-        MathExpression expression = ExpressionCompiler.compileOrThrow(
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "throwsFatal(1)", environmentFrom(FailingProviders.class))
                 .asMath();
 
@@ -79,7 +79,7 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void rejectsANullProviderReturnAsADistinctReturnContractCode() {
-        MathExpression expression = ExpressionCompiler.compileOrThrow(
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "returnsNull(1)", environmentFrom(ReturnContractProviders.class))
                 .asMath();
 
@@ -91,7 +91,7 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void rejectsAProviderCollectionElementOfTheWrongTypeAsADistinctReturnContractCode() {
-        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+        ResultExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "returnsListWithWrongElementType(1)", environmentFrom(ReturnContractProviders.class))
                 .asResult();
 
@@ -103,7 +103,7 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void rejectsANestedInvalidContainerInsideAProviderCollectionReturnAsADistinctReturnContractCode() {
-        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+        ResultExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "returnsNestedInvalidContainer(1)", environmentFrom(ReturnContractProviders.class))
                 .asResult();
 
@@ -115,7 +115,7 @@ class ExpressionRuntimeProviderContractTest {
 
     @Test
     void rejectsANonStringMapKeyInAProviderMapReturnAsADistinctReturnContractCode() {
-        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+        ResultExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "returnsMapWithNonStringKey(1)", environmentFrom(ReturnContractProviders.class))
                 .asResult();
 
@@ -131,7 +131,7 @@ class ExpressionRuntimeProviderContractTest {
                 .functionsFrom(ReturnContractProviders.class, FunctionPurity.IMPURE)
                 .maxMaterializedSize(1)
                 .build();
-        ResultExpression expression = ExpressionCompiler.compileOrThrow("returnsOverLimitList(1)", environment)
+        ResultExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("returnsOverLimitList(1)", environment)
                 .asResult();
 
         assertThatThrownBy(expression::compute)
@@ -146,7 +146,7 @@ class ExpressionRuntimeProviderContractTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
-        MathExpression expression = ExpressionCompiler.compileOrThrow(
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "combine(track(1), boom(2), track(3))", environment)
                 .asMath();
 
@@ -161,7 +161,7 @@ class ExpressionRuntimeProviderContractTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
-        MathExpression expression = ExpressionCompiler.compileOrThrow("bump(1)", environment)
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("bump(1)", environment)
                 .asMath();
 
         for (int call = 1; call <= 5; call++) {

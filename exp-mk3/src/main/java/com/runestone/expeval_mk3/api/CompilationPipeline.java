@@ -21,8 +21,8 @@ import java.util.Objects;
 /**
  * The single, cache-free implementation of {@code source + ExpressionEnvironment + RuntimeServices ->
  * ExpressionCompilationResult}: parsing, Semantic AST construction, semantic resolution, and Plano
- * Imutavel construction. {@link ExpressionCompiler}, tests, and JMH all call this same pipeline; no
- * other code path performs a full compilation.
+ * Imutavel construction. {@link ExpressionEngine}'s cache loader, tests, and JMH all call this same
+ * pipeline; no other code path performs a full compilation.
  */
 final class CompilationPipeline {
 

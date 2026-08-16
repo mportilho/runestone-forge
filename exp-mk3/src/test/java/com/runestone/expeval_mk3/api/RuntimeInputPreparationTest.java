@@ -1,7 +1,6 @@
 package com.runestone.expeval_mk3.api;
 
 import com.runestone.expeval_mk3.internal.runtime.CountingClock;
-import com.runestone.expeval_mk3.internal.runtime.RuntimeServices;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -18,14 +17,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Proves issue #96's deterministic, all-or-nothing input preparation and the {@link RuntimeServices}
+ * Proves issue #96's deterministic, all-or-nothing input preparation and an {@link ExpressionEngine}'s
  * clock seam through the public compile/compute pipeline.
  */
 class RuntimeInputPreparationTest {
 
     @Test
     void rejectsTheLexicographicallySmallestUnknownOverrideKeyFirstRegardlessOfMapIterationOrder() {
-        MathExpression expression = ExpressionCompiler.compileOrThrow("1 + 2", ExpressionEnvironment.standard()).asMath();
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("1 + 2", ExpressionEnvironment.standard()).asMath();
         Map<String, Object> overrides = new LinkedHashMap<>();
         overrides.put("zzz", BigDecimal.ONE);
         overrides.put("aaa", BigDecimal.ONE);
@@ -44,7 +43,7 @@ class RuntimeInputPreparationTest {
                 .externalSymbol("bFixed", BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
                 .externalSymbol("aFixed", BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        MathExpression expression = ExpressionCompiler.compileOrThrow("aFixed + bFixed", environment).asMath();
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("aFixed + bFixed", environment).asMath();
         Map<String, Object> overrides = new LinkedHashMap<>();
         overrides.put("bFixed", BigDecimal.TEN);
         overrides.put("aFixed", BigDecimal.TEN);
@@ -58,13 +57,13 @@ class RuntimeInputPreparationTest {
 
     @Test
     void rejectsAnInvalidOverrideWithoutObservingAnyEarlierValidOverridesProviderEffect() {
-        ExpressionCompilerTest.CountingFunctions functions = new ExpressionCompilerTest.CountingFunctions();
+        ExpressionEngineTest.CountingFunctions functions = new ExpressionEngineTest.CountingFunctions();
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .externalSymbol("aValid", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .externalSymbol("zInvalid", BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        MathExpression expression = ExpressionCompiler.compileOrThrow("bump(aValid)", environment).asMath();
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("bump(aValid)", environment).asMath();
 
         assertThatThrownBy(() -> expression.compute(Map.of("aValid", BigDecimal.TEN, "zInvalid", BigDecimal.TEN)))
                 .isInstanceOf(ExpressionExecutionException.class)
@@ -76,13 +75,13 @@ class RuntimeInputPreparationTest {
 
     @Test
     void rejectsANullOverrideWithoutObservingAnyEarlierValidOverridesProviderEffect() {
-        ExpressionCompilerTest.CountingFunctions functions = new ExpressionCompilerTest.CountingFunctions();
+        ExpressionEngineTest.CountingFunctions functions = new ExpressionEngineTest.CountingFunctions();
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .externalSymbol("aValid", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .externalSymbol("zNullable", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        MathExpression expression = ExpressionCompiler.compileOrThrow("bump(aValid)", environment).asMath();
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("bump(aValid)", environment).asMath();
         Map<String, Object> overrides = new LinkedHashMap<>();
         overrides.put("aValid", BigDecimal.TEN);
         overrides.put("zNullable", null);
@@ -94,7 +93,7 @@ class RuntimeInputPreparationTest {
 
     @Test
     void rejectsAnOverrideWithAnInvalidElementInsideANestedContainerWithoutAnyProviderEffect() {
-        ExpressionCompilerTest.CountingFunctions functions = new ExpressionCompilerTest.CountingFunctions();
+        ExpressionEngineTest.CountingFunctions functions = new ExpressionEngineTest.CountingFunctions();
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .externalSymbol(
@@ -103,7 +102,7 @@ class RuntimeInputPreparationTest {
                         List.of(BigDecimal.ONE),
                         ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        MathExpression expression = ExpressionCompiler.compileOrThrow("trackNumber(items[0])", environment).asMath();
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("trackNumber(items[0])", environment).asMath();
 
         assertThatThrownBy(() -> expression.compute(Map.of("items", Arrays.asList(BigDecimal.ONE, null))))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -114,9 +113,8 @@ class RuntimeInputPreparationTest {
     @Test
     void neverConsultsTheClockWhenNoCurrentTemporalValueIsUsed() {
         CountingClock clock = new CountingClock(Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC));
-        MathExpression expression = ExpressionCompiler.compileOrThrow(
-                        "1 + 2", ExpressionEnvironment.standard(), RuntimeServices.withClock(clock))
-                .asMath();
+        ExpressionEngine engine = ExpressionEngine.builder().clock(clock).build();
+        MathExpression expression = engine.compileOrThrow("1 + 2", ExpressionEnvironment.standard()).asMath();
 
         expression.compute();
 
@@ -127,10 +125,9 @@ class RuntimeInputPreparationTest {
     void consultsTheClockExactlyOnceAndTruncatesToWholeSecondsWhenACurrentTemporalValueIsUsed() {
         Instant instantWithNanos = Instant.parse("2024-03-15T10:20:30.123456789Z");
         CountingClock clock = new CountingClock(Clock.fixed(instantWithNanos, ZoneOffset.UTC));
+        ExpressionEngine engine = ExpressionEngine.builder().clock(clock).build();
         ExpressionEnvironment environment = ExpressionEnvironment.builder().zoneId(ZoneOffset.UTC).build();
-        ResultExpression expression = ExpressionCompiler.compileOrThrow(
-                        "currDateTime", environment, RuntimeServices.withClock(clock))
-                .asResult();
+        ResultExpression expression = engine.compileOrThrow("currDateTime", environment).asResult();
 
         Object result = expression.compute();
 

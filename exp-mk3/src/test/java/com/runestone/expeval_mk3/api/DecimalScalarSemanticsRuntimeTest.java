@@ -38,9 +38,9 @@ class DecimalScalarSemanticsRuntimeTest {
     void additionAndSubtractionAreExactRegardlessOfMathContext() {
         // ADR 0021: + and - have a bounded, non-compounding result scale (max(scale1, scale2));
         // rounding them would only discard exact digits, so a narrow mathContext must not truncate them.
-        assertThat(ExpressionCompiler.compileOrThrow("1.111111 + 2.222222", NARROW_CONTEXT_ENVIRONMENT).asMath().compute())
+        assertThat(ExpressionEngine.defaultEngine().compileOrThrow("1.111111 + 2.222222", NARROW_CONTEXT_ENVIRONMENT).asMath().compute())
                 .isEqualByComparingTo("3.333333");
-        assertThat(ExpressionCompiler.compileOrThrow("5.555555 - 2.222222", NARROW_CONTEXT_ENVIRONMENT).asMath().compute())
+        assertThat(ExpressionEngine.defaultEngine().compileOrThrow("5.555555 - 2.222222", NARROW_CONTEXT_ENVIRONMENT).asMath().compute())
                 .isEqualByComparingTo("3.333333");
     }
 
@@ -48,7 +48,7 @@ class DecimalScalarSemanticsRuntimeTest {
     void multiplyAppliesTheConfiguredMathContextEvenForASingleOperation() {
         // ADR 0021: * has a compounding result scale (scale1 + scale2); it always rounds, unlike +/-,
         // because a scale-dependent rounding rule would not be a statable contract.
-        assertThat(ExpressionCompiler.compileOrThrow("1.111111 * 2.222222", NARROW_CONTEXT_ENVIRONMENT).asMath().compute())
+        assertThat(ExpressionEngine.defaultEngine().compileOrThrow("1.111111 * 2.222222", NARROW_CONTEXT_ENVIRONMENT).asMath().compute())
                 .isEqualByComparingTo("2.47");
     }
 
@@ -57,11 +57,11 @@ class DecimalScalarSemanticsRuntimeTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .mathContext(new MathContext(2, RoundingMode.HALF_UP))
                 .build();
-        assertThat(ExpressionCompiler.compileOrThrow("10.12345 mod 3", environment).asMath().compute())
+        assertThat(ExpressionEngine.defaultEngine().compileOrThrow("10.12345 mod 3", environment).asMath().compute())
                 .isEqualByComparingTo("1.12345");
-        assertThat(ExpressionCompiler.compileOrThrow("-10 mod 3", environment).asMath().compute())
+        assertThat(ExpressionEngine.defaultEngine().compileOrThrow("-10 mod 3", environment).asMath().compute())
                 .isEqualByComparingTo("-1");
-        assertThat(ExpressionCompiler.compileOrThrow("10 mod -3", environment).asMath().compute())
+        assertThat(ExpressionEngine.defaultEngine().compileOrThrow("10 mod -3", environment).asMath().compute())
                 .isEqualByComparingTo("1");
     }
 
@@ -70,11 +70,11 @@ class DecimalScalarSemanticsRuntimeTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .mathContext(new MathContext(1, RoundingMode.HALF_UP))
                 .build();
-        assertThat(ExpressionCompiler.compileOrThrow("123.456%", environment).asMath().compute())
+        assertThat(ExpressionEngine.defaultEngine().compileOrThrow("123.456%", environment).asMath().compute())
                 .isEqualByComparingTo("1.23456");
-        assertThat(ExpressionCompiler.compileOrThrow("5!", environment).asMath().compute())
+        assertThat(ExpressionEngine.defaultEngine().compileOrThrow("5!", environment).asMath().compute())
                 .isEqualByComparingTo("120");
-        assertThat(ExpressionCompiler.compileOrThrow("1.00001 > 1.00000", environment).asLogical().compute())
+        assertThat(ExpressionEngine.defaultEngine().compileOrThrow("1.00001 > 1.00000", environment).asLogical().compute())
                 .isTrue();
     }
 
@@ -87,6 +87,6 @@ class DecimalScalarSemanticsRuntimeTest {
     }
 
     private static Object compute(String source) {
-        return ExpressionCompiler.compileOrThrow(source, ExpressionEnvironment.standard()).asResult().compute();
+        return ExpressionEngine.defaultEngine().compileOrThrow(source, ExpressionEnvironment.standard()).asResult().compute();
     }
 }

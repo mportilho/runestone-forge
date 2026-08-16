@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.runestone.expeval_mk3.api.ExpressionCompilationResult;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.ExpressionExecutionException;
-import com.runestone.expeval_mk3.api.ExpressionCompiler;
+import com.runestone.expeval_mk3.api.ExpressionEngine;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -28,7 +28,7 @@ class ExpressionCorpusExecutionTest {
             return;
         }
 
-        var compiled = ExpressionCompiler.compileOrThrow(expressionCase.source(), ExpressionCaseEnvironments.environment(expressionCase));
+        var compiled = ExpressionEngine.defaultEngine().compileOrThrow(expressionCase.source(), ExpressionCaseEnvironments.environment(expressionCase));
         if (expressionCase.phase() == CasePhase.SEMANTIC) {
             return;
         }
@@ -47,7 +47,7 @@ class ExpressionCorpusExecutionTest {
 
     private static void assertInvalidCase(ExpressionCase expressionCase) {
         if (expressionCase.expectedOutcome() instanceof ExpectedRuntimeError expected) {
-            assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(
+            assertThatThrownBy(() -> ExpressionEngine.defaultEngine().compileOrThrow(
                             expressionCase.source(), ExpressionCaseEnvironments.environment(expressionCase))
                     .asResult()
                     .compute(ExpressionCaseEnvironments.inputs(expressionCase)))
@@ -58,7 +58,7 @@ class ExpressionCorpusExecutionTest {
         }
 
         if (expressionCase.expectedOutcome() instanceof ExpectedRuntimeDiagnostic expected) {
-            assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow(
+            assertThatThrownBy(() -> ExpressionEngine.defaultEngine().compileOrThrow(
                             expressionCase.source(), ExpressionCaseEnvironments.environment(expressionCase))
                     .asResult()
                     .compute(ExpressionCaseEnvironments.inputs(expressionCase)))
@@ -77,7 +77,7 @@ class ExpressionCorpusExecutionTest {
 
         ExpectedDiagnostic expected = (ExpectedDiagnostic) expressionCase.expectedOutcome();
         ExpressionCompilationResult result =
-                ExpressionCompiler.compile(expressionCase.source(), ExpressionCaseEnvironments.environment(expressionCase));
+                ExpressionEngine.defaultEngine().compile(expressionCase.source(), ExpressionCaseEnvironments.environment(expressionCase));
         assertThat(result)
                 .as(expressionCase.id())
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure -> {

@@ -28,7 +28,7 @@ class NestedCurrentItemRestorationTest {
                 .externalSymbol("outer", NESTED_NUMBER_COLLECTION, List.of(List.of(BigDecimal.ONE)),
                         ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+        ResultExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                         "outer.map(@ -> @.map(@ -> 10 / @).sum())", environment)
                 .asResult();
 
@@ -58,7 +58,7 @@ class NestedCurrentItemRestorationTest {
                         List.of(List.of(List.of(BigDecimal.ONE))),
                         ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+        ResultExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                         "outer.map(@ -> @.map(@ -> @.map(@ -> 100 / @).sum()).sum())", environment)
                 .asResult();
 

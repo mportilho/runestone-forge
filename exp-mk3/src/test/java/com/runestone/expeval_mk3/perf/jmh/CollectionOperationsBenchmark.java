@@ -1,6 +1,6 @@
 package com.runestone.expeval_mk3.perf.jmh;
 
-import com.runestone.expeval_mk3.api.ExpressionCompiler;
+import com.runestone.expeval_mk3.api.ExpressionEngine;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.LogicalExpression;
 import com.runestone.expeval_mk3.api.MathExpression;
@@ -82,29 +82,29 @@ public class CollectionOperationsBenchmark {
         @Setup(Level.Trial)
         public void setUp() {
             ExpressionEnvironment environment = ExpressionEnvironment.standard();
-            map = ExpressionCompiler.compileOrThrow(
+            map = ExpressionEngine.defaultEngine().compileOrThrow(
                             "items := [1, 2, 3, 4, 5, 6, 7, 8]; items.map(@ -> @ + 1)", environment)
                     .asResult();
-            sum = ExpressionCompiler.compileOrThrow("items := [1, 2, 3, 4, 5, 6, 7, 8]; items.sum()", environment)
+            sum = ExpressionEngine.defaultEngine().compileOrThrow("items := [1, 2, 3, 4, 5, 6, 7, 8]; items.sum()", environment)
                     .asMath();
-            mapThenSum = ExpressionCompiler.compileOrThrow(
+            mapThenSum = ExpressionEngine.defaultEngine().compileOrThrow(
                             "items := [1, 2, 3, 4, 5, 6, 7, 8]; items.map(@ -> @ + 1).sum()", environment)
                     .asMath();
-            allShortCircuit = ExpressionCompiler.compileOrThrow(
+            allShortCircuit = ExpressionEngine.defaultEngine().compileOrThrow(
                             "items := [0, 1, 2, 3, 4, 5, 6, 7]; items.all(@ -> @ > 0)", environment)
                     .asLogical();
-            sortBy = ExpressionCompiler.compileOrThrow(
+            sortBy = ExpressionEngine.defaultEngine().compileOrThrow(
                             "items := [8, 3, 5, 1, 7, 2, 6, 4]; items.sortBy(@ -> @, \"asc\")", environment)
                     .asResult();
-            reduce = ExpressionCompiler.compileOrThrow(
+            reduce = ExpressionEngine.defaultEngine().compileOrThrow(
                             "items := [1, 2, 3, 4, 5, 6, 7, 8]; "
                                     + "items.reduce(0, @ -> @.accumulator + @.item)",
                             environment)
                     .asMath();
-            wildcardMaterialization = ExpressionCompiler.compileOrThrow(
+            wildcardMaterialization = ExpressionEngine.defaultEngine().compileOrThrow(
                             "items := [1, 2, 3, 4, 5, 6, 7, 8]; items[*]", environment)
                     .asResult();
-            safeCall = ExpressionCompiler.compileOrThrow(
+            safeCall = ExpressionEngine.defaultEngine().compileOrThrow(
                             "items := [1, 2, 3, 4, 5, 6, 7, 8]; items?.map(@ -> @ + 1) ?? []", environment)
                     .asResult();
         }

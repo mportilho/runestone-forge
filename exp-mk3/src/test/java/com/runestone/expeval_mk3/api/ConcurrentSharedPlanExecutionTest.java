@@ -1,6 +1,5 @@
 package com.runestone.expeval_mk3.api;
 
-import com.runestone.expeval_mk3.internal.runtime.RuntimeServices;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -38,7 +37,7 @@ class ConcurrentSharedPlanExecutionTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("factor", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression compiled = ExpressionCompiler.compileOrThrow(
+        CompiledExpression compiled = ExpressionEngine.defaultEngine().compileOrThrow(
                 "doubled := factor * 2; exceeds := doubled > 10; exceeds", environment);
         ResultExpression resultView = compiled.asResult();
         LogicalExpression logicalView = compiled.asLogical();
@@ -97,7 +96,7 @@ class ConcurrentSharedPlanExecutionTest {
                         List.of(List.of(BigDecimal.ONE)),
                         ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        ResultExpression expression = ExpressionCompiler.compileOrThrow(
+        ResultExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                         "outer.map(@ -> @.map(@ -> 10 / @).sum())", environment)
                 .asResult();
 
@@ -152,9 +151,9 @@ class ConcurrentSharedPlanExecutionTest {
     @Test
     void isolatesCurrentTemporalReadsAcrossConcurrentThreadsSharingOnePlan() throws Exception {
         SequentialSecondClock clock = new SequentialSecondClock(ZoneOffset.UTC);
-        CompiledExpression compiled = ExpressionCompiler.compileOrThrow(
-                "moment := currDateTime; moment = currDateTime", ExpressionEnvironment.standard(),
-                RuntimeServices.withClock(clock));
+        ExpressionEngine engine = ExpressionEngine.builder().clock(clock).build();
+        CompiledExpression compiled = engine.compileOrThrow(
+                "moment := currDateTime; moment = currDateTime", ExpressionEnvironment.standard());
         AssignmentsExpression assignmentsView = compiled.asAssignments();
         LogicalExpression consistencyView = compiled.asLogical();
 

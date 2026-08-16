@@ -1,7 +1,7 @@
 package com.runestone.expeval_mk3.perf.jmh;
 
 import com.runestone.expeval_mk3.api.ExpressionCompilationResult;
-import com.runestone.expeval_mk3.api.ExpressionCompiler;
+import com.runestone.expeval_mk3.api.ExpressionEngine;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.LogicalExpression;
@@ -75,16 +75,16 @@ public class Phase5BaselineBenchmark {
                     .externalSymbol("c", Boolean.TRUE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                     .build();
 
-            arithmetic = ExpressionCompiler.compileOrThrow("a + b * 2", environment).asMath();
+            arithmetic = ExpressionEngine.defaultEngine().compileOrThrow("a + b * 2", environment).asMath();
             arithmeticOverrides = Map.of("a", new BigDecimal("3"), "b", new BigDecimal("5"));
 
             // xor never short-circuits, so every operand is evaluated on every call.
-            logical = ExpressionCompiler.compileOrThrow(
+            logical = ExpressionEngine.defaultEngine().compileOrThrow(
                             "(a > 0) xor (b > 0) xor c", environment)
                     .asLogical();
             logicalOverrides = Map.of("a", new BigDecimal("3"), "b", new BigDecimal("-5"), "c", Boolean.FALSE);
 
-            materialization = ExpressionCompiler.compileOrThrow(
+            materialization = ExpressionEngine.defaultEngine().compileOrThrow(
                             "[1, 2, 3, 4, 5, 6, 7, 8]", ExpressionEnvironment.standard())
                     .asResult();
         }

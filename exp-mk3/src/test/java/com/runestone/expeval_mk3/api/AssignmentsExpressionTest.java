@@ -16,7 +16,7 @@ class AssignmentsExpressionTest {
 
     @Test
     void computesEveryInternalSymbolOnceInFirstCreationOrderWithReassignmentAndDestructuring() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "b := 1; a := 2; [c, d] := [3, 4]; b := 5;", ExpressionEnvironment.standard());
 
         Map<String, Object> result = expression.asAssignments().compute();
@@ -34,7 +34,7 @@ class AssignmentsExpressionTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "[a, b, c] := trackSource();", environment);
 
         Map<String, Object> result = expression.asAssignments().compute();
@@ -54,7 +54,7 @@ class AssignmentsExpressionTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("scores", new MapType(ScalarType.NUMBER), unordered, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("b := 1; nested := scores;", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("b := 1; nested := scores;", environment);
 
         Map<String, Object> result = expression.asAssignments().compute();
 
@@ -68,7 +68,7 @@ class AssignmentsExpressionTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("a := 1; fail()", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("a := 1; fail()", environment);
 
         Map<String, Object> result = expression.asAssignments().compute();
 
@@ -78,7 +78,7 @@ class AssignmentsExpressionTest {
 
     @Test
     void skippedFinalExpressionIsStillSemanticallyValidatedAtCompilation() {
-        assertThatThrownBy(() -> ExpressionCompiler.compileOrThrow("a := 1; missing", ExpressionEnvironment.standard()))
+        assertThatThrownBy(() -> ExpressionEngine.defaultEngine().compileOrThrow("a := 1; missing", ExpressionEnvironment.standard()))
                 .isInstanceOfSatisfying(ExpressionCompilationException.class, failure ->
                         assertThat(failure.diagnostics()).anySatisfy(diagnostic ->
                                 assertThat(diagnostic.code()).isEqualTo("SEMANTIC_UNKNOWN_SYMBOL")));
@@ -90,7 +90,7 @@ class AssignmentsExpressionTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "a := trackOrder(1); b := trackOrder(2); a + b", environment);
 
         expression.asAssignments().compute();
@@ -103,7 +103,7 @@ class AssignmentsExpressionTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("base", new BigDecimal("4"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("total := base + 1;", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("total := base + 1;", environment);
 
         assertThat(expression.asAssignments().compute()).isEqualTo(Map.of("total", new BigDecimal("5")));
         assertThat(expression.asAssignments().compute(Map.of("base", new BigDecimal("10"))))
@@ -116,7 +116,7 @@ class AssignmentsExpressionTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("a := trackOrder(1);", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("a := trackOrder(1);", environment);
 
         assertThatThrownBy(() -> expression.asAssignments().compute(Map.of("bogus", 1)))
                 .isInstanceOf(ExpressionExecutionException.class);
@@ -128,21 +128,21 @@ class AssignmentsExpressionTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("x", ScalarType.NUMBER, BigDecimal.TEN, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("x := 1;", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("x := 1;", environment);
 
         assertThat(expression.asAssignments().compute()).isEqualTo(Map.of("x", new BigDecimal("1")));
     }
 
     @Test
     void assignmentOnlySourceWithNoFinalExpressionComputesThroughTheAssignmentsView() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("b := 1; a := 2;", ExpressionEnvironment.standard());
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("b := 1; a := 2;", ExpressionEnvironment.standard());
 
         assertThat(expression.asAssignments().compute()).isEqualTo(Map.of("a", new BigDecimal("2"), "b", new BigDecimal("1")));
     }
 
     @Test
     void rejectsAFileWithoutAnyAssignmentBeforeExecution() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("1 + 2", ExpressionEnvironment.standard());
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("1 + 2", ExpressionEnvironment.standard());
 
         assertThatThrownBy(expression::asAssignments)
                 .isInstanceOfSatisfying(ExpressionViewException.class, exception ->
@@ -156,7 +156,7 @@ class AssignmentsExpressionTest {
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .registerJavaType(Widget.class)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("w := markWidget();", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("w := markWidget();", environment);
 
         assertThatThrownBy(expression::asAssignments)
                 .isInstanceOfSatisfying(ExpressionViewException.class, exception ->
@@ -171,7 +171,7 @@ class AssignmentsExpressionTest {
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .maxMaterializedSize(1)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow(
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "a := trackOrder(1); b := trackOrder(2);", environment);
 
         assertThatThrownBy(expression::asAssignments)
@@ -187,7 +187,7 @@ class AssignmentsExpressionTest {
                 .functionsFrom(functions, FunctionPurity.PURE)
                 .maxMaterializedSize(2)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("a := makeOversizedList();", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("a := makeOversizedList();", environment);
 
         assertThatThrownBy(() -> expression.asAssignments().compute())
                 .isInstanceOf(ExpressionExecutionException.class);
@@ -195,7 +195,7 @@ class AssignmentsExpressionTest {
 
     @Test
     void everyReturnedMapAndNestedContainerIsImmutable() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("items := [1, 2];", ExpressionEnvironment.standard());
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("items := [1, 2];", ExpressionEnvironment.standard());
 
         Map<String, Object> result = expression.asAssignments().compute();
 

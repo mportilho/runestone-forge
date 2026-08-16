@@ -4,8 +4,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Runs an {@link ExpressionParser}'s ATN/DFA warm-up exactly once per process, no matter how many
- * threads race to trigger it. The Expression Engine will call {@link #shared()} when it builds its
- * first instance; nothing in this module calls it yet.
+ * threads race to trigger it. {@code ExpressionEngine} calls {@link #ensureWarmedUp()} when it builds
+ * its first instance, default or isolated; later engines observe the warmed-up state and repeat no work.
  *
  * <p>{@link #shared()} warms up a throwaway {@link ExpressionParser} instead of reaching into the
  * pipeline's own parser instance: ANTLR generates {@code decisionToDFA} and the {@code ATN} as

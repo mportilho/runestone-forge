@@ -1,6 +1,6 @@
 package com.runestone.expeval_mk3.perf.jmh;
 
-import com.runestone.expeval_mk3.api.ExpressionCompiler;
+import com.runestone.expeval_mk3.api.ExpressionEngine;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.ObjectType;
@@ -76,13 +76,13 @@ public class Phase6NavigationBenchmark {
         @Setup(Level.Trial)
         public void setUp() {
             ExpressionEnvironment collectionEnvironment = ExpressionEnvironment.standard();
-            filter = ExpressionCompiler.compileOrThrow(
+            filter = ExpressionEngine.defaultEngine().compileOrThrow(
                             "items := [1, 2, 3, 4, 5, 6, 7, 8]; items[?(@ > 4)]", collectionEnvironment)
                     .asResult();
-            subscript = ExpressionCompiler.compileOrThrow(
+            subscript = ExpressionEngine.defaultEngine().compileOrThrow(
                             "items := [1, 2, 3, 4, 5, 6, 7, 8]; items[4]", collectionEnvironment)
                     .asResult();
-            slice = ExpressionCompiler.compileOrThrow(
+            slice = ExpressionEngine.defaultEngine().compileOrThrow(
                             "items := [1, 2, 3, 4, 5, 6, 7, 8]; items[2:6]", collectionEnvironment)
                     .asResult();
 
@@ -95,16 +95,16 @@ public class Phase6NavigationBenchmark {
                     .registerJavaTypeWithPublicMethods(CustomerProfile.class)
                     .registerJavaType(Address.class)
                     .build();
-            propertyChain = ExpressionCompiler.compileOrThrow("customer.address.city", chainEnvironment)
+            propertyChain = ExpressionEngine.defaultEngine().compileOrThrow("customer.address.city", chainEnvironment)
                     .asResult();
-            methodChain = ExpressionCompiler.compileOrThrow(
+            methodChain = ExpressionEngine.defaultEngine().compileOrThrow(
                             "customer.scorePlus(customer.score)", chainEnvironment)
                     .asResult();
 
             ExpressionEnvironment lambdaEnvironment = ExpressionEnvironment.builder()
                     .maxCurrentItemDepth(3)
                     .build();
-            nestedLambda = ExpressionCompiler.compileOrThrow(
+            nestedLambda = ExpressionEngine.defaultEngine().compileOrThrow(
                             "outer := [[1, 2], [3, 4]]; outer.map(@ -> @.map(@ -> @ + 1))", lambdaEnvironment)
                     .asResult();
         }

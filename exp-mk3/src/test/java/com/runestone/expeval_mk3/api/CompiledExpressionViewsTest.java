@@ -17,14 +17,14 @@ class CompiledExpressionViewsTest {
 
     @Test
     void asResultReturnsCanonicalScalarValue() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("1 + 2", ExpressionEnvironment.standard());
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("1 + 2", ExpressionEnvironment.standard());
 
         assertThat(expression.asResult().compute()).isEqualTo(new BigDecimal("3"));
     }
 
     @Test
     void asResultReturnsCanonicalCollectionValueAsAnImmutableSnapshot() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("[1, 2, 3]", ExpressionEnvironment.standard());
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("[1, 2, 3]", ExpressionEnvironment.standard());
 
         Object result = expression.asResult().compute();
 
@@ -35,7 +35,7 @@ class CompiledExpressionViewsTest {
 
     @Test
     void asResultReturnsCanonicalMapValueWithTextualKeysInCanonicalOrder() throws Exception {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("labels", EnvironmentConfigurations.complete());
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("labels", EnvironmentConfigurations.complete());
 
         Object result = expression.asResult().compute();
 
@@ -53,7 +53,7 @@ class CompiledExpressionViewsTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("scores", new MapType(ScalarType.NUMBER), unordered, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("scores", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("scores", environment);
 
         Object result = expression.asResult().compute();
 
@@ -62,7 +62,7 @@ class CompiledExpressionViewsTest {
 
     @Test
     void asResultSupportsOverrides() throws Exception {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("amount", EnvironmentConfigurations.complete());
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("amount", EnvironmentConfigurations.complete());
 
         Object result = expression.asResult().compute(Map.of("amount", new BigDecimal("42")));
 
@@ -71,7 +71,7 @@ class CompiledExpressionViewsTest {
 
     @Test
     void asMathReturnsBigDecimalForANumberResultAndSupportsOverrides() throws Exception {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("amount", EnvironmentConfigurations.complete());
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("amount", EnvironmentConfigurations.complete());
 
         assertThat(expression.asMath().compute()).isEqualTo(BigDecimal.ONE);
         assertThat(expression.asMath().compute(Map.of("amount", new BigDecimal("7")))).isEqualTo(new BigDecimal("7"));
@@ -82,7 +82,7 @@ class CompiledExpressionViewsTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("flag", true, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("flag", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("flag", environment);
 
         assertThat(expression.asLogical().compute()).isTrue();
         assertThat(expression.asLogical().compute(Map.of("flag", false))).isFalse();
@@ -94,7 +94,7 @@ class CompiledExpressionViewsTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("markTrue()", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("markTrue()", environment);
 
         assertThatThrownBy(expression::asMath)
                 .isInstanceOfSatisfying(ExpressionViewException.class, exception -> {
@@ -110,7 +110,7 @@ class CompiledExpressionViewsTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("markNumber()", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("markNumber()", environment);
 
         assertThatThrownBy(expression::asLogical)
                 .isInstanceOfSatisfying(ExpressionViewException.class, exception -> {
@@ -127,7 +127,7 @@ class CompiledExpressionViewsTest {
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .registerJavaType(Widget.class)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("markWidget()", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("markWidget()", environment);
 
         assertThatThrownBy(expression::asResult)
                 .isInstanceOfSatisfying(ExpressionViewException.class, exception -> {
@@ -144,7 +144,7 @@ class CompiledExpressionViewsTest {
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .registerJavaType(Widget.class)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("[markWidget()]", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("[markWidget()]", environment);
 
         assertThatThrownBy(expression::asResult)
                 .isInstanceOfSatisfying(ExpressionViewException.class, exception ->
@@ -159,7 +159,7 @@ class CompiledExpressionViewsTest {
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .registerJavaType(Widget.class)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("markWidget()", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("markWidget()", environment);
 
         assertThatThrownBy(expression::asMath)
                 .isInstanceOfSatisfying(ExpressionViewException.class, exception ->
@@ -176,7 +176,7 @@ class CompiledExpressionViewsTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("x := markNumber();", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("x := markNumber();", environment);
 
         assertThatThrownBy(expression::asResult)
                 .isInstanceOfSatisfying(ExpressionViewException.class, exception -> {
@@ -194,7 +194,7 @@ class CompiledExpressionViewsTest {
 
     @Test
     void resultAndMathViewsShareTheSameImmutablePlan() {
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("1 + 2", ExpressionEnvironment.standard());
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("1 + 2", ExpressionEnvironment.standard());
 
         Object compiledPlan = planField(expression);
         assertThat(planField(expression.asResult())).isSameAs(compiledPlan);
@@ -206,7 +206,7 @@ class CompiledExpressionViewsTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("flag", true, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        CompiledExpression expression = ExpressionCompiler.compileOrThrow("flag", environment);
+        CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("flag", environment);
 
         Object compiledPlan = planField(expression);
         assertThat(planField(expression.asResult())).isSameAs(compiledPlan);

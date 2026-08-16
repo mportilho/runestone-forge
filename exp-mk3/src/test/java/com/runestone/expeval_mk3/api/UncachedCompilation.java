@@ -4,7 +4,7 @@ import com.runestone.expeval_mk3.internal.runtime.RuntimeServices;
 
 /**
  * Test/benchmark bridge to the package-private {@link CompilationPipeline}, so callers outside the
- * {@code api} package (JMH) can measure the real uncached seam instead of {@link ExpressionCompiler}.
+ * {@code api} package (JMH) can measure the real uncached seam instead of {@link ExpressionEngine}.
  */
 public final class UncachedCompilation {
 
