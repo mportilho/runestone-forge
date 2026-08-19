@@ -18,7 +18,7 @@ Finally, the boundary between compilation-time failure and execution-time failur
 
 ## Decision
 
-Every optimizing transformation of an execution plan is validated by equivalence against an unoptimized oracle produced by the same plan-building pipeline. Equivalence is required in value, scale, rounding, domain, failure code, failure source span, observable evaluation order, and observable effects. A transformation without such a proof is not installed, and "it looks obviously safe" is not a proof.
+Every optimizing transformation of an execution plan is validated by equivalence against an unoptimized oracle produced by the same plan-building pipeline. Equivalence is required in value, scale, rounding, domain, failure code, failure source span, observable evaluation order, and observable effects. When Calculation Memory is requested, equivalence also covers participating variable keys/values and reached calculation keys/values, including their order and runtime nulls. A transformation without such a proof is not installed, and "it looks obviously safe" is not a proof.
 
 The oracle is selectable only inside the module. There is no public flag, no system property, no separate runtime, and no supported execution mode built on it. The pipeline offers one optimized entry point and one oracle entry point, and both build from the same nodes and the same semantic metadata.
 
@@ -29,6 +29,8 @@ Eligibility for any transformation that reuses, discards, or relocates a computa
 ## Consequences
 
 Equivalence runs as part of ordinary verification rather than as a one-off review: the whole expression corpus is executed in both forms on every build, and property-based generation covers effects, failures, scale, and the real domain. That cost is accepted deliberately, because it is what makes every later optimization phase — specialized nodes, tiered compilation, collection pipeline fusion — able to inherit a ready criterion instead of inventing its own.
+
+ADR 0023 extends that permanent verification to Calculation Memory. Constant folding must retain static provenance for every markable source occurrence it collapses, and a memo hit must publish the points of the reached occurrence that it skips executing, using only execution-local captured values and never reinvoking providers.
 
 The unoptimized form must therefore keep working, keep being exercised, and keep being maintained for as long as optimizations exist. It is not dead code that survived a phase; it is the reference semantics. Deleting it later would mean deleting the only mechanical answer to "did this rewrite change behavior".
 

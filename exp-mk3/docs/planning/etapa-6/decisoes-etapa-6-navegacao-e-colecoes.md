@@ -18,7 +18,7 @@ Este documento consolida as decisoes tomadas durante o planejamento da Etapa 6 d
 - O planner nao possui caminho de nao suportado para navegacao; seu unico modo de falha e guarda de bug interno.
 - O produto principal da etapa e completude de verificacao e de diagnostico, nao funcionalidade nova.
 - O gate M2 fecha com diagnostico estavel, matriz de verificacao completa e caracterizacao de desempenho registrada.
-- A Etapa 6 nao implementa otimizacao, especializacao, cache, pooling, auditoria ou fusao.
+- A Etapa 6 nao implementa otimizacao, especializacao, cache, pooling, Memoria de Calculo ou fusao.
 
 ## Gate de Entrada
 
@@ -133,7 +133,7 @@ Este documento consolida as decisoes tomadas durante o planejamento da Etapa 6 d
 - Etapa 7 passa a poder dobrar prefixo de navegacao puro porque a pureza de metodo registrado esta declarada.
 - Etapa 8 especializa acessores com `LambdaMetafactory` e `VarHandle` sobre metadata ja registrada, sem fallback reflexivo.
 - Etapa 9 mantem os vinculos de navegacao dentro do plano compartilhado entre visoes.
-- Etapa 10 instrumenta elos de navegacao por identidade e trecho ja preservados.
+- Etapa 10 marca propriedades e metodos registrados por identidade e trecho ja preservados, mantendo operacoes de colecao e seus descendentes como fronteiras opacas.
 - Etapa 11 mantem os diagnosticos de migracao independentes desta etapa.
 - Etapa 12 transforma a caracterizacao de M2 em gate e amplia stress de profundidade e de materializacao.
 

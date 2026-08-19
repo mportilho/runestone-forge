@@ -23,7 +23,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 **Objetivo:** infraestrutura de build, teste e medição pronta antes da primeira linha de produto.
 
 **Entregas**
-- Estrutura de módulos (sugestão: módulo único com pacotes `parser`, `ast`, `semantics`, `types`, `env`, `plan`, `runtime`, `cache`, `audit`, `api`; separar em módulos Maven/Gradle apenas se o Pratt da fase 2 exigir isolar a dependência do ANTLR).
+- Estrutura de módulos (sugestão: módulo único com pacotes `parser`, `ast`, `semantics`, `types`, `env`, `plan`, `runtime`, `cache`, `internal.memory`, `api`; separar em módulos Maven/Gradle apenas se o Pratt da fase 2 exigir isolar a dependência do ANTLR).
 - Plugin ANTLR integrado ao build gerando lexer/parser a partir do `.g4` versionado.
 - CI com: testes unitários, testes de propriedade (jqwik ou similar), harness JMH executável localmente e perfil de alocação (JFR/async-profiler) preparado como job opcional.
 - **Corpus de expressões**: repositório de casos sintéticos por feature e dos casos reais v1 disponíveis, em formato dado (arquivo por caso: fonte, ambiente, entradas, resultado esperado). O corpus alimenta testes de todas as etapas seguintes; ingestão real continua incremental e sua completude é gate dos testes diferenciais da Etapa 11, não de M1.
@@ -53,7 +53,7 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 
 **Entregas**
 - Hierarquia selada de records: `ExpressionFileNode` (com `resultExpression` opcional), `AssignmentNode` (incluindo destructuring), `LiteralNode`, `IdentifierNode`, `BinaryOperationNode`, `UnaryOperationNode`, `PostfixOperationNode`, `TernaryOperationNode` (between, com flag de negação), `FunctionCallNode`, `ConditionalNode` (forma clássica e funcional na mesma AST), `CollectionLiteralNode`, `NullCoalesceNode` (variádico), `NavigationChainNode`, `FilterNavigationLink` e `LambdaNode`. `CallArgument` distingue expressão de lambda e é compartilhado por chamadas globais e `CallNavigationLink`; a AST não classifica chamada navegada como método ou operação de coleção. `WildcardNavigationLink` representa exclusivamente `[*]`. Todos os nós e links têm `NodeId` estável e `SourceSpan`.
-- `SemanticAstBuilder`: visitor que consome a parse tree em **uma única passada** e a descarta. Nesta passada já ocorrem as materializações da §3.3: literais temporais viram `LocalDate`/`LocalTime`/`LocalDateTime`/`OffsetDateTime` prontos; `INT` vira `long` ou `BigInteger`; `FLOAT` vira `BigDecimal` exato; `nin` e `not in` produzem o mesmo nó; `[]` vira o singleton de lista vazia; `x%` **ainda não** é reescrito (reescritas ficam no plano, §7 deste documento — a AST espelha a fonte para auditoria fiel).
+- `SemanticAstBuilder`: visitor que consome a parse tree em **uma única passada** e a descarta. Nesta passada já ocorrem as materializações da §3.3: literais temporais viram `LocalDate`/`LocalTime`/`LocalDateTime`/`OffsetDateTime` prontos; `INT` vira `long` ou `BigInteger`; `FLOAT` vira `BigDecimal` exato; `nin` e `not in` produzem o mesmo nó; `[]` vira o singleton de lista vazia; `x%` **ainda não** é reescrito (reescritas ficam no plano, §7 deste documento — a AST preserva identidade e trecho para a Memoria de Calculo).
 - Pretty-printer da AST (necessário para o teste de propriedade round-trip e para mensagens de diagnóstico).
 
 **Critérios de aceite:** teste de propriedade round-trip (pretty-print → reparse → AST estruturalmente igual) verde sobre geração aleatória e sobre o corpus; nenhum nó sem `SourceSpan`; parse tree comprovadamente não retida (teste de heap ou por design — builder não guarda referência).
@@ -163,7 +163,7 @@ A navegação já foi implementada antecipadamente ponta a ponta durante as Etap
 **Objetivo:** aplicar transformações opcionais entre a forma sem otimizações e o plano executado. A partir daqui vale a regra: **todo plano otimizado é validado por equivalência contra a forma sem otimizações da Etapa 5**, gerada pela mesma pipeline e selecionável apenas internamente. O detalhamento normativo está em `docs/planning/etapa-7/` e no ADR 0019.
 
 **Entregas, na ordem interna sugerida**
-1. Constant folding completo (binários, unários, postfix, between constante, `??` com esquerda constante não-nula respeitando efeitos, funções `foldable`, coleções constantes, condicionais com condição constante, prefixos constantes de navegação, leitura de símbolo externo não sobrescrevível). Subexpressão constante que falha ao dobrar permanece **não dobrada**, para falhar em execução como o oráculo; a Checagem Diferida só é descartada quando a dobra tem sucesso. Registrar `foldedVariableReads` no plano desde já (pré-requisito da auditoria, Etapa 10).
+1. Constant folding completo (binários, unários, postfix, between constante, `??` com esquerda constante não-nula respeitando efeitos, funções `foldable`, coleções constantes, condicionais com condição constante, prefixos constantes de navegação, leitura de símbolo externo não sobrescrevível). Subexpressão constante que falha ao dobrar permanece **não dobrada**, para falhar em execução como o oráculo; a Checagem Diferida só é descartada quando a dobra tem sucesso. Registrar `foldedVariableReads` no plano desde já (pré-requisito da Memoria de Calculo, Etapa 10).
 2. Reescritas/strength reduction somente com prova de equivalência em valor, escala, arredondamento, domínio, falha, ordem e efeitos. `not not x → x` é a única autorizada; reescritas de `%`, potência, raiz e identidades aritméticas não são presumidas válidas sob `MathContext` e ADR 0017.
 3. Elisão de `as*` quando o tipo já foi provado (§9) — as asserções redundantes viram no-ops.
 4. `in` com lado direito constante → `HashSet` para `STRING`/`BOOLEAN`/temporais e array ordenado + busca binária para `NUMBER`, acima de um limiar único de tamanho. `HashSet<BigDecimal>` é proibido porque `structuralEquals` compara números por `compareTo`.
@@ -204,7 +204,7 @@ Saíram da Etapa 7: **eliminação de atribuições mortas**, porque uma atribui
 **Objetivo:** estabelecer o Engine de Expressão como fronteira longeva de compilação, com reuso limitado e deduplicação concorrente por `(source, environmentId)`, e fechar o marco de desempenho sem adicionar custo ao caminho de execução. Na carga financeira principal, que compila poucas fórmulas e as executa muitas vezes, o cache é proteção contra recompilação de integração e duplicação de planos, não a fonte do ganho por contrato.
 
 **Entregas**
-- Um cache Caffeine limitado por Engine de Expressão, com chave textual exata `(source, environmentId)` — sem normalização, tipo de visão ou segundo nível global, e com compartilhamento limitado à reutilização da mesma instância de ambiente dentro daquele engine. O valor é o `ExpressionCompilationResult` completo: sucessos e falhas determinísticas obedecem ao mesmo single-flight e à mesma política de capacidade/expiração, sem cache negativo separado; falhas internas inesperadas não instalam entrada. Em sucesso, o valor compilado é compartilhado por `asResult()`/`asMath()`/`asLogical()`/`asAssignments()` (plano + warnings/metadados mínimos de visão/auditoria; AST, `SemanticModel`, fonte duplicada e parse tree não retidos no valor).
+- Um cache Caffeine limitado por Engine de Expressão, com chave textual exata `(source, environmentId)` — sem normalização, tipo de visão ou segundo nível global, e com compartilhamento limitado à reutilização da mesma instância de ambiente dentro daquele engine. O valor é o `ExpressionCompilationResult` completo: sucessos e falhas determinísticas obedecem ao mesmo single-flight e à mesma política de capacidade/expiração, sem cache negativo separado; falhas internas inesperadas não instalam entrada. Em sucesso, o valor compilado é compartilhado por `asResult()`/`asMath()`/`asLogical()`/`asAssignments()` (plano + warnings/metadados mínimos de visão e Memoria de Calculo; AST, `SemanticModel`, fonte duplicada e parse tree não retidos no valor).
 - `ExpressionEngine` como único ponto público de compilação, com `defaultEngine()` singleton e `builder()` para engines isolados; ambos oferecem `compile`/`compileOrThrow`. O builder recebe `Clock` (default UTC) e `CacheConfig`; este possui `defaults()` e builder imutável, limita por quantidade positiva de resultados (default 1024), sem weigher, e admite apenas expiração ociosa positiva opcional, desabilitada por default. A fachada estática `ExpressionCompiler` deixa de ser API pública; não há bypass público, cache desabilitável, estatísticas, invalidação, manutenção ou lifecycle para expor na primeira versão.
 - `RuntimeServices`, incluindo `Clock`, pertence ao engine/expressão compilada e não à identidade do ambiente nem ao Plano Imutável.
 - Nenhum contador de execuções na Etapa 9: a observação necessária à promoção nasce e é medida com o Tier 1 opcional da Etapa 13, sem antecipar escrita compartilhada no caminho quente.
@@ -217,16 +217,47 @@ Saíram da Etapa 7: **eliminação de atribuições mortas**, porque uma atribui
 
 ---
 
-## Etapa 10 — Auditoria com custo zero quando desligada
+## Etapa 10 — Memoria de Calculo sobre um unico plano
 
-**Objetivo:** §18 — explicabilidade sem tocar o caminho quente.
+**Objetivo:** §18 — entregar uma mini auditoria deterministica de variaveis participantes e Pontos de
+Calculo alcancados, otimizada para consumo sequencial por persistencia, sem trace de eventos, segunda
+arvore ou segundo plano.
 
 **Entregas**
-- Plano instrumentado construído lazy na primeira chamada de auditoria de uma Visão de Expressão, cacheado ao lado do plano normal; decoradores sobre `ExecutableNode` usam `NodeId`/`SourceSpan` para emitir eventos (leituras, valores dinâmicos, chamadas, atribuições) em ring buffer pré-alocado com `maxAuditEvents`.
-- Integração dos `foldedVariableReads` (Etapa 7) para explicar valores dobrados.
-- `AuditResult<T>` com resultado + `ExpressionAuditTrace`.
+- `computeWithMemory()` nas quatro Visoes de Expressao, retornando `ComputationWithMemory<T>` com o
+  mesmo resultado materializado de `compute()` e uma `CalculationMemory` independente do plano.
+- `CalculationMemory` com payload colunar exato, leitura indexada sem alocacao por entrada e duas
+  vistas `List` imutaveis de conveniencia: variaveis por `(name, origin)` e calculos por Chave de
+  Proveniencia, tipo e nome descritivo.
+- Um unico Plano Imutavel. Nos marcaveis carregam `int calculationSlot`, cujo encoding inativo e ordem
+  de branch sao detalhes medidos;
+  `compute()` preserva o frame exato e `computeWithMemory()` usa cauda estendida no frame apenas na
+  execucao local.
+- Pontos marcaveis fechados em funcao global, propriedade/metodo Java registrado e Valor Temporal
+  Corrente. Operacoes de colecao e todos os seus descendentes sao fronteiras opacas.
+- Folding transfere grupos de proveniencia estatica ao no constante; CSE transfere ao
+  `MemoizedExecutableNode` as capturas que um hit pula; plano otimizado e Oraculo Sem Otimizacoes
+  produzem memorias equivalentes por ocorrencia, inclusive para pontos aninhados.
+- Freeze somente depois da Materializacao Publica, com sentinel privado para ponto alcancado com null,
+  chaves preconstruidas em schema sem back-reference, arrays finais exatos e sidecar de ordinais apenas
+  quando houver lacunas. Entries publicas nao sao criadas no caminho de computacao.
+- Schemas de variaveis carregam slots explicitos e variantes completa/assignments-only, pois variaveis
+  e Item Atual sao intercalados no frame e `AssignmentsExpression` nao executa a expressao final.
+- A rota interna mantem `ExecutionScope` e resultado cru apenas em variaveis locais ate
+  `materializar -> freeze`, sem holder intermediario; a visao de atribuicoes le slots diretamente e nao
+  cria a lista crua de valores do caminho atual.
+- Append-only permanece controle/fallback documentado para eventual evidencia de planos grandes e
+  esparsos; dense+bitmap, adaptacao em runtime, eventos, snapshots, profundidade, ring buffer e
+  `maxAuditEvents` ficam fora.
 
-**Critérios de aceite:** JMH provando que o plano normal não regrediu (nenhum branch de auditoria nele); trace explica corretamente expressões com folding agressivo; ring buffer limita memória sob expressões grandes.
+**Critérios de aceite:** o JMH vinculante mede captura, freeze, percurso indexado, percurso pelas listas
+e sink sequencial de persistencia antes da mudanca de producao e pode reabrir armazenamento/publicacao;
+`compute()` mantem zero B/op adicional e qualquer regressao
+reproduzivel acima de 1% e investigada sem segundo plano; as quatro visoes preservam resultado,
+falha, ordem, null, folding, CSE e opacidade de colecao; memoria nao retém plano/ambiente/fonte e
+execucoes concorrentes permanecem isoladas; travessia indexada aloca zero B/op no evaluator; JOL/JFR
+validam layout e alocacao; o gate final e repetido
+no Java 21 de deployment. O plano detalhado e o ADR 0023 sao normativos para a implementacao.
 
 **Depende de:** Etapas 7–9.
 

@@ -8,7 +8,7 @@ Este plano detalha a Etapa 7 do `exp-mk3` depois do fechamento do M2 na Etapa 6.
 
 Aplicar um conjunto pequeno de transformacoes provadas entre o Modelo Semantico e o plano executado, e estabelecer o mecanismo de prova que as Etapas 8, 9, 12 e 13 vao reutilizar: **todo plano otimizado e validado por equivalencia contra o Oraculo Sem Otimizacoes**, gerado pela mesma pipeline e selecionavel apenas internamente.
 
-A Etapa 7 nao especializa nos por operador e tipo, nao remove reflexao, nao cria cache de compilacao, nao instrumenta auditoria e nao funde pipelines de colecao.
+A Etapa 7 nao especializa nos por operador e tipo, nao remove reflexao, nao cria cache de compilacao, nao implementa Memoria de Calculo e nao funde pipelines de colecao.
 
 ## Autoridade e Premissas
 
@@ -17,7 +17,7 @@ A Etapa 7 nao especializa nos por operador e tipo, nao remove reflexao, nao cria
 - O plano historico e o codigo existente sao evidencias, nao autoridade quando contradizem contratos posteriores.
 - A API publica continua provisoria e pode mudar de forma incompativel antes da GA.
 - Toda a suite existente deve permanecer verde; testes que contradizem contratos normativos sao atualizados atomicamente com codigo e corpus.
-- Nao ha especializacao de nos, remocao de reflexao, pooling de escopo, cache de compilacao, auditoria nem fusao de pipelines nesta etapa.
+- Nao ha especializacao de nos, remocao de reflexao, pooling de escopo, cache de compilacao, Memoria de Calculo nem fusao de pipelines nesta etapa.
 
 ## Estado Atual e Estrategia de Reaproveitamento
 
@@ -187,7 +187,7 @@ Cada incremento fecha com `mvn -pl exp-mk3 -am test` verde. A decomposicao em is
 - Reescritas de `%`, de potencia, de raiz e de identidades aritmeticas.
 - Especializacao de nos por operador e tipo, `LambdaMetafactory`, `VarHandle` e pooling de escopo, que ficam na Etapa 8.
 - Cache de compilacao, contador de execucoes e engine, que ficam na Etapa 9.
-- Auditoria e plano instrumentado, que ficam na Etapa 10.
+- Memoria de Calculo e slots de captura no plano unico, que ficam na Etapa 10.
 - Fusao de pipelines de colecao e Tier 1, que ficam na Etapa 13.
 - Flag publica, propriedade de sistema ou API que exponha a selecao do oraculo.
 - Mudanca de gramatica e de API publica de operacoes de colecao.
@@ -197,7 +197,7 @@ Cada incremento fecha com `mvn -pl exp-mk3 -am test` verde. A decomposicao em is
 
 - Etapa 8 especializa nos sobre um plano que ja passou por dobra e elisao, e herda o oraculo como criterio de aceite em vez de criar o seu; recebe tambem a reordenacao de curto-circuito como candidata condicionada a perfil.
 - Etapa 9 mantem um unico plano por `(source, environmentId)` compartilhado entre visoes, e a Leitura Dobrada viaja dentro desse valor compartilhado sem reter AST, Modelo Semantico nem fonte duplicada.
-- Etapa 10 consome a Leitura Dobrada para explicar valores dobrados e instrumenta o plano por identidade e trecho, sem branch de auditoria no plano normal.
+- Etapa 10 consome a Leitura Dobrada e transfere slots/proveniencia ao no constante ou `MemoizedExecutableNode`, preservando ocorrencias alcancadas sem plano instrumentado.
 - Etapa 11 permanece independente desta etapa; os diagnosticos de migracao nao dependem de otimizacao.
 - Etapa 12 transforma os limiares desta etapa em gate permanente de CI, junto com perfil de alocacao e diferenciais.
 - Etapa 13 reutiliza o mesmo oraculo para o Tier 1 e para a fusao de pipelines de colecao.

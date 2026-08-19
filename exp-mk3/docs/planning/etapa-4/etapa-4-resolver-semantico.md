@@ -48,7 +48,7 @@ Remover conceitos obsoletos do contrato publico e do caminho interno planejavel 
 - `ReflectedFunctionImporter` deve rejeitar tipo Java sem mapeamento conhecido.
 - Funcoes dobraveis devem ser puras.
 - Overload duplicado apenas por retorno deve ser rejeitado no builder/importador.
-- Metadados de funcao preservam classe, metodo e descriptor JVM para diagnostico/auditoria, sem identidade estavel exclusiva para cache.
+- Metadados de funcao preservam classe, metodo e descriptor JVM para diagnostico e preparacao da invocacao, sem identidade estavel exclusiva para cache. A Memoria de Calculo usa apenas nome, tipo de ponto, `NodeId` e `SourceSpan`.
 - Provider de instancia e vinculado diretamente ao descriptor e nao exige `providerId`.
 - `JavaTypeCatalog` deve rejeitar membro exposto sem tipo de retorno mapeavel.
 - Propriedades/metodos Java registrados sao tratados como `NEVER_NULL` por contrato de exposicao.

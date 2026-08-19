@@ -293,7 +293,7 @@ A stable, categorized and severity-marked explanation of a compilation warning/e
 _Avoid_: Exception message, ANTLR error text
 
 **Oraculo Sem Otimizacoes**:
-The form of a Plano Imutavel that applies no optimizing transformation, built by the same pipeline as the optimized form and selectable only inside the module. It is the reference semantics against which every optimized plan is proven equivalent in value, scale, rounding, domain, failure, observable order, and observable effects.
+The form of a Plano Imutavel that applies no optimizing transformation, built by the same pipeline as the optimized form and selectable only inside the module. It is the reference semantics against which every optimized plan is proven equivalent in value, scale, rounding, domain, failure, observable order, observable effects, and, when requested, Memoria de Calculo entries.
 _Avoid_: Interpreter mode, debug plan, public execution mode, legacy plan
 
 **Dobra de Constante**:
@@ -301,8 +301,20 @@ The replacement of a pure subexpression whose operands are all known during comp
 _Avoid_: Compile-time error for failing constants, poisoned constant, precomputed cache
 
 **Leitura Dobrada**:
-The record kept in a Plano Imutavel of each symbol read that became a constant during Dobra de Constante, carrying the symbol name, its Identificador de No, its Trecho de Fonte, and the folded value. It exists so that auditing can explain a value that no longer appears as a read during execution.
+The record kept in a Plano Imutavel of each symbol read that became a constant during Dobra de Constante, carrying the symbol name, its Identificador de No, its Trecho de Fonte, and the folded value. It exists so that Memoria de Calculo can explain a value that no longer appears as a read during execution.
 _Avoid_: Execution trace entry, variable snapshot, audit event
+
+**Memoria de Calculo**:
+The immutable compact companion to one successful expression computation, containing deterministic ordered views of the participating effective symbols and reached Pontos de Calculo without representing a temporal event trace, environment dump, partial failure, or execution tree. Its indexed key/value access is the allocation-free path for sequential persistence; its `List` views are convenience projections over the same payload.
+_Avoid_: Audit trace, execution log, event stream, variable snapshot
+
+**Ponto de Calculo**:
+An observable source occurrence selected while building a Plano Imutavel whose value belongs to Memoria de Calculo only when that occurrence is reached by the execution, even if folding or memoization changes how its value is obtained. Work inside an opaque collection operation is not an independently observable frontier.
+_Avoid_: Audit event, every executable node, execution step
+
+**Chave de Proveniencia**:
+The public identity of one Ponto de Calculo, combining its compilation-local node identity and source span so distinct source occurrences remain distinguishable without retaining source text.
+_Avoid_: Function name, source text, array slot, persistent node id
 
 **Elisao de Assercao**:
 The removal of an assertion function call whose asserted type is exactly the argument's already proven type, turning the call into no operation because the underlying boundary conversion returns the value itself in that case.

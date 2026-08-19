@@ -94,7 +94,7 @@ Estrutura mantida, com pequenos ajustes:
 - `ExpressionFileNode { List<AssignmentNode> assignments; ExpressionNode resultExpression; /* pode ser null */ }` — `resultExpression` agora é opcional, refletindo `expression?` na regra `start`.
 - Nós: `LiteralNode`, `IdentifierNode`, `BinaryOperationNode`, `UnaryOperationNode`, `PostfixOperationNode`, `FunctionCallNode`, `ConditionalNode` (cobre `if/then/elsif/else/endif` e a forma funcional `if(c; a; b)` — mesma AST), `VectorLiteralNode`, `PropertyChainNode`, `NullCoalesceNode` (variádico), `FilterNode`/`LambdaNode` (corpo de `[?(...)]` e `@ -> ...`). Elos de `PropertyChainNode` carregam flag de navegação segura quando aplicável, inclusive em subscript seguro (`?.[...]`). Não existe mais `TypeHintNode`: os hints saíram da gramática (seção 5.1) e as funções de asserção `asNumber(x)` etc. são `FunctionCallNode` comuns.
 - `TernaryOperationNode` da v1 (usado por `between`) permanece: `x between a and b` vira nó ternário; `not between` é o mesmo nó com flag de negação (idem `not in`).
-- Todos os nós são **records imutáveis** com `NodeId` estável e `SourceSpan` — pré-requisito para CSE (seção 11) e auditoria.
+- Todos os nós são **records imutáveis** com `NodeId` estável e `SourceSpan` — pré-requisito para CSE (seção 11) e Chave de Proveniencia da Memoria de Calculo.
 
 ---
 
@@ -212,7 +212,7 @@ ExecutionPlan(
         ExternalBindingPlan[] externalBindings, // array ordenado, não Map
         int frameSize,                          // internos + externos + slots de @
         int maxFilterDepth,
-        AuditPlan auditPlan                     // lazy, ver seção 18
+        CalculationSchema calculationSchema     // metadados imutaveis, ver secao 18
 )
 ```
 
@@ -252,7 +252,7 @@ Mantidas da v1 e ampliadas. Todas rodam no `ExecutionPlanBuilder`, sobre a AST s
 5. **Reordenação segura de curto-circuito**: em `and`/`or`, operandos constantes ou baratos e puros podem ser antecipados (nunca reordenar operandos com efeitos, i.e., chamadas não-puras).
 6. **Fusão de pipeline de coleção** (opcional, fase 2): `v..map(@ -> f)..sum()` funde em um único loop sem lista intermediária.
 
-Toda otimização registra no plano os `foldedVariableReads`/eventos necessários para que a **auditoria continue explicável** mesmo com nós dobrados (compatível com o conceito da v1).
+Toda otimizacao preserva no plano a proveniencia necessaria para que a **Memoria de Calculo continue explicavel** mesmo com nos dobrados ou memoizados. Leituras Dobradas explicam Simbolos Externos que deixaram de executar como leitura; Pontos de Calculo dobrados transferem slot e chave ao no constante substituto.
 
 ---
 
@@ -335,7 +335,7 @@ cria ExecutionScope
 Com a compilação unificada, o cache melhora estruturalmente:
 
 - **Chave**: `(source, environmentId)` com igualdade textual exata, sem normalizacao ou hash exclusivo — `resultType` sai da chave (era necessário na v1 porque cada tipo tinha um parse diferente). O compartilhamento ocorre apenas ao reutilizar a mesma instância de ambiente; dentro dela, o mesmo texto usado como `MathExpression` e como `LogicalExpression` compartilha **um único plano** enquanto a geracao esta residente, e as visões só validam.
-- **Valor**: `ExpressionCompilationResult` completo. Sucesso retém a `CompiledExpression` (plano + metadados semânticos mínimos para as validações de visão e para auditoria); falhas sintáticas e semânticas determinísticas também são cacheadas, sem cache negativo separado. AST e parse tree **não** são retidas.
+- **Valor**: `ExpressionCompilationResult` completo. Sucesso retém a `CompiledExpression` (plano + metadados semânticos mínimos para as validações de visão e para Memoria de Calculo); falhas sintáticas e semânticas determinísticas também são cacheadas, sem cache negativo separado. AST e parse tree **não** são retidas.
 - Um unico Caffeine por engine: `ExpressionEngine.defaultEngine()` fornece o singleton padrao e `ExpressionEngine.builder()` cria engines isolados com `Clock` UTC e `CacheConfig.defaults()` quando nao configurados. `CacheConfig` possui builder imutavel, limita a quantidade positiva de resultados (1024 no engine default), sem *weigher*, e admite expiracao positiva desde o ultimo acesso opcional e desabilitada por default. Nao existe segundo nivel global nem compartilhamento de entrada entre engines.
 - Chamadas concorrentes da mesma chave executam o pipeline uma unica vez por geracao, inclusive em falha. Expiracao ou eviction permitem uma geracao futura sem invalidar expressoes ja entregues; falhas internas inesperadas nao instalam entrada. O cache nao participa de `compute`.
 - Nenhum contador de execucoes e instalado antecipadamente; o Tier 1 opcional introduz e mede sua propria politica de observacao apenas se for ativado.
@@ -343,14 +343,38 @@ Com a compilação unificada, o cache melhora estruturalmente:
 
 ---
 
-## 18. Auditoria com custo zero quando desligada
+## 18. Memoria de Calculo com custo controlado
 
-A v1 pagava (pouco, mas pagava) pela possibilidade de auditar. Na v2:
+A v2 nao oferece trace temporal. Ela produz, sob demanda explicita, uma mini auditoria compacta e
+deterministica, normalmente percorrida uma vez por um adaptador de persistencia:
 
-- O plano normal **não contém nenhum branch de auditoria**.
-- `computeWithAudit(...)` usa um **plano instrumentado**, construído **preguiçosamente** na primeira chamada auditada e cacheado junto ao plano normal. Instrumentação = decoradores sobre os nós executáveis que emitem eventos (leituras de variáveis, valores dinâmicos, chamadas de função, atribuições) em um ring buffer pré-alocado limitado por `maxAuditEvents`.
-- `foldedVariableReads` do plano permitem que o trace explique valores dobrados em compilação (fidelidade preservada).
-- Retorno inalterado: `AuditResult<T>` com resultado + `ExpressionAuditTrace`.
+- `compute()` e `computeWithMemory()` compartilham um unico Plano Imutavel. Nos marcaveis carregam um
+  `calculationSlot` primitivo; encoding inativo e ordem dos testes sao escolhidos por JMH/perfasm.
+- `compute()` clona o frame de tamanho exato. `computeWithMemory()` estende apenas seu frame local com
+  uma cauda de calculos, grava referencias alcancadas e, depois de materializar o resultado publico,
+  congela arrays de valores exatos e sidecar de ordinais somente quando houver lacunas.
+- Variaveis sao os simbolos participantes, uma vez por `(name, origin)`. Calculos sao ocorrencias
+  alcancadas de funcao global, propriedade/metodo registrado e Valor Temporal Corrente.
+- O schema guarda slots de variavel explicitos e variantes completa/assignments-only; nao assume prefixo
+  contiguo no frame. Scope e resultado cru vivem apenas em variaveis locais ate `materializar -> freeze`,
+  sem holder intermediario.
+- Operacoes de colecao sao opacas: `transactions.map(@ -> calculateFee(@)).sum()` nao publica
+  `calculateFee`, `map`, `sum` nem `@`.
+- Folding e CSE transferem captura aos nos que realmente executam sem perder a Chave de Proveniencia.
+- O retorno e `ComputationWithMemory<T>` com resultado materializado e `CalculationMemory`. A memoria
+  expoe leitura indexada sem alocacao por entrada e vistas `List` imutaveis de conveniencia. Chaves sao
+  preconstruidas em schema independente; valores sao referencias canonicas, nao snapshots; a memoria
+  nao retém plano, ambiente nem fonte.
+- Persistencia, serializacao, entidades e copia profunda ficam na borda consumidora. O caminho indicado
+  percorre os acessores indexados e nao cria `VariableEntry`/`CalculationEntry` intermediarios.
+- Nao existem plano instrumentado, decorators, eventos, ring buffer, profundidade ou
+  `maxAuditEvents`. Append-only fica apenas como fallback futuro condicionado a telemetria de planos
+  grandes e esparsos.
+
+O caminho normal aceita no maximo um teste previsivel nos nos marcaveis, exige zero B/op adicional e
+investiga regressao reproduzivel acima de 1%. O gate vinculante mede captura, freeze, percurso indexado,
+percurso por listas e um sink sequencial de mini auditoria antes da implementacao; o veredito final e
+repetido no Java 21 de deployment.
 
 ---
 
@@ -405,7 +429,7 @@ Ferramenta opcional: um **migrador de fonte** (regex + reparse) que converte exp
 
 - Camadas estritamente separadas: parse → AST → semântica → plano → runtime.
 - API `compile(...)` / `compute(...)`; compilar uma vez, executar muitas.
-- `Environment` explícito; modelo semântico separado da AST; representação executável intermediária imutável; símbolos com índices e frames em array; `UNBOUND ≠ null`; coerção só nas bordas; auditoria opcional; cache por fonte + ambiente.
+- `Environment` explícito; modelo semântico separado da AST; representação executável intermediária imutável; símbolos com índices e frames em array; `UNBOUND ≠ null`; coerção só nas bordas; Memoria de Calculo opcional; cache por fonte + ambiente.
 
 **Novo na v2** (habilitado pela gramática e pelo foco em desempenho):
 
@@ -418,5 +442,5 @@ Ferramenta opcional: um **migrador de fonte** (regex + reparse) que converte exp
 7. Navegação por `MethodHandle`/`LambdaMetafactory` + inline caches por call-site; zero `Method.invoke` no caminho quente.
 8. Navegação segura, incluindo `?.[...]`.
 9. `@` de filtros como slot de frame com save/restore — sem thread-locals.
-10. Auditoria por plano instrumentado lazy — custo zero quando desligada.
+10. Memoria de Calculo por cauda no frame local e payload colunar consumivel sem alocacao por entrada — um unico plano, zero B/op adicional em `compute()`.
 11. Parsing SLL+bail com fallback LL, warm-up de ATN, e trilha para parser Pratt artesanal com o `.g4` como especificação.

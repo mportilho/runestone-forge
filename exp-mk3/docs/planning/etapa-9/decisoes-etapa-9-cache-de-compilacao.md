@@ -148,7 +148,7 @@ Cada incremento fecha com `mvn -pl exp-mk3 -am test` verde:
 - Segundo nivel global, cache distribuido ou compartilhamento entre engines.
 - Compartilhamento entre Ambientes de Expressao construidos separadamente, mesmo quando equivalentes.
 - Contador de execucoes, promocao Tier 1 ou qualquer escrita preparatoria no caminho de `compute`.
-- Auditoria e plano instrumentado.
+- Memoria de Calculo e slots de captura no plano unico.
 - Catalogo comercial de produtos, contratos ou versoes de formula da aplicacao consumidora.
 - Parser por engine.
 - Estatisticas, invalidacao, manutencao, lifecycle ou bypass publico do cache.

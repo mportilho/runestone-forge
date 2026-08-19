@@ -121,7 +121,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - `Nulidade de Runtime` nao participa de unificacao comum de tipos, mas constructs cujo contrato rejeita null podem usa-la para diagnostico semantico.
 - `RuntimeNullability.NEVER_NULL` indica que o no e provado como nunca nulo se executar com sucesso.
 - `RuntimeNullability.MAY_BE_NULL` indica que o valor pode ser nulo em runtime.
-- A metadata de nulidade apoia auditoria, diagnosticos e possiveis warnings futuros, mas nao participa da compatibilidade comum de tipos.
+- A metadata de nulidade apoia planejamento, diagnosticos e possiveis warnings futuros, mas nao participa da compatibilidade comum de tipos.
 - Referencia direta a `Simbolo Externo` e `NEVER_NULL`, porque default e override null sao proibidos.
 - Para simbolo externo de objeto Java, propriedades e metodos registrados sao tratados como `NEVER_NULL` por contrato.
 - Para simbolo externo `Map<V>`, subscript textual retorna `NEVER_NULL` por contrato quando executa com sucesso.
@@ -441,7 +441,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Essa extensibilidade nao implica liberar operacoes de colecao customizadas publicamente na v2 inicial.
 - Funcoes pertencem a uma instancia de ambiente e nao exigem identidade canonica para compartilhamento entre ambientes.
 - Descriptors de funcao preservam nome de linguagem, assinatura de parametros, tipo de retorno, flags `pure`/`foldable`, handle e metadados descritivos da implementacao.
-- Metadados refletidos preservam classe, nome e descriptor JVM para diagnostico e auditoria, sem `stableImplementationId` separado.
+- Metadados refletidos preservam classe, nome e descriptor JVM para diagnostico e preparacao da invocacao, sem `stableImplementationId` separado. A Memoria de Calculo nao expoe esses detalhes refletidos.
 - Metodos de instancia sao vinculados diretamente ao provider fornecido, sem exigir `providerId`.
 - Alteracoes de provider exigem construir outro ambiente, que recebe outro identificador de instancia.
 - Chamada global resolve por `FunctionCatalog`.
@@ -475,7 +475,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Funcoes impuras sao semanticamente validas, mas bloqueiam folding, CSE e reordenacao posterior.
 - Funcoes impuras podem aparecer em ramos lazy, operandos posteriores de `??`, condicionais e lambdas; a politica de avaliacao decide se executam em runtime.
 - Etapa 4 valida semanticamente chamadas impuras mesmo em ramos que uma otimizacao futura poderia considerar inalcancaveis.
-- Pureza e metadado para planejamento, auditoria e otimizacao, nao criterio de aceitacao da linguagem.
+- Pureza e metadado para planejamento e otimizacao, nao criterio de aceitacao da linguagem.
 
 ## Nomes Reservados e Namespaces
 

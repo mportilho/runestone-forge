@@ -8,7 +8,7 @@ Este plano detalha a Etapa 8 do `exp-mk3` depois do fechamento da Etapa 7. Ele c
 
 Reduzir o custo por execucao de um Plano Imutavel sem alterar valor, escala, arredondamento, dominio, falha, ordem observavel ou efeito observavel, por tres mecanismos: nos escolhidos por operador e tipo resolvido durante a construcao, invocacao de funcao e de membro registrado sem coleta de argumentos em array, e remocao de conversao de borda ja provada redundante.
 
-A Etapa 8 nao cria cache de compilacao, nao instrumenta auditoria, nao funde pipelines de colecao, nao reordena operandos de curto-circuito e nao especializa potencia nem raiz.
+A Etapa 8 nao cria cache de compilacao, nao implementa Memoria de Calculo, nao funde pipelines de colecao, nao reordena operandos de curto-circuito e nao especializa potencia nem raiz.
 
 ## Resultado Final
 
@@ -199,7 +199,7 @@ Cada incremento fecha com `mvn -pl exp-mk3 -am test` verde. A decomposicao em is
 - `AssignmentExecutable`.
 - Reescritas algebricas, de `%`, de potencia e de raiz.
 - Cache de compilacao, contador de execucoes e engine, que ficam na Etapa 9.
-- Auditoria e plano instrumentado, que ficam na Etapa 10.
+- Memoria de Calculo e slots de captura no plano unico, que ficam na Etapa 10.
 - Fusao de pipelines de colecao e Tier 1, que ficam na Etapa 13.
 - Flag publica, propriedade de sistema ou API que exponha a selecao do oraculo ou a rota de invocacao.
 - Mudanca de gramatica.
@@ -208,6 +208,6 @@ Cada incremento fecha com `mvn -pl exp-mk3 -am test` verde. A decomposicao em is
 ## Impacto nas Etapas Posteriores
 
 - **Etapa 9** herda um plano com nos especializados e pontos de entrada compartilhados por ambiente. Observacao registrada para o dimensionamento dela: no perfil de carga desta etapa, poucas expressoes sao compiladas uma vez e executadas muitas vezes, entao o valor do cache de compilacao esta no plano unico compartilhado entre visoes e no contador de execucoes, nao na amortizacao do custo de compilar. Isso nao muda a Etapa 9 agora; e insumo de quando ela for planejada.
-- **Etapa 10** instrumenta um plano cujas familias sao mais numerosas; o decorador de auditoria continua operando por `NodeId` e `Trecho de Fonte`, que nenhuma especializacao altera.
+- **Etapa 10** adiciona slots primitivos aos nos marcaveis das familias especializadas existentes; cada troca de estrategia preserva `NodeId`, Trecho de Fonte e Chave de Proveniencia, sem decorator ou segunda arvore.
 - **Etapa 12** transforma os gates pareados desta etapa em gate permanente de CI, junto com perfil de alocacao.
 - **Etapa 13** reutiliza o mesmo Oraculo para o Tier 1 e para a fusao de pipelines de colecao, e herda os pontos de entrada gerados como base da compilacao promovida.

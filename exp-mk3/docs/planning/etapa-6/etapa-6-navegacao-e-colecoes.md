@@ -15,7 +15,7 @@ A Etapa 6 nao reimplementa navegacao, nao antecipa otimizacao e nao introduz for
 - O plano historico e o codigo existente sao evidencias, nao autoridade quando contradizem contratos posteriores.
 - A API publica continua provisoria e pode mudar de forma incompativel antes da GA.
 - Toda a suite existente deve permanecer verde; testes que contradizem contratos normativos sao atualizados atomicamente com codigo e corpus.
-- Nao ha folding, CSE, reescrita algebrica, especializacao de nos, pooling de escopo, cache de compilacao, auditoria ou fusao de pipelines nesta etapa.
+- Nao ha folding, CSE, reescrita algebrica, especializacao de nos, pooling de escopo, cache de compilacao, Memoria de Calculo ou fusao de pipelines nesta etapa.
 
 ## Estado Atual e Estrategia de Reaproveitamento
 
@@ -206,7 +206,7 @@ Cada incremento fecha com `mvn -pl exp-mk3 -am test` verde. A decomposicao em is
 - Subscrito com indice ou chave por expressao e qualquer mudanca de gramatica.
 - Navegacao por campo publico.
 - API publica de operacoes de colecao customizadas.
-- Otimizacao, especializacao de nos, cache, pooling, auditoria e fusao de pipelines.
+- Otimizacao, especializacao de nos, cache, pooling, Memoria de Calculo e fusao de pipelines.
 - `LambdaMetafactory` e `VarHandle` em acessores, que permanecem na Etapa 8.
 - Fase `semantic` do Corpus e Tags de Cobertura novas.
 - Limiar de desempenho e gate de CI.
@@ -217,6 +217,6 @@ Cada incremento fecha com `mvn -pl exp-mk3 -am test` verde. A decomposicao em is
 - Etapa 7 usa a forma sem otimizacoes como oraculo e preserva indice estrito, chave estrita e fatia presa; passa a poder dobrar prefixo de navegacao puro porque a pureza esta declarada.
 - Etapa 8 especializa acessores sobre metadata ja registrada, sem fallback reflexivo e sem alterar semantica de `?.`.
 - Etapa 9 mantem os vinculos de navegacao dentro do plano unico compartilhado entre visoes.
-- Etapa 10 instrumenta elos por identidade e trecho ja preservados, sem branch de auditoria no plano normal.
+- Etapa 10 marca propriedades e metodos registrados por identidade e trecho ja preservados. Operacoes de colecao e todos os seus descendentes sao fronteiras opacas; o plano unico recebe slots primitivos apenas nos nos marcaveis.
 - Etapa 11 mantem os diagnosticos de migracao independentes desta etapa.
 - Etapa 12 transforma a caracterizacao de M2 em gate e amplia stress de profundidade de Item Atual e de Limite de Materializacao.

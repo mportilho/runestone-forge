@@ -1,5 +1,40 @@
 # Performance History
 
+## 2026-08-18 - Etapa 10 Calculation-Memory Storage Prototype
+
+Purpose: choose among an extended execution frame, an append-only recorder with lazy slot sidecar,
+and dense values plus presence bitmap before implementing `computeWithMemory()`. The throwaway JMH
+prototype includes frame preparation, variable inclusion, capture, freeze, and separate complete
+traversal. It covers `S=0,4,64,256` and dense, alternating, prefix, empty, and sparse reachability.
+
+Environment: Temurin 25.0.3, JMH 1.37, Linux x86_64, `-Xms1g -Xmx1g`, 5x500 ms warmup,
+10x500 ms measurement, 3 forks, and `gc` profiler. The module target remains Java 21; rerun the final
+production implementation on the deployment JVM.
+
+| Shape | Frame tail ns/op / B/op | Append ns/op / B/op | Dense ns/op / B/op | Winner |
+|---|---:|---:|---:|---|
+| `S=0, K=0` | 21.4 / 144 | 30.0 / 184 | 33.0 / 216 | frame |
+| `S=4, K=4` | 28.8 / 160 | 58.5 / 200 | 64.3 / 256 | frame |
+| `S=64, K=64` | 259.9 / 400 | 442.2 / 1,056 | 632.7 / 736 | frame |
+| `S=64, K=32` alternating | 112.5 / 400 | 477.0 / 1,730.7 | 357.6 / 784 | frame |
+| `S=256, K=0` | 174.5 / 1,168 | 30.1 / 184 | 186.8 / 1,272 | append |
+| `S=256, K=256` | 1,049.7 / 1,168 | 1,815.6 / 3,560 | 2,523.8 / 2,296 | frame |
+| `S=256, K=16` prefix | 171.7 / 1,168 | 150.4 / 448 | 214.0 / 1,336 | append |
+| `S=256, K=4` sparse | 172.8 / 1,168 | 94.2 / 424 | 206.9 / 1,352 | append |
+
+Verdict: **ACCEPT frame tail as the first implementation; DISCARD dense; defer append.** Frame tail
+wins every current-scale case and is the smallest design. Append remains evidence for a future fallback
+only if real plan telemetry finds many large, sparsely reached layouts. Full results and traversal scores
+are recorded in `docs/planning/etapa-10/prototype-calculation-memory-storage.md`.
+
+Initial public-contract follow-up (superseded on 2026-08-18) selected eagerly materialized variable and
+calculation entry lists. A persistence-oriented review replaced that publication choice with exact
+columnar values, prebuilt standalone keys, allocation-free indexed traversal, and immutable `List`
+projections. Frame-tail remains the capture base, but the verdict is conditional on a binding follow-up
+JMH covering capture, freeze, indexed/list consumption, a sequential no-I/O persistence sink, branch
+order, and reach counting. A representative loss reopens the affected choice before production; it does
+not promote append automatically. The final gate must run on the Java 21 deployment JVM.
+
 ## 2026-08-13 - Etapa 8 Final Performance Gate (issue #130)
 
 Purpose: close Etapa 8 without adding another optimization. All four tracked suites and every JMH

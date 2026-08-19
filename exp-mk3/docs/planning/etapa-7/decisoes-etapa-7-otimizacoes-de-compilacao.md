@@ -16,7 +16,7 @@ Este documento consolida as decisoes tomadas durante o planejamento da Etapa 7 d
 - O produto e um conjunto pequeno de transformacoes provadas, mais o mecanismo de prova que as etapas 8, 9 e 13 vao reutilizar.
 - Nenhuma transformacao muda semantica de valor, escala, arredondamento, dominio, falha, ordem ou efeito.
 - Toda transformacao e opcional por construcao: existe sempre uma forma sem otimizacoes gerada pela mesma pipeline.
-- A Etapa 7 nao especializa nos por operador e tipo, nao remove reflexao, nao cria cache de compilacao, nao instrumenta auditoria e nao funde pipelines de colecao.
+- A Etapa 7 nao especializa nos por operador e tipo, nao remove reflexao, nao cria cache de compilacao, nao implementa Memoria de Calculo e nao funde pipelines de colecao.
 
 ## Escopo
 
@@ -58,7 +58,7 @@ Fora do escopo, com motivo registrado:
 
 ## Leitura Dobrada
 
-- O plano registra as Leituras Dobradas desde esta etapa, mesmo sem consumidor: e pre-requisito da auditoria da Etapa 10, que precisa explicar valores que nao aparecem mais como leitura em execucao.
+- O plano registra as Leituras Dobradas desde esta etapa, mesmo sem consumidor: e pre-requisito da Memoria de Calculo da Etapa 10, que precisa explicar valores que nao aparecem mais como leitura em execucao.
 - A forma e uma lista imutavel de nome do simbolo, Identificador de No, Trecho de Fonte e valor dobrado, guardada no plano.
 - O registro nao adiciona nenhum branch ao caminho quente: ele e metadata de construcao, nao de execucao.
 
@@ -125,7 +125,7 @@ Fora do escopo, com motivo registrado:
 - Etapa 8 especializa nos sobre um plano que ja passou por dobra e elisao, e herda o oraculo como criterio de aceite em vez de criar o seu.
 - Etapa 8 recebe a reordenacao de curto-circuito como candidata, condicionada a perfil.
 - Etapa 9 mantem um unico plano por `(source, environmentId)` compartilhado entre visoes, o que e exatamente o motivo de a eliminacao de atribuicao morta ter saido desta etapa.
-- Etapa 10 consome a Leitura Dobrada para explicar valores dobrados e instrumenta o plano por identidade e trecho, sem branch de auditoria no plano normal.
+- Etapa 10 consome a Leitura Dobrada e transfere slots/proveniencia ao no constante ou `MemoizedExecutableNode`, preservando ocorrencias alcancadas em um unico plano.
 - Etapa 12 transforma os limiares desta etapa em gate permanente de CI.
 - Etapa 13 reutiliza o mesmo oraculo para o Tier 1 e para a fusao de pipelines de colecao.
 

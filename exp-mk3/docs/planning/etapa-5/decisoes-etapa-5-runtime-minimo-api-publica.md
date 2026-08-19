@@ -18,7 +18,7 @@ Este documento consolida as decisoes tomadas durante o replanejamento da Etapa 5
 - Codigo antecipado da Etapa 6 permanece quando compativel, mas nao amplia o criterio de aceite de M1.
 - Toda a suite existente deve permanecer verde.
 - Testes existentes que contradizem contratos normativos devem ser corrigidos atomicamente com codigo e corpus.
-- A Etapa 5 nao implementa otimizacao, especializacao, cache, pooling, auditoria ou fusao.
+- A Etapa 5 nao implementa otimizacao, especializacao, cache, pooling, Memoria de Calculo ou fusao.
 
 ## Gate da Etapa 4
 
@@ -268,7 +268,7 @@ Este documento consolida as decisoes tomadas durante o replanejamento da Etapa 5
 - Etapa 7 usa forma sem otimizacoes como oraculo e nao aplica reescrita que mude escala, contexto, falha ou efeitos.
 - Etapa 8 preserva `big-math` e o dominio real em especializacoes.
 - Etapa 9 compartilha um plano entre visoes e mantem runtime services fora da identidade.
-- Etapa 10 usa identidade e trecho dos nos para instrumentacao separada.
+- Etapa 10 usa identidade e trecho dos nos como Chave de Proveniencia no mesmo plano compartilhado por `compute()` e `computeWithMemory()`.
 - Etapa 11 continua responsavel pelo corpus real diferencial.
 - Etapa 12 transforma baselines em gates e amplia testes de stress.
 - Etapa 13 preserva fallback/oraculo sem otimizacoes.

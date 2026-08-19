@@ -271,7 +271,7 @@ Nao ha regra de parada entre os incrementos: a Etapa 9 e fronteira arquitetural 
 - Segundo nivel global, cache distribuido ou compartilhamento entre engines.
 - Compartilhamento entre ambientes construidos separadamente, mesmo quando equivalentes.
 - Contador de execucoes, promocao Tier 1 ou preparacao do caminho quente para a Etapa 13.
-- Auditoria, plano instrumentado ou `computeWithAudit`, que pertencem a Etapa 10.
+- Memoria de Calculo, schema de proveniencia ou `computeWithMemory`, que pertencem a Etapa 10.
 - Catalogo de produtos, contratos, versoes comerciais ou politica de formula historica da aplicacao.
 - Parser por engine.
 - Estatisticas, invalidacao, limpeza, manutencao, lifecycle ou bypass publico.
@@ -281,7 +281,7 @@ Nao ha regra de parada entre os incrementos: a Etapa 9 e fronteira arquitetural 
 
 ## Impacto nas Etapas Posteriores
 
-- **Etapa 10:** a geracao residente passa a ser o lugar natural para associar preguicosamente o plano instrumentado ao mesmo compilado normal. Auditoria nao muda a chave e nao entra no plano normal.
+- **Etapa 10:** a geracao residente compartilha o mesmo Plano Imutavel e seu schema de proveniencia entre `compute()` e `computeWithMemory()`. Nao ha segundo plano lazy, e a Memoria de Calculo nao muda a chave do cache nem retem a geracao depois que o plano se torna inalcancavel.
 - **Etapa 11:** o migrador valida fontes pelo Engine de Expressao; resultados invalidos repetidos podem compartilhar diagnosticos sem recompilar.
 - **Etapa 12:** amplia single-flight e execucao para estresse sustentado, confirma limites multi-tenant e integra perfil de alocacao no CI.
 - **Etapa 13:** se Tier 1 for ativado, ele introduz e mede sua propria politica de observacao. Nenhum contador herdado da Etapa 9 condiciona o desenho.

@@ -18,7 +18,7 @@ The standard Ambiente de Expressao uses the JVM default time zone as its default
 
 The Arvore Semantica de Expressao continues to preserve date-time literals as source-faithful values. The semantic resolver applies the Ambiente de Expressao time zone when assigning the single `DATETIME` type: date-time literals with an explicit offset are converted into the environment time zone, while date-time literals without an explicit offset are interpreted as local date-times in the environment time zone using that zone's effective offset for the local date-time.
 
-Semantic metadata may retain the original literal, whether the offset was explicit or inferred, the environment time zone, the effective offset, and the normalized value for diagnostics and audit. The hot execution plan only needs the normalized `DATETIME` value.
+Semantic metadata may retain the original literal, whether the offset was explicit or inferred, the environment time zone, the effective offset, and the normalized value for diagnostics. The hot execution plan only needs the normalized `DATETIME` value.
 
 Current temporal values are derived from one execution instant per evaluation and use the same Ambiente de Expressao time zone. The execution clock is a runtime dependency and test seam, not part of environment instance identity.
 
@@ -30,4 +30,4 @@ The standard environment is convenient for local or host-relative evaluation. It
 
 The semantic tree remains deterministic for a given source and does not leak environment policy into parsing or AST construction.
 
-Temporal diagnostics and audit can explain offset normalization without adding branches or metadata to the hot runtime path.
+Temporal diagnostics can explain offset normalization without adding branches or metadata to the hot runtime path. Calculation Memory records reached current temporal values, not static temporal-literal normalization.
