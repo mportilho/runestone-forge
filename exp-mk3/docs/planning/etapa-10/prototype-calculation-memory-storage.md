@@ -1,5 +1,10 @@
 # PROTOTYPE ONLY: Calculation-memory storage
 
+> Historical result. Issue #139 added the binding persistable-contract benchmark and reopened the
+> frame-tail storage decision. See
+> [`binding-persistable-payload-benchmark.md`](binding-persistable-payload-benchmark.md). Dense plus
+> bitmap remains discarded; the historical numbers below are preserved as prior evidence.
+
 Question: which of the three most promising execution-local storage models should Etapa 10 use for
 `computeWithMemory()`?
 

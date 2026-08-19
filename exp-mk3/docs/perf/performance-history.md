@@ -1,5 +1,32 @@
 # Performance History
 
+## 2026-08-19 - Etapa 10 Binding Persistable-Payload Gate (issue #139)
+
+Purpose: repeat the storage decision with exact columnar publication, standalone prebuilt keys,
+interleaved frame slots, full/assignments schemas, eager-entry control, complete key/value consumption,
+branch forms and reach counting. The fixture covers the Cartesian product of `S=0,1,4,16,64,256`
+and empty, dense, prefix, one-point, alternating and sparse reach.
+
+Environment: Eclipse Temurin 25.0.3+9-LTS, JMH 1.37, Linux x86_64, `-Xms1g -Xmx1g`, two forks,
+3x250 ms warmup, 5x250 ms measurement, `gc` profiler and JSON output. Maven, JMH driver and forks used
+the same pinned JVM. Java 21 deployment rerun remains outstanding.
+
+| Representative integrated flow | Frame columnar ns/B | Append columnar ns/B | Frame eager ns/B |
+|---|---:|---:|---:|
+| `S=4`, dense | 272.0 / 312 | **188.4 / 296** | 195.7 / 600 |
+| `S=64`, dense | 1,011.7 / **824** | **925.1** / 1,120 | 1,143.7 / 2,520 |
+| `S=64`, alternating | 722.2 / **864** | **642.5** / 1,320 | 718.9 / 1,648 |
+| `S=256`, sparse 4 | 700.3 / 1,352 | **200.7 / 328** | 744.4 / 1,608 |
+
+Verdict: **REOPEN frame-tail storage and BLOCK production calculation-memory changes; ACCEPT columnar
+publication, mode-first branch and per-capture counting.** Exact freeze removes frame-tail's
+historical small/dense dominance. Frame and append both remain Pareto-relevant, so append is not
+automatically promoted. An integrated `capture -> materialize -> freeze -> sink` matrix confirms that
+columnar remains Pareto-winning despite eager's lower retained graph for a single large sparse memory.
+The corrected no-loop branch fixture selects mode-first to protect normal inactive execution. Dense bitmap remains discarded. Commands, all phase
+scores, JOL retained bytes, limitations and retained result paths are documented in
+`docs/planning/etapa-10/binding-persistable-payload-benchmark.md`.
+
 ## 2026-08-18 - Etapa 10 Calculation-Memory Storage Prototype
 
 Purpose: choose among an extended execution frame, an append-only recorder with lazy slot sidecar,
