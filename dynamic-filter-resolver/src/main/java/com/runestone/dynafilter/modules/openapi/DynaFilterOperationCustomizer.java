@@ -25,12 +25,13 @@
 package com.runestone.dynafilter.modules.openapi;
 
 import com.fasterxml.jackson.annotation.JsonView;
+import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.generator.annotation.*;
 import com.runestone.dynafilter.core.model.FilterRequestData;
+import com.runestone.dynafilter.core.operation.*;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 import com.runestone.dynafilter.core.operation.types.Dynamic;
-import com.runestone.dynafilter.core.operation.types.IsIn;
-import com.runestone.dynafilter.core.operation.types.IsNull;
+import com.runestone.dynafilter.helpers.StringHelper;
 import io.swagger.v3.core.util.AnnotationsUtils;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.models.Operation;
@@ -45,6 +46,7 @@ import org.springframework.web.method.HandlerMethod;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
@@ -52,16 +54,18 @@ import static java.util.Objects.requireNonNull;
 public class DynaFilterOperationCustomizer implements OperationCustomizer {
 
     private final ParameterNameDiscoverer parameterNameDiscoverer;
+    private final FilterOperationService<?> filterOperationService;
 
-    public DynaFilterOperationCustomizer(ParameterNameDiscoverer parameterNameDiscoverer) {
+    public DynaFilterOperationCustomizer(ParameterNameDiscoverer parameterNameDiscoverer, FilterOperationService<?> filterOperationService) {
         this.parameterNameDiscoverer = parameterNameDiscoverer;
+        this.filterOperationService = Objects.requireNonNull(filterOperationService, "filterOperationService cannot be null");
     }
 
     @Override
     public Operation customize(Operation operation, HandlerMethod handlerMethod) {
         for (MethodParameter methodParameter : handlerMethod.getMethodParameters()) {
             if (!methodParameter.hasParameterAnnotation(Conjunction.class) && !methodParameter.hasParameterAnnotation(ConjunctionFrom.class)
-                && !methodParameter.hasParameterAnnotation(Disjunction.class) && !methodParameter.hasParameterAnnotation(Disjunction.class)) {
+                && !methodParameter.hasParameterAnnotation(Disjunction.class) && !methodParameter.hasParameterAnnotation(DisjunctionFrom.class)) {
                 continue;
             }
 
@@ -89,6 +93,9 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
      * representation
      */
     private void customizeParameter(Operation operation, MethodParameter methodParameter, FilterRequestData filter) {
+        if (filter.hidden()) {
+            return;
+        }
         if (filter.constantValues() != null && filter.constantValues().length > 0) {
             return;
         }
@@ -105,21 +112,12 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             io.swagger.v3.oas.models.parameters.Parameter parameter = optParameter.orElse(new io.swagger.v3.oas.models.parameters.Parameter());
             parameter.setName(parameterName);
 
-            if (Dynamic.class.equals(filter.operation())) {
-                ArraySchema arraySchema = new ArraySchema();
-                arraySchema.type("array");
-                arraySchema.minItems(2);
-                arraySchema.items(new StringSchema());
-                parameter.setSchema(arraySchema);
-            } else if (IsIn.class.equals(filter.operation())) {
-                ArraySchema arraySchema = new ArraySchema();
-                arraySchema.type("array");
-                arraySchema.items(parameter.getSchema() != null ? parameter.getSchema() : new StringSchema());
-                parameter.setSchema(arraySchema);
+            FilterOperationMetadata metadata = filterOperationService.findMetadata(filter.operation());
+            if (FilterValueShape.DYNAMIC.equals(metadata.valueShape())) {
+                parameter.setSchema(createArraySchema(new StringSchema(), 2, null));
             } else {
-                Class<?> filterTargetClass = TypeAnnotationUtils.findFilterTargetClass(methodParameter.getParameter());
-                Field field = TypeAnnotationUtils.findFilterField(filterTargetClass, filter.path());
-                createCommonSchema(filter, field, methodParameter, parameter);
+                Field field = findFilterField(methodParameter, filter);
+                createSchema(filter, field, methodParameter, parameter, metadata);
             }
 
             parameter.required(filter.required());
@@ -136,27 +134,51 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
         }
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private void createCommonSchema(FilterRequestData filter, Field field, MethodParameter methodParameter, io.swagger.v3.oas.models.parameters.Parameter parameter) {
-        Schema schemaFromType;
-        if (field != null) {
-            Class<?> fieldClass = field.getType();
-            schemaFromType = AnnotationsUtils.resolveSchemaFromType(fieldClass, null, getJsonViewFromMethod(methodParameter));
-        } else {
-            schemaFromType = new StringSchema();
+    private Field findFilterField(MethodParameter methodParameter, FilterRequestData filter) {
+        try {
+            Class<?> filterTargetClass = TypeAnnotationUtils.findFilterTargetClass(methodParameter.getParameter());
+            if (filterTargetClass == null) {
+                if (isCustomOperation(filter.operation())) {
+                    return null;
+                }
+                throw new DynamicFilterConfigurationException("Cannot resolve target type for filter path(s) '%s'"
+                        .formatted(StringHelper.formatPath(filter.path())));
+            }
+            return TypeAnnotationUtils.findFilterField(filterTargetClass, filter.path()[0]);
+        } catch (DynamicFilterConfigurationException e) {
+            if (isCustomOperation(filter.operation())) {
+                return null;
+            }
+            throw e;
         }
+    }
 
-        Schema currentSchema = parameter.getSchema();
-        Schema newSchema;
-        if (IsNull.class.equals(filter.operation())) {
-            newSchema = new BooleanSchema();
-        } else if (currentSchema != null) {
-            newSchema = new Schema();
-            newSchema.setType(schemaFromType.getType());
-            newSchema.setEnum(schemaFromType.getEnum());
-        } else {
-            newSchema = schemaFromType;
+    private static boolean isCustomOperation(@SuppressWarnings("rawtypes") Class<? extends FilterOperation> operationType) {
+        if (Decorated.class.equals(operationType) || Dynamic.class.equals(operationType)) {
+            return false;
         }
+        for (ComparisonOperation comparisonOperation : ComparisonOperation.values()) {
+            if (comparisonOperation.getOperation().equals(operationType)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @SuppressWarnings({"rawtypes"})
+    private void createSchema(FilterRequestData filter, Field field, MethodParameter methodParameter,
+                              io.swagger.v3.oas.models.parameters.Parameter parameter, FilterOperationMetadata metadata) {
+        Schema schemaFromType = resolveSchemaFromField(field, methodParameter);
+
+        Schema newSchema = switch (metadata.valueShape()) {
+            case BOOLEAN -> new BooleanSchema();
+            case ARRAY ->
+                    createArraySchema(parameter.getSchema() != null ? parameter.getSchema() : new StringSchema(), null, null);
+            case STRING -> new StringSchema();
+            case TARGET_FIELD -> createTargetFieldSchema(parameter.getSchema(), schemaFromType);
+            case DYNAMIC ->
+                    throw new IllegalStateException("Unsupported schema shape in common schema creation: " + metadata.valueShape());
+        };
 
         parameter.setSchema(newSchema);
         parameter.setDescription(filter.description());
@@ -164,7 +186,42 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
         if (filter.defaultValues() != null && filter.defaultValues().length == 1) {
             newSchema.setDefault(filter.defaultValues()[0]);
         }
-        SchemaValidationUtils.applyValidations(newSchema, field);
+        if (!metadata.valueShape().equals(FilterValueShape.ARRAY)) {
+            SchemaValidationUtils.applyValidations(newSchema, field);
+        }
+    }
+
+    @SuppressWarnings({"rawtypes"})
+    private Schema resolveSchemaFromField(Field field, MethodParameter methodParameter) {
+        if (field == null) {
+            return new StringSchema();
+        }
+        return AnnotationsUtils.resolveSchemaFromType(field.getType(), null, getJsonViewFromMethod(methodParameter));
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Schema createTargetFieldSchema(Schema currentSchema, Schema schemaFromType) {
+        if (currentSchema == null) {
+            return schemaFromType;
+        }
+        Schema newSchema = new Schema();
+        newSchema.setType(schemaFromType.getType());
+        newSchema.setEnum(schemaFromType.getEnum());
+        return newSchema;
+    }
+
+    @SuppressWarnings({"rawtypes"})
+    private static ArraySchema createArraySchema(Schema itemSchema, Integer minItems, Integer maxItems) {
+        ArraySchema arraySchema = new ArraySchema();
+        arraySchema.type("array");
+        arraySchema.items(itemSchema);
+        if (minItems != null) {
+            arraySchema.minItems(minItems);
+        }
+        if (maxItems != null) {
+            arraySchema.maxItems(maxItems);
+        }
+        return arraySchema;
     }
 
     /**
@@ -173,7 +230,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
     private static JsonView getJsonViewFromMethod(MethodParameter methodParameter) {
         JsonView[] jsonViews = requireNonNull(methodParameter.getMethod()).getAnnotationsByType(JsonView.class);
         JsonView jsonView = null;
-        if (jsonViews != null && jsonViews.length > 0) {
+        if (jsonViews.length > 0) {
             jsonView = jsonViews[0];
         }
         return jsonView;

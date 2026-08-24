@@ -65,7 +65,7 @@ public class DynamicFilterResolverPerf06ProxyBenchmark {
 
             SpecificationDynamicFilterArgumentResolver argumentResolver = createArgumentResolver();
             Method createProxyMethod = SpecificationDynamicFilterArgumentResolver.class
-                    .getDeclaredMethod("createProxy", Specification.class, Class.class);
+                    .getDeclaredMethod("createProxy", Object.class, Class.class);
             createProxyMethod.setAccessible(true);
             this.optimizedProxy = (MarkerSpecification<Object>) createProxyMethod.invoke(
                     argumentResolver,

@@ -278,7 +278,7 @@ public class DynamicFilterResolverPerf02Benchmark {
     }
 
     @Fetching({"addresses", "addresses.location", "phones"})
-    @Fetching(value = {"addresses.location"}, joinType = jakarta.persistence.criteria.JoinType.INNER)
+    @Fetching(value = {"addresses.location"}, joinType = jakarta.persistence.criteria.JoinType.LEFT)
     @Fetching(value = {"addresses.person"}, joinType = jakarta.persistence.criteria.JoinType.LEFT)
     @Target(TYPE)
     @Retention(RUNTIME)

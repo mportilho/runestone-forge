@@ -11,8 +11,8 @@
     <name>Dynamic Filter Resolver</name>
 
     <properties>
-        <spring.boot.version>3.2.1</spring.boot.version>
-        <springdocs.version>2.2.0</springdocs.version>
+        <spring.boot.version>4.0.2</spring.boot.version>
+        <springdocs.version>3.0.1</springdocs.version>
         <jmh.version>1.37</jmh.version>
     </properties>
 
@@ -51,7 +51,7 @@
         </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>
-            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
             <version>${springdocs.version}</version>
             <scope>provided</scope>
         </dependency>
@@ -65,6 +65,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-data-jpa-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
