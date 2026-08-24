@@ -168,3 +168,111 @@ The warmed no-transformer regression gate was compared with the #151 measurement
 | 8 | 1397.8 | 1282.8 | 8.2% faster | 1808 | 1808 |
 
 Decision: accept. All measured framework overhead remains below 10%, transformed containers add exactly one container allocation for the complete chain, dynamic contexts add no request-time allocation, and the no-transformer path retains its allocation profile without latency regression.
+
+## 2026-08-24: Final transformer integration gates
+
+Issue: [#154](https://github.com/mportilho/runestone-forge/issues/154)
+
+The final matrix crosses normal scalar, normal container, dynamic scalar, and dynamic container flows with zero, one, and three transformers. Each combination runs with identity and replacement transformers against cold and warmed plan caches. The baseline and final runs use identical production bytecode because this closing issue adds integration tests, documentation, and benchmark coverage without changing the runtime implementation.
+
+### Protocol
+
+- CPU: Intel Core Ultra 7 165U, 7 cores / 14 logical CPUs
+- JDK: Temurin 21.0.6+7-LTS
+- JMH: 1.37
+- Mode: average time, nanoseconds
+- Warmup: 3 iterations of 300 ms
+- Measurement: 5 iterations of 300 ms
+- Forks: 2
+- Heap: `-Xms1g -Xmx1g`
+- Profiler: `gc`
+- Threads: 1 and 8
+- Artifacts: `/tmp/performance-benchmark/issue-154/`
+
+Run from `dynamic-filter-resolver` after `mvn test-compile -DskipTests`:
+
+```shell
+mvn -q dependency:build-classpath -Dmdep.outputFile=target/jmh-cp.txt -DincludeScope=test
+CP="$(tr -d '\n' < target/jmh-cp.txt):target/test-classes:target/classes"
+PHASE=baseline # Repeat the two flow commands with PHASE=final.
+
+java -Xms1g -Xmx1g -cp "$CP" org.openjdk.jmh.Main FilterValueTransformerFlowBenchmark \
+  -wi 3 -i 5 -f 2 -w 300ms -r 300ms -t 1 -prof gc -tu ns -rf json \
+  -rff /tmp/performance-benchmark/issue-154/${PHASE}-t1.json
+java -Xms1g -Xmx1g -cp "$CP" org.openjdk.jmh.Main FilterValueTransformerFlowBenchmark \
+  -wi 3 -i 5 -f 2 -w 300ms -r 300ms -t 8 -prof gc -tu ns -rf json \
+  -rff /tmp/performance-benchmark/issue-154/${PHASE}-t8.json
+java -Xms1g -Xmx1g -cp "$CP" org.openjdk.jmh.Main FilterValueTransformerArgumentResolverBenchmark \
+  -wi 3 -i 5 -f 2 -w 300ms -r 300ms -t 1 -prof gc -tu ns -rf json \
+  -rff /tmp/performance-benchmark/issue-154/argument-resolver-t1.json
+java -Xms1g -Xmx1g -cp "$CP" org.openjdk.jmh.Main FilterValueTransformerArgumentResolverBenchmark \
+  -wi 3 -i 5 -f 2 -w 300ms -r 300ms -t 8 -prof gc -tu ns -rf json \
+  -rff /tmp/performance-benchmark/issue-154/argument-resolver-t8.json
+java -Xms1g -Xmx1g -cp "$CP" org.openjdk.jmh.Main \
+  'ScalarFilterValueTransformerBenchmark|MultiValueFilterValueTransformerBenchmark' \
+  -wi 3 -i 5 -f 2 -w 300ms -r 300ms -t 1 -prof gc -tu ns -rf json \
+  -rff /tmp/performance-benchmark/issue-154/direct-t1.json
+java -Xms1g -Xmx1g -cp "$CP" org.openjdk.jmh.Main \
+  'ScalarFilterValueTransformerBenchmark|MultiValueFilterValueTransformerBenchmark' \
+  -wi 3 -i 5 -f 2 -w 300ms -r 300ms -t 8 -prof gc -tu ns -rf json \
+  -rff /tmp/performance-benchmark/issue-154/direct-t8.json
+```
+
+Before measurement, `mvn test -pl dynamic-filter-resolver -am` passed 389 tests with no failures on Java 21.
+
+### Final matrix
+
+The complete final run contains 48 parameter combinations for each thread count (96 measurements total). The table summarizes the observed ranges; every individual result, including score error and GC secondary metrics, remains in `final-t1.json` and `final-t8.json`.
+
+| Threads | Cache | ns/op range | B/op range |
+|---:|---|---:|---:|
+| 1 | Warm | 76.5 - 350.4 | 296 - 592 |
+| 1 | Cold | 693.0 - 56,404.7 | 2,640 - 3,600 |
+| 8 | Warm | 235.6 - 2,787.8 | 296 - 605 |
+| 8 | Cold | 4,995.4 - 203,843.0 | 2,758 - 3,962 |
+
+The host CPU was shared with other important processes during this closing run. Absolute latency and cross-run comparisons in this matrix are therefore informational; the initial baseline run also lost eight 8-thread cells to fork class-loading failures and is not used for a performance verdict. No additional long-running measurement was made after that environmental limitation was identified.
+
+Allocation remained deterministic in the complete 1-thread warmed matrix:
+
+| Flow | Identity 0 / 1 / 3 B/op | Replacement 0 / 1 / 3 B/op |
+|---|---:|---:|
+| Normal scalar | 296 / 296 / 296 | 296 / 312 / 344 |
+| Normal container | 296 / 328 / 328 | 296 / 392 / 520 |
+| Dynamic scalar | 368 / 368 / 368 | 368 / 384 / 416 |
+| Dynamic container | 400 / 400 / 400 | 400 / 464 / 592 |
+
+Identity chains allocate no per-operation context or chain structure: moving from one to three transformers leaves `B/op` unchanged. Replacement scalar growth is exactly 16 bytes per returned object. Four-element containers add one 32-byte output array for the entire chain plus the replacement objects (64 bytes for one transformer and 192 bytes for three), not one container per transformer.
+
+### Direct-call gate
+
+The bound-chain and direct-call methods ran together under the same JMH invocation. Across scalar, normal-container, and dynamic-container cases with one and three transformers, framework overhead ranged from faster than direct calls to the following measured maxima:
+
+| Threads | Maximum overhead | Case | Bound B/op | Direct B/op |
+|---:|---:|---|---:|---:|
+| 1 | 9.3% | Scalar identity, 3 transformers | ~0 | ~0 |
+| 8 | 8.9% | Scalar replacement, 3 transformers | 48 | 48 |
+
+All normal and dynamic multivalue cases remained below 6% overhead. Their bound and direct allocation totals were identical: 96 B/op with one transformer and 224 B/op with three transformers.
+
+### Argument resolver
+
+The additional warmed benchmark covers HTTP parameter extraction, the shared compiled generator, transformation, the real `SpecificationDynamicFilterResolver`, standard JPA operation creation, and specification proxy creation.
+
+| Threads | ns/op | B/op |
+|---:|---:|---:|
+| 1 | 273.6 | 496 |
+| 8 | 1,119.0 | 636 |
+
+The 8-thread latency and allocation are retained as observations rather than contention evidence because of the shared host. Deterministic concurrent behavior is covered by the 8-thread matrix and the dedicated concurrent tests; the bound plan contains no lock or mutable request state.
+
+### Gate verdict
+
+- **No-transformer regression:** the controlled #151/#152 gates measured 11.7% and 8.2% improvements with 1,808 B/op unchanged. Issue #154 changes no production runtime code, but a complete same-session rerun of the expanded matrix was not obtained.
+- **Enabled-chain overhead:** the fresh bound-versus-direct run stayed below 10% for every measured case, consistent with the controlled #151/#152 results. Its absolute timing remains informational because the host was shared.
+- **Allocation:** accepted. Identity chains add no context or chain allocation, and transformed containers allocate one output container for the complete chain.
+- **Warmed lookup:** accepted by tests proving zero Spring bean-factory and portable-registry lookups after plan binding.
+- **Concurrency:** accepted for deterministic correctness and allocation stability. Quantitative contention verification is deferred because the shared host invalidated the 8-thread timing comparison.
+- **Speculative optimization:** none added. The measurements do not justify `MethodHandle`, bytecode generation, pooling, or further dispatch specialization.
+
+Decision: functional integration, OpenAPI behavior, documentation, allocation, direct-dispatch overhead, and lookup gates pass. Complete same-session baseline/final and quantitative contention sign-off are deferred; the user stopped further long-running measurements because the CPU is shared with other important processes. No production optimization was made from the noisy data.

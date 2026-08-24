@@ -38,8 +38,11 @@ import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.core.operation.types.IsIn;
 import com.runestone.dynafilter.core.operation.types.IsNull;
+import com.runestone.dynafilter.core.transformer.FilterValueContext;
+import com.runestone.dynafilter.core.transformer.FilterValueTransformer;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationContributor;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
+import io.swagger.v3.core.util.Json;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.media.ArraySchema;
 import io.swagger.v3.oas.models.media.BooleanSchema;
@@ -190,6 +193,16 @@ public class TestDynaFilterOperationCustomizer {
                 .doesNotContain("filters");
     }
 
+    @Test
+    @DisplayName("Transformers do not change generated OpenAPI parameter metadata")
+    public void testTransformerDoesNotChangeOpenApiParameter() throws NoSuchMethodException {
+        Parameter baseline = findParameter(customize("documentUntransformedFilter"), "registeredAt");
+        Parameter transformed = findParameter(customize("documentTransformedFilter"), "registeredAt");
+
+        Assertions.assertThat((Object) Json.mapper().valueToTree(transformed))
+                .isEqualTo(Json.mapper().valueToTree(baseline));
+    }
+
     private static Operation customize(String methodName) throws NoSuchMethodException {
         return customize(methodName, operationService(List.of()));
     }
@@ -314,6 +327,32 @@ public class TestDynaFilterOperationCustomizer {
                 @Conjunction(@Filter(path = "decorValue", parameters = "decorValue", operation = Decorated.class))
                 ConditionalStatement filters
         ) {
+        }
+
+        public void documentUntransformedFilter(
+                @io.swagger.v3.oas.annotations.Parameter(name = "filters")
+                @FilterTarget(OpenApiFilterTarget.class)
+                @Conjunction(@Filter(path = "registeredAt", parameters = "registeredAt", operation = Equals.class,
+                        required = true, defaultValues = "2026-01-01", description = "Accepted registration date"))
+                ConditionalStatement filters
+        ) {
+        }
+
+        public void documentTransformedFilter(
+                @io.swagger.v3.oas.annotations.Parameter(name = "filters")
+                @FilterTarget(OpenApiFilterTarget.class)
+                @Conjunction(@Filter(path = "registeredAt", parameters = "registeredAt", operation = Equals.class,
+                        required = true, defaultValues = "2026-01-01", description = "Accepted registration date",
+                        transformers = OpenApiIgnoredTransformer.class))
+                ConditionalStatement filters
+        ) {
+        }
+    }
+
+    private static final class OpenApiIgnoredTransformer implements FilterValueTransformer {
+        @Override
+        public Object transform(Object value, FilterValueContext context) {
+            return value;
         }
     }
 

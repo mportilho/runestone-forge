@@ -2,7 +2,9 @@ package com.runestone.dynafilter.modules.jpa.spring;
 
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
+import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.operation.types.Equals;
+import com.runestone.dynafilter.core.operation.types.IsIn;
 import com.runestone.dynafilter.core.transformer.FilterValueContext;
 import com.runestone.dynafilter.core.transformer.FilterValueTransformer;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.InMemoryDatabaseApplication;
@@ -32,6 +34,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -66,6 +69,7 @@ class TestSpringFilterValueTransformerJpaIntegration {
     void setUp() {
         personRepository.deleteAll();
         personRepository.save(person("Tall Person", "180"));
+        personRepository.save(person("Medium Person", "170"));
         personRepository.save(person("Short Person", "160"));
         entityManager.flush();
         entityManager.clear();
@@ -85,6 +89,53 @@ class TestSpringFilterValueTransformerJpaIntegration {
                 .andExpect(content().string("Tall Person"));
 
         assertThat(transformer.calls).hasValue(1);
+    }
+
+    @Test
+    void transformsDefaultValuesWhenTheHttpParameterIsAbsent() throws Exception {
+        mockMvc.perform(get("/people/by-default-height"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Tall Person"));
+
+        assertThat(transformer.calls).hasValue(1);
+    }
+
+    @Test
+    void transformsConstantValuesBeforeIgnoringTheHttpParameter() throws Exception {
+        mockMvc.perform(get("/people/by-constant-height").param("height", "tall"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Short Person"));
+
+        assertThat(transformer.calls).hasValue(1);
+    }
+
+    @Test
+    void transformsEveryHttpValueBeforeAStandardIsInOperation() throws Exception {
+        mockMvc.perform(get("/people/by-heights").param("height", "short", "tall"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Short Person,Tall Person"));
+
+        assertThat(transformer.calls).hasValue(2);
+    }
+
+    @Test
+    void transformsDynamicEqBetweenAndInPayloadsAfterReadingTheOpcode() throws Exception {
+        mockMvc.perform(get("/people/by-dynamic-height").param("height", "eq", "tall"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Tall Person"));
+        assertThat(transformer.calls).hasValue(1);
+
+        transformer.calls.set(0);
+        mockMvc.perform(get("/people/by-dynamic-height").param("height", "bt", "short", "tall"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Medium Person,Short Person,Tall Person"));
+        assertThat(transformer.calls).hasValue(2);
+
+        transformer.calls.set(0);
+        mockMvc.perform(get("/people/by-dynamic-height").param("height", "in", "short", "tall"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("Short Person,Tall Person"));
+        assertThat(transformer.calls).hasValue(2);
     }
 
     private static Person person(String name, String height) {
@@ -112,6 +163,26 @@ class TestSpringFilterValueTransformerJpaIntegration {
     interface HeightFilter extends Specification<Person> {
     }
 
+    @Conjunction(@Filter(path = "height", parameters = "height", operation = Equals.class,
+            defaultValues = "tall", transformers = HeightAliasTransformer.class))
+    interface DefaultHeightFilter extends Specification<Person> {
+    }
+
+    @Conjunction(@Filter(path = "height", parameters = "height", operation = Equals.class,
+            constantValues = "short", transformers = HeightAliasTransformer.class))
+    interface ConstantHeightFilter extends Specification<Person> {
+    }
+
+    @Conjunction(@Filter(path = "height", parameters = "height", operation = IsIn.class,
+            transformers = HeightAliasTransformer.class))
+    interface HeightsFilter extends Specification<Person> {
+    }
+
+    @Conjunction(@Filter(path = "height", parameters = "height", operation = Dynamic.class,
+            transformers = HeightAliasTransformer.class))
+    interface DynamicHeightFilter extends Specification<Person> {
+    }
+
     @RestController
     static class PersonController {
         private final PersonRepository repository;
@@ -122,14 +193,45 @@ class TestSpringFilterValueTransformerJpaIntegration {
 
         @GetMapping("/people/by-height")
         String findByHeight(HeightFilter filter) {
-            List<Person> people = repository.findAll(filter);
-            return people.isEmpty() ? "" : people.getFirst().getName();
+            return names(repository.findAll(filter));
+        }
+
+        @GetMapping("/people/by-default-height")
+        String findByDefaultHeight(DefaultHeightFilter filter) {
+            return names(repository.findAll(filter));
+        }
+
+        @GetMapping("/people/by-constant-height")
+        String findByConstantHeight(ConstantHeightFilter filter) {
+            return names(repository.findAll(filter));
+        }
+
+        @GetMapping("/people/by-heights")
+        String findByHeights(HeightsFilter filter) {
+            return names(repository.findAll(filter));
+        }
+
+        @GetMapping("/people/by-dynamic-height")
+        String findByDynamicHeight(DynamicHeightFilter filter) {
+            return names(repository.findAll(filter));
+        }
+
+        private static String names(List<Person> people) {
+            return people.stream()
+                    .map(Person::getName)
+                    .sorted()
+                    .collect(Collectors.joining(","));
         }
     }
 
     static final class HeightLookup {
         String resolve(String alias) {
-            return alias.equals("tall") ? "180" : alias;
+            return switch (alias) {
+                case "short" -> "160";
+                case "medium" -> "170";
+                case "tall" -> "180";
+                default -> alias;
+            };
         }
     }
 

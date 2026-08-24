@@ -10,6 +10,7 @@ import com.runestone.dynafilter.core.operation.types.IsIn;
 import com.runestone.dynafilter.core.transformer.FilterValueContext;
 import com.runestone.dynafilter.core.transformer.FilterValueTransformer;
 import com.runestone.dynafilter.core.transformer.FilterValueTransformerRegistry;
+import com.runestone.dynafilter.core.transformer.FilterValueTransformerResolver;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -34,8 +35,14 @@ import java.util.concurrent.TimeUnit;
 public class FilterValueTransformerFlowBenchmark {
 
     @Benchmark
-    public void generate(FlowState state, Blackhole blackhole) {
+    public void warmCache(FlowState state, Blackhole blackhole) {
         blackhole.consume(state.generator.generateStatements(state.input, state.parameters));
+    }
+
+    @Benchmark
+    public void coldCache(FlowState state, Blackhole blackhole) {
+        AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null, state.transformerResolver);
+        blackhole.consume(generator.generateStatements(state.input, state.parameters));
     }
 
     @State(Scope.Benchmark)
@@ -44,18 +51,23 @@ public class FilterValueTransformerFlowBenchmark {
         @Param({"normalScalar", "normalContainer", "dynamicScalar", "dynamicContainer"})
         String flow;
 
-        @Param({"1", "3"})
+        @Param({"0", "1", "3"})
         int transformerCount;
+
+        @Param({"identity", "replacement"})
+        String behavior;
 
         AnnotationStatementGenerator generator;
         AnnotationStatementInput input;
         Map<String, Object> parameters;
+        FilterValueTransformerResolver transformerResolver;
 
         @Setup
         public void setup() {
             FilterValueTransformerRegistry registry = new FilterValueTransformerRegistry();
-            registry.register(IdentityTransformer.class, new IdentityTransformer());
-            generator = new AnnotationStatementGenerator(null, registry.toResolver());
+            registry.register(IdentityTransformer.class, new IdentityTransformer(behavior.equals("replacement")));
+            transformerResolver = registry.toResolver();
+            generator = new AnnotationStatementGenerator(null, transformerResolver);
             Class<?> filterType = filterType();
             input = new AnnotationStatementInput(filterType, null);
             parameters = parameters();
@@ -64,10 +76,21 @@ public class FilterValueTransformerFlowBenchmark {
 
         private Class<?> filterType() {
             return switch (flow) {
-                case "normalScalar" -> transformerCount == 1 ? NormalScalarOne.class : NormalScalarThree.class;
-                case "normalContainer" -> transformerCount == 1 ? NormalContainerOne.class : NormalContainerThree.class;
-                case "dynamicScalar" -> transformerCount == 1 ? DynamicOne.class : DynamicThree.class;
-                case "dynamicContainer" -> transformerCount == 1 ? DynamicOne.class : DynamicThree.class;
+                case "normalScalar" -> switch (transformerCount) {
+                    case 0 -> NormalScalarZero.class;
+                    case 1 -> NormalScalarOne.class;
+                    default -> NormalScalarThree.class;
+                };
+                case "normalContainer" -> switch (transformerCount) {
+                    case 0 -> NormalContainerZero.class;
+                    case 1 -> NormalContainerOne.class;
+                    default -> NormalContainerThree.class;
+                };
+                case "dynamicScalar", "dynamicContainer" -> switch (transformerCount) {
+                    case 0 -> DynamicZero.class;
+                    case 1 -> DynamicOne.class;
+                    default -> DynamicThree.class;
+                };
                 default -> throw new IllegalArgumentException("Unknown flow " + flow);
             };
         }
@@ -81,6 +104,14 @@ public class FilterValueTransformerFlowBenchmark {
                 default -> throw new IllegalArgumentException("Unknown flow " + flow);
             };
         }
+    }
+
+    @Conjunction(@Filter(path = "target", parameters = "value", operation = Equals.class))
+    private interface NormalScalarZero {
+    }
+
+    @Conjunction(@Filter(path = "target", parameters = "value", operation = IsIn.class))
+    private interface NormalContainerZero {
     }
 
     @Conjunction(@Filter(path = "target", parameters = "value", operation = Equals.class,
@@ -103,6 +134,10 @@ public class FilterValueTransformerFlowBenchmark {
     private interface NormalContainerThree {
     }
 
+    @Conjunction(@Filter(path = "target", parameters = "value", operation = Dynamic.class))
+    private interface DynamicZero {
+    }
+
     @Conjunction(@Filter(path = "target", parameters = "value", operation = Dynamic.class,
             transformers = IdentityTransformer.class))
     private interface DynamicOne {
@@ -114,9 +149,22 @@ public class FilterValueTransformerFlowBenchmark {
     }
 
     public static final class IdentityTransformer implements FilterValueTransformer {
+        private final boolean replacing;
+
+        public IdentityTransformer() {
+            this(false);
+        }
+
+        IdentityTransformer(boolean replacing) {
+            this.replacing = replacing;
+        }
+
         @Override
         public Object transform(Object value, FilterValueContext context) {
-            return value;
+            return replacing ? new TransformedValue(value) : value;
         }
+    }
+
+    record TransformedValue(Object value) {
     }
 }
