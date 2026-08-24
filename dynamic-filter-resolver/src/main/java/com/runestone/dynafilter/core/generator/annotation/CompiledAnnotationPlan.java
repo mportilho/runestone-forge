@@ -5,6 +5,7 @@ import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
 import com.runestone.dynafilter.core.operation.FilterOperation;
 import com.runestone.dynafilter.core.operation.types.Decorated;
+import com.runestone.dynafilter.core.transformer.FilterValueTransformerResolver;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,16 +23,17 @@ final class CompiledAnnotationPlan {
         this.requestFilters = requestFilters;
     }
 
-    static CompiledAnnotationPlan compile(TypeAnnotationUtils.AnnotationMetadata metadata) {
+    static CompiledAnnotationPlan compile(TypeAnnotationUtils.AnnotationMetadata metadata,
+                                          FilterValueTransformerResolver transformerResolver) {
         List<FilterAnnotationData> annotationData = metadata.statementData();
         List<StatementPlan> statements = new ArrayList<>(annotationData.size());
         List<FilterPlan> decoratedFilters = new ArrayList<>();
         for (FilterAnnotationData data : annotationData) {
-            List<FilterPlan> filters = compileFilters(data.filters(), decoratedFilters, true);
+            List<FilterPlan> filters = compileFilters(data.filters(), decoratedFilters, true, transformerResolver);
             List<NestedStatementPlan> nestedStatements = new ArrayList<>(data.filterStatements().size());
             for (FilterAnnotationStatement statement : data.filterStatements()) {
                 nestedStatements.add(new NestedStatementPlan(
-                        compileFilters(statement.filters(), decoratedFilters, false),
+                        compileFilters(statement.filters(), decoratedFilters, false, transformerResolver),
                         statement.negate()
                 ));
             }
@@ -41,10 +43,11 @@ final class CompiledAnnotationPlan {
     }
 
     private static List<FilterPlan> compileFilters(List<Filter> filters, List<FilterPlan> decoratedFilters,
-                                                   boolean collectDecorated) {
+                                                    boolean collectDecorated,
+                                                    FilterValueTransformerResolver transformerResolver) {
         List<FilterPlan> compiledFilters = new ArrayList<>(filters.size());
         for (Filter filter : filters) {
-            FilterPlan compiledFilter = new FilterPlan(filter);
+            FilterPlan compiledFilter = new FilterPlan(filter, transformerResolver);
             if (Decorated.class.equals(compiledFilter.operation())) {
                 if (collectDecorated) {
                     decoratedFilters.add(compiledFilter);
@@ -98,8 +101,9 @@ final class CompiledAnnotationPlan {
         private final List<Class<? extends FilterModifier>> modifiers;
         private final String description;
         private final int invalidParameterIndex;
+        private final BoundFilterValueTransformerChain transformerChain;
 
-        private FilterPlan(Filter filter) {
+        private FilterPlan(Filter filter, FilterValueTransformerResolver transformerResolver) {
             this.path = filter.path();
             this.parameters = filter.parameters();
             this.targetType = filter.targetType();
@@ -111,6 +115,8 @@ final class CompiledAnnotationPlan {
             this.modifiers = List.of(filter.modifiers());
             this.description = filter.description();
             this.invalidParameterIndex = findInvalidParameterIndex();
+            this.transformerChain = BoundFilterValueTransformerChain.bind(filter.transformers(), transformerResolver,
+                    parameters, path, operation, targetType);
         }
 
         private int findInvalidParameterIndex() {
@@ -165,6 +171,10 @@ final class CompiledAnnotationPlan {
 
         String description() {
             return description;
+        }
+
+        BoundFilterValueTransformerChain transformerChain() {
+            return transformerChain;
         }
     }
 }

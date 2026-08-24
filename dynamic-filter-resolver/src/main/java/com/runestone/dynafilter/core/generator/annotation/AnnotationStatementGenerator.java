@@ -29,8 +29,10 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.runestone.dynafilter.core.generator.DefaultStatementGenerator;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
+import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.statement.*;
+import com.runestone.dynafilter.core.transformer.FilterValueTransformerResolver;
 
 import java.util.*;
 
@@ -38,18 +40,36 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
 
     private static final FilterData[] EMPTY_FILTER_DATA = {};
     private static final NoOpStatement NO_OP_STATEMENT = new NoOpStatement();
+    private static final FilterValueTransformerResolver NO_TRANSFORMERS = transformerType -> {
+        throw new DynamicFilterConfigurationException(
+                "Filter value transformer '%s' is not registered".formatted(transformerType.getCanonicalName())
+        );
+    };
     private final Cache<AnnotationStatementInput, CompiledAnnotationPlan> planCache;
+    private final FilterValueTransformerResolver transformerResolver;
 
     public AnnotationStatementGenerator() {
-        this(null, TypeAnnotationUtils.cacheMaxSize());
+        this(null, NO_TRANSFORMERS, TypeAnnotationUtils.cacheMaxSize());
     }
 
     public AnnotationStatementGenerator(ValueExpressionResolver<?> valueExpressionResolver) {
-        this(valueExpressionResolver, TypeAnnotationUtils.cacheMaxSize());
+        this(valueExpressionResolver, NO_TRANSFORMERS, TypeAnnotationUtils.cacheMaxSize());
     }
 
     AnnotationStatementGenerator(ValueExpressionResolver<?> valueExpressionResolver, int planCacheMaxSize) {
+        this(valueExpressionResolver, NO_TRANSFORMERS, planCacheMaxSize);
+    }
+
+    public AnnotationStatementGenerator(ValueExpressionResolver<?> valueExpressionResolver,
+                                        FilterValueTransformerResolver transformerResolver) {
+        this(valueExpressionResolver, Objects.requireNonNull(transformerResolver, "transformerResolver is required"),
+                TypeAnnotationUtils.cacheMaxSize());
+    }
+
+    AnnotationStatementGenerator(ValueExpressionResolver<?> valueExpressionResolver,
+                                 FilterValueTransformerResolver transformerResolver, int planCacheMaxSize) {
         super(valueExpressionResolver);
+        Objects.requireNonNull(transformerResolver, "transformerResolver is required");
         if (planCacheMaxSize <= 0) {
             throw new IllegalArgumentException("planCacheMaxSize must be greater than zero");
         }
@@ -57,6 +77,7 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
                 .maximumSize(planCacheMaxSize)
                 .executor(Runnable::run)
                 .build();
+        this.transformerResolver = transformerResolver;
     }
 
     @Override
@@ -104,7 +125,7 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
     }
 
     private CompiledAnnotationPlan compilePlan(AnnotationStatementInput input) {
-        return CompiledAnnotationPlan.compile(TypeAnnotationUtils.findMetadata(input));
+        return CompiledAnnotationPlan.compile(TypeAnnotationUtils.findMetadata(input), transformerResolver);
     }
 
     private Map<String, FilterData> createDecoratedFiltersData(List<CompiledAnnotationPlan.FilterPlan> filters,
@@ -116,6 +137,7 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
             if (values == null) {
                 continue;
             }
+            filter.transformerChain().transformScalars(values);
             FilterData filterData = createFilterData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(),
                     filter.negate(), values, filter.modifiers(), filter.description());
             for (String path : filter.path()) {
@@ -185,6 +207,7 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
                 }
                 continue;
             }
+            filter.transformerChain().transformScalars(values);
             var filterData = createFilterData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(), filter.negate(), values, filter.modifiers(), filter.description());
             filterParameters.add(filterData);
         }

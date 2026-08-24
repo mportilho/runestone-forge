@@ -26,6 +26,7 @@ package com.runestone.dynafilter.core.generator.annotation;
 
 import com.runestone.dynafilter.core.model.FilterModifier;
 import com.runestone.dynafilter.core.operation.FilterOperation;
+import com.runestone.dynafilter.core.transformer.FilterValueTransformer;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
@@ -68,6 +69,11 @@ public @interface Filter {
      */
     @SuppressWarnings("rawtypes")
     Class<? extends FilterOperation> operation();
+
+    /**
+     * @return Value transformers applied in declaration order before operation conversion
+     */
+    Class<? extends FilterValueTransformer>[] transformers() default {};
 
     /**
      * Negate the filter's logic. Can be parsed by the Spring Expression Language

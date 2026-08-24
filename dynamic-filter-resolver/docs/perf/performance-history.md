@@ -39,3 +39,58 @@ java -cp "$CP" org.openjdk.jmh.Main AnnotationStatementGeneratorPlanBenchmark -t
 | 8 | Cold | 3808.4 | 6570.3 | 72.5% slower | 3733 | 6323 |
 
 Decision: accept. The measured target is the warmed request path, which is substantially faster and allocates about 52% less. The expected cold-path cost is the one-time compilation of immutable metadata into the generator-local plan.
+
+## 2026-08-24: Scalar filter value transformers
+
+Issue: [#151](https://github.com/mportilho/runestone-forge/issues/151)
+
+Scalar transformer instances and immutable parameter contexts are now bound into the compiled annotation plan. The dispatch benchmark compares the bound chain with direct calls to the same transformer instances, using both identity transformers and transformers that allocate replacement values.
+
+### Protocol
+
+- JDK: Temurin 21.0.6+7-LTS
+- JMH: 1.37
+- Mode: average time, nanoseconds
+- Warmup: 5 iterations of 500 ms
+- Measurement: 10 iterations of 500 ms
+- Forks: 3
+- Heap: `-Xms1g -Xmx1g`
+- Profiler: `gc`
+- Threads: 1 and 8
+- Baseline: detached worktree at `23e0e78`, measured in the same session
+
+```shell
+java -Xms1g -Xmx1g -cp "$CP" org.openjdk.jmh.Main ScalarFilterValueTransformerBenchmark -t 1 -prof gc -tu ns
+java -Xms1g -Xmx1g -cp "$CP" org.openjdk.jmh.Main ScalarFilterValueTransformerBenchmark -t 8 -prof gc -tu ns
+```
+
+### Identity-transformer results
+
+| Threads | Transformers | Bound chain ns/op | Direct ns/op | Framework overhead | Bound chain B/op |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 0 | 0.589 | 0.424 | not applicable | ~0 |
+| 1 | 1 | 1.170 | 1.808 | -35.3% | ~0 |
+| 1 | 3 | 3.267 | 2.977 | 9.7% | ~0 |
+| 8 | 0 | 1.038 | 0.772 | not applicable | ~0 |
+| 8 | 1 | 1.858 | 3.818 | -51.3% | ~0 |
+| 8 | 3 | 6.109 | 6.179 | -1.1% | ~0 |
+
+The sub-nanosecond direct baseline for zero transformers is included only as a sanity check; its percentage is not used as a gate.
+
+### Replacement-transformer results
+
+| Threads | Transformers | Bound chain ns/op | Direct ns/op | Framework overhead | Bound chain B/op | Direct B/op |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 1 | 1.982 | 2.140 | -7.4% | 16 | 16 |
+| 1 | 3 | 5.917 | 5.794 | 2.1% | 48 | 48 |
+| 8 | 1 | 5.767 | 6.093 | -5.4% | 16 | 16 |
+| 8 | 3 | 18.526 | 17.497 | 5.9% | 48 | 48 |
+
+The warmed end-to-end regression benchmark is the meaningful zero-transformer gate:
+
+| Threads | Baseline ns/op | After ns/op | Change | Baseline B/op | After B/op |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 573.8 | 558.7 | 2.6% faster | 1808 | 1808 |
+| 8 | 1490.6 | 1397.8 | 6.2% faster | 1808 | 1808 |
+
+Decision: accept. The warmed path without transformers adds no allocation and does not regress. Chains with one and three transformers allocate no context or chain structure per invocation, and measured overhead against direct transformer calls remains below 10%.
