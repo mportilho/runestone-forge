@@ -93,38 +93,20 @@ public abstract class DefaultStatementGenerator<T> implements StatementGenerator
         boolean negate;
 
         if (Dynamic.class.equals(operation)) {
-            if (values[0] instanceof Object[] dynamicValuesArray) {
-                String comparisonOperationValue;
-                try {
-                    comparisonOperationValue = (String) dynamicValuesArray[0];
-                } catch (ClassCastException e) {
-                    throw new StatementGenerationException("Dynamic operation must have a string as first value that indicates the operation");
-                }
-                comparisonValue = Arrays.copyOfRange(dynamicValuesArray, 1, dynamicValuesArray.length);
-                if (comparisonOperationValue.length() == 3) {
-                    if (comparisonOperationValue.charAt(0) != 'N' && comparisonOperationValue.charAt(0) != 'n') {
-                        throw new StatementGenerationException("Invalid negating character [%s] on path [%s]. 'N' should be preceding the operation, case insensitive"
-                                .formatted(comparisonOperationValue.charAt(0), formatPath(path)));
-                    }
-                    negate = true;
-                    operation = ComparisonOperation.valueOf(comparisonOperationValue.substring(1).toUpperCase()).getOperation();
-                } else if (comparisonOperationValue.length() == 2) {
-                    negate = false;
-                    operation = ComparisonOperation.valueOf(comparisonOperationValue.toUpperCase()).getOperation();
-                } else {
-                    throw new StatementGenerationException("Invalid comparison operation [%s] on path [%s]".formatted(comparisonOperationValue, formatPath(path)));
-                }
+            Object[] dynamicValuesArray = dynamicValues(values);
+            String comparisonOperationValue = dynamicOperationValue(dynamicValuesArray);
+            ComparisonOperation comparisonOperation = resolveDynamicOperation(comparisonOperationValue, path);
+            comparisonValue = Arrays.copyOfRange(dynamicValuesArray, 1, dynamicValuesArray.length);
+            negate = comparisonOperationValue.length() == 3;
+            operation = comparisonOperation.getOperation();
 
-                if (ComparisonOperation.IN.getOperation().equals(operation) && comparisonValue.length > 0 && !comparisonValue[0].getClass().isArray()) {
-                    comparisonValue = new Object[]{comparisonValue};
-                } else if (ComparisonOperation.BT.getOperation().equals(operation)) {
-                    if (comparisonValue.length != 2) {
-                        throw new StatementGenerationException("Between operation must have two values");
-                    }
-                    parameters = new String[]{parameters[0] + "From", parameters[0] + "To"};
+            if (ComparisonOperation.IN.equals(comparisonOperation) && comparisonValue.length > 0 && !comparisonValue[0].getClass().isArray()) {
+                comparisonValue = new Object[]{comparisonValue};
+            } else if (ComparisonOperation.BT.equals(comparisonOperation)) {
+                if (comparisonValue.length != 2) {
+                    throw new StatementGenerationException("Between operation must have two values");
                 }
-            } else {
-                throw new StatementGenerationException("Dynamic operation must have two values, one indicating the operation and another the value");
+                parameters = dynamicBetweenParameters(parameters);
             }
         } else {
             negate = computeNegatingParameter(negateParameter);
@@ -132,6 +114,39 @@ public abstract class DefaultStatementGenerator<T> implements StatementGenerator
         }
 
         return new FilterData(path, parameters, targetType, operation, negate, comparisonValue, modifiers, description);
+    }
+
+    protected Object[] dynamicValues(Object[] values) {
+        if (values[0] instanceof Object[] dynamicValuesArray) {
+            return dynamicValuesArray;
+        }
+        throw new StatementGenerationException("Dynamic operation must have two values, one indicating the operation and another the value");
+    }
+
+    protected String dynamicOperationValue(Object[] dynamicValues) {
+        try {
+            return (String) dynamicValues[0];
+        } catch (ClassCastException exception) {
+            throw new StatementGenerationException("Dynamic operation must have a string as first value that indicates the operation");
+        }
+    }
+
+    protected ComparisonOperation resolveDynamicOperation(String operationValue, String[] path) {
+        if (operationValue.length() == 3) {
+            if (operationValue.charAt(0) != 'N' && operationValue.charAt(0) != 'n') {
+                throw new StatementGenerationException("Invalid negating character [%s] on path [%s]. 'N' should be preceding the operation, case insensitive"
+                        .formatted(operationValue.charAt(0), formatPath(path)));
+            }
+            return ComparisonOperation.valueOf(operationValue.substring(1).toUpperCase());
+        }
+        if (operationValue.length() == 2) {
+            return ComparisonOperation.valueOf(operationValue.toUpperCase());
+        }
+        throw new StatementGenerationException("Invalid comparison operation [%s] on path [%s]".formatted(operationValue, formatPath(path)));
+    }
+
+    protected String[] dynamicBetweenParameters(String[] parameters) {
+        return new String[]{parameters[0] + "From", parameters[0] + "To"};
     }
 
     /**

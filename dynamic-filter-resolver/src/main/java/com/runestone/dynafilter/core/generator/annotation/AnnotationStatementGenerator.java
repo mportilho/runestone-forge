@@ -32,6 +32,8 @@ import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.statement.*;
+import com.runestone.dynafilter.core.operation.ComparisonOperation;
+import com.runestone.dynafilter.core.operation.types.Dynamic;
 import com.runestone.dynafilter.core.transformer.FilterValueTransformerResolver;
 
 import java.util.*;
@@ -137,9 +139,7 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
             if (values == null) {
                 continue;
             }
-            filter.transformerChain().transformScalars(values);
-            FilterData filterData = createFilterData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(),
-                    filter.negate(), values, filter.modifiers(), filter.description());
+            FilterData filterData = createTransformedFilterData(filter, values);
             for (String path : filter.path()) {
                 decoratedFilters.put(path, filterData);
             }
@@ -207,11 +207,44 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
                 }
                 continue;
             }
-            filter.transformerChain().transformScalars(values);
-            var filterData = createFilterData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(), filter.negate(), values, filter.modifiers(), filter.description());
+            var filterData = createTransformedFilterData(filter, values);
             filterParameters.add(filterData);
         }
         return filterParameters.toArray(FilterData[]::new);
+    }
+
+    private FilterData createTransformedFilterData(CompiledAnnotationPlan.FilterPlan filter, Object[] values) {
+        BoundFilterValueTransformerChain chain = filter.transformerChain();
+        if (!Dynamic.class.equals(filter.operation()) || chain.isEmpty()) {
+            chain.transformValues(values);
+            return createFilterData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(),
+                    filter.negate(), values, filter.modifiers(), filter.description());
+        }
+
+        Object[] dynamicValues = dynamicValues(values);
+        String operationValue = dynamicOperationValue(dynamicValues);
+        ComparisonOperation comparisonOperation = resolveDynamicOperation(operationValue, filter.path());
+        int payloadSize = dynamicValues.length - 1;
+        if (ComparisonOperation.BT.equals(comparisonOperation) && payloadSize != 2) {
+            throw new com.runestone.dynafilter.core.exceptions.StatementGenerationException(
+                    "Between operation must have two values");
+        }
+
+        Object[] transformedPayload;
+        if (ComparisonOperation.IN.equals(comparisonOperation) && payloadSize == 1
+                && (dynamicValues[1] instanceof Object[] || dynamicValues[1] instanceof Collection<?>)) {
+            transformedPayload = new Object[]{chain.transformDynamicValue(dynamicValues[1], comparisonOperation)};
+        } else {
+            transformedPayload = chain.transformDynamicPayload(dynamicValues, 1, comparisonOperation);
+            if (ComparisonOperation.IN.equals(comparisonOperation)) {
+                transformedPayload = new Object[]{transformedPayload};
+            }
+        }
+
+        String[] parameters = ComparisonOperation.BT.equals(comparisonOperation)
+                ? dynamicBetweenParameters(filter.parameters()) : filter.parameters();
+        return new FilterData(filter.path(), parameters, filter.targetType(), comparisonOperation.getOperation(),
+                operationValue.length() == 3, transformedPayload, filter.modifiers(), filter.description());
     }
 
     int planCacheSize() {
