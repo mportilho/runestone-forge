@@ -2,6 +2,20 @@
 
 This file provides guidance to AI agents (Gemini CLI, Claude Code, etc.) when working with code in this repository.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are published to GitHub in `mportilho/runestone-forge`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical roles use `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+The repository uses multi-context documentation indexed by `CONTEXT-MAP.md`, with glossaries and ADRs alongside each module. See `docs/agents/domain.md`.
+
 ## Project Overview
 
 **runestone-forge** is a multi-module Java development toolkit with four modules:
