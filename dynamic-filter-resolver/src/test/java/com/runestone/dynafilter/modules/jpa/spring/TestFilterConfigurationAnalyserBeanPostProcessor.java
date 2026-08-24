@@ -28,6 +28,7 @@ import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
+import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
 import com.runestone.dynafilter.core.model.modifiers.ModIgnorePath;
@@ -50,6 +51,7 @@ import com.runestone.dynafilter.modules.jpa.spring.tools.SearchState;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -65,6 +67,19 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
 
         Assertions.assertThatCode(() -> postProcessor.postProcessAfterInitialization(new ValidController(), "validController"))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("Warmup compiles the shared statement generator plan during controller initialization")
+    public void testWarmupCompilesSharedStatementGeneratorPlan() {
+        TypeAnnotationUtils.clearCaches();
+        AnnotationStatementGenerator statementGenerator = Mockito.mock(AnnotationStatementGenerator.class);
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = new FilterConfigurationAnalyserBeanPostProcessor(
+                new JpaFilterOperationService(new DefaultDataConversionService()), statementGenerator);
+
+        postProcessor.postProcessAfterInitialization(new ValidController(), "validController");
+
+        Mockito.verify(statementGenerator).warmup(Mockito.any());
     }
 
     @Test
@@ -299,7 +314,7 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
     }
 
     private static FilterConfigurationAnalyserBeanPostProcessor newPostProcessor(FilterOperationService<Specification<?>> filterOperationService) {
-        return new FilterConfigurationAnalyserBeanPostProcessor(filterOperationService);
+        return new FilterConfigurationAnalyserBeanPostProcessor(filterOperationService, new AnnotationStatementGenerator());
     }
 
     @RestController

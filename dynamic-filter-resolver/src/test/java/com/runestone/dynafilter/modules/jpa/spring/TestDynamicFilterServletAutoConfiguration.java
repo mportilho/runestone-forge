@@ -26,6 +26,8 @@ package com.runestone.dynafilter.modules.jpa.spring;
 
 import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
+import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
+import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.statement.LogicalStatement;
 import com.runestone.dynafilter.core.operation.FilterOperation;
@@ -39,6 +41,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringValueResolver;
@@ -54,8 +57,27 @@ public class TestDynamicFilterServletAutoConfiguration {
         servletConfig.setApplicationContext(Mockito.mock(ApplicationContext.class));
         servletConfig.setEmbeddedValueResolver(Mockito.mock(StringValueResolver.class));
         DynamicFilterResolver<Specification<?>> dynamicFilterResolver = Mockito.mock(DynamicFilterResolver.class);
-        WebMvcConfigurer webMvcConfigurer = servletConfig.webMvcConfigurer(dynamicFilterResolver, null);
+        WebMvcConfigurer webMvcConfigurer = servletConfig.webMvcConfigurer(
+                dynamicFilterResolver, new AnnotationStatementGenerator());
         Assertions.assertThat(webMvcConfigurer).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Auto-configuration combines custom and embedded value resolvers for the shared generator")
+    public void testSharedStatementGeneratorCreation() {
+        DynamicFilterServletAutoConfiguration servletConfig = new DynamicFilterServletAutoConfiguration();
+        StringValueResolver embeddedResolver = value -> "embedded:" + value;
+        servletConfig.setEmbeddedValueResolver(embeddedResolver);
+        ValueExpressionResolver<String> customResolver = value -> value.equals("custom") ? "custom-value" : null;
+        ConfigurableListableBeanFactory beanFactory = Mockito.mock(ConfigurableListableBeanFactory.class);
+
+        var transformerResolver = servletConfig.filterValueTransformerResolver(beanFactory);
+        AnnotationStatementGenerator generator = servletConfig.annotationStatementGenerator(transformerResolver, customResolver);
+        ValueExpressionResolver<String> combined = servletConfig.combineValueExpressionResolvers(customResolver);
+
+        Assertions.assertThat(generator).isNotNull();
+        Assertions.assertThat(combined.resolveValue("custom")).isEqualTo("custom-value");
+        Assertions.assertThat(combined.resolveValue("fallback")).isEqualTo("embedded:fallback");
     }
 
     @Test

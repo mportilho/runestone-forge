@@ -27,13 +27,16 @@ package com.runestone.dynafilter.modules.jpa.spring;
 import com.runestone.converters.DataConversionService;
 import com.runestone.converters.impl.DefaultDataConversionService;
 import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
+import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
+import com.runestone.dynafilter.core.transformer.FilterValueTransformerResolver;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationContributor;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
@@ -80,9 +83,37 @@ public class DynamicFilterServletAutoConfiguration implements EmbeddedValueResol
     }
 
     @Bean
+    @ConditionalOnMissingBean
+    public FilterValueTransformerResolver filterValueTransformerResolver(ConfigurableListableBeanFactory beanFactory) {
+        return new SpringFilterValueTransformerResolver(beanFactory);
+    }
+
+    @Bean(destroyMethod = "clearCache")
+    @ConditionalOnMissingBean
+    public AnnotationStatementGenerator annotationStatementGenerator(
+            FilterValueTransformerResolver transformerResolver,
+            @Autowired(required = false) ValueExpressionResolver<String> valueExpressionResolver) {
+        return new AnnotationStatementGenerator(combineValueExpressionResolvers(valueExpressionResolver), transformerResolver);
+    }
+
+    @Bean
     public WebMvcConfigurer webMvcConfigurer(DynamicFilterResolver<Specification<?>> dynamicFilterResolver,
-                                             @Autowired(required = false) final ValueExpressionResolver<String> valueExpressionResolver) {
-        return new SpecificationDynamicFilterWebMvcConfigurer(applicationContext, stringValueResolver, valueExpressionResolver, dynamicFilterResolver);
+                                             AnnotationStatementGenerator statementGenerator) {
+        return new SpecificationDynamicFilterWebMvcConfigurer(applicationContext, statementGenerator, dynamicFilterResolver);
+    }
+
+    ValueExpressionResolver<String> combineValueExpressionResolvers(ValueExpressionResolver<String> valueExpressionResolver) {
+        if (valueExpressionResolver == null && stringValueResolver == null) {
+            return null;
+        } else if (valueExpressionResolver == null) {
+            return stringValueResolver::resolveStringValue;
+        } else if (stringValueResolver == null) {
+            return valueExpressionResolver;
+        }
+        return key -> {
+            String response = valueExpressionResolver.resolveValue(key);
+            return response != null ? response : stringValueResolver.resolveStringValue(key);
+        };
     }
 
 }

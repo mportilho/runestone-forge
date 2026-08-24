@@ -24,13 +24,11 @@
 
 package com.runestone.dynafilter.modules.jpa.spring;
 
-import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.StringValueResolver;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -39,37 +37,20 @@ import java.util.List;
 class SpecificationDynamicFilterWebMvcConfigurer implements WebMvcConfigurer {
 
     private final ApplicationContext applicationContext;
-    private final StringValueResolver stringValueResolver;
-    private final ValueExpressionResolver<String> valueExpressionResolver;
-
+    private final AnnotationStatementGenerator statementGenerator;
     private final DynamicFilterResolver<Specification<?>> dynamicFilterResolver;
 
-    public SpecificationDynamicFilterWebMvcConfigurer(ApplicationContext applicationContext, StringValueResolver stringValueResolver,
-                                                      ValueExpressionResolver<String> valueExpressionResolver, DynamicFilterResolver<Specification<?>> dynamicFilterResolver) {
+    public SpecificationDynamicFilterWebMvcConfigurer(ApplicationContext applicationContext,
+                                                       AnnotationStatementGenerator statementGenerator,
+                                                       DynamicFilterResolver<Specification<?>> dynamicFilterResolver) {
         this.applicationContext = applicationContext;
-        this.stringValueResolver = stringValueResolver;
-        this.valueExpressionResolver = valueExpressionResolver;
+        this.statementGenerator = statementGenerator;
         this.dynamicFilterResolver = dynamicFilterResolver;
     }
 
     @Override
     public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
-        AnnotationStatementGenerator generator = new AnnotationStatementGenerator(getValueExpressionResolver());
         SpringFilterDecoratorFactory filterDecoratorFactory = new SpringFilterDecoratorFactory((GenericApplicationContext) applicationContext);
-        resolvers.add(new SpecificationDynamicFilterArgumentResolver(generator, dynamicFilterResolver, filterDecoratorFactory));
-    }
-
-    protected ValueExpressionResolver<String> getValueExpressionResolver() {
-        if (valueExpressionResolver == null && stringValueResolver == null) {
-            return null;
-        } else if (valueExpressionResolver == null) {
-            return stringValueResolver::resolveStringValue;
-        } else if (stringValueResolver == null) {
-            return valueExpressionResolver;
-        }
-        return key -> {
-            String response = valueExpressionResolver.resolveValue(key);
-            return response != null ? response : stringValueResolver.resolveStringValue(key);
-        };
+        resolvers.add(new SpecificationDynamicFilterArgumentResolver(statementGenerator, dynamicFilterResolver, filterDecoratorFactory));
     }
 }
