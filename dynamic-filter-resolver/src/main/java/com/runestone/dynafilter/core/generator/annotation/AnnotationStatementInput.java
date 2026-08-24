@@ -45,7 +45,7 @@ public final class AnnotationStatementInput {
     }
 
     public Annotation[] annotations() {
-        return annotations;
+        return annotations != null ? annotations.clone() : null;
     }
 
     @Override

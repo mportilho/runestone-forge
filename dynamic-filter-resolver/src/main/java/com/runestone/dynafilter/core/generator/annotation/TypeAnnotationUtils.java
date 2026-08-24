@@ -45,10 +45,10 @@ public class TypeAnnotationUtils {
     private static final int DEFAULT_CACHE_MAX_SIZE = 4096;
     private static final String CACHE_MAX_SIZE_PROPERTY = "runestone.dynafilter.annotation.cache.max-size";
     private static final int CACHE_MAX_SIZE = resolveCacheMaxSize();
-    private static final Map<AnnotationStatementInput, AnnotationMetadata> CACHE_METADATA = Caffeine.newBuilder()
+    private static final com.github.benmanes.caffeine.cache.Cache<AnnotationStatementInput, AnnotationMetadata> CACHE_METADATA = Caffeine.newBuilder()
             .maximumSize(CACHE_MAX_SIZE)
             .executor(Runnable::run)
-            .<AnnotationStatementInput, AnnotationMetadata>build().asMap();
+            .build();
 
     private TypeAnnotationUtils() {
     }
@@ -73,8 +73,9 @@ public class TypeAnnotationUtils {
             }
         }
 
-        if (annotationStatementInput.annotations() != null) {
-            for (Annotation annotation : annotationStatementInput.annotations()) {
+        Annotation[] inputAnnotations = annotationStatementInput.annotations();
+        if (inputAnnotations != null) {
+            for (Annotation annotation : inputAnnotations) {
                 if (annotation.annotationType().equals(FilterDecorators.class)) {
                     FilterDecorators filterDecorators = (FilterDecorators) annotation;
                     decorators.addAll(Arrays.asList(filterDecorators.value()));
@@ -125,18 +126,16 @@ public class TypeAnnotationUtils {
     }
 
     public static void clearCaches() {
-        CACHE_METADATA.clear();
+        CACHE_METADATA.invalidateAll();
+    }
+
+    static AnnotationMetadata findMetadata(AnnotationStatementInput annotationStatementInput) {
+        return findCachedMetadata(annotationStatementInput);
     }
 
     private static AnnotationMetadata findCachedMetadata(AnnotationStatementInput annotationStatementInput) {
         Objects.requireNonNull(annotationStatementInput, "annotationStatementInput is required");
-        AnnotationMetadata cachedMetadata = CACHE_METADATA.get(annotationStatementInput);
-        if (cachedMetadata != null) {
-            return cachedMetadata;
-        }
-
-        AnnotationMetadata builtMetadata = buildMetadata(annotationStatementInput);
-        return CACHE_METADATA.computeIfAbsent(annotationStatementInput, k -> builtMetadata);
+        return CACHE_METADATA.get(annotationStatementInput, TypeAnnotationUtils::buildMetadata);
     }
 
     private static AnnotationMetadata buildMetadata(AnnotationStatementInput annotationStatementInput) {
@@ -412,7 +411,7 @@ public class TypeAnnotationUtils {
         return entityClass;
     }
 
-    private record AnnotationMetadata(
+    record AnnotationMetadata(
             List<FilterAnnotationData> statementData,
             List<Class<? extends FilterDecorator<?>>> decorators,
             List<FilterRequestData> requestFilters
@@ -420,7 +419,8 @@ public class TypeAnnotationUtils {
     }
 
     static int cacheSize() {
-        return CACHE_METADATA.size();
+        CACHE_METADATA.cleanUp();
+        return Math.toIntExact(CACHE_METADATA.estimatedSize());
     }
 
     static int cacheMaxSize() {

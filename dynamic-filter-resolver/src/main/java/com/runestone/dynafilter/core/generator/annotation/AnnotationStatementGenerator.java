@@ -24,13 +24,13 @@
 
 package com.runestone.dynafilter.core.generator.annotation;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.runestone.dynafilter.core.generator.DefaultStatementGenerator;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
 import com.runestone.dynafilter.core.model.FilterData;
-import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.model.statement.*;
-import com.runestone.dynafilter.core.operation.types.Decorated;
 
 import java.util.*;
 
@@ -38,71 +38,101 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
 
     private static final FilterData[] EMPTY_FILTER_DATA = {};
     private static final NoOpStatement NO_OP_STATEMENT = new NoOpStatement();
+    private final Cache<AnnotationStatementInput, CompiledAnnotationPlan> planCache;
 
     public AnnotationStatementGenerator() {
-        super();
+        this(null, TypeAnnotationUtils.cacheMaxSize());
     }
 
     public AnnotationStatementGenerator(ValueExpressionResolver<?> valueExpressionResolver) {
+        this(valueExpressionResolver, TypeAnnotationUtils.cacheMaxSize());
+    }
+
+    AnnotationStatementGenerator(ValueExpressionResolver<?> valueExpressionResolver, int planCacheMaxSize) {
         super(valueExpressionResolver);
+        if (planCacheMaxSize <= 0) {
+            throw new IllegalArgumentException("planCacheMaxSize must be greater than zero");
+        }
+        this.planCache = Caffeine.newBuilder()
+                .maximumSize(planCacheMaxSize)
+                .executor(Runnable::run)
+                .build();
     }
 
     @Override
     public StatementWrapper generateStatements(AnnotationStatementInput filterInputs, Map<String, Object> filterParameters) {
+        Objects.requireNonNull(filterInputs, "annotationStatementInput is required");
         Map<String, Object> parametersMap = filterParameters != null ? filterParameters : Collections.emptyMap();
         List<AbstractStatement> statementList = new ArrayList<>();
 
-        List<FilterAnnotationData> filterAnnotationDataList = TypeAnnotationUtils.findAnnotationData(filterInputs);
-        for (FilterAnnotationData data : filterAnnotationDataList) {
+        CompiledAnnotationPlan plan = planCache.get(filterInputs, this::compilePlan);
+        for (CompiledAnnotationPlan.StatementPlan data : plan.statements()) {
             AbstractStatement statements = createStatements(data, parametersMap);
             if (statements != null) {
                 statementList.add(statements);
             }
         }
 
-        Map<String, FilterData> decoratedFilters = createDecoratedFiltersData(filterAnnotationDataList, parametersMap);
-        List<FilterRequestData> allFilters = TypeAnnotationUtils.listAllFilterRequestData(filterInputs);
+        Map<String, FilterData> decoratedFilters = createDecoratedFiltersData(plan.decoratedFilters(), parametersMap);
 
         if (statementList.isEmpty()) {
-            return new StatementWrapper(NO_OP_STATEMENT, decoratedFilters, allFilters);
+            return new StatementWrapper(NO_OP_STATEMENT, decoratedFilters, plan.requestFilters());
         } else if (statementList.size() == 1) {
-            return new StatementWrapper(statementList.getFirst(), decoratedFilters, allFilters);
+            return new StatementWrapper(statementList.getFirst(), decoratedFilters, plan.requestFilters());
         } else {
             AbstractStatement finalStatement = statementList.getFirst();
             for (int i = 1; i < statementList.size(); i++) {
                 finalStatement = new CompoundStatement(finalStatement, statementList.get(i), LogicOperator.CONJUNCTION);
             }
-            return new StatementWrapper(finalStatement, decoratedFilters, allFilters);
+            return new StatementWrapper(finalStatement, decoratedFilters, plan.requestFilters());
         }
     }
 
-    private Map<String, FilterData> createDecoratedFiltersData(List<FilterAnnotationData> filterAnnotationDataList, Map<String, Object> parametersMap) {
+    /**
+     * Compiles and caches the immutable plan for the supplied annotation input.
+     */
+    public void warmup(AnnotationStatementInput filterInputs) {
+        Objects.requireNonNull(filterInputs, "annotationStatementInput is required");
+        planCache.get(filterInputs, this::compilePlan);
+    }
+
+    /**
+     * Invalidates the plans owned by this generator instance.
+     */
+    public void clearCache() {
+        planCache.invalidateAll();
+    }
+
+    private CompiledAnnotationPlan compilePlan(AnnotationStatementInput input) {
+        return CompiledAnnotationPlan.compile(TypeAnnotationUtils.findMetadata(input));
+    }
+
+    private Map<String, FilterData> createDecoratedFiltersData(List<CompiledAnnotationPlan.FilterPlan> filters,
+                                                                Map<String, Object> parametersMap) {
         Map<String, FilterData> decoratedFilters = new HashMap<>();
-        filterAnnotationDataList
-                .stream()
-                .flatMap(data -> data.filters().stream())
-                .filter(filter -> Decorated.class.equals(filter.operation()))
-                .map(filter -> {
-                    Object[] values = computeValues(filter.parameters(), filter.defaultValues(), filter.constantValues(), parametersMap);
-                    return values != null ? createFilterData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(),
-                            filter.negate(), values, List.of(filter.modifiers()), filter.description()) : null;
-                }).filter(Objects::nonNull)
-                .forEach(filter -> {
-                    for (String path : filter.path()) {
-                        decoratedFilters.put(path, filter);
-                    }
-                });
+        for (CompiledAnnotationPlan.FilterPlan filter : filters) {
+            Object[] values = computePrevalidatedValues(filter.parameters(), filter.defaultValues(), filter.constantValues(),
+                    parametersMap, filter.invalidParameterIndex());
+            if (values == null) {
+                continue;
+            }
+            FilterData filterData = createFilterData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(),
+                    filter.negate(), values, filter.modifiers(), filter.description());
+            for (String path : filter.path()) {
+                decoratedFilters.put(path, filterData);
+            }
+        }
         return Collections.unmodifiableMap(decoratedFilters);
     }
 
     /**
      *
      */
-    private AbstractStatement createStatements(FilterAnnotationData data, Map<String, Object> userParameters) {
+    private AbstractStatement createStatements(CompiledAnnotationPlan.StatementPlan data, Map<String, Object> userParameters) {
         boolean negate = computeNegatingParameter(data.negate());
         FilterData[] clauses = processFilterAnnotations(data.filters(), userParameters);
         AbstractStatement statement = createStatements(clauses, data.logicOperator());
-        AbstractStatement statementFromStatements = createStatementFromFilterStatements(data.filterStatements(), data.logicOperator(), userParameters);
+        AbstractStatement statementFromStatements = createStatementFromFilterStatements(data.nestedStatements(), data.logicOperator(), userParameters);
 
         if (statement == null && statementFromStatements == null) {
             return null;
@@ -117,9 +147,10 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
         }
     }
 
-    private AbstractStatement createStatementFromFilterStatements(List<FilterAnnotationStatement> statements, LogicOperator logicType, Map<String, Object> userParameters) {
+    private AbstractStatement createStatementFromFilterStatements(List<CompiledAnnotationPlan.NestedStatementPlan> statements,
+                                                                   LogicOperator logicType, Map<String, Object> userParameters) {
         AbstractStatement resultStatement = null;
-        for (FilterAnnotationStatement filterStatement : statements) {
+        for (CompiledAnnotationPlan.NestedStatementPlan filterStatement : statements) {
             boolean negate = computeNegatingParameter(filterStatement.negate());
             FilterData[] params = processFilterAnnotations(filterStatement.filters(), userParameters);
             AbstractStatement currStatement = createStatements(params, logicType.opposite());
@@ -137,17 +168,15 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
     /**
      *
      */
-    private FilterData[] processFilterAnnotations(List<Filter> filters, Map<String, Object> userParameters) {
+    private FilterData[] processFilterAnnotations(List<CompiledAnnotationPlan.FilterPlan> filters, Map<String, Object> userParameters) {
         if (filters == null || filters.isEmpty()) {
             return EMPTY_FILTER_DATA;
         }
 
         List<FilterData> filterParameters = new ArrayList<>(filters.size());
-        for (Filter filter : filters) {
-            if (Decorated.class.equals(filter.operation())) {
-                continue;
-            }
-            Object[] values = computeValues(filter.parameters(), filter.defaultValues(), filter.constantValues(), userParameters);
+        for (CompiledAnnotationPlan.FilterPlan filter : filters) {
+            Object[] values = computePrevalidatedValues(filter.parameters(), filter.defaultValues(), filter.constantValues(),
+                    userParameters, filter.invalidParameterIndex());
             if (values == null || values.length == 0) {
                 if (filter.required()) {
                     String pluralChar = filter.parameters().length > 1 ? "s" : "";
@@ -156,9 +185,14 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
                 }
                 continue;
             }
-            var filterData = createFilterData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(), filter.negate(), values, List.of(filter.modifiers()), filter.description());
+            var filterData = createFilterData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(), filter.negate(), values, filter.modifiers(), filter.description());
             filterParameters.add(filterData);
         }
         return filterParameters.toArray(FilterData[]::new);
+    }
+
+    int planCacheSize() {
+        planCache.cleanUp();
+        return Math.toIntExact(planCache.estimatedSize());
     }
 }

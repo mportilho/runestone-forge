@@ -167,6 +167,30 @@ public class TestTypeAnnotationUtils {
     }
 
     @Test
+    public void testAnnotationStatementInputDoesNotExposeItsAnnotations() {
+        AnnotationStatementInput input = new AnnotationStatementInput(StatusOkInterface.class, StatusOkInterface.class.getAnnotations());
+
+        input.annotations()[0] = null;
+
+        AnnotationStatementInput equivalentInput = new AnnotationStatementInput(StatusOkInterface.class, StatusOkInterface.class.getAnnotations());
+        Assertions.assertThat(input).isEqualTo(equivalentInput);
+    }
+
+    @Test
+    public void testRequestFilterMetadataDoesNotExposeArrays() {
+        AnnotationStatementInput input = new AnnotationStatementInput(StatusOkInterface.class, null);
+        var filter = TypeAnnotationUtils.listAllFilterRequestData(input).getFirst();
+        String originalPath = filter.path()[0];
+        String originalParameter = filter.parameters()[0];
+
+        filter.path()[0] = "changed";
+        filter.parameters()[0] = "changed";
+
+        Assertions.assertThat(filter.path()[0]).isEqualTo(originalPath);
+        Assertions.assertThat(filter.parameters()[0]).isEqualTo(originalParameter);
+    }
+
+    @Test
     public void testCacheIsBoundedByConfiguredLruLimit() {
         TypeAnnotationUtils.clearCaches();
         int maxCacheSize = TypeAnnotationUtils.cacheMaxSize();

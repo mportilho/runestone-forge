@@ -169,17 +169,16 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
 
         Map<String, String> parameterPathMap = new HashMap<>(Math.max(16, filters.size()));
         for (FilterRequestData filter : filters) {
-            String[] parameters = filter.parameters();
-            if (parameters == null || parameters.length == 0) {
+            if (filter.parameterCount() == 0) {
                 continue;
             }
 
-            String parameter = parameters[0];
+            String parameter = filter.parameterAt(0);
             if (parameter == null || parameterPathMap.containsKey(parameter)) {
                 continue;
             }
 
-            String path = filter.path()[0];
+            String path = filter.pathAt(0);
             if (path != null && !parameter.equals(path)) {
                 parameterPathMap.put(parameter, path);
             }

@@ -37,6 +37,46 @@ public record FilterRequestData(
 
 ) {
 
+    public FilterRequestData {
+        path = path != null ? path.clone() : null;
+        parameters = parameters != null ? parameters.clone() : null;
+        defaultValues = defaultValues != null ? defaultValues.clone() : null;
+        constantValues = constantValues != null ? constantValues.clone() : null;
+        modifiers = modifiers != null ? List.copyOf(modifiers) : null;
+    }
+
+    @Override
+    public String[] path() {
+        return path != null ? path.clone() : null;
+    }
+
+    @Override
+    public String[] parameters() {
+        return parameters != null ? parameters.clone() : null;
+    }
+
+    @Override
+    public Object[] defaultValues() {
+        return defaultValues != null ? defaultValues.clone() : null;
+    }
+
+    @Override
+    public Object[] constantValues() {
+        return constantValues != null ? constantValues.clone() : null;
+    }
+
+    public int parameterCount() {
+        return parameters != null ? parameters.length : 0;
+    }
+
+    public String parameterAt(int index) {
+        return parameters[index];
+    }
+
+    public String pathAt(int index) {
+        return path[index];
+    }
+
     public static FilterRequestData of(Filter filter) {
         return new FilterRequestData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(),
                 filter.negate(), filter.defaultValues(), filter.constantValues(), filter.format(), filter.required(),

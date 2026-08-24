@@ -153,15 +153,29 @@ public abstract class DefaultStatementGenerator<T> implements StatementGenerator
         }
 
         if (constantValues != null && constantValues.length > 0) {
-            return computeInternalValues(parameters, constantValues, Map.of());
+            return computeInternalValues(parameters, constantValues, Map.of(), true);
         }
-        return computeInternalValues(parameters, defaultValues, parametersMap);
+        return computeInternalValues(parameters, defaultValues, parametersMap, true);
     }
 
-    private Object[] computeInternalValues(String[] parameters, Object[] internalValues, Map<String, Object> parametersMap) {
+    protected Object[] computePrevalidatedValues(String[] parameters, Object[] defaultValues, Object[] constantValues,
+                                                 Map<String, Object> parametersMap, int invalidParameterIndex) {
+        if (constantValues != null && constantValues.length > 0) {
+            return computeInternalValues(parameters, constantValues, Map.of(), false, invalidParameterIndex);
+        }
+        return computeInternalValues(parameters, defaultValues, parametersMap, false, invalidParameterIndex);
+    }
+
+    private Object[] computeInternalValues(String[] parameters, Object[] internalValues, Map<String, Object> parametersMap,
+                                           boolean validateParameterNames) {
+        return computeInternalValues(parameters, internalValues, parametersMap, validateParameterNames, -1);
+    }
+
+    private Object[] computeInternalValues(String[] parameters, Object[] internalValues, Map<String, Object> parametersMap,
+                                           boolean validateParameterNames, int invalidParameterIndex) {
         Object[] valueList = null;
         for (int i = 0; i < parameters.length; i++) {
-            if (Asserts.isEmpty(parameters[i])) {
+            if (i == invalidParameterIndex || (validateParameterNames && Asserts.isEmpty(parameters[i]))) {
                 throw new IllegalArgumentException("Parameter name cannot be null or empty");
             }
             Object internalValue = internalValues != null && internalValues.length > 0 ? internalValues[i] : null;
