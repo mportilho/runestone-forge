@@ -189,7 +189,7 @@ The final matrix crosses normal scalar, normal container, dynamic scalar, and dy
 - Threads: 1 and 8
 - Artifacts: `/tmp/performance-benchmark/issue-154/`
 
-Run from `dynamic-filter-resolver` after `mvn test-compile -DskipTests`:
+Run from `dynamic-filter-resolver` after `mvn clean test-compile -DskipTests` (the clean build is required to regenerate JMH's `META-INF/BenchmarkList`):
 
 ```shell
 mvn -q dependency:build-classpath -Dmdep.outputFile=target/jmh-cp.txt -DincludeScope=test
@@ -276,3 +276,49 @@ The 8-thread latency and allocation are retained as observations rather than con
 - **Speculative optimization:** none added. The measurements do not justify `MethodHandle`, bytecode generation, pooling, or further dispatch specialization.
 
 Decision: functional integration, OpenAPI behavior, documentation, allocation, direct-dispatch overhead, and lookup gates pass. Complete same-session baseline/final and quantitative contention sign-off are deferred; the user stopped further long-running measurements because the CPU is shared with other important processes. No production optimization was made from the noisy data.
+
+### Java 21 rerun and three-transformer optimization
+
+A subsequent run on an Intel Core i7-7700HQ (4 cores / 8 logical CPUs) with Temurin 21.0.8+9 completed all 389 functional tests and the complete 1-thread and 8-thread matrices. Baseline and final measurements used the same JVM, heap, GC profiler, warmup, measurement, and fork parameters listed above. Artifacts are retained in `/tmp/performance-benchmark/issue-154-rerun/`.
+
+The longer bound-versus-direct confirmation run (5 x 500 ms warmup, 10 x 500 ms measurement, 3 forks) found repeatable overhead above the 10% gate for three-transformer chains. This justified a narrowly scoped, benchmark-driven optimization that unrolls exactly that chain length while retaining the same null checks and exception translation. The optimized run produced:
+
+```shell
+java -Xms1g -Xmx1g -cp "$CP" org.openjdk.jmh.Main \
+  'ScalarFilterValueTransformerBenchmark|MultiValueFilterValueTransformerBenchmark' \
+  -wi 5 -i 10 -f 3 -w 500ms -r 500ms -t 1 -prof gc -tu ns -rf json \
+  -rff /tmp/performance-benchmark/issue-154-rerun/direct-{confirm|optimized}-t1.json
+```
+
+| Three-transformer benchmark | Before ns/op | After ns/op | Improvement |
+|---|---:|---:|---:|
+| Scalar identity | 4.898 +/- 0.049 | 3.179 +/- 0.018 | 35.1% |
+| Scalar replacement | 8.895 +/- 0.059 | 7.585 +/- 0.062 | 14.7% |
+| Normal container | 56.554 +/- 1.921 | 44.646 +/- 1.647 | 21.1% |
+| Dynamic container | 54.523 +/- 0.388 | 37.953 +/- 0.306 | 30.4% |
+
+| Threads | Scenario | 1 transformer overhead | 3 transformers overhead | Bound/direct B/op |
+|---:|---|---:|---:|---:|
+| 1 | Scalar identity | -29.3% | -24.8% | 0 / 0 |
+| 1 | Scalar replacement | -5.8% | -2.5% | 16 / 16; 48 / 48 |
+| 1 | Normal container | 9.1% | 4.2% | 96 / 96; 224 / 224 |
+| 1 | Dynamic container | 8.6% | -13.4% | 96 / 96; 224 / 224 |
+| 8 | Scalar identity | -29.9% | -35.3% | 0 / 0 |
+| 8 | Scalar replacement | -0.2% | 0.5% | 16 / 16; 48 / 48 |
+| 8 | Normal container | 0.1% | -7.6% | 96 / 96; 224 / 224 |
+| 8 | Dynamic container | 0.8% | -0.3% | 96 / 96; 224 / 224 |
+
+The three-transformer optimization improved its bound-chain benchmarks by 14.7% to 35.1% at one thread. Maximum framework overhead is now 9.1% at one thread and 0.8% at eight threads. Allocation remains identical to direct calls, and the eight-thread results do not show increasing plan contention.
+
+The warmed 1-thread end-to-end allocation matrix remained deterministic:
+
+| Flow | Identity 0 / 1 / 3 B/op | Replacement 0 / 1 / 3 B/op |
+|---|---:|---:|
+| Normal scalar | 296 / 296 / 296 | 296 / 312 / 344 |
+| Normal container | 296 / 328 / 328 | 296 / 392 / 520 |
+| Dynamic scalar | 368 / 368 / 368 | 368 / 384 / 416 |
+| Dynamic container | 400 / 400 / 400 | 400 / 464 / 592 |
+
+Sequential end-to-end baseline/final latency scores drifted by up to 12.8% even for duplicate zero-transformer parameter cells executing identical bytecode. Those absolute score deltas are therefore not used to infer a regression. The controlled no-transformer measurements from #151/#152 remain the latency gate: 11.7% and 8.2% faster with 1,808 B/op unchanged. The same-session rerun independently confirms zero additional bytes in every warmed no-transformer flow.
+
+Decision: accept the measured three-transformer optimization. Functional, allocation, direct-dispatch, warmed-lookup, and concurrency gates pass on Java 21. No `MethodHandle`, bytecode generation, pooling, or other speculative mechanism was added.

@@ -99,7 +99,7 @@ class TestScalarFilterValueTransformation {
     }
 
     @Test
-    void resolvesTransformersOnlyOnceWhileCompilingThePlanAndReusesContexts() {
+    void performsNoResolverLookupsAfterPlanWarmupAndReusesContexts() {
         CapturingTransformer transformer = new CapturingTransformer();
         AtomicInteger resolutions = new AtomicInteger();
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null, type -> {
@@ -107,6 +107,9 @@ class TestScalarFilterValueTransformation {
             return transformer;
         });
         AnnotationStatementInput input = new AnnotationStatementInput(ContextFilter.class, null);
+
+        generator.warmup(input);
+        assertThat(resolutions).hasValue(1);
 
         generator.generateStatements(input, Map.of("first", "one", "second", "two"));
         generator.generateStatements(input, Map.of("first", "three", "second", "four"));

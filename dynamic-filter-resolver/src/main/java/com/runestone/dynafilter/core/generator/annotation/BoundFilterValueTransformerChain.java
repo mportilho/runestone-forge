@@ -145,6 +145,17 @@ final class BoundFilterValueTransformerChain {
             }
             return transformed;
         }
+        if (transformers.length == 3) {
+            for (int i = 0; i < size; i++) {
+                Object value = values[offset + i];
+                if (value != null) {
+                    value = apply(0, value, context, i);
+                    value = apply(1, value, context, i);
+                    transformed[i] = apply(2, value, context, i);
+                }
+            }
+            return transformed;
+        }
         for (int i = 0; i < size; i++) {
             Object current = values[offset + i];
             if (current == null) {
@@ -180,6 +191,11 @@ final class BoundFilterValueTransformerChain {
         }
         if (transformers.length == 1) {
             return apply(0, value, context, elementIndex);
+        }
+        if (transformers.length == 3) {
+            value = apply(0, value, context, elementIndex);
+            value = apply(1, value, context, elementIndex);
+            return apply(2, value, context, elementIndex);
         }
         Object current = value;
         for (int i = 0; i < transformers.length; i++) {

@@ -65,7 +65,7 @@ public class FilterValueTransformerFlowBenchmark {
         @Setup
         public void setup() {
             FilterValueTransformerRegistry registry = new FilterValueTransformerRegistry();
-            registry.register(IdentityTransformer.class, new IdentityTransformer(behavior.equals("replacement")));
+            registry.register(BenchmarkTransformer.class, new BenchmarkTransformer(behavior.equals("replacement")));
             transformerResolver = registry.toResolver();
             generator = new AnnotationStatementGenerator(null, transformerResolver);
             Class<?> filterType = filterType();
@@ -79,17 +79,20 @@ public class FilterValueTransformerFlowBenchmark {
                 case "normalScalar" -> switch (transformerCount) {
                     case 0 -> NormalScalarZero.class;
                     case 1 -> NormalScalarOne.class;
-                    default -> NormalScalarThree.class;
+                    case 3 -> NormalScalarThree.class;
+                    default -> throw new IllegalArgumentException("Unsupported transformer count " + transformerCount);
                 };
                 case "normalContainer" -> switch (transformerCount) {
                     case 0 -> NormalContainerZero.class;
                     case 1 -> NormalContainerOne.class;
-                    default -> NormalContainerThree.class;
+                    case 3 -> NormalContainerThree.class;
+                    default -> throw new IllegalArgumentException("Unsupported transformer count " + transformerCount);
                 };
                 case "dynamicScalar", "dynamicContainer" -> switch (transformerCount) {
                     case 0 -> DynamicZero.class;
                     case 1 -> DynamicOne.class;
-                    default -> DynamicThree.class;
+                    case 3 -> DynamicThree.class;
+                    default -> throw new IllegalArgumentException("Unsupported transformer count " + transformerCount);
                 };
                 default -> throw new IllegalArgumentException("Unknown flow " + flow);
             };
@@ -115,22 +118,22 @@ public class FilterValueTransformerFlowBenchmark {
     }
 
     @Conjunction(@Filter(path = "target", parameters = "value", operation = Equals.class,
-            transformers = IdentityTransformer.class))
+            transformers = BenchmarkTransformer.class))
     private interface NormalScalarOne {
     }
 
     @Conjunction(@Filter(path = "target", parameters = "value", operation = IsIn.class,
-            transformers = IdentityTransformer.class))
+            transformers = BenchmarkTransformer.class))
     private interface NormalContainerOne {
     }
 
     @Conjunction(@Filter(path = "target", parameters = "value", operation = Equals.class,
-            transformers = {IdentityTransformer.class, IdentityTransformer.class, IdentityTransformer.class}))
+            transformers = {BenchmarkTransformer.class, BenchmarkTransformer.class, BenchmarkTransformer.class}))
     private interface NormalScalarThree {
     }
 
     @Conjunction(@Filter(path = "target", parameters = "value", operation = IsIn.class,
-            transformers = {IdentityTransformer.class, IdentityTransformer.class, IdentityTransformer.class}))
+            transformers = {BenchmarkTransformer.class, BenchmarkTransformer.class, BenchmarkTransformer.class}))
     private interface NormalContainerThree {
     }
 
@@ -139,23 +142,23 @@ public class FilterValueTransformerFlowBenchmark {
     }
 
     @Conjunction(@Filter(path = "target", parameters = "value", operation = Dynamic.class,
-            transformers = IdentityTransformer.class))
+            transformers = BenchmarkTransformer.class))
     private interface DynamicOne {
     }
 
     @Conjunction(@Filter(path = "target", parameters = "value", operation = Dynamic.class,
-            transformers = {IdentityTransformer.class, IdentityTransformer.class, IdentityTransformer.class}))
+            transformers = {BenchmarkTransformer.class, BenchmarkTransformer.class, BenchmarkTransformer.class}))
     private interface DynamicThree {
     }
 
-    public static final class IdentityTransformer implements FilterValueTransformer {
+    private static final class BenchmarkTransformer implements FilterValueTransformer {
         private final boolean replacing;
 
-        public IdentityTransformer() {
+        private BenchmarkTransformer() {
             this(false);
         }
 
-        IdentityTransformer(boolean replacing) {
+        private BenchmarkTransformer(boolean replacing) {
             this.replacing = replacing;
         }
 

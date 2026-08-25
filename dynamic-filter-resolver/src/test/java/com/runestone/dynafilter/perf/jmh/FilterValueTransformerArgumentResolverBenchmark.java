@@ -83,7 +83,7 @@ public class FilterValueTransformerArgumentResolverBenchmark {
     private interface HttpFilter extends Specification<Object> {
     }
 
-    public static final class IdentityTransformer implements FilterValueTransformer {
+    private static final class IdentityTransformer implements FilterValueTransformer {
         @Override
         public Object transform(Object value, FilterValueContext context) {
             return value;
