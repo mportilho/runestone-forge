@@ -287,7 +287,7 @@ The longer bound-versus-direct confirmation run (5 x 500 ms warmup, 10 x 500 ms 
 java -Xms1g -Xmx1g -cp "$CP" org.openjdk.jmh.Main \
   'ScalarFilterValueTransformerBenchmark|MultiValueFilterValueTransformerBenchmark' \
   -wi 5 -i 10 -f 3 -w 500ms -r 500ms -t 1 -prof gc -tu ns -rf json \
-  -rff /tmp/performance-benchmark/issue-154-rerun/direct-{confirm|optimized}-t1.json
+  -rff /tmp/performance-benchmark/issue-154-rerun/direct-optimized-t1.json
 ```
 
 | Three-transformer benchmark | Before ns/op | After ns/op | Improvement |
@@ -322,3 +322,14 @@ The warmed 1-thread end-to-end allocation matrix remained deterministic:
 Sequential end-to-end baseline/final latency scores drifted by up to 12.8% even for duplicate zero-transformer parameter cells executing identical bytecode. Those absolute score deltas are therefore not used to infer a regression. The controlled no-transformer measurements from #151/#152 remain the latency gate: 11.7% and 8.2% faster with 1,808 B/op unchanged. The same-session rerun independently confirms zero additional bytes in every warmed no-transformer flow.
 
 Decision: accept the measured three-transformer optimization. Functional, allocation, direct-dispatch, warmed-lookup, and concurrency gates pass on Java 21. No `MethodHandle`, bytecode generation, pooling, or other speculative mechanism was added.
+
+## 2026-08-24: Issue #148 post-audit correctness fixes
+
+A post-implementation audit fixed primitive-array handling for dynamic `IN`, prewarming of non-public MVC handler methods, and isolation of cached plan metadata from mutable `FilterData` arrays. The no-transformer gate was rerun against the pre-issue commit `0e30bd9` in the same session with Temurin 21.0.8+9, JMH 1.37, a 1 GiB heap, five 500 ms warmups, ten 500 ms measurements, three forks, one thread, and the GC profiler. The unchanged `AnnotationStatementGeneratorPlanBenchmark` source was added to the detached baseline worktree because that benchmark did not yet exist at the baseline commit.
+
+| Revision | ns/op | B/op |
+|---|---:|---:|
+| Pre-issue `0e30bd9` | 1,264.645 +/- 26.858 | 2,336.017 |
+| Post-audit | 1,236.663 +/- 10.543 | 2,336.017 |
+
+The post-audit implementation is 2.2% faster with no allocation increase. The defensive metadata copies restore the per-request isolation that existed before plan caching without changing the baseline allocation profile. Artifacts are retained at `/tmp/opencode/issue-148-baseline.json`, `/tmp/opencode/issue-148-final.json`, and `/tmp/opencode/issue-148-final-zero-transformer.json`.

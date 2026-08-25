@@ -217,7 +217,7 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
         BoundFilterValueTransformerChain chain = filter.transformerChain();
         if (!Dynamic.class.equals(filter.operation()) || chain.isEmpty()) {
             chain.transformValues(values);
-            return createFilterData(filter.path(), filter.parameters(), filter.targetType(), filter.operation(),
+            return createFilterData(filter.path().clone(), filter.parameters().clone(), filter.targetType(), filter.operation(),
                     filter.negate(), values, filter.modifiers(), filter.description());
         }
 
@@ -232,7 +232,8 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
 
         Object[] transformedPayload;
         if (ComparisonOperation.IN.equals(comparisonOperation) && payloadSize == 1
-                && (dynamicValues[1] instanceof Object[] || dynamicValues[1] instanceof Collection<?>)) {
+                && dynamicValues[1] != null
+                && (dynamicValues[1].getClass().isArray() || dynamicValues[1] instanceof Collection<?>)) {
             transformedPayload = new Object[]{chain.transformDynamicValue(dynamicValues[1], comparisonOperation)};
         } else {
             transformedPayload = chain.transformDynamicPayload(dynamicValues, 1, comparisonOperation);
@@ -242,8 +243,8 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
         }
 
         String[] parameters = ComparisonOperation.BT.equals(comparisonOperation)
-                ? dynamicBetweenParameters(filter.parameters()) : filter.parameters();
-        return new FilterData(filter.path(), parameters, filter.targetType(), comparisonOperation.getOperation(),
+                ? dynamicBetweenParameters(filter.parameters()) : filter.parameters().clone();
+        return new FilterData(filter.path().clone(), parameters, filter.targetType(), comparisonOperation.getOperation(),
                 operationValue.length() == 3, transformedPayload, filter.modifiers(), filter.description());
     }
 

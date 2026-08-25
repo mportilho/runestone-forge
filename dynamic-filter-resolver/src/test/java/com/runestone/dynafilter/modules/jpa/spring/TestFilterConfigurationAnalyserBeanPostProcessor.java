@@ -54,6 +54,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.GetMapping;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -79,7 +80,19 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
 
         postProcessor.postProcessAfterInitialization(new ValidController(), "validController");
 
-        Mockito.verify(statementGenerator).warmup(Mockito.any());
+        Mockito.verify(statementGenerator, Mockito.times(1)).warmup(Mockito.any());
+    }
+
+    @Test
+    @DisplayName("Warmup includes non-public controller methods")
+    public void testWarmupCompilesPlanForNonPublicControllerMethod() {
+        AnnotationStatementGenerator statementGenerator = Mockito.mock(AnnotationStatementGenerator.class);
+        FilterConfigurationAnalyserBeanPostProcessor postProcessor = new FilterConfigurationAnalyserBeanPostProcessor(
+                new JpaFilterOperationService(new DefaultDataConversionService()), statementGenerator);
+
+        postProcessor.postProcessAfterInitialization(new NonPublicMethodController(), "nonPublicMethodController");
+
+        Mockito.verify(statementGenerator, Mockito.times(1)).warmup(Mockito.any());
     }
 
     @Test
@@ -321,6 +334,18 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
     private static class ValidController {
         @SuppressWarnings("unused")
         public void search(SearchState<Object> specification) {
+        }
+    }
+
+    @RestController
+    private static class NonPublicMethodController {
+        @SuppressWarnings("unused")
+        @GetMapping("/search")
+        void search(SearchState<Object> specification) {
+        }
+
+        @SuppressWarnings("unused")
+        private void helper(SearchState<Object> specification) {
         }
     }
 

@@ -3,6 +3,7 @@ package com.runestone.dynafilter.core.generator.annotation;
 import com.runestone.dynafilter.core.exceptions.StatementGenerationException;
 import com.runestone.dynafilter.core.generator.annotation.testdata.interfaces.CombinedAnnotations;
 import com.runestone.dynafilter.core.generator.annotation.testdata.interfaces.StatusOkInterface;
+import com.runestone.dynafilter.core.model.statement.LogicalStatement;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import org.junit.jupiter.api.Test;
 
@@ -83,6 +84,20 @@ class TestAnnotationStatementGeneratorPlan {
     }
 
     @Test
+    void doesNotExposePlanMetadataThroughGeneratedFilterData() {
+        AnnotationStatementGenerator generator = new AnnotationStatementGenerator(null, 10);
+        AnnotationStatementInput input = new AnnotationStatementInput(PlanIsolationFilter.class, null);
+
+        LogicalStatement first = (LogicalStatement) generator.generateStatements(input, Map.of("value", "one")).statement();
+        first.getFilterData().path()[0] = "corruptedPath";
+        first.getFilterData().parameters()[0] = "corruptedParameter";
+
+        LogicalStatement second = (LogicalStatement) generator.generateStatements(input, Map.of("value", "two")).statement();
+        assertThat(second.getFilterData().path()).containsExactly("target");
+        assertThat(second.getFilterData().parameters()).containsExactly("value");
+    }
+
+    @Test
     void preservesRuntimeErrorOrderingAfterStructuralCompilation() {
         AnnotationStatementGenerator generator = new AnnotationStatementGenerator();
         AnnotationStatementInput input = new AnnotationStatementInput(RequiredBeforeInvalid.class, null);
@@ -123,6 +138,10 @@ class TestAnnotationStatementGeneratorPlan {
             operation = Equals.class
     ))
     private interface ResolverFailureBeforeInvalid {
+    }
+
+    @Conjunction(@Filter(path = "target", parameters = "value", operation = Equals.class))
+    private interface PlanIsolationFilter {
     }
 
     @Retention(RUNTIME)

@@ -17,10 +17,14 @@ import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.stereotype.Controller;
+import org.springframework.util.ReflectionUtils;
+import org.springframework.web.bind.annotation.RequestMapping;
 
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.List;
@@ -68,7 +72,11 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanFactory
     }
 
     private void validateControllerType(Class<?> controllerType) {
-        for (Method method : controllerType.getMethods()) {
+        for (Method method : ReflectionUtils.getUniqueDeclaredMethods(controllerType)) {
+            if (!Modifier.isPublic(method.getModifiers())
+                    && !AnnotatedElementUtils.hasAnnotation(method, RequestMapping.class)) {
+                continue;
+            }
             for (Parameter parameter : method.getParameters()) {
                 warmupAndCheckFilterConfiguration(parameter);
             }

@@ -73,6 +73,17 @@ class TestDynamicFilterValueTransformation {
     }
 
     @Test
+    void keepsPrimitiveArrayAsAScalarDynamicInPayload() {
+        int[] payload = {1, 2};
+        FilterValueTransformer transformer = (value, context) -> value;
+
+        FilterData data = generate(generator(transformer), "in", payload);
+
+        assertThat(data.values()).containsExactly((Object) payload);
+        assertThat(data.values()[0]).isSameAs(payload);
+    }
+
+    @Test
     void validatesBetweenArityBeforeInvokingTransformers() {
         CapturingTransformer transformer = new CapturingTransformer();
 
