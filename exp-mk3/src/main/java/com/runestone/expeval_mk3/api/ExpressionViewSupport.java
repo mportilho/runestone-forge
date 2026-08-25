@@ -2,14 +2,12 @@ package com.runestone.expeval_mk3.api;
 
 import com.runestone.expeval_mk3.internal.plan.AssignedSymbol;
 import com.runestone.expeval_mk3.internal.plan.ExecutionPlan;
+import com.runestone.expeval_mk3.internal.runtime.PublicMaterialization;
 
 import java.util.List;
 
 /**
- * Selection-time compatibility checks shared by every {@code CompiledExpression} view. Each check runs
- * once, from the plan's static {@link ExecutionPlan#resultType()} or
- * {@link ExecutionPlan#assignedSymbolsInCreationOrder()}, before any override is prepared or the plan
- * executes.
+ * Compatibility checks and memory-enabled execution lifecycle shared by expression views.
  */
 final class ExpressionViewSupport {
 
@@ -52,5 +50,10 @@ final class ExpressionViewSupport {
         if (assignedSymbols.size() > maxMaterializedSize) {
             throw ExpressionViewException.of(ExpressionViewException.Reason.MATERIALIZATION_LIMIT_EXCEEDED, null, null);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> ComputationWithMemory<T> narrow(ComputationWithMemory<?> computation) {
+        return (ComputationWithMemory<T>) computation;
     }
 }

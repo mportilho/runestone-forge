@@ -266,7 +266,7 @@ class SemanticModelCompletenessGateTest {
                 .build();
         SemanticModel model = resolve("x", environment);
 
-        assertThatThrownBy(() -> rebuild(model, builder -> builder.frameLayout = new FrameLayout(List.of(), 1)))
+        assertThatThrownBy(() -> rebuild(model, builder -> builder.frameLayout = new FrameLayout(List.of(), 0, 1)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("canonical frame layout");
     }

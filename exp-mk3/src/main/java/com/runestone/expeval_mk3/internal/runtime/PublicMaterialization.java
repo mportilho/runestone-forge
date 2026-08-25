@@ -1,26 +1,31 @@
-package com.runestone.expeval_mk3.api;
+package com.runestone.expeval_mk3.internal.runtime;
 
+import com.runestone.expeval_mk3.api.CollectionType;
+import com.runestone.expeval_mk3.api.ExpressionType;
+import com.runestone.expeval_mk3.api.MapType;
+import com.runestone.expeval_mk3.api.ObjectType;
+import com.runestone.expeval_mk3.api.ScalarType;
+import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.diagnostics.RuntimeFailures;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
-/**
- * The single type-directed boundary that turns a computed internal value into its canonical public
- * representation: scalars as-is, collections and maps as recursive, immutable, size-checked snapshots
- * detached from any internal or provider-owned structure. Shared by every public expression view,
- * including the future assignments view.
- */
-final class PublicMaterialization {
+/** Creates bounded immutable values at the public execution boundary. */
+public final class PublicMaterialization {
 
     private PublicMaterialization() {
     }
 
-    static boolean isPubliclyExposable(ExpressionType type) {
+    public static boolean isPubliclyExposable(ExpressionType type) {
         return switch (type) {
             case ScalarType ignored -> true;
             case CollectionType collectionType -> isPubliclyExposable(collectionType.elementType());
@@ -29,7 +34,7 @@ final class PublicMaterialization {
         };
     }
 
-    static Object materialize(Object value, ExpressionType type, int maxMaterializedSize, SourceSpan span) {
+    public static Object materialize(Object value, ExpressionType type, int maxMaterializedSize, SourceSpan span) {
         if (value == null) {
             throw RuntimeFailures.forbiddenNull("public expression result must not be null", span);
         }
@@ -43,7 +48,14 @@ final class PublicMaterialization {
     }
 
     private static Object materializeScalar(Object value, ScalarType scalarType) {
-        Class<?> expectedType = ExpressionJavaTypes.scalarValueType(scalarType);
+        Class<?> expectedType = switch (scalarType) {
+            case NUMBER -> BigDecimal.class;
+            case BOOLEAN -> Boolean.class;
+            case STRING -> String.class;
+            case DATE -> LocalDate.class;
+            case TIME -> LocalTime.class;
+            case DATETIME -> LocalDateTime.class;
+        };
         if (!expectedType.isInstance(value)) {
             throw new IllegalStateException(
                     "expected " + expectedType.getName() + " for " + scalarType + " but found " + value.getClass());

@@ -2,6 +2,7 @@ package com.runestone.expeval_mk3.api;
 
 import com.runestone.expeval_mk3.internal.plan.AssignedSymbol;
 import com.runestone.expeval_mk3.internal.plan.ExecutionPlan;
+import com.runestone.expeval_mk3.internal.runtime.PublicMaterialization;
 import com.runestone.expeval_mk3.internal.runtime.RuntimeServices;
 
 import java.util.Collections;
@@ -45,5 +46,14 @@ public final class AssignmentsExpression {
                     rawValues.get(index), symbol.type(), plan.maxMaterializedSize(), symbol.sourceSpan()));
         }
         return Collections.unmodifiableMap(materialized);
+    }
+
+    public ComputationWithMemory<Map<String, Object>> computeWithMemory() {
+        return computeWithMemory(Map.of());
+    }
+
+    public ComputationWithMemory<Map<String, Object>> computeWithMemory(Map<String, ?> overrides) {
+        Objects.requireNonNull(overrides, "overrides");
+        return plan.computeAssignmentsWithMemory(overrides, runtimeServices.clock());
     }
 }

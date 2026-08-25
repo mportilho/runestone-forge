@@ -1,12 +1,15 @@
 package com.runestone.expeval_mk3.internal.semantics;
 
-import java.util.List;
 import java.util.HashSet;
+import java.util.List;
 
-public record FrameLayout(List<SymbolBinding> externalBindings, int frameSize) {
+public record FrameLayout(List<SymbolBinding> externalBindings, int assignmentExternalBindingCount, int frameSize) {
 
     public FrameLayout {
         externalBindings = List.copyOf(externalBindings);
+        if (assignmentExternalBindingCount < 0 || assignmentExternalBindingCount > externalBindings.size()) {
+            throw new IllegalArgumentException("assignmentExternalBindingCount must be within externalBindings");
+        }
         if (frameSize < externalBindings.size()) {
             throw new IllegalArgumentException("frameSize must cover external bindings");
         }

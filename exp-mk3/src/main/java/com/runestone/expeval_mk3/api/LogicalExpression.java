@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.api;
 
 import com.runestone.expeval_mk3.internal.plan.ExecutionPlan;
+import com.runestone.expeval_mk3.internal.runtime.PublicMaterialization;
 import com.runestone.expeval_mk3.internal.runtime.RuntimeServices;
 
 import java.util.Map;
@@ -34,5 +35,14 @@ public final class LogicalExpression {
         Object value = plan.compute(overrides, runtimeServices.clock());
         return (Boolean) PublicMaterialization.materialize(
                 value, ScalarType.BOOLEAN, plan.maxMaterializedSize(), resultSourceSpan);
+    }
+
+    public ComputationWithMemory<Boolean> computeWithMemory() {
+        return computeWithMemory(Map.of());
+    }
+
+    public ComputationWithMemory<Boolean> computeWithMemory(Map<String, ?> overrides) {
+        Objects.requireNonNull(overrides, "overrides");
+        return ExpressionViewSupport.narrow(plan.computeWithMemory(overrides, runtimeServices.clock()));
     }
 }

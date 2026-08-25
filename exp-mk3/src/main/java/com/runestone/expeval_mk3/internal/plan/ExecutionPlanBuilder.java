@@ -10,6 +10,8 @@ import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.RuntimeNullability;
 import com.runestone.expeval_mk3.api.ScalarType;
+import com.runestone.expeval_mk3.api.VariableKey;
+import com.runestone.expeval_mk3.api.VariableOrigin;
 import com.runestone.expeval_mk3.internal.ast.AssignmentNode;
 import com.runestone.expeval_mk3.internal.ast.AssignmentTargetNode;
 import com.runestone.expeval_mk3.internal.ast.BetweenNode;
@@ -46,6 +48,7 @@ import com.runestone.expeval_mk3.internal.ast.StringKeySubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
+import com.runestone.expeval_mk3.internal.memory.VariableMemorySchema;
 import com.runestone.expeval_mk3.internal.runtime.AddDecimalExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.BetweenExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.BinaryExecutableNode;
@@ -213,6 +216,24 @@ public final class ExecutionPlanBuilder {
                 .map(assignment -> buildAssignment(assignment, model, environment, deferredChecksByNode, foldedReads, memoSlots))
                 .toList();
         List<AssignedSymbol> assignedSymbolsInCreationOrder = buildAssignedSymbolsInCreationOrder(model);
+        VariableKey[] externalVariableKeys = externalBindings.stream()
+                .map(binding -> new VariableKey(binding.symbol().name(), VariableOrigin.EXTERNAL))
+                .toArray(VariableKey[]::new);
+        VariableKey[] internalVariableKeys = assignedSymbolsInCreationOrder.stream()
+                .map(symbol -> new VariableKey(symbol.name(), VariableOrigin.INTERNAL))
+                .toArray(VariableKey[]::new);
+        VariableMemorySchema fullVariableMemorySchema = buildVariableMemorySchema(
+                externalBindings,
+                externalBindings.size(),
+                assignedSymbolsInCreationOrder,
+                externalVariableKeys,
+                internalVariableKeys);
+        VariableMemorySchema assignmentVariableMemorySchema = buildVariableMemorySchema(
+                externalBindings,
+                model.frameLayout().assignmentExternalBindingCount(),
+                assignedSymbolsInCreationOrder,
+                externalVariableKeys,
+                internalVariableKeys);
         return new ExecutionPlan(
                 result,
                 resultType,
@@ -221,10 +242,36 @@ public final class ExecutionPlanBuilder {
                 declaredSymbolsInCanonicalOrder,
                 assignedSymbolsInCreationOrder,
                 foldedReads,
+                fullVariableMemorySchema,
+                assignmentVariableMemorySchema,
                 model.frameLayout().frameSize() + commonSubexpressions.memoSlotCount(),
                 environment.boundaryCoercion(),
                 environment.zoneId(),
                 environment.maxMaterializedSize());
+    }
+
+    private static VariableMemorySchema buildVariableMemorySchema(
+            List<ExternalBindingPlan> externalBindings,
+            int externalBindingCount,
+            List<AssignedSymbol> assignedSymbols,
+            VariableKey[] externalVariableKeys,
+            VariableKey[] internalVariableKeys) {
+        int variableCount = externalBindingCount + assignedSymbols.size();
+        VariableKey[] keys = new VariableKey[variableCount];
+        int[] frameSlots = new int[variableCount];
+        int index = 0;
+        for (; index < externalBindingCount; index++) {
+            ExternalBindingPlan binding = externalBindings.get(index);
+            keys[index] = externalVariableKeys[index];
+            frameSlots[index] = binding.frameSlot();
+        }
+        for (int assignedIndex = 0; assignedIndex < assignedSymbols.size(); assignedIndex++) {
+            AssignedSymbol symbol = assignedSymbols.get(assignedIndex);
+            keys[index] = internalVariableKeys[assignedIndex];
+            frameSlots[index] = symbol.frameSlot();
+            index++;
+        }
+        return new VariableMemorySchema(keys, frameSlots);
     }
 
     /**

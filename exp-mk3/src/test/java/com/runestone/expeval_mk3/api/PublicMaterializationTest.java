@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.api;
 
+import com.runestone.expeval_mk3.internal.runtime.PublicMaterialization;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

@@ -132,6 +132,7 @@ public final class SemanticResolver {
             for (AssignmentNode assignment : ast.assignments()) {
                 resolveAssignment(assignment);
             }
+            int assignmentExternalBindingCount = externalBindings.size();
             if (ast.assignments().isEmpty() && ast.resultExpression().isEmpty()) {
                 // ast.sourceSpan() falls back to the EOF token position, offset 0/line 1/column 1 for a
                 // literally empty source, matching the decided stable span for this diagnostic.
@@ -169,7 +170,7 @@ public final class SemanticResolver {
                     navigationBindings,
                     numericFacts,
                     deferredChecks,
-                    new FrameLayout(externalBindings, nextFrameSlot)), warnings);
+                    new FrameLayout(externalBindings, assignmentExternalBindingCount, nextFrameSlot)), warnings);
         }
 
         private void resolveAssignment(AssignmentNode assignment) {

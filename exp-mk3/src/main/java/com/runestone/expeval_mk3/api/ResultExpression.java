@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.api;
 
 import com.runestone.expeval_mk3.internal.plan.ExecutionPlan;
+import com.runestone.expeval_mk3.internal.runtime.PublicMaterialization;
 import com.runestone.expeval_mk3.internal.runtime.RuntimeServices;
 
 import java.util.Map;
@@ -33,5 +34,14 @@ public final class ResultExpression {
         Objects.requireNonNull(overrides, "overrides");
         Object value = plan.compute(overrides, runtimeServices.clock());
         return PublicMaterialization.materialize(value, resultType, plan.maxMaterializedSize(), resultSourceSpan);
+    }
+
+    public ComputationWithMemory<Object> computeWithMemory() {
+        return computeWithMemory(Map.of());
+    }
+
+    public ComputationWithMemory<Object> computeWithMemory(Map<String, ?> overrides) {
+        Objects.requireNonNull(overrides, "overrides");
+        return plan.computeWithMemory(overrides, runtimeServices.clock());
     }
 }
