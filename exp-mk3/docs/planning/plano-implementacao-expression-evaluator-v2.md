@@ -231,14 +231,14 @@ arvore ou segundo plano.
   Proveniencia, tipo e nome descritivo.
 - Um unico Plano Imutavel. Nos marcaveis carregam `int calculationSlot`, cujo encoding inativo e ordem
   de branch sao detalhes medidos;
-  `compute()` preserva o frame exato e `computeWithMemory()` usa cauda estendida no frame apenas na
-  execucao local.
+  `compute()` preserva o frame exato e `computeWithMemory()` usa captura append-only apenas na execucao
+  local.
 - Pontos marcaveis fechados em funcao global, propriedade/metodo Java registrado e Valor Temporal
   Corrente. Operacoes de colecao e todos os seus descendentes sao fronteiras opacas.
 - Folding transfere grupos de proveniencia estatica ao no constante; CSE transfere ao
   `MemoizedExecutableNode` as capturas que um hit pula; plano otimizado e Oraculo Sem Otimizacoes
   produzem memorias equivalentes por ocorrencia, inclusive para pontos aninhados.
-- Freeze somente depois da Materializacao Publica, com sentinel privado para ponto alcancado com null,
+- Freeze somente depois da Materializacao Publica, com `count` distinguindo ponto alcancado com null,
   chaves preconstruidas em schema sem back-reference, arrays finais exatos e sidecar de ordinais apenas
   quando houver lacunas. Entries publicas nao sao criadas no caminho de computacao.
 - Schemas de variaveis carregam slots explicitos e variantes completa/assignments-only, pois variaveis
@@ -246,8 +246,8 @@ arvore ou segundo plano.
 - A rota interna mantem `ExecutionScope` e resultado cru apenas em variaveis locais ate
   `materializar -> freeze`, sem holder intermediario; a visao de atribuicoes le slots diretamente e nao
   cria a lista crua de valores do caminho atual.
-- Append-only permanece controle/fallback documentado para eventual evidencia de planos grandes e
-  esparsos; dense+bitmap, adaptacao em runtime, eventos, snapshots, profundidade, ring buffer e
+- Frame-tail permanece controle documentado; dense+bitmap, adaptacao em runtime, eventos, snapshots,
+  profundidade, ring buffer e
   `maxAuditEvents` ficam fora.
 
 **Critérios de aceite:** o JMH vinculante mede captura, freeze, percurso indexado, percurso pelas listas

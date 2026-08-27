@@ -1,5 +1,39 @@
 # Performance History
 
+## 2026-08-26 - Etapa 10 Production Calculation Capture (issue #141)
+
+Purpose: verify the selected append-only recorder in the real `ExecutionPlan.compute()` and
+`computeWithMemory()` paths, including no-point, one-point dense, and leading-gap execution.
+
+Environment: Eclipse Temurin 21.0.8+9-LTS, JMH 1.37, Linux x86_64, `-Xms1g -Xmx1g`, three forks,
+5x500 ms warmup, 10x500 ms measurement, GC profiler.
+
+Results (`ns/op / B/op`): normal `compute()` measured 15.41/24 (`S=0`), 29.49/56 (`S=1`), and
+28.69/56 (leading-gap source). `computeWithMemory()` measured 49.83/144, 80.42/232, and 130.33/344,
+respectively, including exact payload construction and indexed consumption. Normal execution uses no
+recorder and does not extend the frame. Raw output:
+`/tmp/opencode/issue-141/java21-production-path.json`.
+
+## 2026-08-26 - Etapa 10 Capture-Storage Reconciliation (issue #155)
+
+Purpose: resolve the frame-tail versus append-only decision reopened by issue #139 before calculation
+capture enters production. The gate corrected append capacity so it depends only on static `S`, derived
+`F/S` from 144 current corpus plans, and measured corpus and required lazy/dense shapes.
+
+Environment: Eclipse Temurin 21.0.8+9-LTS, JMH 1.37, Linux x86_64, `-Xms1g -Xmx1g`. The final
+end-to-end run used three forks, 5x500 ms warmup and 10x500 ms measurement; a no-fork run paired capture,
+freeze and full flow in one JVM. Both used the GC profiler and JSON output.
+
+Verdict: **ACCEPT append-only capture for production; retain frame-tail only as a benchmark control.**
+The dominant current shape (`S=1`) improved end-to-end latency by 12.5% and saved 8 B/op; current dense
+`S=2` improved by 5.6% and also saved 8 B/op. Gapped shapes favored frame-tail by 4.2-6.1% and used
+48-72 fewer B/op. JOL retained graphs were identical. The explicit tie-break prioritizes
+current-corpus end-to-end latency, then working allocation, and therefore selects append without claiming
+universal dominance. Monotonic append remains valid under lazy reachability, folding groups,
+per-occurrence CSE replay, and collection opacity. Columnar publication, mode-first branching, and
+increment-during-capture counting remain accepted. Full rationale and results are in
+`docs/planning/etapa-10/calculation-capture-storage-reconciliation.md`.
+
 ## 2026-08-19 - Etapa 10 Binding Persistable-Payload Gate (issue #139)
 
 Purpose: repeat the storage decision with exact columnar publication, standalone prebuilt keys,
@@ -9,7 +43,7 @@ and empty, dense, prefix, one-point, alternating and sparse reach.
 
 Environment: Eclipse Temurin 25.0.3+9-LTS, JMH 1.37, Linux x86_64, `-Xms1g -Xmx1g`, two forks,
 3x250 ms warmup, 5x250 ms measurement, `gc` profiler and JSON output. Maven, JMH driver and forks used
-the same pinned JVM. Java 21 deployment rerun remains outstanding.
+the same pinned JVM. The then-outstanding Java 21 deployment rerun was completed by issue #155.
 
 | Representative integrated flow | Frame columnar ns/B | Append columnar ns/B | Frame eager ns/B |
 |---|---:|---:|---:|
@@ -18,7 +52,7 @@ the same pinned JVM. Java 21 deployment rerun remains outstanding.
 | `S=64`, alternating | 722.2 / **864** | **642.5** / 1,320 | 718.9 / 1,648 |
 | `S=256`, sparse 4 | 700.3 / 1,352 | **200.7 / 328** | 744.4 / 1,608 |
 
-Verdict: **REOPEN frame-tail storage and BLOCK production calculation-memory changes; ACCEPT columnar
+Historical verdict, resolved by issue #155: **REOPEN frame-tail storage and BLOCK production calculation-memory changes; ACCEPT columnar
 publication, mode-first branch and per-capture counting.** Exact freeze removes frame-tail's
 historical small/dense dominance. Frame and append both remain Pareto-relevant, so append is not
 automatically promoted. An integrated `capture -> materialize -> freeze -> sink` matrix confirms that

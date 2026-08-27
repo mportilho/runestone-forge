@@ -3,14 +3,14 @@
 Date: 2026-08-16; resolved after prototype and design session on 2026-08-18
 Scope: Java 21, `exp-mk3` only, research and measurement guidance; no production-code change.
 
-Final status: the storage prototype selected the execution-frame tail as the implementation base. The
-subsequent persistence-oriented review selected exact columnar value payloads, prebuilt standalone keys,
-allocation-free indexed traversal, and immutable `List` projections for convenience. Eager entry arrays
-are retained only as a benchmark control because they duplicate the transient object graph that a
-persistence adapter normally consumes once. The final plan is
+Final status: issue #155 reconciled the later binding gate and selected append-only capture on Java 21.
+The persistence-oriented review selected exact columnar value payloads, prebuilt standalone keys,
+allocation-free indexed traversal, and immutable `List` projections for convenience. Frame-tail and
+eager entry arrays remain benchmark controls. The final plan is
 [`etapa-10-memoria-de-calculo.md`](./etapa-10-memoria-de-calculo.md), and ADR 0023 records the
-architectural choice. A binding JMH gate with the real API and a sequential persistence sink remains
-required before production.
+architectural choice. The binding and reconciliation gates are recorded in
+[`binding-persistable-payload-benchmark.md`](binding-persistable-payload-benchmark.md) and
+[`calculation-capture-storage-reconciliation.md`](calculation-capture-storage-reconciliation.md).
 
 ## Fixed architecture
 
@@ -24,7 +24,7 @@ This report assumes the agreed design rather than reopening it:
 
 The current runtime already creates a fresh [`ExecutionScope`](../../../src/main/java/com/runestone/expeval_mk3/internal/runtime/ExecutionScope.java) and clones its frame for each call. A prior per-thread whole-scope pool saved only 80 B/op (3.58%) and did not improve latency, so it was removed ([performance history](../../perf/performance-history.md#2026-08-13---issue-129-executionscope-pool-permanence-decision)). That result does not prove that every recorder optimization will fail, but it sets a high evidence bar for reuse and pooling.
 
-## Executive conclusion
+## Historical candidate analysis
 
 Keep the execution-local state on heap and ordinary. For this runtime, the first implementation to measure should be:
 
@@ -36,13 +36,14 @@ Keep the execution-local state on heap and ordinary. For this runtime, the first
 6. Prebuild public keys in standalone provenance metadata shared by memories without any back-reference to `ExecutionPlan`, executable nodes, source text, or the environment.
 7. Expose allocation-free indexed key/value access for persistence and immutable `variables()` / `calculations()` projections for convenience. Do not create or cache entry records during compute/freeze.
 
-This shape exploits an allocation the runtime already makes and avoids a recorder while execution is in
-progress. Compact publication means the frame is discarded after freeze and each returned memory owns
-only reached values plus optional ordinals, while keys and source spans are amortized by a standalone
-schema. The append recorder below remains the principal control and may win for unusually large, sparse
-plans. Capture storage and publication layout are separate benchmark axes.
+The analysis below records the original frame-tail candidate and is retained as historical rationale.
+Issue #155 later selected append-only after correcting its capacity model and measuring corpus-derived
+Java 21 shapes. Capture storage and publication layout remain separate benchmark axes.
 
-## Ranked recommendations
+## Historical ranked recommendations
+
+> Superseded for storage by issue #155. Exact columnar publication and the other independent
+> recommendations remain current.
 
 | Rank | Recommendation | Expected effect | Confidence / gate |
 |---:|---|---|---|
@@ -54,7 +55,7 @@ plans. Capture storage and publication layout are separate benchmark axes.
 | 6 | Compare per-capture counting against post-execution counting | Trades a write at every reached point and a scope field against an extra linear freeze scan | Binding capture/freeze split benchmark |
 | 7 | Keep append-only only as a documented fallback; discard dense and adaptive forms | Avoids a second production representation without real large-sparse demand | Prototype evidence; reconsider only from production telemetry |
 
-## Primary candidate: calculation tail in the execution frame
+## Historical primary candidate: calculation tail in the execution frame
 
 Let `F` be the normal frame length, including CSE memo slots, and `S` the number of dynamic calculation slots. The planner assigns every marked node an absolute slot in `[F, F + S)`. The cached `frameTemplate` remains length `F`.
 
@@ -354,16 +355,17 @@ Use JFR after JMH identifies finalists, because JMH allocation is the quantitati
 
 Also run `jcmd GC.class_histogram` and JOL graph footprints for controlled test fixtures. `GC.class_histogram` and heap dumps are high-impact diagnostics, so keep them out of scored JMH runs ([S24]).
 
-## Decision sequence
+## Completed decision sequence
 
-1. The storage prototype proved frame-tail as the current-scale winner, append as the large-sparse control, and dense+bitmap as dominated.
+1. The first storage prototype selected frame-tail provisionally and discarded dense+bitmap.
 2. Define prebuilt public keys, compact columnar payload, indexed access, and immutable list projections in the benchmark fixture.
 3. Benchmark frame-tail and append across compute-only, freeze, indexed consumption, list consumption, and a sequential no-I/O persistence sink; retain eager entries as a control.
 4. Benchmark slot/mode branch order and reach counting independently from storage/publication.
-5. Reopen storage or publication if it is no longer Pareto-winning in representative current-scale cases; otherwise land only frame-tail plus compact publication.
+5. The binding gate reopened storage; issue #155 corrected append capacity, derived current scale from
+   the corpus, and selected append-only with compact publication.
 6. Prove current-item restoration, no plan back-reference, and optimized/Oracle memory equivalence.
 7. Measure node-plan growth and key/schema alternatives with JOL; profile allocation stacks and generated branches with JFR/JMH profilers.
-8. Repeat the complete verdict on Java 21 and consider append in production only if later telemetry finds a material population of large sparse plans.
+8. The complete verdict was repeated on Temurin 21.0.8. Frame-tail remains only a benchmark control.
 
 ## Primary sources
 

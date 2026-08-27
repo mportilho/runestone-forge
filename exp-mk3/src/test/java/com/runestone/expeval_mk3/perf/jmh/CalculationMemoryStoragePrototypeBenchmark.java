@@ -138,6 +138,50 @@ public class CalculationMemoryStoragePrototypeBenchmark {
     }
 
     @Benchmark
+    public void representativeFrameColumnar(RepresentativeState state, Blackhole sink) {
+        BindingState binding = state.binding();
+        FrameCapture capture = binding.captureFrameTail();
+        Computation computation = new Computation(
+                binding.materializePublicResult(),
+                binding.freezeFrameTail(capture, binding.fullSchema));
+        sink.consume(computation.result);
+        computation.memory.consume(sink);
+    }
+
+    @Benchmark
+    public void representativeAppendColumnar(RepresentativeState state, Blackhole sink) {
+        BindingState binding = state.binding();
+        AppendCapture capture = binding.captureAppend();
+        Computation computation = new Computation(
+                binding.materializePublicResult(),
+                binding.freezeAppend(capture, binding.fullSchema));
+        sink.consume(computation.result);
+        computation.memory.consume(sink);
+    }
+
+    @Benchmark
+    public FrameCapture representativeFrameCapture(RepresentativeState state) {
+        return state.binding().captureFrameTail();
+    }
+
+    @Benchmark
+    public AppendCapture representativeAppendCapture(RepresentativeState state) {
+        return state.binding().captureAppend();
+    }
+
+    @Benchmark
+    public ColumnarMemory representativeFrameFreeze(RepresentativeState state) {
+        BindingState binding = state.binding();
+        return binding.freezeFrameTail(binding.frameCapture, binding.fullSchema);
+    }
+
+    @Benchmark
+    public ColumnarMemory representativeAppendFreeze(RepresentativeState state) {
+        BindingState binding = state.binding();
+        return binding.freezeAppend(binding.appendCapture, binding.fullSchema);
+    }
+
+    @Benchmark
     public void computeAndConsumeFrameEager(BindingState state, Blackhole sink) {
         FrameCapture capture = state.captureFrameTail();
         EagerComputation computation = new EagerComputation(
@@ -178,6 +222,7 @@ public class CalculationMemoryStoragePrototypeBenchmark {
 
         private static final Object UNBOUND = new Object();
         private static final Object CAPTURED_NULL = new Object();
+        private static final Object[] NO_VALUES = new Object[0];
         private static final int NORMAL_FRAME_SIZE = 24;
         private static final int[] FULL_VARIABLE_SLOTS = {0, 3, 5, 9, 12, 15, 20, 23};
         private static final int[] ASSIGNMENT_VARIABLE_SLOTS = {0, 5, 12, 20};
@@ -189,6 +234,9 @@ public class CalculationMemoryStoragePrototypeBenchmark {
         private Reachability reachability;
 
         private Object[] frameTemplate;
+        private int normalFrameSize = NORMAL_FRAME_SIZE;
+        private int[] fullVariableSlots = FULL_VARIABLE_SLOTS;
+        private int[] assignmentVariableSlots = ASSIGNMENT_VARIABLE_SLOTS;
         private Payload[] calculationValues;
         private int[] reachedSlots;
         private StandaloneSchema fullSchema;
@@ -196,25 +244,23 @@ public class CalculationMemoryStoragePrototypeBenchmark {
         private FrameCapture frameCapture;
         private AppendCapture appendCapture;
         private ColumnarMemory columnarMemory;
+        private ColumnarMemory appendColumnarMemory;
         private EagerMemory eagerMemory;
         private Object rawResult;
 
         @Setup(Level.Trial)
         public void setUp() {
-            reachedSlots = reachability.slots(slotCount);
-            frameTemplate = new Object[NORMAL_FRAME_SIZE];
-            Arrays.fill(frameTemplate, UNBOUND);
-            for (int index = 0; index < FULL_VARIABLE_SLOTS.length; index++) {
-                frameTemplate[FULL_VARIABLE_SLOTS[index]] = value(index);
+            if (reachability != null) {
+                reachedSlots = reachability.slots(slotCount);
             }
-            // Slots 1/7 model Item Atual and slots 17/19 model memo storage interleaved with variables.
-            frameTemplate[1] = UNBOUND;
-            frameTemplate[7] = UNBOUND;
-            frameTemplate[17] = UNBOUND;
-            frameTemplate[19] = UNBOUND;
+            frameTemplate = new Object[normalFrameSize];
+            Arrays.fill(frameTemplate, UNBOUND);
+            for (int index = 0; index < fullVariableSlots.length; index++) {
+                frameTemplate[fullVariableSlots[index]] = value(index);
+            }
             calculationValues = new Payload[slotCount];
             Arrays.setAll(calculationValues, index -> new Payload(1_000 + index));
-            fullSchema = schema(FULL_VARIABLE_SLOTS, slotCount);
+            fullSchema = schema(fullVariableSlots, slotCount);
             assignmentsSchema = assignmentsSchema(fullSchema);
             rawResult = List.of(
                     new BigDecimal("123.45"),
@@ -225,9 +271,9 @@ public class CalculationMemoryStoragePrototypeBenchmark {
             frameCapture = captureFrameTail();
             appendCapture = captureAppend();
             columnarMemory = freezeFrameTail(frameCapture, fullSchema);
-            ColumnarMemory appendMemory = freezeAppend(appendCapture, fullSchema);
+            appendColumnarMemory = freezeAppend(appendCapture, fullSchema);
             eagerMemory = freezeEager(frameCapture, fullSchema);
-            assertEquivalent(columnarMemory, appendMemory, eagerMemory);
+            assertEquivalent(columnarMemory, appendColumnarMemory, eagerMemory);
         }
 
         void configure(int slotCount, Reachability reachability) {
@@ -235,8 +281,27 @@ public class CalculationMemoryStoragePrototypeBenchmark {
             this.reachability = reachability;
         }
 
+        void configure(int slotCount, int[] reachedSlots) {
+            this.slotCount = slotCount;
+            this.reachability = null;
+            this.reachedSlots = reachedSlots.clone();
+        }
+
+        void configure(int normalFrameSize, int variableCount, int slotCount, int[] reachedSlots) {
+            this.normalFrameSize = normalFrameSize;
+            this.fullVariableSlots = new int[variableCount];
+            Arrays.setAll(fullVariableSlots, index -> index);
+            this.assignmentVariableSlots = Arrays.copyOf(fullVariableSlots, (variableCount + 1) / 2);
+            Arrays.setAll(assignmentVariableSlots, index -> index * 2);
+            configure(slotCount, reachedSlots);
+        }
+
         ColumnarMemory columnarMemory() {
             return columnarMemory;
+        }
+
+        ColumnarMemory appendColumnarMemory() {
+            return appendColumnarMemory;
         }
 
         EagerMemory eagerMemory() {
@@ -252,31 +317,34 @@ public class CalculationMemoryStoragePrototypeBenchmark {
         }
 
         FrameCapture captureFrameTail() {
-            Object[] frame = Arrays.copyOf(frameTemplate, NORMAL_FRAME_SIZE + slotCount);
+            Object[] frame = Arrays.copyOf(frameTemplate, normalFrameSize + slotCount);
             int reachedCount = 0;
             for (int slot : reachedSlots) {
-                frame[NORMAL_FRAME_SIZE + slot] = capturedValue(slot);
+                frame[normalFrameSize + slot] = capturedValue(slot);
                 reachedCount++;
             }
             return new FrameCapture(frame, reachedCount);
         }
 
         FrameCapture captureFrameTailWithoutCount() {
-            Object[] frame = Arrays.copyOf(frameTemplate, NORMAL_FRAME_SIZE + slotCount);
+            Object[] frame = Arrays.copyOf(frameTemplate, normalFrameSize + slotCount);
             for (int slot : reachedSlots) {
-                frame[NORMAL_FRAME_SIZE + slot] = capturedValue(slot);
+                frame[normalFrameSize + slot] = capturedValue(slot);
             }
             return new FrameCapture(frame, -1);
         }
 
         AppendCapture captureAppend() {
             Object[] frame = frameTemplate.clone();
-            Object[] values = new Object[Math.max(1, Math.min(8, reachedSlots.length))];
+            if (slotCount == 0) {
+                return new AppendCapture(frame, NO_VALUES, null, 0);
+            }
+            Object[] values = new Object[Math.min(8, slotCount)];
             int[] ordinals = null;
             int count = 0;
             for (int slot : reachedSlots) {
                 if (count == values.length) {
-                    values = Arrays.copyOf(values, Math.min(reachedSlots.length, count + (count >> 1) + 1));
+                    values = Arrays.copyOf(values, Math.min(slotCount, count + (count >> 1) + 1));
                     if (ordinals != null) {
                         ordinals = Arrays.copyOf(ordinals, values.length);
                     }
@@ -300,9 +368,9 @@ public class CalculationMemoryStoragePrototypeBenchmark {
         }
 
         Object materializeAssignments(Object[] frame) {
-            Object[] values = new Object[ASSIGNMENT_VARIABLE_SLOTS.length];
-            for (int index = 0; index < ASSIGNMENT_VARIABLE_SLOTS.length; index++) {
-                values[index] = frame[ASSIGNMENT_VARIABLE_SLOTS[index]];
+            Object[] values = new Object[assignmentVariableSlots.length];
+            for (int index = 0; index < assignmentVariableSlots.length; index++) {
+                values[index] = frame[assignmentVariableSlots[index]];
             }
             return List.of(values);
         }
@@ -314,7 +382,7 @@ public class CalculationMemoryStoragePrototypeBenchmark {
             int[] ordinals = null;
             int target = 0;
             for (int slot = 0; slot < slotCount; slot++) {
-                Object value = capture.frame[NORMAL_FRAME_SIZE + slot];
+                Object value = capture.frame[normalFrameSize + slot];
                 if (value == null) {
                     continue;
                 }
@@ -350,7 +418,7 @@ public class CalculationMemoryStoragePrototypeBenchmark {
             CalculationEntry[] calculations = new CalculationEntry[capture.reachedCount];
             int target = 0;
             for (int slot = 0; slot < slotCount; slot++) {
-                Object value = capture.frame[NORMAL_FRAME_SIZE + slot];
+                Object value = capture.frame[normalFrameSize + slot];
                 if (value != null) {
                     calculations[target++] = new CalculationEntry(schema.calculationKeys[slot], exposed(value));
                 }
@@ -361,7 +429,7 @@ public class CalculationMemoryStoragePrototypeBenchmark {
         int countReached(Object[] frame) {
             int count = 0;
             for (int slot = 0; slot < slotCount; slot++) {
-                if (frame[NORMAL_FRAME_SIZE + slot] != null) {
+                if (frame[normalFrameSize + slot] != null) {
                     count++;
                 }
             }
@@ -414,14 +482,14 @@ public class CalculationMemoryStoragePrototypeBenchmark {
             return new StandaloneSchema(ownedSlots, variableKeys, calculationKeys);
         }
 
-        private static StandaloneSchema assignmentsSchema(StandaloneSchema fullSchema) {
-            int[] selectedIndexes = {0, 2, 4, 6};
-            VariableKey[] keys = new VariableKey[selectedIndexes.length];
-            for (int index = 0; index < selectedIndexes.length; index++) {
-                keys[index] = fullSchema.variableKeys[selectedIndexes[index]];
+        private StandaloneSchema assignmentsSchema(StandaloneSchema fullSchema) {
+            VariableKey[] keys = new VariableKey[assignmentVariableSlots.length];
+            for (int index = 0; index < assignmentVariableSlots.length; index++) {
+                int fullIndex = Arrays.binarySearch(fullSchema.variableSlots, assignmentVariableSlots[index]);
+                keys[index] = fullSchema.variableKeys[fullIndex];
             }
             return new StandaloneSchema(
-                    ASSIGNMENT_VARIABLE_SLOTS.clone(),
+                    assignmentVariableSlots.clone(),
                     keys,
                     fullSchema.calculationKeys);
         }
@@ -454,6 +522,38 @@ public class CalculationMemoryStoragePrototypeBenchmark {
             }
         }
 
+    }
+
+    /** Named Etapa 10 execution shapes used to break the storage Pareto tie. */
+    @State(Scope.Benchmark)
+    public static class RepresentativeState {
+
+        @Param
+        private RepresentativeShape shape;
+        private BindingState binding;
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            binding = new BindingState();
+            binding.configure(shape.frameSize, shape.variableCount, shape.slotCount, shape.reachedSlots);
+            binding.setUp();
+        }
+
+        void configure(RepresentativeShape shape) {
+            this.shape = shape;
+        }
+
+        BindingState binding() {
+            return binding;
+        }
+
+        ColumnarMemory columnarMemory() {
+            return binding.columnarMemory();
+        }
+
+        ColumnarMemory appendColumnarMemory() {
+            return binding.appendColumnarMemory();
+        }
     }
 
     @State(Scope.Benchmark)
@@ -620,6 +720,40 @@ public class CalculationMemoryStoragePrototypeBenchmark {
         };
 
         abstract int[] slots(int slotCount);
+    }
+
+    public enum RepresentativeShape {
+        CORPUS_P50_NO_POINTS(1, 1, 0),
+        CORPUS_P95_ONE_POINT(2, 2, 1, 0),
+        CORPUS_SAFE_ONE_SKIPPED(1, 1, 1),
+        CORPUS_MAX_DENSE(8, 8, 2, 0, 1),
+        CORPUS_MAX_GAPPED(8, 8, 2, 1),
+        CORPUS_SAFE_TWO_SKIPPED(1, 1, 2),
+        CORPUS_SAFE_TWO_PREFIX(1, 1, 2, 0),
+        REQUIRED_NESTED_DENSE(4, 2, 4, 0, 1, 2, 3),
+        REQUIRED_ASSIGNMENTS_DENSE(8, 6, 8, 0, 1, 2, 3, 4, 5, 6, 7),
+        REQUIRED_LAZY_PREFIX(4, 2, 4, 0),
+        REQUIRED_LAZY_GAPPED(8, 4, 8, 0, 3, 4);
+
+        private final int frameSize;
+        private final int variableCount;
+        private final int slotCount;
+        private final int[] reachedSlots;
+
+        RepresentativeShape(int frameSize, int variableCount, int slotCount, int... reachedSlots) {
+            this.frameSize = frameSize;
+            this.variableCount = variableCount;
+            this.slotCount = slotCount;
+            this.reachedSlots = reachedSlots;
+        }
+
+        int reachedCount() {
+            return reachedSlots.length;
+        }
+
+        int[] reachedSlots() {
+            return reachedSlots.clone();
+        }
     }
 
     public enum NodeShape {

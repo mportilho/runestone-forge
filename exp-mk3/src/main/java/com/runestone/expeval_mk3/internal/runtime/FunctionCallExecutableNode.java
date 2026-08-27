@@ -12,7 +12,8 @@ public record FunctionCallExecutableNode(
         NodeId id,
         SourceSpan sourceSpan,
         FunctionDescriptor descriptor,
-        List<ExecutableNode> arguments) implements ExecutableNode {
+        List<ExecutableNode> arguments,
+        int calculationSlot) implements ExecutableNode {
 
     public FunctionCallExecutableNode {
         Objects.requireNonNull(id, "id");
@@ -23,6 +24,8 @@ public record FunctionCallExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.invokeFunction(descriptor, arguments, scope, sourceSpan);
+        Object value = ExpressionRuntime.invokeFunction(descriptor, arguments, scope, sourceSpan);
+        scope.captureCalculation(calculationSlot, value);
+        return value;
     }
 }

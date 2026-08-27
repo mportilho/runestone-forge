@@ -41,6 +41,29 @@ class CalculationMemoryStoragePrototypeTest {
                 .isInstanceOf(IndexOutOfBoundsException.class);
     }
 
+    @Test
+    void representativeEtapa10ShapesProduceEquivalentPayloads() {
+        for (CalculationMemoryStoragePrototypeBenchmark.RepresentativeShape shape
+                : CalculationMemoryStoragePrototypeBenchmark.RepresentativeShape.values()) {
+            var state = new CalculationMemoryStoragePrototypeBenchmark.RepresentativeState();
+            state.configure(shape);
+            state.setUp();
+
+            assertThat(state.columnarMemory().indexedChecksum())
+                    .as(shape.name())
+                    .isEqualTo(state.appendColumnarMemory().indexedChecksum())
+                    .isEqualTo(state.columnarMemory().listChecksum());
+
+            var append = state.binding().captureAppend();
+            assertThat(append.count()).as(shape.name()).isEqualTo(shape.reachedCount());
+            if (append.ordinals() != null) {
+                assertThat(append.ordinals())
+                        .as(shape.name())
+                        .startsWith(shape.reachedSlots());
+            }
+        }
+    }
+
     private static CalculationMemoryStoragePrototypeBenchmark.BindingState state(
             int slotCount,
             CalculationMemoryStoragePrototypeBenchmark.Reachability reachability) {

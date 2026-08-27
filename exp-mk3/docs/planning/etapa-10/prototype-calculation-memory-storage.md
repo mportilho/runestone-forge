@@ -1,9 +1,10 @@
 # PROTOTYPE ONLY: Calculation-memory storage
 
 > Historical result. Issue #139 added the binding persistable-contract benchmark and reopened the
-> frame-tail storage decision. See
-> [`binding-persistable-payload-benchmark.md`](binding-persistable-payload-benchmark.md). Dense plus
-> bitmap remains discarded; the historical numbers below are preserved as prior evidence.
+> frame-tail storage decision; issue #155 subsequently selected append-only on Java 21 after correcting
+> its capacity model and deriving current scale from the corpus. See
+> [`calculation-capture-storage-reconciliation.md`](calculation-capture-storage-reconciliation.md).
+> Dense plus bitmap remains discarded; the historical numbers below are preserved as prior evidence.
 
 Question: which of the three most promising execution-local storage models should Etapa 10 use for
 `computeWithMemory()`?

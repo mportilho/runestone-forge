@@ -32,10 +32,19 @@ public final class VariableMemorySchema {
         if (frameSlots.length == 0) {
             return DefaultCalculationMemory.emptyInstance();
         }
+        return DefaultCalculationMemory.variables(keys, copyValues(scope));
+    }
+
+    List<VariableKey> keys() {
+        return keys;
+    }
+
+    Object[] copyValues(ExecutionScope scope) {
+        Objects.requireNonNull(scope, "scope");
         Object[] values = new Object[frameSlots.length];
         for (int index = 0; index < frameSlots.length; index++) {
             values[index] = scope.read(frameSlots[index]);
         }
-        return DefaultCalculationMemory.variables(keys, values);
+        return values;
     }
 }

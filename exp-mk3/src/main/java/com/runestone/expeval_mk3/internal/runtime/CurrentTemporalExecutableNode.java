@@ -10,7 +10,8 @@ import java.util.Objects;
 public record CurrentTemporalExecutableNode(
         NodeId id,
         SourceSpan sourceSpan,
-        CurrentTemporalValueKind kind) implements ExecutableNode {
+        CurrentTemporalValueKind kind,
+        int calculationSlot) implements ExecutableNode {
 
     public CurrentTemporalExecutableNode {
         Objects.requireNonNull(id, "id");
@@ -20,10 +21,12 @@ public record CurrentTemporalExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return switch (kind) {
+        Object value = switch (kind) {
             case DATE -> scope.currentDate();
             case TIME -> scope.currentTime();
             case DATE_TIME -> scope.currentDateTime();
         };
+        scope.captureCalculation(calculationSlot, value);
+        return value;
     }
 }

@@ -1,5 +1,7 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
+import com.runestone.expeval_mk3.internal.memory.CalculationRecorder;
+
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -17,6 +19,7 @@ public class ExecutionScope {
     private final Object[] frame;
     private final ZoneId zoneId;
     private final Clock clock;
+    private final CalculationRecorder calculationRecorder;
     private ZonedDateTime currentInstant;
 
     /** Builds a frame template with every slot set to the {@code UNBOUND} sentinel, distinct from {@code null}. */
@@ -27,9 +30,14 @@ public class ExecutionScope {
     }
 
     public ExecutionScope(Object[] frame, ZoneId zoneId, Clock clock) {
+        this(frame, zoneId, clock, null);
+    }
+
+    public ExecutionScope(Object[] frame, ZoneId zoneId, Clock clock, CalculationRecorder calculationRecorder) {
         this.frame = Objects.requireNonNull(frame, "frame");
         this.zoneId = Objects.requireNonNull(zoneId, "zoneId");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.calculationRecorder = calculationRecorder;
     }
 
     public Object read(int slot) {
@@ -75,6 +83,13 @@ public class ExecutionScope {
     /** Reads a memoized value already known bound by a prior {@link #isMemoUnbound} check. */
     public Object readMemo(int slot) {
         return frame[slot];
+    }
+
+    public void captureCalculation(int calculationSlot, Object value) {
+        CalculationRecorder active = calculationRecorder;
+        if (active != null && calculationSlot >= 0) {
+            active.append(calculationSlot, value);
+        }
     }
 
     public LocalDate currentDate() {

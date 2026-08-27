@@ -1,9 +1,8 @@
 # Plano Detalhado - Etapa 10 - Memoria de Calculo
 
 Este plano substitui a proposta anterior de auditoria por eventos. Ele incorpora a pesquisa JVM, o
-prototipo JMH de armazenamento e as decisoes publicas fechadas para `computeWithMemory()`. A Etapa 10
-parte da cauda estendida no frame como base de implementacao, mas exige um ultimo gate com o payload
-publico compacto e seu consumo sequencial antes de alterar o runtime de producao.
+prototipo JMH de armazenamento e as decisoes publicas fechadas para `computeWithMemory()`. O gate de
+reconciliacao da issue #155 selecionou captura append-only local com payload publico compacto.
 
 ## Objetivo
 
@@ -21,12 +20,12 @@ nao premissas fixadas pelo desenho fonte.
 
 - O ADR 0019 continua normativo para equivalencia entre o plano otimizado e o Oraculo Sem
   Otimizacoes.
-- O ADR 0023 registra a escolha de um unico plano com captura em cauda de frame.
+- O ADR 0023 registra a escolha de um unico plano com captura append-only local.
 - `performance-compute-with-memory.md` registra a pesquisa JVM e os riscos de retencao.
 - `prototype-calculation-memory-storage.md` registra a comparacao JMH entre cauda no frame,
   append-only e denso com bitmap.
-- O prototipo local foi medido em Temurin 25.0.3. O fechamento da etapa exige repeticao no Java 21 de
-  deployment.
+- `calculation-capture-storage-reconciliation.md` registra o desempate em Temurin 21.0.8 e autoriza a
+  implementacao de producao append-only.
 
 ## Resultado Publico
 
@@ -166,13 +165,8 @@ representacao.
 
 Cada familia de no marcavel recebe um `int calculationSlot` imutavel. O encoding de
 `NO_CALCULATION_SLOT` permanece interno. O no calcula o valor uma unica vez e, quando a captura esta
-ativa e a ocorrencia e marcavel, grava a referencia ja calculada. A implementacao deve escolher por
-JMH/perfasm entre tres formas equivalentes:
-
-- slot primeiro, evitando tocar o frame em descendentes opacos nao marcados;
-- modo primeiro, fazendo `compute()` abandonar a captura com um unico teste;
-- slot absoluto com sentinel alto, fundindo modo e validade em uma unica comparacao com o comprimento
-  do frame.
+ativa e a ocorrencia e marcavel, acrescenta a referencia ja calculada. O gate escolheu mode-first:
+`compute()` abandona a captura antes de validar o slot; descendentes opacos usam o slot inativo.
 
 Nao se adiciona um segundo plano para obter um branch melhor. A forma vencedora precisa preservar
 opacidade de colecao, inline do helper e uma unica avaliacao do valor.
@@ -207,35 +201,35 @@ O inventario de calculos percorre primeiro atribuicoes em ordem de fonte e depoi
 seguindo ordem real de avaliacao dentro de cada arvore. Nao usa ordem de construcao dos nos, pois o
 builder atual constroi a expressao final antes das atribuicoes, nem ordena por `NodeId`, pois pais recebem
 identidade antes de filhos que executam primeiro. Plano otimizado e Oracle compartilham ordinais/chaves
-publicos mesmo quando seus slots absolutos diferem por causa dos slots de memo.
+publicos independentemente dos slots de memo.
 
 O Oraculo Sem Otimizacoes recebe o mesmo inventario de ocorrencias e chaves. Sua memoria deve ser
 equivalente a memoria otimizada em chaves, valores, nulls, alcance e ordem, alem da equivalencia de
 resultado e falha ja exigida pelo ADR 0019.
 
-## Execucao com Cauda no Frame
+## Execucao com Captura Append-only
 
 Se `F` e o tamanho normal do frame, incluindo slots de memo, `S` e o numero de Pontos de Calculo e `K`
 e o numero de pontos alcancados:
 
-- `compute()` continua clonando o template de tamanho exato `F`;
-- `computeWithMemory()` cria `Arrays.copyOf(frameTemplate, F + S)`;
-- os slots absolutos de calculo ocupam `[F, F + S)`;
-- `null` na cauda significa ponto nao alcancado;
-- um sentinel privado `CAPTURED_NULL` significa ponto alcancado com Valor Nulo de Runtime;
-- o modo e discriminado pelo comprimento do frame, sem recorder, interface ou null object;
-- o resultado publico e materializado antes do freeze; se essa borda falhar, nenhum payload de memoria
-  e alocado;
-- o freeze copia os valores participantes para `Object[]` exatos, reutiliza as chaves do schema e
-  descarta o frame temporario;
-- calculos densos em ordem usam apenas `Object[K]`; calculos com lacunas acrescentam `int[K]` com os
-  ordinais no schema; vazios reutilizam arrays e listas singleton;
-- nenhuma entrada publica e criada no freeze;
-- a escolha entre `count++` durante cada captura mais uma varredura e contagem posterior mais duas
-  varreduras e vinculada a JMH. A segunda forma remove uma escrita do hot path e um campo potencial de
-  `ExecutionScope`; a primeira reduz trabalho de freeze. Grupos de folding/CSE entram na mesma conta;
+- `compute()` continua clonando o template de tamanho exato `F` e nao cria recorder;
+- `computeWithMemory()` tambem mantem o frame exato e ativa um recorder append-only local apenas quando
+  `S > 0`;
+- o recorder mantem `Object[] values`, `int[] ordinals` opcional e `count`; `count` distingue null
+  alcancado de ausencia sem sentinel ou bitmap;
+- a capacidade inicial e pequena e limitada por `S`; crescimento usa arrays simples e nunca ultrapassa
+  o numero estatico de pontos;
+- enquanto os ordinais alcancados formam o prefixo `0..K-1`, nao existe sidecar; a primeira lacuna cria
+  o sidecar e preenche o prefixo anterior;
+- o resultado publico e materializado antes do freeze; se essa borda falhar, nenhum payload final de
+  memoria e alocado;
+- no freeze, arrays com tamanho exato transferem ownership; arrays com capacidade excedente sao
+  truncados para `K`; chaves do schema sao reutilizadas;
+- calculos densos em ordem usam apenas `Object[K]`; calculos com lacunas usam tambem `int[K]` exato;
+- nenhuma entrada publica e criada durante captura ou freeze;
+- `count` e incrementado durante a captura, conforme o gate da issue #139;
 - slots de memo e Item Atual nao sao publicados. A disciplina `finally` de Item Atual continua sendo
-  requisito de correcao, mas o frame completo nao fica retido pela memoria.
+  requisito de correcao, e nem frame nem recorder ficam retidos pela memoria.
 
 Sem participantes, retorna-se uma instancia vazia compartilhada de `CalculationMemory`.
 
@@ -244,7 +238,7 @@ Sem participantes, retorna-se uma instancia vazia compartilhada de `CalculationM
 A rota de memoria mantem o `ExecutionScope` apenas em variavel local da implementacao enquanto executa
 estas fases:
 
-1. preparar frame estendido e aplicar overrides;
+1. preparar frame normal, recorder append-only quando `S > 0`, e aplicar overrides;
 2. executar atribuicoes e, exceto em `AssignmentsExpression`, a expressao final;
 3. executar exatamente uma vez a Materializacao Publica normal;
 4. congelar o payload colunar;
@@ -261,9 +255,8 @@ constroi o mapa final. A rota de memoria nao chama o atual `computeAssignedValue
 ao `compute()` normal somente se preservar comportamento e passar seu proprio gate; nao e pre-condicao
 para alterar o caminho normal nesta etapa.
 
-Append-only com sidecar lazy continua apenas como controle de benchmark e fallback documentado para
-planos grandes e esparsos. Denso com bitmap esta descartado. Nao ha estrategia adaptativa, selecao em
-runtime ou limiar publico nesta etapa.
+Cauda estendida no frame continua apenas como controle de benchmark. Denso com bitmap esta descartado.
+Nao ha estrategia adaptativa, selecao em runtime ou limiar publico nesta etapa.
 
 ## Organizacao e Direcao de Dependencias
 
@@ -276,7 +269,7 @@ runtime ou limiar publico nesta etapa.
 - A fronteira coesa `internal.memory` possui schema, payload colunar e operacoes de freeze. Ela
   depende dos contratos publicos de chave, mas nao de Visoes de Expressao nem do
   grafo de nos.
-- `internal.runtime` grava somente por slot no frame local. Nos executaveis conhecem apenas o
+- `internal.runtime` grava somente por ordinal no recorder local. Nos executaveis conhecem apenas o
   `calculationSlot` e `ExecutionScope`; nao importam `CalculationEntry`, listas ou builders publicos.
 - A Visao de Expressao continua responsavel por Materializacao Publica do resultado e monta
   `ComputationWithMemory<T>` a partir do payload interno por um seam de propriedade, sem copia de
@@ -304,9 +297,9 @@ dependencias internas coesas, nao para suportar multiplas estrategias em produca
   freeze. O controle de `compute()` nao pode ganhar alocacao nem segundo plano.
 - Registrar o resultado no historico de desempenho.
 
-**Stop rule:** se a cauda ou o payload colunar deixarem de ser Pareto vencedores no fluxo
+**Stop rule:** se o armazenamento ou o payload colunar deixarem de ser Pareto vencedores no fluxo
 `computeWithMemory() -> consumo sequencial` dos casos representativos, a respectiva escolha e reaberta
-antes de codigo de producao. Vitorias do prototipo simplificado nao podem ignorar a evidencia nova.
+antes de codigo de producao. A issue #155 aplicou esta regra e selecionou append-only.
 
 ### Incremento 2 - API publica e schema
 
@@ -319,13 +312,13 @@ antes de codigo de producao. Vitorias do prototipo simplificado nao podem ignora
 - Adicionar `computeWithMemory()` com e sem overrides nas quatro visoes.
 - Preservar exatamente a Materializacao Publica de cada `compute()` existente.
 
-### Incremento 3 - Frame estendido e freeze
+### Incremento 3 - Captura append-only e freeze
 
-- Separar preparacao do frame normal e do frame estendido sem duplicar validacao de overrides.
+- Separar preparacao normal e preparacao com recorder sem duplicar validacao de overrides.
 - Criar o ciclo interno `preparar -> executar -> materializar -> freeze` sem holder intermediario e sem
   alterar a rota direta de `compute()`.
-- Adicionar gravacao por slot, sentinel de null alcancado e a estrategia de alcance vencedora.
-- Materializar somente arrays compactos depois da Materializacao Publica e liberar o frame temporario.
+- Adicionar append por ordinal, sidecar lazy e contagem durante captura.
+- Materializar somente arrays compactos depois da Materializacao Publica e liberar o recorder temporario.
 - Em `AssignmentsExpression`, ler slots atribuidos diretamente durante a construcao do mapa publico,
   sem a lista crua intermediaria.
 - Cobrir vazio, null, falha, raiz marcavel e todas as visoes.
@@ -389,8 +382,9 @@ antes de codigo de producao. Vitorias do prototipo simplificado nao podem ignora
   segundo plano para remove-la.
 - O delta estrutural alvo de `computeWithMemory()` sobre a mesma computacao normal e: um envelope, uma
   `CalculationMemory`, no maximo um `Object[V]`, um `Object[K]` e, somente para alcance com lacunas,
-  um `int[K]`. Frame estendido e Materializacao Publica continuam contabilizados separadamente como
-  working allocation e resultado normal. Schema, chaves e spans alocam na compilacao, nao por execucao.
+  um `int[K]`. Recorder append-only e Materializacao Publica continuam contabilizados separadamente
+  como working allocation e resultado normal. Schema, chaves e spans alocam na compilacao, nao por
+  execucao.
 - O caminho indexado nao aloca lista, iterator, entry, chave, span, lambda, builder ou mapa. Qualquer
   objeto adicional por execucao precisa de justificativa em perfil e comparacao JMH.
 - A forma de branch escolhida inlineia e passa os gates de branches/op, branch-misses/op e codigo de
@@ -401,8 +395,8 @@ antes de codigo de producao. Vitorias do prototipo simplificado nao podem ignora
   materializa o resultado exatamente uma vez e nao faz segunda copia de colecao/mapa capturado.
 - A travessia indexada completa aloca zero B/op no evaluator; alocacoes do sink de persistencia sao
   responsabilidade do sink e medidas separadamente.
-- Nao existe entry por item no freeze, `ArrayList` seguido de copia, objeto recorder na estrategia de
-  cauda, bitmap, mapa de identidade ou reconstrucao de chave por execucao.
+- Nao existe entry por item no freeze, `ArrayList`, recorder polimorfico, bitmap, mapa de identidade ou
+  reconstrucao de chave por execucao.
 
 ### Retencao e Concorrencia
 
@@ -419,12 +413,13 @@ antes de codigo de producao. Vitorias do prototipo simplificado nao podem ignora
 - Busca por nome, mapa derivado ou indice hash adicional.
 - Sink/callback de persistencia, serializer oficial ou integracao JDBC/JPA.
 - Copia profunda ou opcao de snapshot destacado.
-- Append-only em producao, estrategia adaptativa, dense+bitmap ou pooling.
-- Telemetria de producao nesta etapa. Append so volta em trabalho futuro se dados reais mostrarem uma
-  populacao relevante de planos grandes com baixo `K/S`.
+- Cauda no frame em producao, estrategia adaptativa, dense+bitmap ou pooling.
+- Telemetria de producao nesta etapa. Cauda so volta a ser candidata se dados posteriores mostrarem uma
+  populacao material de planos densos grandes em que sua economia de working allocation seja decisiva.
 
 ## Decisoes Pendentes
 
-Nenhuma decisao de produto permanece aberta. Forma de branch, contagem de alcance, armazenamento de
-captura e detalhes internos de schema/payload/projecoes continuam condicionados aos gates declarados,
-sem alterar o contrato publico ou introduzir estrategia adaptativa em producao.
+Nenhuma decisao de produto permanece aberta. A issue #155 selecionou append-only; mode-first e contagem
+durante captura permanecem os resultados da issue #139. Detalhes internos de capacidade e crescimento
+continuam condicionados aos gates declarados, sem alterar o contrato publico ou introduzir estrategia
+adaptativa em producao.

@@ -1,5 +1,9 @@
 # Binding benchmark: persistable calculation-memory payload
 
+> Historical binding result. Issue #155 resolved the reopened storage decision in favor of append-only
+> capture on Java 21. See
+> [`calculation-capture-storage-reconciliation.md`](calculation-capture-storage-reconciliation.md).
+
 Issue #139 evolves the historical storage prototype into the persistable contract required before
 Etapa 10 production work. The fixture remains entirely under `src/test`: this ticket introduces no
 calculation-memory production code.

@@ -68,6 +68,16 @@ public final class DefaultCalculationMemory implements CalculationMemory {
         return new DefaultCalculationMemory(variableKeys, variableValues, List.of(), NO_VALUES, null);
     }
 
+    static DefaultCalculationMemory combined(
+            List<VariableKey> variableKeys,
+            Object[] variableValues,
+            List<CalculationKey> calculationKeys,
+            Object[] calculationValues,
+            int[] calculationOrdinals) {
+        return new DefaultCalculationMemory(
+                variableKeys, variableValues, calculationKeys, calculationValues, calculationOrdinals);
+    }
+
     @Override
     public int variableCount() {
         return variableValues.length;
@@ -108,6 +118,7 @@ public final class DefaultCalculationMemory implements CalculationMemory {
 
     @Override
     public CalculationKey calculationKeyAt(int index) {
+        Objects.checkIndex(index, calculationValues.length);
         int ordinal = calculationOrdinals == null ? index : calculationOrdinals[index];
         return calculationKeys.get(ordinal);
     }

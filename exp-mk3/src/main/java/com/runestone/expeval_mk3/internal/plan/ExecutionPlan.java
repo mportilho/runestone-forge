@@ -8,7 +8,8 @@ import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.diagnostics.RuntimeFailures;
-import com.runestone.expeval_mk3.internal.memory.VariableMemorySchema;
+import com.runestone.expeval_mk3.internal.memory.CalculationMemorySchema;
+import com.runestone.expeval_mk3.internal.memory.CalculationRecorder;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 import com.runestone.expeval_mk3.internal.runtime.PublicMaterialization;
@@ -40,8 +41,8 @@ public final class ExecutionPlan {
     private final Set<String> declaredSymbolNames;
     private final List<AssignedSymbol> assignedSymbolsInCreationOrder;
     private final List<FoldedRead> foldedVariableReads;
-    private final VariableMemorySchema fullVariableMemorySchema;
-    private final VariableMemorySchema assignmentVariableMemorySchema;
+    private final CalculationMemorySchema fullCalculationMemorySchema;
+    private final CalculationMemorySchema assignmentCalculationMemorySchema;
     private final Object[] frameTemplate;
     private final BoundaryCoercion boundaryCoercion;
     private final ZoneId zoneId;
@@ -55,8 +56,8 @@ public final class ExecutionPlan {
             List<ExternalSymbol> declaredSymbolsInCanonicalOrder,
             List<AssignedSymbol> assignedSymbolsInCreationOrder,
             List<FoldedRead> foldedVariableReads,
-            VariableMemorySchema fullVariableMemorySchema,
-            VariableMemorySchema assignmentVariableMemorySchema,
+            CalculationMemorySchema fullCalculationMemorySchema,
+            CalculationMemorySchema assignmentCalculationMemorySchema,
             int frameSize,
             BoundaryCoercion boundaryCoercion,
             ZoneId zoneId,
@@ -70,9 +71,10 @@ public final class ExecutionPlan {
         this.externalBindings = List.copyOf(externalBindings);
         this.assignedSymbolsInCreationOrder = List.copyOf(assignedSymbolsInCreationOrder);
         this.foldedVariableReads = List.copyOf(foldedVariableReads);
-        this.fullVariableMemorySchema = Objects.requireNonNull(fullVariableMemorySchema, "fullVariableMemorySchema");
-        this.assignmentVariableMemorySchema = Objects.requireNonNull(
-                assignmentVariableMemorySchema, "assignmentVariableMemorySchema");
+        this.fullCalculationMemorySchema = Objects.requireNonNull(
+                fullCalculationMemorySchema, "fullCalculationMemorySchema");
+        this.assignmentCalculationMemorySchema = Objects.requireNonNull(
+                assignmentCalculationMemorySchema, "assignmentCalculationMemorySchema");
         bindingsByName = this.externalBindings.stream()
                 .collect(Collectors.toUnmodifiableMap(binding -> binding.symbol().name(), binding -> binding));
         this.declaredSymbolsInCanonicalOrder = List.copyOf(declaredSymbolsInCanonicalOrder);
@@ -146,11 +148,12 @@ public final class ExecutionPlan {
     }
 
     public ComputationWithMemory<Object> computeWithMemory(Map<String, ?> overrides, Clock clock) {
-        ExecutionScope scope = executeAssignments(overrides, clock);
+        CalculationRecorder recorder = fullCalculationMemorySchema.newRecorder();
+        ExecutionScope scope = executeAssignments(overrides, clock, recorder);
         Object value = executeResult(scope);
         Object result = PublicMaterialization.materialize(
                 value, resultType, maxMaterializedSize, resultSourceSpan());
-        CalculationMemory memory = fullVariableMemorySchema.freeze(scope);
+        CalculationMemory memory = fullCalculationMemorySchema.freeze(scope, recorder);
         return new ComputationWithMemory<>(result, memory);
     }
 
@@ -169,18 +172,24 @@ public final class ExecutionPlan {
 
     public ComputationWithMemory<Map<String, Object>> computeAssignmentsWithMemory(
             Map<String, ?> overrides, Clock clock) {
-        ExecutionScope scope = executeAssignments(overrides, clock);
+        CalculationRecorder recorder = assignmentCalculationMemorySchema.newRecorder();
+        ExecutionScope scope = executeAssignments(overrides, clock, recorder);
         Map<String, Object> materialized = new LinkedHashMap<>();
         for (AssignedSymbol symbol : assignedSymbolsInCreationOrder) {
             materialized.put(symbol.name(), PublicMaterialization.materialize(
                     scope.read(symbol.frameSlot()), symbol.type(), maxMaterializedSize, symbol.sourceSpan()));
         }
         Map<String, Object> result = Collections.unmodifiableMap(materialized);
-        CalculationMemory memory = assignmentVariableMemorySchema.freeze(scope);
+        CalculationMemory memory = assignmentCalculationMemorySchema.freeze(scope, recorder);
         return new ComputationWithMemory<>(result, memory);
     }
 
     private ExecutionScope executeAssignments(Map<String, ?> overrides, Clock clock) {
+        return executeAssignments(overrides, clock, null);
+    }
+
+    private ExecutionScope executeAssignments(
+            Map<String, ?> overrides, Clock clock, CalculationRecorder calculationRecorder) {
         Objects.requireNonNull(overrides, "overrides");
         Objects.requireNonNull(clock, "clock");
         rejectSmallestUndeclaredOverride(overrides);
@@ -201,7 +210,9 @@ public final class ExecutionPlan {
             }
         }
 
-        ExecutionScope scope = new ExecutionScope(frame, zoneId, clock);
+        ExecutionScope scope = calculationRecorder == null
+                ? new ExecutionScope(frame, zoneId, clock)
+                : new ExecutionScope(frame, zoneId, clock, calculationRecorder);
         for (AssignmentExecutable assignment : assignments) {
             assignment.execute(scope);
         }

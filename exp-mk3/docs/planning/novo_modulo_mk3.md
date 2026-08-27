@@ -368,8 +368,8 @@ deterministica, normalmente percorrida uma vez por um adaptador de persistencia:
 - Persistencia, serializacao, entidades e copia profunda ficam na borda consumidora. O caminho indicado
   percorre os acessores indexados e nao cria `VariableEntry`/`CalculationEntry` intermediarios.
 - Nao existem plano instrumentado, decorators, eventos, ring buffer, profundidade ou
-  `maxAuditEvents`. Append-only fica apenas como fallback futuro condicionado a telemetria de planos
-  grandes e esparsos.
+  `maxAuditEvents`. A captura de producao e append-only; frame-tail permanece apenas como controle de
+  benchmark.
 
 O caminho normal aceita no maximo um teste previsivel nos nos marcaveis, exige zero B/op adicional e
 investiga regressao reproduzivel acima de 1%. O gate vinculante mede captura, freeze, percurso indexado,
@@ -442,5 +442,5 @@ Ferramenta opcional: um **migrador de fonte** (regex + reparse) que converte exp
 7. Navegação por `MethodHandle`/`LambdaMetafactory` + inline caches por call-site; zero `Method.invoke` no caminho quente.
 8. Navegação segura, incluindo `?.[...]`.
 9. `@` de filtros como slot de frame com save/restore — sem thread-locals.
-10. Memoria de Calculo por cauda no frame local e payload colunar consumivel sem alocacao por entrada — um unico plano, zero B/op adicional em `compute()`.
+10. Memoria de Calculo por captura append-only local e payload colunar consumivel sem alocacao por entrada — um unico plano, zero B/op adicional em `compute()`.
 11. Parsing SLL+bail com fallback LL, warm-up de ATN, e trilha para parser Pratt artesanal com o `.g4` como especificação.

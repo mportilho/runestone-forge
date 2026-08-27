@@ -124,12 +124,16 @@ public final class ConstantFolder {
      */
     public static ExecutableNode foldAssertion(FunctionCallExecutableNode built) {
         FunctionDescriptor descriptor = built.descriptor();
-        if (descriptor.arity() == 1
-                && SCALAR_ASSERTION_OWNER.equals(descriptor.implementationMetadata().owner())
-                && descriptor.parameterTypes().getFirst().equals(descriptor.returnType())) {
+        if (isElidableAssertion(descriptor)) {
             return built.arguments().getFirst();
         }
         return built;
+    }
+
+    public static boolean isElidableAssertion(FunctionDescriptor descriptor) {
+        return descriptor.arity() == 1
+                && SCALAR_ASSERTION_OWNER.equals(descriptor.implementationMetadata().owner())
+                && descriptor.parameterTypes().getFirst().equals(descriptor.returnType());
     }
 
     /**

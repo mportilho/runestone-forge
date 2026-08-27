@@ -9,7 +9,7 @@ public final class CalculationMemoryStorageLayoutReport {
     }
 
     public static void main(String[] args) {
-        System.out.println("slots,reachability,columnarBytes,eagerBytes");
+        System.out.println("slots,reachability,frameColumnarBytes,appendColumnarBytes,eagerBytes");
         int[] slotCounts = {0, 1, 4, 16, 64, 256};
         for (int slotCount : slotCounts) {
             for (CalculationMemoryStoragePrototypeBenchmark.Reachability reachability
@@ -18,14 +18,29 @@ public final class CalculationMemoryStorageLayoutReport {
                 state.configure(slotCount, reachability);
                 state.setUp();
                 long columnarBytes = GraphLayout.parseInstance(state.columnarMemory()).totalSize();
+                long appendColumnarBytes = GraphLayout.parseInstance(state.appendColumnarMemory()).totalSize();
                 long eagerBytes = GraphLayout.parseInstance(state.eagerMemory()).totalSize();
                 System.out.printf(
-                        "%d,%s,%d,%d%n",
+                        "%d,%s,%d,%d,%d%n",
                         slotCount,
                         reachability,
                         columnarBytes,
+                        appendColumnarBytes,
                         eagerBytes);
             }
+        }
+
+        System.out.println("shape,frameColumnarBytes,appendColumnarBytes");
+        for (CalculationMemoryStoragePrototypeBenchmark.RepresentativeShape shape
+                : CalculationMemoryStoragePrototypeBenchmark.RepresentativeShape.values()) {
+            var state = new CalculationMemoryStoragePrototypeBenchmark.RepresentativeState();
+            state.configure(shape);
+            state.setUp();
+            System.out.printf(
+                    "%s,%d,%d%n",
+                    shape,
+                    GraphLayout.parseInstance(state.columnarMemory()).totalSize(),
+                    GraphLayout.parseInstance(state.appendColumnarMemory()).totalSize());
         }
     }
 }
