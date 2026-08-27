@@ -5,17 +5,39 @@ import com.runestone.expeval_mk3.internal.ast.NodeId;
 
 import java.util.Objects;
 
-/** A literal's prepared value, already resolved by semantics; execution just returns it. */
-public record ConstantExecutableNode(NodeId id, SourceSpan sourceSpan, Object value) implements ExecutableNode {
+/** A prepared or folded value, with any source calculations collapsed into it. */
+public sealed class ConstantExecutableNode implements ExecutableNode permits CapturedConstantExecutableNode {
 
-    public ConstantExecutableNode {
-        Objects.requireNonNull(id, "id");
-        Objects.requireNonNull(sourceSpan, "sourceSpan");
-        Objects.requireNonNull(value, "value");
+    private final NodeId id;
+    private final SourceSpan sourceSpan;
+    private final Object value;
+
+    public ConstantExecutableNode(NodeId id, SourceSpan sourceSpan, Object value) {
+        this.id = Objects.requireNonNull(id, "id");
+        this.sourceSpan = Objects.requireNonNull(sourceSpan, "sourceSpan");
+        this.value = Objects.requireNonNull(value, "value");
+    }
+
+    @Override
+    public NodeId id() {
+        return id;
+    }
+
+    @Override
+    public SourceSpan sourceSpan() {
+        return sourceSpan;
+    }
+
+    public Object value() {
+        return value;
     }
 
     @Override
     public Object execute(ExecutionScope scope) {
         return value;
+    }
+
+    StaticCalculationGroup calculationGroup() {
+        return StaticCalculationGroup.EMPTY;
     }
 }

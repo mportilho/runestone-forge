@@ -13,7 +13,7 @@ public record FunctionCallExecutableNode(
         SourceSpan sourceSpan,
         FunctionDescriptor descriptor,
         List<ExecutableNode> arguments,
-        int calculationSlot) implements ExecutableNode {
+        int calculationSlot) implements CalculationPointExecutableNode {
 
     public FunctionCallExecutableNode {
         Objects.requireNonNull(id, "id");

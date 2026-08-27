@@ -61,8 +61,11 @@ public final class ConstantFolder {
             }
         }
         Object value;
+        ConstantFoldSentinelScope foldScope = requiresCalculationCapture(built, requiredConstantChildren)
+                ? ConstantFoldSentinelScope.capturing()
+                : ConstantFoldSentinelScope.INSTANCE;
         try {
-            value = built.execute(ConstantFoldSentinelScope.INSTANCE);
+            value = built.execute(foldScope);
         } catch (ConstantFoldEligibilityViolation violation) {
             throw new IllegalStateException(
                     "constant fold eligibility violation for node " + built.id() + ": " + violation.getMessage(),
@@ -70,7 +73,27 @@ public final class ConstantFolder {
         } catch (RuntimeException executionFailure) {
             return built;
         }
-        return value == null ? built : new ConstantExecutableNode(built.id(), built.sourceSpan(), value);
+        if (value == null) {
+            return built;
+        }
+        StaticCalculationGroup calculationGroup = foldScope.calculationGroup();
+        return calculationGroup.isEmpty()
+                ? new ConstantExecutableNode(built.id(), built.sourceSpan(), value)
+                : new CapturedConstantExecutableNode(built.id(), built.sourceSpan(), value, calculationGroup);
+    }
+
+    private static boolean requiresCalculationCapture(
+            ExecutableNode built, ExecutableNode[] requiredConstantChildren) {
+        if (built instanceof CalculationPointExecutableNode calculationPoint
+                && calculationPoint.calculationSlot() >= 0) {
+            return true;
+        }
+        for (ExecutableNode child : requiredConstantChildren) {
+            if (!((ConstantExecutableNode) child).calculationGroup().isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -96,6 +119,14 @@ public final class ConstantFolder {
         for (ExecutableBranch branch : branches) {
             if (!(branch.condition() instanceof ConstantExecutableNode constantCondition)) {
                 remaining.add(branch);
+                continue;
+            }
+            if (!constantCondition.calculationGroup().isEmpty()) {
+                remaining.add(branch);
+                if (Boolean.TRUE.equals(constantCondition.value())) {
+                    return new ConditionalExecutableNode(
+                            built.id(), built.sourceSpan(), List.copyOf(remaining), branch.consequence());
+                }
                 continue;
             }
             if (Boolean.TRUE.equals(constantCondition.value())) {
@@ -168,6 +199,7 @@ public final class ConstantFolder {
      */
     public static ExecutableNode foldMembership(MembershipExecutableNode built) {
         if (!(built.collection() instanceof ConstantExecutableNode constantCollection)
+                || !constantCollection.calculationGroup().isEmpty()
                 || !(built.collectionType() instanceof CollectionType collectionType)) {
             return built;
         }

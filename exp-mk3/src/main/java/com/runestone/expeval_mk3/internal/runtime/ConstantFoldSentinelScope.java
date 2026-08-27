@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.util.Arrays;
 
 /**
  * The scope a candidate constant subtree is executed against while the plan builder attempts to fold
@@ -16,10 +17,20 @@ import java.time.ZoneOffset;
  */
 final class ConstantFoldSentinelScope extends ExecutionScope {
 
-    static final ConstantFoldSentinelScope INSTANCE = new ConstantFoldSentinelScope();
+    static final ConstantFoldSentinelScope INSTANCE = new ConstantFoldSentinelScope(false);
 
-    private ConstantFoldSentinelScope() {
+    private final boolean capturesCalculations;
+    private int[] calculationSlots;
+    private Object[] calculationValues;
+    private int calculationCount;
+
+    private ConstantFoldSentinelScope(boolean capturesCalculations) {
         super(new Object[0], ZoneOffset.UTC, Clock.systemUTC());
+        this.capturesCalculations = capturesCalculations;
+    }
+
+    static ConstantFoldSentinelScope capturing() {
+        return new ConstantFoldSentinelScope(true);
     }
 
     @Override
@@ -40,6 +51,47 @@ final class ConstantFoldSentinelScope extends ExecutionScope {
     @Override
     public void restore(int slot, Object previous) {
         throw new ConstantFoldEligibilityViolation("constant fold attempted a frame restore at slot " + slot);
+    }
+
+    @Override
+    public void captureCalculation(int calculationSlot, Object value) {
+        if (calculationSlot < 0) {
+            return;
+        }
+        if (!capturesCalculations) {
+            throw new ConstantFoldEligibilityViolation(
+                    "constant fold attempted to capture an unanticipated calculation point");
+        }
+        if (calculationSlots == null) {
+            calculationSlots = new int[4];
+            calculationValues = new Object[4];
+        }
+        if (calculationCount > 0 && calculationSlot <= calculationSlots[calculationCount - 1]) {
+            throw new ConstantFoldEligibilityViolation(
+                    "constant fold captured calculation ordinals out of order: " + calculationSlot);
+        }
+        if (calculationCount == calculationSlots.length) {
+            calculationSlots = Arrays.copyOf(calculationSlots, calculationCount << 1);
+            calculationValues = Arrays.copyOf(calculationValues, calculationCount << 1);
+        }
+        calculationSlots[calculationCount] = calculationSlot;
+        calculationValues[calculationCount] = value;
+        calculationCount++;
+    }
+
+    @Override
+    void captureCalculations(int[] slots, Object[] values) {
+        for (int index = 0; index < slots.length; index++) {
+            captureCalculation(slots[index], values[index]);
+        }
+    }
+
+    StaticCalculationGroup calculationGroup() {
+        return calculationCount == 0
+                ? StaticCalculationGroup.EMPTY
+                : new StaticCalculationGroup(
+                        Arrays.copyOf(calculationSlots, calculationCount),
+                        Arrays.copyOf(calculationValues, calculationCount));
     }
 
     @Override

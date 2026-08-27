@@ -92,6 +92,16 @@ public class ExecutionScope {
         }
     }
 
+    void captureCalculations(int[] calculationSlots, Object[] values) {
+        CalculationRecorder active = calculationRecorder;
+        if (active == null) {
+            return;
+        }
+        for (int index = 0; index < calculationSlots.length; index++) {
+            active.append(calculationSlots[index], values[index]);
+        }
+    }
+
     public LocalDate currentDate() {
         return currentZonedDateTime().toLocalDate();
     }

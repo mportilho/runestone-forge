@@ -11,7 +11,7 @@ public record CurrentTemporalExecutableNode(
         NodeId id,
         SourceSpan sourceSpan,
         CurrentTemporalValueKind kind,
-        int calculationSlot) implements ExecutableNode {
+        int calculationSlot) implements CalculationPointExecutableNode {
 
     public CurrentTemporalExecutableNode {
         Objects.requireNonNull(id, "id");

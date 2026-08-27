@@ -15,7 +15,7 @@ public record OracleRegisteredMethodExecutableNode(
         boolean safe,
         RegisteredMethodNavigationBinding binding,
         List<ExecutableNode> arguments,
-        int calculationSlot) implements ExecutableNode {
+        int calculationSlot) implements CalculationPointExecutableNode {
 
     public OracleRegisteredMethodExecutableNode {
         Objects.requireNonNull(id, "id");

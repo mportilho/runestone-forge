@@ -15,7 +15,7 @@ public record RegisteredMethodExecutableNode(
         boolean safe,
         RegisteredMethodNavigationBinding binding,
         List<ExecutableNode> arguments,
-        int calculationSlot) implements ExecutableNode {
+        int calculationSlot) implements CalculationPointExecutableNode {
 
     public RegisteredMethodExecutableNode {
         Objects.requireNonNull(id, "id");

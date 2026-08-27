@@ -13,7 +13,7 @@ public record OracleRegisteredPropertyExecutableNode(
         ExecutableNode receiver,
         boolean safe,
         RegisteredPropertyNavigationBinding binding,
-        int calculationSlot) implements ExecutableNode {
+        int calculationSlot) implements CalculationPointExecutableNode {
 
     public OracleRegisteredPropertyExecutableNode {
         Objects.requireNonNull(id, "id");
