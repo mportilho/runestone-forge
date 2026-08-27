@@ -29,6 +29,7 @@ import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.runtime.ConstantFolder;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
 import com.runestone.expeval_mk3.internal.semantics.RegisteredMethodNavigationBinding;
+import com.runestone.expeval_mk3.internal.semantics.RegisteredPropertyNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.SemanticModel;
 
 import java.util.ArrayList;
@@ -145,8 +146,18 @@ final class CalculationPointInventory {
                 if (binding instanceof CollectionOperationBinding || link instanceof FilterNavigationLink) {
                     continue;
                 }
-                if (binding instanceof RegisteredMethodNavigationBinding) {
-                    visitArguments(((CallNavigationLink) link).arguments());
+                if (binding instanceof RegisteredPropertyNavigationBinding propertyBinding) {
+                    add(link.id(), new CalculationKey(
+                            link.id().value(), link.sourceSpan(), CalculationKind.PROPERTY,
+                            propertyBinding.descriptor().name()));
+                    continue;
+                }
+                if (binding instanceof RegisteredMethodNavigationBinding methodBinding) {
+                    CallNavigationLink call = (CallNavigationLink) link;
+                    visitArguments(call.arguments());
+                    add(link.id(), new CalculationKey(
+                            link.id().value(), link.sourceSpan(), CalculationKind.METHOD,
+                            methodBinding.descriptor().languageName()));
                 }
             }
         }

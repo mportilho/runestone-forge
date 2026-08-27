@@ -12,7 +12,8 @@ public record OracleRegisteredPropertyExecutableNode(
         SourceSpan sourceSpan,
         ExecutableNode receiver,
         boolean safe,
-        RegisteredPropertyNavigationBinding binding) implements ExecutableNode {
+        RegisteredPropertyNavigationBinding binding,
+        int calculationSlot) implements ExecutableNode {
 
     public OracleRegisteredPropertyExecutableNode {
         Objects.requireNonNull(id, "id");
@@ -23,6 +24,8 @@ public record OracleRegisteredPropertyExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.oracleRegisteredPropertyValue(receiver.execute(scope), safe, binding, sourceSpan);
+        Object value = ExpressionRuntime.oracleRegisteredPropertyValue(receiver.execute(scope), safe, binding, sourceSpan);
+        scope.captureCalculation(calculationSlot, value);
+        return value;
     }
 }

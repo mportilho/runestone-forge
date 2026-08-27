@@ -14,7 +14,8 @@ public record OracleRegisteredMethodExecutableNode(
         ExecutableNode receiver,
         boolean safe,
         RegisteredMethodNavigationBinding binding,
-        List<ExecutableNode> arguments) implements ExecutableNode {
+        List<ExecutableNode> arguments,
+        int calculationSlot) implements ExecutableNode {
 
     public OracleRegisteredMethodExecutableNode {
         Objects.requireNonNull(id, "id");
@@ -26,7 +27,9 @@ public record OracleRegisteredMethodExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.oracleInvokeRegisteredMethod(
+        Object value = ExpressionRuntime.oracleInvokeRegisteredMethod(
                 receiver.execute(scope), safe, binding, arguments, scope, sourceSpan);
+        scope.captureCalculation(calculationSlot, value);
+        return value;
     }
 }

@@ -12,7 +12,8 @@ public record RegisteredPropertyExecutableNode(
         SourceSpan sourceSpan,
         ExecutableNode receiver,
         boolean safe,
-        RegisteredPropertyNavigationBinding binding) implements ExecutableNode {
+        RegisteredPropertyNavigationBinding binding,
+        int calculationSlot) implements ExecutableNode {
 
     public RegisteredPropertyExecutableNode {
         Objects.requireNonNull(id, "id");
@@ -23,6 +24,8 @@ public record RegisteredPropertyExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.registeredPropertyValue(receiver.execute(scope), safe, binding, sourceSpan);
+        Object value = ExpressionRuntime.registeredPropertyValue(receiver.execute(scope), safe, binding, sourceSpan);
+        scope.captureCalculation(calculationSlot, value);
+        return value;
     }
 }

@@ -1,9 +1,11 @@
 package com.runestone.expeval_mk3.internal.plan;
 
 import com.runestone.expeval_mk3.api.ComputationWithMemory;
+import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.FunctionPurity;
+import com.runestone.expeval_mk3.api.ObjectType;
 import com.runestone.expeval_mk3.internal.ast.ExpressionFileNode;
 import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildSuccess;
 import com.runestone.expeval_mk3.internal.ast.SemanticAstBuilder;
@@ -18,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,6 +67,33 @@ class CalculationMemoryPlanEquivalenceTest {
         assertThat(optimized.memory().calculations()).isEqualTo(oracle.memory().calculations());
     }
 
+    @Test
+    void optimizedAndOraclePlansAgreeForRegisteredMembersAndOpaqueCollectionBodies() {
+        Account account = new Account(BigDecimal.TEN);
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("account", new ObjectType(Account.class.getName()), account,
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("accounts", new CollectionType(new ObjectType(Account.class.getName())), List.of(account),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .registerJavaType(Account.class)
+                .registerJavaTypeMethod(Account.class, "fee", FunctionPurity.IMPURE, BigDecimal.class)
+                .functionsFrom(new Functions(), FunctionPurity.IMPURE)
+                .build();
+        SemanticModel model = resolve(
+                "account.amount + account.fee(1) + accounts.map(@ -> track(@.amount)).sum()", environment);
+        ExecutionPlanBuilder builder = new ExecutionPlanBuilder();
+
+        ComputationWithMemory<Object> optimized = builder.build(model, environment)
+                .computeWithMemory(Map.of(), Clock.systemUTC());
+        ComputationWithMemory<Object> oracle = builder.buildOracle(model, environment)
+                .computeWithMemory(Map.of(), Clock.systemUTC());
+
+        assertThat(optimized.result()).isEqualTo(oracle.result());
+        assertThat(optimized.memory().variables()).isEqualTo(oracle.memory().variables());
+        assertThat(optimized.memory().calculations()).isEqualTo(oracle.memory().calculations());
+        assertThat(optimized.memory().calculations()).hasSize(2);
+    }
+
     private static SemanticModel resolve(String source, ExpressionEnvironment environment) {
         ParseSuccess parse = (ParseSuccess) new ExpressionParser().parse(source);
         ExpressionFileNode ast = ((SemanticAstBuildSuccess) new SemanticAstBuilder().build(parse)).file();
@@ -74,6 +104,13 @@ class CalculationMemoryPlanEquivalenceTest {
 
         public BigDecimal track(BigDecimal value) {
             return value;
+        }
+    }
+
+    public record Account(BigDecimal amount) {
+
+        public BigDecimal fee(BigDecimal increment) {
+            return amount.add(increment);
         }
     }
 }

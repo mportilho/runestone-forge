@@ -14,7 +14,8 @@ public record RegisteredMethodExecutableNode(
         ExecutableNode receiver,
         boolean safe,
         RegisteredMethodNavigationBinding binding,
-        List<ExecutableNode> arguments) implements ExecutableNode {
+        List<ExecutableNode> arguments,
+        int calculationSlot) implements ExecutableNode {
 
     public RegisteredMethodExecutableNode {
         Objects.requireNonNull(id, "id");
@@ -26,7 +27,9 @@ public record RegisteredMethodExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        return ExpressionRuntime.invokeRegisteredMethod(
+        Object value = ExpressionRuntime.invokeRegisteredMethod(
                 receiver.execute(scope), safe, binding, arguments, scope, sourceSpan);
+        scope.captureCalculation(calculationSlot, value);
+        return value;
     }
 }

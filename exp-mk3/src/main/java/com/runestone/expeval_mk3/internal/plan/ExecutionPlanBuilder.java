@@ -759,8 +759,10 @@ public final class ExecutionPlanBuilder {
             case RegisteredPropertyNavigationBinding propertyBinding -> {
                 boolean safe = propertyBinding.safe();
                 ExecutableNode built = optimizing
-                        ? new RegisteredPropertyExecutableNode(id, span, receiver, safe, propertyBinding)
-                        : new OracleRegisteredPropertyExecutableNode(id, span, receiver, safe, propertyBinding);
+                        ? new RegisteredPropertyExecutableNode(
+                                id, span, receiver, safe, propertyBinding, buildContext.calculationPoints().slot(id))
+                        : new OracleRegisteredPropertyExecutableNode(
+                                id, span, receiver, safe, propertyBinding, buildContext.calculationPoints().slot(id));
                 yield foldNavigationLink(propertyBinding.pure(), built, receiver);
             }
             case RegisteredMethodNavigationBinding methodBinding -> {
@@ -772,8 +774,12 @@ public final class ExecutionPlanBuilder {
                                 argument.expression(), model, environment, deferredChecksByNode, foldedReads, memoSlots, buildContext))
                         .toList();
                 ExecutableNode built = optimizing
-                        ? new RegisteredMethodExecutableNode(id, span, receiver, safe, methodBinding, arguments)
-                        : new OracleRegisteredMethodExecutableNode(id, span, receiver, safe, methodBinding, arguments);
+                        ? new RegisteredMethodExecutableNode(
+                                id, span, receiver, safe, methodBinding, arguments,
+                                buildContext.calculationPoints().slot(id))
+                        : new OracleRegisteredMethodExecutableNode(
+                                id, span, receiver, safe, methodBinding, arguments,
+                                buildContext.calculationPoints().slot(id));
                 ExecutableNode[] requiredConstants = new ExecutableNode[arguments.size() + 1];
                 requiredConstants[0] = receiver;
                 for (int i = 0; i < arguments.size(); i++) {
