@@ -30,6 +30,99 @@ Artifacts: `/tmp/performance-benchmark/issue-156-before-direct.json`,
 `/tmp/performance-benchmark/issue-156-after-direct.json`, and
 `/tmp/performance-benchmark/issue-156-comparison.md`.
 
+## 2026-08-30 - Segunda rodada de comparacoes adicionais de runtime
+
+Purpose: compare three more steady-state runtime mechanisms shared by `exp-mk3` and
+`expression-evaluator`: direct indexing into an externally supplied collection, an anchored regular
+expression with alternating matching/nonmatching text, and a four-operation numeric
+comparison/equality chain joined by non-short-circuiting `xor`. Compilation, environment construction,
+input-map construction, and result-equivalence checks remain outside the measured path.
+
+Environment: Eclipse Temurin 21.0.8+9-LTS; JMH 1.37; Linux x86_64; Intel Core i7-7700HQ;
+`-Xms1g -Xmx1g`; one thread; three forks; 5x500 ms warmup and 10x500 ms measurement; 99.9%
+confidence intervals; GC profiler enabled; commit `df5bd8c` plus the comparison fixtures.
+
+Results are `ns/op +/- 99.9% CI`; lower is better. Performance delta is
+`(legacy - MK3) / legacy`, so a positive value means MK3 is faster. Allocation delta is MK3 minus
+legacy bytes per operation.
+
+| Runtime area | Previous module | MK3 | MK3 performance | Previous B/op | MK3 B/op | Allocation delta |
+|---|---:|---:|---:|---:|---:|---:|
+| Dynamic collection override, direct index | 62.80 +/- 1.45 | 93.66 +/- 1.29 | -49.13% | 64 | 184 | +120 B |
+| Four numeric comparisons joined by `xor` | 276.71 +/- 8.36 | 157.59 +/- 2.63 | +43.05% | 72 | 64 | -8 B |
+| Anchored regex, alternating match/miss | 149.23 +/- 7.94 | 135.10 +/- 5.52 | +9.47% | 272 | 264 | -8 B |
+
+Verdict: **MIXED.** MK3 is 1.76x as fast for the comparison chain and 9.47% faster for the anchored
+regex while allocating 8 B/op less in both. For direct indexing into an overridden collection, MK3
+is 1.49x as slow and allocates 2.88x as much. That result includes each engine's public input-boundary
+handling and identifies collection override preparation/materialization as the next investigation
+target. The regex is fully anchored because the previous module uses substring search while MK3 uses
+whole-input matching; anchoring makes the selected workload's results equivalent.
+
+Benchmark: `com.runestone.expeval_mk3.perf.jmh.LegacyComparisonBenchmark`.
+
+### Direct collection index investigation
+
+The direct-index regression was isolated to external collection preparation, before the index node
+runs. Every collection override eagerly constructed its diagnostic label, copied the source into an
+`ArrayList`, and wrapped that list in an unmodifiable view. For the four-element canonical-number
+input, this accounted for the full 120 B/op gap over the previous evaluator; the index operation
+itself only performs bounds normalization and `List.get`.
+
+The accepted change builds override diagnostics only on failure. A `List` is now validated without
+an intermediate container and passed to `List.copyOf` when every element is already canonical. This
+still snapshots mutable lists, rejects null or incompatible elements, and enforces
+`maxMaterializedSize`; lists requiring element conversion and other collection kinds retain the
+general conversion path.
+
+| Measurement | Before | After | Change |
+|---|---:|---:|---:|
+| MK3 latency | 94.48 +/- 1.19 ns/op | 72.01 +/- 1.30 ns/op | 23.78% faster |
+| MK3 allocation | 184 B/op | 112 B/op | -72 B/op |
+
+A fresh paired post-change run measured the previous evaluator at `63.87 +/- 1.14 ns/op` and MK3 at
+`68.30 +/- 1.60 ns/op`. The remaining MK3 deficit is 6.94%, down from 49.13%. Its remaining
+allocation above the previous evaluator is the immutable collection snapshot required by MK3's
+external-boundary isolation contract; removing it would change observable behavior for mutable
+inputs.
+
+Verdict: **ACCEPT.** The changed path improved by more than 10% without weakening boundary
+validation or snapshot isolation. Raw results:
+`/tmp/performance-benchmark/collection-index-before-2026-08-30.json`,
+`/tmp/performance-benchmark/collection-index-after-2026-08-30.json`, and
+`/tmp/performance-benchmark/collection-index-paired-optimized-2026-08-30.json`.
+
+## 2026-08-30 - Tres comparacoes adicionais de runtime com expression-evaluator
+
+Purpose: extend the paired steady-state comparison beyond broad arithmetic, static function calls,
+and registered object navigation. The three additional areas are seven-element literal membership,
+collection filtering followed by indexing, and a dynamic conditional with alternating branches.
+Compilation, environment construction, input-map construction, and result-equivalence checks remain
+outside the measured path. Membership alternates a late hit and a miss; filtering alternates thresholds
+whose first matches differ; the conditional alternates its true and false branches.
+
+Environment: Eclipse Temurin 21.0.8+9-LTS; JMH 1.37; Linux x86_64; Intel Core i7-7700HQ;
+`-Xms1g -Xmx1g`; one thread; three forks; 5x500 ms warmup and 10x500 ms measurement; 99.9%
+confidence intervals; GC profiler enabled; commit `df5bd8c` plus the comparison fixture.
+
+Results are `ns/op +/- 99.9% CI`; lower is better. Performance delta is
+`(legacy - MK3) / legacy`, so a positive value means MK3 is faster. Allocation delta is MK3 minus
+legacy bytes per operation.
+
+| Runtime area | Previous module | MK3 | MK3 performance | Previous B/op | MK3 B/op | Allocation delta |
+|---|---:|---:|---:|---:|---:|---:|
+| 7-element membership, late hit/miss | 76.63 +/- 1.44 | 42.42 +/- 0.62 | +44.64% | 64 | 24 | -40 B |
+| Collection filter followed by index | 266.72 +/- 9.96 | 155.52 +/- 2.81 | +41.69% | 120 | 168 | +48 B |
+| Dynamic conditional, alternating branches | 135.03 +/- 3.69 | 119.51 +/- 1.62 | +11.49% | 92 | 52 | -40 B |
+
+Verdict: **MK3 wins all three latency comparisons.** Membership and the conditional also reduce
+allocation by 62.50% and 43.48%, respectively. Collection filter is 1.71x as fast, but allocates
+40.00% more per operation, making allocation the remaining weakness in that runtime area. The
+seven-element membership deliberately stays below MK3's large-constant-collection specialization
+threshold so both engines execute a comparable linear membership workload.
+
+Benchmark: `com.runestone.expeval_mk3.perf.jmh.LegacyComparisonBenchmark`.
+
 ## 2026-08-30 - Comparacao de runtime com expression-evaluator
 
 Purpose: compare steady-state execution of `exp-mk3` and the previous `expression-evaluator` with

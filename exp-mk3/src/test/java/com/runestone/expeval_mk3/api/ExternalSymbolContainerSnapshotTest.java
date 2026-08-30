@@ -157,6 +157,23 @@ class ExternalSymbolContainerSnapshotTest {
     }
 
     @Test
+    void listConversionPreservesCanonicalElementsBeforeTheFirstConvertedElement() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "values",
+                        new CollectionType(ScalarType.NUMBER),
+                        List.of(BigDecimal.ZERO),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        ExternalSymbol symbol = environment.externalSymbols().find("values").orElseThrow();
+
+        Object snapshot = symbol.coerceOverride(
+                List.of(BigDecimal.ONE, 2, BigDecimal.valueOf(3)), environment.boundaryCoercion());
+
+        assertThat(snapshot).isEqualTo(numbers(1, 2, 3));
+    }
+
+    @Test
     void mapsAreRecursivelyCopiedAndOrderedByBinaryTextComparison() {
         List<String> nested = new ArrayList<>(List.of("value"));
         Map<String, Object> source = new LinkedHashMap<>();

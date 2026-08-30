@@ -137,13 +137,20 @@ public final class BoundaryCoercion {
         if (isCanonicalScalarOrObject(sourceValue, targetType)) {
             return sourceValue;
         }
-        return convertBoundaryValue(
-                "external symbol '" + symbolName + "' override",
-                DiagnosticContext.VALUE_NAME,
-                sourceValue,
-                targetType,
-                maxMaterializedSize,
-                true);
+        try {
+            return convertValue(
+                    symbolName,
+                    DiagnosticContext.VALUE_NAME,
+                    sourceValue,
+                    targetType,
+                    maxMaterializedSize,
+                    true);
+        } catch (RuntimeException exception) {
+            throw new BoundaryCoercionFailure(
+                    "external symbol '" + symbolName + "' override cannot be converted to "
+                            + targetType + ": " + exception.getMessage(),
+                    exception);
+        }
     }
 
     private static boolean isCanonicalScalarOrObject(Object sourceValue, ExpressionType targetType) {
@@ -297,22 +304,40 @@ public final class BoundaryCoercion {
             ExpressionType elementType,
             int maxMaterializedSize,
             boolean iterableAllowed) {
-        if (sourceValue instanceof Collection<?> values) {
+        if (sourceValue instanceof List<?> values) {
             requireWithinLimit(valueName, diagnosticContext, values.size(), maxMaterializedSize);
-            ArrayList<Object> convertedValues = new ArrayList<>(values.size());
+            ArrayList<Object> convertedValues = null;
+            int index = 0;
             for (Object element : values) {
-                if (convertedValues.size() == maxMaterializedSize) {
+                if (index == maxMaterializedSize) {
                     throw materializationLimitExceeded(valueName, diagnosticContext, maxMaterializedSize);
                 }
-                convertedValues.add(convertElement(
+                Object converted = convertElement(
                         valueName,
                         diagnosticContext,
                         elementType,
                         element,
                         maxMaterializedSize,
-                        iterableAllowed));
+                        iterableAllowed);
+                if (convertedValues == null && converted != element) {
+                    convertedValues = new ArrayList<>(values.size());
+                    convertedValues.addAll(values.subList(0, index));
+                }
+                if (convertedValues != null) {
+                    convertedValues.add(converted);
+                }
+                index++;
             }
-            return Collections.unmodifiableList(convertedValues);
+            return convertedValues == null ? List.copyOf(values) : Collections.unmodifiableList(convertedValues);
+        }
+        if (sourceValue instanceof Collection<?> values) {
+            return convertCollectionElements(
+                    valueName,
+                    diagnosticContext,
+                    values,
+                    elementType,
+                    maxMaterializedSize,
+                    iterableAllowed);
         }
         if (sourceValue != null && sourceValue.getClass().isArray()) {
             int length = Array.getLength(sourceValue);
@@ -346,6 +371,30 @@ public final class BoundaryCoercion {
             return Collections.unmodifiableList(convertedValues);
         }
         throw new IllegalArgumentException("value must be a collection for CollectionType");
+    }
+
+    private List<Object> convertCollectionElements(
+            String valueName,
+            DiagnosticContext diagnosticContext,
+            Collection<?> values,
+            ExpressionType elementType,
+            int maxMaterializedSize,
+            boolean iterableAllowed) {
+        requireWithinLimit(valueName, diagnosticContext, values.size(), maxMaterializedSize);
+        ArrayList<Object> convertedValues = new ArrayList<>(values.size());
+        for (Object element : values) {
+            if (convertedValues.size() == maxMaterializedSize) {
+                throw materializationLimitExceeded(valueName, diagnosticContext, maxMaterializedSize);
+            }
+            convertedValues.add(convertElement(
+                    valueName,
+                    diagnosticContext,
+                    elementType,
+                    element,
+                    maxMaterializedSize,
+                    iterableAllowed));
+        }
+        return Collections.unmodifiableList(convertedValues);
     }
 
     private Object convertElement(
