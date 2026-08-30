@@ -69,6 +69,28 @@ class RegisteredNavigationInvocationTest {
         assertThatNullPointerException().isThrownBy(() -> method.invoke(receiver, null)).withMessage("argument0");
     }
 
+    @Test
+    void arrayEntryPointPreservesIndexedNullFailures() {
+        JavaMethodDescriptor sum4 = environment().javaTypes()
+                .find(Provider.class)
+                .orElseThrow()
+                .findMethod(new FunctionSignature(
+                        "sum4", List.of(ScalarType.NUMBER, ScalarType.NUMBER, ScalarType.NUMBER, ScalarType.NUMBER)))
+                .orElseThrow();
+        Provider receiver = new Provider();
+
+        assertThatNullPointerException()
+                .isThrownBy(() -> sum4.invokeArray(new Object[] {
+                    null, BigDecimal.ONE, BigDecimal.TWO, new BigDecimal("3"), new BigDecimal("4")
+                }))
+                .withMessage("receiverAndArguments[0]");
+        assertThatNullPointerException()
+                .isThrownBy(() -> sum4.invokeArray(new Object[] {
+                    receiver, BigDecimal.ONE, BigDecimal.TWO, null, new BigDecimal("4")
+                }))
+                .withMessage("receiverAndArguments[3]");
+    }
+
     private static void assertEquivalent(String source, ExpressionEnvironment environment) {
         SemanticModel model = OraclePlanFixtures.resolve(source, environment);
         PlanEquivalenceHarness.assertEquivalent(model, environment, Map.of(), Clock.systemUTC());

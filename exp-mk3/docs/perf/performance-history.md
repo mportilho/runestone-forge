@@ -1,5 +1,29 @@
 # Performance History
 
+## 2026-08-30 - Mensagens indexadas lazy na invocacao Java (issue #158)
+
+Purpose: construct the indexed null-validation message in `JavaMethodDescriptor.invokeArray` only
+when the receiver or an argument is null. The focused benchmark invokes a registered four-argument
+Java method through the required array entry point. Environment construction, method registration,
+descriptor lookup, receiver construction, and argument-array preparation run in trial setup.
+
+Environment: Eclipse Temurin 21.0.8+9-LTS; JMH 1.37; Linux x86_64; `-Xms1g -Xmx1g`; one thread;
+three forks; 5x500 ms warmup and 10x500 ms measurement; GC profiler. Before and after runs used
+identical parameters in the same session. Results are `ns/op +/- 99.9% CI`; lower is better.
+
+| Scenario | Before | After | Improvement | Before B/op | After B/op | Allocation change |
+|---|---:|---:|---:|---:|---:|---:|
+| Four-argument registered method array entry point | 73.184 +/- 1.215 | 22.206 +/- 0.215 | 69.66% | 240.001 | 40.000 | -200.001 B (-83.33%) |
+
+Verdict: **ACCEPT.** The explicit null branch is a localized, low-risk change that preserves the
+exact `NullPointerException` messages while eliminating five eager indexed-message allocations from
+the valid path. The remaining allocation comes from the benchmark method's `BigDecimal` additions.
+
+Benchmark: `com.runestone.expeval_mk3.perf.jmh.RegisteredNavigationInvocationBenchmark.arrayEntryPoint`.
+Artifacts: `/tmp/performance-benchmark/issue-158-before.json`,
+`/tmp/performance-benchmark/issue-158-after.json`, and
+`/tmp/performance-benchmark/issue-158-comparison.md`.
+
 ## 2026-08-30 - Renderizacao lazy de proveniencia de funcoes (issue #157)
 
 Purpose: retain function origin and implementation metadata structurally while building a catalog,

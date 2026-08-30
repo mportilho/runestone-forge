@@ -83,7 +83,9 @@ public final class JavaMethodDescriptor {
             throw new IllegalArgumentException("receiver and argument count must match method arity");
         }
         for (int index = 0; index < receiverAndArguments.length; index++) {
-            Objects.requireNonNull(receiverAndArguments[index], "receiverAndArguments[" + index + "]");
+            if (receiverAndArguments[index] == null) {
+                throw new NullPointerException("receiverAndArguments[" + index + "]");
+            }
         }
         return entryPoint.invokeArray(receiverAndArguments);
     }

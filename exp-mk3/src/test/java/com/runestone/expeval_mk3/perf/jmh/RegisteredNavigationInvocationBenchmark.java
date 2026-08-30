@@ -3,6 +3,8 @@ package com.runestone.expeval_mk3.perf.jmh;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.FunctionPurity;
+import com.runestone.expeval_mk3.api.FunctionSignature;
+import com.runestone.expeval_mk3.api.JavaMethodDescriptor;
 import com.runestone.expeval_mk3.api.ObjectType;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.plan.ExecutionPlan;
@@ -23,6 +25,7 @@ import org.openjdk.jmh.infra.Blackhole;
 
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -56,6 +59,11 @@ public class RegisteredNavigationInvocationBenchmark {
     @Benchmark
     public void methodOracle(MethodPlans plans, Blackhole blackhole) {
         blackhole.consume(plans.oracle.compute(plans.overrides, plans.clock));
+    }
+
+    @Benchmark
+    public Object arrayEntryPoint(ArrayEntryPointState state) throws Throwable {
+        return state.descriptor.invokeArray(state.receiverAndArguments);
     }
 
     private static ExpressionEnvironment environment() {
@@ -109,9 +117,52 @@ public class RegisteredNavigationInvocationBenchmark {
         }
     }
 
+    @State(Scope.Benchmark)
+    public static class ArrayEntryPointState {
+        JavaMethodDescriptor descriptor;
+        Object[] receiverAndArguments;
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                    .registerJavaType(Account.class)
+                    .registerJavaTypeMethod(
+                            Account.class,
+                            "add4",
+                            FunctionPurity.PURE,
+                            BigDecimal.class,
+                            BigDecimal.class,
+                            BigDecimal.class,
+                            BigDecimal.class)
+                    .build();
+            descriptor = environment.javaTypes()
+                    .find(Account.class)
+                    .orElseThrow()
+                    .findMethod(new FunctionSignature(
+                            "add4", List.of(
+                                    ScalarType.NUMBER,
+                                    ScalarType.NUMBER,
+                                    ScalarType.NUMBER,
+                                    ScalarType.NUMBER)))
+                    .orElseThrow();
+            receiverAndArguments = new Object[] {
+                new Account(BigDecimal.ONE),
+                BigDecimal.ONE,
+                BigDecimal.TWO,
+                new BigDecimal("3"),
+                new BigDecimal("4")
+            };
+        }
+    }
+
     public record Account(BigDecimal balance) {
         public BigDecimal add(BigDecimal increment) {
             return balance.add(increment);
+        }
+
+        public BigDecimal add4(
+                BigDecimal first, BigDecimal second, BigDecimal third, BigDecimal fourth) {
+            return balance.add(first).add(second).add(third).add(fourth);
         }
     }
 }
