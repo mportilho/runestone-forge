@@ -1,5 +1,35 @@
 # Performance History
 
+## 2026-08-30 - Renderizacao lazy de proveniencia de funcoes (issue #157)
+
+Purpose: retain function origin and implementation metadata structurally while building a catalog,
+but render the complete origin description only for duplicate registration or forbidden replacement
+diagnostics. The dedicated benchmark builds a successful `ExpressionEnvironment` on every operation,
+outside the compilation cache, with all official built-ins, eight custom descriptors, and eight
+reflected imported functions. Descriptor and import-plan declaration run in trial setup; environment
+and catalog assembly remain entirely inside the measured operation. Collision paths are excluded from
+the performance scenario and covered by exact-message functional tests.
+
+Environment: OpenJDK 26.0.1; JMH 1.37; Linux x86_64; `-Xms1g -Xmx1g`; one thread; three forks;
+5x500 ms warmup and 10x500 ms measurement; GC profiler. Before and after runs used identical
+parameters in the same session at commit `013ce06` plus the benchmark fixture. Results are
+`ns/op +/- 99.9% CI`; lower is better.
+
+| Scenario | Before | After | Improvement | Before B/op | After B/op | Allocation change |
+|---|---:|---:|---:|---:|---:|---:|
+| Successful mixed catalog | 3,360,511.16 +/- 201,997.33 | 3,266,591.67 +/- 216,905.36 | 2.79% | 3,062,300 | 2,957,596 | -104,704 B (-3.42%) |
+
+Verdict: **ACCEPT.** The small, localized enum representation removes all per-registration full
+provenance strings from the valid path, measurably reduces allocation, and has no latency regression;
+the 2.79% time improvement is acceptable for this low-risk change. Duplicate registration, missing
+replacement target, forbidden built-in replacement, registration order, and successful catalog
+behavior remain covered by the `exp-mk3` suite.
+
+Benchmark: `com.runestone.expeval_mk3.perf.jmh.FunctionCatalogConstructionBenchmark`.
+Artifacts: `/tmp/performance-benchmark/issue-157-before.json`,
+`/tmp/performance-benchmark/issue-157-after.json`, and
+`/tmp/performance-benchmark/issue-157-comparison.md`.
+
 ## 2026-08-30 - Preparacao lazy de diagnosticos de defaults (issue #156)
 
 Purpose: materialize `external symbol '<name>' default` only when default boundary coercion fails.

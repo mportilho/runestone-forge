@@ -211,11 +211,75 @@ class FunctionCatalogTest {
 
         String firstOrder = duplicateMessage(first, second);
         String secondOrder = duplicateMessage(second, first);
+        List<String> origins = java.util.stream.Stream.of(
+                        "custom function " + first.implementationMetadata().describeImplementation(),
+                        "custom function " + second.implementationMetadata().describeImplementation())
+                .sorted()
+                .toList();
+        String expected = "function signature already registered: " + first.signature().canonical()
+                + "; origins: " + origins.getFirst() + " and " + origins.getLast();
 
         assertThat(firstOrder)
                 .isEqualTo(secondOrder)
-                .contains("numberIdentity")
-                .contains("numberAsText");
+                .isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("replacement diagnostics preserve exact messages and official built-in provenance")
+    void replacementDiagnosticsPreserveExactMessagesAndOfficialBuiltInProvenance() throws NoSuchMethodException {
+        FunctionDescriptor missing = descriptor(
+                "missing",
+                "numberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.PURE,
+                BigDecimal.class);
+        FunctionDescriptor official = ExpressionEnvironment.standard().functions()
+                .find(new FunctionSignature("abs", List.of(ScalarType.NUMBER)))
+                .orElseThrow();
+        FunctionDescriptor replacement = descriptor(
+                "abs",
+                "numberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.PURE,
+                BigDecimal.class);
+
+        assertThatThrownBy(() -> FunctionCatalog.builder().replace(missing))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("function replacement has no custom target: " + missing.signature().canonical());
+        assertThatThrownBy(() -> FunctionCatalog.builder().registerOfficial(official).replace(replacement))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("official built-in function cannot be replaced: " + official.signature().canonical()
+                        + " from official built-in "
+                        + official.implementationMetadata().describeImplementation());
+    }
+
+    @Test
+    @DisplayName("duplicate diagnostics preserve exact official and imported provenance")
+    void duplicateDiagnosticsPreserveExactOfficialAndImportedProvenance() throws NoSuchMethodException {
+        FunctionDescriptor official = ExpressionEnvironment.standard().functions()
+                .find(new FunctionSignature("abs", List.of(ScalarType.NUMBER)))
+                .orElseThrow();
+        FunctionDescriptor imported = descriptor(
+                "abs",
+                "numberIdentity",
+                List.of(ScalarType.NUMBER),
+                ScalarType.NUMBER,
+                FunctionPurity.PURE,
+                BigDecimal.class);
+        List<String> origins = java.util.stream.Stream.of(
+                        "official built-in " + official.implementationMetadata().describeImplementation(),
+                        "imported provider " + imported.implementationMetadata().describeImplementation())
+                .sorted()
+                .toList();
+
+        assertThatThrownBy(() -> FunctionCatalog.builder()
+                .registerOfficial(official)
+                .registerImported(imported))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("function signature already registered: " + official.signature().canonical()
+                        + "; origins: " + origins.getFirst() + " and " + origins.getLast());
     }
 
     private static String duplicateMessage(FunctionDescriptor first, FunctionDescriptor second) {
