@@ -37,7 +37,9 @@ public final class DefaultCalculationMemory implements CalculationMemory {
             throw new IllegalArgumentException("variable keys and values must have the same length");
         }
         for (int index = 0; index < variableValues.length; index++) {
-            Objects.requireNonNull(variableValues[index], "variableValues[" + index + "]");
+            if (variableValues[index] == null) {
+                throw new NullPointerException("variableValues[" + index + "]");
+            }
         }
         if (calculationOrdinals == null && calculationValues.length > this.calculationKeys.size()) {
             throw new IllegalArgumentException("calculation values must fit the calculation schema");

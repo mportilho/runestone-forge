@@ -1,5 +1,164 @@
 # Performance History
 
+## 2026-08-30 - Etapa 10 Final Local Performance and Allocation Gates (issue #146)
+
+Purpose: close the local production gates for normal execution, calculation-memory publication, indexed
+persistence, convenience-list traversal, and the retained frame-tail control. The production JMH now
+keeps capture inactive on the same marked plan in `compute()`, measures `computeWithMemory()` before
+consumption, consumes a prebuilt memory independently, and separates projection, indexed `List.get`, and
+iterator costs. Its scenarios cover empty, dense, prefix, alternating, sparse, and eight repeated opaque
+descendants. Every setup checks the expected reached-point count.
+
+Environment: Eclipse Temurin 21.0.8+9-LTS, JMH 1.37, Linux x86_64, `-Xms1g -Xmx1g`, three forks,
+3x250 ms warmup, 5x250 ms measurement, GC profiler, one thread. Scores below are `ns/op +/- 99.9% CI /
+B/op`; allocation values below `0.01 B/op` are displayed as zero.
+
+| Production shape | `compute` | `computeWithMemory` | Full indexed flow |
+|---|---:|---:|---:|
+| empty | 19.02 +/- 3.04 / 24 | 40.50 +/- 0.86 / 104 | 54.94 +/- 2.79 / 104 |
+| dense, 4/4 | 81.06 +/- 13.91 / 56 | 131.78 +/- 7.04 / 200 | 210.44 +/- 38.86 / 200 |
+| prefix, 1/4 | 40.72 +/- 3.78 / 56 | 91.23 +/- 2.82 / 224 | 115.32 +/- 2.84 / 224 |
+| alternating, 4/8 | 72.31 +/- 2.81 / 136 | 179.52 +/- 4.50 / 408 | 258.49 +/- 10.65 / 408 |
+| sparse, 1/8 | 29.16 +/- 0.59 / 56 | 105.26 +/- 22.81 / 312 | 142.21 +/- 1.62 / 312 |
+| opaque repeated, 0/0 | 348.45 +/- 58.29 / 392 | 377.16 +/- 46.48 / 472 | 571.41 +/- 95.81 / 472 |
+
+`compute()` has exactly the ordinary result and working-frame allocation and JFR records no
+`CalculationRecorder`, `CalculationMemory`, view, entry, or provenance-key allocation. In particular,
+the marked dense plan remains at 56 B/op with capture inactive. The opaque repeated setup verifies the
+result-changing output of all eight `opaqueMark(@)` descendants while publishing no calculation,
+confirming that collection bodies remain outside the observable frontier. `computeWithMemory()` performs
+the one existing public materialization
+before freeze; indexed consumption adds no bytes to any complete flow.
+
+| Consumption shape | Projection only | Indexed traversal | Lists by `get` | Lists with iterators |
+|---|---:|---:|---:|---:|
+| empty | 3.81 +/- 0.06 / 24 | 9.83 +/- 0.18 / **0** | 10.49 +/- 0.18 / 24 | 17.60 +/- 0.25 / 80 |
+| dense | 7.42 +/- 0.07 / 48 | 41.08 +/- 0.81 / **0** | 48.95 +/- 0.86 / 120 | 69.91 +/- 1.35 / 232 |
+| prefix | 7.44 +/- 0.06 / 48 | 17.42 +/- 0.25 / **0** | 18.74 +/- 0.37 / 48 | 35.42 +/- 0.91 / 160 |
+| alternating | 7.43 +/- 0.16 / 48 | 48.06 +/- 0.46 / **0** | 59.73 +/- 0.62 / 144 | 82.79 +/- 2.21 / 256 |
+| sparse | 7.46 +/- 0.12 / 48 | 26.83 +/- 0.81 / **0** | 29.21 +/- 0.69 / 72 | 46.66 +/- 1.19 / 184 |
+| opaque repeated | 3.82 +/- 0.06 / 24 | 56.82 +/- 2.69 / **0** | 68.78 +/- 1.48 / 24 | 62.19 +/- 4.59 / 80 |
+
+The no-I/O indexed sink reads every variable name/origin, calculation node ID, source-span field,
+kind, name, and value. JFR observes no evaluator allocation in that benchmark. List JFR attributes the
+explicit costs to the two `DefaultCalculationMemory` projection classes and transient `VariableEntry` /
+`CalculationEntry` records. The GC-profiler delta in the iterator column additionally measures the two
+`AbstractList` iterators.
+
+The first production run exposed an accidental eager validation-message allocation in
+`DefaultCalculationMemory`: every successful variable check constructed one `String` and one `byte[]`.
+An explicit null branch preserves the indexed error message while removing both objects. Dense
+`computeWithMemory()` fell from 240 to 200 B/op; empty, prefix, alternating, sparse, and opaque cases each
+fell by 40 B/op. Final JFR samples contain only the normal execution scope/frame plus the selected
+append recorder/value array, exact variable/calculation columns, final memory, and result envelope.
+There are no per-execution views, entries, key reconstructions, maps, lambdas, builders, or temporary
+transfer holders. The prior deterministic graph/JOL gate, rather than the dense JFR sample, verifies
+that gapped cases add only the designed exact ordinal sidecar.
+
+Capture, existing Materializacao Publica, and freeze were also measured independently with the binding
+fixture, rather than inferred from end-to-end subtraction. The public materialization control was
+20.55 +/- 0.40 ns and 104 B/op. Append capture ranged from 9.66/56 for no points through 17.00/80 for the
+current one-point shape to 42.14/128 for the required dense assignments shape, with latency errors of
+0.19, 0.43, and 0.91 ns/op; freeze respectively measured 13.70/56, 15.37/56, and 23.61/72, with errors
+of 0.21, 0.24, and 0.45 ns/op. The required lazy gapped control measured 40.94 +/- 0.88 ns and 176 B/op
+for capture and 33.42 +/- 0.82 ns and 128 B/op for freeze. These fixture numbers attribute the phases;
+the production table above remains the authoritative complete-flow result.
+
+The normal marked-function path was additionally compared against commit `9bb5bf9`, immediately before
+dynamic calculation points added the inactive capture branch, using the unchanged
+`FunctionInvocationBenchmark.arityOneOptimized` on the same machine and JVM. Two complete runs measured
+65.30 +/- 0.72 and 64.83 +/- 1.52 ns/op before versus 66.60 +/- 1.56 and 67.15 +/- 0.83 ns/op after,
+with allocation unchanged at 104.0009 B/op in every run. The point deltas are +1.98% and +3.58%, while
+the confidence bands touch or overlap at their boundary. Investigation isolated the mandatory null
+recorder test; splitting it from replay/append into a smaller fast-path method worsened the result to
+67.92 +/- 0.94 ns/op and was discarded. The retained implementation is therefore justified as the
+smallest one-plan form: zero allocation delta, about 2 ns absolute measured cost, no statistically clean
+separation at the 99.9% confidence level, and no faster branch shape found without violating the design.
+
+The repeated Java 21 benchmark-fixture frame-tail control leaves the ADR 0023 decision unchanged. This
+control models the complete `capture -> materialize -> freeze -> sink` flow with production-derived
+shapes, but intentionally does not add a second storage strategy to the production runtime. Append wins
+the current dominant one-point shape by 12.9% latency and 8 B/op (64.49 +/- 2.18 / 208 versus
+74.08 +/- 1.25 / 216), the current dense two-point shape by 1.8% and 8 B/op
+(154.70 +/- 8.22 / 224 versus 157.48 +/- 9.91 / 232), and required nested dense by 13.7% and 16 B/op
+(92.30 +/- 3.52 / 224 versus 106.91 +/- 2.68 / 240). Frame-tail remains cheaper for gapped shapes (for
+required lazy gapped, 162.05 +/- 7.37 / 336 versus 178.41 +/- 6.74 / 408), but does not overturn the
+documented current-corpus tie-break and is not promoted to a second production representation.
+
+`PrintInlining` confirms that `ExecutionPlan.compute`, `FunctionCallExecutableNode.execute`, and the
+62-byte `ExecutionScope.captureCalculation` are hot-inlined in the marked dense normal path. Hardware
+branch counters and `perfasm` could not run on this host: both JMH `perfnorm` and direct `perf stat`
+reported no supported events because `perf_event_paranoid=4` and the process lacks `CAP_PERFMON`.
+Consequently branches/op and branch-misses/op remain an explicit deployment-host limitation; no claim is
+made from wall-clock timing in their place. The local verdict is **ACCEPT, provisional on repeating the
+hardware-counter check in the deployment environment**. The quantitative allocation, JFR, JOL,
+functional, and Java 21 compatibility gates pass locally.
+
+Commands:
+
+```bash
+mvn -pl exp-mk3 -am -DskipTests test-compile
+mvn -q -pl exp-mk3 dependency:build-classpath -Dmdep.outputFile=target/jmh-cp.txt -DincludeScope=test
+JMH_CP="runestone-toolkit/target/classes:exp-mk3/target/test-classes:exp-mk3/target/classes:$(tr -d '\n' < exp-mk3/target/jmh-cp.txt)"
+
+/home/marcelo/.sdkman/candidates/java/21.0.8-tem/bin/java -cp "$JMH_CP" org.openjdk.jmh.Main \
+  'CalculationMemoryProductionBenchmark' -wi 3 -i 5 -w 250ms -r 250ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' -prof gc -rf json \
+  -rff /tmp/opencode/issue-146/production-gates-final-java21.json -foe true
+
+/home/marcelo/.sdkman/candidates/java/21.0.8-tem/bin/java -cp "$JMH_CP" org.openjdk.jmh.Main \
+  'CalculationMemoryStoragePrototypeBenchmark.representative(Frame|Append)Columnar' \
+  -wi 3 -i 5 -w 250ms -r 250ms -f 3 -tu ns -jvmArgs '-Xms1g -Xmx1g' -prof gc \
+  -rf json -rff /tmp/opencode/issue-146/frame-append-control-java21.json -foe true
+
+/home/marcelo/.sdkman/candidates/java/21.0.8-tem/bin/java -cp "$JMH_CP" org.openjdk.jmh.Main \
+  'CalculationMemoryStoragePrototypeBenchmark.(representativeAppendCapture|representativeAppendFreeze|materializePublicResult)$' \
+  -p slotCount=4 -p reachability=DENSE -wi 3 -i 5 -w 250ms -r 250ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' -prof gc -rf json \
+  -rff /tmp/opencode/issue-146/phase-attribution-java21.json -foe true
+
+/home/marcelo/.sdkman/candidates/java/21.0.8-tem/bin/java -cp "$JMH_CP" org.openjdk.jmh.Main \
+  'CalculationMemoryProductionBenchmark.(computeWithMemory|traverseIndexed|traverseListsByIndex)$' \
+  -p scenario=DENSE -wi 2 -i 3 -w 500ms -r 500ms -f 1 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' -prof 'jfr:dir=/tmp/opencode/issue-146/jfr;configName=profile' -foe true
+
+/home/marcelo/.sdkman/candidates/java/21.0.8-tem/bin/java -cp "$JMH_CP" org.openjdk.jmh.Main \
+  'CalculationMemoryProductionBenchmark.compute$' -p scenario=DENSE -wi 2 -i 2 \
+  -w 250ms -r 250ms -f 1 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g -XX:+UnlockDiagnosticVMOptions -XX:+PrintInlining' -foe true
+
+# The same JFR profiler invocation was run separately for compute and computeWithMemory, with its
+# dir changed to /tmp/opencode/issue-146/jfr-compute-normal and /tmp/opencode/issue-146/jfr-final.
+# The opaque scenario was rerun after adding its result-changing setup assertion.
+RESULT=/tmp/opencode/issue-146/opaque-final-java21.json
+/home/marcelo/.sdkman/candidates/java/21.0.8-tem/bin/java -cp "$JMH_CP" org.openjdk.jmh.Main \
+  'CalculationMemoryProductionBenchmark' -p scenario=OPAQUE_REPEATED \
+  -wi 3 -i 5 -w 250ms -r 250ms -f 3 -tu ns -jvmArgs '-Xms1g -Xmx1g' -prof gc \
+  -rf json -rff "$RESULT" -foe true
+
+/home/marcelo/.sdkman/candidates/java/21.0.8-tem/bin/java -cp "$JMH_CP" org.openjdk.jmh.Main \
+  'CalculationMemoryProductionBenchmark.(compute|computeWithMemory)$' -p scenario=OPAQUE_REPEATED \
+  -wi 2 -i 3 -w 250ms -r 250ms -f 1 -tu ns -jvmArgs '-Xms1g -Xmx1g' -prof perfnorm -foe true
+
+# Run from both a local clone at 9bb5bf9 and the current tree, preserving separate JSON files.
+/home/marcelo/.sdkman/candidates/java/21.0.8-tem/bin/java -cp "$JMH_CP" org.openjdk.jmh.Main \
+  'FunctionInvocationBenchmark.arityOneOptimized' -wi 5 -i 10 -w 500ms -r 500ms -f 3 -tu ns \
+  -jvmArgs '-Xms1g -Xmx1g' -prof gc -rf json -rff "$RESULT" -foe true
+
+perf stat -e branches,branch-misses -- /home/marcelo/.sdkman/candidates/java/21.0.8-tem/bin/java -version
+mvn -pl exp-mk3 -am test
+```
+
+Artifacts: `/tmp/opencode/issue-146/production-gates-final-java21.{json,txt}`,
+`/tmp/opencode/issue-146/opaque-final-java21.{json,txt}`,
+`/tmp/opencode/issue-146/frame-append-control-java21.{json,txt}`,
+`/tmp/opencode/issue-146/phase-attribution-java21.{json,txt}`,
+`/tmp/opencode/issue-146/{pre-capture-function,post-capture-function}-java21.{json,txt}` and their
+`*-rerun-java21.{json,txt}` repeats,
+`/tmp/opencode/issue-146/jfr-final/`, `/tmp/opencode/issue-146/jfr-compute-normal/`,
+`/tmp/opencode/issue-146/print-inlining-dense-java21.txt`, and
+`/tmp/opencode/issue-146/perfnorm-opaque-java21.txt`.
+
 ## 2026-08-30 - Etapa 10 Retention and Production Layout (issue #145)
 
 Purpose: prove execution-local ownership and deterministic non-retention for `CalculationMemory`, then

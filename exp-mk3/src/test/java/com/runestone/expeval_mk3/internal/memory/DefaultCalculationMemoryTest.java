@@ -37,6 +37,10 @@ class DefaultCalculationMemoryTest {
                 List.of(variableKey), new Object[0], List.of(), new Object[0], null))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new DefaultCalculationMemory(
+                List.of(variableKey), new Object[] {null}, List.of(), new Object[0], null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("variableValues[0]");
+        assertThatThrownBy(() -> new DefaultCalculationMemory(
                 List.of(), new Object[0], List.of(calculationKey), new Object[] {"x"}, new int[] {1}))
                 .isInstanceOf(IllegalArgumentException.class);
     }
