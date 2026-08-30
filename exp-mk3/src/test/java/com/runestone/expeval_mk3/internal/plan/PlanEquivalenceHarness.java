@@ -1,12 +1,15 @@
 package com.runestone.expeval_mk3.internal.plan;
 
+import com.runestone.expeval_mk3.api.CalculationKey;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.ExpressionExecutionException;
 import com.runestone.expeval_mk3.api.SourceSpan;
+import com.runestone.expeval_mk3.api.VariableKey;
 import com.runestone.expeval_mk3.internal.semantics.SemanticModel;
 
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -53,8 +56,17 @@ public final class PlanEquivalenceHarness {
 
     private static Outcome execute(ExecutionPlan plan, Map<String, ?> inputs, Clock clock) {
         try {
-            Object value = plan.hasResult() ? plan.compute(inputs, clock) : plan.computeAssignedValues(inputs, clock);
-            return Outcome.success(value);
+            var computation = plan.hasResult()
+                    ? plan.computeWithMemory(inputs, clock)
+                    : plan.computeAssignmentsWithMemory(inputs, clock);
+            return Outcome.success(
+                    computation.result(),
+                    computation.memory().variables().stream()
+                            .map(entry -> new VariableSnapshot(entry.key(), comparableValue(entry.value())))
+                            .toList(),
+                    computation.memory().calculations().stream()
+                            .map(entry -> new CalculationSnapshot(entry.key(), comparableValue(entry.value())))
+                            .toList());
         } catch (ExpressionExecutionException exception) {
             ExpressionDiagnostic diagnostic = exception.diagnostic();
             return Outcome.failure(diagnostic.code(), diagnostic.primarySpan().orElse(null), diagnostic.message());
@@ -63,14 +75,40 @@ public final class PlanEquivalenceHarness {
         }
     }
 
-    private record Outcome(Object value, String failureCode, SourceSpan failureSpan, String failureMessage) {
+    private record Outcome(
+            Object value,
+            List<VariableSnapshot> variables,
+            List<CalculationSnapshot> calculations,
+            String failureCode,
+            SourceSpan failureSpan,
+            String failureMessage) {
 
-        static Outcome success(Object value) {
-            return new Outcome(value, null, null, null);
+        static Outcome success(
+                Object value, List<VariableSnapshot> variables, List<CalculationSnapshot> calculations) {
+            return new Outcome(value, variables, calculations, null, null, null);
         }
 
         static Outcome failure(String code, SourceSpan span, String message) {
-            return new Outcome(null, code, span, message);
+            return new Outcome(null, null, null, code, span, message);
+        }
+    }
+
+    private record VariableSnapshot(VariableKey key, Object value) {
+    }
+
+    private record CalculationSnapshot(CalculationKey key, Object value) {
+    }
+
+    private static Object comparableValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return value.getClass().getMethod("equals", Object.class).getDeclaringClass() == Object.class
+                    ? value.getClass()
+                    : value;
+        } catch (NoSuchMethodException impossible) {
+            throw new AssertionError(impossible);
         }
     }
 }

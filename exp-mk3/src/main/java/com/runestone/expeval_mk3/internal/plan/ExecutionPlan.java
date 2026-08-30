@@ -44,6 +44,7 @@ public final class ExecutionPlan {
     private final CalculationMemorySchema fullCalculationMemorySchema;
     private final CalculationMemorySchema assignmentCalculationMemorySchema;
     private final Object[] frameTemplate;
+    private final int memoryFrameSize;
     private final BoundaryCoercion boundaryCoercion;
     private final ZoneId zoneId;
     private final int maxMaterializedSize;
@@ -59,6 +60,7 @@ public final class ExecutionPlan {
             CalculationMemorySchema fullCalculationMemorySchema,
             CalculationMemorySchema assignmentCalculationMemorySchema,
             int frameSize,
+            int replaySlotCount,
             BoundaryCoercion boundaryCoercion,
             ZoneId zoneId,
             int maxMaterializedSize) {
@@ -86,6 +88,7 @@ public final class ExecutionPlan {
             template[binding.frameSlot()] = binding.symbol().defaultValue().value();
         }
         this.frameTemplate = template;
+        this.memoryFrameSize = frameSize + replaySlotCount;
         this.boundaryCoercion = Objects.requireNonNull(boundaryCoercion, "boundaryCoercion");
         this.zoneId = Objects.requireNonNull(zoneId, "zoneId");
         this.maxMaterializedSize = maxMaterializedSize;
@@ -196,7 +199,12 @@ public final class ExecutionPlan {
 
         // Not observable until wrapped in a scope below, so a validation failure here discards this
         // partially-written array with no assignment or provider ever having run against it.
-        Object[] frame = frameTemplate.clone();
+        Object[] frame;
+        if (calculationRecorder == null || memoryFrameSize == frameTemplate.length) {
+            frame = frameTemplate.clone();
+        } else {
+            frame = ExecutionScope.extendFrame(frameTemplate, memoryFrameSize);
+        }
         for (ExternalSymbol symbol : declaredSymbolsInCanonicalOrder) {
             String name = symbol.name();
             if (!overrides.containsKey(name)) {

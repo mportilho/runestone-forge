@@ -15,7 +15,8 @@ public record RegisteredMethodExecutableNode(
         boolean safe,
         RegisteredMethodNavigationBinding binding,
         List<ExecutableNode> arguments,
-        int calculationSlot) implements CalculationPointExecutableNode {
+        int calculationSlot,
+        int[] replaySlots) implements CalculationPointExecutableNode {
 
     public RegisteredMethodExecutableNode {
         Objects.requireNonNull(id, "id");
@@ -23,13 +24,14 @@ public record RegisteredMethodExecutableNode(
         Objects.requireNonNull(receiver, "receiver");
         Objects.requireNonNull(binding, "binding");
         arguments = List.copyOf(Objects.requireNonNull(arguments, "arguments"));
+        Objects.requireNonNull(replaySlots, "replaySlots");
     }
 
     @Override
     public Object execute(ExecutionScope scope) {
         Object value = ExpressionRuntime.invokeRegisteredMethod(
                 receiver.execute(scope), safe, binding, arguments, scope, sourceSpan);
-        scope.captureCalculation(calculationSlot, value);
+        scope.captureCalculation(calculationSlot, replaySlots, value);
         return value;
     }
 }

@@ -13,19 +13,21 @@ public record OracleRegisteredPropertyExecutableNode(
         ExecutableNode receiver,
         boolean safe,
         RegisteredPropertyNavigationBinding binding,
-        int calculationSlot) implements CalculationPointExecutableNode {
+        int calculationSlot,
+        int[] replaySlots) implements CalculationPointExecutableNode {
 
     public OracleRegisteredPropertyExecutableNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(receiver, "receiver");
         Objects.requireNonNull(binding, "binding");
+        Objects.requireNonNull(replaySlots, "replaySlots");
     }
 
     @Override
     public Object execute(ExecutionScope scope) {
         Object value = ExpressionRuntime.oracleRegisteredPropertyValue(receiver.execute(scope), safe, binding, sourceSpan);
-        scope.captureCalculation(calculationSlot, value);
+        scope.captureCalculation(calculationSlot, replaySlots, value);
         return value;
     }
 }

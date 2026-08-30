@@ -21,6 +21,7 @@ final class ConstantFoldSentinelScope extends ExecutionScope {
 
     private final boolean capturesCalculations;
     private int[] calculationSlots;
+    private int[][] replaySlots;
     private Object[] calculationValues;
     private int calculationCount;
 
@@ -55,7 +56,12 @@ final class ConstantFoldSentinelScope extends ExecutionScope {
 
     @Override
     public void captureCalculation(int calculationSlot, Object value) {
-        if (calculationSlot < 0) {
+        captureCalculation(calculationSlot, new int[0], value);
+    }
+
+    @Override
+    public void captureCalculation(int calculationSlot, int[] capturedReplaySlots, Object value) {
+        if (calculationSlot < 0 && capturedReplaySlots.length == 0) {
             return;
         }
         if (!capturesCalculations) {
@@ -64,17 +70,23 @@ final class ConstantFoldSentinelScope extends ExecutionScope {
         }
         if (calculationSlots == null) {
             calculationSlots = new int[4];
+            replaySlots = new int[4][];
             calculationValues = new Object[4];
         }
-        if (calculationCount > 0 && calculationSlot <= calculationSlots[calculationCount - 1]) {
+        if (calculationCount > 0
+                && calculationSlot >= 0
+                && calculationSlots[calculationCount - 1] >= 0
+                && calculationSlot <= calculationSlots[calculationCount - 1]) {
             throw new ConstantFoldEligibilityViolation(
                     "constant fold captured calculation ordinals out of order: " + calculationSlot);
         }
         if (calculationCount == calculationSlots.length) {
             calculationSlots = Arrays.copyOf(calculationSlots, calculationCount << 1);
+            replaySlots = Arrays.copyOf(replaySlots, calculationCount << 1);
             calculationValues = Arrays.copyOf(calculationValues, calculationCount << 1);
         }
         calculationSlots[calculationCount] = calculationSlot;
+        replaySlots[calculationCount] = capturedReplaySlots;
         calculationValues[calculationCount] = value;
         calculationCount++;
     }
@@ -86,11 +98,19 @@ final class ConstantFoldSentinelScope extends ExecutionScope {
         }
     }
 
+    @Override
+    void captureCalculations(int[] slots, int[][] capturedReplaySlots, Object[] values) {
+        for (int index = 0; index < slots.length; index++) {
+            captureCalculation(slots[index], capturedReplaySlots[index], values[index]);
+        }
+    }
+
     StaticCalculationGroup calculationGroup() {
         return calculationCount == 0
                 ? StaticCalculationGroup.EMPTY
                 : new StaticCalculationGroup(
                         Arrays.copyOf(calculationSlots, calculationCount),
+                        Arrays.copyOf(replaySlots, calculationCount),
                         Arrays.copyOf(calculationValues, calculationCount));
     }
 

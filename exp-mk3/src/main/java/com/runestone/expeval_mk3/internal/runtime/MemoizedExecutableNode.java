@@ -22,12 +22,25 @@ public final class MemoizedExecutableNode implements ExecutableNode {
     private final SourceSpan sourceSpan;
     private final int memoSlot;
     private final ExecutableNode delegate;
+    private final int[] calculationSlots;
+    private final int[] replaySlots;
 
-    public MemoizedExecutableNode(NodeId id, SourceSpan sourceSpan, int memoSlot, ExecutableNode delegate) {
+    public MemoizedExecutableNode(
+            NodeId id,
+            SourceSpan sourceSpan,
+            int memoSlot,
+            ExecutableNode delegate,
+            int[] calculationSlots,
+            int[] replaySlots) {
         this.id = Objects.requireNonNull(id, "id");
         this.sourceSpan = Objects.requireNonNull(sourceSpan, "sourceSpan");
         this.memoSlot = memoSlot;
         this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.calculationSlots = Objects.requireNonNull(calculationSlots, "calculationSlots");
+        this.replaySlots = Objects.requireNonNull(replaySlots, "replaySlots");
+        if (calculationSlots.length != replaySlots.length) {
+            throw new IllegalArgumentException("calculation and replay slots must have equal lengths");
+        }
     }
 
     @Override
@@ -47,6 +60,7 @@ public final class MemoizedExecutableNode implements ExecutableNode {
             scope.writeMemo(memoSlot, value);
             return value;
         }
+        scope.replayCalculations(calculationSlots, replaySlots);
         return scope.readMemo(memoSlot);
     }
 

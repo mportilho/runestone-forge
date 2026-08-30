@@ -5,16 +5,18 @@ import java.util.Objects;
 /** Immutable folded calculation values replayed when their replacement constant is reached. */
 final class StaticCalculationGroup {
 
-    static final StaticCalculationGroup EMPTY = new StaticCalculationGroup(new int[0], new Object[0]);
+    static final StaticCalculationGroup EMPTY = new StaticCalculationGroup(new int[0], new int[0][], new Object[0]);
 
     private final int[] ordinals;
+    private final int[][] replaySlots;
     private final Object[] values;
 
-    StaticCalculationGroup(int[] ordinals, Object[] values) {
+    StaticCalculationGroup(int[] ordinals, int[][] replaySlots, Object[] values) {
         this.ordinals = Objects.requireNonNull(ordinals, "ordinals");
+        this.replaySlots = Objects.requireNonNull(replaySlots, "replaySlots");
         this.values = Objects.requireNonNull(values, "values");
-        if (ordinals.length != values.length) {
-            throw new IllegalArgumentException("calculation ordinals and values must have equal lengths");
+        if (ordinals.length != replaySlots.length || ordinals.length != values.length) {
+            throw new IllegalArgumentException("calculation ordinals, replay slots, and values must have equal lengths");
         }
     }
 
@@ -23,6 +25,6 @@ final class StaticCalculationGroup {
     }
 
     void capture(ExecutionScope scope) {
-        scope.captureCalculations(ordinals, values);
+        scope.captureCalculations(ordinals, replaySlots, values);
     }
 }

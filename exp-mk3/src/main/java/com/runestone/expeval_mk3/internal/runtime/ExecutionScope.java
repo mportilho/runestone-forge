@@ -15,6 +15,7 @@ import java.util.Objects;
 public class ExecutionScope {
 
     private static final Object UNBOUND = new Object();
+    private static final int[] NO_REPLAY_SLOTS = new int[0];
 
     private final Object[] frame;
     private final ZoneId zoneId;
@@ -26,6 +27,12 @@ public class ExecutionScope {
     public static Object[] blankFrame(int frameSize) {
         Object[] frame = new Object[frameSize];
         Arrays.fill(frame, UNBOUND);
+        return frame;
+    }
+
+    public static Object[] extendFrame(Object[] template, int frameSize) {
+        Object[] frame = Arrays.copyOf(template, frameSize);
+        Arrays.fill(frame, template.length, frameSize, UNBOUND);
         return frame;
     }
 
@@ -86,9 +93,18 @@ public class ExecutionScope {
     }
 
     public void captureCalculation(int calculationSlot, Object value) {
+        captureCalculation(calculationSlot, NO_REPLAY_SLOTS, value);
+    }
+
+    public void captureCalculation(int calculationSlot, int[] replaySlots, Object value) {
         CalculationRecorder active = calculationRecorder;
-        if (active != null && calculationSlot >= 0) {
-            active.append(calculationSlot, value);
+        if (active != null) {
+            for (int replaySlot : replaySlots) {
+                frame[replaySlot] = value;
+            }
+            if (calculationSlot >= 0) {
+                active.append(calculationSlot, value);
+            }
         }
     }
 
@@ -99,6 +115,34 @@ public class ExecutionScope {
         }
         for (int index = 0; index < calculationSlots.length; index++) {
             active.append(calculationSlots[index], values[index]);
+        }
+    }
+
+    void captureCalculations(int[] calculationSlots, int[][] replaySlots, Object[] values) {
+        CalculationRecorder active = calculationRecorder;
+        if (active == null) {
+            return;
+        }
+        for (int index = 0; index < calculationSlots.length; index++) {
+            for (int replaySlot : replaySlots[index]) {
+                frame[replaySlot] = values[index];
+            }
+            if (calculationSlots[index] >= 0) {
+                active.append(calculationSlots[index], values[index]);
+            }
+        }
+    }
+
+    void replayCalculations(int[] calculationSlots, int[] replaySlots) {
+        CalculationRecorder active = calculationRecorder;
+        if (active == null) {
+            return;
+        }
+        for (int index = 0; index < calculationSlots.length; index++) {
+            Object value = frame[replaySlots[index]];
+            if (value != UNBOUND) {
+                active.append(calculationSlots[index], value);
+            }
         }
     }
 

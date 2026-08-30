@@ -151,6 +151,8 @@ import java.util.stream.Collectors;
  */
 public final class ExecutionPlanBuilder {
 
+    private static final int[] NO_REPLAY_SLOTS = new int[0];
+
     private final boolean optimizing;
 
     public ExecutionPlanBuilder() {
@@ -193,11 +195,12 @@ public final class ExecutionPlanBuilder {
         Map<NodeId, List<DeferredCheck>> deferredChecksByNode = model.deferredChecks().stream()
                 .collect(Collectors.groupingBy(DeferredCheck::nodeId));
         List<FoldedRead> foldedReads = new ArrayList<>();
-        CommonSubexpressionAnalysis commonSubexpressions =
-                optimizing ? CommonSubexpressionAnalyzer.analyze(model) : CommonSubexpressionAnalysis.EMPTY;
-        Map<NodeId, Integer> memoSlots = commonSubexpressions.memoSlotsByNodeId();
         CalculationPointInventory calculationPoints = CalculationPointInventory.build(model);
-        BuildContext buildContext = new BuildContext(calculationPoints);
+        CommonSubexpressionAnalysis commonSubexpressions = optimizing
+                ? CommonSubexpressionAnalyzer.analyze(model, calculationPoints)
+                : CommonSubexpressionAnalysis.EMPTY;
+        Map<NodeId, Integer> memoSlots = commonSubexpressions.memoSlotsByNodeId();
+        BuildContext buildContext = new BuildContext(calculationPoints, commonSubexpressions);
         ExecutableNode result = model.ast().resultExpression()
                 .map(expression -> buildNode(
                         expression, model, environment, deferredChecksByNode, foldedReads, memoSlots, buildContext))
@@ -254,6 +257,7 @@ public final class ExecutionPlanBuilder {
                 fullCalculationMemorySchema,
                 assignmentCalculationMemorySchema,
                 model.frameLayout().frameSize() + commonSubexpressions.memoSlotCount(),
+                commonSubexpressions.replaySlotCount(),
                 environment.boundaryCoercion(),
                 environment.zoneId(),
                 environment.maxMaterializedSize());
@@ -353,7 +357,7 @@ public final class ExecutionPlanBuilder {
             BuildContext buildContext) {
         BindingLookup.required(model.runtimeNullability(), node.id(), "runtime nullability");
         return memoize(node.id(), buildNodeWithoutMemo(
-                node, model, environment, deferredChecksByNode, foldedReads, memoSlots, buildContext), memoSlots);
+                node, model, environment, deferredChecksByNode, foldedReads, memoSlots, buildContext), buildContext);
     }
 
     private ExecutableNode buildNodeWithoutMemo(
@@ -382,7 +386,8 @@ public final class ExecutionPlanBuilder {
                     BindingLookup.required(model.symbolBindings(), currentItem.id(), "current item binding").frameSlot());
             case CurrentTemporalValueNode currentTemporalValue -> new CurrentTemporalExecutableNode(
                     currentTemporalValue.id(), currentTemporalValue.sourceSpan(), currentTemporalValue.kind(),
-                    buildContext.calculationPoints().slot(currentTemporalValue.id()));
+                    buildContext.calculationPoints().slot(currentTemporalValue.id()),
+                    buildContext.replaySlots(currentTemporalValue.id()));
             case GroupedExpressionNode grouped ->
                     buildNode(grouped.expression(), model, environment, deferredChecksByNode, foldedReads, memoSlots, buildContext);
             case BinaryOperationNode binary ->
@@ -676,7 +681,8 @@ public final class ExecutionPlanBuilder {
                 .toList();
         FunctionCallExecutableNode built = new FunctionCallExecutableNode(
                 functionCall.id(), functionCall.sourceSpan(), descriptor, arguments,
-                buildContext.calculationPoints().slot(functionCall.id()));
+                buildContext.calculationPoints().slot(functionCall.id()),
+                buildContext.replaySlots(functionCall.id()));
         ExecutableNode assertionElided = foldAssertion(built);
         if (assertionElided != built) {
             return assertionElided;
@@ -760,9 +766,11 @@ public final class ExecutionPlanBuilder {
                 boolean safe = propertyBinding.safe();
                 ExecutableNode built = optimizing
                         ? new RegisteredPropertyExecutableNode(
-                                id, span, receiver, safe, propertyBinding, buildContext.calculationPoints().slot(id))
+                                id, span, receiver, safe, propertyBinding,
+                                buildContext.calculationPoints().slot(id), buildContext.replaySlots(id))
                         : new OracleRegisteredPropertyExecutableNode(
-                                id, span, receiver, safe, propertyBinding, buildContext.calculationPoints().slot(id));
+                                id, span, receiver, safe, propertyBinding,
+                                buildContext.calculationPoints().slot(id), buildContext.replaySlots(id));
                 yield foldNavigationLink(propertyBinding.pure(), built, receiver);
             }
             case RegisteredMethodNavigationBinding methodBinding -> {
@@ -776,10 +784,10 @@ public final class ExecutionPlanBuilder {
                 ExecutableNode built = optimizing
                         ? new RegisteredMethodExecutableNode(
                                 id, span, receiver, safe, methodBinding, arguments,
-                                buildContext.calculationPoints().slot(id))
+                                buildContext.calculationPoints().slot(id), buildContext.replaySlots(id))
                         : new OracleRegisteredMethodExecutableNode(
                                 id, span, receiver, safe, methodBinding, arguments,
-                                buildContext.calculationPoints().slot(id));
+                                buildContext.calculationPoints().slot(id), buildContext.replaySlots(id));
                 ExecutableNode[] requiredConstants = new ExecutableNode[arguments.size() + 1];
                 requiredConstants[0] = receiver;
                 for (int i = 0; i < arguments.size(); i++) {
@@ -842,18 +850,24 @@ public final class ExecutionPlanBuilder {
 
     /**
      * Wraps {@code built} in a {@link MemoizedExecutableNode} when {@code nodeId} is one occurrence of
-     * an eligible Subexpressao Comum Memoizada (ADR 0019, issue #121): {@code memoSlots} is empty in
+     * an eligible Subexpressao Comum Memoizada (ADR 0019, issue #121): the occurrence map is empty in
      * Oracle mode, so this is a no-op there. A node that already folded to a {@link ConstantExecutableNode},
      * or that is already a single frame slot load ({@link FrameReadExecutableNode}, e.g. a repeated
      * identifier or Item Atual read), is never wrapped: both are already the cheapest possible read, and
      * a memo slot would only add a frame read and a branch on top for no benefit.
      */
-    private ExecutableNode memoize(NodeId nodeId, ExecutableNode built, Map<NodeId, Integer> memoSlots) {
-        Integer slot = memoSlots.get(nodeId);
-        if (slot == null || built instanceof ConstantExecutableNode || built instanceof FrameReadExecutableNode) {
+    private ExecutableNode memoize(NodeId nodeId, ExecutableNode built, BuildContext buildContext) {
+        MemoizedOccurrence occurrence = buildContext.commonSubexpressions().occurrencesByNodeId().get(nodeId);
+        if (occurrence == null || built instanceof ConstantExecutableNode || built instanceof FrameReadExecutableNode) {
             return built;
         }
-        return new MemoizedExecutableNode(nodeId, built.sourceSpan(), slot, built);
+        return new MemoizedExecutableNode(
+                nodeId,
+                built.sourceSpan(),
+                occurrence.memoSlot(),
+                built,
+                occurrence.calculationSlots(),
+                occurrence.replaySlots());
     }
 
     /**
@@ -920,10 +934,17 @@ public final class ExecutionPlanBuilder {
         return Objects.requireNonNull(environment, "environment");
     }
 
-    private record BuildContext(CalculationPointInventory calculationPoints) {
+    private record BuildContext(
+            CalculationPointInventory calculationPoints,
+            CommonSubexpressionAnalysis commonSubexpressions) {
 
         private BuildContext {
             Objects.requireNonNull(calculationPoints, "calculationPoints");
+            Objects.requireNonNull(commonSubexpressions, "commonSubexpressions");
+        }
+
+        private int[] replaySlots(NodeId nodeId) {
+            return commonSubexpressions.replaySlotsByCalculationNodeId().getOrDefault(nodeId, NO_REPLAY_SLOTS);
         }
     }
 

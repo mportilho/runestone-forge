@@ -108,7 +108,7 @@ class CommonSubexpressionMemoizationTest {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("x", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
-        SemanticModel model = resolve("(x + 1) * (x + 1)", environment);
+        SemanticModel model = resolve("(sqrt(x) + 1) * (sqrt(x) + 1)", environment);
         int semanticFrameSize = model.frameLayout().frameSize();
 
         CommonSubexpressionAnalysis analysis = CommonSubexpressionAnalyzer.analyze(model);
@@ -118,6 +118,11 @@ class CommonSubexpressionMemoizationTest {
         for (Map.Entry<NodeId, Integer> entry : analysis.memoSlotsByNodeId().entrySet()) {
             assertThat(entry.getValue()).isGreaterThanOrEqualTo(semanticFrameSize);
         }
+        assertThat(analysis.replaySlotsByCalculationNodeId().values().stream()
+                .flatMapToInt(java.util.Arrays::stream))
+                .isNotEmpty()
+                .allSatisfy(slot -> assertThat(slot)
+                        .isGreaterThanOrEqualTo(semanticFrameSize + analysis.memoSlotCount()));
     }
 
     @Test

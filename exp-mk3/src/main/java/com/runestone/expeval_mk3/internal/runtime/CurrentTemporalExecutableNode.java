@@ -11,12 +11,14 @@ public record CurrentTemporalExecutableNode(
         NodeId id,
         SourceSpan sourceSpan,
         CurrentTemporalValueKind kind,
-        int calculationSlot) implements CalculationPointExecutableNode {
+        int calculationSlot,
+        int[] replaySlots) implements CalculationPointExecutableNode {
 
     public CurrentTemporalExecutableNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(kind, "kind");
+        Objects.requireNonNull(replaySlots, "replaySlots");
     }
 
     @Override
@@ -26,7 +28,7 @@ public record CurrentTemporalExecutableNode(
             case TIME -> scope.currentTime();
             case DATE_TIME -> scope.currentDateTime();
         };
-        scope.captureCalculation(calculationSlot, value);
+        scope.captureCalculation(calculationSlot, replaySlots, value);
         return value;
     }
 }

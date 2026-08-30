@@ -85,7 +85,7 @@ public final class ConstantFolder {
     private static boolean requiresCalculationCapture(
             ExecutableNode built, ExecutableNode[] requiredConstantChildren) {
         if (built instanceof CalculationPointExecutableNode calculationPoint
-                && calculationPoint.calculationSlot() >= 0) {
+                && (calculationPoint.calculationSlot() >= 0 || calculationPoint.replaySlots().length > 0)) {
             return true;
         }
         for (ExecutableNode child : requiredConstantChildren) {

@@ -13,19 +13,21 @@ public record FunctionCallExecutableNode(
         SourceSpan sourceSpan,
         FunctionDescriptor descriptor,
         List<ExecutableNode> arguments,
-        int calculationSlot) implements CalculationPointExecutableNode {
+        int calculationSlot,
+        int[] replaySlots) implements CalculationPointExecutableNode {
 
     public FunctionCallExecutableNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
         Objects.requireNonNull(descriptor, "descriptor");
         arguments = List.copyOf(Objects.requireNonNull(arguments, "arguments"));
+        Objects.requireNonNull(replaySlots, "replaySlots");
     }
 
     @Override
     public Object execute(ExecutionScope scope) {
         Object value = ExpressionRuntime.invokeFunction(descriptor, arguments, scope, sourceSpan);
-        scope.captureCalculation(calculationSlot, value);
+        scope.captureCalculation(calculationSlot, replaySlots, value);
         return value;
     }
 }

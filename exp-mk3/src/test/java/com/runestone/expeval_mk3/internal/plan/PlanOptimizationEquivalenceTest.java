@@ -74,6 +74,20 @@ class PlanOptimizationEquivalenceTest {
                 model, environment, inputs, Clock.systemUTC(), probe::reset, probe::orderSnapshot);
     }
 
+    @Property
+    void memoizedMemoryAgreesWhenTheFirstSourceOccurrenceMayBeUnreached(
+            @ForAll boolean enabled,
+            @ForAll @BigRange(min = "0", max = "20") @Scale(2) BigDecimal x) {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("enabled", false, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("x", ScalarType.NUMBER, BigDecimal.ZERO, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        SemanticModel model = resolve("if(enabled; sqrt(x); 0) + sqrt(x)", environment);
+
+        PlanEquivalenceHarness.assertEquivalent(
+                model, environment, Map.of("enabled", enabled, "x", x), Clock.systemUTC());
+    }
+
     private static ExpressionEnvironment environment(EffectProbe probe) {
         return ExpressionEnvironment.builder()
                 .externalSymbol("x", ScalarType.NUMBER, BigDecimal.ZERO, ExternalSymbolOverwritePolicy.OVERRIDABLE)

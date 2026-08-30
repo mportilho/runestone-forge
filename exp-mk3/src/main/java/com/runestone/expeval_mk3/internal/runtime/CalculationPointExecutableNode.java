@@ -4,4 +4,6 @@ package com.runestone.expeval_mk3.internal.runtime;
 interface CalculationPointExecutableNode extends ExecutableNode {
 
     int calculationSlot();
+
+    int[] replaySlots();
 }

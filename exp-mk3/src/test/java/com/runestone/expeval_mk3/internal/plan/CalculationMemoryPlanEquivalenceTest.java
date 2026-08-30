@@ -25,10 +25,168 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CalculationMemoryPlanEquivalenceTest {
+
+    @Test
+    void memoHitRepublishesEveryReachedSourceOccurrenceWithoutReinvokingTheFunction() {
+        AtomicInteger invocations = new AtomicInteger();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .functionsFrom(new CountingFunctions(invocations), FunctionPurity.PURE)
+                .build();
+        SemanticModel model = resolve("count(x) + count(x)", environment);
+        ExecutionPlanBuilder builder = new ExecutionPlanBuilder();
+
+        ComputationWithMemory<Object> optimized = builder.build(model, environment)
+                .computeWithMemory(Map.of("x", BigDecimal.TEN), Clock.systemUTC());
+        assertThat(invocations).hasValue(1);
+        ComputationWithMemory<Object> oracle = builder.buildOracle(model, environment)
+                .computeWithMemory(Map.of("x", BigDecimal.TEN), Clock.systemUTC());
+
+        assertThat(invocations).hasValue(3);
+        assertThat(optimized.memory().calculations()).isEqualTo(oracle.memory().calculations());
+        assertThat(optimized.memory().calculations()).extracting(CalculationEntry::value)
+                .containsExactly(BigDecimal.TEN, BigDecimal.TEN);
+    }
+
+    @Test
+    void firstReachedMemoOccurrencePublishesOnlyItsOwnProvenance() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("enabled", false, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("x", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .functionsFrom(new Functions(), FunctionPurity.PURE)
+                .build();
+        SemanticModel model = resolve("if enabled then track(x) else 0 endif + track(x)", environment);
+
+        assertMemoryEquivalent(model, environment, Map.of("enabled", false, "x", BigDecimal.TEN));
+
+        ComputationWithMemory<Object> optimized = new ExecutionPlanBuilder().build(model, environment)
+                .computeWithMemory(Map.of("enabled", false, "x", BigDecimal.TEN), Clock.systemUTC());
+        assertThat(optimized.memory().calculations()).singleElement().satisfies(calculation ->
+                assertThat(calculation.key().sourceSpan().offset()).isGreaterThan(20));
+    }
+
+    @Test
+    void cseSharedByAssignmentAndResultRespectsTheExecutedView() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .functionsFrom(new Functions(), FunctionPurity.PURE)
+                .build();
+        SemanticModel model = resolve("assigned := track(x); track(x)", environment);
+        ExecutionPlanBuilder builder = new ExecutionPlanBuilder();
+        ExecutionPlan optimizedPlan = builder.build(model, environment);
+        ExecutionPlan oraclePlan = builder.buildOracle(model, environment);
+
+        ComputationWithMemory<Map<String, Object>> optimizedAssignments = optimizedPlan
+                .computeAssignmentsWithMemory(Map.of("x", BigDecimal.TEN), Clock.systemUTC());
+        ComputationWithMemory<Map<String, Object>> oracleAssignments = oraclePlan
+                .computeAssignmentsWithMemory(Map.of("x", BigDecimal.TEN), Clock.systemUTC());
+        ComputationWithMemory<Object> optimizedResult = optimizedPlan
+                .computeWithMemory(Map.of("x", BigDecimal.TEN), Clock.systemUTC());
+        ComputationWithMemory<Object> oracleResult = oraclePlan
+                .computeWithMemory(Map.of("x", BigDecimal.TEN), Clock.systemUTC());
+
+        assertThat(optimizedAssignments.memory().calculations())
+                .isEqualTo(oracleAssignments.memory().calculations()).hasSize(1);
+        assertThat(optimizedResult.memory().calculations())
+                .isEqualTo(oracleResult.memory().calculations()).hasSize(2);
+    }
+
+    @Test
+    void nestedMemoGroupsReplayNestedCalculationPointsInEvaluationOrder() {
+        AtomicInteger invocations = new AtomicInteger();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .functionsFrom(new CountingFunctions(invocations), FunctionPurity.PURE)
+                .build();
+        SemanticModel model = resolve("count(count(x)) + count(count(x))", environment);
+        ExecutionPlanBuilder builder = new ExecutionPlanBuilder();
+
+        ComputationWithMemory<Object> optimized = builder.build(model, environment)
+                .computeWithMemory(Map.of("x", BigDecimal.TEN), Clock.systemUTC());
+        assertThat(invocations).hasValue(2);
+        invocations.set(0);
+        ComputationWithMemory<Object> oracle = builder.buildOracle(model, environment)
+                .computeWithMemory(Map.of("x", BigDecimal.TEN), Clock.systemUTC());
+
+        assertThat(invocations).hasValue(4);
+        assertThat(optimized.memory().calculations()).isEqualTo(oracle.memory().calculations());
+        assertThat(optimized.memory().calculations()).extracting(CalculationEntry::value)
+                .containsExactly(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN, BigDecimal.TEN);
+    }
+
+    @Test
+    void memoHitReplaysAStaticFoldedGroupInsideTheMemoizedSubtree() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .functionsFrom(new Functions(), FunctionPurity.FOLDABLE)
+                .build();
+        SemanticModel model = resolve("(track(1) + x) * (track(1) + x)", environment);
+
+        assertMemoryEquivalent(model, environment, Map.of("x", BigDecimal.TEN));
+
+        ComputationWithMemory<Object> optimized = new ExecutionPlanBuilder().build(model, environment)
+                .computeWithMemory(Map.of("x", BigDecimal.TEN), Clock.systemUTC());
+        assertThat(optimized.memory().calculations()).extracting(CalculationEntry::value)
+                .containsExactly(BigDecimal.ONE, BigDecimal.ONE);
+    }
+
+    @Test
+    void memoHitReplaysReachedNullFromASafeRegisteredProperty() {
+        ObjectType accountType = new ObjectType(NullableAccount.class.getName());
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("accounts", new com.runestone.expeval_mk3.api.MapType(accountType), Map.of(),
+                        ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .registerJavaType(NullableAccount.class)
+                .build();
+        String access = "accounts?.[\"missing\"]?.amount";
+        SemanticModel model = resolve("(" + access + " ?? 0) + (" + access + " ?? 0)", environment);
+
+        assertMemoryEquivalent(model, environment, Map.of());
+
+        ComputationWithMemory<Object> optimized = new ExecutionPlanBuilder().build(model, environment)
+                .computeWithMemory(Map.of(), Clock.systemUTC());
+        assertThat(optimized.memory().calculations()).hasSize(2)
+                .allSatisfy(calculation -> assertThat(calculation.value()).isNull());
+    }
+
+    @Test
+    void replayPreservesReachabilityOfEquivalentPointsInMutuallyExclusiveBranches() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("enabled", true, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .externalSymbol("x", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .functionsFrom(new Functions(), FunctionPurity.PURE)
+                .build();
+        String conditional = "if enabled then track(x) else track(x) endif";
+        SemanticModel model = resolve("(" + conditional + ") + (" + conditional + ")", environment);
+
+        assertMemoryEquivalent(model, environment, Map.of("enabled", true, "x", BigDecimal.TEN));
+        assertMemoryEquivalent(model, environment, Map.of("enabled", false, "x", BigDecimal.TEN));
+
+        ComputationWithMemory<Object> optimized = new ExecutionPlanBuilder().build(model, environment)
+                .computeWithMemory(Map.of("enabled", true, "x", BigDecimal.TEN), Clock.systemUTC());
+        assertThat(optimized.memory().calculations()).hasSize(2);
+    }
+
+    @Test
+    void opaqueOccurrenceCanSeedAReplayValueWithoutPublishingItsInactiveOrdinal() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("x", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        SemanticModel model = resolve(
+                "items := [1, 2]; items.map(@ -> sqrt(x)).sum() + sqrt(x)", environment);
+
+        assertMemoryEquivalent(model, environment, Map.of("x", BigDecimal.TEN));
+
+        ComputationWithMemory<Object> optimized = new ExecutionPlanBuilder().build(model, environment)
+                .computeWithMemory(Map.of("x", BigDecimal.TEN), Clock.systemUTC());
+        assertThat(optimized.memory().calculations()).singleElement().satisfies(calculation ->
+                assertThat(calculation.key().name()).isEqualTo("sqrt"));
+    }
 
     @Test
     void optimizedAndOraclePlansAgreeForNonFoldedNonMemoizedCalculationFlows() {
@@ -314,10 +472,27 @@ class CalculationMemoryPlanEquivalenceTest {
         }
     }
 
+    public static final class CountingFunctions {
+
+        private final AtomicInteger invocations;
+
+        CountingFunctions(AtomicInteger invocations) {
+            this.invocations = invocations;
+        }
+
+        public BigDecimal count(BigDecimal value) {
+            invocations.incrementAndGet();
+            return value;
+        }
+    }
+
     public record Account(BigDecimal amount) {
 
         public BigDecimal fee(BigDecimal increment) {
             return amount.add(increment);
         }
+    }
+
+    public record NullableAccount(BigDecimal amount) {
     }
 }
