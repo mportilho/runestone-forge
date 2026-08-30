@@ -16,6 +16,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -62,11 +63,11 @@ class ConcurrentSharedPlanExecutionTest {
                     .collect(Collectors.toList());
 
             List<Future<CallOutcome>> futures = calls.stream().map(executor::submit).collect(Collectors.toList());
-            ready.await();
+            assertThat(ready.await(10, TimeUnit.SECONDS)).as("all calls became ready").isTrue();
             release.countDown();
 
             for (Future<CallOutcome> future : futures) {
-                CallOutcome outcome = future.get();
+                CallOutcome outcome = future.get(10, TimeUnit.SECONDS);
                 BigDecimal expectedDoubled = outcome.factor.multiply(BigDecimal.valueOf(2));
                 boolean expectedExceeds = expectedDoubled.compareTo(BigDecimal.TEN) > 0;
 
@@ -114,7 +115,7 @@ class ConcurrentSharedPlanExecutionTest {
                     .mapToObj(value -> (Callable<Object>) () -> {
                         ready.countDown();
                         release.await();
-                        return expression.compute(Map.of("outer", healthyInput));
+                        return expression.computeWithMemory(Map.of("outer", healthyInput));
                     })
                     .collect(Collectors.toList());
             List<Callable<Object>> failingCalls = IntStream.range(0, callsPerKind)
@@ -122,7 +123,7 @@ class ConcurrentSharedPlanExecutionTest {
                         ready.countDown();
                         release.await();
                         try {
-                            expression.compute(Map.of("outer", failingInput));
+                            expression.computeWithMemory(Map.of("outer", failingInput));
                             return "did not fail";
                         } catch (ExpressionExecutionException expected) {
                             return expected;
@@ -134,14 +135,19 @@ class ConcurrentSharedPlanExecutionTest {
                     healthyCalls.stream().map(executor::submit).collect(Collectors.toList());
             List<Future<Object>> failingFutures =
                     failingCalls.stream().map(executor::submit).collect(Collectors.toList());
-            ready.await();
+            assertThat(ready.await(10, TimeUnit.SECONDS)).as("all calls became ready").isTrue();
             release.countDown();
 
             for (Future<Object> future : healthyFutures) {
-                assertThat(future.get()).isEqualTo(expectedHealthyResult);
+                ComputationWithMemory<?> computation =
+                        (ComputationWithMemory<?>) future.get(10, TimeUnit.SECONDS);
+                assertThat(computation.result()).isEqualTo(expectedHealthyResult);
+                assertThat(computation.memory().variables()).containsExactly(
+                        new VariableEntry(new VariableKey("outer", VariableOrigin.EXTERNAL), healthyInput));
+                assertThat(computation.memory().calculations()).isEmpty();
             }
             for (Future<Object> future : failingFutures) {
-                assertThat(future.get()).isInstanceOf(ExpressionExecutionException.class);
+                assertThat(future.get(10, TimeUnit.SECONDS)).isInstanceOf(ExpressionExecutionException.class);
             }
         } finally {
             executor.shutdownNow();
@@ -172,7 +178,7 @@ class ConcurrentSharedPlanExecutionTest {
                     .collect(Collectors.toList());
 
             List<Future<LocalDateTime>> futures = calls.stream().map(executor::submit).collect(Collectors.toList());
-            ready.await();
+            assertThat(ready.await(10, TimeUnit.SECONDS)).as("all calls became ready").isTrue();
             release.countDown();
 
             List<LocalDateTime> moments = futures.stream().map(this::join).collect(Collectors.toList());
@@ -189,7 +195,7 @@ class ConcurrentSharedPlanExecutionTest {
 
     private LocalDateTime join(Future<LocalDateTime> future) {
         try {
-            return future.get();
+            return future.get(10, TimeUnit.SECONDS);
         } catch (Exception exception) {
             throw new AssertionError(exception);
         }

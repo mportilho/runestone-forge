@@ -1,5 +1,50 @@
 # Performance History
 
+## 2026-08-30 - Etapa 10 Retention and Production Layout (issue #145)
+
+Purpose: prove execution-local ownership and deterministic non-retention for `CalculationMemory`, then
+measure the production node, schema, recorder, plan, and final-memory layouts. Functional gates inspect
+the object graph by identity without `System.gc()` and cover concurrent success/failure, reentrant
+`computeWithMemory()`, memo values, Item Atual restoration, exact columns, and uncached list projections.
+
+Environment: Eclipse Temurin 21.0.8+9-LTS, JOL 0.17, Linux x86_64, 64-bit VM, compressed ordinary and
+class references with 3-bit shifts, 8-byte object alignment. JOL could not attach Instrumentation or the
+Serviceability Agent in this environment, so reference base/shift details are inferred; shallow sizes and
+relative retained-footprint comparisons use the reported VM model. JVM module opens used for graph
+inspection were `java.lang`, `java.util`, and `java.lang.invoke`.
+
+| Shallow production object | Bytes |
+|---|---:|
+| function/property/current-temporal calculation node | 32-40 |
+| registered method calculation node | 48 |
+| memoized node | 40 |
+| folded-provenance constant / static calculation group | 32 / 24 |
+| execution scope / recorder / final memory | 32 each |
+| calculation schema / variable schema | 24 each |
+
+| Production graph | Instances | Bytes |
+|---|---:|---:|
+| Plan with 10 executable nodes | 10,793 | 411,032 |
+| Plan with 100 executable nodes | 11,430 | 429,264 |
+| Plan with 1,000 executable nodes | 15,030 | 531,264 |
+| Empty memory | 4 | 88 |
+| Dense memory, 3 calculations | 27 | 800 |
+| Prefix memory, 1 of 2 calculations | 16 | 408 |
+| Gapped memory, 2 of 3 calculations | 25 | 680 |
+| 32 memories from distinct plans | 319 | 9,088 |
+| 32 memories from one shared plan | 164 | 4,872 |
+
+Verdict for issue #145's retention/layout gate: **ACCEPT.** Final memories retain exact value arrays,
+add an exact ordinal sidecar only for gaps, and do not reach the plan, executable nodes, AST, semantic
+model, environment, provider, source, execution scope, recorder, memo slots, or Item Atual slots. The
+inverse graph proves a retained plan does not reach prior memories or override values. Sharing one plan
+saves 4,216 retained bytes across 32 memories by sharing prebuilt keys; list projections occur only when
+callers retain them and are not cached.
+No unexpected retention or nonlinear plan growth was found.
+
+Command: `MAVEN_OPTS='--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.lang.invoke=ALL-UNNAMED' mvn -q -pl exp-mk3 -Dexec.classpathScope=test -Dexec.mainClass=com.runestone.expeval_mk3.perf.jmh.CalculationMemoryProductionLayoutReport org.codehaus.mojo:exec-maven-plugin:3.5.0:java`.
+Raw output: `/tmp/opencode/issue-145/jol-production-layout.txt`.
+
 ## 2026-08-26 - Etapa 10 Production Calculation Capture (issue #141)
 
 Purpose: verify the selected append-only recorder in the real `ExecutionPlan.compute()` and
