@@ -75,7 +75,8 @@ public final class CalculationMemoryProductionLayoutReport {
         }) {
             System.out.printf("%s,%d%n", type.getSimpleName(), ClassLayout.parseClass(type).instanceSize());
         }
-        printPackagePrivateLayout("com.runestone.expeval_mk3.internal.runtime.CapturedConstantExecutableNode");
+        printPackagePrivateLayout(
+                "com.runestone.expeval_mk3.internal.runtime.StaticCalculationConstantExecutableNode");
         printPackagePrivateLayout("com.runestone.expeval_mk3.internal.runtime.StaticCalculationGroup");
     }
 

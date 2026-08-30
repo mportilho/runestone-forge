@@ -5,12 +5,12 @@ import com.runestone.expeval_mk3.internal.ast.NodeId;
 
 import java.util.Objects;
 
-/** A folded constant that replays the reached calculation points collapsed into its value. */
-final class CapturedConstantExecutableNode extends ConstantExecutableNode {
+/** A folded constant that replays the static calculation provenance collapsed into its value. */
+final class StaticCalculationConstantExecutableNode extends ConstantExecutableNode {
 
     private final StaticCalculationGroup calculationGroup;
 
-    CapturedConstantExecutableNode(
+    StaticCalculationConstantExecutableNode(
             NodeId id, SourceSpan sourceSpan, Object value, StaticCalculationGroup calculationGroup) {
         super(id, sourceSpan, value);
         this.calculationGroup = Objects.requireNonNull(calculationGroup, "calculationGroup");

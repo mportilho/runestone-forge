@@ -6,7 +6,7 @@ import com.runestone.expeval_mk3.internal.ast.NodeId;
 import java.util.Objects;
 
 /** A prepared or folded value, with any source calculations collapsed into it. */
-public sealed class ConstantExecutableNode implements ExecutableNode permits CapturedConstantExecutableNode {
+public sealed class ConstantExecutableNode implements ExecutableNode permits StaticCalculationConstantExecutableNode {
 
     private final NodeId id;
     private final SourceSpan sourceSpan;

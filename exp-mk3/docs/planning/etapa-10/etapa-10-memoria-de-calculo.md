@@ -173,7 +173,8 @@ Existe um unico Plano Imutavel cacheado para `compute()` e `computeWithMemory()`
 `Captured*`, wrappers, decorators, segunda arvore, plano instrumentado ou construcao lazy de outra
 representacao.
 
-Cada familia de no marcavel recebe um `int calculationSlot` imutavel. O encoding de
+Cada familia de no marcavel recebe um `int calculationSlot` imutavel e, somente quando CSE exige
+republicacao de proveniencia, metadata imutavel de slots de replay. O encoding de
 `NO_CALCULATION_SLOT` permanece interno. O no calcula o valor uma unica vez e, quando a captura esta
 ativa e a ocorrencia e marcavel, acrescenta a referencia ja calculada. O gate escolheu mode-first:
 `compute()` abandona a captura antes de validar o slot; descendentes opacos usam o slot inativo.
@@ -223,8 +224,9 @@ Se `F` e o tamanho normal do frame, incluindo slots de memo, `S` e o numero de P
 e o numero de pontos alcancados:
 
 - `compute()` continua clonando o template de tamanho exato `F` e nao cria recorder;
-- `computeWithMemory()` tambem mantem o frame exato e ativa um recorder append-only local apenas quando
-  `S > 0`;
+- `computeWithMemory()` ativa um recorder append-only local apenas quando `S > 0`; o frame permanece
+  exato quando nao ha replay de CSE e recebe somente os slots scratch necessarios quando um memo hit
+  precisa republicar valores sem reinvocar o calculo;
 - o recorder mantem `Object[] values`, `int[] ordinals` opcional e `count`; `count` distingue null
   alcancado de ausencia sem sentinel ou bitmap;
 - a capacidade inicial e pequena e limitada por `S`; crescimento usa arrays simples e nunca ultrapassa

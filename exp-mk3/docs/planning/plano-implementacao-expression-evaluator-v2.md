@@ -228,10 +228,10 @@ Calculo alcancados, otimizada para consumo sequencial por persistencia no mesmo 
 - `CalculationMemory` com payload colunar exato, leitura indexada sem alocacao por entrada e duas
   vistas `List` imutaveis de conveniencia: variaveis por `(name, origin)` e calculos por Chave de
   Proveniencia, tipo e nome descritivo.
-- Um unico Plano Imutavel. Nos marcaveis carregam `int calculationSlot`, cujo encoding inativo e ordem
-  de branch sao detalhes medidos;
+- Um unico Plano Imutavel. Nos marcaveis carregam `int calculationSlot` e, somente para replay de CSE,
+  metadata imutavel dos slots scratch; encoding inativo e ordem de branch sao detalhes medidos.
   `compute()` preserva o frame exato e `computeWithMemory()` usa captura append-only apenas na execucao
-  local.
+  local, estendendo o frame somente quando o replay de CSE precisar preservar valores pulados.
 - Pontos marcaveis fechados em funcao global, propriedade/metodo Java registrado e Valor Temporal
   Corrente. Operacoes de colecao e todos os seus descendentes sao fronteiras opacas.
 - Folding transfere grupos de proveniencia estatica ao no constante; CSE transfere ao

@@ -79,7 +79,8 @@ public final class ConstantFolder {
         StaticCalculationGroup calculationGroup = foldScope.calculationGroup();
         return calculationGroup.isEmpty()
                 ? new ConstantExecutableNode(built.id(), built.sourceSpan(), value)
-                : new CapturedConstantExecutableNode(built.id(), built.sourceSpan(), value, calculationGroup);
+                : new StaticCalculationConstantExecutableNode(
+                        built.id(), built.sourceSpan(), value, calculationGroup);
     }
 
     private static boolean requiresCalculationCapture(
