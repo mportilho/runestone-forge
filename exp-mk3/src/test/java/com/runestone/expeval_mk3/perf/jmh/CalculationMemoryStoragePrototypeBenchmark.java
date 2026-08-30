@@ -160,6 +160,17 @@ public class CalculationMemoryStoragePrototypeBenchmark {
     }
 
     @Benchmark
+    public void representativeFrameEager(RepresentativeState state, Blackhole sink) {
+        BindingState binding = state.binding();
+        FrameCapture capture = binding.captureFrameTail();
+        EagerComputation computation = new EagerComputation(
+                binding.materializePublicResult(),
+                binding.freezeEager(capture, binding.fullSchema));
+        sink.consume(computation.result);
+        computation.memory.consume(sink);
+    }
+
+    @Benchmark
     public FrameCapture representativeFrameCapture(RepresentativeState state) {
         return state.binding().captureFrameTail();
     }

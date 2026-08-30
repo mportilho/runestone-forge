@@ -345,14 +345,14 @@ Com a compilação unificada, o cache melhora estruturalmente:
 
 ## 18. Memoria de Calculo com custo controlado
 
-A v2 nao oferece trace temporal. Ela produz, sob demanda explicita, uma mini auditoria compacta e
-deterministica, normalmente percorrida uma vez por um adaptador de persistencia:
+A v2 produz, sob demanda explicita, uma mini auditoria compacta e deterministica, normalmente
+percorrida uma vez por um adaptador de persistencia:
 
 - `compute()` e `computeWithMemory()` compartilham um unico Plano Imutavel. Nos marcaveis carregam um
   `calculationSlot` primitivo; encoding inativo e ordem dos testes sao escolhidos por JMH/perfasm.
-- `compute()` clona o frame de tamanho exato. `computeWithMemory()` estende apenas seu frame local com
-  uma cauda de calculos, grava referencias alcancadas e, depois de materializar o resultado publico,
-  congela arrays de valores exatos e sidecar de ordinais somente quando houver lacunas.
+- `compute()` e `computeWithMemory()` mantem o frame de tamanho exato. A rota de memoria ativa um
+  recorder append-only local, grava referencias alcancadas e, depois de materializar o resultado
+  publico, congela arrays de valores exatos e sidecar de ordinais somente quando houver lacunas.
 - Variaveis sao os simbolos participantes, uma vez por `(name, origin)`. Calculos sao ocorrencias
   alcancadas de funcao global, propriedade/metodo registrado e Valor Temporal Corrente.
 - O schema guarda slots de variavel explicitos e variantes completa/assignments-only; nao assume prefixo
@@ -367,14 +367,15 @@ deterministica, normalmente percorrida uma vez por um adaptador de persistencia:
   nao retém plano, ambiente nem fonte.
 - Persistencia, serializacao, entidades e copia profunda ficam na borda consumidora. O caminho indicado
   percorre os acessores indexados e nao cria `VariableEntry`/`CalculationEntry` intermediarios.
-- Nao existem plano instrumentado, decorators, eventos, ring buffer, profundidade ou
-  `maxAuditEvents`. A captura de producao e append-only; frame-tail permanece apenas como controle de
-  benchmark.
+- A captura de producao e append-only, local a execucao e limitada pelo inventario estatico de pontos;
+  frame-tail permanece apenas como controle de benchmark.
 
 O caminho normal aceita no maximo um teste previsivel nos nos marcaveis, exige zero B/op adicional e
 investiga regressao reproduzivel acima de 1%. O gate vinculante mede captura, freeze, percurso indexado,
-percurso por listas e um sink sequencial de mini auditoria antes da implementacao; o veredito final e
-repetido no Java 21 de deployment.
+percurso por listas e um sink sequencial de mini auditoria antes da implementacao. O veredito final da
+Etapa 10 foi repetido no Temurin 21.0.8 de deployment em 2026-08-30; os gates de software foram aceitos,
+e o contador de branches permanece pendente por permissao do host. Detalhes e a excecao de latencia
+investigada estao no historico de desempenho e no ADR 0023.
 
 ---
 

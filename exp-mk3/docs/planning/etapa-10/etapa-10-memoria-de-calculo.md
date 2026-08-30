@@ -27,6 +27,16 @@ nao premissas fixadas pelo desenho fonte.
 - `calculation-capture-storage-reconciliation.md` registra o desempate em Temurin 21.0.8 e autoriza a
   implementacao de producao append-only.
 
+## Status do Gate de Software
+
+Gate de software concluido em 2026-08-30. O gate de deployment repetiu build, suite, JMH, JFR, JOL e
+inspecao de inlining no Eclipse Temurin 21.0.8+9-LTS. Permanecem como escolhas finais: recorder append-only local,
+branch mode-first, contagem durante captura, payload colunar exato e API indexada como percurso de
+persistencia. O resultado vinculante e seus comandos reproduziveis estao em
+`docs/perf/performance-history.md`, na entrada da issue #147. O fechamento da etapa permanece condicionado
+ao contador de branches em um host com acesso a eventos de hardware; este host usa
+`perf_event_paranoid=4` sem `CAP_PERFMON`.
+
 ## Resultado Publico
 
 As quatro Visoes de Expressao oferecem `computeWithMemory()` com e sem sobrescritas:
@@ -420,6 +430,7 @@ antes de codigo de producao. A issue #155 aplicou esta regra e selecionou append
 ## Decisoes Pendentes
 
 Nenhuma decisao de produto permanece aberta. A issue #155 selecionou append-only; mode-first e contagem
-durante captura permanecem os resultados da issue #139. Detalhes internos de capacidade e crescimento
-continuam condicionados aos gates declarados, sem alterar o contrato publico ou introduzir estrategia
-adaptativa em producao.
+durante captura permanecem os resultados da issue #139 e foram confirmados pelo gate final da issue
+#147, condicionado somente a contadores de hardware ainda indisponiveis. Detalhes internos de capacidade
+e crescimento continuam condicionados aos gates declarados, sem alterar o contrato publico ou introduzir
+estrategia adaptativa em producao.

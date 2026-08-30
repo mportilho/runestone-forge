@@ -220,8 +220,7 @@ Saíram da Etapa 7: **eliminação de atribuições mortas**, porque uma atribui
 ## Etapa 10 — Memoria de Calculo sobre um unico plano
 
 **Objetivo:** §18 — entregar uma mini auditoria deterministica de variaveis participantes e Pontos de
-Calculo alcancados, otimizada para consumo sequencial por persistencia, sem trace de eventos, segunda
-arvore ou segundo plano.
+Calculo alcancados, otimizada para consumo sequencial por persistencia no mesmo Plano Imutavel.
 
 **Entregas**
 - `computeWithMemory()` nas quatro Visoes de Expressao, retornando `ComputationWithMemory<T>` com o
@@ -246,18 +245,20 @@ arvore ou segundo plano.
 - A rota interna mantem `ExecutionScope` e resultado cru apenas em variaveis locais ate
   `materializar -> freeze`, sem holder intermediario; a visao de atribuicoes le slots diretamente e nao
   cria a lista crua de valores do caminho atual.
-- Frame-tail permanece controle documentado; dense+bitmap, adaptacao em runtime, eventos, snapshots,
-  profundidade, ring buffer e
-  `maxAuditEvents` ficam fora.
+- A captura de producao e append-only; frame-tail permanece somente como controle documentado e
+  dense+bitmap permanece descartado.
 
 **Critérios de aceite:** o JMH vinculante mede captura, freeze, percurso indexado, percurso pelas listas
 e sink sequencial de persistencia antes da mudanca de producao e pode reabrir armazenamento/publicacao;
 `compute()` mantem zero B/op adicional e qualquer regressao
-reproduzivel acima de 1% e investigada sem segundo plano; as quatro visoes preservam resultado,
+reproduzivel acima de 1% e investigada preservando o plano unico; as quatro visoes preservam resultado,
 falha, ordem, null, folding, CSE e opacidade de colecao; memoria nao retém plano/ambiente/fonte e
 execucoes concorrentes permanecem isoladas; travessia indexada aloca zero B/op no evaluator; JOL/JFR
 validam layout e alocacao; o gate final e repetido
-no Java 21 de deployment. O plano detalhado e o ADR 0023 sao normativos para a implementacao.
+no Java 21 de deployment. Os gates de software foram aceitos no Temurin 21.0.8 em 2026-08-30, com a
+regressao do branch obrigatorio medida e justificada no historico de desempenho; o contador de hardware
+permanece pendente por permissao do host. O plano detalhado e o ADR 0023 sao normativos para a
+implementacao.
 
 **Depende de:** Etapas 7–9.
 
