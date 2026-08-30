@@ -73,7 +73,13 @@ public final class BoundaryCoercion {
     public boolean canConvert(Object sourceValue, ExpressionType targetType) {
         Objects.requireNonNull(targetType, "targetType");
         try {
-            convertBoundaryValue("boundary value", sourceValue, targetType, DEFAULT_MAX_MATERIALIZED_SIZE, true);
+            convertBoundaryValue(
+                    "boundary value",
+                    DiagnosticContext.VALUE_NAME,
+                    sourceValue,
+                    targetType,
+                    DEFAULT_MAX_MATERIALIZED_SIZE,
+                    true);
             return true;
         } catch (IllegalArgumentException exception) {
             return false;
@@ -110,6 +116,7 @@ public final class BoundaryCoercion {
         Objects.requireNonNull(targetType, "targetType");
         return convertBoundaryValue(
                 "function-binding fallback value",
+                DiagnosticContext.VALUE_NAME,
                 sourceValue,
                 targetType,
                 Integer.MAX_VALUE,
@@ -118,7 +125,8 @@ public final class BoundaryCoercion {
 
     Object convertDefault(String symbolName, Object sourceValue, ExpressionType targetType, int maxMaterializedSize) {
         return convertBoundaryValue(
-                "external symbol '" + symbolName + "' default",
+                symbolName,
+                DiagnosticContext.EXTERNAL_SYMBOL_DEFAULT,
                 sourceValue,
                 targetType,
                 maxMaterializedSize,
@@ -131,6 +139,7 @@ public final class BoundaryCoercion {
         }
         return convertBoundaryValue(
                 "external symbol '" + symbolName + "' override",
+                DiagnosticContext.VALUE_NAME,
                 sourceValue,
                 targetType,
                 maxMaterializedSize,
@@ -148,42 +157,61 @@ public final class BoundaryCoercion {
     }
 
     private Object convertBoundaryValue(
-            String boundaryName,
+            String valueName,
+            DiagnosticContext diagnosticContext,
             Object sourceValue,
             ExpressionType targetType,
             int maxMaterializedSize,
             boolean iterableAllowed) {
         try {
-            return convertValue(boundaryName, sourceValue, targetType, maxMaterializedSize, iterableAllowed);
+            return convertValue(
+                    valueName,
+                    diagnosticContext,
+                    sourceValue,
+                    targetType,
+                    maxMaterializedSize,
+                    iterableAllowed);
         } catch (RuntimeException exception) {
             throw new BoundaryCoercionFailure(
-                    boundaryName + " cannot be converted to " + targetType + ": " + exception.getMessage(),
+                    diagnosticContext.describe(valueName)
+                            + " cannot be converted to " + targetType + ": " + exception.getMessage(),
                     exception);
         }
     }
 
     private Object convertValue(
             String valueName,
+            DiagnosticContext diagnosticContext,
             Object sourceValue,
             ExpressionType targetType,
             int maxMaterializedSize,
             boolean iterableAllowed) {
         Objects.requireNonNull(targetType, "targetType");
         return switch (targetType) {
-            case ScalarType scalarType -> convertScalar(valueName, sourceValue, scalarType);
+            case ScalarType scalarType -> convertScalar(valueName, diagnosticContext, sourceValue, scalarType);
             case CollectionType collectionType -> convertCollection(
                     valueName,
+                    diagnosticContext,
                     sourceValue,
                     collectionType.elementType(),
                     maxMaterializedSize,
                     iterableAllowed);
             case MapType mapType -> convertMap(
-                    valueName, sourceValue, mapType.valueType(), maxMaterializedSize, iterableAllowed);
-            case ObjectType objectType -> convertObject(valueName, sourceValue, objectType);
+                    valueName,
+                    diagnosticContext,
+                    sourceValue,
+                    mapType.valueType(),
+                    maxMaterializedSize,
+                    iterableAllowed);
+            case ObjectType objectType -> convertObject(valueName, diagnosticContext, sourceValue, objectType);
         };
     }
 
-    private Object convertScalar(String valueName, Object sourceValue, ScalarType scalarType) {
+    private Object convertScalar(
+            String valueName,
+            DiagnosticContext diagnosticContext,
+            Object sourceValue,
+            ScalarType scalarType) {
         if (sourceValue == null) {
             throw new IllegalArgumentException("scalar target requires a non-null value");
         }
@@ -199,7 +227,8 @@ public final class BoundaryCoercion {
                     + (converted == null ? "null" : converted.getClass().getName()));
         }
         if (scalarType == ScalarType.NUMBER && !(converted instanceof BigDecimal)) {
-            throw new IllegalArgumentException("numeric boundary coercion did not produce BigDecimal for " + valueName);
+            throw new IllegalArgumentException("numeric boundary coercion did not produce BigDecimal for "
+                    + diagnosticContext.describe(valueName));
         }
         return converted;
     }
@@ -263,29 +292,36 @@ public final class BoundaryCoercion {
 
     private Object convertCollection(
             String valueName,
+            DiagnosticContext diagnosticContext,
             Object sourceValue,
             ExpressionType elementType,
             int maxMaterializedSize,
             boolean iterableAllowed) {
         if (sourceValue instanceof Collection<?> values) {
-            requireWithinLimit(valueName, values.size(), maxMaterializedSize);
+            requireWithinLimit(valueName, diagnosticContext, values.size(), maxMaterializedSize);
             ArrayList<Object> convertedValues = new ArrayList<>(values.size());
             for (Object element : values) {
                 if (convertedValues.size() == maxMaterializedSize) {
-                    throw materializationLimitExceeded(valueName, maxMaterializedSize);
+                    throw materializationLimitExceeded(valueName, diagnosticContext, maxMaterializedSize);
                 }
                 convertedValues.add(convertElement(
-                        valueName, elementType, element, maxMaterializedSize, iterableAllowed));
+                        valueName,
+                        diagnosticContext,
+                        elementType,
+                        element,
+                        maxMaterializedSize,
+                        iterableAllowed));
             }
             return Collections.unmodifiableList(convertedValues);
         }
         if (sourceValue != null && sourceValue.getClass().isArray()) {
             int length = Array.getLength(sourceValue);
-            requireWithinLimit(valueName, length, maxMaterializedSize);
+            requireWithinLimit(valueName, diagnosticContext, length, maxMaterializedSize);
             ArrayList<Object> convertedValues = new ArrayList<>(length);
             for (int index = 0; index < length; index++) {
                 convertedValues.add(convertElement(
                         valueName,
+                        diagnosticContext,
                         elementType,
                         Array.get(sourceValue, index),
                         maxMaterializedSize,
@@ -297,10 +333,15 @@ public final class BoundaryCoercion {
             ArrayList<Object> convertedValues = new ArrayList<>(Math.min(maxMaterializedSize, 10));
             for (Object element : values) {
                 if (convertedValues.size() == maxMaterializedSize) {
-                    throw materializationLimitExceeded(valueName, maxMaterializedSize);
+                    throw materializationLimitExceeded(valueName, diagnosticContext, maxMaterializedSize);
                 }
                 convertedValues.add(convertElement(
-                        valueName, elementType, element, maxMaterializedSize, iterableAllowed));
+                        valueName,
+                        diagnosticContext,
+                        elementType,
+                        element,
+                        maxMaterializedSize,
+                        iterableAllowed));
             }
             return Collections.unmodifiableList(convertedValues);
         }
@@ -309,15 +350,23 @@ public final class BoundaryCoercion {
 
     private Object convertElement(
             String valueName,
+            DiagnosticContext diagnosticContext,
             ExpressionType elementType,
             Object element,
             int maxMaterializedSize,
             boolean iterableAllowed) {
-        return convertValue(valueName, element, elementType, maxMaterializedSize, iterableAllowed);
+        return convertValue(
+                valueName,
+                diagnosticContext,
+                element,
+                elementType,
+                maxMaterializedSize,
+                iterableAllowed);
     }
 
     private Map<String, Object> convertMap(
             String valueName,
+            DiagnosticContext diagnosticContext,
             Object sourceValue,
             ExpressionType valueType,
             int maxMaterializedSize,
@@ -325,42 +374,57 @@ public final class BoundaryCoercion {
         if (!(sourceValue instanceof Map<?, ?> values)) {
             throw new IllegalArgumentException("value must be a map for MapType");
         }
-        requireWithinLimit(valueName, values.size(), maxMaterializedSize);
+        requireWithinLimit(valueName, diagnosticContext, values.size(), maxMaterializedSize);
         TreeMap<String, Object> sortedValues = new TreeMap<>();
         int entryCount = 0;
         for (Map.Entry<?, ?> entry : values.entrySet()) {
             if (entryCount == maxMaterializedSize) {
-                throw materializationLimitExceeded(valueName, maxMaterializedSize);
+                throw materializationLimitExceeded(valueName, diagnosticContext, maxMaterializedSize);
             }
             entryCount++;
             if (!(entry.getKey() instanceof String key)) {
                 throw new IllegalArgumentException("MapType values must be text-keyed");
             }
             sortedValues.put(key, convertElement(
-                    valueName, valueType, entry.getValue(), maxMaterializedSize, iterableAllowed));
+                    valueName,
+                    diagnosticContext,
+                    valueType,
+                    entry.getValue(),
+                    maxMaterializedSize,
+                    iterableAllowed));
         }
         return Collections.unmodifiableMap(new LinkedHashMap<>(sortedValues));
     }
 
-    private static void requireWithinLimit(String valueName, int size, int maxMaterializedSize) {
+    private static void requireWithinLimit(
+            String valueName,
+            DiagnosticContext diagnosticContext,
+            int size,
+            int maxMaterializedSize) {
         if (size > maxMaterializedSize) {
-            throw materializationLimitExceeded(valueName, maxMaterializedSize);
+            throw materializationLimitExceeded(valueName, diagnosticContext, maxMaterializedSize);
         }
     }
 
     private static IllegalArgumentException materializationLimitExceeded(
             String valueName,
+            DiagnosticContext diagnosticContext,
             int maxMaterializedSize) {
         return new IllegalArgumentException(
-                valueName + " exceeds maxMaterializedSize " + maxMaterializedSize);
+                diagnosticContext.describe(valueName) + " exceeds maxMaterializedSize " + maxMaterializedSize);
     }
 
-    private Object convertObject(String valueName, Object sourceValue, ObjectType objectType) {
+    private Object convertObject(
+            String valueName,
+            DiagnosticContext diagnosticContext,
+            Object sourceValue,
+            ObjectType objectType) {
         if (sourceValue == null) {
             throw new IllegalArgumentException("object target requires a non-null value");
         }
         if (!sourceValue.getClass().getName().equals(objectType.name())) {
-            throw new IllegalArgumentException(valueName + " must be an instance of " + objectType.name());
+            throw new IllegalArgumentException(
+                    diagnosticContext.describe(valueName) + " must be an instance of " + objectType.name());
         }
         return sourceValue;
     }
@@ -385,6 +449,18 @@ public final class BoundaryCoercion {
 
         private BoundaryCoercionFailure(String message, Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    private enum DiagnosticContext {
+        VALUE_NAME,
+        EXTERNAL_SYMBOL_DEFAULT;
+
+        private String describe(String valueName) {
+            if (this == EXTERNAL_SYMBOL_DEFAULT) {
+                return "external symbol '" + valueName + "' default";
+            }
+            return valueName;
         }
     }
 

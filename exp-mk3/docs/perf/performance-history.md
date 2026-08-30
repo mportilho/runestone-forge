@@ -1,5 +1,35 @@
 # Performance History
 
+## 2026-08-30 - Preparacao lazy de diagnosticos de defaults (issue #156)
+
+Purpose: materialize `external symbol '<name>' default` only when default boundary coercion fails.
+The dedicated benchmark measures `ExternalSymbol.withDefault(...)` directly and consumes each built
+symbol, without expression compilation or `compute(...)`. Scenarios cover one inferred canonical
+scalar, one explicitly typed collection, and an inferred map containing four lists and 32 scalar
+leaves.
+
+Environment: Eclipse Temurin 21.0.8+9-LTS; JMH 1.37; Linux x86_64; Intel Core i7-7700HQ;
+`-Xms1g -Xmx1g`; one thread; three forks; 5x500 ms warmup and 10x500 ms measurement; GC profiler.
+Before and after runs used identical parameters in the same session. Results are `ns/op +/- 99.9% CI`;
+lower is better.
+
+| Scenario | Before | After | Improvement | Before B/op | After B/op | Allocation change |
+|---|---:|---:|---:|---:|---:|---:|
+| Canonical inferred scalar | 515.88 +/- 5.39 | 474.05 +/- 28.55 | 8.11% | 1,472 | 1,424 | -48 B |
+| Explicitly typed collection | 691.94 +/- 7.51 | 668.35 +/- 9.86 | 3.41% | 1,168 | 1,096 | -72 B |
+| Compound inferred default | 3,141.79 +/- 51.33 | 2,461.07 +/- 31.65 | 21.67% | 5,976 | 4,184 | -1,792 B |
+
+Verdict: **ACCEPT.** No scenario regressed, and the compound case demonstrates the expected
+size-proportional removal of eager diagnostic strings. The implementation passes the symbol name and
+a shared enum context through recursive coercion, adding no lambda or per-level context allocation;
+the complete label is formatted only on failure. Exact outer exception type/message and cause
+type/message remain covered for scalar, object, collection, map, and materialization-limit failures.
+
+Benchmark: `com.runestone.expeval_mk3.perf.jmh.ExternalSymbolDefaultPreparationBenchmark`.
+Artifacts: `/tmp/performance-benchmark/issue-156-before-direct.json`,
+`/tmp/performance-benchmark/issue-156-after-direct.json`, and
+`/tmp/performance-benchmark/issue-156-comparison.md`.
+
 ## 2026-08-30 - Comparacao de runtime com expression-evaluator
 
 Purpose: compare steady-state execution of `exp-mk3` and the previous `expression-evaluator` with
