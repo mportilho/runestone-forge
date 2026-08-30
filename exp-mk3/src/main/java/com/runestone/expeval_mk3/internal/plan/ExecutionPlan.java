@@ -32,6 +32,8 @@ import java.util.stream.Collectors;
  */
 public final class ExecutionPlan {
 
+    private static final Object NO_OVERRIDE = new Object();
+
     private final ExecutableNode resultExpression;
     private final ExpressionType resultType;
     private final List<AssignmentExecutable> assignments;
@@ -39,6 +41,7 @@ public final class ExecutionPlan {
     private final Map<String, ExternalBindingPlan> bindingsByName;
     private final List<ExternalSymbol> declaredSymbolsInCanonicalOrder;
     private final Set<String> declaredSymbolNames;
+    private final boolean everyDeclaredSymbolHasFrameSlot;
     private final List<AssignedSymbol> assignedSymbolsInCreationOrder;
     private final List<FoldedRead> foldedVariableReads;
     private final CalculationMemorySchema fullCalculationMemorySchema;
@@ -83,6 +86,7 @@ public final class ExecutionPlan {
         declaredSymbolNames = this.declaredSymbolsInCanonicalOrder.stream()
                 .map(ExternalSymbol::name)
                 .collect(Collectors.toUnmodifiableSet());
+        everyDeclaredSymbolHasFrameSlot = this.externalBindings.size() == this.declaredSymbolsInCanonicalOrder.size();
         Object[] template = ExecutionScope.blankFrame(frameSize);
         for (ExternalBindingPlan binding : this.externalBindings) {
             template[binding.frameSlot()] = binding.symbol().defaultValue().value();
@@ -195,7 +199,6 @@ public final class ExecutionPlan {
             Map<String, ?> overrides, Clock clock, CalculationRecorder calculationRecorder) {
         Objects.requireNonNull(overrides, "overrides");
         Objects.requireNonNull(clock, "clock");
-        rejectSmallestUndeclaredOverride(overrides);
 
         // Not observable until wrapped in a scope below, so a validation failure here discards this
         // partially-written array with no assignment or provider ever having run against it.
@@ -205,16 +208,11 @@ public final class ExecutionPlan {
         } else {
             frame = ExecutionScope.extendFrame(frameTemplate, memoryFrameSize);
         }
-        for (ExternalSymbol symbol : declaredSymbolsInCanonicalOrder) {
-            String name = symbol.name();
-            if (!overrides.containsKey(name)) {
-                continue;
-            }
-            requireOverridable(symbol, name);
-            Object coerced = symbol.coerceOverride(overrides.get(name), boundaryCoercion);
-            ExternalBindingPlan binding = bindingsByName.get(name);
-            if (binding != null) {
-                frame[binding.frameSlot()] = coerced;
+        if (!overrides.isEmpty()) {
+            if (everyDeclaredSymbolHasFrameSlot) {
+                applyOverridesWithFrameSlots(overrides, frame);
+            } else {
+                applyOverridesToPartiallyBoundPlan(overrides, frame);
             }
         }
 
@@ -225,6 +223,57 @@ public final class ExecutionPlan {
             assignment.execute(scope);
         }
         return scope;
+    }
+
+    private void applyOverridesWithFrameSlots(Map<String, ?> overrides, Object[] frame) {
+        for (int index = 0; index < externalBindings.size(); index++) {
+            frame[externalBindings.get(index).frameSlot()] = NO_OVERRIDE;
+        }
+
+        String smallestUndeclared = null;
+        for (Map.Entry<String, ?> entry : overrides.entrySet()) {
+            ExternalBindingPlan binding = bindingsByName.get(entry.getKey());
+            if (binding == null) {
+                String name = entry.getKey();
+                if (smallestUndeclared == null || name.compareTo(smallestUndeclared) < 0) {
+                    smallestUndeclared = name;
+                }
+            } else {
+                frame[binding.frameSlot()] = entry.getValue();
+            }
+        }
+        rejectUndeclaredOverride(smallestUndeclared);
+
+        for (int index = 0; index < externalBindings.size(); index++) {
+            ExternalBindingPlan binding = externalBindings.get(index);
+            int frameSlot = binding.frameSlot();
+            Object override = frame[frameSlot];
+            if (override == NO_OVERRIDE) {
+                frame[frameSlot] = frameTemplate[frameSlot];
+                continue;
+            }
+            ExternalSymbol symbol = binding.symbol();
+            requireOverridable(symbol, symbol.name());
+            frame[frameSlot] = symbol.coerceOverride(override, boundaryCoercion);
+        }
+    }
+
+    private void applyOverridesToPartiallyBoundPlan(Map<String, ?> overrides, Object[] frame) {
+        rejectSmallestUndeclaredOverride(overrides);
+        for (int index = 0; index < declaredSymbolsInCanonicalOrder.size(); index++) {
+            ExternalSymbol symbol = declaredSymbolsInCanonicalOrder.get(index);
+            String name = symbol.name();
+            Object override = overrides.get(name);
+            if (override == null && !overrides.containsKey(name)) {
+                continue;
+            }
+            requireOverridable(symbol, name);
+            Object coerced = symbol.coerceOverride(override, boundaryCoercion);
+            ExternalBindingPlan binding = bindingsByName.get(name);
+            if (binding != null) {
+                frame[binding.frameSlot()] = coerced;
+            }
+        }
     }
 
     private Object executeResult(ExecutionScope scope) {
@@ -241,6 +290,10 @@ public final class ExecutionPlan {
                 smallestUndeclared = name;
             }
         }
+        rejectUndeclaredOverride(smallestUndeclared);
+    }
+
+    private static void rejectUndeclaredOverride(String smallestUndeclared) {
         if (smallestUndeclared != null) {
             throw RuntimeFailures.invalidExternalInput("unknown external symbol override: " + smallestUndeclared);
         }

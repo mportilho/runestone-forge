@@ -38,6 +38,21 @@ class RuntimeInputPreparationTest {
     }
 
     @Test
+    void rejectsAnUnknownOverrideBeforeAnInvalidKnownOverrideOnTheDirectFramePath() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("known", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("known", environment).asMath();
+        Map<String, Object> overrides = new LinkedHashMap<>();
+        overrides.put("known", null);
+        overrides.put("unknown", BigDecimal.ONE);
+
+        assertThatThrownBy(() -> expression.compute(overrides))
+                .isInstanceOf(ExpressionExecutionException.class)
+                .hasMessageContaining("unknown external symbol override: unknown");
+    }
+
+    @Test
     void validatesDeclaredSymbolOverridesInCanonicalOrderRegardlessOfMapIterationOrder() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .externalSymbol("bFixed", BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)

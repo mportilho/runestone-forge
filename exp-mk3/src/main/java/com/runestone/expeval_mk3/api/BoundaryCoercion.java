@@ -126,12 +126,25 @@ public final class BoundaryCoercion {
     }
 
     Object convertOverride(String symbolName, Object sourceValue, ExpressionType targetType, int maxMaterializedSize) {
+        if (isCanonicalScalarOrObject(sourceValue, targetType)) {
+            return sourceValue;
+        }
         return convertBoundaryValue(
                 "external symbol '" + symbolName + "' override",
                 sourceValue,
                 targetType,
                 maxMaterializedSize,
                 true);
+    }
+
+    private static boolean isCanonicalScalarOrObject(Object sourceValue, ExpressionType targetType) {
+        return switch (targetType) {
+            case ScalarType scalarType -> ExpressionJavaTypes.scalarValueType(scalarType).isInstance(sourceValue);
+            case ObjectType objectType -> sourceValue != null
+                    && sourceValue.getClass().getName().equals(objectType.name());
+            case CollectionType ignored -> false;
+            case MapType ignored -> false;
+        };
     }
 
     private Object convertBoundaryValue(

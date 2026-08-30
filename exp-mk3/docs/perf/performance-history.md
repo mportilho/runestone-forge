@@ -1,5 +1,102 @@
 # Performance History
 
+## 2026-08-30 - Comparacao de runtime com expression-evaluator
+
+Purpose: compare steady-state execution of `exp-mk3` and the previous `expression-evaluator` with
+the same expressions, inputs, registered functions, and registered object types. Compilation and
+environment construction are outside the measured path. The benchmark setup checks that both
+engines produce equivalent results before each fork starts measuring.
+
+Environment: Eclipse Temurin 21.0.8+9-LTS; Maven 3.9.16; JMH 1.37; Linux x86_64; Intel Core
+i7-7700HQ; `-Xms1g -Xmx1g`; one thread; three forks; 5x500 ms warmup and 10x500 ms measurement;
+99.9% confidence intervals; GC profiler enabled; commit `69a3e01` plus the comparison fixture.
+
+Results are `ns/op +/- 99.9% CI`; lower is better. Performance delta is
+`(legacy - MK3) / legacy`, so a positive value means MK3 is faster. Allocation delta shows the
+relative increase in MK3 bytes per operation.
+
+| Scenario | Previous module | MK3 | MK3 performance | Previous B/op | MK3 B/op | MK3 allocation |
+|---|---:|---:|---:|---:|---:|---:|
+| 12 variables | 666.96 +/- 13.49 | 1,148.34 +/- 20.30 | -72.18% | 704 | 1,280 | +81.82% |
+| 4 function calls, arity 3 | 609.00 +/- 11.16 | 1,127.14 +/- 21.26 | -85.08% | 544 | 1,112 | +104.41% |
+| 3-level object navigation | 132.21 +/- 4.17 | 86.90 +/- 1.17 | +34.27% | 88 | 112 | +27.27% |
+
+Verdict: **MIXED.** MK3 is 1.52x as fast for registered object navigation, but has 1.72x the
+latency for the multiple-variable expression and 1.85x for the function-call expression. It
+allocates more in all three scenarios. These results characterize the selected hot execution paths
+only and do not compare compilation/startup time.
+
+Benchmark: `com.runestone.expeval_mk3.perf.jmh.LegacyComparisonBenchmark`.
+
+Command: `run-jmh.sh exp-mk3 LegacyComparisonBenchmark /tmp/performance-benchmark/legacy-comparison.json`.
+
+### Root-cause controls
+
+The same plans were measured both with no override map and with a 12-entry override map containing
+exactly the same values as the defaults. This holds arithmetic and function results constant and
+isolates runtime input preparation. Results use the same three-fork standard protocol as the main
+comparison.
+
+| Scenario | Engine | No overrides (ns/op / B/op) | Same values through overrides | Override cost |
+|---|---|---:|---:|---:|
+| 12 variables | Previous | 416.96 / 40 | 671.96 / 104 | +255.00 ns / +64 B |
+| 12 variables | MK3 | 149.50 / 112 | 1,081.05 / 680 | +931.56 ns / +568 B |
+| 4 function calls | Previous | 342.70 / 480 | 609.42 / 544 | +266.72 ns / +64 B |
+| 4 function calls | MK3 | 176.07 / 544 | 1,116.98 / 1,112 | +940.90 ns / +568 B |
+
+Without overrides, MK3 is 64.15% faster for the arithmetic plan and 48.62% faster for the function
+plan. Supplying the equivalent map adds approximately 675 ns and 504 B/op more to MK3 than to the
+previous evaluator in both controls, which is sufficient to reverse both comparisons.
+
+The cause is `ExecutionPlan.executeAssignments`: MK3 first scans every override key to reject unknown
+names, then scans every declared symbol and performs `containsKey`, `get`, coercion, and a binding-map
+lookup. The previous evaluator scans the supplied entries once and performs one binding lookup per
+entry. In addition, `BoundaryCoercion.convertOverride` eagerly builds `"external symbol '<name>' override"`
+for every successful exact-type conversion. JFR allocation sampling for the MK3 arithmetic path
+attributed 46.86% of allocation pressure to `byte[]` created through `StringConcatHelper`, 21.11% to
+`Object[]`, and 0.97% to `ArrayList` iterators; the corresponding legacy profile was dominated by
+`BigDecimal` (85.28%) and its one override array (12.27%), with no string-concatenation site present.
+
+Conclusion: the regressions are in named override validation/preparation, not in arithmetic node
+execution or function dispatch. The first optimization candidate is to remove eager success-path
+diagnostic-string construction; the larger CPU opportunity is to reduce the two-pass, multi-lookup
+override binding while preserving deterministic unknown-symbol diagnostics and overwrite validation.
+
+### Override preparation optimization
+
+The proposed changes were implemented and measured against a fresh same-session baseline. Exact-type
+scalar and object overrides now bypass diagnostic-label construction. Plans where every declared
+external symbol has a frame slot stage raw overrides directly in the cloned frame, validate unknown
+names in one map pass, and then coerce in canonical symbol order. This preserves deterministic
+diagnostics and all-or-nothing execution without a per-call staging array. Empty override maps skip
+override traversal entirely. Plans containing declared-but-unused symbols retain the general path.
+
+| MK3 benchmark | Before (ns/op / B/op) | After (ns/op / B/op) | Latency gain | Allocation change |
+|---|---:|---:|---:|---:|
+| 12 variables, changing overrides | 1,145.30 / 1,288 | 509.69 / 696 | +55.50% | -592 B |
+| 12 variables, default-value overrides | 1,088.79 / 680 | 461.31 / 96 | +57.63% | -584 B |
+| 12 variables, no overrides | 144.16 / 104 | 120.19 / 96 | +16.63% | -8 B |
+| 4 function calls, changing overrides | 1,131.61 / 1,128 | 477.24 / 536 | +57.83% | -592 B |
+| 4 function calls, default-value overrides | 1,054.09 / 1,120 | 477.08 / 536 | +54.74% | -584 B |
+| 4 function calls, no overrides | 169.09 / 544 | 145.56 / 536 | +13.91% | -8 B |
+
+The isolated cost of supplying the 12-entry default-value map fell from approximately 945 ns and
+576 B/op to 341 ns and effectively 0 B/op for arithmetic, and from 885 ns and 576 B/op to 332 ns and
+effectively 0 B/op for function calls. This confirms both causes identified above.
+
+A fresh post-change paired comparison reverses the original result:
+
+| Scenario | Previous module (ns/op / B/op) | Optimized MK3 (ns/op / B/op) | MK3 latency |
+|---|---:|---:|---:|
+| 12 variables | 663.82 / 704 | 462.91 / 696 | +30.27% faster |
+| 4 function calls, arity 3 | 594.97 / 544 | 476.77 / 536 | +19.87% faster |
+
+Verdict: **ACCEPT.** Every changed-path benchmark improved by more than 10%, MK3 is now faster than
+the previous evaluator in both formerly regressing scenarios, and it allocates 8 B/op less in each.
+Raw results: `/tmp/performance-benchmark/mk3-overrides-before-2026-08-30.json`,
+`/tmp/performance-benchmark/mk3-overrides-after-2026-08-30.json`, and
+`/tmp/performance-benchmark/legacy-comparison-optimized-2026-08-30.json`.
+
 ## 2026-08-30 - Etapa 10 Deployment Java 21 Software Verdict (issue #147)
 
 Purpose: repeat the binding Etapa 10 verdict on the deployment JVM and prepare the implementation,
