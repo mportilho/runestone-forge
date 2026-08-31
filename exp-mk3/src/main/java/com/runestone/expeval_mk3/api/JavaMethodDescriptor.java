@@ -9,6 +9,8 @@ import java.util.Objects;
  */
 public final class JavaMethodDescriptor {
 
+    private static final int MAX_DIRECT_PARAMETER_COUNT = 10;
+
     private final String languageName;
     private final List<ExpressionType> parameterTypes;
     private final ExpressionType returnType;
@@ -28,7 +30,7 @@ public final class JavaMethodDescriptor {
         this.parameterTypes = ExpressionTypes.copyOf(parameterTypes, "parameterTypes");
         this.returnType = Objects.requireNonNull(returnType, "returnType");
         this.invocationHandle = Objects.requireNonNull(invocationHandle, "invocationHandle");
-        this.entryPoint = InvocationEntryPoint.prepare(invocationHandle);
+        this.entryPoint = InvocationEntryPoint.prepare(invocationHandle, MAX_DIRECT_PARAMETER_COUNT + 1);
         this.implementationMetadata = Objects.requireNonNull(implementationMetadata, "implementationMetadata");
         this.purity = Objects.requireNonNull(purity, "purity");
         if (invocationHandle.type().parameterCount() != this.parameterTypes.size() + 1) {
@@ -75,6 +77,106 @@ public final class JavaMethodDescriptor {
                 Objects.requireNonNull(argument0, "argument0"),
                 Objects.requireNonNull(argument1, "argument1"),
                 Objects.requireNonNull(argument2, "argument2"));
+    }
+
+    public Object invoke(
+            Object receiver, Object argument0, Object argument1, Object argument2, Object argument3)
+            throws Throwable {
+        return entryPoint.invoke(
+                Objects.requireNonNull(receiver, "receiver"),
+                Objects.requireNonNull(argument0, "argument0"),
+                Objects.requireNonNull(argument1, "argument1"),
+                Objects.requireNonNull(argument2, "argument2"),
+                Objects.requireNonNull(argument3, "argument3"));
+    }
+
+    public Object invoke(
+            Object receiver, Object argument0, Object argument1, Object argument2, Object argument3,
+            Object argument4) throws Throwable {
+        return entryPoint.invoke(
+                Objects.requireNonNull(receiver, "receiver"),
+                Objects.requireNonNull(argument0, "argument0"),
+                Objects.requireNonNull(argument1, "argument1"),
+                Objects.requireNonNull(argument2, "argument2"),
+                Objects.requireNonNull(argument3, "argument3"),
+                Objects.requireNonNull(argument4, "argument4"));
+    }
+
+    public Object invoke(
+            Object receiver, Object argument0, Object argument1, Object argument2, Object argument3,
+            Object argument4, Object argument5) throws Throwable {
+        return entryPoint.invoke(
+                Objects.requireNonNull(receiver, "receiver"),
+                Objects.requireNonNull(argument0, "argument0"),
+                Objects.requireNonNull(argument1, "argument1"),
+                Objects.requireNonNull(argument2, "argument2"),
+                Objects.requireNonNull(argument3, "argument3"),
+                Objects.requireNonNull(argument4, "argument4"),
+                Objects.requireNonNull(argument5, "argument5"));
+    }
+
+    public Object invoke(
+            Object receiver, Object argument0, Object argument1, Object argument2, Object argument3,
+            Object argument4, Object argument5, Object argument6) throws Throwable {
+        return entryPoint.invoke(
+                Objects.requireNonNull(receiver, "receiver"),
+                Objects.requireNonNull(argument0, "argument0"),
+                Objects.requireNonNull(argument1, "argument1"),
+                Objects.requireNonNull(argument2, "argument2"),
+                Objects.requireNonNull(argument3, "argument3"),
+                Objects.requireNonNull(argument4, "argument4"),
+                Objects.requireNonNull(argument5, "argument5"),
+                Objects.requireNonNull(argument6, "argument6"));
+    }
+
+    public Object invoke(
+            Object receiver, Object argument0, Object argument1, Object argument2, Object argument3,
+            Object argument4, Object argument5, Object argument6, Object argument7) throws Throwable {
+        return entryPoint.invoke(
+                Objects.requireNonNull(receiver, "receiver"),
+                Objects.requireNonNull(argument0, "argument0"),
+                Objects.requireNonNull(argument1, "argument1"),
+                Objects.requireNonNull(argument2, "argument2"),
+                Objects.requireNonNull(argument3, "argument3"),
+                Objects.requireNonNull(argument4, "argument4"),
+                Objects.requireNonNull(argument5, "argument5"),
+                Objects.requireNonNull(argument6, "argument6"),
+                Objects.requireNonNull(argument7, "argument7"));
+    }
+
+    public Object invoke(
+            Object receiver, Object argument0, Object argument1, Object argument2, Object argument3,
+            Object argument4, Object argument5, Object argument6, Object argument7, Object argument8)
+            throws Throwable {
+        return entryPoint.invoke(
+                Objects.requireNonNull(receiver, "receiver"),
+                Objects.requireNonNull(argument0, "argument0"),
+                Objects.requireNonNull(argument1, "argument1"),
+                Objects.requireNonNull(argument2, "argument2"),
+                Objects.requireNonNull(argument3, "argument3"),
+                Objects.requireNonNull(argument4, "argument4"),
+                Objects.requireNonNull(argument5, "argument5"),
+                Objects.requireNonNull(argument6, "argument6"),
+                Objects.requireNonNull(argument7, "argument7"),
+                Objects.requireNonNull(argument8, "argument8"));
+    }
+
+    public Object invoke(
+            Object receiver, Object argument0, Object argument1, Object argument2, Object argument3,
+            Object argument4, Object argument5, Object argument6, Object argument7, Object argument8,
+            Object argument9) throws Throwable {
+        return entryPoint.invoke(
+                Objects.requireNonNull(receiver, "receiver"),
+                Objects.requireNonNull(argument0, "argument0"),
+                Objects.requireNonNull(argument1, "argument1"),
+                Objects.requireNonNull(argument2, "argument2"),
+                Objects.requireNonNull(argument3, "argument3"),
+                Objects.requireNonNull(argument4, "argument4"),
+                Objects.requireNonNull(argument5, "argument5"),
+                Objects.requireNonNull(argument6, "argument6"),
+                Objects.requireNonNull(argument7, "argument7"),
+                Objects.requireNonNull(argument8, "argument8"),
+                Objects.requireNonNull(argument9, "argument9"));
     }
 
     public Object invokeArray(Object[] receiverAndArguments) throws Throwable {

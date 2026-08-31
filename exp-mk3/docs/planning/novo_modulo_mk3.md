@@ -191,7 +191,7 @@ Acréscimos:
 
 Mantida a descoberta por reflexão → `FunctionDescriptor` com `MethodHandle`, tipos, retorno e flag `foldable`. Melhorias de desempenho:
 
-- **Invocação sem reflexão em runtime**: cada binding resolvido gera um invoker especializado. Preferência: `LambdaMetafactory` para assinaturas comuns (1–4 args), caindo para `MethodHandle.invokeExact` com handle **adaptado em compilação** (asType feito uma vez). Nunca `Method.invoke` no caminho quente.
+- **Invocação sem reflexão em runtime**: cada binding resolvido gera um invoker especializado. Aridades 0–10 tentam `LambdaMetafactory` e caem para um `MethodHandle.invokeExact` de assinatura fixa com handle **adaptado em compilação** (`asType` feito uma vez); somente aridades 11+ materializam o array do spreader. Nunca `Method.invoke` no caminho quente.
 - **Despacho por aridade + tipos resolvido em compilação** — overload nunca é decidido em runtime; quando os tipos são `Unknown`, o binding vira um *inline cache* por call-site (seção 15).
 - **Varargs materializados uma vez**: o plano pré-aloca o array de argumentos por call-site quando os tamanhos são fixos (com cópia por execução apenas se a função puder reter o array).
 - `foldable` mantido e usado agressivamente pelo folding (seção 11). Funções puras adicionais anotadas como `pure` habilitam CSE.

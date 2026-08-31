@@ -22,11 +22,11 @@ public final class FunctionDescriptor {
 
     /**
      * Reflection-free invocation entry point, built once here rather than per plan call-site
-     * (ADR 0020). For arity 0-4 this is either a {@code LambdaMetafactory}-linked {@code InvokerN}
+     * (ADR 0020). For arity 0-10 this is either a {@code LambdaMetafactory}-linked {@code InvokerN}
      * instance (when {@code implementationHandle} is a direct handle {@code LambdaMetafactory} can
      * crack) or, when linking is not possible, a plain {@link MethodHandle} pre-adapted to
      * {@code MethodType.genericMethodType(arity)} and invoked with {@code invokeExact} at a fixed
-     * call site. For arity 5+ it is always a {@link MethodHandle} pre-adapted with
+     * call site. For arity 11+ it is always a {@link MethodHandle} pre-adapted with
      * {@link MethodHandle#asSpreader}. The node executing a call does not know which shape backs it.
      */
     private final InvocationEntryPoint entryPoint;
@@ -146,9 +146,51 @@ public final class FunctionDescriptor {
         return entryPoint.invoke(argument0, argument1, argument2, argument3);
     }
 
+    public Object invoke(
+            Object argument0, Object argument1, Object argument2, Object argument3, Object argument4)
+            throws Throwable {
+        return entryPoint.invoke(argument0, argument1, argument2, argument3, argument4);
+    }
+
+    public Object invoke(
+            Object argument0, Object argument1, Object argument2, Object argument3, Object argument4,
+            Object argument5) throws Throwable {
+        return entryPoint.invoke(argument0, argument1, argument2, argument3, argument4, argument5);
+    }
+
+    public Object invoke(
+            Object argument0, Object argument1, Object argument2, Object argument3, Object argument4,
+            Object argument5, Object argument6) throws Throwable {
+        return entryPoint.invoke(argument0, argument1, argument2, argument3, argument4, argument5, argument6);
+    }
+
+    public Object invoke(
+            Object argument0, Object argument1, Object argument2, Object argument3, Object argument4,
+            Object argument5, Object argument6, Object argument7) throws Throwable {
+        return entryPoint.invoke(
+                argument0, argument1, argument2, argument3, argument4, argument5, argument6, argument7);
+    }
+
+    public Object invoke(
+            Object argument0, Object argument1, Object argument2, Object argument3, Object argument4,
+            Object argument5, Object argument6, Object argument7, Object argument8) throws Throwable {
+        return entryPoint.invoke(
+                argument0, argument1, argument2, argument3, argument4, argument5, argument6, argument7,
+                argument8);
+    }
+
+    public Object invoke(
+            Object argument0, Object argument1, Object argument2, Object argument3, Object argument4,
+            Object argument5, Object argument6, Object argument7, Object argument8, Object argument9)
+            throws Throwable {
+        return entryPoint.invoke(
+                argument0, argument1, argument2, argument3, argument4, argument5, argument6, argument7,
+                argument8, argument9);
+    }
+
     /**
-     * Invokes an arity-5+ function. {@code arguments.length} must equal {@code arity()}; the
-     * pre-adapted spreader handle enforces that at the {@code invokeExact} call below.
+     * Invokes this function from an existing argument array. {@code arguments.length} must equal
+     * {@code arity()}; the prepared entry point validates the count before dispatch.
      */
     public Object invokeArray(Object[] arguments) throws Throwable {
         return entryPoint.invokeArray(arguments);

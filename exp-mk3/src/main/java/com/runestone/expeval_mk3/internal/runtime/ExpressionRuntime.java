@@ -43,8 +43,8 @@ public final class ExpressionRuntime {
             List<ExecutableNode> argumentNodes,
             ExecutionScope scope,
             SourceSpan callSpan) {
-        // Arity 0-4 evaluates arguments positionally and calls its FunctionDescriptor entry point
-        // directly, with no Object[] allocation; arity 5+ falls back to the array-based entry
+        // Arity 0-10 evaluates arguments positionally and calls its FunctionDescriptor entry point
+        // directly, with no Object[] allocation; arity 11+ falls back to the array-based entry
         // point. Argument evaluation and null-checking happen before the try block so
         // RuntimeFailures.forbiddenNull is not reclassified as a provider failure below.
         switch (argumentNodes.size()) {
@@ -96,6 +96,111 @@ public final class ExpressionRuntime {
                 Object argument3 = requiredArgument(argumentNodes, 3, scope, descriptor, callSpan);
                 try {
                     return descriptor.invoke(argument0, argument1, argument2, argument3);
+                } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                    throw fatal;
+                } catch (Throwable exception) {
+                    throw classify(descriptor, callSpan, exception);
+                }
+            }
+            case 5: {
+                Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
+                Object argument1 = requiredArgument(argumentNodes, 1, scope, descriptor, callSpan);
+                Object argument2 = requiredArgument(argumentNodes, 2, scope, descriptor, callSpan);
+                Object argument3 = requiredArgument(argumentNodes, 3, scope, descriptor, callSpan);
+                Object argument4 = requiredArgument(argumentNodes, 4, scope, descriptor, callSpan);
+                try {
+                    return descriptor.invoke(argument0, argument1, argument2, argument3, argument4);
+                } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                    throw fatal;
+                } catch (Throwable exception) {
+                    throw classify(descriptor, callSpan, exception);
+                }
+            }
+            case 6: {
+                Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
+                Object argument1 = requiredArgument(argumentNodes, 1, scope, descriptor, callSpan);
+                Object argument2 = requiredArgument(argumentNodes, 2, scope, descriptor, callSpan);
+                Object argument3 = requiredArgument(argumentNodes, 3, scope, descriptor, callSpan);
+                Object argument4 = requiredArgument(argumentNodes, 4, scope, descriptor, callSpan);
+                Object argument5 = requiredArgument(argumentNodes, 5, scope, descriptor, callSpan);
+                try {
+                    return descriptor.invoke(argument0, argument1, argument2, argument3, argument4, argument5);
+                } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                    throw fatal;
+                } catch (Throwable exception) {
+                    throw classify(descriptor, callSpan, exception);
+                }
+            }
+            case 7: {
+                Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
+                Object argument1 = requiredArgument(argumentNodes, 1, scope, descriptor, callSpan);
+                Object argument2 = requiredArgument(argumentNodes, 2, scope, descriptor, callSpan);
+                Object argument3 = requiredArgument(argumentNodes, 3, scope, descriptor, callSpan);
+                Object argument4 = requiredArgument(argumentNodes, 4, scope, descriptor, callSpan);
+                Object argument5 = requiredArgument(argumentNodes, 5, scope, descriptor, callSpan);
+                Object argument6 = requiredArgument(argumentNodes, 6, scope, descriptor, callSpan);
+                try {
+                    return descriptor.invoke(
+                            argument0, argument1, argument2, argument3, argument4, argument5, argument6);
+                } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                    throw fatal;
+                } catch (Throwable exception) {
+                    throw classify(descriptor, callSpan, exception);
+                }
+            }
+            case 8: {
+                Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
+                Object argument1 = requiredArgument(argumentNodes, 1, scope, descriptor, callSpan);
+                Object argument2 = requiredArgument(argumentNodes, 2, scope, descriptor, callSpan);
+                Object argument3 = requiredArgument(argumentNodes, 3, scope, descriptor, callSpan);
+                Object argument4 = requiredArgument(argumentNodes, 4, scope, descriptor, callSpan);
+                Object argument5 = requiredArgument(argumentNodes, 5, scope, descriptor, callSpan);
+                Object argument6 = requiredArgument(argumentNodes, 6, scope, descriptor, callSpan);
+                Object argument7 = requiredArgument(argumentNodes, 7, scope, descriptor, callSpan);
+                try {
+                    return descriptor.invoke(
+                            argument0, argument1, argument2, argument3, argument4, argument5, argument6, argument7);
+                } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                    throw fatal;
+                } catch (Throwable exception) {
+                    throw classify(descriptor, callSpan, exception);
+                }
+            }
+            case 9: {
+                Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
+                Object argument1 = requiredArgument(argumentNodes, 1, scope, descriptor, callSpan);
+                Object argument2 = requiredArgument(argumentNodes, 2, scope, descriptor, callSpan);
+                Object argument3 = requiredArgument(argumentNodes, 3, scope, descriptor, callSpan);
+                Object argument4 = requiredArgument(argumentNodes, 4, scope, descriptor, callSpan);
+                Object argument5 = requiredArgument(argumentNodes, 5, scope, descriptor, callSpan);
+                Object argument6 = requiredArgument(argumentNodes, 6, scope, descriptor, callSpan);
+                Object argument7 = requiredArgument(argumentNodes, 7, scope, descriptor, callSpan);
+                Object argument8 = requiredArgument(argumentNodes, 8, scope, descriptor, callSpan);
+                try {
+                    return descriptor.invoke(
+                            argument0, argument1, argument2, argument3, argument4, argument5, argument6, argument7,
+                            argument8);
+                } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+                    throw fatal;
+                } catch (Throwable exception) {
+                    throw classify(descriptor, callSpan, exception);
+                }
+            }
+            case 10: {
+                Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
+                Object argument1 = requiredArgument(argumentNodes, 1, scope, descriptor, callSpan);
+                Object argument2 = requiredArgument(argumentNodes, 2, scope, descriptor, callSpan);
+                Object argument3 = requiredArgument(argumentNodes, 3, scope, descriptor, callSpan);
+                Object argument4 = requiredArgument(argumentNodes, 4, scope, descriptor, callSpan);
+                Object argument5 = requiredArgument(argumentNodes, 5, scope, descriptor, callSpan);
+                Object argument6 = requiredArgument(argumentNodes, 6, scope, descriptor, callSpan);
+                Object argument7 = requiredArgument(argumentNodes, 7, scope, descriptor, callSpan);
+                Object argument8 = requiredArgument(argumentNodes, 8, scope, descriptor, callSpan);
+                Object argument9 = requiredArgument(argumentNodes, 9, scope, descriptor, callSpan);
+                try {
+                    return descriptor.invoke(
+                            argument0, argument1, argument2, argument3, argument4, argument5, argument6, argument7,
+                            argument8, argument9);
                 } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
                     throw fatal;
                 } catch (Throwable exception) {
@@ -367,6 +472,89 @@ public final class ExpressionRuntime {
                 yield invokeRegisteredMethodEntryPoint(
                         descriptor, receiver, argument0, argument1, argument2, memberName, sourceSpan);
             }
+            case 4 -> {
+                Object argument0 = requiredRegisteredMethodArgument(argumentNodes, 0, scope, memberName, sourceSpan);
+                Object argument1 = requiredRegisteredMethodArgument(argumentNodes, 1, scope, memberName, sourceSpan);
+                Object argument2 = requiredRegisteredMethodArgument(argumentNodes, 2, scope, memberName, sourceSpan);
+                Object argument3 = requiredRegisteredMethodArgument(argumentNodes, 3, scope, memberName, sourceSpan);
+                yield invokeRegisteredMethodEntryPoint(
+                        descriptor, receiver, argument0, argument1, argument2, argument3, memberName, sourceSpan);
+            }
+            case 5 -> {
+                Object argument0 = requiredRegisteredMethodArgument(argumentNodes, 0, scope, memberName, sourceSpan);
+                Object argument1 = requiredRegisteredMethodArgument(argumentNodes, 1, scope, memberName, sourceSpan);
+                Object argument2 = requiredRegisteredMethodArgument(argumentNodes, 2, scope, memberName, sourceSpan);
+                Object argument3 = requiredRegisteredMethodArgument(argumentNodes, 3, scope, memberName, sourceSpan);
+                Object argument4 = requiredRegisteredMethodArgument(argumentNodes, 4, scope, memberName, sourceSpan);
+                yield invokeRegisteredMethodEntryPoint(
+                        descriptor, receiver, argument0, argument1, argument2, argument3, argument4,
+                        memberName, sourceSpan);
+            }
+            case 6 -> {
+                Object argument0 = requiredRegisteredMethodArgument(argumentNodes, 0, scope, memberName, sourceSpan);
+                Object argument1 = requiredRegisteredMethodArgument(argumentNodes, 1, scope, memberName, sourceSpan);
+                Object argument2 = requiredRegisteredMethodArgument(argumentNodes, 2, scope, memberName, sourceSpan);
+                Object argument3 = requiredRegisteredMethodArgument(argumentNodes, 3, scope, memberName, sourceSpan);
+                Object argument4 = requiredRegisteredMethodArgument(argumentNodes, 4, scope, memberName, sourceSpan);
+                Object argument5 = requiredRegisteredMethodArgument(argumentNodes, 5, scope, memberName, sourceSpan);
+                yield invokeRegisteredMethodEntryPoint(
+                        descriptor, receiver, argument0, argument1, argument2, argument3, argument4, argument5,
+                        memberName, sourceSpan);
+            }
+            case 7 -> {
+                Object argument0 = requiredRegisteredMethodArgument(argumentNodes, 0, scope, memberName, sourceSpan);
+                Object argument1 = requiredRegisteredMethodArgument(argumentNodes, 1, scope, memberName, sourceSpan);
+                Object argument2 = requiredRegisteredMethodArgument(argumentNodes, 2, scope, memberName, sourceSpan);
+                Object argument3 = requiredRegisteredMethodArgument(argumentNodes, 3, scope, memberName, sourceSpan);
+                Object argument4 = requiredRegisteredMethodArgument(argumentNodes, 4, scope, memberName, sourceSpan);
+                Object argument5 = requiredRegisteredMethodArgument(argumentNodes, 5, scope, memberName, sourceSpan);
+                Object argument6 = requiredRegisteredMethodArgument(argumentNodes, 6, scope, memberName, sourceSpan);
+                yield invokeRegisteredMethodEntryPoint(
+                        descriptor, receiver, argument0, argument1, argument2, argument3, argument4, argument5,
+                        argument6, memberName, sourceSpan);
+            }
+            case 8 -> {
+                Object argument0 = requiredRegisteredMethodArgument(argumentNodes, 0, scope, memberName, sourceSpan);
+                Object argument1 = requiredRegisteredMethodArgument(argumentNodes, 1, scope, memberName, sourceSpan);
+                Object argument2 = requiredRegisteredMethodArgument(argumentNodes, 2, scope, memberName, sourceSpan);
+                Object argument3 = requiredRegisteredMethodArgument(argumentNodes, 3, scope, memberName, sourceSpan);
+                Object argument4 = requiredRegisteredMethodArgument(argumentNodes, 4, scope, memberName, sourceSpan);
+                Object argument5 = requiredRegisteredMethodArgument(argumentNodes, 5, scope, memberName, sourceSpan);
+                Object argument6 = requiredRegisteredMethodArgument(argumentNodes, 6, scope, memberName, sourceSpan);
+                Object argument7 = requiredRegisteredMethodArgument(argumentNodes, 7, scope, memberName, sourceSpan);
+                yield invokeRegisteredMethodEntryPoint(
+                        descriptor, receiver, argument0, argument1, argument2, argument3, argument4, argument5,
+                        argument6, argument7, memberName, sourceSpan);
+            }
+            case 9 -> {
+                Object argument0 = requiredRegisteredMethodArgument(argumentNodes, 0, scope, memberName, sourceSpan);
+                Object argument1 = requiredRegisteredMethodArgument(argumentNodes, 1, scope, memberName, sourceSpan);
+                Object argument2 = requiredRegisteredMethodArgument(argumentNodes, 2, scope, memberName, sourceSpan);
+                Object argument3 = requiredRegisteredMethodArgument(argumentNodes, 3, scope, memberName, sourceSpan);
+                Object argument4 = requiredRegisteredMethodArgument(argumentNodes, 4, scope, memberName, sourceSpan);
+                Object argument5 = requiredRegisteredMethodArgument(argumentNodes, 5, scope, memberName, sourceSpan);
+                Object argument6 = requiredRegisteredMethodArgument(argumentNodes, 6, scope, memberName, sourceSpan);
+                Object argument7 = requiredRegisteredMethodArgument(argumentNodes, 7, scope, memberName, sourceSpan);
+                Object argument8 = requiredRegisteredMethodArgument(argumentNodes, 8, scope, memberName, sourceSpan);
+                yield invokeRegisteredMethodEntryPoint(
+                        descriptor, receiver, argument0, argument1, argument2, argument3, argument4, argument5,
+                        argument6, argument7, argument8, memberName, sourceSpan);
+            }
+            case 10 -> {
+                Object argument0 = requiredRegisteredMethodArgument(argumentNodes, 0, scope, memberName, sourceSpan);
+                Object argument1 = requiredRegisteredMethodArgument(argumentNodes, 1, scope, memberName, sourceSpan);
+                Object argument2 = requiredRegisteredMethodArgument(argumentNodes, 2, scope, memberName, sourceSpan);
+                Object argument3 = requiredRegisteredMethodArgument(argumentNodes, 3, scope, memberName, sourceSpan);
+                Object argument4 = requiredRegisteredMethodArgument(argumentNodes, 4, scope, memberName, sourceSpan);
+                Object argument5 = requiredRegisteredMethodArgument(argumentNodes, 5, scope, memberName, sourceSpan);
+                Object argument6 = requiredRegisteredMethodArgument(argumentNodes, 6, scope, memberName, sourceSpan);
+                Object argument7 = requiredRegisteredMethodArgument(argumentNodes, 7, scope, memberName, sourceSpan);
+                Object argument8 = requiredRegisteredMethodArgument(argumentNodes, 8, scope, memberName, sourceSpan);
+                Object argument9 = requiredRegisteredMethodArgument(argumentNodes, 9, scope, memberName, sourceSpan);
+                yield invokeRegisteredMethodEntryPoint(
+                        descriptor, receiver, argument0, argument1, argument2, argument3, argument4, argument5,
+                        argument6, argument7, argument8, argument9, memberName, sourceSpan);
+            }
             default -> invokeRegisteredMethodEntryPoint(
                     descriptor,
                     registeredMethodArguments(receiver, argumentNodes, scope, memberName, sourceSpan),
@@ -512,6 +700,160 @@ public final class ExpressionRuntime {
             SourceSpan sourceSpan) {
         try {
             return descriptor.invoke(receiver, argument0);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
+    }
+
+    private static Object invokeRegisteredMethodEntryPoint(
+            JavaMethodDescriptor descriptor,
+            Object receiver,
+            Object argument0,
+            Object argument1,
+            Object argument2,
+            Object argument3,
+            Object argument4,
+            Object argument5,
+            Object argument6,
+            Object argument7,
+            Object argument8,
+            Object argument9,
+            String memberName,
+            SourceSpan sourceSpan) {
+        try {
+            return descriptor.invoke(
+                    receiver, argument0, argument1, argument2, argument3, argument4, argument5, argument6,
+                    argument7, argument8, argument9);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
+    }
+
+    private static Object invokeRegisteredMethodEntryPoint(
+            JavaMethodDescriptor descriptor,
+            Object receiver,
+            Object argument0,
+            Object argument1,
+            Object argument2,
+            Object argument3,
+            String memberName,
+            SourceSpan sourceSpan) {
+        try {
+            return descriptor.invoke(receiver, argument0, argument1, argument2, argument3);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
+    }
+
+    private static Object invokeRegisteredMethodEntryPoint(
+            JavaMethodDescriptor descriptor,
+            Object receiver,
+            Object argument0,
+            Object argument1,
+            Object argument2,
+            Object argument3,
+            Object argument4,
+            String memberName,
+            SourceSpan sourceSpan) {
+        try {
+            return descriptor.invoke(receiver, argument0, argument1, argument2, argument3, argument4);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
+    }
+
+    private static Object invokeRegisteredMethodEntryPoint(
+            JavaMethodDescriptor descriptor,
+            Object receiver,
+            Object argument0,
+            Object argument1,
+            Object argument2,
+            Object argument3,
+            Object argument4,
+            Object argument5,
+            String memberName,
+            SourceSpan sourceSpan) {
+        try {
+            return descriptor.invoke(receiver, argument0, argument1, argument2, argument3, argument4, argument5);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
+    }
+
+    private static Object invokeRegisteredMethodEntryPoint(
+            JavaMethodDescriptor descriptor,
+            Object receiver,
+            Object argument0,
+            Object argument1,
+            Object argument2,
+            Object argument3,
+            Object argument4,
+            Object argument5,
+            Object argument6,
+            String memberName,
+            SourceSpan sourceSpan) {
+        try {
+            return descriptor.invoke(
+                    receiver, argument0, argument1, argument2, argument3, argument4, argument5, argument6);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
+    }
+
+    private static Object invokeRegisteredMethodEntryPoint(
+            JavaMethodDescriptor descriptor,
+            Object receiver,
+            Object argument0,
+            Object argument1,
+            Object argument2,
+            Object argument3,
+            Object argument4,
+            Object argument5,
+            Object argument6,
+            Object argument7,
+            String memberName,
+            SourceSpan sourceSpan) {
+        try {
+            return descriptor.invoke(
+                    receiver, argument0, argument1, argument2, argument3, argument4, argument5, argument6,
+                    argument7);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw RuntimeFailures.memberAccessFailure(memberName, sourceSpan, exception);
+        }
+    }
+
+    private static Object invokeRegisteredMethodEntryPoint(
+            JavaMethodDescriptor descriptor,
+            Object receiver,
+            Object argument0,
+            Object argument1,
+            Object argument2,
+            Object argument3,
+            Object argument4,
+            Object argument5,
+            Object argument6,
+            Object argument7,
+            Object argument8,
+            String memberName,
+            SourceSpan sourceSpan) {
+        try {
+            return descriptor.invoke(
+                    receiver, argument0, argument1, argument2, argument3, argument4, argument5, argument6,
+                    argument7, argument8);
         } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
             throw fatal;
         } catch (Throwable exception) {

@@ -32,6 +32,7 @@ class RegisteredNavigationInvocationTest {
         assertEquivalent("provider?.increment(41) ?? 0", environment);
         assertEquivalent("provider.sum3(1, 2, 3)", environment);
         assertEquivalent("provider.sum4(1, 2, 3, 4)", environment);
+        assertEquivalent("provider.sum10(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)", environment);
     }
 
     @Test
@@ -89,6 +90,9 @@ class RegisteredNavigationInvocationTest {
                     receiver, BigDecimal.ONE, BigDecimal.TWO, null, new BigDecimal("4")
                 }))
                 .withMessage("receiverAndArguments[3]");
+        assertThatThrownBy(() -> sum4.invokeArray(new Object[] {receiver, BigDecimal.ONE}))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("receiver and argument count must match method arity");
     }
 
     private static void assertEquivalent(String source, ExpressionEnvironment environment) {
@@ -127,6 +131,20 @@ class RegisteredNavigationInvocationTest {
                         BigDecimal.class,
                         BigDecimal.class,
                         BigDecimal.class)
+                .registerJavaTypeMethod(
+                        Provider.class,
+                        "sum10",
+                        FunctionPurity.PURE,
+                        BigDecimal.class,
+                        BigDecimal.class,
+                        BigDecimal.class,
+                        BigDecimal.class,
+                        BigDecimal.class,
+                        BigDecimal.class,
+                        BigDecimal.class,
+                        BigDecimal.class,
+                        BigDecimal.class,
+                        BigDecimal.class)
                 .registerJavaTypeMethod(Provider.class, "fail", FunctionPurity.PURE)
                 .externalSymbol(
                         "provider",
@@ -156,6 +174,12 @@ class RegisteredNavigationInvocationTest {
 
         public BigDecimal sum4(BigDecimal first, BigDecimal second, BigDecimal third, BigDecimal fourth) {
             return first.add(second).add(third).add(fourth);
+        }
+
+        public BigDecimal sum10(
+                BigDecimal a, BigDecimal b, BigDecimal c, BigDecimal d, BigDecimal e,
+                BigDecimal f, BigDecimal g, BigDecimal h, BigDecimal i, BigDecimal j) {
+            return a.add(b).add(c).add(d).add(e).add(f).add(g).add(h).add(i).add(j);
         }
 
         public String fail() {

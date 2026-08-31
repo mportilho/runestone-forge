@@ -22,7 +22,7 @@ Function invocation and member access do not exhaust the surface the strategy as
 
 Reflection-free invocation is implemented by entry points generated once during `ExpressionEnvironment` construction, one per function descriptor and one per registered member, shared by every plan compiled against that environment. No entry point is generated per plan call site.
 
-Arities one through four are linked through `LambdaMetafactory` against dedicated functional interfaces. Remaining arities use `invokeExact` against a handle pre-adapted at the same point in the lifecycle. Both routes are reached through the same binding recorded in the plan, so a node does not know which one it uses.
+Global-function arities zero through ten use dedicated functional interfaces or fixed-signature `invokeExact` call sites. Registered instance methods use the same mechanism for up to ten declared parameters, with the receiver occupying the additional eleventh handle position. Remaining arities use `invokeExact` against an array-spreader handle pre-adapted at the same point in the lifecycle. Both routes are reached through the same binding recorded in the plan, so a node does not know which one it uses.
 
 A long-lived environment is a stated precondition of this design, not an assumption left implicit. An application that rebuilds environments frequently pays class generation repeatedly and should expect metaspace growth proportional to the number of environments it constructs.
 
@@ -71,6 +71,18 @@ elided, because it is where the provider non-null/type/container-shape return co
 and eliding it was never required to remove the per-call `BigDecimal` allocation that motivated it:
 `BoundaryCoercion.prepareJavaConversion(BigDecimal.class, BigDecimal.class)` already returns a
 validating, non-allocating identity conversion, with or without this issue's changes.
+
+The arity ranges in this issue #125 amendment describe that implementation point and are superseded
+by the direct arity expansion below.
+
+## Amendment (direct arity expansion)
+
+The array-free entry-point range is expanded from arities zero through four to zero through ten.
+`LambdaMetafactory` linking and the fixed-signature `invokeExact` fallback now have dedicated
+interfaces and call sites for every global-function arity in that range. Global functions therefore
+allocate an argument array only at arity eleven or greater. Registered instance methods share the
+same entry-point implementation and remain array-free through ten declared parameters; their
+receiver occupies the eleventh fixed handle position.
 
 ## Consequences
 

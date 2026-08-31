@@ -27,9 +27,9 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Issue #125 pilot gate for Invocacao Sem Reflexao e Elisao de Coercao de Borda on global function
- * calls, one state per representative arity (one, two, four - the arities LambdaMetafactory/direct
- * {@code invokeExact} cover per ADR 0020 - plus five, the smallest arity that falls back to the
- * array-based entry point). Arguments are {@code OVERRIDABLE} external symbols rather than
+ * calls, one state per representative arity from the original issue #125 boundary (one, two, four,
+ * and five). The current ADR 0020 implementation extends the array-free entry points through arity
+ * ten. Arguments are {@code OVERRIDABLE} external symbols rather than
  * literals so Constant Folding (Etapa 7) cannot fold the call away in the optimized plan.
  *
  * <p>Unlike the other Etapa 8 gates, the {@code optimized}/{@code oracle} pair below does
