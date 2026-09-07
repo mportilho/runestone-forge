@@ -197,7 +197,7 @@ public final class ExecutionPlan {
 
     private ExecutionScope executeAssignments(
             Map<String, ?> overrides, Clock clock, CalculationRecorder calculationRecorder) {
-        Objects.requireNonNull(overrides, "overrides");
+        requireOverrides(overrides);
         Objects.requireNonNull(clock, "clock");
 
         // Not observable until wrapped in a scope below, so a validation failure here discards this
@@ -231,10 +231,10 @@ public final class ExecutionPlan {
         }
 
         String smallestUndeclared = null;
-        for (Map.Entry<String, ?> entry : overrides.entrySet()) {
-            ExternalBindingPlan binding = bindingsByName.get(entry.getKey());
+        for (Map.Entry<?, ?> entry : overrides.entrySet()) {
+            String name = requireTextOverrideKey(entry.getKey());
+            ExternalBindingPlan binding = bindingsByName.get(name);
             if (binding == null) {
-                String name = entry.getKey();
                 if (smallestUndeclared == null || name.compareTo(smallestUndeclared) < 0) {
                     smallestUndeclared = name;
                 }
@@ -254,7 +254,7 @@ public final class ExecutionPlan {
             }
             ExternalSymbol symbol = binding.symbol();
             requireOverridable(symbol, symbol.name());
-            frame[frameSlot] = symbol.coerceOverride(override, boundaryCoercion);
+            frame[frameSlot] = coerceOverride(symbol, override);
         }
     }
 
@@ -268,7 +268,7 @@ public final class ExecutionPlan {
                 continue;
             }
             requireOverridable(symbol, name);
-            Object coerced = symbol.coerceOverride(override, boundaryCoercion);
+            Object coerced = coerceOverride(symbol, override);
             ExternalBindingPlan binding = bindingsByName.get(name);
             if (binding != null) {
                 frame[binding.frameSlot()] = coerced;
@@ -282,7 +282,8 @@ public final class ExecutionPlan {
 
     private void rejectSmallestUndeclaredOverride(Map<String, ?> overrides) {
         String smallestUndeclared = null;
-        for (String name : overrides.keySet()) {
+        for (Object key : overrides.keySet()) {
+            String name = requireTextOverrideKey(key);
             if (declaredSymbolNames.contains(name)) {
                 continue;
             }
@@ -302,6 +303,33 @@ public final class ExecutionPlan {
     private static void requireOverridable(ExternalSymbol symbol, String name) {
         if (symbol.overwritePolicy() != ExternalSymbolOverwritePolicy.OVERRIDABLE) {
             throw RuntimeFailures.invalidExternalInput("external symbol '" + name + "' is not overridable");
+        }
+    }
+
+    private static void requireOverrides(Map<String, ?> overrides) {
+        if (overrides == null) {
+            NullPointerException cause = new NullPointerException("overrides");
+            throw RuntimeFailures.invalidExternalInput("external symbol overrides must not be null", cause);
+        }
+    }
+
+    private static String requireTextOverrideKey(Object key) {
+        if (key instanceof String name) {
+            return name;
+        }
+        IllegalArgumentException cause = new IllegalArgumentException(
+                key == null ? "override key must not be null" : "override key must be text");
+        throw RuntimeFailures.invalidExternalInput(cause.getMessage(), cause);
+    }
+
+    private Object coerceOverride(ExternalSymbol symbol, Object override) {
+        try {
+            return symbol.coerceOverride(override, boundaryCoercion);
+        } catch (IllegalArgumentException cause) {
+            String message = cause.getMessage() == null
+                    ? "external symbol '" + symbol.name() + "' override is invalid"
+                    : cause.getMessage();
+            throw RuntimeFailures.invalidExternalInput(message, cause);
         }
     }
 }

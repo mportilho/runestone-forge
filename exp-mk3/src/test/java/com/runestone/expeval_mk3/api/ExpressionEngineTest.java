@@ -601,10 +601,8 @@ class ExpressionEngineTest {
                         "items.sortBy(@ -> trackNumber(@), \"asc\")", environment)
                 .asResult();
 
-        assertThatThrownBy(() -> expression.compute(Map.of(
-                        "items", List.of(BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3")))))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("maxMaterializedSize 2");
+        assertInvalidExternalMaterialization(() -> expression.compute(Map.of(
+                "items", List.of(BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3")))));
         assertThat(functions.invocations()).isZero();
     }
 
@@ -699,10 +697,8 @@ class ExpressionEngineTest {
                 .build();
         ResultExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("items.map(@ -> trackNumber(@))", environment).asResult();
 
-        assertThatThrownBy(() -> expression.compute(Map.of(
-                        "items", List.of(BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3")))))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("maxMaterializedSize 2");
+        assertInvalidExternalMaterialization(() -> expression.compute(Map.of(
+                "items", List.of(BigDecimal.ONE, new BigDecimal("2"), new BigDecimal("3")))));
         assertThat(functions.invocations()).isZero();
     }
 
@@ -887,6 +883,14 @@ class ExpressionEngineTest {
         });
     }
 
+    private static void assertInvalidExternalMaterialization(Runnable computation) {
+        assertThatThrownBy(computation::run)
+                .isInstanceOf(ExpressionExecutionException.class)
+                .hasMessageContaining("maxMaterializedSize 2")
+                .satisfies(thrown -> assertThat(((ExpressionExecutionException) thrown).diagnostic().code())
+                        .isEqualTo("RUNTIME_INVALID_EXTERNAL_INPUT"));
+    }
+
     @Test
     void rejectsInvalidNavigatedCollectionOperationCallsBeforeRuntime() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
@@ -940,10 +944,15 @@ class ExpressionEngineTest {
                 .asMath().compute())
                 .isEqualByComparingTo(new BigDecimal("30"));
 
-        assertThat(ExpressionEngine.defaultEngine().compile("[a, a] := [1, 2]; a", ExpressionEnvironment.standard()))
-                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
-                        assertThat(failure.diagnostics().getFirst().code())
-                                .isEqualTo("SEMANTIC_DUPLICATE_ASSIGNMENT_TARGET"));
+        String duplicateTargetSource = "[a, a] := [1, 2]; a";
+        assertThat(ExpressionEngine.defaultEngine().compile(duplicateTargetSource, ExpressionEnvironment.standard()))
+                .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure -> {
+                    ExpressionDiagnostic diagnostic = failure.diagnostics().getFirst();
+                    assertThat(diagnostic.code()).isEqualTo("SEMANTIC_DUPLICATE_ASSIGNMENT_TARGET");
+                    assertThat(diagnostic.relatedInformation()).containsExactly(new RelatedInformation(
+                            "First occurrence of 'a'",
+                            new SourceSpan(1, 2, 1, 2)));
+                });
 
         assertThat(ExpressionEngine.defaultEngine().compile("[a, b, c] := [1, 2]; a", ExpressionEnvironment.standard()))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->

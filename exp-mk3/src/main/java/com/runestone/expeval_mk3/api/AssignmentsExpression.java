@@ -36,7 +36,6 @@ public final class AssignmentsExpression {
     }
 
     public Map<String, Object> compute(Map<String, ?> overrides) {
-        Objects.requireNonNull(overrides, "overrides");
         List<Object> rawValues = plan.computeAssignedValues(overrides, runtimeServices.clock());
         // LinkedHashMap preserves first-creation order; Map.copyOf/immutable factories do not.
         Map<String, Object> materialized = new LinkedHashMap<>();
@@ -53,7 +52,6 @@ public final class AssignmentsExpression {
     }
 
     public ComputationWithMemory<Map<String, Object>> computeWithMemory(Map<String, ?> overrides) {
-        Objects.requireNonNull(overrides, "overrides");
         return plan.computeAssignmentsWithMemory(overrides, runtimeServices.clock());
     }
 }

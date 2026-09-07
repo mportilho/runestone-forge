@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.internal.diagnostics;
 
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.api.RelatedInformation;
 import com.runestone.expeval_mk3.api.SourceSpan;
 
 import java.util.Comparator;
@@ -27,13 +28,32 @@ public final class ExpressionDiagnostics {
 
     public static ExpressionDiagnostic create(
             DiagnosticCode code, String message, SourceSpan primarySpan, String suggestion) {
+        return create(code, message, primarySpan, suggestion, List.of());
+    }
+
+    public static ExpressionDiagnostic createWithRelatedInformation(
+            DiagnosticCode code,
+            String message,
+            SourceSpan primarySpan,
+            List<RelatedInformation> relatedInformation) {
+        return create(code, message, primarySpan, null, relatedInformation);
+    }
+
+    private static ExpressionDiagnostic create(
+            DiagnosticCode code,
+            String message,
+            SourceSpan primarySpan,
+            String suggestion,
+            List<RelatedInformation> relatedInformation) {
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(message, "message");
+        Objects.requireNonNull(relatedInformation, "relatedInformation");
         validateSpan(code, primarySpan);
         validateSuggestion(code, suggestion);
         ExpressionDiagnostic.Builder builder = ExpressionDiagnostic.builder(
                         code.category(), code.severity(), code.code(), message)
-                .primarySpan(primarySpan);
+                .primarySpan(primarySpan)
+                .relatedInformation(relatedInformation);
         if (suggestion != null) {
             builder.suggestion(suggestion);
         }

@@ -31,7 +31,6 @@ public final class LogicalExpression {
     }
 
     public boolean compute(Map<String, ?> overrides) {
-        Objects.requireNonNull(overrides, "overrides");
         Object value = plan.compute(overrides, runtimeServices.clock());
         return (Boolean) PublicMaterialization.materialize(
                 value, ScalarType.BOOLEAN, plan.maxMaterializedSize(), resultSourceSpan);
@@ -42,7 +41,6 @@ public final class LogicalExpression {
     }
 
     public ComputationWithMemory<Boolean> computeWithMemory(Map<String, ?> overrides) {
-        Objects.requireNonNull(overrides, "overrides");
         return ExpressionViewSupport.narrow(plan.computeWithMemory(overrides, runtimeServices.clock()));
     }
 }

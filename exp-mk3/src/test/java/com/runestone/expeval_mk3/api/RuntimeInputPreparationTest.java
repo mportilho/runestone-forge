@@ -101,7 +101,7 @@ class RuntimeInputPreparationTest {
         overrides.put("aValid", BigDecimal.TEN);
         overrides.put("zNullable", null);
 
-        assertThatThrownBy(() -> expression.compute(overrides)).isInstanceOf(IllegalArgumentException.class);
+        assertInvalidExternalInput(() -> expression.compute(overrides), IllegalArgumentException.class);
 
         assertThat(functions.invocations()).isZero();
     }
@@ -119,10 +119,42 @@ class RuntimeInputPreparationTest {
                 .build();
         MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("trackNumber(items[0])", environment).asMath();
 
-        assertThatThrownBy(() -> expression.compute(Map.of("items", Arrays.asList(BigDecimal.ONE, null))))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertInvalidExternalInput(
+                () -> expression.compute(Map.of("items", Arrays.asList(BigDecimal.ONE, null))),
+                IllegalArgumentException.class);
 
         assertThat(functions.invocations()).isZero();
+    }
+
+    @Test
+    void rejectsAnIncoercibleOverrideWithAnUnpositionedDiagnosticAndPreservedCause() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol("amount", BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("amount", environment).asMath();
+
+        assertInvalidExternalInput(() -> expression.compute(Map.of("amount", new Object())), IllegalArgumentException.class);
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void rejectsAnOverrideMapWithANonTextKeyWithoutLeakingAClassCastException() {
+        MathExpression expression = ExpressionEngine.defaultEngine()
+                .compileOrThrow("1", ExpressionEnvironment.standard())
+                .asMath();
+        Map overrides = Map.of(1, BigDecimal.ONE);
+
+        assertInvalidExternalInput(() -> expression.compute(overrides), IllegalArgumentException.class);
+    }
+
+    @Test
+    void rejectsANullOverrideMapThroughTheExecutionDiagnosticSeam() {
+        MathExpression expression = ExpressionEngine.defaultEngine()
+                .compileOrThrow("1", ExpressionEnvironment.standard())
+                .asMath();
+
+        assertInvalidExternalInput(() -> expression.compute(null), NullPointerException.class);
+        assertInvalidExternalInput(() -> expression.computeWithMemory(null), NullPointerException.class);
     }
 
     @Test
@@ -148,5 +180,18 @@ class RuntimeInputPreparationTest {
 
         assertThat(result).isEqualTo(LocalDateTime.of(2024, 3, 15, 10, 20, 30));
         assertThat(clock.callCount()).isEqualTo(1);
+    }
+
+    private static void assertInvalidExternalInput(Runnable computation, Class<? extends Throwable> causeType) {
+        assertThatThrownBy(computation::run)
+                .isInstanceOf(ExpressionExecutionException.class)
+                .hasCauseInstanceOf(causeType)
+                .satisfies(thrown -> {
+                    ExpressionDiagnostic diagnostic = ((ExpressionExecutionException) thrown).diagnostic();
+                    assertThat(diagnostic.code()).isEqualTo("RUNTIME_INVALID_EXTERNAL_INPUT");
+                    assertThat(diagnostic.category()).isEqualTo(DiagnosticCategory.RUNTIME);
+                    assertThat(diagnostic.severity()).isEqualTo(DiagnosticSeverity.ERROR);
+                    assertThat(diagnostic.primarySpan()).isEmpty();
+                });
     }
 }

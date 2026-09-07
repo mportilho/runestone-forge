@@ -25,6 +25,11 @@ public final class RuntimeFailures {
         return ExpressionExecutionException.of(diagnostic(DiagnosticCode.RUNTIME_INVALID_EXTERNAL_INPUT, message, null));
     }
 
+    public static ExpressionExecutionException invalidExternalInput(String message, Throwable cause) {
+        return ExpressionExecutionException.of(
+                diagnostic(DiagnosticCode.RUNTIME_INVALID_EXTERNAL_INPUT, message, null), cause);
+    }
+
     public static ExpressionExecutionException forbiddenNull(String message, SourceSpan span) {
         return ExpressionExecutionException.of(diagnostic(DiagnosticCode.RUNTIME_FORBIDDEN_NULL, message, span));
     }

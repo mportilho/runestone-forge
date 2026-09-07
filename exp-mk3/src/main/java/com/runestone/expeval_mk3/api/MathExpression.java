@@ -32,7 +32,6 @@ public final class MathExpression {
     }
 
     public BigDecimal compute(Map<String, ?> overrides) {
-        Objects.requireNonNull(overrides, "overrides");
         Object value = plan.compute(overrides, runtimeServices.clock());
         return (BigDecimal) PublicMaterialization.materialize(
                 value, ScalarType.NUMBER, plan.maxMaterializedSize(), resultSourceSpan);
@@ -43,7 +42,6 @@ public final class MathExpression {
     }
 
     public ComputationWithMemory<BigDecimal> computeWithMemory(Map<String, ?> overrides) {
-        Objects.requireNonNull(overrides, "overrides");
         return ExpressionViewSupport.narrow(plan.computeWithMemory(overrides, runtimeServices.clock()));
     }
 }

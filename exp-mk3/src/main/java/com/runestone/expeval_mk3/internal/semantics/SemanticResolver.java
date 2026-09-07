@@ -13,6 +13,7 @@ import com.runestone.expeval_mk3.api.JavaTypeDescriptor;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ObjectType;
 import com.runestone.expeval_mk3.api.RuntimeNullability;
+import com.runestone.expeval_mk3.api.RelatedInformation;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.AssignmentNode;
 import com.runestone.expeval_mk3.internal.ast.AssignmentTargetNode;
@@ -261,14 +262,16 @@ public final class SemanticResolver {
         }
 
         private boolean destructuringTargetsAreUnique(DestructuringAssignmentTargetNode destructuring) {
-            Set<String> names = new HashSet<>();
+            Map<String, SourceSpan> firstOccurrences = new HashMap<>();
             boolean unique = true;
             for (IdentifierAssignmentTargetNode element : destructuring.elements()) {
-                if (!names.add(element.name())) {
-                    diagnostic(
+                SourceSpan firstOccurrence = firstOccurrences.putIfAbsent(element.name(), element.sourceSpan());
+                if (firstOccurrence != null) {
+                    diagnostics.add(ExpressionDiagnostics.createWithRelatedInformation(
                             DiagnosticCode.SEMANTIC_DUPLICATE_ASSIGNMENT_TARGET,
                             "Destructuring assignment target contains duplicate symbol '" + element.name() + "'",
-                            element.sourceSpan());
+                            element.sourceSpan(),
+                            List.of(new RelatedInformation("First occurrence of '" + element.name() + "'", firstOccurrence))));
                     unique = false;
                 }
             }

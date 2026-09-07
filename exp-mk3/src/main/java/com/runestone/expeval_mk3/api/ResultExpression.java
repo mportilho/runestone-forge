@@ -31,7 +31,6 @@ public final class ResultExpression {
     }
 
     public Object compute(Map<String, ?> overrides) {
-        Objects.requireNonNull(overrides, "overrides");
         Object value = plan.compute(overrides, runtimeServices.clock());
         return PublicMaterialization.materialize(value, resultType, plan.maxMaterializedSize(), resultSourceSpan);
     }
@@ -41,7 +40,6 @@ public final class ResultExpression {
     }
 
     public ComputationWithMemory<Object> computeWithMemory(Map<String, ?> overrides) {
-        Objects.requireNonNull(overrides, "overrides");
         return plan.computeWithMemory(overrides, runtimeServices.clock());
     }
 }
