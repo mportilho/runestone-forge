@@ -69,7 +69,7 @@ Este documento consolida as decisoes tomadas durante o replanejamento da Etapa 5
 
 ## Diagnosticos Publicos
 
-- Parsing, semantica, runtime e migracao compartilham `ExpressionDiagnostic`.
+- Parsing, semantica e runtime compartilham `ExpressionDiagnostic`.
 - O diagnostico contem categoria, severidade, codigo textual estavel, mensagem, trecho primario opcional, informacoes relacionadas, notas e sugestao opcional.
 - Falhas originadas na fonte sempre tem trecho primario.
 - Falhas puramente externas podem nao ter trecho primario.

@@ -9,7 +9,7 @@ A versioned example that describes an expression, its environment, inputs, expec
 _Avoid_: Test fixture, corpus item
 
 **Corpus de Expressoes**:
-A versioned collection of expression cases used as the shared behavioral contract for parser, semantic resolver, runtime, migration, and differential verification.
+A versioned collection of expression cases used as the shared behavioral contract for parser, semantic resolver, runtime, and optimized-plan verification.
 _Avoid_: Test data, examples folder
 
 **Fonte de Expressao Nao Confiavel**:

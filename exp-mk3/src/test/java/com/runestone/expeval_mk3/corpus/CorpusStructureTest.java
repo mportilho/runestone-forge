@@ -37,6 +37,16 @@ class CorpusStructureTest {
     }
 
     @Test
+    @DisplayName("every expression case belongs to exactly one executable suite")
+    void everyExpressionCaseBelongsToExactlyOneExecutableSuite() {
+        for (ExpressionCase expressionCase : ExpressionCaseLoader.loadAll()) {
+            assertThat(ExpressionCaseSuite.matching(expressionCase))
+                    .as("%s", expressionCase.path())
+                    .hasSize(1);
+        }
+    }
+
+    @Test
     @DisplayName("initial corpus covers every controlled coverage tag")
     void initialCorpusCoversEveryControlledCoverageTag() {
         Set<CoverageTag> coveredTags = new HashSet<>();

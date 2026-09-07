@@ -130,7 +130,7 @@ Cada visao expoe `compute()` e `compute(Map<String, ?> overrides)`. Solicitar um
 
 ## Modelo Publico de Diagnostico
 
-`ExpressionDiagnostic` e o contrato comum de parsing, semantica, runtime e migracao. Ele contem:
+`ExpressionDiagnostic` e o contrato comum de parsing, semantica e runtime. Ele contem:
 
 - categoria;
 - severidade `ERROR` ou `WARNING`;

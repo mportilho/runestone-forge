@@ -14,4 +14,4 @@ Expression integer literals are decimal-only in all source positions. Hexadecima
 
 ## Consequences
 
-The grammar, AST builder, AST value model, pretty-printer, and corpus must be simplified to remove integer literal base handling. The Etapa 4 resolver no longer owns a hex/octal-in-subscript policy; migration diagnostics may still recognize old hex/octal-looking source forms when that can be done without reintroducing them as valid grammar.
+The grammar, AST builder, AST value model, pretty-printer, and corpus must be simplified to remove integer literal base handling. The Etapa 4 resolver no longer owns a hex/octal-in-subscript policy. Unsupported forms receive ordinary language diagnostics; there is no separate recognition or rewrite contract for historical syntax.

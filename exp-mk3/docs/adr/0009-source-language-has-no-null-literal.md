@@ -16,4 +16,4 @@ The expression source language does not include a `null` literal. Null remains a
 
 ## Consequences
 
-The grammar, AST literal model, corpus, and semantic type system should remove source `null` handling. The semantic resolver should model possible runtime null as binding metadata where useful, not as a normal expression type. Migration diagnostics may still recognize source `null` from older expressions and suggest an explicit default, fallback, or environment value.
+The grammar, AST literal model, corpus, and semantic type system should remove source `null` handling. The semantic resolver should model possible runtime null as binding metadata where useful, not as a normal expression type. Source `null` receives an ordinary language diagnostic; there is no separate recognition or rewrite contract for historical syntax.

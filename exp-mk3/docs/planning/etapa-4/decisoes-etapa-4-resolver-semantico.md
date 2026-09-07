@@ -43,7 +43,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Literal fonte `null` deve ser removido da gramatica, AST, pretty-printer e corpus.
 - Inteiros hexadecimais e octais devem ser removidos da gramatica, AST, pretty-printer e corpus.
 - Usos publicos de `UnknownType` devem ser substituidos por contratos explicitos; placeholders como `Variavel de Tipo Pendente` e `Tipo Invalido` pertencem apenas ao fluxo interno do resolver.
-- Diagnosticos e migracao para sintaxes antigas, como `null`, hex/octal e type hints removidos, devem ficar fora do resolver semantico principal quando pertencerem ao parser ou a migracao.
+- Sintaxes nao suportadas, como `null`, hex/octal e type hints removidos, recebem diagnosticos normais da fase que as rejeita, sem contrato especial de reconhecimento ou reescrita.
 - A Etapa 8 do plano macro deve ser reescrita para especializacao preservando semantica decimal, sem `FAST`.
 - A Etapa 8 ainda deve cobrir nos especializados, reducao de boxing/alocacao, otimizacoes de `BigDecimal`, invocacao de funcoes sem reflexao, accessors rapidos de navegacao e JMH gates de decimal/navegacao.
 - Gates e entregas baseados em `computeAsLong`, `computeAsDouble`, zero alocacao em `FAST` e fallback estrutural de `FAST` para decimal devem ser removidos do plano atual.
@@ -85,9 +85,9 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Hexadecimal e octal devem ser removidos da gramatica como um todo.
 - `0x10`, `077` e formas similares nao sao `INT` valido em nenhuma posicao da fonte.
 - A Etapa 4 nao deve conter politica especial de rejeicao de hex/octal em subscripts, porque essas formas nao chegam como AST valida.
-- Diagnosticos didaticos para hex/octal antigos pertencem ao parser/migracao, nao ao resolver semantico.
+- Diagnosticos para hex/octal nao suportados pertencem ao parser, nao ao resolver semantico.
 - O literal fonte `null` deve ser removido da gramatica.
-- Fonte como `null`, `[null]`, `x = null` e `asNumber(null)` deve falhar antes ou durante migracao, nao como caso semantico normal.
+- Fonte como `null`, `[null]`, `x = null` e `asNumber(null)` deve falhar pelo fluxo normal de parsing ou semantica.
 - Literais `DATETIME` com e sem offset sao interpretados pela politica temporal do ambiente.
 - Literais `DATETIME` sem offset sao horarios locais no `ZoneId` do ambiente, com offset efetivo inferido pelas `ZoneRules`.
 - Literais `DATETIME` com offset explicito sao convertidos para o `ZoneId` do ambiente antes de virar valor semantico preparado.
@@ -264,7 +264,7 @@ Este documento consolida as decisoes tomadas durante a sessao de planejamento da
 - Simbolo desconhecido deve apontar para o identificador desconhecido.
 - Erros independentes devem ser emitidos mesmo que outro ramo da expressao tenha erro.
 - Cascatas devem ser suprimidas quando qualquer operando ou simbolo envolvido ja tem `Tipo Invalido`.
-- Parser, resolver e runtime devem usar continuidade conceitual de diagnosticos com categorias distintas, como `PARSE`, `SEMANTIC`, `RUNTIME` e possivelmente `MIGRATION`.
+- Parser, resolver e runtime devem usar continuidade conceitual de diagnosticos com as categorias distintas `PARSE`, `SEMANTIC` e `RUNTIME`.
 - Nulidade de runtime que escapa para contexto `NEVER_NULL` deve gerar diagnostico semantico especifico, nao warning generico.
 - Codigos recomendados: `SEMANTIC_NULLABLE_RESULT_NOT_ALLOWED`, `SEMANTIC_NULLABLE_ASSIGNMENT_NOT_ALLOWED`, `SEMANTIC_NULLABLE_OPERAND_NOT_ALLOWED`, `SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED`, `SEMANTIC_NULLABLE_RECEIVER_NOT_ALLOWED` e `SEMANTIC_NULLABLE_PREDICATE_NOT_ALLOWED`.
 - Diagnosticos de nulidade devem sugerir fallback explicito com `??` quando aplicavel.

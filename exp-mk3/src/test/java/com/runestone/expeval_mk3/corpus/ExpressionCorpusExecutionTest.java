@@ -40,8 +40,7 @@ class ExpressionCorpusExecutionTest {
 
     static Stream<Arguments> semanticAndRuntimeCases() {
         return ExpressionCaseLoader.loadAll().stream()
-                .filter(expressionCase -> expressionCase.phase() == CasePhase.SEMANTIC
-                        || expressionCase.phase() == CasePhase.RUNTIME)
+                .filter(expressionCase -> !ExpressionCaseSuite.PARSER.includes(expressionCase))
                 .map(expressionCase -> Arguments.of(expressionCase.id(), expressionCase));
     }
 

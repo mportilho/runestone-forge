@@ -1,7 +1,0 @@
-id: parser.migration.assignment-equals.001
-phase: migration
-kind: invalid
-source: 'x = 2 + 3;'
-coverage: [assignment, migration, diagnostic]
-expected:
-  diagnostic: {category: MIGRATION, code: TBD}

@@ -389,30 +389,17 @@ investigada estao no historico de desempenho e no ADR 0023.
 
 ---
 
-## 20. Compatibilidade e migração (v1 → v2)
+## 20. Sintaxe não suportada
 
-Mudanças de linguagem visíveis ao usuário, com detecção e mensagem dedicada:
-
-| v1 | v2 | Diagnóstico sugerido |
-|---|---|---|
-| `x = 2 + 3;` (atribuição) | `x := 2 + 3;` | erro sintático em `=`+`;` → "atribuição agora usa `:=`" |
-| `!=` | `<>` | token `!` seguido de `=`: "use `<>` para desigualdade" |
-| `|x|` | `abs(x)` | `||` inesperado / `|` isolado → "módulo agora é `abs(x)`" |
-| `sqrt` como sintaxe | `sqrt(x)` função | transparente se catálogo tiver `sqrt` |
-| `2021-01-02` literal | `d"2021-01-02"` | sequência `INT - INT - INT` com forma de data → sugerir prefixo |
-| `10:30` literal | `t"10:30"` | `INT : INT` fora de subscript → sugerir prefixo |
-| `not in` apenas | `not in` e `nin` | — |
-| `??` por família | `??` geral encadeável | — |
-| `[]` inválido | `[]` válido | — |
-| `<number>(x)` etc. | tipo declarado no ambiente ou `asNumber(x)` | token `<` + nome de tipo + `>` → "type hints saíram da sintaxe; declare o tipo em `registerExternalSymbol` ou use `asNumber(x)`" |
-
-Ferramenta opcional: um **migrador de fonte** (regex + reparse) que converte expressões v1 armazenadas em banco para v2, validando por compilação.
+A linguagem MK3 não oferece migração automática, reconhecimento dedicado ou reescrita de sintaxe de
+versões anteriores. Formas não suportadas percorrem o pipeline normal e recebem diagnósticos `PARSE` ou
+`SEMANTIC`. Sequências que também sejam sintaxe MK3 válida mantêm exclusivamente o significado MK3.
 
 ---
 
 ## 21. Verificação e desempenho como requisito testável
 
-- **Testes diferenciais** ANTLR × Pratt (quando fase 2 existir) e v1 × v2 sobre corpus real de expressões.
+- **Testes diferenciais** ANTLR × Pratt quando o parser da fase 2 existir.
 - **Property-based testing** do parser (round-trip: pretty-print da AST re-parseia para AST igual) e do folding (plano otimizado ≡ plano ingênuo para entradas aleatórias).
 - **JMH** com metas explícitas:
   - `a + b * 2` (`FAST`): ordem de dezenas de ns por compute, **zero alocação** em regime estacionário;

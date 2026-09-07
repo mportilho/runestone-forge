@@ -1,7 +1,0 @@
-id: parser.migration.not-equals.001
-phase: migration
-kind: invalid
-source: 'a != b'
-coverage: [comparison, migration, diagnostic]
-expected:
-  diagnostic: {category: MIGRATION, code: TBD}

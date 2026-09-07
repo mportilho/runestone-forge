@@ -105,7 +105,7 @@ final class ExpressionCaseLoader {
                     code,
                     spans);
         }
-        if (requiresResult(phase)) {
+        if (phase == CasePhase.RUNTIME) {
             JsonNode expectedObject = requiredObject(root, "expected", path);
             validateExpectedResult(expectedObject, path);
             return new ExpectedResult(
@@ -113,10 +113,6 @@ final class ExpressionCaseLoader {
                     expectedObject.get("result").deepCopy());
         }
         return NoExpectedOutcome.INSTANCE;
-    }
-
-    private static boolean requiresResult(CasePhase phase) {
-        return phase == CasePhase.RUNTIME || phase == CasePhase.DIFFERENTIAL;
     }
 
     private static void validateExpectedResult(JsonNode expected, Path path) {

@@ -47,7 +47,6 @@ enum CoverageTag {
     AT_SYMBOL("at-symbol"),
     COMMENTS("comments"),
     PRECEDENCE("precedence"),
-    MIGRATION("migration"),
     DIAGNOSTIC("diagnostic");
 
     private final String yamlName;
