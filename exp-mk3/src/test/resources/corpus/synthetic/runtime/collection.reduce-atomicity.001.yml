@@ -6,4 +6,4 @@ coverage: [assignment, collection-literal, identifier, call, lambda, at-symbol, 
 expected:
   runtimeError:
     code: RUNTIME_UNDEFINED_OPERATION
-    span: {offset: 41, endOffset: 58, line: 1, column: 42}
+    span: {offset: 44, endOffset: 45, line: 1, column: 45}

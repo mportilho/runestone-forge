@@ -758,7 +758,7 @@ public final class SemanticResolver {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
                         "Postfix numeric operator requires a number",
-                        postfix.sourceSpan());
+                        postfix.operations().getFirst().sourceSpan());
                 return Resolution.invalidResolution();
             }
             if (rejectNullableOperands(postfix.operand())) {

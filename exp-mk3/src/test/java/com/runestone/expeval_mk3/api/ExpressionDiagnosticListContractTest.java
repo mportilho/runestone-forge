@@ -56,6 +56,69 @@ class ExpressionDiagnosticListContractTest {
         assertExecutionCode(expression, BigDecimal.ONE.negate(), "RUNTIME_FACTORIAL_NEGATIVE");
     }
 
+    @Test
+    void supplementaryUnicodeKeepsSemanticDiagnosticOrderingAndUtf16SpansDeterministic() {
+        String source = "emoji := \"😀\"; first := missingOne + 1; second := missingTwo + 1; 0";
+
+        ExpressionCompilationResult result = ExpressionEngine.defaultEngine().compile(
+                source, ExpressionEnvironment.builder().build());
+
+        assertThat(result).isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
+                assertThat(failure.diagnostics())
+                        .extracting(diagnostic -> diagnostic.primarySpan().orElseThrow())
+                        .containsExactly(
+                                new SourceSpan(source.indexOf("missingOne"), source.indexOf("missingOne") + 10, 1, 25),
+                                new SourceSpan(source.indexOf("missingTwo"), source.indexOf("missingTwo") + 10, 1, 51)));
+    }
+
+    @Test
+    void runtimePostfixFailurePointsToTheResponsibleOccurrenceAfterSupplementaryUnicode() {
+        String source = "emoji := \"😀\"; value!!";
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "value", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
+                .build();
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(source, environment).asMath();
+
+        assertThatThrownBy(() -> expression.compute(Map.of("value", new BigDecimal("7"))))
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(thrown -> assertThat(((ExpressionExecutionException) thrown).diagnostic().primarySpan())
+                        .contains(new SourceSpan(source.lastIndexOf('!'), source.length(), 1, source.length())));
+    }
+
+    @Test
+    void semanticPostfixTypeFailurePointsToTheFirstResponsibleOccurrenceAfterSupplementaryUnicode() {
+        String source = "emoji := \"😀\"; text := \"value\"; text%!";
+
+        ExpressionCompilationResult result = ExpressionEngine.defaultEngine().compile(
+                source, ExpressionEnvironment.builder().build());
+
+        assertThat(result).isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure -> {
+            ExpressionDiagnostic diagnostic = failure.diagnostics().getFirst();
+            int operatorOffset = source.indexOf('%');
+            assertThat(diagnostic.code()).isEqualTo("SEMANTIC_OPERATOR_TYPE_MISMATCH");
+            assertThat(diagnostic.primarySpan())
+                    .contains(new SourceSpan(operatorOffset, operatorOffset + 1, 1, operatorOffset + 1));
+        });
+    }
+
+    @Test
+    void runtimeBinaryFailurePointsToTheResponsibleOperatorAfterSupplementaryUnicode() {
+        String source = "emoji := \"😀\"; dividend / divisor";
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .externalSymbol(
+                        "dividend", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
+                .externalSymbol(
+                        "divisor", ScalarType.NUMBER, BigDecimal.ZERO, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        MathExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(source, environment).asMath();
+
+        assertThatThrownBy(expression::compute)
+                .isInstanceOf(ExpressionExecutionException.class)
+                .satisfies(thrown -> assertThat(((ExpressionExecutionException) thrown).diagnostic().primarySpan())
+                        .contains(new SourceSpan(source.indexOf('/'), source.indexOf('/') + 1, 1, source.indexOf('/') + 1)));
+    }
+
     private static void assertSingleCode(String source, ExpressionEnvironment environment, String expectedCode) {
         ExpressionCompilationResult result = ExpressionEngine.defaultEngine().compile(source, environment);
         assertThat(result).isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->

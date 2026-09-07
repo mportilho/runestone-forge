@@ -39,18 +39,19 @@ public final class ExpressionParser {
         ParserContext parserContext = context.get();
         try {
             parserContext.reset(source);
-            List<ExpressionDiagnostic> lexicalDiagnostics = collectLexicalDiagnostics(parserContext.tokens);
+            AntlrSourcePositions sourcePositions = AntlrSourcePositions.from(source);
+            List<ExpressionDiagnostic> lexicalDiagnostics = collectLexicalDiagnostics(parserContext.tokens, sourcePositions);
 
             try {
                 ExpressionEvaluatorParser.StartContext tree = parseSll(parserContext);
                 if (lexicalDiagnostics.isEmpty()) {
-                    return new ParseSuccess(tree, PredictionPath.SLL);
+                    return new ParseSuccess(tree, PredictionPath.SLL, sourcePositions);
                 }
             } catch (ParseCancellationException | RecognitionException exception) {
                 // SLL failures are intentionally discarded; LL retry emits user-facing diagnostics.
             }
 
-            return parseLl(parserContext, lexicalDiagnostics);
+            return parseLl(parserContext, lexicalDiagnostics, sourcePositions);
         } finally {
             // The lexer/parser pair stays put for reuse; only the previous source, its buffered
             // tokens, and any input reference they hold are released from the thread context.
@@ -80,8 +81,11 @@ public final class ExpressionParser {
         return context.parser.start();
     }
 
-    private static ParseResult parseLl(ParserContext context, List<ExpressionDiagnostic> lexicalDiagnostics) {
-        CapturingErrorStrategy errorStrategy = new CapturingErrorStrategy(context.source);
+    private static ParseResult parseLl(
+            ParserContext context,
+            List<ExpressionDiagnostic> lexicalDiagnostics,
+            AntlrSourcePositions sourcePositions) {
+        CapturingErrorStrategy errorStrategy = new CapturingErrorStrategy(context.source, sourcePositions);
         configureParser(context.parser, PredictionMode.LL, errorStrategy);
 
         ExpressionEvaluatorParser.StartContext tree = context.parser.start();
@@ -91,7 +95,7 @@ public final class ExpressionParser {
         diagnostics.sort(ExpressionDiagnostics.CANONICAL_ORDER);
 
         if (diagnostics.isEmpty()) {
-            return new ParseSuccess(tree, PredictionPath.LL_FALLBACK);
+            return new ParseSuccess(tree, PredictionPath.LL_FALLBACK, sourcePositions);
         }
         return new ParseFailure(diagnostics, PredictionPath.LL_FALLBACK);
     }
@@ -104,49 +108,26 @@ public final class ExpressionParser {
         parser.setErrorHandler(errorStrategy);
     }
 
-    private static List<ExpressionDiagnostic> collectLexicalDiagnostics(CommonTokenStream tokens) {
+    private static List<ExpressionDiagnostic> collectLexicalDiagnostics(
+            CommonTokenStream tokens, AntlrSourcePositions sourcePositions) {
         List<ExpressionDiagnostic> diagnostics = new ArrayList<>();
         for (Token token : tokens.getTokens()) {
             if (token.getType() == ExpressionEvaluatorLexer.ERROR_CHAR) {
                 diagnostics.add(ExpressionDiagnostics.create(
                         DiagnosticCode.PARSE_UNRECOGNIZED_CHARACTER,
                         "Unrecognized character: " + token.getText(),
-                        tokenSpan(token)));
+                        sourcePositions.span(token)));
             }
         }
         return diagnostics;
     }
 
-    private static SourceSpan tokenSpan(Token token) {
-        int startOffset = Math.max(0, token.getStartIndex());
-        if (token.getType() == Token.EOF) {
-            return new SourceSpan(startOffset, startOffset, Math.max(1, token.getLine()), token.getCharPositionInLine() + 1);
-        }
-        int endOffset = Math.max(startOffset, token.getStopIndex() + 1);
-        return new SourceSpan(startOffset, endOffset, Math.max(1, token.getLine()), token.getCharPositionInLine() + 1);
-    }
-
-    private static SourceSpan insertionSpan(Parser parser, String source) {
+    private static SourceSpan insertionSpan(Parser parser, AntlrSourcePositions sourcePositions) {
         Token token = parser.getCurrentToken();
         if (token.getType() == Token.EOF) {
-            return eofSpan(source);
+            return sourcePositions.eofSpan();
         }
-        return new SourceSpan(Math.max(0, token.getStartIndex()), Math.max(0, token.getStartIndex()),
-                Math.max(1, token.getLine()), token.getCharPositionInLine() + 1);
-    }
-
-    private static SourceSpan eofSpan(String source) {
-        int line = 1;
-        int column = 1;
-        for (int index = 0; index < source.length(); index++) {
-            if (source.charAt(index) == '\n') {
-                line++;
-                column = 1;
-            } else {
-                column++;
-            }
-        }
-        return new SourceSpan(source.length(), source.length(), line, column);
+        return sourcePositions.insertionSpan(token);
     }
 
     private static final class ParserContext {
@@ -181,10 +162,12 @@ public final class ExpressionParser {
     private static final class CapturingErrorStrategy extends DefaultErrorStrategy {
 
         private final String source;
+        private final AntlrSourcePositions sourcePositions;
         private final List<ExpressionDiagnostic> diagnostics = new ArrayList<>();
 
-        private CapturingErrorStrategy(String source) {
+        private CapturingErrorStrategy(String source, AntlrSourcePositions sourcePositions) {
             this.source = source;
+            this.sourcePositions = sourcePositions;
         }
 
         @Override
@@ -193,7 +176,7 @@ public final class ExpressionParser {
                 diagnostics.add(ExpressionDiagnostics.create(
                         DiagnosticCode.PARSE_MISSING_TOKEN,
                         "Missing token",
-                        eofSpan(source)));
+                        sourcePositions.eofSpan()));
                 return;
             }
             addDiagnostic(DiagnosticCode.PARSE_NO_VIABLE_ALTERNATIVE, "No viable parse alternative", exception.getOffendingToken());
@@ -257,7 +240,7 @@ public final class ExpressionParser {
             diagnostics.add(ExpressionDiagnostics.create(
                     DiagnosticCode.PARSE_MISSING_TOKEN,
                     "Missing token",
-                    insertionSpan(recognizer, source)));
+                    insertionSpan(recognizer, sourcePositions)));
         }
 
         @Override
@@ -267,8 +250,8 @@ public final class ExpressionParser {
 
         private void addDiagnostic(DiagnosticCode code, String message, Token token) {
             SourceSpan span = token == null || token.getType() == Token.EOF
-                    ? eofSpan(source)
-                    : tokenSpan(token);
+                    ? sourcePositions.eofSpan()
+                    : sourcePositions.span(token);
             diagnostics.add(ExpressionDiagnostics.create(code, message, span));
         }
     }

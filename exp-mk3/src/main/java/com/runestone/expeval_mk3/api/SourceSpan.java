@@ -1,5 +1,9 @@
 package com.runestone.expeval_mk3.api;
 
+/**
+ * A half-open source range. Offsets and the one-based column are measured in UTF-16 code units;
+ * the line is one-based.
+ */
 public record SourceSpan(int offset, int endOffset, int line, int column) {
 
     public SourceSpan {

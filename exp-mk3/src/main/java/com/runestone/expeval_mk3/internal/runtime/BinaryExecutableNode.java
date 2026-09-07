@@ -23,6 +23,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
 
     private final NodeId id;
     private final SourceSpan sourceSpan;
+    private final SourceSpan operatorSpan;
     private final BinaryOperator operator;
     private final ExecutableNode left;
     private final ExecutableNode right;
@@ -36,6 +37,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
     private BinaryExecutableNode(
             NodeId id,
             SourceSpan sourceSpan,
+            SourceSpan operatorSpan,
             BinaryOperator operator,
             ExecutableNode left,
             ExecutableNode right,
@@ -47,6 +49,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
             boolean domainProven) {
         this.id = Objects.requireNonNull(id, "id");
         this.sourceSpan = Objects.requireNonNull(sourceSpan, "sourceSpan");
+        this.operatorSpan = Objects.requireNonNull(operatorSpan, "operatorSpan");
         this.operator = Objects.requireNonNull(operator, "operator");
         this.left = Objects.requireNonNull(left, "left");
         this.right = right;
@@ -66,46 +69,48 @@ public final class BinaryExecutableNode implements ExecutableNode {
      * {@code domainProven} false and takes the classifying path in {@link RealDomainArithmetic}.
      */
     public static BinaryExecutableNode arithmetic(
-            NodeId id, SourceSpan sourceSpan, BinaryOperator operator,
+            NodeId id, SourceSpan sourceSpan, SourceSpan operatorSpan, BinaryOperator operator,
             ExecutableNode left, ExecutableNode right, MathContext mathContext,
             List<DeferredCheck> deferredChecks, boolean domainProven) {
         return new BinaryExecutableNode(
-                id, sourceSpan, operator, left,
+                id, sourceSpan, operatorSpan, operator, left,
                 Objects.requireNonNull(right, "right"),
                 Objects.requireNonNull(mathContext, "mathContext"),
                 null, false, null, deferredChecks, domainProven);
     }
 
     public static BinaryExecutableNode logical(
-            NodeId id, SourceSpan sourceSpan, BinaryOperator operator, ExecutableNode left, ExecutableNode right) {
+            NodeId id, SourceSpan sourceSpan, SourceSpan operatorSpan, BinaryOperator operator,
+            ExecutableNode left, ExecutableNode right) {
         return new BinaryExecutableNode(
-                id, sourceSpan, operator, left, Objects.requireNonNull(right, "right"),
+                id, sourceSpan, operatorSpan, operator, left, Objects.requireNonNull(right, "right"),
                 null, null, false, null, List.of(), false);
     }
 
     public static BinaryExecutableNode comparison(
-            NodeId id, SourceSpan sourceSpan, BinaryOperator operator,
+            NodeId id, SourceSpan sourceSpan, SourceSpan operatorSpan, BinaryOperator operator,
             ExecutableNode left, ExecutableNode right, ExpressionType operandType) {
         return new BinaryExecutableNode(
-                id, sourceSpan, operator, left,
+                id, sourceSpan, operatorSpan, operator, left,
                 Objects.requireNonNull(right, "right"),
                 null, Objects.requireNonNull(operandType, "operandType"), false, null, List.of(), false);
     }
 
     public static BinaryExecutableNode equality(
-            NodeId id, SourceSpan sourceSpan, BinaryOperator operator,
+            NodeId id, SourceSpan sourceSpan, SourceSpan operatorSpan, BinaryOperator operator,
             ExecutableNode left, ExecutableNode right, ExpressionType operandType) {
         return new BinaryExecutableNode(
-                id, sourceSpan, operator, left,
+                id, sourceSpan, operatorSpan, operator, left,
                 Objects.requireNonNull(right, "right"),
                 null, Objects.requireNonNull(operandType, "operandType"),
                 operator == BinaryOperator.NOT_EQUAL, null, List.of(), false);
     }
 
     public static BinaryExecutableNode regex(
-            NodeId id, SourceSpan sourceSpan, BinaryOperator operator, ExecutableNode left, Pattern regexPattern) {
+            NodeId id, SourceSpan sourceSpan, SourceSpan operatorSpan, BinaryOperator operator,
+            ExecutableNode left, Pattern regexPattern) {
         return new BinaryExecutableNode(
-                id, sourceSpan, operator, left, null, null, null,
+                id, sourceSpan, operatorSpan, operator, left, null, null, null,
                 operator == BinaryOperator.REGEX_NOT_MATCH,
                 Objects.requireNonNull(regexPattern, "regexPattern"), List.of(), false);
     }
@@ -156,12 +161,12 @@ public final class BinaryExecutableNode implements ExecutableNode {
         BigDecimal dividend = ExpressionRuntime.number(left.execute(scope));
         BigDecimal divisor = ExpressionRuntime.number(right.execute(scope));
         if (divisor.signum() == 0) {
-            throw RuntimeFailures.undefinedOperation("division by zero", sourceSpan);
+            throw RuntimeFailures.undefinedOperation("division by zero", operatorSpan);
         }
         try {
             return dividend.divide(divisor, mathContext);
         } catch (ArithmeticException exception) {
-            throw RuntimeFailures.calculationFailure("division failed", sourceSpan, exception);
+            throw RuntimeFailures.calculationFailure("division failed", operatorSpan, exception);
         }
     }
 
@@ -169,27 +174,27 @@ public final class BinaryExecutableNode implements ExecutableNode {
         BigDecimal dividend = ExpressionRuntime.number(left.execute(scope));
         BigDecimal divisor = ExpressionRuntime.number(right.execute(scope));
         if (divisor.signum() == 0) {
-            throw RuntimeFailures.undefinedOperation("modulo by zero", sourceSpan);
+            throw RuntimeFailures.undefinedOperation("modulo by zero", operatorSpan);
         }
         try {
             return dividend.remainder(divisor);
         } catch (ArithmeticException exception) {
-            throw RuntimeFailures.calculationFailure("modulo failed", sourceSpan, exception);
+            throw RuntimeFailures.calculationFailure("modulo failed", operatorSpan, exception);
         }
     }
 
     private BigDecimal root(ExecutionScope scope) {
         BigDecimal degree = ExpressionRuntime.number(left.execute(scope));
         BigDecimal radicand = ExpressionRuntime.number(right.execute(scope));
-        return RealDomainArithmetic.root(degree, radicand, mathContext, sourceSpan);
+        return RealDomainArithmetic.root(degree, radicand, mathContext, operatorSpan);
     }
 
     private BigDecimal exponentiate(ExecutionScope scope) {
         BigDecimal base = ExpressionRuntime.number(left.execute(scope));
         BigDecimal exponent = ExpressionRuntime.number(right.execute(scope));
         return domainProven
-                ? RealDomainArithmetic.powWithProvenDomain(base, exponent, mathContext, sourceSpan)
-                : RealDomainArithmetic.pow(base, exponent, mathContext, sourceSpan);
+                ? RealDomainArithmetic.powWithProvenDomain(base, exponent, mathContext, operatorSpan)
+                : RealDomainArithmetic.pow(base, exponent, mathContext, operatorSpan);
     }
 
     private int compare(ExecutionScope scope) {

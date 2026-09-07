@@ -8,11 +8,13 @@ import java.math.BigDecimal;
 import java.util.Objects;
 
 public record ModuloDecimalExecutableNode(
-        NodeId id, SourceSpan sourceSpan, ExecutableNode left, ExecutableNode right) implements ExecutableNode {
+        NodeId id, SourceSpan sourceSpan, SourceSpan operatorSpan, ExecutableNode left, ExecutableNode right)
+        implements ExecutableNode {
 
     public ModuloDecimalExecutableNode {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(sourceSpan, "sourceSpan");
+        Objects.requireNonNull(operatorSpan, "operatorSpan");
         Objects.requireNonNull(left, "left");
         Objects.requireNonNull(right, "right");
     }
@@ -22,12 +24,12 @@ public record ModuloDecimalExecutableNode(
         BigDecimal dividend = (BigDecimal) left.execute(scope);
         BigDecimal divisor = (BigDecimal) right.execute(scope);
         if (divisor.signum() == 0) {
-            throw RuntimeFailures.undefinedOperation("modulo by zero", sourceSpan);
+            throw RuntimeFailures.undefinedOperation("modulo by zero", operatorSpan);
         }
         try {
             return dividend.remainder(divisor);
         } catch (ArithmeticException exception) {
-            throw RuntimeFailures.calculationFailure("modulo failed", sourceSpan, exception);
+            throw RuntimeFailures.calculationFailure("modulo failed", operatorSpan, exception);
         }
     }
 }

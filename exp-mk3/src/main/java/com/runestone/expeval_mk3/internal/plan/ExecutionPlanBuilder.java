@@ -450,16 +450,17 @@ public final class ExecutionPlanBuilder {
             case ADD, SUBTRACT, MULTIPLY, MODULO -> fold(buildDecimalBinary(
                     binary, operator, left, right, model, environment, deferredChecksByNode), left, right);
             case DIVIDE, ROOT, EXPONENTIATE, CONCATENATE -> fold(BinaryExecutableNode.arithmetic(
-                    binary.id(), binary.sourceSpan(), operator, left, right, environment.mathContext(),
+                    binary.id(), binary.sourceSpan(), binary.operatorSpan(), operator, left, right, environment.mathContext(),
                     deferredChecksByNode.getOrDefault(binary.id(), List.of()),
                     powerDomainProven(binary, model, deferredChecksByNode)), left, right);
             case LOGICAL_AND, LOGICAL_OR, LOGICAL_NAND, LOGICAL_NOR, LOGICAL_XOR, LOGICAL_XNOR -> fold(
-                    BinaryExecutableNode.logical(binary.id(), binary.sourceSpan(), operator, left, right), left, right);
+                    BinaryExecutableNode.logical(
+                            binary.id(), binary.sourceSpan(), binary.operatorSpan(), operator, left, right), left, right);
             case GREATER_THAN, GREATER_THAN_OR_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL ->
                     fold(buildComparison(binary, operator, left, right, model), left, right);
             case EQUAL, NOT_EQUAL -> fold(buildEquality(binary, operator, left, right, model), left, right);
             case REGEX_MATCH, REGEX_NOT_MATCH -> fold(BinaryExecutableNode.regex(
-                    binary.id(), binary.sourceSpan(), operator, left,
+                    binary.id(), binary.sourceSpan(), binary.operatorSpan(), operator, left,
                     (Pattern) BindingLookup.required(model.preparedValues(), binary.id(), "prepared regex pattern")), left);
         };
     }
@@ -479,12 +480,13 @@ public final class ExecutionPlanBuilder {
                 case SUBTRACT -> new SubtractDecimalExecutableNode(binary.id(), binary.sourceSpan(), left, right);
                 case MULTIPLY -> new MultiplyDecimalExecutableNode(
                         binary.id(), binary.sourceSpan(), left, right, environment.mathContext());
-                case MODULO -> new ModuloDecimalExecutableNode(binary.id(), binary.sourceSpan(), left, right);
+                case MODULO -> new ModuloDecimalExecutableNode(
+                        binary.id(), binary.sourceSpan(), binary.operatorSpan(), left, right);
                 default -> throw new IllegalArgumentException("unsupported decimal binary operator: " + operator);
             };
         }
         return BinaryExecutableNode.arithmetic(
-                binary.id(), binary.sourceSpan(), operator, left, right, environment.mathContext(),
+                binary.id(), binary.sourceSpan(), binary.operatorSpan(), operator, left, right, environment.mathContext(),
                 deferredChecksByNode.getOrDefault(binary.id(), List.of()), false);
     }
 
@@ -524,7 +526,8 @@ public final class ExecutionPlanBuilder {
             BinaryOperationNode binary, BinaryOperator operator, ExecutableNode left, ExecutableNode right, SemanticModel model) {
         ExpressionType operandType = model.resolvedTypes().get(binary.left().id());
         if (!optimizing) {
-            return BinaryExecutableNode.comparison(binary.id(), binary.sourceSpan(), operator, left, right, operandType);
+            return BinaryExecutableNode.comparison(
+                    binary.id(), binary.sourceSpan(), binary.operatorSpan(), operator, left, right, operandType);
         }
         return operandType == ScalarType.NUMBER
                 ? new NumberComparisonExecutableNode(binary.id(), binary.sourceSpan(), operator, left, right)
@@ -557,7 +560,8 @@ public final class ExecutionPlanBuilder {
                 return new EqualsEqualityExecutableNode(binary.id(), binary.sourceSpan(), negated, left, right);
             }
         }
-        return BinaryExecutableNode.equality(binary.id(), binary.sourceSpan(), operator, left, right, operandType);
+        return BinaryExecutableNode.equality(
+                binary.id(), binary.sourceSpan(), binary.operatorSpan(), operator, left, right, operandType);
     }
 
     /**
@@ -592,9 +596,8 @@ public final class ExecutionPlanBuilder {
             BuildContext buildContext) {
         ExecutableNode operand = buildNode(
                 postfix.operand(), model, environment, deferredChecksByNode, foldedReads, memoSlots, buildContext);
-        List<PostfixOperator> operators = postfix.operations().stream().map(PostfixOperatorOccurrence::operator).toList();
         return fold(new PostfixExecutableNode(
-                postfix.id(), postfix.sourceSpan(), operand, operators, environment.maxFactorialInput(),
+                postfix.id(), postfix.sourceSpan(), operand, postfix.operations(), environment.maxFactorialInput(),
                 deferredChecksByNode.getOrDefault(postfix.id(), List.of())), operand);
     }
 

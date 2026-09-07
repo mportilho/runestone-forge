@@ -49,6 +49,44 @@ class ExpressionParserTest {
     }
 
     @Test
+    @DisplayName("parse diagnostics expose supplementary Unicode positions in UTF-16 units")
+    void parseDiagnosticsExposeSupplementaryUnicodePositionsInUtf16Units() {
+        String source = "text := \"😀\";\n#";
+
+        ParseFailure failure = (ParseFailure) parser.parse(source);
+
+        int errorOffset = source.indexOf('#');
+        assertThat(failure.diagnostics()).allSatisfy(diagnostic ->
+                assertThat(diagnostic.primarySpan()).contains(new SourceSpan(errorOffset, errorOffset + 1, 2, 1)));
+    }
+
+    @Test
+    @DisplayName("parse diagnostics preserve ASCII and BMP UTF-16 positions")
+    void parseDiagnosticsPreserveAsciiAndBmpUtf16Positions() {
+        String source = "text := \"ação\"; #";
+
+        ParseFailure failure = (ParseFailure) parser.parse(source);
+
+        int errorOffset = source.indexOf('#');
+        assertThat(failure.diagnostics()).allSatisfy(diagnostic ->
+                assertThat(diagnostic.primarySpan()).contains(
+                        new SourceSpan(errorOffset, errorOffset + 1, 1, errorOffset + 1)));
+    }
+
+    @Test
+    @DisplayName("EOF diagnostics after supplementary Unicode are empty UTF-16 spans")
+    void eofDiagnosticsAfterSupplementaryUnicodeAreEmptyUtf16Spans() {
+        String source = "sum(\n\"😀\"";
+
+        ParseFailure failure = (ParseFailure) parser.parse(source);
+
+        assertThat(failure.diagnostics()).anySatisfy(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.PARSE_MISSING_TOKEN.code());
+            assertThat(diagnostic.primarySpan()).contains(new SourceSpan(source.length(), source.length(), 2, 5));
+        });
+    }
+
+    @Test
     @DisplayName("null source is a programming error")
     void nullSourceIsProgrammingError() {
         assertThatNullPointerException()

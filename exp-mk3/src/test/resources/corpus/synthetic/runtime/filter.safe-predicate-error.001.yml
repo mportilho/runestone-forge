@@ -20,4 +20,4 @@ coverage: [identifier, filter, at-symbol, root, comparison, safe-navigation, coa
 expected:
   runtimeError:
     code: RUNTIME_ROOT_UNDEFINED
-    span: {offset: 10, endOffset: 23, line: 1, column: 11}
+    span: {offset: 17, endOffset: 21, line: 1, column: 18}

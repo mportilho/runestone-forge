@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.internal.ast;
 
 import com.runestone.expeval_mk3.api.DiagnosticCategory;
+import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.parser.ExpressionParser;
 import com.runestone.expeval_mk3.internal.parser.ParseResult;
@@ -194,6 +195,45 @@ class SemanticAstPipelineTest {
 
         assertThat(AstPrettyPrinter.print(ast)).isEqualTo("value := n%!;\nvalue");
         assertThat(AstStructuralEquality.equals(ast, build(AstPrettyPrinter.print(ast)))).isTrue();
+    }
+
+    @Test
+    @DisplayName("AST spans use UTF-16 offsets and columns after supplementary Unicode")
+    void astSpansUseUtf16OffsetsAndColumnsAfterSupplementaryUnicode() {
+        String source = "emoji := \"😀\";\nvalue := n%!; value";
+
+        ExpressionFileNode ast = build(source);
+        LiteralNode emoji = (LiteralNode) ast.assignments().getFirst().expression();
+        AssignmentNode secondAssignment = ast.assignments().get(1);
+        PostfixOperationNode postfix = (PostfixOperationNode) secondAssignment.expression();
+
+        int valueOffset = source.indexOf("value :=");
+        int percentOffset = source.indexOf('%');
+        int factorialOffset = source.indexOf('!');
+        assertThat(source.substring(emoji.sourceSpan().offset(), emoji.sourceSpan().endOffset())).isEqualTo("\"😀\"");
+        assertThat(Character.isLowSurrogate(source.charAt(emoji.sourceSpan().offset()))).isFalse();
+        assertThat(Character.isHighSurrogate(source.charAt(emoji.sourceSpan().endOffset() - 1))).isFalse();
+        assertThat(secondAssignment.sourceSpan()).isEqualTo(
+                new SourceSpan(valueOffset, source.indexOf(';', valueOffset) + 1, 2, 1));
+        assertThat(postfix.operations()).extracting(PostfixOperatorOccurrence::sourceSpan)
+                .containsExactly(
+                        new SourceSpan(percentOffset, percentOffset + 1, 2, 11),
+                        new SourceSpan(factorialOffset, factorialOffset + 1, 2, 12));
+        assertThat(source.substring(postfix.sourceSpan().offset(), postfix.sourceSpan().endOffset())).isEqualTo("n%!");
+    }
+
+    @Test
+    @DisplayName("chained links point to their responsible UTF-16 source occurrences")
+    void chainedLinksPointToTheirResponsibleUtf16SourceOccurrences() {
+        String source = "emoji := \"😀\";\naccount.name?.items()[0][*]";
+
+        NavigationChainNode chain = (NavigationChainNode) build(source).resultExpression().orElseThrow();
+
+        assertThat(chain.links()).extracting(link ->
+                        source.substring(link.sourceSpan().offset(), link.sourceSpan().endOffset()))
+                .containsExactly(".name", "?.items()", "[0]", "[*]");
+        assertThat(chain.links()).extracting(link -> link.sourceSpan().column())
+                .containsExactly(8, 13, 22, 25);
     }
 
     @Test

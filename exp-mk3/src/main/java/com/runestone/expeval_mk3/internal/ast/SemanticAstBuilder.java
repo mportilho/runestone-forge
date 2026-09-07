@@ -1,12 +1,13 @@
 package com.runestone.expeval_mk3.internal.ast;
 
-import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorBaseVisitor;
-import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorParser;
+import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostics;
-import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorBaseVisitor;
+import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorParser;
+import com.runestone.expeval_mk3.internal.parser.AntlrSourcePositions;
 import com.runestone.expeval_mk3.internal.parser.ParseSuccess;
-import com.runestone.expeval_mk3.api.SourceSpan;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.TerminalNode;
@@ -28,7 +29,7 @@ import java.util.function.Function;
 public final class SemanticAstBuilder {
 
     public SemanticAstBuildResult build(ParseSuccess parseSuccess) {
-        return new SemanticAstBuildSession().build(parseSuccess);
+        return new SemanticAstBuildSession(parseSuccess.sourcePositions()).build(parseSuccess);
     }
 }
 
@@ -39,6 +40,11 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
             LocalDateTime.of(LocalDate.EPOCH, LocalTime.MIDNIGHT));
 
     private final List<ExpressionDiagnostic> diagnostics = new ArrayList<>();
+    private final AntlrSourcePositions sourcePositions;
+
+    SemanticAstBuildSession(AntlrSourcePositions sourcePositions) {
+        this.sourcePositions = Objects.requireNonNull(sourcePositions, "sourcePositions");
+    }
 
     SemanticAstBuildResult build(ParseSuccess parseSuccess) {
         Objects.requireNonNull(parseSuccess, "parseSuccess");
@@ -852,7 +858,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
         return -1;
     }
 
-    private static SourceSpan fileSpan(List<? extends AstNode> topLevelNodes, ExpressionEvaluatorParser.StartInputContext context) {
+    private SourceSpan fileSpan(List<? extends AstNode> topLevelNodes, ExpressionEvaluatorParser.StartInputContext context) {
         if (!topLevelNodes.isEmpty()) {
             SourceSpan first = topLevelNodes.getFirst().sourceSpan();
             SourceSpan last = topLevelNodes.getLast().sourceSpan();
@@ -861,29 +867,21 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
         return span(context.EOF().getSymbol());
     }
 
-    private static SourceSpan span(ParserRuleContext context) {
+    private SourceSpan span(ParserRuleContext context) {
         Token start = context.getStart();
         Token stop = context.getStop();
         if (stop.getType() == Token.EOF) {
-            return new SourceSpan(
-                    start.getStartIndex(),
-                    start.getStartIndex(),
-                    start.getLine(),
-                    start.getCharPositionInLine() + 1);
+            return sourcePositions.insertionSpan(start);
         }
-        return new SourceSpan(start.getStartIndex(), stop.getStopIndex() + 1, start.getLine(), start.getCharPositionInLine() + 1);
+        return sourcePositions.span(start, stop);
     }
 
-    private static SourceSpan span(Token token) {
-        int offset = Math.max(0, token.getStartIndex());
-        int endOffset = token.getType() == Token.EOF ? offset : Math.max(offset, token.getStopIndex() + 1);
-        return new SourceSpan(offset, endOffset, Math.max(1, token.getLine()), token.getCharPositionInLine() + 1);
+    private SourceSpan span(Token token) {
+        return sourcePositions.span(token);
     }
 
-    private static SourceSpan span(Token start, Token stop) {
-        int offset = Math.max(0, start.getStartIndex());
-        int endOffset = stop.getType() == Token.EOF ? offset : Math.max(offset, stop.getStopIndex() + 1);
-        return new SourceSpan(offset, endOffset, Math.max(1, start.getLine()), start.getCharPositionInLine() + 1);
+    private SourceSpan span(Token start, Token stop) {
+        return sourcePositions.span(start, stop);
     }
 
     private static SourceSpan span(SourceSpan start, SourceSpan stop) {
@@ -894,7 +892,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
         return ((TerminalNode) context.getChild(childIndex)).getSymbol();
     }
 
-    private static UnsupportedOperationException unsupported(ParserRuleContext context, String construct) {
+    private UnsupportedOperationException unsupported(ParserRuleContext context, String construct) {
         return new UnsupportedOperationException("AST tracer does not yet support " + construct + " at " + span(context));
     }
 }
