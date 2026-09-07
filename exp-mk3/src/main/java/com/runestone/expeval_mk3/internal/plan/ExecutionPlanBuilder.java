@@ -50,6 +50,8 @@ import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
 import com.runestone.expeval_mk3.internal.memory.CalculationMemorySchema;
 import com.runestone.expeval_mk3.internal.memory.VariableMemorySchema;
+import com.runestone.expeval_mk3.internal.regex.LinearRegex;
+import com.runestone.expeval_mk3.internal.regex.PreparedRegexCall;
 import com.runestone.expeval_mk3.internal.runtime.AddDecimalExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.BetweenExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.BinaryExecutableNode;
@@ -115,7 +117,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -461,7 +462,7 @@ public final class ExecutionPlanBuilder {
             case EQUAL, NOT_EQUAL -> fold(buildEquality(binary, operator, left, right, model), left, right);
             case REGEX_MATCH, REGEX_NOT_MATCH -> fold(BinaryExecutableNode.regex(
                     binary.id(), binary.sourceSpan(), binary.operatorSpan(), operator, left,
-                    (Pattern) BindingLookup.required(model.preparedValues(), binary.id(), "prepared regex pattern")), left);
+                    (LinearRegex) BindingLookup.required(model.preparedValues(), binary.id(), "prepared regex pattern")), left);
         };
     }
 
@@ -684,6 +685,7 @@ public final class ExecutionPlanBuilder {
                 .toList();
         FunctionCallExecutableNode built = new FunctionCallExecutableNode(
                 functionCall.id(), functionCall.sourceSpan(), descriptor, arguments,
+                (PreparedRegexCall) model.preparedValues().get(functionCall.id()),
                 buildContext.calculationPoints().slot(functionCall.id()),
                 buildContext.replaySlots(functionCall.id()));
         ExecutableNode assertionElided = foldAssertion(built);

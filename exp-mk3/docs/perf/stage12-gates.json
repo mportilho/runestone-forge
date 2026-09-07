@@ -68,13 +68,14 @@
     },
     {
       "id": "regex",
-      "classification": "characterization",
+      "classification": "binding",
       "metrics": ["score", "gc.alloc.rate.norm"],
-      "thresholds": [],
+      "thresholds": ["no backtracking-engine fallback", "adversarial latency grows approximately linearly with inputLength"],
       "benchmarks": [
         "com.runestone.expeval_mk3.perf.jmh.Stage12RegexBenchmark.literalMatch",
         "com.runestone.expeval_mk3.perf.jmh.Stage12RegexBenchmark.dynamicReplaceAll",
-        "com.runestone.expeval_mk3.perf.jmh.Stage12RegexBenchmark.dynamicSplit"
+        "com.runestone.expeval_mk3.perf.jmh.Stage12RegexBenchmark.dynamicSplit",
+        "com.runestone.expeval_mk3.perf.jmh.Stage12RegexBenchmark.adversarialNonMatch"
       ]
     },
     {

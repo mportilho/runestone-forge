@@ -6,7 +6,7 @@ import java.util.Objects;
  * Wraps a reference so a {@link StructuralKey} compares it by identity regardless of whether the
  * wrapped type overrides {@code equals}/{@code hashCode} structurally. Subexpressao Comum Memoizada
  * (issue #121) requires identity comparison for a {@code FunctionDescriptor}, a compiled regex
- * {@code Pattern}, and the identity-bearing accessor of a navigation binding, because two occurrences
+ * a prepared regex, and the identity-bearing accessor of a navigation binding, because two occurrences
  * resolved independently can wrap the very same catalog-cached instance even when the surrounding
  * binding record is freshly allocated per occurrence.
  */

@@ -5,19 +5,19 @@ import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperator;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
 import com.runestone.expeval_mk3.internal.diagnostics.RuntimeFailures;
+import com.runestone.expeval_mk3.internal.regex.LinearRegex;
 import com.runestone.expeval_mk3.internal.semantics.DeferredCheck;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.util.List;
 import java.util.Objects;
-import java.util.regex.Pattern;
 
 /**
  * Every binary construct: arithmetic, logical, ordering comparison, equality, and regex match. Each
  * shape switches on its own {@link BinaryOperator} subset and carries only the extra resolved data
  * that subset needs (a {@link MathContext} for arithmetic, an operand {@link ExpressionType} for
- * comparison/equality, or a prepared {@link Pattern} for regex).
+ * comparison/equality, or a prepared {@link LinearRegex} for regex).
  */
 public final class BinaryExecutableNode implements ExecutableNode {
 
@@ -30,7 +30,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
     private final MathContext mathContext;
     private final ExpressionType operandType;
     private final boolean negated;
-    private final Pattern regexPattern;
+    private final LinearRegex regexPattern;
     private final List<DeferredCheck> deferredChecks;
     private final boolean domainProven;
 
@@ -44,7 +44,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
             MathContext mathContext,
             ExpressionType operandType,
             boolean negated,
-            Pattern regexPattern,
+            LinearRegex regexPattern,
             List<DeferredCheck> deferredChecks,
             boolean domainProven) {
         this.id = Objects.requireNonNull(id, "id");
@@ -108,7 +108,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
 
     public static BinaryExecutableNode regex(
             NodeId id, SourceSpan sourceSpan, SourceSpan operatorSpan, BinaryOperator operator,
-            ExecutableNode left, Pattern regexPattern) {
+            ExecutableNode left, LinearRegex regexPattern) {
         return new BinaryExecutableNode(
                 id, sourceSpan, operatorSpan, operator, left, null, null, null,
                 operator == BinaryOperator.REGEX_NOT_MATCH,
@@ -153,7 +153,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
             case LESS_THAN_OR_EQUAL -> compare(scope) <= 0;
             case EQUAL, NOT_EQUAL -> ExpressionRuntime.structuralEquals(
                     left.execute(scope), right.execute(scope), operandType) != negated;
-            case REGEX_MATCH, REGEX_NOT_MATCH -> regexPattern.matcher((String) left.execute(scope)).matches() != negated;
+            case REGEX_MATCH, REGEX_NOT_MATCH -> regexPattern.matches((String) left.execute(scope)) != negated;
         };
     }
 

@@ -1,5 +1,33 @@
 # Performance History
 
+## 2026-09-07 - Linear regex through RE2/J (issue #165)
+
+Purpose: replace every language-controlled backtracking regex path with RE2/J, characterize the cost
+on benign patterns, and verify approximately linear growth for a nested-quantifier non-match. Before
+and after runs used the same machine and JMH 1.37 protocol: `-Xms1g -Xmx1g`, one thread, three forks,
+5x500 ms warm-up and 10x500 ms measurement, with the GC profiler. The available runtime was OpenJDK
+26.0.1 rather than the binding Temurin 21 environment, so these figures are implementation evidence
+and must not replace the full Etapa 12 gate run on the reference JDK.
+
+| Scenario | Before | After | Delta | Before B/op | After B/op |
+|---|---:|---:|---:|---:|---:|
+| Literal match | 153.18 +/- 2.98 ns/op | 395.39 +/- 17.18 ns/op | -158.11% | 192 | 128 |
+| Dynamic `replaceAll` | 326.85 +/- 5.03 ns/op | 808.02 +/- 7.74 ns/op | -147.21% | 1,064 | 1,888 |
+| Dynamic `split` | 417.30 +/- 8.90 ns/op | 840.36 +/- 8.83 ns/op | -101.38% | 1,336 | 2,011 |
+
+The adversarial `(a+)+b` non-match measured 10,865.75 ns/op at 128 UTF-16 units, 89,797.91 ns/op at
+1,024 units, and 712,911.37 ns/op at 8,192 units. Each 8x input increase produced 8.26x and 7.94x
+latency respectively, characterizing approximately linear growth without a backtracking fallback.
+
+Verdict: **ACCEPT for the security contract.** Benign regex latency regressed and dynamic operations
+allocate more because they compile RE2/J patterns per call, but small-pattern latency is explicitly a
+characterization rather than a compatibility threshold. The required bounded asymptotic behavior,
+structured diagnostics, and elimination of JDK backtracking outweigh that local cost.
+
+Artifacts: `/tmp/performance-benchmark/issue-165-before.json`,
+`/tmp/performance-benchmark/issue-165-after.json`, and
+`/tmp/performance-benchmark/issue-165-comparison.md`.
+
 ## 2026-09-07 - Etapa 12 reproducible local baseline (issue #160)
 
 Purpose: establish the pre-hardening functional and performance frontier and prove the local gate

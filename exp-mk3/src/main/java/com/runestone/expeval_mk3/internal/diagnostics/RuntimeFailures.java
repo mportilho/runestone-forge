@@ -72,6 +72,11 @@ public final class RuntimeFailures {
                 diagnostic(DiagnosticCode.RUNTIME_INVALID_OPERATION_ARGUMENT, message, span));
     }
 
+    public static ExpressionExecutionException invalidRegexPattern(SourceSpan span, Throwable cause) {
+        return ExpressionExecutionException.of(
+                diagnostic(DiagnosticCode.RUNTIME_REGEX_PATTERN_INVALID, "Invalid linear regex pattern", span), cause);
+    }
+
     public static ExpressionExecutionException materializationLimitExceeded(
             int size, int maxMaterializedSize, SourceSpan span) {
         String message = "materialized collection size " + size + " exceeds maxMaterializedSize " + maxMaterializedSize;

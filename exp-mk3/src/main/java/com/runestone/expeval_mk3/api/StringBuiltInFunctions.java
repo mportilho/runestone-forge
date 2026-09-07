@@ -1,11 +1,12 @@
 package com.runestone.expeval_mk3.api;
 
+import com.runestone.expeval_mk3.internal.regex.LinearRegex;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.StringJoiner;
-import java.util.regex.Pattern;
 
 final class StringBuiltInFunctions {
 
@@ -149,9 +150,10 @@ final class StringBuiltInFunctions {
     }
 
     public static String replaceAll(String value, String regex, String replacement) {
-        return Pattern.compile(BuiltInFunctionSupport.requireString(regex, "regex"))
-                .matcher(BuiltInFunctionSupport.requireText(value))
-                .replaceAll(BuiltInFunctionSupport.requireString(replacement, "replacement"));
+        return LinearRegex.compile(BuiltInFunctionSupport.requireString(regex, "regex"))
+                .replaceAll(
+                        BuiltInFunctionSupport.requireText(value),
+                        BuiltInFunctionSupport.requireString(replacement, "replacement"));
     }
 
     public static BigDecimal indexOf(String value, String token) {
@@ -192,8 +194,8 @@ final class StringBuiltInFunctions {
     }
 
     public static List<String> split(String value, String regex) {
-        return List.of(Pattern.compile(BuiltInFunctionSupport.requireString(regex, "regex"))
-                .split(BuiltInFunctionSupport.requireText(value), -1));
+        return LinearRegex.compile(BuiltInFunctionSupport.requireString(regex, "regex"))
+                .split(BuiltInFunctionSupport.requireText(value));
     }
 
     public static String join(List<String> values, String delimiter) {

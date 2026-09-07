@@ -17,6 +17,7 @@
         <classgraph.version>4.8.162</classgraph.version>
         <jspecify.version>1.0.0</jspecify.version>
         <jmh.version>1.37</jmh.version>
+        <re2j.version>1.8</re2j.version>
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

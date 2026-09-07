@@ -30,13 +30,13 @@ indicator, protocol, commands, logs, JSON, JOL, JFR, and an artifact inventory a
 | Collections | Binding | `map`, composed map/sum, short circuit, sorting, reduction, wildcard, filter, nested lambda |
 | Compilation | Binding | Warm parsing and full uncached compilation |
 | Cache | Binding | Uncached pipeline, miss, pure hit, and hit plus math view |
-| Regex | Characterization | Literal operator, dynamic replacement, and dynamic split on the current regex engine |
+| Regex | Binding | RE2/J literal operator, dynamic replacement/split, and adversarial non-match growth |
 | Calculation Memory | Binding | Dense-shape normal compute, capture/freeze, indexed persistence, indexed and list traversal |
 
 “Binding” means later Etapa 12 work must preserve the metrics, comparisons, and thresholds encoded in
-the JSON manifest. “Characterization” records the current behavior without making its latency a
-compatibility threshold. Regex remains characterization until the linear RE2/J implementation and
-growth scenarios exist; absence of fallback and approximately linear growth then become binding.
+the JSON manifest. “Characterization” records behavior without making its latency a compatibility
+threshold. Regex binds absence of a backtracking fallback and approximately linear adversarial growth;
+its latency and allocation on small benign patterns remain characterization data.
 
 ## Commands
 

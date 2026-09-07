@@ -31,6 +31,7 @@ import com.runestone.expeval_mk3.internal.ast.SliceSubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.StringKeySubscriptNavigationLink;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
+import com.runestone.expeval_mk3.internal.regex.LinearRegex;
 import com.runestone.expeval_mk3.internal.runtime.ConstantFolder;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationBinding;
 import com.runestone.expeval_mk3.internal.semantics.ContextualMemberNavigationBinding;
@@ -49,7 +50,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 /**
  * Finds Subexpressao Comum Memoizada candidates (issue #121, ADR 0019) by walking the same AST shape
@@ -237,7 +237,7 @@ final class CommonSubexpressionAnalyzer {
         NodeAnalysis left = analyzeExpression(binary.left());
         BinaryOperator operator = binary.operator();
         if (operator == BinaryOperator.REGEX_MATCH || operator == BinaryOperator.REGEX_NOT_MATCH) {
-            Pattern pattern = (Pattern) model.preparedValues().get(binary.id());
+            LinearRegex pattern = (LinearRegex) model.preparedValues().get(binary.id());
             StructuralKey key = StructuralKey.of("Binary:" + operator, left.key(), new IdentityKey(pattern));
             return new NodeAnalysis(key, left.containsCurrentItem(), left.containsInternalSymbol(), left.calculationPoints());
         }

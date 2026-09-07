@@ -10,6 +10,8 @@ import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.diagnostics.ProviderReturnViolation;
 import com.runestone.expeval_mk3.internal.diagnostics.RuntimeFailures;
+import com.runestone.expeval_mk3.internal.regex.InvalidRegexPatternException;
+import com.runestone.expeval_mk3.internal.regex.PreparedRegexCall;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationWiring;
 import com.runestone.expeval_mk3.internal.semantics.ContextualMemberNavigationBinding;
 import com.runestone.expeval_mk3.internal.semantics.RegisteredMethodNavigationBinding;
@@ -223,6 +225,26 @@ public final class ExpressionRuntime {
         }
     }
 
+    public static Object invokePreparedRegexBuiltIn(
+            FunctionDescriptor descriptor,
+            List<ExecutableNode> argumentNodes,
+            PreparedRegexCall preparedCall,
+            ExecutionScope scope,
+            SourceSpan callSpan) {
+        Object value = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
+        requiredArgument(argumentNodes, 1, scope, descriptor, callSpan);
+        Object replacement = preparedCall.requiresReplacement()
+                ? requiredArgument(argumentNodes, 2, scope, descriptor, callSpan)
+                : null;
+        try {
+            return preparedCall.execute((String) value, (String) replacement);
+        } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
+            throw fatal;
+        } catch (Throwable exception) {
+            throw classify(descriptor, callSpan, exception);
+        }
+    }
+
     private static Object requiredArgument(
             List<ExecutableNode> argumentNodes,
             int index,
@@ -238,6 +260,9 @@ public final class ExpressionRuntime {
     }
 
     private static RuntimeException classify(FunctionDescriptor descriptor, SourceSpan callSpan, Throwable exception) {
+        if (exception instanceof InvalidRegexPatternException) {
+            return RuntimeFailures.invalidRegexPattern(callSpan, exception);
+        }
         if (exception instanceof ProviderReturnViolation violation) {
             // The provider ran to completion but its return value fails the resolved return
             // contract (null, incompatible type, or invalid container); distinct from a

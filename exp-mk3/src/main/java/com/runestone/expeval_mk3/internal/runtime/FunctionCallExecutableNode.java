@@ -3,6 +3,7 @@ package com.runestone.expeval_mk3.internal.runtime;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
+import com.runestone.expeval_mk3.internal.regex.PreparedRegexCall;
 
 import java.util.List;
 import java.util.Objects;
@@ -13,6 +14,7 @@ public record FunctionCallExecutableNode(
         SourceSpan sourceSpan,
         FunctionDescriptor descriptor,
         List<ExecutableNode> arguments,
+        PreparedRegexCall preparedRegexCall,
         int calculationSlot,
         int[] replaySlots) implements CalculationPointExecutableNode {
 
@@ -26,7 +28,10 @@ public record FunctionCallExecutableNode(
 
     @Override
     public Object execute(ExecutionScope scope) {
-        Object value = ExpressionRuntime.invokeFunction(descriptor, arguments, scope, sourceSpan);
+        Object value = preparedRegexCall == null
+                ? ExpressionRuntime.invokeFunction(descriptor, arguments, scope, sourceSpan)
+                : ExpressionRuntime.invokePreparedRegexBuiltIn(
+                        descriptor, arguments, preparedRegexCall, scope, sourceSpan);
         scope.captureCalculation(calculationSlot, replaySlots, value);
         return value;
     }

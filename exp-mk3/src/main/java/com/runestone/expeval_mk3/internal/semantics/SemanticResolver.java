@@ -80,8 +80,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
+import com.runestone.expeval_mk3.internal.regex.InvalidRegexPatternException;
+import com.runestone.expeval_mk3.internal.regex.LinearRegex;
+import com.runestone.expeval_mk3.internal.regex.PreparedRegexCall;
 
 public final class SemanticResolver {
 
@@ -718,8 +719,8 @@ public final class SemanticResolver {
                 return Resolution.invalidResolution();
             }
             try {
-                preparedValues.put(binary.id(), Pattern.compile((String) preparedValues.get(binary.right().id())));
-            } catch (PatternSyntaxException exception) {
+                preparedValues.put(binary.id(), LinearRegex.compile((String) preparedValues.get(binary.right().id())));
+            } catch (InvalidRegexPatternException exception) {
                 diagnostic(DiagnosticCode.SEMANTIC_REGEX_PATTERN_INVALID, "Invalid regex pattern", binary.right().sourceSpan());
                 return Resolution.invalidResolution();
             }
@@ -1032,10 +1033,45 @@ public final class SemanticResolver {
                 return Resolution.invalidResolution();
             }
             FunctionDescriptor descriptor = lookup.descriptor().orElseThrow();
+            if (!prepareLiteralRegexBuiltIn(functionCall, descriptor)) {
+                return Resolution.invalidResolution();
+            }
             functionBindings.put(functionCall.id(), descriptor);
             recordValue(functionCall.id(), descriptor.returnType());
             recordPure(functionCall.id(), descriptor.pure() && functionArgumentsPure(functionCall.arguments()));
             return Resolution.known(descriptor.returnType());
+        }
+
+        private boolean prepareLiteralRegexBuiltIn(FunctionCallNode functionCall, FunctionDescriptor descriptor) {
+            String functionName = functionCall.name().value();
+            boolean replaceAll;
+            if (functionName.equals("replaceAll")
+                    && descriptor.parameterTypes().equals(List.of(
+                            ScalarType.STRING, ScalarType.STRING, ScalarType.STRING))) {
+                replaceAll = true;
+            } else if (functionName.equals("split")
+                    && descriptor.parameterTypes().equals(List.of(ScalarType.STRING, ScalarType.STRING))) {
+                replaceAll = false;
+            } else {
+                return true;
+            }
+            ExpressionCallArgument patternArgument = (ExpressionCallArgument) functionCall.arguments().get(1);
+            if (!(patternArgument.expression() instanceof LiteralNode literal)) {
+                return true;
+            }
+            try {
+                LinearRegex pattern = LinearRegex.compile((String) preparedValues.get(literal.id()));
+                preparedValues.put(functionCall.id(), replaceAll
+                        ? PreparedRegexCall.replaceAll(pattern)
+                        : PreparedRegexCall.split(pattern));
+                return true;
+            } catch (InvalidRegexPatternException exception) {
+                diagnostic(
+                        DiagnosticCode.SEMANTIC_REGEX_PATTERN_INVALID,
+                        "Invalid linear regex pattern",
+                        literal.sourceSpan());
+                return false;
+            }
         }
 
         private Resolution resolveNavigationChain(NavigationChainNode navigation) {
