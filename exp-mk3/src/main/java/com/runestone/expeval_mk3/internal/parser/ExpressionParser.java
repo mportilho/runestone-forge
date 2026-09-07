@@ -15,7 +15,12 @@ import org.antlr.v4.runtime.NoViableAltException;
 import org.antlr.v4.runtime.Parser;
 import org.antlr.v4.runtime.RecognitionException;
 import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.TokenStream;
+import org.antlr.v4.runtime.atn.ATN;
+import org.antlr.v4.runtime.atn.ParserATNSimulator;
+import org.antlr.v4.runtime.atn.PredictionContextCache;
 import org.antlr.v4.runtime.atn.PredictionMode;
+import org.antlr.v4.runtime.dfa.DFA;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 
 import java.util.ArrayList;
@@ -53,8 +58,7 @@ public final class ExpressionParser {
 
             return parseLl(parserContext, lexicalDiagnostics, sourcePositions);
         } finally {
-            // The lexer/parser pair stays put for reuse; only the previous source, its buffered
-            // tokens, and any input reference they hold are released from the thread context.
+            // The lexer/parser pair and DFA stay put for reuse; all input-specific state is released.
             parserContext.release();
         }
     }
@@ -134,13 +138,15 @@ public final class ExpressionParser {
 
         private final ExpressionEvaluatorLexer lexer;
         private final CommonTokenStream tokens;
-        private final ExpressionEvaluatorParser parser;
+        private final ReusableExpressionEvaluatorParser parser;
+        private final DefaultErrorStrategy idleErrorStrategy;
         private String source;
 
         private ParserContext() {
             lexer = new ExpressionEvaluatorLexer(CharStreams.fromString(""));
             tokens = new CommonTokenStream(lexer);
-            parser = new ExpressionEvaluatorParser(tokens);
+            parser = new ReusableExpressionEvaluatorParser(tokens);
+            idleErrorStrategy = new DefaultErrorStrategy();
         }
 
         private void reset(String source) {
@@ -156,6 +162,45 @@ public final class ExpressionParser {
             source = null;
             lexer.setInputStream(CharStreams.fromString(""));
             tokens.setTokenSource(lexer);
+            parser.setErrorHandler(idleErrorStrategy);
+            parser.setInputStream(tokens);
+            parser.getInterpreter().setPredictionMode(PredictionMode.SLL);
+            parser.releaseTransientPredictionState();
+        }
+    }
+
+    private static final class ReusableExpressionEvaluatorParser extends ExpressionEvaluatorParser {
+
+        private final RetentionSafeParserATNSimulator reusableInterpreter;
+
+        private ReusableExpressionEvaluatorParser(TokenStream input) {
+            super(input);
+            reusableInterpreter = new RetentionSafeParserATNSimulator(
+                    this, getATN(), _decisionToDFA, _sharedContextCache);
+            setInterpreter(reusableInterpreter);
+        }
+
+        private void releaseTransientPredictionState() {
+            reusableInterpreter.releaseTransientState();
+        }
+    }
+
+    private static final class RetentionSafeParserATNSimulator extends ParserATNSimulator {
+
+        private RetentionSafeParserATNSimulator(
+                Parser parser,
+                ATN atn,
+                DFA[] decisionToDfa,
+                PredictionContextCache sharedContextCache) {
+            super(parser, atn, decisionToDfa, sharedContextCache);
+        }
+
+        private void releaseTransientState() {
+            mergeCache = null;
+            _input = null;
+            _startIndex = 0;
+            _outerContext = null;
+            _dfa = null;
         }
     }
 

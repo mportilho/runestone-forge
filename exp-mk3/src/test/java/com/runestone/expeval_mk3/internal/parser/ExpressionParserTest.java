@@ -4,7 +4,7 @@ import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.api.DiagnosticCategory;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.SourceSpan;
-import org.antlr.v4.runtime.CommonTokenStream;
+import com.runestone.expeval_mk3.support.ParserRetentionAssertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -135,23 +135,43 @@ class ExpressionParserTest {
     }
 
     @Test
-    @DisplayName("thread context releases the previous source and buffered tokens after a successful parse")
-    void threadContextReleasesSourceAndTokensAfterSuccessfulParse() throws ReflectiveOperationException {
-        parser.parse("1 + 2");
+    @DisplayName("thread context releases the complete parser payload after SLL success")
+    void threadContextReleasesCompletePayloadAfterSllSuccess() throws ReflectiveOperationException {
+        String source = new String("1 + 2");
+        parser.parse(source);
 
-        Object parserContext = threadLocalParserContext(parser);
-        assertThat(fieldValue(parserContext, "source")).isNull();
-        assertThat(((CommonTokenStream) fieldValue(parserContext, "tokens")).getTokens()).isEmpty();
+        ParserRetentionAssertions.assertReleased(parser);
     }
 
     @Test
-    @DisplayName("thread context releases the previous source and buffered tokens after a syntax failure")
-    void threadContextReleasesSourceAndTokensAfterSyntaxFailure() throws ReflectiveOperationException {
-        parser.parse("1 +");
+    @DisplayName("thread context releases the complete parser payload after LL fallback")
+    void threadContextReleasesCompletePayloadAfterLlFallback() throws ReflectiveOperationException {
+        String source = new String("1 +");
+        ParseResult result = parser.parse(source);
 
-        Object parserContext = threadLocalParserContext(parser);
-        assertThat(fieldValue(parserContext, "source")).isNull();
-        assertThat(((CommonTokenStream) fieldValue(parserContext, "tokens")).getTokens()).isEmpty();
+        assertThat(result.predictionPath()).isEqualTo(PredictionPath.LL_FALLBACK);
+        ParserRetentionAssertions.assertReleased(parser);
+    }
+
+    @Test
+    @DisplayName("thread context releases the complete parser payload after lexical failure")
+    void threadContextReleasesCompletePayloadAfterLexicalFailure() throws ReflectiveOperationException {
+        String source = new String("1 # 2");
+        parser.parse(source);
+
+        ParserRetentionAssertions.assertReleased(parser);
+    }
+
+    @Test
+    @DisplayName("same thread remains reusable after SLL, LL fallback, and lexical failure")
+    void sameThreadRemainsReusableAcrossAllParserOutcomes() {
+        assertThat(parser.parse("1 + 2")).isInstanceOf(ParseSuccess.class);
+        assertThat(parser.parse("1 +").predictionPath()).isEqualTo(PredictionPath.LL_FALLBACK);
+        assertThat(parser.parse("#")).isInstanceOf(ParseFailure.class);
+
+        ParseSuccess reused = (ParseSuccess) parser.parse("40 + 2");
+
+        assertThat(reused.predictionPath()).isEqualTo(PredictionPath.SLL);
     }
 
     @Test
@@ -180,4 +200,5 @@ class ExpressionParserTest {
         field.setAccessible(true);
         return field.get(target);
     }
+
 }

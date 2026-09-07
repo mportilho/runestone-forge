@@ -2,12 +2,10 @@ package com.runestone.expeval_mk3.api;
 
 import com.runestone.expeval_mk3.internal.parser.ExpressionParser;
 import com.runestone.expeval_mk3.internal.runtime.RuntimeServices;
-import org.antlr.v4.runtime.CommonTokenStream;
+import com.runestone.expeval_mk3.support.ParserRetentionAssertions;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Proves the module-shared {@link ExpressionParser} the pipeline uses never leaves the previous
@@ -19,21 +17,24 @@ class CompilationPipelineParserRetentionTest {
 
     @Test
     void releasesTheParserThreadContextAfterASuccessfulCompilation() throws ReflectiveOperationException {
-        CompilationPipeline.compile("1 + 2", ExpressionEnvironment.standard(), RuntimeServices.systemDefault());
+        String source = new String("1 + 2");
+        CompilationPipeline.compile(source, ExpressionEnvironment.standard(), RuntimeServices.systemDefault());
 
         assertParserThreadContextIsReleased();
     }
 
     @Test
     void releasesTheParserThreadContextAfterASyntaxFailure() throws ReflectiveOperationException {
-        CompilationPipeline.compile("1 +", ExpressionEnvironment.standard(), RuntimeServices.systemDefault());
+        String source = new String("1 +");
+        CompilationPipeline.compile(source, ExpressionEnvironment.standard(), RuntimeServices.systemDefault());
 
         assertParserThreadContextIsReleased();
     }
 
     @Test
     void releasesTheParserThreadContextAfterASemanticFailure() throws ReflectiveOperationException {
-        CompilationPipeline.compile("missing", ExpressionEnvironment.standard(), RuntimeServices.systemDefault());
+        String source = new String("missing");
+        CompilationPipeline.compile(source, ExpressionEnvironment.standard(), RuntimeServices.systemDefault());
 
         assertParserThreadContextIsReleased();
     }
@@ -43,17 +44,6 @@ class CompilationPipelineParserRetentionTest {
         parserField.setAccessible(true);
         ExpressionParser parser = (ExpressionParser) parserField.get(null);
 
-        Field contextField = ExpressionParser.class.getDeclaredField("context");
-        contextField.setAccessible(true);
-        ThreadLocal<?> threadLocal = (ThreadLocal<?>) contextField.get(parser);
-        Object parserContext = threadLocal.get();
-
-        Field sourceField = parserContext.getClass().getDeclaredField("source");
-        sourceField.setAccessible(true);
-        Field tokensField = parserContext.getClass().getDeclaredField("tokens");
-        tokensField.setAccessible(true);
-
-        assertThat(sourceField.get(parserContext)).isNull();
-        assertThat(((CommonTokenStream) tokensField.get(parserContext)).getTokens()).isEmpty();
+        ParserRetentionAssertions.assertReleased(parser);
     }
 }
