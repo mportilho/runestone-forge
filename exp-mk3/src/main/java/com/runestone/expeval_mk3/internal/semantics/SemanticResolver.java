@@ -65,8 +65,7 @@ import com.runestone.expeval_mk3.internal.ast.UnaryOperationNode;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
 import com.runestone.expeval_mk3.internal.ast.WildcardNavigationLink;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
-import com.runestone.expeval_mk3.api.DiagnosticCategory;
-import com.runestone.expeval_mk3.api.DiagnosticSeverity;
+import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostics;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.SourceSpan;
 
@@ -116,6 +115,7 @@ public final class SemanticResolver {
         private final Map<NodeId, NumericFact> numericFacts = new HashMap<>();
         private final List<DeferredCheck> deferredChecks = new ArrayList<>();
         private final Map<String, SymbolBinding> visibleBindings = new LinkedHashMap<>();
+        private final Set<String> invalidBindings = new HashSet<>();
         private final Map<String, CollectionShape> visibleCollectionShapes = new HashMap<>();
         private final List<SymbolBinding> externalBindings = new ArrayList<>();
         private final List<SymbolBinding> currentItemBindings = new ArrayList<>();
@@ -177,9 +177,11 @@ public final class SemanticResolver {
             Resolution value = resolveExpression(assignment.expression(), null);
             if (value.pending()) {
                 emptyCollectionDiagnostic(value.pendingSpan());
+                markInvalidTarget(assignment.target());
                 return;
             }
             if (value.invalid()) {
+                markInvalidTarget(assignment.target());
                 return;
             }
             RuntimeNullability valueNullability = nullabilityOf(assignment.expression().id());
@@ -214,9 +216,11 @@ public final class SemanticResolver {
                             DiagnosticCode.SEMANTIC_ASSIGNMENT_TARGET_MISMATCH,
                             "Destructuring assignment requires a collection value",
                             target.sourceSpan());
+                    markInvalidTarget(target);
                     return;
                 }
                 if (!destructuringTargetsAreUnique(destructuring)) {
+                    markInvalidTarget(target);
                     return;
                 }
                 CollectionShape shape = collectionShapes.get(valueNodeId);
@@ -226,6 +230,7 @@ public final class SemanticResolver {
                                 DiagnosticCode.SEMANTIC_DESTRUCTURING_SIZE_MISMATCH,
                                 "Destructuring source has fewer elements than targets",
                                 destructuring.sourceSpan());
+                        markInvalidTarget(target);
                         return;
                     }
                 } else {
@@ -242,7 +247,17 @@ public final class SemanticResolver {
                 }
                 return;
             }
-            diagnostic(DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION, "Unsupported assignment target", target.sourceSpan());
+            throw new IllegalStateException("Unsupported assignment target: " + target.getClass().getName());
+        }
+
+        private void markInvalidTarget(AssignmentTargetNode target) {
+            if (target instanceof IdentifierAssignmentTargetNode identifier) {
+                invalidBindings.add(identifier.name());
+            } else if (target instanceof DestructuringAssignmentTargetNode destructuring) {
+                for (IdentifierAssignmentTargetNode element : destructuring.elements()) {
+                    invalidBindings.add(element.name());
+                }
+            }
         }
 
         private boolean destructuringTargetsAreUnique(DestructuringAssignmentTargetNode destructuring) {
@@ -283,6 +298,7 @@ public final class SemanticResolver {
             }
             SymbolBinding binding = SymbolBinding.internal(name, type, nextFrameSlot++, runtimeNullability);
             visibleBindings.put(name, binding);
+            invalidBindings.remove(name);
             return binding;
         }
 
@@ -1124,11 +1140,7 @@ public final class SemanticResolver {
                 }
                 return resolveCollectionOperation(call, receiverType, receiverShape, receiverPure);
             }
-            diagnostic(
-                    DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION,
-                    "Navigation link is not supported by this compilation slice",
-                    link.sourceSpan());
-            return LinkResolution.invalidResolution();
+            throw new IllegalStateException("Unsupported navigation link: " + link.getClass().getName());
         }
 
         private LinkResolution resolveIndexSubscript(
@@ -1409,11 +1421,7 @@ public final class SemanticResolver {
             if (receiverType instanceof ObjectType objectType) {
                 return resolveRegisteredProperty(property, objectType, receiverPure);
             }
-            diagnostic(
-                    DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION,
-                    "Property navigation is not supported by this compilation slice",
-                    property.sourceSpan());
-            return LinkResolution.invalidResolution();
+            throw new IllegalStateException("Unsupported property receiver type: " + receiverType);
         }
 
         private LinkResolution resolveRegisteredProperty(
@@ -1542,11 +1550,7 @@ public final class SemanticResolver {
             }
             if (!supportedOperation(descriptor.identity())) {
                 resolveUnsupportedOperationArguments(call);
-                diagnostic(
-                        DiagnosticCode.SEMANTIC_UNSUPPORTED_EXPRESSION,
-                        "Collection operation '" + descriptor.name() + "' is not supported by this compilation slice",
-                        call.sourceSpan());
-                return LinkResolution.invalidResolution();
+                throw new IllegalStateException("Unsupported registered collection operation: " + descriptor.name());
             }
             if (call.arguments().size() != descriptor.arguments().size()) {
                 resolveUnsupportedOperationArguments(call);
@@ -1892,6 +1896,9 @@ public final class SemanticResolver {
 
         private Resolution resolveIdentifier(IdentifierNode identifier) {
             SymbolBinding binding = visibleBindings.get(identifier.name());
+            if (invalidBindings.contains(identifier.name())) {
+                return Resolution.invalidResolution();
+            }
             if (binding == null) {
                 binding = bindExternalIfDeclared(identifier.name());
             }
@@ -2021,10 +2028,7 @@ public final class SemanticResolver {
         }
 
         private void nullableDiagnostic(DiagnosticCode code, String message, SourceSpan span, String suggestion) {
-            diagnostics.add(ExpressionDiagnostic.builder(DiagnosticCategory.SEMANTIC, DiagnosticSeverity.ERROR, code.name(), message)
-                    .primarySpan(span)
-                    .suggestion(suggestion)
-                    .build());
+            diagnostics.add(ExpressionDiagnostics.create(code, message, span, suggestion));
         }
 
         private void recordCollectionShape(NodeId nodeId, ExpressionType type, CollectionShape shape) {
@@ -2034,11 +2038,11 @@ public final class SemanticResolver {
         }
 
         private void diagnostic(DiagnosticCode code, String message, SourceSpan span) {
-            diagnostics.add(ExpressionDiagnostic.error(DiagnosticCategory.SEMANTIC, code.name(), message, span));
+            diagnostics.add(ExpressionDiagnostics.create(code, message, span));
         }
 
         private void warning(DiagnosticCode code, String message, SourceSpan span) {
-            warnings.add(ExpressionDiagnostic.warning(DiagnosticCategory.SEMANTIC, code.name(), message, span));
+            warnings.add(ExpressionDiagnostics.create(code, message, span));
         }
 
         private static boolean orderable(ExpressionType type) {

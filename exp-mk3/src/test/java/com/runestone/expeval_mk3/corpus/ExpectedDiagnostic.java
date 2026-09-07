@@ -5,7 +5,7 @@ import com.runestone.expeval_mk3.api.SourceSpan;
 import java.util.List;
 import java.util.Objects;
 
-record ExpectedDiagnostic(String category, String code, List<SourceSpan> spans) implements ExpectedOutcome {
+record ExpectedDiagnostic(String category, String code, List<SourceSpan> spans) {
 
     ExpectedDiagnostic {
         Objects.requireNonNull(category, "category");

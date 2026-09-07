@@ -3,7 +3,7 @@ package com.runestone.expeval_mk3.internal.parser;
 import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorLexer;
 import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorParser;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
-import com.runestone.expeval_mk3.api.DiagnosticCategory;
+import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostics;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.SourceSpan;
 import org.antlr.v4.runtime.BailErrorStrategy;
@@ -19,7 +19,6 @@ import org.antlr.v4.runtime.atn.PredictionMode;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
@@ -89,7 +88,7 @@ public final class ExpressionParser {
         List<ExpressionDiagnostic> diagnostics = new ArrayList<>(lexicalDiagnostics.size() + errorStrategy.diagnostics.size());
         diagnostics.addAll(lexicalDiagnostics);
         diagnostics.addAll(errorStrategy.diagnostics);
-        diagnostics.sort(DIAGNOSTIC_ORDER);
+        diagnostics.sort(ExpressionDiagnostics.CANONICAL_ORDER);
 
         if (diagnostics.isEmpty()) {
             return new ParseSuccess(tree, PredictionPath.LL_FALLBACK);
@@ -109,23 +108,13 @@ public final class ExpressionParser {
         List<ExpressionDiagnostic> diagnostics = new ArrayList<>();
         for (Token token : tokens.getTokens()) {
             if (token.getType() == ExpressionEvaluatorLexer.ERROR_CHAR) {
-                diagnostics.add(ExpressionDiagnostic.error(
-                        DiagnosticCategory.PARSE,
-                        DiagnosticCode.PARSE_UNRECOGNIZED_CHARACTER.name(),
+                diagnostics.add(ExpressionDiagnostics.create(
+                        DiagnosticCode.PARSE_UNRECOGNIZED_CHARACTER,
                         "Unrecognized character: " + token.getText(),
                         tokenSpan(token)));
             }
         }
         return diagnostics;
-    }
-
-    private static final Comparator<ExpressionDiagnostic> DIAGNOSTIC_ORDER = Comparator
-            .comparingInt((ExpressionDiagnostic diagnostic) -> diagnostic.primarySpan().orElseThrow().offset())
-            .thenComparingInt(ExpressionParser::diagnosticPriority)
-            .thenComparingInt(diagnostic -> diagnostic.primarySpan().orElseThrow().endOffset());
-
-    private static int diagnosticPriority(ExpressionDiagnostic diagnostic) {
-        return diagnostic.code().equals(DiagnosticCode.PARSE_UNRECOGNIZED_CHARACTER.name()) ? 0 : 1;
     }
 
     private static SourceSpan tokenSpan(Token token) {
@@ -201,9 +190,8 @@ public final class ExpressionParser {
         @Override
         protected void reportNoViableAlternative(Parser recognizer, NoViableAltException exception) {
             if (isMissingClosingTokenAtEof(recognizer, exception.getOffendingToken(), source)) {
-                diagnostics.add(ExpressionDiagnostic.error(
-                        DiagnosticCategory.PARSE,
-                        DiagnosticCode.PARSE_MISSING_TOKEN.name(),
+                diagnostics.add(ExpressionDiagnostics.create(
+                        DiagnosticCode.PARSE_MISSING_TOKEN,
                         "Missing token",
                         eofSpan(source)));
                 return;
@@ -266,9 +254,8 @@ public final class ExpressionParser {
 
         @Override
         protected void reportMissingToken(Parser recognizer) {
-            diagnostics.add(ExpressionDiagnostic.error(
-                    DiagnosticCategory.PARSE,
-                    DiagnosticCode.PARSE_MISSING_TOKEN.name(),
+            diagnostics.add(ExpressionDiagnostics.create(
+                    DiagnosticCode.PARSE_MISSING_TOKEN,
                     "Missing token",
                     insertionSpan(recognizer, source)));
         }
@@ -282,7 +269,7 @@ public final class ExpressionParser {
             SourceSpan span = token == null || token.getType() == Token.EOF
                     ? eofSpan(source)
                     : tokenSpan(token);
-            diagnostics.add(ExpressionDiagnostic.error(DiagnosticCategory.PARSE, code.name(), message, span));
+            diagnostics.add(ExpressionDiagnostics.create(code, message, span));
         }
     }
 }

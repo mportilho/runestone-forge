@@ -40,7 +40,7 @@ class ExecutionPlanCorpusEquivalenceTest {
     static Stream<Arguments> plannedCases() {
         return ExpressionCaseLoader.loadAll().stream()
                 .filter(expressionCase -> !ExpressionCaseSuite.PARSER.includes(expressionCase))
-                .filter(expressionCase -> !(expressionCase.expectedOutcome() instanceof ExpectedDiagnostic))
+                .filter(expressionCase -> !(expressionCase.expectedOutcome() instanceof ExpectedDiagnostics))
                 .map(expressionCase -> Arguments.of(expressionCase.id(), expressionCase));
     }
 

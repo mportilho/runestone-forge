@@ -74,17 +74,21 @@ class ExpressionCorpusExecutionTest {
             return;
         }
 
-        ExpectedDiagnostic expected = (ExpectedDiagnostic) expressionCase.expectedOutcome();
+        ExpectedDiagnostics expected = (ExpectedDiagnostics) expressionCase.expectedOutcome();
         ExpressionCompilationResult result =
                 ExpressionEngine.defaultEngine().compile(expressionCase.source(), ExpressionCaseEnvironments.environment(expressionCase));
         assertThat(result)
                 .as(expressionCase.id())
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure -> {
-                    ExpressionDiagnostic actual = failure.diagnostics().getFirst();
-                    assertThat(actual.category().name()).isEqualTo(expected.category());
-                    assertThat(actual.code()).isEqualTo(expected.code());
-                    if (!expected.spans().isEmpty()) {
-                        assertThat(actual.primarySpan()).contains(expected.spans().getFirst());
+                    assertThat(failure.diagnostics()).hasSameSizeAs(expected.diagnostics());
+                    for (int index = 0; index < expected.diagnostics().size(); index++) {
+                        ExpressionDiagnostic actual = failure.diagnostics().get(index);
+                        ExpectedDiagnostic expectedDiagnostic = expected.diagnostics().get(index);
+                        assertThat(actual.category().name()).isEqualTo(expectedDiagnostic.category());
+                        assertThat(actual.code()).isEqualTo(expectedDiagnostic.code());
+                        if (!expectedDiagnostic.spans().isEmpty()) {
+                            assertThat(actual.primarySpan()).contains(expectedDiagnostic.spans().getFirst());
+                        }
                     }
                 });
     }

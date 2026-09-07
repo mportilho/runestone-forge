@@ -96,14 +96,18 @@ final class ExpressionCaseLoader {
                     requiredText(runtimeError, "messageContains", path));
         }
         if (kind == CaseKind.INVALID) {
-            JsonNode diagnostic = requiredObject(expected, "diagnostic", path);
-            String category = requiredText(diagnostic, "category", path);
-            String code = requiredText(diagnostic, "code", path);
-            List<SourceSpan> spans = diagnosticSpans(diagnostic, category, code, path);
-            return new ExpectedDiagnostic(
-                    category,
-                    code,
-                    spans);
+            JsonNode diagnostics = expected == null ? null : expected.get("diagnostics");
+            if (diagnostics != null) {
+                if (!diagnostics.isArray() || diagnostics.isEmpty()) {
+                    throw new IllegalArgumentException("expected.diagnostics must be a non-empty array in " + path);
+                }
+                List<ExpectedDiagnostic> entries = new ArrayList<>(diagnostics.size());
+                for (JsonNode diagnostic : diagnostics) {
+                    entries.add(expectedDiagnostic(diagnostic, path));
+                }
+                return new ExpectedDiagnostics(entries);
+            }
+            return new ExpectedDiagnostics(List.of(expectedDiagnostic(requiredObject(expected, "diagnostic", path), path)));
         }
         if (phase == CasePhase.RUNTIME) {
             JsonNode expectedObject = requiredObject(root, "expected", path);
@@ -113,6 +117,12 @@ final class ExpressionCaseLoader {
                     expectedObject.get("result").deepCopy());
         }
         return NoExpectedOutcome.INSTANCE;
+    }
+
+    private static ExpectedDiagnostic expectedDiagnostic(JsonNode diagnostic, Path path) {
+        String category = requiredText(diagnostic, "category", path);
+        String code = requiredText(diagnostic, "code", path);
+        return new ExpectedDiagnostic(category, code, diagnosticSpans(diagnostic, category, code, path));
     }
 
     private static void validateExpectedResult(JsonNode expected, Path path) {

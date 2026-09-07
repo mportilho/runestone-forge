@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.internal.ast;
 
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostics;
 
 import java.util.List;
 import java.util.Objects;
@@ -12,6 +13,6 @@ public record SemanticAstBuildFailure(List<ExpressionDiagnostic> diagnostics) im
         if (diagnostics.isEmpty()) {
             throw new IllegalArgumentException("diagnostics must not be empty");
         }
-        diagnostics = List.copyOf(diagnostics);
+        diagnostics = ExpressionDiagnostics.canonicalCopy(diagnostics);
     }
 }

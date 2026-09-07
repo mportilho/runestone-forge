@@ -4,7 +4,10 @@ kind: invalid
 source: 'a # b'
 coverage: [diagnostic]
 expected:
-  diagnostic:
-    category: PARSE
-    code: PARSE_UNRECOGNIZED_CHARACTER
-    span: {offset: 2, endOffset: 3, line: 1, column: 3}
+  diagnostics:
+    - category: PARSE
+      code: PARSE_NO_VIABLE_ALTERNATIVE
+      span: {offset: 2, endOffset: 3, line: 1, column: 3}
+    - category: PARSE
+      code: PARSE_UNRECOGNIZED_CHARACTER
+      span: {offset: 2, endOffset: 3, line: 1, column: 3}

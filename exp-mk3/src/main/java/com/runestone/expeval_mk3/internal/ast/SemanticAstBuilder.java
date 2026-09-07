@@ -3,7 +3,7 @@ package com.runestone.expeval_mk3.internal.ast;
 import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorBaseVisitor;
 import com.runestone.expeval_mk3.internal.grammar.ExpressionEvaluatorParser;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
-import com.runestone.expeval_mk3.api.DiagnosticCategory;
+import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostics;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.internal.parser.ParseSuccess;
 import com.runestone.expeval_mk3.api.SourceSpan;
@@ -770,7 +770,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     }
 
     private void addDiagnostic(DiagnosticCode code, String message, SourceSpan span) {
-        diagnostics.add(ExpressionDiagnostic.error(DiagnosticCategory.SEMANTIC, code.name(), message, span));
+        diagnostics.add(ExpressionDiagnostics.create(code, message, span));
     }
 
     private static Optional<LocalDate> parseDate(String value) {

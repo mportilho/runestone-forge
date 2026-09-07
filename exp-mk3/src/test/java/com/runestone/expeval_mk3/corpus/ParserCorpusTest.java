@@ -47,7 +47,7 @@ class ParserCorpusTest {
             if (!isParserParseInvalidCase(expressionCase)) {
                 continue;
             }
-            ExpectedDiagnostic expected = (ExpectedDiagnostic) expressionCase.expectedOutcome();
+            ExpectedDiagnostics expected = (ExpectedDiagnostics) expressionCase.expectedOutcome();
 
             ParseResult result = parser.parse(expressionCase.source());
 
@@ -55,16 +55,18 @@ class ParserCorpusTest {
                     .as("%s", expressionCase.path())
                     .isInstanceOf(ParseFailure.class);
             ParseFailure failure = (ParseFailure) result;
-            ExpressionDiagnostic primary = failure.diagnostics().getFirst();
-            assertThat(primary.category().name())
-                    .as("%s", expressionCase.path())
-                    .isEqualTo(expected.category());
-            assertThat(primary.code())
-                    .as("%s", expressionCase.path())
-                    .isEqualTo(expected.code());
-            assertThat(primary.primarySpan())
-                    .as("%s", expressionCase.path())
-                    .contains(expected.requiredSpan());
+            assertThat(failure.diagnostics()).as("%s", expressionCase.path())
+                    .hasSameSizeAs(expected.diagnostics());
+            for (int index = 0; index < expected.diagnostics().size(); index++) {
+                ExpressionDiagnostic actual = failure.diagnostics().get(index);
+                ExpectedDiagnostic expectedDiagnostic = expected.diagnostics().get(index);
+                assertThat(actual.category().name()).as("%s diagnostic %d", expressionCase.path(), index)
+                        .isEqualTo(expectedDiagnostic.category());
+                assertThat(actual.code()).as("%s diagnostic %d", expressionCase.path(), index)
+                        .isEqualTo(expectedDiagnostic.code());
+                assertThat(actual.primarySpan()).as("%s diagnostic %d", expressionCase.path(), index)
+                        .contains(expectedDiagnostic.requiredSpan());
+            }
         }
     }
 
@@ -86,7 +88,8 @@ class ParserCorpusTest {
         if (expressionCase.kind() != CaseKind.INVALID || expressionCase.phase() != CasePhase.PARSER) {
             return false;
         }
-        ExpectedDiagnostic expected = (ExpectedDiagnostic) expressionCase.expectedOutcome();
-        return DiagnosticCategory.PARSE.name().equals(expected.category());
+        ExpectedDiagnostics expected = (ExpectedDiagnostics) expressionCase.expectedOutcome();
+        return expected.diagnostics().stream()
+                .allMatch(diagnostic -> DiagnosticCategory.PARSE.name().equals(diagnostic.category()));
     }
 }

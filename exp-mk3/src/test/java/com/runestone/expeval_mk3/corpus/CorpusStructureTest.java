@@ -62,13 +62,12 @@ class CorpusStructureTest {
     void executableCorpusDiagnosticsUseStableCodes() {
         for (ExpressionCase expressionCase : ExpressionCaseLoader.loadAll()) {
             if ((expressionCase.phase() != CasePhase.SEMANTIC && expressionCase.phase() != CasePhase.RUNTIME)
-                    || !(expressionCase.expectedOutcome() instanceof ExpectedDiagnostic expected)) {
+                    || !(expressionCase.expectedOutcome() instanceof ExpectedDiagnostics expected)) {
                 continue;
             }
 
-            assertThat(expected.code())
-                    .as("%s", expressionCase.path())
-                    .isNotEqualTo("TBD");
+            assertThat(expected.diagnostics()).as("%s", expressionCase.path()).allSatisfy(diagnostic ->
+                    assertThat(diagnostic.code()).isNotEqualTo("TBD"));
         }
     }
 

@@ -2,13 +2,14 @@ package com.runestone.expeval_mk3.internal.semantics;
 
 import com.runestone.expeval_mk3.api.DiagnosticSeverity;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostics;
 
 import java.util.List;
 
 public record SemanticResolutionFailure(List<ExpressionDiagnostic> diagnostics) implements SemanticResolutionResult {
 
     public SemanticResolutionFailure {
-        diagnostics = List.copyOf(diagnostics);
+        diagnostics = ExpressionDiagnostics.canonicalCopy(diagnostics);
         if (diagnostics.isEmpty()) {
             throw new IllegalArgumentException("diagnostics must not be empty");
         }

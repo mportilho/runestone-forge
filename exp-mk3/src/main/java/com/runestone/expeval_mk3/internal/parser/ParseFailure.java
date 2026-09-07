@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.internal.parser;
 
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
+import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostics;
 
 import java.util.List;
 import java.util.Objects;
@@ -12,7 +13,7 @@ public record ParseFailure(List<ExpressionDiagnostic> diagnostics, PredictionPat
         if (diagnostics.isEmpty()) {
             throw new IllegalArgumentException("diagnostics must not be empty");
         }
-        diagnostics = List.copyOf(diagnostics);
+        diagnostics = ExpressionDiagnostics.canonicalCopy(diagnostics);
         Objects.requireNonNull(predictionPath, "predictionPath");
     }
 }

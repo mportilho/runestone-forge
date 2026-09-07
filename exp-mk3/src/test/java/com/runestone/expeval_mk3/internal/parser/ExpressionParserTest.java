@@ -2,6 +2,7 @@ package com.runestone.expeval_mk3.internal.parser;
 
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.api.DiagnosticCategory;
+import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.SourceSpan;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.junit.jupiter.api.DisplayName;
@@ -37,9 +38,12 @@ class ExpressionParserTest {
         assertThat(result).isInstanceOf(ParseFailure.class);
         ParseFailure failure = (ParseFailure) result;
         assertThat(failure.predictionPath()).isEqualTo(PredictionPath.LL_FALLBACK);
-        assertThat(failure.diagnostics()).first().satisfies(diagnostic -> {
+        assertThat(failure.diagnostics()).extracting(ExpressionDiagnostic::code)
+                .containsExactly(
+                        DiagnosticCode.PARSE_NO_VIABLE_ALTERNATIVE.code(),
+                        DiagnosticCode.PARSE_UNRECOGNIZED_CHARACTER.code());
+        assertThat(failure.diagnostics()).allSatisfy(diagnostic -> {
             assertThat(diagnostic.category()).isEqualTo(DiagnosticCategory.PARSE);
-            assertThat(diagnostic.code()).isEqualTo(DiagnosticCode.PARSE_UNRECOGNIZED_CHARACTER.name());
             assertThat(diagnostic.primarySpan()).contains(new SourceSpan(2, 3, 1, 3));
         });
     }

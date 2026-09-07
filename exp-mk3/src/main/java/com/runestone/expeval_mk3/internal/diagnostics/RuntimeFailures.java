@@ -1,6 +1,5 @@
 package com.runestone.expeval_mk3.internal.diagnostics;
 
-import com.runestone.expeval_mk3.api.DiagnosticCategory;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.ExpressionExecutionException;
 import com.runestone.expeval_mk3.api.SourceSpan;
@@ -93,6 +92,6 @@ public final class RuntimeFailures {
     }
 
     private static ExpressionDiagnostic diagnostic(DiagnosticCode code, String message, SourceSpan span) {
-        return ExpressionDiagnostic.error(DiagnosticCategory.RUNTIME, code.name(), message, span);
+        return ExpressionDiagnostics.create(code, message, span);
     }
 }
