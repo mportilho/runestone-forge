@@ -1,5 +1,41 @@
 # Performance History
 
+## 2026-08-30 - Reexecucao dos nove cenarios de comparacao no MK3
+
+Purpose: check the current MK3 runtime across the nine canonical legacy-comparison scenarios after
+issues #156, #157, and #158. Only the MK3 methods were rerun because the changes are confined to
+`exp-mk3`; the previous-module and first-MK3 columns below are the first samples already recorded in
+this file, not same-session measurements. Lower latency is better. The two delta columns use
+`(reference - current) / reference`, so positive values mean the current MK3 is faster.
+
+Environment: Eclipse Temurin 21.0.8+9-LTS; Maven 3.9.16; JMH 1.37; Linux x86_64; Intel Core
+i7-7700HQ; `-Xms1g -Xmx1g`; one thread; three forks; 5x500 ms warmup and 10x500 ms measurement; 99.9%
+confidence intervals; GC profiler enabled; commit `66ea9aa`.
+
+| Scenario | Previous module, first sample (ns/op / B/op) | MK3, first sample (ns/op / B/op) | MK3 current (ns/op / B/op) | Current vs first MK3 | Current vs previous module |
+|---|---:|---:|---:|---:|---:|
+| 12 variables | 666.96 / 704 | 1,148.34 / 1,280 | 468.50 +/- 5.29 / 696 | +59.20% | +29.76% |
+| 4 function calls, arity 3 | 609.00 / 544 | 1,127.14 / 1,112 | 476.95 +/- 7.14 / 536 | +57.68% | +21.68% |
+| 3-level object navigation | 132.21 / 88 | 86.90 / 112 | 64.11 +/- 1.40 / 56 | +26.22% | +51.51% |
+| 7-element membership, late hit/miss | 76.63 / 64 | 42.42 / 24 | 42.02 +/- 0.62 / 24 | +0.95% | +45.17% |
+| Collection filter followed by index | 266.72 / 120 | 155.52 / 168 | 156.38 +/- 3.58 / 168 | -0.55% | +41.37% |
+| Dynamic conditional, alternating branches | 135.03 / 92 | 119.51 / 52 | 120.60 +/- 3.78 / 62.67 | -0.91% | +10.68% |
+| Dynamic collection override, direct index | 62.80 / 64 | 93.66 / 184 | 61.76 +/- 1.22 / 112 | +34.06% | +1.66% |
+| Anchored regex, alternating match/miss | 149.23 / 272 | 135.10 / 264 | 134.67 +/- 4.76 / 264 | +0.32% | +9.75% |
+| Four numeric comparisons joined by `xor` | 276.71 / 72 | 157.59 / 64 | 156.31 +/- 4.21 / 64 | +0.81% | +43.51% |
+
+Verdict: **no runtime regression detected.** Seven current scores are below their first MK3 sample.
+The collection-filter and conditional increases are 0.55% and 0.91%, respectively, both inside the
+1% inconclusive band and with overlapping confidence intervals. Allocation is lower or unchanged in
+eight scenarios; the conditional's `62.67 +/- 10.25 B/op` result is variable and is not on a path
+changed by these issues. Issues #156 and #157 optimize environment/catalog construction outside this
+steady-state benchmark, while issue #158 optimizes the array entry point for registered methods with
+four or more arguments; the arity-three function scenario uses a dedicated entry point. This run is
+therefore a broad regression check, not attribution evidence for those individual gains.
+
+Benchmark: `com.runestone.expeval_mk3.perf.jmh.LegacyComparisonBenchmark` (nine `*Mk3` scenario
+methods). Raw result: `/tmp/performance-benchmark/legacy-comparison-mk3-current-2026-08-30.json`.
+
 ## 2026-08-30 - Mensagens indexadas lazy na invocacao Java (issue #158)
 
 Purpose: construct the indexed null-validation message in `JavaMethodDescriptor.invokeArray` only
