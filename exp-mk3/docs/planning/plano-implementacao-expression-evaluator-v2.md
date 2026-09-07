@@ -13,8 +13,8 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 | **M1 — Walking skeleton** | `compile → compute` funcionando para aritmética/lógica decimal, sem otimizações | 0–5 |
 | **M2 — Feature-complete** | Toda a linguagem da gramática coberta: navegação, filtros, coleções, `?.`, `@` | 6 |
 | **M3 — Desempenho** | Folding/CSE, nós especializados preservando semântica decimal, cache de compilação por engine, metas JMH atingidas | 7–9 |
-| **M4 — GA** | Auditoria, diagnósticos de migração v1→v2, endurecimento e verificação diferencial | 10–12 |
-| **Fase 2 (pós-GA)** | Parser Pratt, Tier 1 de compilação, fusão de pipelines de coleção | 13 |
+| **M4 — Endurecimento** | Auditoria, proteção para fontes não confiáveis e verificação reproduzível da implementação | 10 e 12 |
+| **Fase 2 (pós-M4)** | Parser Pratt, Tier 1 de compilação, fusão de pipelines de coleção | 13 |
 
 ---
 
@@ -25,10 +25,10 @@ Cada etapa lista objetivo, entregas, critérios de aceite e dependências. As re
 **Entregas**
 - Estrutura de módulos (sugestão: módulo único com pacotes `parser`, `ast`, `semantics`, `types`, `env`, `plan`, `runtime`, `cache`, `internal.memory`, `api`; separar em módulos Maven/Gradle apenas se o Pratt da fase 2 exigir isolar a dependência do ANTLR).
 - Plugin ANTLR integrado ao build gerando lexer/parser a partir do `.g4` versionado.
-- CI com: testes unitários, testes de propriedade (jqwik ou similar), harness JMH executável localmente e perfil de alocação (JFR/async-profiler) preparado como job opcional.
-- **Corpus de expressões**: repositório de casos sintéticos por feature e dos casos reais v1 disponíveis, em formato dado (arquivo por caso: fonte, ambiente, entradas, resultado esperado). O corpus alimenta testes de todas as etapas seguintes; ingestão real continua incremental e sua completude é gate dos testes diferenciais da Etapa 11, não de M1.
+- Verificação automatizada local com testes unitários, testes de propriedade, harness JMH executável e perfil de alocação preparado; CI/CD não faz parte do fechamento atual.
+- **Corpus de expressões**: repositório de casos sintéticos por feature em formato dado (arquivo por caso: fonte, ambiente, entradas, resultado esperado). O corpus alimenta testes de todas as etapas seguintes; migração e corpus real v1 foram cancelados com a Etapa 11.
 
-**Critérios de aceite:** build reprodutível; `.g4` compila sem warnings do ANTLR; corpus sintético inicial com ≥ 100 expressões cobrindo cada construção da gramática e todos os casos reais então disponíveis incorporados; pipeline de CI verde.
+**Critérios de aceite:** build reprodutível; `.g4` compila sem warnings do ANTLR; corpus sintético inicial com ≥ 100 expressões cobrindo cada construção da gramática; verificação local verde.
 
 ---
 
@@ -204,8 +204,8 @@ Saíram da Etapa 7: **eliminação de atribuições mortas**, porque uma atribui
 **Objetivo:** estabelecer o Engine de Expressão como fronteira longeva de compilação, com reuso limitado e deduplicação concorrente por `(source, environmentId)`, e fechar o marco de desempenho sem adicionar custo ao caminho de execução. Na carga financeira principal, que compila poucas fórmulas e as executa muitas vezes, o cache é proteção contra recompilação de integração e duplicação de planos, não a fonte do ganho por contrato.
 
 **Entregas**
-- Um cache Caffeine limitado por Engine de Expressão, com chave textual exata `(source, environmentId)` — sem normalização, tipo de visão ou segundo nível global, e com compartilhamento limitado à reutilização da mesma instância de ambiente dentro daquele engine. O valor é o `ExpressionCompilationResult` completo: sucessos e falhas determinísticas obedecem ao mesmo single-flight e à mesma política de capacidade/expiração, sem cache negativo separado; falhas internas inesperadas não instalam entrada. Em sucesso, o valor compilado é compartilhado por `asResult()`/`asMath()`/`asLogical()`/`asAssignments()` (plano + warnings/metadados mínimos de visão e Memoria de Calculo; AST, `SemanticModel`, fonte duplicada e parse tree não retidos no valor).
-- `ExpressionEngine` como único ponto público de compilação, com `defaultEngine()` singleton e `builder()` para engines isolados; ambos oferecem `compile`/`compileOrThrow`. O builder recebe `Clock` (default UTC) e `CacheConfig`; este possui `defaults()` e builder imutável, limita por quantidade positiva de resultados (default 1024), sem weigher, e admite apenas expiração ociosa positiva opcional, desabilitada por default. A fachada estática `ExpressionCompiler` deixa de ser API pública; não há bypass público, cache desabilitável, estatísticas, invalidação, manutenção ou lifecycle para expor na primeira versão.
+- Um cache Caffeine limitado por Engine de Expressão, com chave textual exata `(source, environmentId)` — sem normalização, tipo de visão ou segundo nível global, e com compartilhamento limitado à reutilização da mesma instância de ambiente dentro daquele engine. O valor é o `ExpressionCompilationResult` completo: sucessos e falhas determinísticas obedecem ao mesmo single-flight e à mesma política de capacidade/expiração, sem cache negativo separado; falhas internas inesperadas não instalam entrada. Em sucesso, o valor compilado é compartilhado por `asResult()`/`asMath()`/`asLogical()`/`asAssignments()` (plano + warnings/metadados mínimos de visão e Memoria de Calculo; AST, `SemanticModel`, fonte duplicada e parse tree não retidos no valor). A Etapa 12 preserva o limite exato de entradas e adiciona Peso Retido de Compilacao conservador para payload controlado por Fonte de Expressao Nao Confiavel.
+- `ExpressionEngine` como único ponto público de compilação, com `defaultEngine()` singleton e `builder()` para engines isolados; ambos oferecem `compile`/`compileOrThrow`. O builder recebe `Clock` (default UTC) e `CacheConfig`; este possui `defaults()` e builder imutável, limita por quantidade positiva de resultados (default 1024), Peso Retido de Compilacao positivo e expiração ociosa positiva opcional, desabilitada por default. A fachada estática `ExpressionCompiler` deixa de ser API pública; não há bypass público, cache desabilitável, estatísticas, invalidação, manutenção ou lifecycle para expor na primeira versão.
 - `RuntimeServices`, incluindo `Clock`, pertence ao engine/expressão compilada e não à identidade do ambiente nem ao Plano Imutável.
 - Nenhum contador de execuções na Etapa 9: a observação necessária à promoção nasce e é medida com o Tier 1 opcional da Etapa 13, sem antecipar escrita compartilhada no caminho quente.
 - Parser compartilhado pelo módulo, com warm-up síncrono único na construção do primeiro engine sobre expressões internas fixas e liberação da fonte, tokens e parse tree do contexto da thread depois da materialização da AST. O carregador do cache usa o mesmo seam interno de compilação sem cache que testes e JMH; esse seam não é público.
@@ -256,47 +256,54 @@ falha, ordem, null, folding, CSE e opacidade de colecao; memoria nao retém plan
 execucoes concorrentes permanecem isoladas; travessia indexada aloca zero B/op no evaluator; JOL/JFR
 validam layout e alocacao; o gate final e repetido
 no Java 21 de deployment. Os gates de software foram aceitos no Temurin 21.0.8 em 2026-08-30, com a
-regressao do branch obrigatorio medida e justificada no historico de desempenho; o contador de hardware
-permanece pendente por permissao do host. O plano detalhado e o ADR 0023 sao normativos para a
+regressao do branch obrigatorio medida e justificada no historico de desempenho. O contador de hardware
+foi dispensado durante o planejamento da Etapa 12; o plano detalhado e o ADR 0023 sao normativos para a
 implementacao.
 
 **Depende de:** Etapas 7–9.
 
 ---
 
-## Etapa 11 — Migração v1 → v2
+## Etapa 11 — Cancelada: migração v1 → v2
 
-**Objetivo:** a tabela da §20 como produto: cada quebra de linguagem vira diagnóstico guiado, mais o migrador opcional.
+**Status:** cancelada durante o planejamento da Etapa 12. Não haverá suporte à migração automática de
+expressões antigas.
 
-**Entregas**
-- Diagnósticos dedicados no parser/resolver: `=` + `;` → "atribuição agora usa `:=`"; `!` + `=` → "use `<>`"; `|` isolado / `||` inesperado → "módulo agora é `abs(x)`"; `INT-INT-INT` com forma de data → sugerir `d"…"`; `INT:INT` fora de subscript → sugerir `t"…"`; `<tipo>(…)` → mensagem sobre hints removidos com as duas alternativas.
-- Migrador de fonte (ferramenta separada): reescrita textual + validação por recompilação; relatório por expressão (migrada / precisa de revisão manual); execução em lote sobre base v1.
-- Testes diferenciais v1 × v2 sobre o corpus real: para expressões semanticamente inalteradas, mesmos resultados; para as alteradas, migração + equivalência pós-migração.
-
-**Critérios de aceite:** cada linha da tabela da §20 com teste de diagnóstico próprio; migrador converte o corpus v1 real com taxa de intervenção manual conhecida e documentada.
-
-**Depende de:** Etapas 1–6 (diagnósticos), 9 (migrador valida por compilação).
+Diagnósticos de migração, migrador textual, corpus real v1 e testes diferenciais v1 × v2 ficam fora do
+produto. Os resíduos sintáticos da linguagem v2 continuam documentados como parte da referência da
+linguagem, sem promessa de reconhecer ou reescrever toda forma legada.
 
 ---
 
-## Etapa 12 — Endurecimento, verificação e release (M4)
+## Etapa 12 — Endurecimento e verificação (M4)
 
-**Objetivo:** fechar §19 e §21 como estado permanente, não como esforço pontual.
+**Objetivo:** fechar §19 e §21 como estado permanente, protegendo Fonte de Expressão Não Confiável sem
+degradar o caminho quente escalar. O plano detalhado em `docs/planning/etapa-12/` e o ADR 0024 são
+normativos.
 
 **Entregas**
-- Revisão de exaustividade dos diagnósticos: toda falha originada na fonte com `SourceSpan`, todo diagnóstico com código estável e sugestão quando aplicável; falhas puramente externas podem não ter trecho primário; erros semânticos sempre acumulados.
-- Guard-rails multi-tenant sob teste de estresse: `maxCurrentItemDepth`, `maxMaterializedSize`, `maxFactorialInput`, expressões patológicas (aninhamento profundo, coleções enormes, regex custosas) sem degradar o processo.
-- Testes de concorrência: plano compartilhado entre threads com escopos isolados; pool de parser sob contenção.
-- Consolidação dos gates de CI: JMH com limiares, perfil de alocação como gate, property-based e diferenciais no pipeline.
-- Documentação: referência da linguagem (derivada do `.g4` + semântica do resolver), guia de API, guia de migração, tabela de precedência, resíduos documentados.
+- `ExpressionResourceLimits` com limites e tetos para compilação, forma de valores e Orcamento de
+  Trabalho de Avaliação; violações prováveis na compilação e Checagens Diferidas no runtime.
+- Regex Linear por RE2/J em operadores e built-ins, sem fallback backtracking.
+- Revisão de exaustividade dos diagnósticos com registro, ordem canônica, spans UTF-16, lista completa e
+  acumulação de erros independentes; esgotamento de recurso é terminal.
+- Peso Retido de Compilacao no cache, preservando limite exato de quantidade e gates da Etapa 9.
+- Stress concorrente de planos e parser `ThreadLocal` em threads de plataforma e virtuais, sem retenção
+  da entrada.
+- Gates locais reproduzíveis de JMH, alocação, property-based, retenção e equivalência; zero testes
+  pulados/desabilitados/abortados.
+- Referência da linguagem, diagnósticos, guia de API, guia de hardening e manifesto de desempenho.
 
-**Critérios de aceite:** todos os gates verdes por N execuções consecutivas de CI; documentação revisada; versão GA taggeada.
+**Critérios de aceite:** suíte cotidiana, perfil de stress e script integral verdes no Temurin 21 de
+referência; hot path escalar com zero B/op adicional e delta pareado em ±1%; coleções sem alocação por
+débito e até 5% de regressão; cache e Memoria de Calculo preservam seus gates; documentação revisada e
+nenhuma decisão aberta.
 
-**Depende de:** todas as anteriores.
+**Depende de:** Etapas 0–10. A Etapa 11 foi cancelada.
 
 ---
 
-## Etapa 13 — Fase 2 (pós-GA, opcional e independente entre si)
+## Etapa 13 — Fase 2 (pós-M4, opcional e independente entre si)
 
 Três trilhas já previstas na estratégia, cada uma ativável por demanda medida:
 
@@ -311,13 +318,13 @@ Três trilhas já previstas na estratégia, cada uma ativável por demanda medid
 ```text
 E0 ─┬─ E1 ── E2 ─┐
     └─ E3 ───────┴─ E3.5 ── E4 ── E5 (M1) ── E6 (M2) ── E7 ── E8 ── E9 (M3)
-                                                  │            │
-                                     E11 ◄────────┘      E10 ◄─┘
-                                                  │
-                                            E12 (M4) ── E13 (fase 2)
+                                                                       │
+                                                                      E10
+                                                                       │
+                                                                 E12 (M4) ── E13
 ```
 
-Paralelismos úteis: E3 corre em paralelo com E1–E2; os built-ins do catálogo (E3) e o corpus (E0) podem ser expandidos continuamente por uma pessoa dedicada; E3.5 bloqueia E4 porque remove conceitos obsoletos do contrato planejável; os diagnósticos de migração (E11) podem começar assim que parser e resolver estabilizarem, sem esperar o desempenho.
+Paralelismos úteis: E3 corre em paralelo com E1–E2; os built-ins do catálogo (E3) e o corpus (E0) podem ser expandidos continuamente por uma pessoa dedicada; E3.5 bloqueia E4 porque remove conceitos obsoletos do contrato planejável.
 
 ## Riscos principais e mitigações embutidas no plano
 
@@ -325,4 +332,4 @@ Paralelismos úteis: E3 corre em paralelo com E1–E2; os built-ins do catálogo
 - **Metas de desempenho descobertas tarde** → JMH baseline reproduzível nasce na E5; E7-E9 definem comparação/gates por benchmark depois de medir variabilidade, sem "fase de otimização" descolada da medição.
 - **Explosão de casos em navegação/`?.`** → E6 isolada como a etapa de maior superfície de teste, antes de qualquer especialização, para que E8 otimize comportamento já provado.
 - **Cache reter memória (AST/parse tree)** → critério de aceite explícito de não-retenção nas E2 e E9.
-- **Migração v1 subestimada** → todo corpus real disponível é executado desde cedo, mas sua ausência atual não bloqueia M1; ingestão e diferenciais completos são critério de aceite da E11, não tarefa de rodapé.
+- **Entrada hostil degradar o processo** → a E12 define orçamentos verificáveis para a Fonte de Expressão Não Confiável e para dados de execução, sem apresentar código Java registrado como sandboxado.

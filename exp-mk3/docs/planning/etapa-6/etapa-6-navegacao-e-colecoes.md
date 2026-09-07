@@ -218,5 +218,6 @@ Cada incremento fecha com `mvn -pl exp-mk3 -am test` verde. A decomposicao em is
 - Etapa 8 especializa acessores sobre metadata ja registrada, sem fallback reflexivo e sem alterar semantica de `?.`.
 - Etapa 9 mantem os vinculos de navegacao dentro do plano unico compartilhado entre visoes.
 - Etapa 10 marca propriedades e metodos registrados por identidade e trecho ja preservados. Operacoes de colecao e todos os seus descendentes sao fronteiras opacas; o plano unico recebe slots primitivos apenas nos nos marcaveis.
-- Etapa 11 mantem os diagnosticos de migracao independentes desta etapa.
+- A separacao original dos diagnosticos de migracao permanece historica; a Etapa 11 foi cancelada no
+  planejamento da Etapa 12.
 - Etapa 12 transforma a caracterizacao de M2 em gate e amplia stress de profundidade de Item Atual e de Limite de Materializacao.

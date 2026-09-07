@@ -112,7 +112,10 @@ ExpressionEngine engine = ExpressionEngine.builder()
 - `builder().expireAfterAccess(Duration)` e opcional e aceita apenas duracao positiva.
 - Ausencia de expiracao nao e representada por `null` ou `Optional` na API publica.
 - O `Ticker` monotono do Caffeine nao e o `Clock` da linguagem e permanece seam interno injetavel em testes.
-- Capacidade usa `maximumSize`, nao `maximumWeight`. Numero de nos nao mede constantes, defaults, providers, servicos, fonte ou falhas sem plano, e uma heuristica composta nao imporia limite real de heap.
+- **Revisado pela Etapa 12 / ADR 0024:** `maximumEntries` continua como limite publico exato, mas a
+  implementacao passa a usar um `maximumWeight` composto com o Peso Retido de Compilacao. A revisao
+  decorre do novo contrato de Fonte de Expressao Nao Confiavel; o peso e conservador e nao promete
+  medir o heap de componentes confiaveis compartilhados.
 
 Expiracao por acesso, e nao por escrita, evita recompilar periodicamente uma formula ativa. O limite de quantidade continua valendo com ou sem expiracao.
 
@@ -200,7 +203,7 @@ A matriz obrigatoria cobre:
 - mesma fonte e ambiente em engines distintos e com `Clock`s distintos;
 - single-flight concorrente em sucesso e falha, contado no seam interno;
 - falha interna seguida por nova tentativa;
-- capacidade com `maximumEntries` pequeno;
+- capacidade com `maximumEntries` pequeno e com `maximumRetainedWeight` pequeno;
 - expiracao por acesso com `Ticker` falso, sem `sleep`;
 - nova geracao depois de eviction e expiracao;
 - execucao correta de uma visao antiga depois da nova geracao;
@@ -282,6 +285,6 @@ Nao ha regra de parada entre os incrementos: a Etapa 9 e fronteira arquitetural 
 ## Impacto nas Etapas Posteriores
 
 - **Etapa 10:** a geracao residente compartilha o mesmo Plano Imutavel e seu schema de proveniencia entre `compute()` e `computeWithMemory()`. Nao ha segundo plano lazy, e a Memoria de Calculo nao muda a chave do cache nem retem a geracao depois que o plano se torna inalcancavel.
-- **Etapa 11:** o migrador valida fontes pelo Engine de Expressao; resultados invalidos repetidos podem compartilhar diagnosticos sem recompilar.
+- **Etapa 11:** cancelada durante o planejamento da Etapa 12; nao ha migrador consumidor do cache.
 - **Etapa 12:** amplia single-flight e execucao para estresse sustentado, confirma limites multi-tenant e integra perfil de alocacao no CI.
 - **Etapa 13:** se Tier 1 for ativado, ele introduz e mede sua propria politica de observacao. Nenhum contador herdado da Etapa 9 condiciona o desenho.

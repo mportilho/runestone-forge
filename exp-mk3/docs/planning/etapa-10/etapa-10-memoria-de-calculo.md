@@ -33,9 +33,10 @@ Gate de software concluido em 2026-08-30. O gate de deployment repetiu build, su
 inspecao de inlining no Eclipse Temurin 21.0.8+9-LTS. Permanecem como escolhas finais: recorder append-only local,
 branch mode-first, contagem durante captura, payload colunar exato e API indexada como percurso de
 persistencia. O resultado vinculante e seus comandos reproduziveis estao em
-`docs/perf/performance-history.md`, na entrada da issue #147. O fechamento da etapa permanece condicionado
-ao contador de branches em um host com acesso a eventos de hardware; este host usa
-`perf_event_paranoid=4` sem `CAP_PERFMON`.
+`docs/perf/performance-history.md`, na entrada da issue #147. A medicao por contador de hardware,
+indisponivel no host com `perf_event_paranoid=4` sem `CAP_PERFMON`, foi dispensada durante o
+planejamento da Etapa 12 em 2026-09-07. Os gates de software e a justificativa registrada encerram a
+etapa sem essa medicao adicional.
 
 ## Resultado Publico
 

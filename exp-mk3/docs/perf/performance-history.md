@@ -1,5 +1,62 @@
 # Performance History
 
+## 2026-09-07 - Etapa 12 reproducible local baseline (issue #160)
+
+Purpose: establish the pre-hardening functional and performance frontier and prove the local gate
+orchestrator before changing any hot path. The versioned manifest distinguishes binding gates from
+characterizations and covers scalar execution, collections, compilation, cache, current regex, and
+Calculation Memory. Regex is a characterization until the RE2/J implementation and linear-growth
+scenarios exist. Lower latency is better.
+
+Environment: Eclipse Temurin 21.0.8+9-LTS; Maven 3.9.16; JMH 1.37; Linux x86_64; Intel Core
+i7-7700HQ; `-Xms1g -Xmx1g`; one thread; three forks; 5x500 ms warm-up and 10x500 ms measurement;
+99.9% confidence intervals; GC profiler enabled; commit `3a1f5fa` with the issue #160 infrastructure
+changes in a dirty worktree. The complete functional run was green in 50.843 s: the MK3 module ran
+1,178 tests with 50 existing corpus/oracle aborts reported as skipped, which remain an explicit Etapa
+12 gap rather than an issue #160 failure.
+
+| Family / scenario | ns/op | B/op |
+|---|---:|---:|
+| Scalar arithmetic | 104.287 +/- 1.432 | 64.001 |
+| Scalar logic | 114.101 +/- 4.218 | 64.002 |
+| Registered function, arity one | 40.941 +/- 0.548 | 56.001 |
+| Collection `map` | 263.664 +/- 3.815 | 392.004 |
+| Collection `mapThenSum` | 239.940 +/- 4.929 | 432.003 |
+| Collection `allShortCircuit` | 28.075 +/- 0.975 | 24.000 |
+| Collection `sortBy` | 481.280 +/- 7.132 | 672.007 |
+| Collection `reduce` | 192.582 +/- 3.838 | 408.003 |
+| Wildcard materialization | 151.536 +/- 2.207 | 368.002 |
+| Collection filter | 207.342 +/- 6.862 | 320.003 |
+| Nested lambda | 293.668 +/- 14.925 | 544.004 |
+| Warm parser | 10,980.846 +/- 549.015 | 20,216.152 |
+| Full uncached compilation | 12,192.178 +/- 242.847 | 19,778.413 |
+| Cache-free pipeline | 12,170.554 +/- 396.103 | 19,688.323 |
+| Engine miss | 12,926.165 +/- 665.015 | 20,421.750 |
+| Engine pure hit | 15.373 +/- 0.236 | 24.000 |
+| Engine hit plus math view | 21.486 +/- 0.239 | 48.000 |
+| Regex literal match (characterization) | 192.621 +/- 3.571 | 264.003 |
+| Regex dynamic replace (characterization) | 365.906 +/- 3.331 | 1,136.005 |
+| Regex dynamic split (characterization) | 475.509 +/- 12.642 | 1,408.007 |
+| Calculation Memory dense compute | 64.556 +/- 1.115 | 56.001 |
+| Dense compute with memory | 124.383 +/- 1.273 | 200.002 |
+| Dense capture plus indexed consumption | 191.622 +/- 6.337 | 200.003 |
+| Dense indexed traversal | 42.623 +/- 1.013 | 0.001 |
+| Dense list traversal | 50.507 +/- 0.531 | 120.001 |
+
+JOL recorded a 32-byte shallow `ExecutionScope`, plans of 10/100/1,000 executable nodes, and empty,
+dense, prefix, and gapped Calculation Memory graphs. JOL could not attach its instrumentation or
+Serviceability Agent in this environment, so compressed-reference details are inferred; the class and
+graph layout report remains useful under the same JVM. The runner also produced a valid JFR recording
+from a forked JMH workload.
+
+Verdict: **BASELINE RECORDED; no pass/fail performance comparison applies.** The module behavior is
+green and all six manifest families produced JMH JSON with GC metrics. Future Etapa 12 changes compare
+against paired controls or alternating same-machine runs, not this isolated historical sample alone.
+
+Command: `exp-mk3/scripts/run-stage12-gates.sh`. Manifest:
+`docs/perf/stage12-gates.json`. Generated artifacts:
+`exp-mk3/target/stage12/{environment.txt,commands.txt,tests.log,jmh/*.json,jmh/*.log,jol/,jfr/}`.
+
 ## 2026-08-30 - Reexecucao dos nove cenarios de comparacao no MK3
 
 Purpose: check the current MK3 runtime across the nine canonical legacy-comparison scenarios after

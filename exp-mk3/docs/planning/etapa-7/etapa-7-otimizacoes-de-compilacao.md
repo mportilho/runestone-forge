@@ -198,6 +198,7 @@ Cada incremento fecha com `mvn -pl exp-mk3 -am test` verde. A decomposicao em is
 - Etapa 8 especializa nos sobre um plano que ja passou por dobra e elisao, e herda o oraculo como criterio de aceite em vez de criar o seu; recebe tambem a reordenacao de curto-circuito como candidata condicionada a perfil.
 - Etapa 9 mantem um unico plano por `(source, environmentId)` compartilhado entre visoes, e a Leitura Dobrada viaja dentro desse valor compartilhado sem reter AST, Modelo Semantico nem fonte duplicada.
 - Etapa 10 consome a Leitura Dobrada e transfere slots/proveniencia ao no constante ou `MemoizedExecutableNode`, preservando ocorrencias alcancadas sem plano instrumentado.
-- Etapa 11 permanece independente desta etapa; os diagnosticos de migracao nao dependem de otimizacao.
+- A independencia registrada permanece historica; a Etapa 11 foi cancelada durante o planejamento da
+  Etapa 12.
 - Etapa 12 transforma os limiares desta etapa em gate permanente de CI, junto com perfil de alocacao e diferenciais.
 - Etapa 13 reutiliza o mesmo oraculo para o Tier 1 e para a fusao de pipelines de colecao.

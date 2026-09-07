@@ -235,7 +235,7 @@ Este documento consolida as decisoes tomadas durante o replanejamento da Etapa 5
 - O oraculo das propriedades nao pode ser a funcao sob teste.
 - Funcoes impuras com contador/ordem provam politicas eager e lazy.
 - Relogio fixo prova instante unico e truncamento em segundos.
-- Ausencia atual de corpus real v1 nao bloqueia M1.
+- Ausencia de corpus real v1 nao bloqueia M1; migracao e corpus diferencial foram cancelados na Etapa 12.
 - Todos os casos reais disponiveis devem passar.
 - Nao adicionar campo de milestone ao YAML nesta etapa.
 - Tags e fases existentes identificam o subconjunto M1.
@@ -269,7 +269,8 @@ Este documento consolida as decisoes tomadas durante o replanejamento da Etapa 5
 - Etapa 8 preserva `big-math` e o dominio real em especializacoes.
 - Etapa 9 compartilha um plano entre visoes e mantem runtime services fora da identidade.
 - Etapa 10 usa identidade e trecho dos nos como Chave de Proveniencia no mesmo plano compartilhado por `compute()` e `computeWithMemory()`.
-- Etapa 11 continua responsavel pelo corpus real diferencial.
+- Esta decisao historica foi superada durante o planejamento da Etapa 12, quando a Etapa 11 e o corpus
+  real diferencial foram cancelados.
 - Etapa 12 transforma baselines em gates e amplia testes de stress.
 - Etapa 13 preserva fallback/oraculo sem otimizacoes.
 

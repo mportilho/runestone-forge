@@ -134,7 +134,7 @@ Este documento consolida as decisoes tomadas durante o planejamento da Etapa 6 d
 - Etapa 8 especializa acessores com `LambdaMetafactory` e `VarHandle` sobre metadata ja registrada, sem fallback reflexivo.
 - Etapa 9 mantem os vinculos de navegacao dentro do plano compartilhado entre visoes.
 - Etapa 10 marca propriedades e metodos registrados por identidade e trecho ja preservados, mantendo operacoes de colecao e seus descendentes como fronteiras opacas.
-- Etapa 11 mantem os diagnosticos de migracao independentes desta etapa.
+- Esta separacao ficou sem consumidor quando a Etapa 11 foi cancelada durante o planejamento da Etapa 12.
 - Etapa 12 transforma a caracterizacao de M2 em gate e amplia stress de profundidade e de materializacao.
 
 ## Decisoes Ainda Pendentes

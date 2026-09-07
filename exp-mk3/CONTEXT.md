@@ -12,6 +12,14 @@ _Avoid_: Test fixture, corpus item
 A versioned collection of expression cases used as the shared behavioral contract for parser, semantic resolver, runtime, migration, and differential verification.
 _Avoid_: Test data, examples folder
 
+**Fonte de Expressao Nao Confiavel**:
+An expression source supplied by a tenant and therefore treated as potentially adversarial input that must stay within language-controlled resource budgets. Registered Java code and environment components remain trusted and are not sandboxed by those budgets.
+_Avoid_: Trusted formula, sandboxed provider code, malformed expression only
+
+**Orcamento de Compilacao**:
+The bounded compilation allowance for one Fonte de Expressao Nao Confiavel, expressed through source length, token count, general syntax depth, and semantic-tree node count so every compiler phase receives finite input.
+_Avoid_: Parser timeout, source-length check only, unlimited trusted mode
+
 **Resultado de Compilacao**:
 The closed public outcome of compiling one expression source, containing either a reusable compiled expression plus warnings or the complete compilation diagnostics without an executable plan.
 _Avoid_: Nullable compiled expression, compilation exception as the primary result
@@ -23,6 +31,10 @@ _Avoid_: Compiled tree, executable expression internals
 **Engine de Expressao**:
 The long-lived compilation boundary that owns runtime services and bounded reuse of compiled expressions, sharing one resident compilation generation for the same source and Ambiente de Expressao within that engine without participating in each execution.
 _Avoid_: Per-request compiler, execution-result cache, process-wide plan registry
+
+**Peso Retido de Compilacao**:
+A conservative cache-admission measure of source-controlled payload retained by one Resultado de Compilacao, including its exact source key, plan shape, diagnostics, and folded constants. It is calibrated against JVM layouts but is not an exact heap-byte measurement and excludes trusted shared environment components.
+_Avoid_: Exact object size, AST node count, cache entry count
 
 **Visao de Expressao**:
 A validated public projection over one Plano Imutavel that defines which result is executed and exposed, such as a general result, number, boolean, or final assignment map, without recompiling the source.
@@ -79,6 +91,14 @@ _Avoid_: Vector, Java collection implementation, raw iterable
 **Limite de Materializacao**:
 An Ambiente de Expressao guard rail that bounds every container snapshot materialized at an external boundary or by the language, including collection literals, maps, operation results, function-provider results, and public results.
 _Avoid_: Parser size limit, result-only collection limit
+
+**Orcamento de Trabalho de Avaliacao**:
+A per-compilation or per-execution allowance for cumulative variable-cost work controlled by the evaluator, including collection traversal, regex, text expansion, expensive official numeric operations, and boundary materialization. Constant-cost scalar nodes do not consume it, and work inside registered Java provider code remains trusted and unmetered.
+_Avoid_: Node counter, wall-clock timeout, provider execution quota, collection-size limit
+
+**Regex Linear**:
+The regular-expression subset accepted by the language and executed without backtracking through RE2/J, including regex operators and regex-taking built-ins. Unsupported constructs fail through structured diagnostics and never fall back to Java backtracking regex.
+_Avoid_: Java regex compatibility, regex timeout, safe-pattern heuristic
 
 **Materializacao Publica**:
 The type-directed creation of a bounded immutable snapshot when an expression result or assignment map crosses the public API boundary, recursively excluding null and non-exposable object values.

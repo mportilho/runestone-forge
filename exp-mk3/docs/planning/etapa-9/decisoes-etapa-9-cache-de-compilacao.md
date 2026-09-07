@@ -40,7 +40,11 @@ Este documento registra incrementalmente as decisoes tomadas durante o planejame
 
 ## Capacidade e Expiracao
 
-- A capacidade e limitada por numero de Resultados de Compilacao, nao por peso. Caffeine nao combina `maximumSize` e `maximumWeight`, e numero de nos nao representa a memoria retida por constantes, defaults, providers, servicos ou fontes; uma heuristica composta adicionaria complexidade sem impor limite real de heap.
+- **Decisao original, revisada pela Etapa 12 / ADR 0024:** a Etapa 9 limitou a capacidade somente por
+  numero de Resultados de Compilacao. O modelo posterior de Fonte de Expressao Nao Confiavel preserva
+  `maximumEntries` como limite exato e adiciona um `maximumWeight` composto com Peso Retido de
+  Compilacao conservador. Ele limita payload controlado pela fonte, sem prometer medir defaults,
+  providers, servicos ou outros componentes confiaveis compartilhados.
 - O engine default usa `maximumEntries = 1024`.
 - Expiracao e opcional e desabilitada por default. Quando configurada, usa tempo desde o ultimo acesso, para que uma formula ativa nao recompile periodicamente apenas por idade.
 - O mecanismo de expiracao do cache usa tempo monotono proprio do Caffeine e nao o `Clock` dos RuntimeServices, que pertence a semantica dos valores temporais da linguagem.

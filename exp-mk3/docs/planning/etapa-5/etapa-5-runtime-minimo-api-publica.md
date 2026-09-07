@@ -430,6 +430,7 @@ Cada incremento termina verde e nao depende de uma refatoracao total posterior p
 - Etapa 8 especializa preservando o ADR 0017 e o uso de `big-math`; substituicao exige decisao futura explicita.
 - Etapa 9 compartilha um plano entre todas as visoes, mantem `RuntimeServices` fora da identidade do ambiente e mede compilacao sem cache versus hit.
 - Etapa 10 usa `NodeId` e `SourceSpan` preservados como Chave de Proveniencia da Memoria de Calculo. Um unico plano atende `compute()` e `computeWithMemory()`; somente nos marcaveis recebem o branch previsivel de `calculationSlot`, sob gate de zero B/op adicional.
-- Etapa 11 nao bloqueia M1 pela ausencia atual de corpus real, mas continua responsavel pela verificacao diferencial completa.
+- A Etapa 11 e o corpus diferencial legado foram cancelados durante o planejamento da Etapa 12; isso
+  nao altera o aceite historico de M1.
 - Etapa 12 transforma medicao em gates de CI e amplia stress/concurrency.
 - Etapa 13 mantem a forma sem otimizacoes como fallback/oraculo para Tier 1 e fusao de pipelines.

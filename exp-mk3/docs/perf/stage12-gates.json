@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "protocol": {
+    "jdkMajor": 21,
+    "jdkVendor": "Eclipse Adoptium",
+    "heap": "1g",
+    "forks": 3,
+    "warmupIterations": 5,
+    "warmupTime": "500ms",
+    "measurementIterations": 10,
+    "measurementTime": "500ms",
+    "threads": 1,
+    "profiler": "gc"
+  },
+  "families": [
+    {
+      "id": "scalar",
+      "classification": "binding",
+      "metrics": ["score", "gc.alloc.rate.norm"],
+      "thresholds": ["no additional B/op", "paired latency delta within +/-1%"],
+      "benchmarks": [
+        "com.runestone.expeval_mk3.perf.jmh.Phase5BaselineBenchmark.arithmeticCompute",
+        "com.runestone.expeval_mk3.perf.jmh.Phase5BaselineBenchmark.logicalCompute",
+        "com.runestone.expeval_mk3.perf.jmh.FunctionInvocationBenchmark.arityOneOptimized"
+      ]
+    },
+    {
+      "id": "collections",
+      "classification": "binding",
+      "metrics": ["score", "gc.alloc.rate.norm"],
+      "thresholds": ["no allocation per work-budget debit", "paired latency regression <=5%"],
+      "benchmarks": [
+        "com.runestone.expeval_mk3.perf.jmh.CollectionOperationsBenchmark.map",
+        "com.runestone.expeval_mk3.perf.jmh.CollectionOperationsBenchmark.mapThenSum",
+        "com.runestone.expeval_mk3.perf.jmh.CollectionOperationsBenchmark.allShortCircuit",
+        "com.runestone.expeval_mk3.perf.jmh.CollectionOperationsBenchmark.sortBy",
+        "com.runestone.expeval_mk3.perf.jmh.CollectionOperationsBenchmark.reduce",
+        "com.runestone.expeval_mk3.perf.jmh.CollectionOperationsBenchmark.wildcardMaterialization",
+        "com.runestone.expeval_mk3.perf.jmh.Phase6NavigationBenchmark.filter",
+        "com.runestone.expeval_mk3.perf.jmh.Phase6NavigationBenchmark.nestedLambda"
+      ]
+    },
+    {
+      "id": "compilation",
+      "classification": "binding",
+      "metrics": ["score", "gc.alloc.rate.norm"],
+      "thresholds": ["paired latency regression <=5% outside the error band"],
+      "benchmarks": [
+        "com.runestone.expeval_mk3.perf.jmh.ParsingBenchmark.warmParser",
+        "com.runestone.expeval_mk3.perf.jmh.Phase5BaselineBenchmark.fullUncachedCompilation"
+      ]
+    },
+    {
+      "id": "cache",
+      "classification": "binding",
+      "metrics": ["score", "gc.alloc.rate.norm"],
+      "comparisons": [
+        {"candidate": "engineMiss", "control": "pipelineUncached", "threshold": "latency overhead <=10%"},
+        {"candidate": "engineHitPure", "control": "pipelineUncached", "threshold": "latency >=20x lower and allocation >=99% lower"},
+        {"candidate": "engineHitAsMath", "control": "pipelineUncached", "threshold": "latency >=10x lower and allocation >=95% lower"}
+      ],
+      "benchmarks": [
+        "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.pipelineUncached",
+        "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.engineMiss",
+        "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.engineHitPure",
+        "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.engineHitAsMath"
+      ]
+    },
+    {
+      "id": "regex",
+      "classification": "characterization",
+      "metrics": ["score", "gc.alloc.rate.norm"],
+      "thresholds": [],
+      "benchmarks": [
+        "com.runestone.expeval_mk3.perf.jmh.Stage12RegexBenchmark.literalMatch",
+        "com.runestone.expeval_mk3.perf.jmh.Stage12RegexBenchmark.dynamicReplaceAll",
+        "com.runestone.expeval_mk3.perf.jmh.Stage12RegexBenchmark.dynamicSplit"
+      ]
+    },
+    {
+      "id": "calculation-memory",
+      "classification": "binding",
+      "metrics": ["score", "gc.alloc.rate.norm"],
+      "comparisons": [
+        {"candidate": "computeWithMemory", "control": "compute", "threshold": "preserve accepted Etapa 10 software gates"},
+        {"candidate": "traverseIndexed", "control": null, "threshold": "zero evaluator B/op"}
+      ],
+      "jmhArguments": ["-p", "scenario=DENSE"],
+      "benchmarks": [
+        "com.runestone.expeval_mk3.perf.jmh.CalculationMemoryProductionBenchmark.compute",
+        "com.runestone.expeval_mk3.perf.jmh.CalculationMemoryProductionBenchmark.computeWithMemory",
+        "com.runestone.expeval_mk3.perf.jmh.CalculationMemoryProductionBenchmark.computeWithMemoryAndConsumeIndexed",
+        "com.runestone.expeval_mk3.perf.jmh.CalculationMemoryProductionBenchmark.traverseIndexed",
+        "com.runestone.expeval_mk3.perf.jmh.CalculationMemoryProductionBenchmark.traverseListsByIndex"
+      ]
+    }
+  ]
+}
