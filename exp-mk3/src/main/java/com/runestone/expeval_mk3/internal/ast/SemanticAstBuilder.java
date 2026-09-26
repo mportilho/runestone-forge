@@ -29,7 +29,15 @@ import java.util.function.Function;
 public final class SemanticAstBuilder {
 
     public SemanticAstBuildResult build(ParseSuccess parseSuccess) {
-        return new SemanticAstBuildSession(parseSuccess.sourcePositions()).build(parseSuccess);
+        return build(parseSuccess, Integer.MAX_VALUE);
+    }
+
+    public SemanticAstBuildResult build(ParseSuccess parseSuccess, int maxNodes) {
+        try {
+            return new SemanticAstBuildSession(parseSuccess.sourcePositions(), maxNodes).build(parseSuccess);
+        } catch (AstNodeLimitException exception) {
+            return new SemanticAstBuildFailure(List.of(exception.diagnostic()));
+        }
     }
 }
 
@@ -41,9 +49,12 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
 
     private final List<ExpressionDiagnostic> diagnostics = new ArrayList<>();
     private final AntlrSourcePositions sourcePositions;
+    private final int maxNodes;
+    private int nodes;
 
-    SemanticAstBuildSession(AntlrSourcePositions sourcePositions) {
+    SemanticAstBuildSession(AntlrSourcePositions sourcePositions, int maxNodes) {
         this.sourcePositions = Objects.requireNonNull(sourcePositions, "sourcePositions");
+        this.maxNodes = maxNodes;
     }
 
     SemanticAstBuildResult build(ParseSuccess parseSuccess) {
@@ -62,31 +73,39 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
         topLevelNodes.addAll(assignments);
         resultExpression.ifPresent(topLevelNodes::add);
         ExpressionFileNode unassigned = new ExpressionFileNode(
-                NodeId.UNASSIGNED,
+                reserve(fileSpan(topLevelNodes, start)),
                 fileSpan(topLevelNodes, start),
                 assignments,
                 resultExpression);
         if (!diagnostics.isEmpty()) {
             return new SemanticAstBuildFailure(diagnostics);
         }
-        return new SemanticAstBuildSuccess(new AstNodeIdAssigner().assign(unassigned));
+        return new SemanticAstBuildSuccess(new AstNodeIdAssigner(maxNodes).assign(unassigned));
+    }
+
+    private NodeId reserve(SourceSpan span) {
+        if (nodes == maxNodes) {
+            throw new AstNodeLimitException(span);
+        }
+        nodes++;
+        return NodeId.UNASSIGNED;
     }
 
     private AssignmentNode buildAssignment(ExpressionEvaluatorParser.AssignmentExpressionContext context) {
         if (context instanceof ExpressionEvaluatorParser.AssignmentOperationContext assignment) {
             TerminalNode identifier = assignment.IDENTIFIER();
             return new AssignmentNode(
-                    NodeId.UNASSIGNED,
+                    reserve(span(assignment)),
                     span(assignment),
                     new IdentifierAssignmentTargetNode(
-                            NodeId.UNASSIGNED,
+                            reserve(span(identifier.getSymbol())),
                             span(identifier.getSymbol()),
                             identifier.getText()),
                     visit(assignment.expression()));
         }
         if (context instanceof ExpressionEvaluatorParser.DestructuringAssignmentOperationContext assignment) {
             return new AssignmentNode(
-                    NodeId.UNASSIGNED,
+                    reserve(span(assignment)),
                     span(assignment),
                     destructuringTarget(assignment.destructuringPattern()),
                     visit(assignment.expression()));
@@ -102,11 +121,11 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
         List<IdentifierAssignmentTargetNode> elements = new ArrayList<>(pattern.IDENTIFIER().size());
         for (TerminalNode identifier : pattern.IDENTIFIER()) {
             elements.add(new IdentifierAssignmentTargetNode(
-                    NodeId.UNASSIGNED,
+                    reserve(span(identifier.getSymbol())),
                     span(identifier.getSymbol()),
                     identifier.getText()));
         }
-        return new DestructuringAssignmentTargetNode(NodeId.UNASSIGNED, span(context), elements);
+        return new DestructuringAssignmentTargetNode(reserve(span(context)), span(context), elements);
     }
 
     @Override
@@ -114,7 +133,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
         ExpressionNode left = visit(context.bitwiseLogicalExpression(0));
         ExpressionNode right = visit(context.bitwiseLogicalExpression(1));
         return new BinaryOperationNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 left,
                 comparisonOperator(context.comparisonOperator().getStart()),
@@ -128,7 +147,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
                 ? span(context.IN().getSymbol())
                 : span(context.NOT_KW().getSymbol(), context.IN().getSymbol());
         return new MembershipNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 visit(context.bitwiseLogicalExpression(0)),
                 context.NOT_KW() != null,
@@ -139,7 +158,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     @Override
     public ExpressionNode visitNinOperation(ExpressionEvaluatorParser.NinOperationContext context) {
         return new MembershipNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 visit(context.bitwiseLogicalExpression(0)),
                 true,
@@ -153,7 +172,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
                 ? span(context.BETWEEN().getSymbol())
                 : span(context.NOT_KW().getSymbol(), context.BETWEEN().getSymbol());
         return new BetweenNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 visit(context.bitwiseLogicalExpression(0)),
                 context.NOT_KW() != null,
@@ -166,7 +185,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     @Override
     public ExpressionNode visitRegexMatchOperation(ExpressionEvaluatorParser.RegexMatchOperationContext context) {
         return new BinaryOperationNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 visit(context.bitwiseLogicalExpression()),
                 BinaryOperator.REGEX_MATCH,
@@ -177,7 +196,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     @Override
     public ExpressionNode visitRegexNotMatchOperation(ExpressionEvaluatorParser.RegexNotMatchOperationContext context) {
         return new BinaryOperationNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 visit(context.bitwiseLogicalExpression()),
                 BinaryOperator.REGEX_NOT_MATCH,
@@ -203,7 +222,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
         for (int operatorIndex = 1; operatorIndex < context.getChildCount(); operatorIndex += 2) {
             operatorSpans.add(span(terminalToken(context, operatorIndex)));
         }
-        return new NullCoalesceNode(NodeId.UNASSIGNED, span(context), operands, operatorSpans);
+        return new NullCoalesceNode(reserve(span(context)), span(context), operands, operatorSpans);
     }
 
     @Override
@@ -262,7 +281,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     @Override
     public ExpressionNode visitUnaryMinusOperation(ExpressionEvaluatorParser.UnaryMinusOperationContext context) {
         return new UnaryOperationNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 UnaryOperator.NEGATE,
                 span(context.MINUS().getSymbol()),
@@ -273,7 +292,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     public ExpressionNode visitLogicalNotOperation(ExpressionEvaluatorParser.LogicalNotOperationContext context) {
         Token operator = context.NOT() == null ? context.EXCLAMATION().getSymbol() : context.NOT().getSymbol();
         return new UnaryOperationNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 UnaryOperator.LOGICAL_NOT,
                 span(operator),
@@ -299,7 +318,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
             return visit(context.postfixExpression());
         }
         return new BinaryOperationNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 visit(context.postfixExpression()),
                 BinaryOperator.EXPONENTIATE,
@@ -317,12 +336,12 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
             Token operator = terminalToken(context, childIndex);
             operations.add(new PostfixOperatorOccurrence(postfixOperator(operator), span(operator)));
         }
-        return new PostfixOperationNode(NodeId.UNASSIGNED, span(context), visit(context.primaryExpression()), operations);
+        return new PostfixOperationNode(reserve(span(context)), span(context), visit(context.primaryExpression()), operations);
     }
 
     @Override
     public ExpressionNode visitParenthesisOperation(ExpressionEvaluatorParser.ParenthesisOperationContext context) {
-        return new GroupedExpressionNode(NodeId.UNASSIGNED, span(context), visit(context.expression()));
+        return new GroupedExpressionNode(reserve(span(context)), span(context), visit(context.expression()));
     }
 
     @Override
@@ -340,7 +359,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
             branches.add(conditionalBranch(expressions.get(expressionIndex), expressions.get(expressionIndex + 1)));
         }
         return new ConditionalNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 ConditionalSyntax.CLASSIC,
                 branches,
@@ -356,7 +375,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
             branches.add(conditionalBranch(expressions.get(expressionIndex), expressions.get(expressionIndex + 1)));
         }
         return new ConditionalNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 ConditionalSyntax.FUNCTIONAL,
                 branches,
@@ -375,7 +394,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
         for (ExpressionEvaluatorParser.ExpressionContext expression : context.expression()) {
             elements.add(visit(expression));
         }
-        return new CollectionLiteralNode(NodeId.UNASSIGNED, span(context), elements);
+        return new CollectionLiteralNode(reserve(span(context)), span(context), elements);
     }
 
     @Override
@@ -390,7 +409,8 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
 
     @Override
     public ExpressionNode visitIdentifierReferenceTarget(ExpressionEvaluatorParser.IdentifierReferenceTargetContext context) {
-        ExpressionNode receiver = new IdentifierNode(NodeId.UNASSIGNED, span(context.IDENTIFIER().getSymbol()), context.IDENTIFIER().getText());
+        SourceSpan identifierSpan = span(context.IDENTIFIER().getSymbol());
+        ExpressionNode receiver = new IdentifierNode(reserve(identifierSpan), identifierSpan, context.IDENTIFIER().getText());
         if (context.memberChain().isEmpty()) {
             return receiver;
         }
@@ -408,7 +428,8 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
 
     @Override
     public ExpressionNode visitAtReferenceTarget(ExpressionEvaluatorParser.AtReferenceTargetContext context) {
-        ExpressionNode receiver = new CurrentItemNode(NodeId.UNASSIGNED, span(context.AT().getSymbol()));
+        SourceSpan itemSpan = span(context.AT().getSymbol());
+        ExpressionNode receiver = new CurrentItemNode(reserve(itemSpan), itemSpan);
         if (context.memberChain().isEmpty()) {
             return receiver;
         }
@@ -418,7 +439,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     @Override
     public ExpressionNode visitIntConstantOperation(ExpressionEvaluatorParser.IntConstantOperationContext context) {
         return new LiteralNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 parseInteger(context.INT().getText()));
     }
@@ -426,7 +447,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     @Override
     public ExpressionNode visitFloatConstantOperation(ExpressionEvaluatorParser.FloatConstantOperationContext context) {
         return new LiteralNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 new DecimalLiteralValue(new BigDecimal(context.FLOAT().getText())));
     }
@@ -434,20 +455,20 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     @Override
     public ExpressionNode visitStringConstantOperation(ExpressionEvaluatorParser.StringConstantOperationContext context) {
         return new LiteralNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 new StringLiteralValue(unquote(context.STRING().getText())));
     }
 
     @Override
     public ExpressionNode visitLogicalConstantOperation(ExpressionEvaluatorParser.LogicalConstantOperationContext context) {
-        return new LiteralNode(NodeId.UNASSIGNED, span(context), new BooleanLiteralValue(context.TRUE() != null));
+        return new LiteralNode(reserve(span(context)), span(context), new BooleanLiteralValue(context.TRUE() != null));
     }
 
     @Override
     public ExpressionNode visitDateConstantOperation(ExpressionEvaluatorParser.DateConstantOperationContext context) {
         return new LiteralNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 materializeDate(context));
     }
@@ -455,30 +476,30 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     @Override
     public ExpressionNode visitTimeConstantOperation(ExpressionEvaluatorParser.TimeConstantOperationContext context) {
         return new LiteralNode(
-                NodeId.UNASSIGNED,
+                reserve(span(context)),
                 span(context),
                 materializeTime(context));
     }
 
     @Override
     public ExpressionNode visitDateTimeConstantOperation(ExpressionEvaluatorParser.DateTimeConstantOperationContext context) {
-        return new LiteralNode(NodeId.UNASSIGNED, span(context), materializeDateTime(context));
+        return new LiteralNode(reserve(span(context)), span(context), materializeDateTime(context));
     }
 
     @Override
     public ExpressionNode visitDateCurrentValueOperation(ExpressionEvaluatorParser.DateCurrentValueOperationContext context) {
-        return new CurrentTemporalValueNode(NodeId.UNASSIGNED, span(context), CurrentTemporalValueKind.DATE);
+        return new CurrentTemporalValueNode(reserve(span(context)), span(context), CurrentTemporalValueKind.DATE);
     }
 
     @Override
     public ExpressionNode visitTimeCurrentValueOperation(ExpressionEvaluatorParser.TimeCurrentValueOperationContext context) {
-        return new CurrentTemporalValueNode(NodeId.UNASSIGNED, span(context), CurrentTemporalValueKind.TIME);
+        return new CurrentTemporalValueNode(reserve(span(context)), span(context), CurrentTemporalValueKind.TIME);
     }
 
     @Override
     public ExpressionNode visitDateTimeCurrentValueOperation(
             ExpressionEvaluatorParser.DateTimeCurrentValueOperationContext context) {
-        return new CurrentTemporalValueNode(NodeId.UNASSIGNED, span(context), CurrentTemporalValueKind.DATE_TIME);
+        return new CurrentTemporalValueNode(reserve(span(context)), span(context), CurrentTemporalValueKind.DATE_TIME);
     }
 
     private ExpressionNode buildLeftAssociative(
@@ -490,7 +511,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
             Token operator = terminalToken(context, operandIndex * 2 - 1);
             ExpressionNode right = visit(operandContexts.get(operandIndex));
             result = new BinaryOperationNode(
-                    NodeId.UNASSIGNED,
+                    reserve(span(result.sourceSpan(), right.sourceSpan())),
                     span(result.sourceSpan(), right.sourceSpan()),
                     result,
                     operatorMapper.apply(operator),
@@ -516,30 +537,30 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
         for (ExpressionEvaluatorParser.MemberChainContext memberChain : memberChains) {
             links.add(buildNavigationLink(memberChain));
         }
-        return new NavigationChainNode(NodeId.UNASSIGNED, span(context), receiver, links);
+        return new NavigationChainNode(reserve(span(context)), span(context), receiver, links);
     }
 
     private NavigationLink buildNavigationLink(ExpressionEvaluatorParser.MemberChainContext context) {
         return switch (context) {
             case ExpressionEvaluatorParser.NavigatedCallAccessContext call -> new CallNavigationLink(
-                    NodeId.UNASSIGNED,
+                    reserve(span(call)),
                     span(call),
                     memberName(call.memberName()),
                     false,
                     callArguments(call.argumentList()));
             case ExpressionEvaluatorParser.PropertyAccessContext property -> new PropertyNavigationLink(
-                    NodeId.UNASSIGNED,
+                    reserve(span(property)),
                     span(property),
                     memberName(property.memberName()),
                     false);
             case ExpressionEvaluatorParser.SafeNavigatedCallAccessContext call -> new CallNavigationLink(
-                    NodeId.UNASSIGNED,
+                    reserve(span(call)),
                     span(call),
                     memberName(call.memberName()),
                     true,
                     callArguments(call.argumentList()));
             case ExpressionEvaluatorParser.SafePropertyAccessContext property -> new PropertyNavigationLink(
-                    NodeId.UNASSIGNED,
+                    reserve(span(property)),
                     span(property),
                     memberName(property.memberName()),
                     true);
@@ -574,9 +595,9 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
             case ExpressionEvaluatorParser.ExpressionArgumentContext expression ->
                     new ExpressionCallArgument(visit(expression.expression()));
             case ExpressionEvaluatorParser.LambdaArgumentContext lambda -> new LambdaCallArgument(new LambdaNode(
-                    NodeId.UNASSIGNED,
+                    reserve(span(lambda)),
                     span(lambda),
-                    new CurrentItemNode(NodeId.UNASSIGNED, span(lambda.AT().getSymbol())),
+                    new CurrentItemNode(reserve(span(lambda.AT().getSymbol())), span(lambda.AT().getSymbol())),
                     span(lambda.ARROW().getSymbol()),
                     visit(lambda.expression())));
             default -> throw unsupported(context, "call argument");
@@ -589,21 +610,21 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
             boolean safe) {
         return switch (context) {
             case ExpressionEvaluatorParser.WildcardSubscriptContext ignored -> new WildcardNavigationLink(
-                    NodeId.UNASSIGNED,
+                    reserve(linkSpan),
                     linkSpan,
                     safe);
             case ExpressionEvaluatorParser.StringKeySubscriptContext stringKey -> new StringKeySubscriptNavigationLink(
-                    NodeId.UNASSIGNED,
+                    reserve(linkSpan),
                     linkSpan,
                     unquote(stringKey.STRING().getText()),
                     safe);
             case ExpressionEvaluatorParser.IndexSubscriptContext index -> new IndexSubscriptNavigationLink(
-                    NodeId.UNASSIGNED,
+                    reserve(linkSpan),
                     linkSpan,
                     subscriptInteger(index.signedInteger()),
                     safe);
             case ExpressionEvaluatorParser.SliceWithStartSubscriptContext slice -> new SliceSubscriptNavigationLink(
-                    NodeId.UNASSIGNED,
+                    reserve(linkSpan),
                     linkSpan,
                     new IntegerSubscriptSliceBound(subscriptInteger(slice.signedInteger(0))),
                     slice.signedInteger().size() == 1
@@ -611,13 +632,13 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
                             : new IntegerSubscriptSliceBound(subscriptInteger(slice.signedInteger(1))),
                     safe);
             case ExpressionEvaluatorParser.SliceToEndSubscriptContext slice -> new SliceSubscriptNavigationLink(
-                    NodeId.UNASSIGNED,
+                    reserve(linkSpan),
                     linkSpan,
                     UnboundedSubscriptSliceBound.INSTANCE,
                     new IntegerSubscriptSliceBound(subscriptInteger(slice.signedInteger())),
                     safe);
             case ExpressionEvaluatorParser.FilterSubscriptContext filter -> new FilterNavigationLink(
-                    NodeId.UNASSIGNED,
+                    reserve(linkSpan),
                     linkSpan,
                     visit(filter.expression()),
                     safe);
@@ -628,7 +649,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     private FunctionCallNode buildFunctionCall(ExpressionEvaluatorParser.FunctionContext context) {
         if (context instanceof ExpressionEvaluatorParser.FunctionCallOperationContext function) {
             return new FunctionCallNode(
-                    NodeId.UNASSIGNED,
+                    reserve(span(function)),
                     span(function),
                     new FunctionName(function.IDENTIFIER().getText()),
                     callArguments(function.argumentList()));
@@ -653,7 +674,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
 
     private ConditionalBranchNode conditionalBranch(ExpressionNode condition, ExpressionNode consequence) {
         return new ConditionalBranchNode(
-                NodeId.UNASSIGNED,
+                reserve(span(condition.sourceSpan(), consequence.sourceSpan())),
                 span(condition.sourceSpan(), consequence.sourceSpan()),
                 condition,
                 consequence);
@@ -683,7 +704,7 @@ final class SemanticAstBuildSession extends ExpressionEvaluatorBaseVisitor<Expre
     }
 
     private ExpressionNode stringLiteral(Token token) {
-        return new LiteralNode(NodeId.UNASSIGNED, span(token), new StringLiteralValue(unquote(token.getText())));
+        return new LiteralNode(reserve(span(token)), span(token), new StringLiteralValue(unquote(token.getText())));
     }
 
     private static BinaryOperator comparisonOperator(Token token) {

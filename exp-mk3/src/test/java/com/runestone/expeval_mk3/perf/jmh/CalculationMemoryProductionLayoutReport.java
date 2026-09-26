@@ -143,11 +143,9 @@ public final class CalculationMemoryProductionLayoutReport {
                 SHARING_SAMPLE_SIZE, shared.totalCount(), shared.totalSize());
     }
 
-    private static ExecutionPlan planWithNodeCount(int targetNodes) {
+    static ExecutionPlan planWithNodeCount(int targetNodes) {
         int terms = (targetNodes + 1) / 3;
-        String joined = String.join(" + ", java.util.stream.IntStream.range(0, terms)
-                .mapToObj(index -> "mark(" + (index + 1) + ")")
-                .toList());
+        String joined = balancedTerms(0, terms);
         String source = "-(-(" + joined + "))";
         CompiledExpression compiled = ExpressionEngine.builder().build().compileOrThrow(source, environment());
         ExecutionPlan plan = fieldValue(compiled, "plan", ExecutionPlan.class);
@@ -158,6 +156,14 @@ public final class CalculationMemoryProductionLayoutReport {
             throw new IllegalStateException("expected " + targetNodes + " executable nodes but built " + actualNodes);
         }
         return plan;
+    }
+
+    private static String balancedTerms(int start, int end) {
+        if (end - start == 1) {
+            return "mark(" + (start + 1) + ")";
+        }
+        int middle = (start + end) >>> 1;
+        return "(" + balancedTerms(start, middle) + " + " + balancedTerms(middle, end) + ")";
     }
 
     private static ExpressionEnvironment environment() {

@@ -42,6 +42,9 @@ public final class ExpressionEngine {
     public ExpressionCompilationResult compile(String source, ExpressionEnvironment environment) {
         Objects.requireNonNull(source, "source");
         Objects.requireNonNull(environment, "environment");
+        if (CompilationSourceLimit.exceeded(source, environment)) {
+            return CompilationSourceLimit.failure();
+        }
         return cache.get(source, environment);
     }
 

@@ -1,5 +1,6 @@
 package com.runestone.expeval_mk3.internal.ast;
 
+import com.runestone.expeval_mk3.api.SourceSpan;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -8,10 +9,21 @@ import java.util.Objects;
 final class AstNodeIdAssigner {
 
     private int nextId;
+    private final int maxNodes;
+    private SourceSpan fileSpan;
+
+    AstNodeIdAssigner() {
+        this(Integer.MAX_VALUE);
+    }
+
+    AstNodeIdAssigner(int maxNodes) {
+        this.maxNodes = maxNodes;
+    }
 
     ExpressionFileNode assign(ExpressionFileNode file) {
         Objects.requireNonNull(file, "file");
         nextId = 0;
+        fileSpan = file.sourceSpan();
         NodeId fileId = next();
         List<AssignmentNode> assignments = new ArrayList<>(file.assignments().size());
         for (AssignmentNode assignment : file.assignments()) {
@@ -197,6 +209,9 @@ final class AstNodeIdAssigner {
     }
 
     private NodeId next() {
+        if (nextId == maxNodes) {
+            throw new AstNodeLimitException(fileSpan);
+        }
         return new NodeId(nextId++);
     }
 }

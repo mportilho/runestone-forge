@@ -6,6 +6,7 @@ import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostics;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.SourceSpan;
+import com.runestone.expeval_mk3.api.ExpressionResourceLimits;
 import org.antlr.v4.runtime.BailErrorStrategy;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -39,12 +40,19 @@ public final class ExpressionParser {
     private final ThreadLocal<ParserContext> context = ThreadLocal.withInitial(ParserContext::new);
 
     public ParseResult parse(String source) {
+        return parse(source, null);
+    }
+
+    public ParseResult parse(String source, ExpressionResourceLimits limits) {
         Objects.requireNonNull(source, "source");
 
         ParserContext parserContext = context.get();
         try {
-            parserContext.reset(source);
             AntlrSourcePositions sourcePositions = AntlrSourcePositions.from(source);
+            parserContext.reset(source, limits, sourcePositions);
+            if (limits != null) {
+                SyntaxDepthPreflight.check(parserContext.tokens.getTokens(), limits.maxSyntaxDepth(), sourcePositions);
+            }
             List<ExpressionDiagnostic> lexicalDiagnostics = collectLexicalDiagnostics(parserContext.tokens, sourcePositions);
 
             try {
@@ -57,6 +65,8 @@ public final class ExpressionParser {
             }
 
             return parseLl(parserContext, lexicalDiagnostics, sourcePositions);
+        } catch (CompilationLimitException exception) {
+            return new ParseFailure(List.of(exception.diagnostic()), PredictionPath.SLL);
         } finally {
             // The lexer/parser pair and DFA stay put for reuse; all input-specific state is released.
             parserContext.release();
@@ -137,35 +147,71 @@ public final class ExpressionParser {
     private static final class ParserContext {
 
         private final ExpressionEvaluatorLexer lexer;
-        private final CommonTokenStream tokens;
+        private final BoundedTokenStream tokens;
         private final ReusableExpressionEvaluatorParser parser;
         private final DefaultErrorStrategy idleErrorStrategy;
         private String source;
 
         private ParserContext() {
             lexer = new ExpressionEvaluatorLexer(CharStreams.fromString(""));
-            tokens = new CommonTokenStream(lexer);
+            tokens = new BoundedTokenStream(lexer);
             parser = new ReusableExpressionEvaluatorParser(tokens);
             idleErrorStrategy = new DefaultErrorStrategy();
         }
 
-        private void reset(String source) {
+        private void reset(String source, ExpressionResourceLimits limits, AntlrSourcePositions positions) {
             this.source = source;
             lexer.setInputStream(CharStreams.fromString(source));
             lexer.removeErrorListeners();
             tokens.setTokenSource(lexer);
+            tokens.configure(limits == null ? Integer.MAX_VALUE : limits.maxTokenCount(), positions);
             tokens.fill();
             parser.setInputStream(tokens);
         }
 
         private void release() {
             source = null;
+            tokens.configure(Integer.MAX_VALUE, null);
             lexer.setInputStream(CharStreams.fromString(""));
             tokens.setTokenSource(lexer);
             parser.setErrorHandler(idleErrorStrategy);
             parser.setInputStream(tokens);
             parser.getInterpreter().setPredictionMode(PredictionMode.SLL);
             parser.releaseTransientPredictionState();
+        }
+    }
+
+    static final class BoundedTokenStream extends CommonTokenStream {
+
+        private int limit = Integer.MAX_VALUE;
+        private int count;
+        private AntlrSourcePositions positions;
+
+        BoundedTokenStream(ExpressionEvaluatorLexer lexer) {
+            super(lexer);
+        }
+
+        void configure(int limit, AntlrSourcePositions positions) {
+            this.limit = limit;
+            this.positions = positions;
+            count = 0;
+        }
+
+        @Override
+        protected int fetch(int requested) {
+            int fetched = 0;
+            while (fetched < requested && !fetchedEOF) {
+                int added = super.fetch(1);
+                fetched += added;
+                Token token = tokens.getLast();
+                // Count all emitted tokens, including hidden whitespace, but not EOF.
+                if (token.getType() != Token.EOF && ++count > limit) {
+                    throw new CompilationLimitException(ExpressionDiagnostics.create(
+                            DiagnosticCode.COMPILE_TOKEN_COUNT_EXCEEDED,
+                            "Expression token count exceeds the compilation limit", positions.span(token)));
+                }
+            }
+            return fetched;
         }
     }
 

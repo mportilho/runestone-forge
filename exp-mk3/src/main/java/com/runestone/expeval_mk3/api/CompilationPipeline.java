@@ -37,11 +37,16 @@ final class CompilationPipeline {
         Objects.requireNonNull(environment, "environment");
         Objects.requireNonNull(runtimeServices, "runtimeServices");
 
-        ParseResult parseResult = PARSER.parse(source);
+        if (CompilationSourceLimit.exceeded(source, environment)) {
+            return CompilationSourceLimit.failure();
+        }
+        boolean limited = environment.trustMode() != ExpressionTrustMode.UNSAFE;
+        ParseResult parseResult = limited ? PARSER.parse(source, environment.resourceLimits()) : PARSER.parse(source);
         if (parseResult instanceof ParseFailure failure) {
             return new ExpressionCompilationResult.Failure(failure.diagnostics());
         }
-        SemanticAstBuildResult astResult = new SemanticAstBuilder().build((ParseSuccess) parseResult);
+        SemanticAstBuildResult astResult = new SemanticAstBuilder().build(
+                (ParseSuccess) parseResult, limited ? environment.resourceLimits().maxAstNodeCount() : Integer.MAX_VALUE);
         if (astResult instanceof SemanticAstBuildFailure failure) {
             return new ExpressionCompilationResult.Failure(failure.diagnostics());
         }
