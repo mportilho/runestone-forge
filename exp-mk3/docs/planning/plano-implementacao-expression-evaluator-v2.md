@@ -277,13 +277,14 @@ linguagem, sem promessa de reconhecer ou reescrever toda forma legada.
 
 ## Etapa 12 — Endurecimento e verificação (M4)
 
-**Objetivo:** fechar §19 e §21 como estado permanente, protegendo Fonte de Expressão Não Confiável sem
-degradar o caminho quente escalar. O plano detalhado em `docs/planning/etapa-12/` e o ADR 0024 são
-normativos.
+**Objetivo:** fechar §19 e §21 como estado permanente, com `TRUSTED` como default de runtime próximo de
+zero, `SAFE` para Fonte de Expressão Não Confiável e `UNSAFE` para contenção totalmente delegada ao
+integrador. O plano detalhado em `docs/planning/etapa-12/` e o ADR 0024 são normativos.
 
 **Entregas**
-- `ExpressionResourceLimits` com limites e tetos para compilação, forma de valores e Orcamento de
-  Trabalho de Avaliação; violações prováveis na compilação e Checagens Diferidas no runtime.
+- `ExpressionTrustMode` (`UNSAFE`, `TRUSTED` default e `SAFE`) e `ExpressionResourceLimits` com limites
+  e tetos para compilação, forma de valores e Orcamento de Trabalho de Avaliação; cada modo aplica o
+  escopo de enforcement definido no ADR 0024.
 - Regex Linear por RE2/J em operadores e built-ins, sem fallback backtracking.
 - Revisão de exaustividade dos diagnósticos com registro, ordem canônica, spans UTF-16, lista completa e
   acumulação de erros independentes; esgotamento de recurso é terminal.
@@ -295,9 +296,9 @@ normativos.
 - Referência da linguagem, diagnósticos, guia de API, guia de hardening e manifesto de desempenho.
 
 **Critérios de aceite:** suíte cotidiana, perfil de stress e script integral verdes no Temurin 21 de
-referência; hot path escalar com zero B/op adicional e delta pareado em ±1%; coleções sem alocação por
-débito e até 5% de regressão; cache e Memoria de Calculo preservam seus gates; documentação revisada e
-nenhuma decisão aberta.
+referência; `UNSAFE` e `TRUSTED` com zero B/op adicional e delta pareado em ±1% em escalares e coleções;
+`SAFE` com zero B/op e ±1% em escalares, e coleções sem alocação por débito e até 5% de regressão; cache
+e Memoria de Calculo preservam seus gates; documentação revisada e nenhuma decisão aberta.
 
 **Depende de:** Etapas 0–10. A Etapa 11 foi cancelada.
 

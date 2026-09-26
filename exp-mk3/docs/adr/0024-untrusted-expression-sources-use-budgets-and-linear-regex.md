@@ -1,4 +1,4 @@
-# ADR 0024: Untrusted Expression Sources Use Deterministic Budgets and Linear Regex
+# ADR 0024: Resource Enforcement Uses Trust Modes and Linear Regex
 
 ## Status
 
@@ -14,15 +14,23 @@ Java providers as hostile would require a process sandbox outside the evaluator'
 
 ## Decision
 
-The evaluator accepts untrusted expression sources under deterministic, non-disableable resource
-budgets. Compilation bounds source length, token count, general syntax depth and semantic-tree node
-count; compilation and execution cumulatively bound evaluator-controlled variable-cost work and value
-shapes. The work budget covers collection traversal, regex, text expansion, expensive official numeric
-operations and boundary materialization, but not constant-cost scalar nodes or trusted provider bodies.
-Every budget has a generous default in the Ambiente de Expressao and an evidence-backed absolute ceiling.
-Untrusted boundary values and evaluator-produced values are also bounded by text length, recursive
-value depth, numeric precision and numeric scale magnitude. Resource exhaustion is terminal for the
-affected compilation phase or execution rather than subject to continued diagnostic accumulation.
+`ExpressionEnvironment` selects a public `ExpressionTrustMode`:
+
+- `TRUSTED` is the default. It enforces compilation-time resource limits (source length, tokens,
+  projected syntax depth, AST nodes, Current Item depth, constant/value shape checks, literal regex
+  limits, and folding work), but does not enforce runtime resource limits.
+- `SAFE` enforces the complete resource policy, including runtime value shape, materialization,
+  dynamic regex, factorial/deferred checks, and evaluation-work budgets. Resource exhaustion is terminal
+  for the affected phase or execution.
+- `UNSAFE` enforces none of the expression resource limits. It is for formulas and values whose resource
+  behavior is wholly trusted by the integrator.
+
+All modes preserve functional language contracts: type/nullability and boundary coercion contracts,
+structured non-resource diagnostics, and RE2/J as the only regex engine. `ExpressionResourceLimits`
+remains validated against its defaults and absolute ceilings in every mode; it is enforced only where the
+selected trust mode applies it. Resource diagnostics follow enforcement: none in `UNSAFE`, compilation
+diagnostics only in `TRUSTED`, and all applicable diagnostics in `SAFE`.
+
 The evaluator does not implement an internal wall-clock timeout and does not catch fatal JVM errors;
 call deadlines belong to the integrator. Registered environments, function providers and Java members
 remain trusted components rather than sandboxed code.
@@ -30,7 +38,9 @@ remain trusted components rather than sandboxed code.
 The Expression Engine cache combines an exact entry-count limit with a conservative retained-weight
 budget for source-controlled keys and compilation results. Weight is calibrated from JVM layouts but
 does not claim exact heap accounting for trusted shared environment components. A compilation result
-that exceeds the resident budget may be returned without becoming resident.
+that exceeds the resident budget may be returned without becoming resident. Parser `ThreadLocal` state is
+cleared in every mode. Cache bounds and parser cleanup are Engine lifecycle guarantees, not expression
+runtime enforcement.
 
 All regular expressions controlled by the language use RE2/J's linear-time subset. This includes
 literal regex operators and built-ins that receive patterns dynamically. Unsupported constructs such
@@ -39,8 +49,10 @@ as backreferences and lookaround fail through stable structured diagnostics, wit
 
 ## Consequences
 
-The accepted regex language is intentionally narrower than Java regex and must be documented. Limit
-checks become part of the public semantic/runtime contract and optimized plans must fail at the same
-semantic budget boundary as the Oraculo Sem Otimizacoes. Trusted provider code can still block, allocate
-without bound or violate its concurrency contract; containing that code requires isolation by the
-embedding application and is outside `exp-mk3`.
+The accepted regex language is intentionally narrower than Java regex and must be documented. Where a
+resource limit is active, optimized plans must fail at the same semantic budget boundary as the Oraculo
+Sem Otimizacoes. `TRUSTED` and `UNSAFE` must add zero B/op and stay within ±1% of the baseline for scalar
+and collection execution; `SAFE` retains the scalar gate and permits up to 5% paired collection
+regression with zero allocation per budget debit. Trusted provider code can still block, allocate without
+bound or violate its concurrency contract; containing that code requires isolation by the embedding
+application and is outside `exp-mk3`.

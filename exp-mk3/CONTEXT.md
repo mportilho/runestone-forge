@@ -48,6 +48,10 @@ _Avoid_: Assertion payload, expected output
 The compilation configuration that declares external symbols, functions, Java types, decimal numeric semantics, time zone, and limits used to interpret an expression case.
 _Avoid_: Test context, evaluation setup
 
+**Modo de Confianca**:
+The public `ExpressionTrustMode` (`UNSAFE`, `TRUSTED`, or `SAFE`) selected by an Ambiente de Expressao. `TRUSTED`, the default, enforces compilation-time resource limits but omits runtime resource guard rails; `UNSAFE` omits all expression resource guard rails; and `SAFE` enforces the full resource policy against untrusted sources and values. All modes preserve the language's functional contracts. ExpressionResourceLimits remain valid configuration in every mode, but are enforced only within the selected policy scope. Engine cache bounds and parser-context cleanup apply in every mode.
+_Avoid_: Sandbox mode, regex mode, semantic-validation switch
+
 **Identificador de Instancia do Ambiente**:
 An opaque UUID string generated when an Ambiente de Expressao is built and used to share compiled plans only while that same environment instance is reused. Separately built environments have different identifiers even when their configurations are equal.
 _Avoid_: Environment content hash, deterministic environment ID, semantic fingerprint, persistent environment ID

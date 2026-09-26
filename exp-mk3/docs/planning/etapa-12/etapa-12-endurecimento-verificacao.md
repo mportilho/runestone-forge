@@ -7,11 +7,12 @@ CI/CD, tagging e publicacao foram retirados do escopo.
 
 ## Objetivo
 
-Entregar um evaluator que aceite entradas nao confiaveis somente dentro de orcamentos deterministas,
-sem alterar a semantica decimal, a ordem de efeitos, o Plano Imutavel unico, a Memoria de Calculo ou o
-caminho quente escalar. Toda falha controlada pelo evaluator deve sair por diagnostico estruturado; o
-processo nao deve depender de timeout interno, captura de erro fatal ou heuristica de regex
-backtracking.
+Entregar um evaluator com politicas explicitas `UNSAFE`, `TRUSTED` e `SAFE`: o default `TRUSTED` limita
+a estrutura durante a compilacao sem cobrar guard rails de recurso no runtime; `SAFE` contem fontes e
+valores nao confiaveis por orcamentos deterministas; e `UNSAFE` deixa ambos ao integrador. Os tres
+preservam semantica decimal, ordem de efeitos, Plano Imutavel unico, Memoria de Calculo, contratos
+funcionais e Regex Linear. O processo nao depende de timeout interno, captura de erro fatal ou heuristica
+de regex backtracking.
 
 ## Autoridade e Premissas
 
@@ -82,6 +83,7 @@ ExpressionResourceLimits limits = ExpressionResourceLimits.builder()
         .build();
 
 ExpressionEnvironment environment = ExpressionEnvironment.builder()
+        .trustMode(ExpressionTrustMode.SAFE)
         .resourceLimits(limits)
         .build();
 ```
@@ -90,6 +92,13 @@ ExpressionEnvironment environment = ExpressionEnvironment.builder()
 no mutator do builder. O Ambiente copia a referencia imutavel e a expoe por `resourceLimits()`. Os
 getters/setters diretos de `maxCurrentItemDepth`, `maxMaterializedSize` e `maxFactorialInput` saem antes
 de M4; nao ha ponte deprecada para a API pre-GA.
+
+`ExpressionTrustMode` e um enum publico escolhido por `ExpressionEnvironment.Builder` e exposto pelo
+Ambiente. `TRUSTED` e o default: aplica limites de compilacao (fonte, tokens, profundidade, AST, Item
+Atual, forma de constantes, regex literal e trabalho de folding), mas nao aplica limites de recurso no
+runtime. `SAFE` aplica todos os limites. `UNSAFE` nao aplica limites de recurso. Os tres mantem contratos
+funcionais, RE2/J, cache limitado e limpeza do contexto do parser. `resourceLimits(...)` continua valido
+e validado em todos os modos; `SAFE` sem configuracao explicita usa `ExpressionResourceLimits.defaults()`.
 
 ### Defaults e tetos iniciais
 
@@ -115,7 +124,8 @@ os benchmarks ordinarios ficam muito abaixo dos defaults; o probe atual de 1.000
 
 ## Ordem de Enforcement
 
-As validacoes seguem a ordem abaixo para nunca executar uma fase cara antes de seu guard rail:
+Quando o modo selecionado aplica o limite, as validacoes seguem a ordem abaixo para nunca executar uma
+fase cara antes de seu guard rail:
 
 1. `ExpressionEngine.compile` valida null e `maxSourceLength` antes de hash/chave/cache.
 2. O seam sem cache repete `maxSourceLength` como defesa em profundidade.
@@ -150,8 +160,8 @@ para cada familia.
 
 ## Forma de Valores
 
-Um unico validador interno aplica forma em literais materializados, defaults, overrides, argumentos e
-retornos Java, resultados de built-ins, constantes dobradas e Materializacao Publica:
+Um unico validador interno aplica forma em literais materializados, defaults, constantes dobradas e,
+em `SAFE`, overrides, argumentos e retornos Java, resultados de built-ins e Materializacao Publica:
 
 - texto e chave textual: `maxTextLength`;
 - numero: precisao e magnitude de escala, calculada sem overflow;
@@ -170,9 +180,10 @@ omitir a checagem intermediaria. O gate JMH decide qualquer duvida no caminho fi
 
 ## Orcamento de Trabalho de Avaliacao
 
-`maxEvaluationWork` e operacional: mede trabalho variavel efetivamente realizado pelo tier. Cada
-compilacao e cada execucao recebe saldo novo. Nao existe contador por tenant, engine ou thread.
-Reentrancia iniciada por provider cria outro escopo e outro saldo.
+`maxEvaluationWork` e operacional nos modos que o aplicam: mede trabalho variavel efetivamente realizado
+pelo tier. `TRUSTED` e `SAFE` atribuem saldo novo ao folding; somente `SAFE` atribui saldo a cada
+execucao. Nao existe contador por tenant, engine ou thread. Reentrancia iniciada por provider em `SAFE`
+cria outro escopo e outro saldo.
 
 ### Modulo e escopo
 
@@ -183,9 +194,9 @@ Reentrancia iniciada por provider cria outro escopo e outro saldo.
 - Provider customizado e implicitamente `TRUSTED_UNMETERED`; apenas conversao/validacao feita pelo
   evaluator e medida.
 - `ExecutionScope` escalar preserva o layout atual.
-- `BudgetedExecutionScope` adiciona um `int remainingWork` somente quando a Visao executada pode
-  alcancar trabalho medido. O teto de 100 milhoes cabe em `int`; formulas usam `long` saturado antes do
-  debito.
+- `BudgetedExecutionScope` adiciona um `int remainingWork` somente em `SAFE`, quando a Visao executada
+  pode alcancar trabalho medido. O teto de 100 milhoes cabe em `int`; formulas usam `long` saturado antes
+  do debito.
 - Debito que excederia o saldo falha antes de iniciar aquela unidade. Efeitos anteriores permanecem;
   nao ha rollback.
 
@@ -280,8 +291,8 @@ severidade e politica de span ficam estaveis depois de M4.
 6. offset final como desempate.
 
 Parser, AST e resolver aplicam o mesmo comparador. Erros semanticos independentes continuam acumulados;
-`Tipo Invalido` suprime apenas cascatas dependentes. Orcamento esgotado e terminal e nao participa da
-acumulacao posterior.
+`Tipo Invalido` suprime apenas cascatas dependentes. Orcamento esgotado, quando o modo o aplica, e
+terminal e nao participa da acumulacao posterior.
 
 ### Familias novas minimas
 
@@ -309,7 +320,8 @@ vazios sem dividir pares substitutos.
 - single-flight de sucesso e falhas deterministicas;
 - fontes distintas concorrentes em SLL, fallback LL, erro lexical e erro semantico;
 - contexto do parser sem fonte, token, parse tree ou `CapturingErrorStrategy` retido;
-- limites em `limite - 1`, `limite`, `limite + 1` usando valores pequenos;
+- matriz `UNSAFE`/`TRUSTED`/`SAFE`, incluindo limites em `limite - 1`, `limite`, `limite + 1` usando
+  valores pequenos e ausencia do diagnostico de recurso fora do escopo de enforcement;
 - zero teste skipped, disabled ou aborted.
 
 O teste corpus/oraculo seleciona somente casos planejaveis antes de criar casos dinamicos. Um gate de
@@ -319,7 +331,8 @@ diagnostico nao aparecem como abort do oraculo.
 ### Perfil `stage12-stress`
 
 - JVM filha Temurin 21 com `-Xms512m -Xmx512m -Xss1m` e timeout de processo;
-- fonte/tokens/profundidade/nos e valores proximos aos tetos;
+- fonte/tokens/profundidade/nos e valores proximos aos tetos em `SAFE`, e compilacao estrutural limitada
+  em `TRUSTED`;
 - regex adversarial e crescimento de input;
 - expansao textual, containers profundos e cache preenchido por fontes distintas;
 - pool de plataforma `min(32, max(4, CPUs * 2))`;
@@ -384,8 +397,8 @@ de warm-up, 10 x 500 ms de medicao, heap fixo e mesma JVM/maquina, salvo justifi
 
 | Familia | Cobertura vinculante | Gate |
 |---|---|---|
-| escalar | `Phase5BaselineBenchmark.arithmeticCompute`, `logicalCompute`, funcao registrada e Memoria sem colecao | zero B/op adicional; delta pareado dentro de +/-1% |
-| colecao | `map`, `mapThenSum`, `allShortCircuit`, `sortBy`, `reduce`, wildcard, filtro e lambda aninhada | zero alocacao por debito; regressao pareada <=5% |
+| escalar | `Phase5BaselineBenchmark.arithmeticCompute`, `logicalCompute`, funcao registrada e Memoria sem colecao, nos tres modos | zero B/op adicional; delta pareado dentro de +/-1% |
+| colecao | `map`, `mapThenSum`, `allShortCircuit`, `sortBy`, `reduce`, wildcard, filtro e lambda aninhada | `UNSAFE`/`TRUSTED`: zero B/op adicional e +/-1%; `SAFE`: zero alocacao por debito e regressao pareada <=5% |
 | compilacao | parse warm, compilacao sem cache e fontes proximas dos limites aceitos | sem regressao >5% fora da banda; rejeicao limitada caracterizada separadamente |
 | cache | pipeline, miss, hit puro e hit+visao da Etapa 9 | miss <=10%; hit >=20x/99%; hit+visao >=10x/95% |
 | regex | literal, dinamica, replace/split e serie adversarial crescente | sem fallback; crescimento aproximadamente linear; latencia simples registrada |
@@ -412,9 +425,9 @@ Entregas versionadas:
 - `docs/reference/language.md`: sintaxe, tipos, operadores, precedencia, avaliacao, navegacao, colecoes,
   null de runtime, temporais, Regex Linear e residuos;
 - `docs/reference/diagnostics.md`: tabela completa do registro e estabilidade;
-- `docs/guides/api.md`: Engine, Ambiente, limites, compilacao, visoes, overrides, providers,
+- `docs/guides/api.md`: Engine, Ambiente, modos de confianca, limites, compilacao, visoes, overrides, providers,
   concorrencia e Memoria de Calculo com percurso indexado primeiro;
-- `docs/guides/hardening.md`: modelo de ameaca, tuning, tetos, providers confiaveis, deadline externo,
+- `docs/guides/hardening.md`: modelo de ameaca, `UNSAFE`/`TRUSTED`/`SAFE`, tuning, tetos, providers confiaveis, deadline externo,
   cache e observacao de falhas;
 - `docs/perf/stage12-gates.md`: ambiente, manifesto, comandos, limiares e leitura dos resultados.
 
@@ -442,7 +455,7 @@ Cada incremento comeca por teste direcionado e termina com `mvn -pl exp-mk3 -am 
 
 ### Incremento 3 - Contratos publicos e diagnosticos
 
-- Introduzir `ExpressionResourceLimits` e migrar Ambiente/consumidores.
+- Introduzir `ExpressionTrustMode`, `ExpressionResourceLimits` e migrar Ambiente/consumidores.
 - Adicionar tetos e zero uniforme.
 - Transformar `DiagnosticCode` em registro com metadata e comparador canonico.
 - Criar gates de cobertura do registro, lista completa e acumulacao sem cascata.

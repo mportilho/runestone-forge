@@ -14,9 +14,11 @@ de planejamento.
 
 ## Modelo de Ameaca
 
-- Tenants podem fornecer Fontes de Expressao Nao Confiaveis e dados de execucao nao confiaveis.
-- O evaluator deve proteger o processo com limites verificaveis sobre o trabalho que ele proprio
-  controla.
+- Tenants podem fornecer Fontes de Expressao Nao Confiaveis e dados de execucao nao confiaveis; o
+  integrador tambem pode declarar que uma formula e seus valores sao confiaveis.
+- `ExpressionTrustMode` e publico e pertence ao Ambiente de Expressao: `TRUSTED` e o default,
+  `SAFE` protege o processo com limites verificaveis sobre o trabalho controlado pelo evaluator, e
+  `UNSAFE` delega integralmente a confianca de recursos ao integrador.
 - O evaluator nao e um sandbox para codigo Java registrado pelo integrador. Ambientes de Expressao,
   Provedores de Funcoes e membros Java registrados continuam sendo componentes confiaveis e devem
   cumprir seus contratos de concorrencia, terminacao, nulidade e pureza.
@@ -26,9 +28,9 @@ de planejamento.
 - A compilacao limita tamanho UTF-16 da fonte, quantidade de tokens, profundidade sintatica geral e
   quantidade de nos da Arvore Semantica de Expressao. Numero de atribuicoes, comprimento de navegacao
   e construcoes semelhantes sao derivados desses orcamentos, sem knobs proprios.
-- Todo limite tem default generoso, configuracao no Ambiente de Expressao e teto absoluto validado.
-  Nao existe configuracao ilimitada. Defaults e tetos finais serao fechados contra corpus, stress e
-  benchmarks no plano detalhado.
+- Todo limite tem default generoso, configuracao no Ambiente de Expressao e teto absoluto validado,
+  mesmo quando o modo selecionado nao o aplica. Defaults e tetos finais serao fechados contra corpus,
+  stress e benchmarks no plano detalhado.
 - A hipotese inicial a validar e: fonte 16.384/262.144 unidades UTF-16, tokens 4.096/65.536,
   profundidade 64/256 e nos AST 4.096/65.536, no formato `default/teto`. Para limites existentes, a
   hipotese preserva os defaults e adiciona tetos: Item Atual 32/64, materializacao 10.000/100.000 e
@@ -68,16 +70,28 @@ de planejamento.
   expansoras nao limitadas pelo `MathContext` e no resultado publico. Nos intermediarios cuja metadata
   ja prova um teto seguro nao recebem checagem generica de precisao/escala.
 
+### Escopo por modo
+
+- `UNSAFE` nao aplica limites de recurso na compilacao ou no runtime, nem emite diagnosticos de recurso.
+- `TRUSTED` aplica limites de compilacao: fonte, tokens, profundidade, nos AST, Item Atual, forma de
+  constantes, regex literal e trabalho de folding. Ele nao aplica limites de recurso no runtime nem emite
+  seus diagnosticos; contratos funcionais de tipo, nulidade e Coercao de Borda permanecem ativos.
+- `SAFE` aplica todos os limites de compilacao e runtime. Seus diagnósticos de recurso permanecem
+  terminais.
+- RE2/J, limites por quantidade/peso do cache e a limpeza do contexto parser permanecem em todos os
+  modos; sao contratos da linguagem ou do ciclo de vida do Engine, nao enforcement runtime da expressao.
+
 ## Custo no Caminho Quente
 
-- Nao existe contador em todo `ExecutableNode`. O `ExecutionScope` escalar preserva seu layout; uma
-  variante interna `BudgetedExecutionScope` com contador `int` e usada somente quando a Visao de
-  Expressao executada pode percorrer containers.
+- Nao existe contador em todo `ExecutableNode`. O `ExecutionScope` escalar preserva seu layout; em
+  `SAFE`, uma variante interna `BudgetedExecutionScope` com contador `int` e usada somente quando a
+  Visao de Expressao executada pode percorrer containers.
 - Operacoes puras de custo conhecido debitam em bloco. Somente loops lazy ou com callbacks debitam por
   item. Nenhum debito aloca.
-- O caminho escalar deve manter zero `B/op` adicional e delta pareado dentro de +/-1%. Operacoes de
-  colecao devem manter zero alocacao por visita e no maximo 5% de regressao pareada. Acima disso, perfil
-  e tentativa de simplificacao sao obrigatorios; a protecao nao e removida silenciosamente.
+- Nos tres modos, o caminho escalar deve manter zero `B/op` adicional e delta pareado dentro de +/-1%.
+  Em `UNSAFE` e `TRUSTED`, colecoes tambem devem manter zero `B/op` adicional e +/-1%; em `SAFE`, devem
+  manter zero alocacao por visita e no maximo 5% de regressao pareada. Acima disso, perfil e tentativa de
+  simplificacao sao obrigatorios; a protecao nao e removida silenciosamente.
 - Se o subtipo de escopo alterar o layout escalar ou impedir inlining suficiente, o desenho deve ser
   refeito antes do fechamento.
 - Um modulo interno `WorkCostPolicy` concentra formulas saturadas, debito e associacao com codigo/span.
@@ -156,6 +170,8 @@ de planejamento.
 - Um unico tipo publico, final e imutavel `ExpressionResourceLimits` concentra defaults, builder,
   tetos e validacoes. O Ambiente de Expressao recebe e expoe esse valor por `resourceLimits(...)` e
   `resourceLimits()`.
+- `ExpressionEnvironment.Builder.trustMode(ExpressionTrustMode)` seleciona o modo e o Ambiente o expoe;
+  o default e `TRUSTED`. `SAFE` sem limites explicitos usa `ExpressionResourceLimits.defaults()`.
 - Os tres setters/getters diretos de limites atualmente existentes no Ambiente sao substituidos antes
   de M4; nao ha ponte deprecada porque a API ainda nao chegou a GA.
 - `CacheConfig` permanece separado: seus limites pertencem ao ciclo de vida do Engine de Expressao,
