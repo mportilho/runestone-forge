@@ -14,4 +14,4 @@ coverage: [identifier, call, subscript-slice, diagnostic]
 expected:
   runtimeError:
     code: RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED
-    span: {offset: 11, endOffset: 16, line: 1, column: 12}
+    span: {offset: 3, endOffset: 11, line: 1, column: 4}

@@ -14,4 +14,4 @@ coverage: [identifier, call, filter, at-symbol, comparison, safe-navigation, coa
 expected:
   runtimeError:
     code: RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED
-    span: {offset: 11, endOffset: 23, line: 1, column: 12}
+    span: {offset: 3, endOffset: 11, line: 1, column: 4}

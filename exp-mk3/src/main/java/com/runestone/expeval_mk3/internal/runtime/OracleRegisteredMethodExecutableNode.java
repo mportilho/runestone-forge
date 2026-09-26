@@ -31,6 +31,7 @@ public record OracleRegisteredMethodExecutableNode(
     public Object execute(ExecutionScope scope) {
         Object value = ExpressionRuntime.oracleInvokeRegisteredMethod(
                 receiver.execute(scope), safe, binding, arguments, scope, sourceSpan);
+        scope.validateValue(value, sourceSpan);
         scope.captureCalculation(calculationSlot, replaySlots, value);
         return value;
     }

@@ -2,6 +2,7 @@ package com.runestone.expeval_mk3.internal.runtime;
 
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionType;
+import com.runestone.expeval_mk3.api.ExpressionResourceLimits;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ObjectType;
 import com.runestone.expeval_mk3.api.ScalarType;
@@ -45,6 +46,24 @@ public final class PublicMaterialization {
             case ObjectType ignored -> throw new IllegalStateException(
                     "ObjectType must not cross the public materialization boundary");
         };
+    }
+
+    public static Object materialize(Object value, ExpressionType type, int maxMaterializedSize,
+                                     SourceSpan span, ExpressionResourceLimits limits) {
+        if (limits != null) {
+            ValueShapeValidator.Violation violation = ValueShapeValidator.check(value, limits);
+            if (violation != null) {
+                if (violation.kind() == ValueShapeValidator.Kind.FORBIDDEN_NULL) {
+                    throw RuntimeFailures.forbiddenNull("public value container must not contain null", span);
+                }
+                throw RuntimeFailures.domainViolation(
+                        violation.kind() == ValueShapeValidator.Kind.MATERIALIZATION
+                                ? DiagnosticCode.RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED
+                                : DiagnosticCode.RUNTIME_VALUE_SHAPE_EXCEEDED,
+                        violation.message(), span);
+            }
+        }
+        return materialize(value, type, maxMaterializedSize, span);
     }
 
     private static Object materializeScalar(Object value, ScalarType scalarType) {

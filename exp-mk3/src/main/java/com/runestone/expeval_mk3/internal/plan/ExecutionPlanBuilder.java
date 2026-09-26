@@ -163,6 +163,7 @@ public final class ExecutionPlanBuilder {
 
     private final boolean optimizing;
     private final int maxFoldMaterializedSize;
+    private final com.runestone.expeval_mk3.api.ExpressionResourceLimits foldValueLimits;
 
     public ExecutionPlanBuilder() {
         this(true);
@@ -173,8 +174,14 @@ public final class ExecutionPlanBuilder {
     }
 
     private ExecutionPlanBuilder(boolean optimizing, int maxFoldMaterializedSize) {
+        this(optimizing, maxFoldMaterializedSize, null);
+    }
+
+    private ExecutionPlanBuilder(boolean optimizing, int maxFoldMaterializedSize,
+                                 com.runestone.expeval_mk3.api.ExpressionResourceLimits foldValueLimits) {
         this.optimizing = optimizing;
         this.maxFoldMaterializedSize = maxFoldMaterializedSize;
+        this.foldValueLimits = foldValueLimits;
     }
 
     /**
@@ -201,7 +208,8 @@ public final class ExecutionPlanBuilder {
     private ExecutionPlanBuilder forCompilation(boolean optimizing, ExpressionEnvironment environment) {
         int limit = environment.trustMode() == ExpressionTrustMode.UNSAFE
                 ? Integer.MAX_VALUE : environment.resourceLimits().maxMaterializedSize();
-        return new ExecutionPlanBuilder(optimizing, limit);
+        return new ExecutionPlanBuilder(optimizing, limit,
+                environment.trustMode() == ExpressionTrustMode.UNSAFE ? null : environment.resourceLimits());
     }
 
     private ExecutionPlan buildPlan(SemanticModel model, ExpressionEnvironment environment) {
@@ -275,7 +283,8 @@ public final class ExecutionPlanBuilder {
                 commonSubexpressions.replaySlotCount(),
                 environment.boundaryCoercion(),
                 environment.zoneId(),
-                runtimeMaterializedSize(environment));
+                runtimeMaterializedSize(environment),
+                environment.trustMode() == ExpressionTrustMode.SAFE ? environment.resourceLimits() : null);
     }
 
     private static VariableMemorySchema buildVariableMemorySchema(
@@ -914,7 +923,8 @@ public final class ExecutionPlanBuilder {
      * traversal. In oracle mode this is a no-op: {@code built} is always returned unchanged.
      */
     private ExecutableNode fold(ExecutableNode built, ExecutableNode... requiredConstantChildren) {
-        return optimizing ? ConstantFolder.fold(built, maxFoldMaterializedSize, requiredConstantChildren) : built;
+        return optimizing ? ConstantFolder.fold(built, maxFoldMaterializedSize, foldValueLimits,
+                requiredConstantChildren) : built;
     }
 
     /**

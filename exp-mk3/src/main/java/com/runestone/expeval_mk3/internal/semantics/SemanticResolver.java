@@ -85,6 +85,7 @@ import java.util.Set;
 import com.runestone.expeval_mk3.internal.regex.InvalidRegexPatternException;
 import com.runestone.expeval_mk3.internal.regex.LinearRegex;
 import com.runestone.expeval_mk3.internal.regex.PreparedRegexCall;
+import com.runestone.expeval_mk3.internal.runtime.ValueShapeValidator;
 
 public final class SemanticResolver {
 
@@ -358,6 +359,15 @@ public final class SemanticResolver {
 
         private Resolution resolveLiteral(LiteralNode literal, ExpressionType expectedType) {
             LiteralResolution resolution = literalResolution(literal.value());
+            if (environment.trustMode() != ExpressionTrustMode.UNSAFE) {
+                ValueShapeValidator.Violation violation = ValueShapeValidator.check(
+                        resolution.value(), environment.resourceLimits());
+                if (violation != null) {
+                    diagnostic(DiagnosticCode.SEMANTIC_VALUE_SHAPE_EXCEEDED,
+                            violation.message(), literal.sourceSpan());
+                    return Resolution.invalidResolution();
+                }
+            }
             if (expectedType != null && !expectedType.equals(resolution.type())) {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_OPERATOR_TYPE_MISMATCH,
@@ -411,6 +421,13 @@ public final class SemanticResolver {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_MATERIALIZATION_LIMIT_EXCEEDED,
                         "Collection literal exceeds maxMaterializedSize " + environment.resourceLimits().maxMaterializedSize(),
+                        collection.sourceSpan());
+                return Resolution.invalidResolution();
+            }
+            if (environment.trustMode() != ExpressionTrustMode.UNSAFE
+                    && literalContainerDepth(collection) > environment.resourceLimits().maxValueDepth()) {
+                diagnostic(DiagnosticCode.SEMANTIC_VALUE_SHAPE_EXCEEDED,
+                        "maxValueDepth " + environment.resourceLimits().maxValueDepth() + " exceeded",
                         collection.sourceSpan());
                 return Resolution.invalidResolution();
             }
@@ -486,6 +503,16 @@ public final class SemanticResolver {
             recordPure(collection.id(), allPure(collection.elements()));
             collectionShapes.put(collection.id(), new CollectionShape(collection.elements().size()));
             return Resolution.known(collectionType);
+        }
+
+        private int literalContainerDepth(CollectionLiteralNode collection) {
+            int childDepth = 0;
+            for (ExpressionNode element : collection.elements()) {
+                if (element instanceof CollectionLiteralNode nested) {
+                    childDepth = Math.max(childDepth, literalContainerDepth(nested));
+                }
+            }
+            return childDepth + 1;
         }
 
         private Resolution resolveBinary(BinaryOperationNode binary) {
@@ -721,8 +748,16 @@ public final class SemanticResolver {
             if (rejectNullableOperands(binary.left(), binary.right())) {
                 return Resolution.invalidResolution();
             }
+            String pattern = (String) preparedValues.get(binary.right().id());
+            if (environment.trustMode() != ExpressionTrustMode.UNSAFE
+                    && pattern.length() > environment.resourceLimits().maxRegexPatternLength()) {
+                diagnostic(DiagnosticCode.SEMANTIC_REGEX_PATTERN_LENGTH_EXCEEDED,
+                        "Regex pattern exceeds maxRegexPatternLength "
+                                + environment.resourceLimits().maxRegexPatternLength(), binary.right().sourceSpan());
+                return Resolution.invalidResolution();
+            }
             try {
-                preparedValues.put(binary.id(), LinearRegex.compile((String) preparedValues.get(binary.right().id())));
+                preparedValues.put(binary.id(), LinearRegex.compile(pattern));
             } catch (InvalidRegexPatternException exception) {
                 diagnostic(DiagnosticCode.SEMANTIC_REGEX_PATTERN_INVALID, "Invalid regex pattern", binary.right().sourceSpan());
                 return Resolution.invalidResolution();
@@ -1066,8 +1101,16 @@ public final class SemanticResolver {
             if (!(patternArgument.expression() instanceof LiteralNode literal)) {
                 return true;
             }
+            String patternText = (String) preparedValues.get(literal.id());
+            if (environment.trustMode() != ExpressionTrustMode.UNSAFE
+                    && patternText.length() > environment.resourceLimits().maxRegexPatternLength()) {
+                diagnostic(DiagnosticCode.SEMANTIC_REGEX_PATTERN_LENGTH_EXCEEDED,
+                        "Regex pattern exceeds maxRegexPatternLength "
+                                + environment.resourceLimits().maxRegexPatternLength(), literal.sourceSpan());
+                return false;
+            }
             try {
-                LinearRegex pattern = LinearRegex.compile((String) preparedValues.get(literal.id()));
+                LinearRegex pattern = LinearRegex.compile(patternText);
                 preparedValues.put(functionCall.id(), replaceAll
                         ? PreparedRegexCall.replaceAll(pattern)
                         : PreparedRegexCall.split(pattern));

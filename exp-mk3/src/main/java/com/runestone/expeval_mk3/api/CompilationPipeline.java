@@ -10,6 +10,10 @@ import com.runestone.expeval_mk3.internal.parser.ParseResult;
 import com.runestone.expeval_mk3.internal.parser.ParseSuccess;
 import com.runestone.expeval_mk3.internal.plan.ExecutionPlanBuilder;
 import com.runestone.expeval_mk3.internal.runtime.RuntimeServices;
+import com.runestone.expeval_mk3.internal.runtime.ValueShapeValidator;
+import com.runestone.expeval_mk3.internal.runtime.ConstantShapeException;
+import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
+import com.runestone.expeval_mk3.internal.diagnostics.ExpressionDiagnostics;
 import com.runestone.expeval_mk3.internal.semantics.SemanticModel;
 import com.runestone.expeval_mk3.internal.semantics.SemanticResolutionFailure;
 import com.runestone.expeval_mk3.internal.semantics.SemanticResolutionResult;
@@ -50,6 +54,17 @@ final class CompilationPipeline {
         if (astResult instanceof SemanticAstBuildFailure failure) {
             return new ExpressionCompilationResult.Failure(failure.diagnostics());
         }
+        if (limited) {
+            for (ExternalSymbol symbol : environment.externalSymbols().values()) {
+                ValueShapeValidator.Violation violation = ValueShapeValidator.check(
+                        symbol.defaultValue().value(), environment.resourceLimits());
+                if (violation != null) {
+                    return new ExpressionCompilationResult.Failure(java.util.List.of(ExpressionDiagnostics.create(
+                            DiagnosticCode.SEMANTIC_VALUE_SHAPE_EXCEEDED,
+                            "Default for '" + symbol.name() + "': " + violation.message(), null)));
+                }
+            }
+        }
         SemanticResolutionResult semanticResult = new SemanticResolver().resolve(
                 ((SemanticAstBuildSuccess) astResult).file(), environment);
         if (semanticResult instanceof SemanticResolutionFailure failure) {
@@ -57,8 +72,14 @@ final class CompilationPipeline {
         }
         SemanticResolutionSuccess success = (SemanticResolutionSuccess) semanticResult;
         SemanticModel model = success.model();
-        CompiledExpression compiledExpression = new CompiledExpression(
-                new ExecutionPlanBuilder().build(model, environment), runtimeServices, success.warnings());
+        CompiledExpression compiledExpression;
+        try {
+            compiledExpression = new CompiledExpression(
+                    new ExecutionPlanBuilder().build(model, environment), runtimeServices, success.warnings());
+        } catch (ConstantShapeException violation) {
+            return new ExpressionCompilationResult.Failure(java.util.List.of(ExpressionDiagnostics.create(
+                    DiagnosticCode.SEMANTIC_VALUE_SHAPE_EXCEEDED, violation.getMessage(), violation.span())));
+        }
         return new ExpressionCompilationResult.Success(compiledExpression, success.warnings());
     }
 }

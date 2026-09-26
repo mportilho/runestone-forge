@@ -27,6 +27,7 @@ public record RegisteredPropertyExecutableNode(
     @Override
     public Object execute(ExecutionScope scope) {
         Object value = ExpressionRuntime.registeredPropertyValue(receiver.execute(scope), safe, binding, sourceSpan);
+        scope.validateValue(value, sourceSpan);
         scope.captureCalculation(calculationSlot, replaySlots, value);
         return value;
     }

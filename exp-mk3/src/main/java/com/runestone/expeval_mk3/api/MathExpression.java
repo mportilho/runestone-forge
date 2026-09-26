@@ -34,7 +34,7 @@ public final class MathExpression {
     public BigDecimal compute(Map<String, ?> overrides) {
         Object value = plan.compute(overrides, runtimeServices.clock());
         return (BigDecimal) PublicMaterialization.materialize(
-                value, ScalarType.NUMBER, plan.maxMaterializedSize(), resultSourceSpan);
+                value, ScalarType.NUMBER, plan.maxMaterializedSize(), resultSourceSpan, plan.valueLimits());
     }
 
     public ComputationWithMemory<BigDecimal> computeWithMemory() {

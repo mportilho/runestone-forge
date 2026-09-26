@@ -2,6 +2,7 @@ package com.runestone.expeval_mk3.internal.runtime;
 
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionType;
+import com.runestone.expeval_mk3.api.ExpressionExecutionException;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.JavaMethodDescriptor;
 import com.runestone.expeval_mk3.api.JavaWildcardChildDescriptor;
@@ -11,6 +12,7 @@ import com.runestone.expeval_mk3.internal.ast.SubscriptBounds;
 import com.runestone.expeval_mk3.internal.diagnostics.ProviderReturnViolation;
 import com.runestone.expeval_mk3.internal.diagnostics.RuntimeFailures;
 import com.runestone.expeval_mk3.internal.regex.InvalidRegexPatternException;
+import com.runestone.expeval_mk3.internal.regex.LinearRegex;
 import com.runestone.expeval_mk3.internal.regex.PreparedRegexCall;
 import com.runestone.expeval_mk3.internal.semantics.CollectionOperationWiring;
 import com.runestone.expeval_mk3.internal.semantics.ContextualMemberNavigationBinding;
@@ -60,6 +62,13 @@ public final class ExpressionRuntime {
                 }
             case 1: {
                 Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
+                if (scope.enforcesResourceLimits() && officialStringFunction(descriptor, "concat")) {
+                    long size = 0;
+                    for (Object element : (List<?>) argument0) {
+                        size = saturatedAdd(size, ((String) element).length());
+                    }
+                    scope.validateTextLength(size, callSpan);
+                }
                 try {
                     return descriptor.invoke(argument0);
                 } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
@@ -71,7 +80,13 @@ public final class ExpressionRuntime {
             case 2: {
                 Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
                 Object argument1 = requiredArgument(argumentNodes, 1, scope, descriptor, callSpan);
+                if (scope.enforcesResourceLimits()) {
+                    preflightTextExpansion(descriptor, argument0, argument1, null, scope, callSpan);
+                }
                 try {
+                    if (scope.enforcesResourceLimits() && officialStringFunction(descriptor, "split")) {
+                        return scope.split(LinearRegex.compile((String) argument1), (String) argument0, callSpan);
+                    }
                     return descriptor.invoke(argument0, argument1);
                 } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
                     throw fatal;
@@ -83,7 +98,14 @@ public final class ExpressionRuntime {
                 Object argument0 = requiredArgument(argumentNodes, 0, scope, descriptor, callSpan);
                 Object argument1 = requiredArgument(argumentNodes, 1, scope, descriptor, callSpan);
                 Object argument2 = requiredArgument(argumentNodes, 2, scope, descriptor, callSpan);
+                if (scope.enforcesResourceLimits()) {
+                    preflightTextExpansion(descriptor, argument0, argument1, argument2, scope, callSpan);
+                }
                 try {
+                    if (scope.enforcesResourceLimits() && officialStringFunction(descriptor, "replaceAll")) {
+                        return scope.replaceAll(LinearRegex.compile((String) argument1),
+                                (String) argument0, (String) argument2, callSpan);
+                    }
                     return descriptor.invoke(argument0, argument1, argument2);
                 } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
                     throw fatal;
@@ -237,7 +259,7 @@ public final class ExpressionRuntime {
                 ? requiredArgument(argumentNodes, 2, scope, descriptor, callSpan)
                 : null;
         try {
-            return preparedCall.execute((String) value, (String) replacement);
+            return preparedCall.execute((String) value, (String) replacement, scope, callSpan);
         } catch (ThreadDeath | VirtualMachineError | LinkageError fatal) {
             throw fatal;
         } catch (Throwable exception) {
@@ -256,10 +278,20 @@ public final class ExpressionRuntime {
             throw RuntimeFailures.forbiddenNull(
                     "function argument must not be null: " + descriptor.languageName(), callSpan);
         }
+        scope.validateValue(argument, callSpan);
+        if (index == 1 && argument instanceof String pattern
+                && descriptor.implementationMetadata().owner().equals(
+                        "com.runestone.expeval_mk3.api.StringBuiltInFunctions")
+                && (descriptor.languageName().equals("split") || descriptor.languageName().equals("replaceAll"))) {
+            scope.validateRegexPattern(pattern, callSpan);
+        }
         return argument;
     }
 
     private static RuntimeException classify(FunctionDescriptor descriptor, SourceSpan callSpan, Throwable exception) {
+        if (exception instanceof ExpressionExecutionException executionException) {
+            return executionException;
+        }
         if (exception instanceof InvalidRegexPatternException) {
             return RuntimeFailures.invalidRegexPattern(callSpan, exception);
         }
@@ -276,6 +308,66 @@ public final class ExpressionRuntime {
         // the provider implementation are all provider-invocation failures; fatal JVM conditions
         // are rethrown unchanged by the caller's ThreadDeath|VirtualMachineError|LinkageError catch.
         return RuntimeFailures.providerFailure(descriptor.languageName(), callSpan, exception);
+    }
+
+    private static boolean officialStringFunction(FunctionDescriptor descriptor, String name) {
+        return descriptor.languageName().equals(name)
+                && descriptor.implementationMetadata().owner().equals(
+                        "com.runestone.expeval_mk3.api.StringBuiltInFunctions");
+    }
+
+    public static void preflightTextExpansion(FunctionDescriptor descriptor, Object first, Object second,
+                                               Object third, ExecutionScope scope, SourceSpan span) {
+        if (officialStringFunction(descriptor, "repeat")) {
+            scope.validateRepeat((String) first, (BigDecimal) second, span);
+        } else if (officialStringFunction(descriptor, "padLeft")
+                || officialStringFunction(descriptor, "padRight")) {
+            scope.validateTextLength(Math.max(((String) first).length(), ((BigDecimal) second).longValue()), span);
+        } else if (officialStringFunction(descriptor, "replaceFirst")) {
+            String text = (String) first;
+            String token = (String) second;
+            int at = text.indexOf(token);
+            if (at >= 0) {
+                scope.validateTextLength((long) text.length() - token.length() + ((String) third).length(), span);
+            }
+        } else if (officialStringFunction(descriptor, "padLeftWith")
+                || officialStringFunction(descriptor, "padRightWith")) {
+            scope.validateTextLength(Math.max(((String) first).length(), ((BigDecimal) second).longValue()), span);
+        } else if (officialStringFunction(descriptor, "replace")) {
+            String text = (String) first;
+            String target = (String) second;
+            String replacement = (String) third;
+            long occurrences = target.isEmpty() ? (long) text.length() + 1 : nonOverlappingOccurrences(text, target);
+            long growth = Math.max(0L, (long) replacement.length() - target.length());
+            scope.validateTextLength(saturatedAdd(text.length(), saturatedMultiply(occurrences, growth)), span);
+        } else if (officialStringFunction(descriptor, "join")) {
+            long size = 0;
+            List<?> values = (List<?>) first;
+            for (Object value : values) {
+                size = saturatedAdd(size, ((String) value).length());
+            }
+            scope.validateTextLength(saturatedAdd(size, saturatedMultiply(
+                    Math.max(0, values.size() - 1), ((String) second).length())), span);
+        }
+    }
+
+    private static long nonOverlappingOccurrences(String text, String target) {
+        long occurrences = 0;
+        int fromIndex = 0;
+        int match;
+        while ((match = text.indexOf(target, fromIndex)) >= 0) {
+            occurrences++;
+            fromIndex = match + target.length();
+        }
+        return occurrences;
+    }
+
+    private static long saturatedMultiply(long left, long right) {
+        return right != 0 && left > Long.MAX_VALUE / right ? Long.MAX_VALUE : left * right;
+    }
+
+    private static long saturatedAdd(long left, long right) {
+        return left > Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
     }
 
     public static List<Object> materialize(List<ExecutableNode> elements, ExecutionScope scope, SourceSpan sourceSpan) {
@@ -392,6 +484,7 @@ public final class ExpressionRuntime {
             Object receiver,
             boolean safe,
             WildcardNavigationBinding binding,
+            ExecutionScope scope,
             int maxMaterializedSize,
             SourceSpan sourceSpan) {
         if (receiver == null) {
@@ -403,7 +496,8 @@ public final class ExpressionRuntime {
         return switch (binding.receiverKind()) {
             case COLLECTION -> collectionWildcardValues(receiver, maxMaterializedSize, sourceSpan);
             case MAP -> mapWildcardValues(receiver, maxMaterializedSize, sourceSpan);
-            case OBJECT -> objectWildcardValues(receiver, binding.objectChildren(), maxMaterializedSize, sourceSpan);
+            case OBJECT -> objectWildcardValues(
+                    receiver, binding.objectChildren(), scope, maxMaterializedSize, sourceSpan);
         };
     }
 
@@ -437,6 +531,7 @@ public final class ExpressionRuntime {
     private static List<Object> objectWildcardValues(
             Object receiver,
             List<JavaWildcardChildDescriptor> children,
+            ExecutionScope scope,
             int maxMaterializedSize,
             SourceSpan sourceSpan) {
         requireMaterializedSize(children.size(), maxMaterializedSize, sourceSpan);
@@ -452,7 +547,9 @@ public final class ExpressionRuntime {
                 // access failure, including one a safe link must not mask.
                 throw RuntimeFailures.memberAccessFailure(child.name(), sourceSpan, exception);
             }
-            result.add(requiredMemberValue(value, child.name(), sourceSpan));
+            Object requiredValue = requiredMemberValue(value, child.name(), sourceSpan);
+            scope.validateValue(requiredValue, sourceSpan);
+            result.add(requiredValue);
         }
         return List.copyOf(result);
     }
@@ -688,6 +785,7 @@ public final class ExpressionRuntime {
             throw RuntimeFailures.forbiddenNull(
                     "registered method argument must not be null: " + memberName, sourceSpan);
         }
+        scope.validateValue(argument, sourceSpan);
         return argument;
     }
 

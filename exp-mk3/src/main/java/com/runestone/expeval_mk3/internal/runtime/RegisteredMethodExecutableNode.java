@@ -31,6 +31,7 @@ public record RegisteredMethodExecutableNode(
     public Object execute(ExecutionScope scope) {
         Object value = ExpressionRuntime.invokeRegisteredMethod(
                 receiver.execute(scope), safe, binding, arguments, scope, sourceSpan);
+        scope.validateValue(value, sourceSpan);
         scope.captureCalculation(calculationSlot, replaySlots, value);
         return value;
     }

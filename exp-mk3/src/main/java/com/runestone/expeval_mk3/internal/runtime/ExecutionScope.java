@@ -1,8 +1,11 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
 import com.runestone.expeval_mk3.internal.memory.CalculationRecorder;
+import com.runestone.expeval_mk3.api.SourceSpan;
+import com.runestone.expeval_mk3.internal.regex.LinearRegex;
 
 import java.time.Clock;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -11,6 +14,7 @@ import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.List;
 
 public class ExecutionScope {
 
@@ -94,6 +98,35 @@ public class ExecutionScope {
 
     public void captureCalculation(int calculationSlot, Object value) {
         captureCalculation(calculationSlot, NO_REPLAY_SLOTS, value);
+    }
+
+    /** SAFE overrides this boundary; ordinary scopes do not perform resource checks. */
+    public void validateValue(Object value, SourceSpan span) {
+    }
+
+    public boolean enforcesResourceLimits() {
+        return false;
+    }
+
+    public void validateRegexPattern(String pattern, SourceSpan span) {
+    }
+
+    public void validateRepeat(String text, BigDecimal times, SourceSpan span) {
+    }
+
+    public void validateTextLength(long length, SourceSpan span) {
+    }
+
+    public String concatenate(String left, String right, SourceSpan span) {
+        return left + right;
+    }
+
+    public String replaceAll(LinearRegex regex, String text, String replacement, SourceSpan span) {
+        return regex.replaceAll(text, replacement);
+    }
+
+    public List<String> split(LinearRegex regex, String text, SourceSpan span) {
+        return regex.split(text);
     }
 
     public void captureCalculation(int calculationSlot, int[] replaySlots, Object value) {

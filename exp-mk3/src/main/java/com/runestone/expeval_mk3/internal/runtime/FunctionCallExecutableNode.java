@@ -32,6 +32,7 @@ public record FunctionCallExecutableNode(
                 ? ExpressionRuntime.invokeFunction(descriptor, arguments, scope, sourceSpan)
                 : ExpressionRuntime.invokePreparedRegexBuiltIn(
                         descriptor, arguments, preparedRegexCall, scope, sourceSpan);
+        scope.validateValue(value, sourceSpan);
         scope.captureCalculation(calculationSlot, replaySlots, value);
         return value;
     }

@@ -1,13 +1,17 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
 import com.runestone.expeval_mk3.api.CollectionType;
+import com.runestone.expeval_mk3.api.ExpressionResourceLimits;
 import com.runestone.expeval_mk3.api.ExpressionType;
+import com.runestone.expeval_mk3.api.ExpressionExecutionException;
 import com.runestone.expeval_mk3.api.FunctionDescriptor;
 import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.ScalarType;
 import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -61,9 +65,33 @@ public final class ConstantFolder {
 
     public static ExecutableNode fold(
             ExecutableNode built, int maxMaterializedSize, ExecutableNode... requiredConstantChildren) {
+        return fold(built, maxMaterializedSize, null, requiredConstantChildren);
+    }
+
+    public static ExecutableNode fold(ExecutableNode built, int maxMaterializedSize,
+                                      ExpressionResourceLimits limits, ExecutableNode... requiredConstantChildren) {
         for (ExecutableNode child : requiredConstantChildren) {
             if (!(child instanceof ConstantExecutableNode)) {
                 return built;
+            }
+        }
+        if (limits != null && built instanceof BinaryExecutableNode binary) {
+            binary.validateConstantExpansion(limits);
+        }
+        if (limits != null && built instanceof FunctionCallExecutableNode call
+                && call.descriptor().implementationMetadata().owner().equals(
+                        "com.runestone.expeval_mk3.api.StringBuiltInFunctions")) {
+            // The SAFE execution seam enforces the same pre-allocation checks for constant expansions.
+            // Do not execute a custom provider during this preflight.
+            SafeExecutionScope preflight = new SafeExecutionScope(ExecutionScope.blankFrame(0),
+                    ZoneOffset.UTC, Clock.systemUTC(), null, limits);
+            try {
+                call.execute(preflight);
+            } catch (ExpressionExecutionException violation) {
+                if (violation.diagnostic().code().equals("RUNTIME_VALUE_SHAPE_EXCEEDED")
+                        || violation.diagnostic().code().equals("RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED")) {
+                    throw new ConstantShapeException(violation.diagnostic().message(), call.sourceSpan());
+                }
             }
         }
         Object value;
@@ -78,6 +106,12 @@ public final class ConstantFolder {
                     violation);
         } catch (RuntimeException executionFailure) {
             return built;
+        }
+        if (limits != null) {
+            ValueShapeValidator.Violation violation = ValueShapeValidator.check(value, limits);
+            if (violation != null) {
+                throw new ConstantShapeException(violation.message(), built.sourceSpan());
+            }
         }
         if (value == null || !withinMaterializationLimit(value, maxMaterializedSize)) {
             return built;

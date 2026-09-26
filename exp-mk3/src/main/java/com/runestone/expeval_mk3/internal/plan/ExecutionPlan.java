@@ -4,6 +4,7 @@ import com.runestone.expeval_mk3.api.BoundaryCoercion;
 import com.runestone.expeval_mk3.api.CalculationMemory;
 import com.runestone.expeval_mk3.api.ComputationWithMemory;
 import com.runestone.expeval_mk3.api.ExpressionType;
+import com.runestone.expeval_mk3.api.ExpressionResourceLimits;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.SourceSpan;
@@ -13,6 +14,9 @@ import com.runestone.expeval_mk3.internal.memory.CalculationRecorder;
 import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 import com.runestone.expeval_mk3.internal.runtime.PublicMaterialization;
+import com.runestone.expeval_mk3.internal.runtime.SafeExecutionScope;
+import com.runestone.expeval_mk3.internal.runtime.ValueShapeValidator;
+import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 
 import java.time.Clock;
 import java.time.ZoneId;
@@ -51,6 +55,7 @@ public final class ExecutionPlan {
     private final BoundaryCoercion boundaryCoercion;
     private final ZoneId zoneId;
     private final int maxMaterializedSize;
+    private final ExpressionResourceLimits valueLimits;
 
     ExecutionPlan(
             ExecutableNode resultExpression,
@@ -67,6 +72,20 @@ public final class ExecutionPlan {
             BoundaryCoercion boundaryCoercion,
             ZoneId zoneId,
             int maxMaterializedSize) {
+        this(resultExpression, resultType, assignments, externalBindings, declaredSymbolsInCanonicalOrder,
+                assignedSymbolsInCreationOrder, foldedVariableReads, fullCalculationMemorySchema,
+                assignmentCalculationMemorySchema, frameSize, replaySlotCount, boundaryCoercion,
+                zoneId, maxMaterializedSize, null);
+    }
+
+    ExecutionPlan(
+            ExecutableNode resultExpression, ExpressionType resultType, List<AssignmentExecutable> assignments,
+            List<ExternalBindingPlan> externalBindings, List<ExternalSymbol> declaredSymbolsInCanonicalOrder,
+            List<AssignedSymbol> assignedSymbolsInCreationOrder, List<FoldedRead> foldedVariableReads,
+            CalculationMemorySchema fullCalculationMemorySchema,
+            CalculationMemorySchema assignmentCalculationMemorySchema, int frameSize, int replaySlotCount,
+            BoundaryCoercion boundaryCoercion, ZoneId zoneId, int maxMaterializedSize,
+            ExpressionResourceLimits valueLimits) {
         if ((resultExpression == null) != (resultType == null)) {
             throw new IllegalStateException("resultType must be present if and only if resultExpression is present");
         }
@@ -96,6 +115,7 @@ public final class ExecutionPlan {
         this.boundaryCoercion = Objects.requireNonNull(boundaryCoercion, "boundaryCoercion");
         this.zoneId = Objects.requireNonNull(zoneId, "zoneId");
         this.maxMaterializedSize = maxMaterializedSize;
+        this.valueLimits = valueLimits;
     }
 
     public boolean hasResult() {
@@ -118,6 +138,10 @@ public final class ExecutionPlan {
 
     public int maxMaterializedSize() {
         return maxMaterializedSize;
+    }
+
+    public ExpressionResourceLimits valueLimits() {
+        return valueLimits;
     }
 
     /**
@@ -159,7 +183,7 @@ public final class ExecutionPlan {
         ExecutionScope scope = executeAssignments(overrides, clock, recorder);
         Object value = executeResult(scope);
         Object result = PublicMaterialization.materialize(
-                value, resultType, maxMaterializedSize, resultSourceSpan());
+                value, resultType, maxMaterializedSize, resultSourceSpan(), valueLimits);
         CalculationMemory memory = fullCalculationMemorySchema.freeze(scope, recorder);
         return new ComputationWithMemory<>(result, memory);
     }
@@ -184,7 +208,7 @@ public final class ExecutionPlan {
         Map<String, Object> materialized = new LinkedHashMap<>();
         for (AssignedSymbol symbol : assignedSymbolsInCreationOrder) {
             materialized.put(symbol.name(), PublicMaterialization.materialize(
-                    scope.read(symbol.frameSlot()), symbol.type(), maxMaterializedSize, symbol.sourceSpan()));
+                    scope.read(symbol.frameSlot()), symbol.type(), maxMaterializedSize, symbol.sourceSpan(), valueLimits));
         }
         Map<String, Object> result = Collections.unmodifiableMap(materialized);
         CalculationMemory memory = assignmentCalculationMemorySchema.freeze(scope, recorder);
@@ -216,9 +240,11 @@ public final class ExecutionPlan {
             }
         }
 
-        ExecutionScope scope = calculationRecorder == null
-                ? new ExecutionScope(frame, zoneId, clock)
-                : new ExecutionScope(frame, zoneId, clock, calculationRecorder);
+        ExecutionScope scope = valueLimits != null
+                ? new SafeExecutionScope(frame, zoneId, clock, calculationRecorder, valueLimits)
+                : calculationRecorder == null
+                        ? new ExecutionScope(frame, zoneId, clock)
+                        : new ExecutionScope(frame, zoneId, clock, calculationRecorder);
         for (AssignmentExecutable assignment : assignments) {
             assignment.execute(scope);
         }
@@ -323,13 +349,32 @@ public final class ExecutionPlan {
     }
 
     private Object coerceOverride(ExternalSymbol symbol, Object override) {
+        if (valueLimits != null) {
+            requireValueShape(override);
+        }
         try {
-            return symbol.coerceOverride(override, boundaryCoercion);
+            Object value = symbol.coerceOverride(override, boundaryCoercion);
+            if (valueLimits != null) {
+                requireValueShape(value);
+            }
+            return value;
         } catch (IllegalArgumentException cause) {
             String message = cause.getMessage() == null
                     ? "external symbol '" + symbol.name() + "' override is invalid"
                     : cause.getMessage();
             throw RuntimeFailures.invalidExternalInput(message, cause);
+        }
+    }
+
+    private void requireValueShape(Object value) {
+        ValueShapeValidator.Violation violation = ValueShapeValidator.check(value, valueLimits);
+        if (violation != null) {
+            if (violation.kind() == ValueShapeValidator.Kind.MATERIALIZATION
+                    || violation.kind() == ValueShapeValidator.Kind.FORBIDDEN_NULL) {
+                throw RuntimeFailures.invalidExternalInput(violation.message());
+            }
+            throw RuntimeFailures.domainViolation(DiagnosticCode.RUNTIME_VALUE_SHAPE_EXCEEDED,
+                    violation.message(), null);
         }
     }
 }

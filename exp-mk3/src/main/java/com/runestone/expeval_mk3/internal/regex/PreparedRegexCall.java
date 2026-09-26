@@ -1,5 +1,7 @@
 package com.runestone.expeval_mk3.internal.regex;
 
+import com.runestone.expeval_mk3.api.SourceSpan;
+import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 import java.util.Objects;
 
 /** A literal regex compiled together with the exact official built-in operation that consumes it. */
@@ -21,10 +23,10 @@ public final class PreparedRegexCall {
         return new PreparedRegexCall(Operation.SPLIT, pattern);
     }
 
-    public Object execute(String value, String replacement) {
+    public Object execute(String value, String replacement, ExecutionScope scope, SourceSpan span) {
         return switch (operation) {
-            case REPLACE_ALL -> pattern.replaceAll(value, Objects.requireNonNull(replacement, "replacement"));
-            case SPLIT -> pattern.split(value);
+            case REPLACE_ALL -> scope.replaceAll(pattern, value, Objects.requireNonNull(replacement, "replacement"), span);
+            case SPLIT -> scope.split(pattern, value, span);
         };
     }
 

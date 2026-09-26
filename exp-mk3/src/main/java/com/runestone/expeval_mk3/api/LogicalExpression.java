@@ -33,7 +33,7 @@ public final class LogicalExpression {
     public boolean compute(Map<String, ?> overrides) {
         Object value = plan.compute(overrides, runtimeServices.clock());
         return (Boolean) PublicMaterialization.materialize(
-                value, ScalarType.BOOLEAN, plan.maxMaterializedSize(), resultSourceSpan);
+                value, ScalarType.BOOLEAN, plan.maxMaterializedSize(), resultSourceSpan, plan.valueLimits());
     }
 
     public ComputationWithMemory<Boolean> computeWithMemory() {

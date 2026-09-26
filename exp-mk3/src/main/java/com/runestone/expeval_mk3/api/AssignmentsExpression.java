@@ -42,7 +42,8 @@ public final class AssignmentsExpression {
         for (int index = 0; index < assignedSymbols.size(); index++) {
             AssignedSymbol symbol = assignedSymbols.get(index);
             materialized.put(symbol.name(), PublicMaterialization.materialize(
-                    rawValues.get(index), symbol.type(), plan.maxMaterializedSize(), symbol.sourceSpan()));
+                    rawValues.get(index), symbol.type(), plan.maxMaterializedSize(), symbol.sourceSpan(),
+                    plan.valueLimits()));
         }
         return Collections.unmodifiableMap(materialized);
     }

@@ -32,7 +32,8 @@ public final class ResultExpression {
 
     public Object compute(Map<String, ?> overrides) {
         Object value = plan.compute(overrides, runtimeServices.clock());
-        return PublicMaterialization.materialize(value, resultType, plan.maxMaterializedSize(), resultSourceSpan);
+        return PublicMaterialization.materialize(value, resultType, plan.maxMaterializedSize(), resultSourceSpan,
+                plan.valueLimits());
     }
 
     public ComputationWithMemory<Object> computeWithMemory() {

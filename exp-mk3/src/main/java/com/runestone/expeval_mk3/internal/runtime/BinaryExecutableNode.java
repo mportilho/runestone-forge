@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
 import com.runestone.expeval_mk3.api.ExpressionType;
+import com.runestone.expeval_mk3.api.ExpressionResourceLimits;
 import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.ast.BinaryOperator;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
@@ -140,7 +141,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
             case MODULO -> modulo(scope);
             case ROOT -> root(scope);
             case EXPONENTIATE -> exponentiate(scope);
-            case CONCATENATE -> (String) left.execute(scope) + right.execute(scope);
+            case CONCATENATE -> concatenate(scope);
             case LOGICAL_AND -> ExpressionRuntime.bool(left.execute(scope)) && ExpressionRuntime.bool(right.execute(scope));
             case LOGICAL_OR -> ExpressionRuntime.bool(left.execute(scope)) || ExpressionRuntime.bool(right.execute(scope));
             case LOGICAL_NAND -> !eagerAnd(scope);
@@ -155,6 +156,26 @@ public final class BinaryExecutableNode implements ExecutableNode {
                     left.execute(scope), right.execute(scope), operandType) != negated;
             case REGEX_MATCH, REGEX_NOT_MATCH -> regexPattern.matches((String) left.execute(scope)) != negated;
         };
+    }
+
+    private String concatenate(ExecutionScope scope) {
+        String leftValue = (String) left.execute(scope);
+        String rightValue = (String) right.execute(scope);
+        return scope.concatenate(leftValue, rightValue, sourceSpan);
+    }
+
+    void validateConstantExpansion(ExpressionResourceLimits limits) {
+        if (operator != BinaryOperator.CONCATENATE
+                || !(left instanceof ConstantExecutableNode leftConstant)
+                || !(right instanceof ConstantExecutableNode rightConstant)) {
+            return;
+        }
+        long length = (long) ((String) leftConstant.value()).length()
+                + ((String) rightConstant.value()).length();
+        if (length > limits.maxTextLength()) {
+            throw new ConstantShapeException(
+                    "maxTextLength " + limits.maxTextLength() + " exceeded", sourceSpan);
+        }
     }
 
     private BigDecimal divide(ExecutionScope scope) {
