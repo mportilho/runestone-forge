@@ -112,10 +112,15 @@ public final class ExternalSymbolCatalog {
         }
 
         ExternalSymbolCatalog build(BoundaryCoercion boundaryCoercion, int maxMaterializedSize) {
+            return build(boundaryCoercion, maxMaterializedSize, maxMaterializedSize);
+        }
+
+        ExternalSymbolCatalog build(
+                BoundaryCoercion boundaryCoercion, int maxMaterializedSize, int runtimeMaterializedSize) {
             Map<String, ExternalSymbol> builtSymbols = new LinkedHashMap<>();
             for (ExternalSymbolDeclaration declaration : symbols.values()) {
                 ExternalSymbol externalSymbol = declaration.toExternalSymbol(boundaryCoercion, maxMaterializedSize);
-                builtSymbols.put(externalSymbol.name(), externalSymbol);
+                builtSymbols.put(externalSymbol.name(), externalSymbol.withRuntimeMaterializedSize(runtimeMaterializedSize));
             }
             return ExternalSymbolCatalog.from(builtSymbols);
         }

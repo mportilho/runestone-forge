@@ -53,7 +53,7 @@ class NestedCurrentItemRestorationTest {
         CollectionType tripleNestedNumberCollection =
                 new CollectionType(new CollectionType(new CollectionType(ScalarType.NUMBER)));
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .maxCurrentItemDepth(3)
+                .resourceLimits(ExpressionResourceLimits.builder().maxCurrentItemDepth(3).build())
                 .externalSymbol("outer", tripleNestedNumberCollection,
                         List.of(List.of(List.of(BigDecimal.ONE))),
                         ExternalSymbolOverwritePolicy.OVERRIDABLE)

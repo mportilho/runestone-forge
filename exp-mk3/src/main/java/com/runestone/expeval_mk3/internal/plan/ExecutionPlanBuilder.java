@@ -1,5 +1,7 @@
 package com.runestone.expeval_mk3.internal.plan;
 
+import com.runestone.expeval_mk3.api.ExpressionTrustMode;
+
 import com.runestone.expeval_mk3.api.CollectionOperationCatalog;
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
@@ -154,21 +156,32 @@ public final class ExecutionPlanBuilder {
 
     private static final int[] NO_REPLAY_SLOTS = new int[0];
 
+    private static int runtimeMaterializedSize(ExpressionEnvironment environment) {
+        return environment.trustMode() == ExpressionTrustMode.SAFE
+                ? environment.resourceLimits().maxMaterializedSize() : Integer.MAX_VALUE;
+    }
+
     private final boolean optimizing;
+    private final int maxFoldMaterializedSize;
 
     public ExecutionPlanBuilder() {
         this(true);
     }
 
     private ExecutionPlanBuilder(boolean optimizing) {
+        this(optimizing, Integer.MAX_VALUE);
+    }
+
+    private ExecutionPlanBuilder(boolean optimizing, int maxFoldMaterializedSize) {
         this.optimizing = optimizing;
+        this.maxFoldMaterializedSize = maxFoldMaterializedSize;
     }
 
     /**
      * Builds the optimized plan that the public compilation entry point uses.
      */
     public ExecutionPlan build(SemanticModel model, ExpressionEnvironment environment) {
-        return withOptimizing(true).buildPlan(model, environment);
+        return forCompilation(true, environment).buildPlan(model, environment);
     }
 
     /**
@@ -178,16 +191,17 @@ public final class ExecutionPlanBuilder {
      * duplicated runtime built on this path.
      */
     ExecutionPlan buildOracle(SemanticModel model, ExpressionEnvironment environment) {
-        return withOptimizing(false).buildPlan(model, environment);
+        return forCompilation(false, environment).buildPlan(model, environment);
     }
 
     /**
-     * Returns {@code this} when it already carries the requested mode, and a fresh instance with that
-     * mode otherwise; keeps {@code optimizing} the single, genuinely consulted mode selector rather than
-     * a field one entry point writes and the other ignores.
+     * Binds the compilation resource policy to an isolated builder, without retaining an environment
+     * or mutable compilation state on the reusable public builder.
      */
-    private ExecutionPlanBuilder withOptimizing(boolean optimizing) {
-        return this.optimizing == optimizing ? this : new ExecutionPlanBuilder(optimizing);
+    private ExecutionPlanBuilder forCompilation(boolean optimizing, ExpressionEnvironment environment) {
+        int limit = environment.trustMode() == ExpressionTrustMode.UNSAFE
+                ? Integer.MAX_VALUE : environment.resourceLimits().maxMaterializedSize();
+        return new ExecutionPlanBuilder(optimizing, limit);
     }
 
     private ExecutionPlan buildPlan(SemanticModel model, ExpressionEnvironment environment) {
@@ -261,7 +275,7 @@ public final class ExecutionPlanBuilder {
                 commonSubexpressions.replaySlotCount(),
                 environment.boundaryCoercion(),
                 environment.zoneId(),
-                environment.maxMaterializedSize());
+                runtimeMaterializedSize(environment));
     }
 
     private static VariableMemorySchema buildVariableMemorySchema(
@@ -597,9 +611,21 @@ public final class ExecutionPlanBuilder {
             BuildContext buildContext) {
         ExecutableNode operand = buildNode(
                 postfix.operand(), model, environment, deferredChecksByNode, foldedReads, memoSlots, buildContext);
-        return fold(new PostfixExecutableNode(
-                postfix.id(), postfix.sourceSpan(), operand, postfix.operations(), environment.maxFactorialInput(),
-                deferredChecksByNode.getOrDefault(postfix.id(), List.of())), operand);
+        PostfixExecutableNode runtimeNode = new PostfixExecutableNode(
+                postfix.id(), postfix.sourceSpan(), operand, postfix.operations(),
+                environment.trustMode() == ExpressionTrustMode.SAFE
+                        ? environment.resourceLimits().maxFactorialInput() : -1,
+                deferredChecksByNode.getOrDefault(postfix.id(), List.of()));
+        if (optimizing && environment.trustMode() == ExpressionTrustMode.TRUSTED
+                && operand instanceof ConstantExecutableNode) {
+            PostfixExecutableNode foldingNode = new PostfixExecutableNode(
+                    postfix.id(), postfix.sourceSpan(), operand, postfix.operations(),
+                    environment.resourceLimits().maxFactorialInput(),
+                    deferredChecksByNode.getOrDefault(postfix.id(), List.of()));
+            ExecutableNode folded = fold(foldingNode, operand);
+            return folded == foldingNode ? runtimeNode : folded;
+        }
+        return fold(runtimeNode, operand);
     }
 
     private ExecutableNode buildBetween(
@@ -692,6 +718,11 @@ public final class ExecutionPlanBuilder {
         if (assertionElided != built) {
             return assertionElided;
         }
+        // TRUSTED provider adapters are deliberately unbounded at runtime. Do not invoke such an
+        // adapter during folding: even obtaining its result may materialize an unbounded iterable.
+        if (!canFoldJavaResult(environment, descriptor.returnType())) {
+            return built;
+        }
         return descriptor.foldable() ? fold(built, arguments.toArray(ExecutableNode[]::new)) : built;
     }
 
@@ -745,7 +776,7 @@ public final class ExecutionPlanBuilder {
                 boolean safe = sliceBinding.safe();
                 ExecutableNode built = new SliceSubscriptExecutableNode(
                         id, span, receiver, SubscriptBounds.rawValue(slice.start()),
-                        SubscriptBounds.rawValue(slice.end()), safe, environment.maxMaterializedSize());
+                        SubscriptBounds.rawValue(slice.end()), safe, runtimeMaterializedSize(environment));
                 yield foldNavigationLink(sliceBinding.pure(), built, receiver);
             }
             case MapKeySubscriptNavigationBinding mapKeyBinding -> {
@@ -760,7 +791,7 @@ public final class ExecutionPlanBuilder {
                         filter.predicate(), model, environment, deferredChecksByNode, foldedReads, memoSlots, buildContext);
                 yield new FilterExecutableNode(
                         id, span, receiver, filter.safe(), predicate, filterBinding.currentItemFrameSlot(),
-                        environment.maxMaterializedSize());
+                        runtimeMaterializedSize(environment));
             }
             case ContextualMemberNavigationBinding memberBinding -> {
                 boolean safe = memberBinding.safe();
@@ -776,7 +807,8 @@ public final class ExecutionPlanBuilder {
                         : new OracleRegisteredPropertyExecutableNode(
                                 id, span, receiver, safe, propertyBinding,
                                 buildContext.calculationPoints().slot(id), buildContext.replaySlots(id));
-                yield foldNavigationLink(propertyBinding.pure(), built, receiver);
+                yield foldNavigationLink(propertyBinding.pure()
+                        && canFoldJavaResult(environment, propertyBinding.resultType()), built, receiver);
             }
             case RegisteredMethodNavigationBinding methodBinding -> {
                 CallNavigationLink call = (CallNavigationLink) link;
@@ -798,12 +830,13 @@ public final class ExecutionPlanBuilder {
                 for (int i = 0; i < arguments.size(); i++) {
                     requiredConstants[i + 1] = arguments.get(i);
                 }
-                yield foldNavigationLink(methodBinding.pure(), built, requiredConstants);
+                yield foldNavigationLink(methodBinding.pure()
+                        && canFoldJavaResult(environment, methodBinding.resultType()), built, requiredConstants);
             }
             case WildcardNavigationBinding wildcardBinding -> {
                 WildcardNavigationLink wildcard = (WildcardNavigationLink) link;
                 yield new WildcardExecutableNode(
-                        id, span, receiver, wildcard.safe(), wildcardBinding, environment.maxMaterializedSize());
+                        id, span, receiver, wildcard.safe(), wildcardBinding, runtimeMaterializedSize(environment));
             }
             case CollectionOperationBinding operationBinding -> {
                 CallNavigationLink call = (CallNavigationLink) link;
@@ -819,7 +852,7 @@ public final class ExecutionPlanBuilder {
                                 : null);
                 yield new CollectionOperationExecutableNode(
                         id, span, receiver, call.safe(), executor, runtimeBinding,
-                        environment.mathContext(), environment.maxMaterializedSize(), arguments);
+                        environment.mathContext(), runtimeMaterializedSize(environment), arguments);
             }
         };
     }
@@ -881,7 +914,7 @@ public final class ExecutionPlanBuilder {
      * traversal. In oracle mode this is a no-op: {@code built} is always returned unchanged.
      */
     private ExecutableNode fold(ExecutableNode built, ExecutableNode... requiredConstantChildren) {
-        return optimizing ? ConstantFolder.fold(built, requiredConstantChildren) : built;
+        return optimizing ? ConstantFolder.fold(built, maxFoldMaterializedSize, requiredConstantChildren) : built;
     }
 
     /**
@@ -893,6 +926,11 @@ public final class ExecutionPlanBuilder {
      */
     private ExecutableNode foldNavigationLink(boolean pure, ExecutableNode built, ExecutableNode... requiredConstantChildren) {
         return pure ? fold(built, requiredConstantChildren) : built;
+    }
+
+    private static boolean canFoldJavaResult(ExpressionEnvironment environment, ExpressionType resultType) {
+        return environment.trustMode() != ExpressionTrustMode.TRUSTED
+                || !(resultType instanceof CollectionType || resultType instanceof MapType);
     }
 
     /**

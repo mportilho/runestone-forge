@@ -1,0 +1,20 @@
+id: runtime.trust-mode.factorial.safe
+phase: runtime
+kind: invalid
+source: 'n!'
+environment:
+  trustMode: SAFE
+  maxMaterializedSize: 1
+  maxFactorialInput: 3
+  symbols:
+    n:
+      type: NUMBER
+      default: {value: "1"}
+      overwritePolicy: OVERRIDABLE
+inputs:
+  n: {type: NUMBER, value: "4"}
+coverage: [identifier, postfix-factorial, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_FACTORIAL_EXCEEDS_MAXIMUM
+    span: {offset: 1, endOffset: 2, line: 1, column: 2}

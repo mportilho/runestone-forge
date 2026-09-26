@@ -36,9 +36,10 @@ class ExpressionEnvironmentTest {
         assertThat(environment.zoneId()).isEqualTo(ZoneId.systemDefault());
         assertThat(environment.mathContext()).isEqualTo(MathContext.DECIMAL128);
         assertThat(environment.transcendentalMathContext()).isEqualTo(MathContext.DECIMAL128);
-        assertThat(environment.maxCurrentItemDepth()).isEqualTo(32);
-        assertThat(environment.maxMaterializedSize()).isEqualTo(10_000);
-        assertThat(environment.maxFactorialInput()).isEqualTo(1_000);
+        assertThat(environment.trustMode()).isEqualTo(ExpressionTrustMode.TRUSTED);
+        assertThat(environment.resourceLimits().maxCurrentItemDepth()).isEqualTo(32);
+        assertThat(environment.resourceLimits().maxMaterializedSize()).isEqualTo(10_000);
+        assertThat(environment.resourceLimits().maxFactorialInput()).isEqualTo(1_000);
         assertThat(environment.conversionProfileIdentity())
                 .isEqualTo(DefaultDataConversionService.standard().conversionProfileIdentity());
         assertThat(environment.conversionProfileHash())
@@ -74,10 +75,11 @@ class ExpressionEnvironmentTest {
         ExpressionEnvironment.Builder builder = ExpressionEnvironment.builder();
         ExpressionEnvironment first = builder.build();
 
-        ExpressionEnvironment second = builder.maxFactorialInput(42).build();
+        ExpressionEnvironment second = builder.resourceLimits(
+                ExpressionResourceLimits.builder().maxFactorialInput(42).build()).build();
 
-        assertThat(first.maxFactorialInput()).isEqualTo(1_000);
-        assertThat(second.maxFactorialInput()).isEqualTo(42);
+        assertThat(first.resourceLimits().maxFactorialInput()).isEqualTo(1_000);
+        assertThat(second.resourceLimits().maxFactorialInput()).isEqualTo(42);
         assertThat(first.environmentId()).isNotEqualTo(second.environmentId());
     }
 
@@ -105,6 +107,7 @@ class ExpressionEnvironmentTest {
     @DisplayName("external symbols support defaults and declared known types")
     void externalSymbolsSupportDefaultsAndDeclaredKnownTypes() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .trustMode(ExpressionTrustMode.SAFE)
                 .externalSymbol("threshold", new BigDecimal("12.50"), ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .externalSymbol("enabled", ScalarType.BOOLEAN, true, ExternalSymbolOverwritePolicy.FIXED)
                 .externalSymbol("inferred", "text", ExternalSymbolOverwritePolicy.FIXED)
@@ -457,14 +460,14 @@ class ExpressionEnvironmentTest {
                         .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService("identity", " ")))
                 .withMessage("conversion profile hash must not be blank");
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> ExpressionEnvironment.builder().maxCurrentItemDepth(-1))
-                .withMessage("maxCurrentItemDepth must not be negative");
+                .isThrownBy(() -> ExpressionResourceLimits.builder().maxCurrentItemDepth(-1))
+                .withMessage("maxCurrentItemDepth must be in [0, 64]: -1");
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> ExpressionEnvironment.builder().maxMaterializedSize(-1))
-                .withMessage("maxMaterializedSize must not be negative");
+                .isThrownBy(() -> ExpressionResourceLimits.builder().maxMaterializedSize(-1))
+                .withMessage("maxMaterializedSize must be in [0, 100000]: -1");
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> ExpressionEnvironment.builder().maxFactorialInput(-1))
-                .withMessage("maxFactorialInput must not be negative");
+                .isThrownBy(() -> ExpressionResourceLimits.builder().maxFactorialInput(-1))
+                .withMessage("maxFactorialInput must be in [0, 10000]: -1");
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> ExpressionEnvironment.builder().mathContext(MathContext.UNLIMITED))
                 .withMessage("mathContext must have positive precision");
@@ -486,13 +489,12 @@ class ExpressionEnvironmentTest {
         assertThat(supportedContexts.mathContext()).isEqualTo(new MathContext(5, RoundingMode.FLOOR));
         assertThat(supportedContexts.transcendentalMathContext()).isEqualTo(new MathContext(7, RoundingMode.CEILING));
         ExpressionEnvironment zeroLimits = ExpressionEnvironment.builder()
-                .maxCurrentItemDepth(0)
-                .maxMaterializedSize(0)
-                .maxFactorialInput(0)
+                .resourceLimits(ExpressionResourceLimits.builder()
+                        .maxCurrentItemDepth(0).maxMaterializedSize(0).maxFactorialInput(0).build())
                 .build();
-        assertThat(zeroLimits.maxCurrentItemDepth()).isZero();
-        assertThat(zeroLimits.maxMaterializedSize()).isZero();
-        assertThat(zeroLimits.maxFactorialInput()).isZero();
+        assertThat(zeroLimits.resourceLimits().maxCurrentItemDepth()).isZero();
+        assertThat(zeroLimits.resourceLimits().maxMaterializedSize()).isZero();
+        assertThat(zeroLimits.resourceLimits().maxFactorialInput()).isZero();
     }
 
     @Test

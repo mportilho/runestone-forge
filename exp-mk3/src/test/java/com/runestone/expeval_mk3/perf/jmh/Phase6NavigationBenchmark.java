@@ -1,5 +1,7 @@
 package com.runestone.expeval_mk3.perf.jmh;
 
+import com.runestone.expeval_mk3.api.ExpressionResourceLimits;
+
 import com.runestone.expeval_mk3.api.ExpressionEngine;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
@@ -102,7 +104,7 @@ public class Phase6NavigationBenchmark {
                     .asResult();
 
             ExpressionEnvironment lambdaEnvironment = ExpressionEnvironment.builder()
-                    .maxCurrentItemDepth(3)
+                    .resourceLimits(ExpressionResourceLimits.builder().maxCurrentItemDepth(3).build())
                     .build();
             nestedLambda = ExpressionEngine.defaultEngine().compileOrThrow(
                             "outer := [[1, 2], [3, 4]]; outer.map(@ -> @.map(@ -> @ + 1))", lambdaEnvironment)

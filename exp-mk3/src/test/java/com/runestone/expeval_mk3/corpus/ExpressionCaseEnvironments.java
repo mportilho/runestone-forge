@@ -3,6 +3,8 @@ package com.runestone.expeval_mk3.corpus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
+import com.runestone.expeval_mk3.api.ExpressionResourceLimits;
+import com.runestone.expeval_mk3.api.ExpressionTrustMode;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
 import com.runestone.expeval_mk3.api.MapType;
@@ -60,18 +62,21 @@ final class ExpressionCaseEnvironments {
         if (environment == null) {
             return;
         }
+        builder.trustMode(ExpressionTrustMode.valueOf(environment.path("trustMode").asText("SAFE")));
+        ExpressionResourceLimits.Builder limits = ExpressionResourceLimits.builder();
         JsonNode maxMaterializedSize = environment.get("maxMaterializedSize");
         if (maxMaterializedSize != null) {
-            builder.maxMaterializedSize(maxMaterializedSize.intValue());
+            limits.maxMaterializedSize(maxMaterializedSize.intValue());
         }
         JsonNode maxFactorialInput = environment.get("maxFactorialInput");
         if (maxFactorialInput != null) {
-            builder.maxFactorialInput(maxFactorialInput.intValue());
+            limits.maxFactorialInput(maxFactorialInput.intValue());
         }
         JsonNode maxCurrentItemDepth = environment.get("maxCurrentItemDepth");
         if (maxCurrentItemDepth != null) {
-            builder.maxCurrentItemDepth(maxCurrentItemDepth.intValue());
+            limits.maxCurrentItemDepth(maxCurrentItemDepth.intValue());
         }
+        builder.resourceLimits(limits.build());
         JsonNode mathContext = environment.get("mathContext");
         if (mathContext != null) {
             builder.mathContext(new MathContext(

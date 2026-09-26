@@ -168,7 +168,8 @@ class ExpressionEnvironmentProviderContainerContractTest {
         InfiniteIterableProvider.reset();
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(InfiniteIterableProvider.class, FunctionPurity.IMPURE)
-                .maxMaterializedSize(2)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .build();
 
         assertThatThrownBy(() -> resolve(environment, "values").implementationHandle().invoke())
@@ -182,7 +183,8 @@ class ExpressionEnvironmentProviderContainerContractTest {
     void providerMapsEnforceMaterializationLimitWhileIterating() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(UnderreportedMapProvider.class, FunctionPurity.PURE)
-                .maxMaterializedSize(2)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .build();
 
         assertThatThrownBy(() -> resolve(environment, "values").implementationHandle().invoke())

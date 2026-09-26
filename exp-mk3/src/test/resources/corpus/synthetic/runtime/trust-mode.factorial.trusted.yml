@@ -1,0 +1,17 @@
+id: runtime.trust-mode.factorial.trusted
+phase: runtime
+kind: valid
+source: 'n!'
+environment:
+  trustMode: TRUSTED
+  maxMaterializedSize: 1
+  maxFactorialInput: 3
+  symbols:
+    n:
+      type: NUMBER
+      default: {value: "1"}
+      overwritePolicy: OVERRIDABLE
+inputs:
+  n: {type: NUMBER, value: "4"}
+coverage: [identifier, postfix-factorial]
+expected: {type: NUMBER, result: "24"}

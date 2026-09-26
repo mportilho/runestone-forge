@@ -1,5 +1,7 @@
 package com.runestone.expeval_mk3.internal.plan;
 
+import com.runestone.expeval_mk3.api.ExpressionTrustMode;
+
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
@@ -70,6 +72,7 @@ class ExecutionPlanBuilderTest {
     @Test
     void attachesTheFactorialDeferredChecksToThePostfixNodeForANonConstantOperand() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .trustMode(ExpressionTrustMode.SAFE)
                 .externalSymbol("x", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
         SemanticModel model = resolve("x!", environment);

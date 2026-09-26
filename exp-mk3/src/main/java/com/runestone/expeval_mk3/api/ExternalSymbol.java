@@ -101,6 +101,11 @@ public final class ExternalSymbol {
                 maxMaterializedSize);
     }
 
+    ExternalSymbol withRuntimeMaterializedSize(int limit) {
+        return limit == maxMaterializedSize ? this
+                : new ExternalSymbol(name, type, defaultValue, overwritePolicy, limit);
+    }
+
     public String name() {
         return name;
     }

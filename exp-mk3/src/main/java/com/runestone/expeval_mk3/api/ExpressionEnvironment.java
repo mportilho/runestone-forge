@@ -20,17 +20,13 @@ public final class ExpressionEnvironment {
     private static final ZoneId DEFAULT_ZONE_ID = ZoneId.systemDefault();
     private static final MathContext DEFAULT_MATH_CONTEXT = MathContext.DECIMAL128;
     private static final MathContext DEFAULT_TRANSCENDENTAL_MATH_CONTEXT = MathContext.DECIMAL128;
-    private static final int DEFAULT_MAX_CURRENT_ITEM_DEPTH = 32;
-    private static final int DEFAULT_MAX_MATERIALIZED_SIZE = BoundaryCoercion.DEFAULT_MAX_MATERIALIZED_SIZE;
-    private static final int DEFAULT_MAX_FACTORIAL_INPUT = 1_000;
     private static final ExpressionEnvironment STANDARD = builder().build();
 
     private final ZoneId zoneId;
     private final MathContext mathContext;
     private final MathContext transcendentalMathContext;
-    private final int maxCurrentItemDepth;
-    private final int maxMaterializedSize;
-    private final int maxFactorialInput;
+    private final ExpressionTrustMode trustMode;
+    private final ExpressionResourceLimits resourceLimits;
     private final String conversionProfileIdentity;
     private final String conversionProfileHash;
     private final BoundaryCoercion boundaryCoercion;
@@ -44,19 +40,23 @@ public final class ExpressionEnvironment {
         zoneId = builder.zoneId;
         mathContext = builder.mathContext;
         transcendentalMathContext = builder.transcendentalMathContext;
-        maxCurrentItemDepth = builder.maxCurrentItemDepth;
-        maxMaterializedSize = builder.maxMaterializedSize;
-        maxFactorialInput = builder.maxFactorialInput;
+        trustMode = builder.trustMode;
+        resourceLimits = builder.resourceLimits;
         boundaryCoercion = builder.boundaryCoercion;
         conversionProfileIdentity = boundaryCoercion.profileIdentity();
         conversionProfileHash = boundaryCoercion.profileHash();
-        externalSymbols = builder.externalSymbols.build(boundaryCoercion, maxMaterializedSize);
+        int compilationMaterializedSize = trustMode == ExpressionTrustMode.UNSAFE
+                ? Integer.MAX_VALUE : resourceLimits.maxMaterializedSize();
+        int runtimeMaterializedSize = trustMode == ExpressionTrustMode.SAFE
+                ? resourceLimits.maxMaterializedSize() : Integer.MAX_VALUE;
+        externalSymbols = builder.externalSymbols.build(
+                boundaryCoercion, compilationMaterializedSize, runtimeMaterializedSize);
         javaTypes = builder.javaTypes.build();
         functions = FunctionCatalogAssembly.assemble(
                 boundaryCoercion,
                 builder.mathContext,
                 builder.transcendentalMathContext,
-                maxMaterializedSize,
+                runtimeMaterializedSize,
                 javaTypes,
                 builder.functions,
                 builder.functionProviders,
@@ -93,16 +93,12 @@ public final class ExpressionEnvironment {
         return transcendentalMathContext;
     }
 
-    public int maxCurrentItemDepth() {
-        return maxCurrentItemDepth;
+    public ExpressionTrustMode trustMode() {
+        return trustMode;
     }
 
-    public int maxMaterializedSize() {
-        return maxMaterializedSize;
-    }
-
-    public int maxFactorialInput() {
-        return maxFactorialInput;
+    public ExpressionResourceLimits resourceLimits() {
+        return resourceLimits;
     }
 
     public String conversionProfileIdentity() {
@@ -150,9 +146,8 @@ public final class ExpressionEnvironment {
         private ZoneId zoneId = DEFAULT_ZONE_ID;
         private MathContext mathContext = DEFAULT_MATH_CONTEXT;
         private MathContext transcendentalMathContext = DEFAULT_TRANSCENDENTAL_MATH_CONTEXT;
-        private int maxCurrentItemDepth = DEFAULT_MAX_CURRENT_ITEM_DEPTH;
-        private int maxMaterializedSize = DEFAULT_MAX_MATERIALIZED_SIZE;
-        private int maxFactorialInput = DEFAULT_MAX_FACTORIAL_INPUT;
+        private ExpressionTrustMode trustMode = ExpressionTrustMode.TRUSTED;
+        private ExpressionResourceLimits resourceLimits = ExpressionResourceLimits.defaults();
         private BoundaryCoercion boundaryCoercion = BoundaryCoercion.standard();
         private final ExternalSymbolCatalog.Builder externalSymbols = ExternalSymbolCatalog.builder();
         private final List<FunctionDescriptor> functions = new ArrayList<>();
@@ -191,27 +186,13 @@ public final class ExpressionEnvironment {
             return mathContext;
         }
 
-        public Builder maxCurrentItemDepth(int maxCurrentItemDepth) {
-            if (maxCurrentItemDepth < 0) {
-                throw new IllegalArgumentException("maxCurrentItemDepth must not be negative");
-            }
-            this.maxCurrentItemDepth = maxCurrentItemDepth;
+        public Builder trustMode(ExpressionTrustMode trustMode) {
+            this.trustMode = Objects.requireNonNull(trustMode, "trustMode");
             return this;
         }
 
-        public Builder maxMaterializedSize(int maxMaterializedSize) {
-            if (maxMaterializedSize < 0) {
-                throw new IllegalArgumentException("maxMaterializedSize must not be negative");
-            }
-            this.maxMaterializedSize = maxMaterializedSize;
-            return this;
-        }
-
-        public Builder maxFactorialInput(int maxFactorialInput) {
-            if (maxFactorialInput < 0) {
-                throw new IllegalArgumentException("maxFactorialInput must not be negative");
-            }
-            this.maxFactorialInput = maxFactorialInput;
+        public Builder resourceLimits(ExpressionResourceLimits resourceLimits) {
+            this.resourceLimits = Objects.requireNonNull(resourceLimits, "resourceLimits");
             return this;
         }
 

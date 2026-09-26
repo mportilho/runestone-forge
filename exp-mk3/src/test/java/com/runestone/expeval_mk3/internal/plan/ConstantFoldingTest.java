@@ -1,5 +1,8 @@
 package com.runestone.expeval_mk3.internal.plan;
 
+import com.runestone.expeval_mk3.api.ExpressionTrustMode;
+import com.runestone.expeval_mk3.api.ExpressionResourceLimits;
+
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExpressionExecutionException;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
@@ -211,7 +214,8 @@ class ConstantFoldingTest {
 
     @Test
     void abandonsAFoldOnAFactorialExceedingTheEnvironmentMaximumAndPreservesTheDeferredChecks() {
-        ExpressionEnvironment environment = ExpressionEnvironment.builder().maxFactorialInput(15).build();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder().trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder().maxFactorialInput(15).build()).build();
         SemanticModel model = resolve("(10 + 10)!", environment);
 
         ExecutionPlan optimized = new ExecutionPlanBuilder().build(model, environment);
@@ -241,6 +245,83 @@ class ConstantFoldingTest {
 
     private static ExpressionEnvironment environment() {
         return ExpressionEnvironment.builder().build();
+    }
+
+    @Test
+    void trustedFactorialFoldHonorsCompilationLimitButRuntimeRemainsUnbounded() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .resourceLimits(ExpressionResourceLimits.builder().maxFactorialInput(3).build()).build();
+        SemanticModel model = resolve("(2 + 2)!", environment);
+        ExecutionPlan plan = new ExecutionPlanBuilder().build(model, environment);
+        assertThat(plan.resultExpression()).isInstanceOf(PostfixExecutableNode.class);
+        assertThat(plan.compute(Map.of(), Clock.systemUTC())).isEqualTo(new BigDecimal("24"));
+        PlanEquivalenceHarness.assertEquivalent(model, environment, Map.of(), Clock.systemUTC());
+    }
+
+    @Test
+    void trustedProviderFoldDoesNotRetainOversizedConstantsButRuntimeRemainsUnbounded() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(1).build())
+                .functionsFrom(OversizedProvider.class, com.runestone.expeval_mk3.api.FunctionPurity.PURE).build();
+        SemanticModel model = resolve("items()", environment);
+        ExecutionPlan plan = new ExecutionPlanBuilder().build(model, environment);
+        assertThat(plan.resultExpression()).isNotInstanceOf(ConstantExecutableNode.class);
+        assertThat(plan.compute(Map.of(), Clock.systemUTC())).isEqualTo(java.util.List.of(BigDecimal.ONE, BigDecimal.TWO));
+        PlanEquivalenceHarness.assertEquivalent(model, environment, Map.of(), Clock.systemUTC());
+    }
+
+    public static final class OversizedProvider {
+        public static java.util.List<Integer> items() {
+            return java.util.List.of(1, 2);
+        }
+    }
+
+    @Test
+    void trustedCompilationNeverTraversesAnUnboundedPureProviderResult() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(1).build())
+                .functionsFrom(UnboundedProvider.class, com.runestone.expeval_mk3.api.FunctionPurity.PURE).build();
+        SemanticModel model = resolve("unbounded()", environment);
+        ExecutionPlan plan = new ExecutionPlanBuilder().build(model, environment);
+        assertThat(plan.resultExpression()).isNotInstanceOf(ConstantExecutableNode.class);
+    }
+
+    public static final class UnboundedProvider {
+        public static Iterable<Integer> unbounded() {
+            return () -> {
+                throw new AssertionError("TRUSTED folding must not traverse runtime provider results");
+            };
+        }
+    }
+
+    @Test
+    void trustedCompilationNeverTraversesUnboundedJavaNavigationResults() {
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(1).build())
+                .registerJavaType(UnboundedMembers.class)
+                .registerJavaTypeMethod(UnboundedMembers.class, "items", com.runestone.expeval_mk3.api.FunctionPurity.PURE)
+                .functionsFrom(MemberProvider.class, com.runestone.expeval_mk3.api.FunctionPurity.PURE).build();
+        for (String source : java.util.List.of("object().values", "object().items()")) {
+            SemanticModel model = resolve(source, environment);
+            ExecutionPlan plan = new ExecutionPlanBuilder().build(model, environment);
+            assertThat(plan.resultExpression()).isNotInstanceOf(ConstantExecutableNode.class);
+        }
+    }
+
+    public static final class MemberProvider {
+        public static UnboundedMembers object() {
+            return new UnboundedMembers();
+        }
+    }
+
+    public static final class UnboundedMembers {
+        public Iterable<Integer> getValues() {
+            return UnboundedProvider.unbounded();
+        }
+
+        public Iterable<Integer> items() {
+            return UnboundedProvider.unbounded();
+        }
     }
 
     private static SemanticModel resolve(String source, ExpressionEnvironment environment) {

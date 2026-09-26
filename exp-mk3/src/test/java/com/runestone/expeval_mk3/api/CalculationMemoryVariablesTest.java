@@ -168,7 +168,8 @@ class CalculationMemoryVariablesTest {
 
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(new AssignmentsExpressionTest.OversizedCollectionFunctions(), FunctionPurity.IMPURE)
-                .maxMaterializedSize(2)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .build();
         ResultExpression materializationFailure = ExpressionEngine.defaultEngine()
                 .compileOrThrow("makeOversizedList()", environment)

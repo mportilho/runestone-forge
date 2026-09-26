@@ -70,7 +70,7 @@ class ExternalSymbolDefaultDiagnosticTest {
     @Test
     void preservesMaterializationLimitDiagnostic() {
         Throwable failure = catchThrowable(() -> ExpressionEnvironment.builder()
-                .maxMaterializedSize(1)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(1).build())
                 .externalSymbol(
                         "values",
                         new CollectionType(ScalarType.STRING),

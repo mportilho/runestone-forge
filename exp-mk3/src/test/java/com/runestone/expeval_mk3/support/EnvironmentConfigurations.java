@@ -1,5 +1,8 @@
 package com.runestone.expeval_mk3.support;
 
+import com.runestone.expeval_mk3.api.ExpressionTrustMode;
+import com.runestone.expeval_mk3.api.ExpressionResourceLimits;
+
 import com.runestone.converters.ConversionContext;
 import com.runestone.converters.DataConversionService;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
@@ -36,9 +39,9 @@ public final class EnvironmentConfigurations {
                 .zoneId(ZoneId.of("UTC"))
                 .mathContext(new MathContext(18, RoundingMode.HALF_EVEN))
                 .transcendentalMathContext(new MathContext(30, RoundingMode.HALF_UP))
-                .maxCurrentItemDepth(3)
-                .maxMaterializedSize(256)
-                .maxFactorialInput(32)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder()
+                        .maxCurrentItemDepth(3).maxMaterializedSize(256).maxFactorialInput(32).build())
                 .boundaryCoercion(prefixedNumberConversionService())
                 .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .externalSymbol("businessDate", ScalarType.DATE, BUSINESS_DATE, ExternalSymbolOverwritePolicy.FIXED)

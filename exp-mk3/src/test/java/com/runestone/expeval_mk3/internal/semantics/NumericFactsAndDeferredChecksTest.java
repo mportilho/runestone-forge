@@ -1,5 +1,7 @@
 package com.runestone.expeval_mk3.internal.semantics;
 
+import com.runestone.expeval_mk3.api.ExpressionTrustMode;
+
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
@@ -240,6 +242,7 @@ class NumericFactsAndDeferredChecksTest {
     @Test
     void dynamicFactorialOperandRegistersTheThreeDeferredChecks() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .trustMode(ExpressionTrustMode.SAFE)
                 .externalSymbol("n", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
         ExpressionFileNode ast = ast("n!");
@@ -251,7 +254,7 @@ class NumericFactsAndDeferredChecksTest {
                         new FactorialIntegralDeferredCheck(postfix.id(), postfix.operations().getFirst().sourceSpan()),
                         new FactorialNonNegativeDeferredCheck(postfix.id(), postfix.operations().getFirst().sourceSpan()),
                         new FactorialMaxBoundDeferredCheck(
-                                postfix.id(), postfix.operations().getFirst().sourceSpan(), environment.maxFactorialInput())));
+                                postfix.id(), postfix.operations().getFirst().sourceSpan(), environment.resourceLimits().maxFactorialInput())));
     }
 
     @Test
@@ -303,6 +306,7 @@ class NumericFactsAndDeferredChecksTest {
     @Test
     void wildcardOnADynamicShapedCollectionRegistersAMaterializationDeferredCheck() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .trustMode(ExpressionTrustMode.SAFE)
                 .externalSymbol("items", new CollectionType(ScalarType.NUMBER), List.of(BigDecimal.ONE),
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
@@ -312,12 +316,13 @@ class NumericFactsAndDeferredChecksTest {
 
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success ->
                 assertThat(success.model().deferredChecks()).containsExactly(new MaterializationLimitDeferredCheck(
-                        link.id(), link.sourceSpan(), environment.maxMaterializedSize())));
+                        link.id(), link.sourceSpan(), environment.resourceLimits().maxMaterializedSize())));
     }
 
     @Test
     void wildcardOnAMapRegistersAMaterializationDeferredCheck() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .trustMode(ExpressionTrustMode.SAFE)
                 .externalSymbol("m", new MapType(ScalarType.NUMBER), Map.of("a", BigDecimal.ONE),
                         ExternalSymbolOverwritePolicy.FIXED)
                 .build();
@@ -327,7 +332,7 @@ class NumericFactsAndDeferredChecksTest {
 
         assertThat(result).isInstanceOfSatisfying(SemanticResolutionSuccess.class, success ->
                 assertThat(success.model().deferredChecks()).containsExactly(new MaterializationLimitDeferredCheck(
-                        link.id(), link.sourceSpan(), environment.maxMaterializedSize())));
+                        link.id(), link.sourceSpan(), environment.resourceLimits().maxMaterializedSize())));
     }
 
     private static void assertSemanticSuccess(String source) {

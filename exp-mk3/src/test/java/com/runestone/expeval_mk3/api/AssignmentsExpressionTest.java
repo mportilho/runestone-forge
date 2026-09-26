@@ -169,7 +169,8 @@ class AssignmentsExpressionTest {
         CountingFunctions functions = new CountingFunctions();
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
-                .maxMaterializedSize(1)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(1).build())
                 .build();
         CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow(
                 "a := trackOrder(1); b := trackOrder(2);", environment);
@@ -185,7 +186,8 @@ class AssignmentsExpressionTest {
         OversizedCollectionFunctions functions = new OversizedCollectionFunctions();
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.PURE)
-                .maxMaterializedSize(2)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .build();
         CompiledExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("a := makeOversizedList();", environment);
 

@@ -38,9 +38,9 @@ final class EnvironmentAcceptanceGateTest {
                         ExternalSymbolOverwritePolicy.FIXED)
                 .externalSymbol("amount", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .boundaryCoercion(EnvironmentConfigurations.prefixedNumberConversionService())
-                .maxMaterializedSize(256)
-                .maxFactorialInput(32)
-                .maxCurrentItemDepth(3)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder()
+                        .maxMaterializedSize(256).maxFactorialInput(32).maxCurrentItemDepth(3).build())
                 .transcendentalMathContext(new MathContext(30, RoundingMode.HALF_UP))
                 .mathContext(new MathContext(18, RoundingMode.HALF_EVEN))
                 .zoneId(ZoneId.of("UTC"))
@@ -209,15 +209,15 @@ final class EnvironmentAcceptanceGateTest {
                 .boundaryCoercion(null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("dataConversionService");
-        assertThatThrownBy(() -> ExpressionEnvironment.builder().maxCurrentItemDepth(-1))
+        assertThatThrownBy(() -> ExpressionResourceLimits.builder().maxCurrentItemDepth(-1))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("maxCurrentItemDepth must not be negative");
-        assertThatThrownBy(() -> ExpressionEnvironment.builder().maxMaterializedSize(-1))
+                .hasMessage("maxCurrentItemDepth must be in [0, 64]: -1");
+        assertThatThrownBy(() -> ExpressionResourceLimits.builder().maxMaterializedSize(-1))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("maxMaterializedSize must not be negative");
-        assertThatThrownBy(() -> ExpressionEnvironment.builder().maxFactorialInput(-1))
+                .hasMessage("maxMaterializedSize must be in [0, 100000]: -1");
+        assertThatThrownBy(() -> ExpressionResourceLimits.builder().maxFactorialInput(-1))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("maxFactorialInput must not be negative");
+                .hasMessage("maxFactorialInput must be in [0, 10000]: -1");
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
                 .externalSymbol(CurrentTemporalValue.DATE.simpleName(), ScalarType.DATE, LocalDate.of(2026, 7, 10),
                         ExternalSymbolOverwritePolicy.FIXED)
@@ -329,8 +329,8 @@ final class EnvironmentAcceptanceGateTest {
         ExpressionEnvironment javaTypeMetadata = byName.get("Java type metadata");
         ExpressionEnvironment overloadedFunctions = byName.get("overloaded functions");
 
-        assertThat(tenantGuarded.maxMaterializedSize()).isEqualTo(256);
-        assertThat(tenantGuarded.maxFactorialInput()).isEqualTo(32);
+        assertThat(tenantGuarded.resourceLimits().maxMaterializedSize()).isEqualTo(256);
+        assertThat(tenantGuarded.resourceLimits().maxFactorialInput()).isEqualTo(32);
         assertThat(tenantGuarded.externalSymbols().asMap()).containsKeys("amount", "businessDate", "customer", "labels");
         assertThat(tenantGuarded.javaTypes().find(EnvironmentConfigurations.customerProfileClass())).isPresent();
         assertThat(tenantGuarded.functions().find(new FunctionSignature(

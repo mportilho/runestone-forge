@@ -129,7 +129,8 @@ class ExpressionRuntimeProviderContractTest {
     void rejectsAnOverLimitProviderCollectionReturnAsTheEnvironmentLimitCode() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(ReturnContractProviders.class, FunctionPurity.IMPURE)
-                .maxMaterializedSize(1)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(1).build())
                 .build();
         ResultExpression expression = ExpressionEngine.defaultEngine().compileOrThrow("returnsOverLimitList(1)", environment)
                 .asResult();

@@ -75,6 +75,7 @@ class ExpressionDiagnosticListContractTest {
     void runtimePostfixFailurePointsToTheResponsibleOccurrenceAfterSupplementaryUnicode() {
         String source = "emoji := \"😀\"; value!!";
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .trustMode(ExpressionTrustMode.SAFE)
                 .externalSymbol(
                         "value", ScalarType.NUMBER, BigDecimal.ONE, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();

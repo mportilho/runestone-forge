@@ -84,16 +84,23 @@ public final class PostfixExecutableNode implements ExecutableNode {
                     "factorial input must not be negative: " + value,
                     operationSpan);
         }
-        if (integerValue.compareTo(BigInteger.valueOf(maxFactorialInput)) > 0) {
+        if (maxFactorialInput >= 0 && integerValue.compareTo(BigInteger.valueOf(maxFactorialInput)) > 0) {
             throw RuntimeFailures.domainViolation(
                     DiagnosticCode.RUNTIME_FACTORIAL_EXCEEDS_MAXIMUM,
                     "factorial input exceeds maxFactorialInput " + maxFactorialInput + ": " + value,
                     operationSpan);
         }
-        int integer = integerValue.intValue();
         BigInteger result = BigInteger.ONE;
-        for (int factor = 2; factor <= integer; factor++) {
-            result = result.multiply(BigInteger.valueOf(factor));
+        if (integerValue.bitLength() < 32) {
+            int integer = integerValue.intValue();
+            for (long factor = 2; factor <= integer; factor++) {
+                result = result.multiply(BigInteger.valueOf(factor));
+            }
+        } else {
+            for (BigInteger factor = BigInteger.TWO; factor.compareTo(integerValue) <= 0;
+                    factor = factor.add(BigInteger.ONE)) {
+                result = result.multiply(factor);
+            }
         }
         return new BigDecimal(result);
     }

@@ -113,19 +113,20 @@ class ExternalSymbolContainerSnapshotTest {
         };
 
         ExpressionEnvironment exact = ExpressionEnvironment.builder()
-                .maxMaterializedSize(2)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .externalSymbol("values", List.of(1, 2), ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
         assertThat(defaultValue(exact, "values")).isEqualTo(numbers(1, 2));
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .maxMaterializedSize(2)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .externalSymbol("values", new int[]{1, 2, 3}, ExternalSymbolOverwritePolicy.FIXED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("maxMaterializedSize 2");
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .maxMaterializedSize(2)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .externalSymbol("values", unbounded, ExternalSymbolOverwritePolicy.FIXED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
@@ -136,7 +137,8 @@ class ExternalSymbolContainerSnapshotTest {
     @Test
     void overridesUseTheEnvironmentLimitAndReturnIsolatedSnapshots() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .maxMaterializedSize(2)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .externalSymbol(
                         "values",
                         new CollectionType(ScalarType.STRING),
@@ -182,7 +184,7 @@ class ExternalSymbolContainerSnapshotTest {
         source.put("Z", List.of("upper"));
 
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .maxMaterializedSize(3)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(3).build())
                 .externalSymbol("values", source, ExternalSymbolOverwritePolicy.OVERRIDABLE)
                 .build();
         Map<?, ?> snapshot = (Map<?, ?>) defaultValue(environment, "values");
@@ -210,7 +212,7 @@ class ExternalSymbolContainerSnapshotTest {
     @Test
     void everyNestedContainerEnforcesTheMaterializationLimit() {
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .maxMaterializedSize(2)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .externalSymbol(
                         "values",
                         new CollectionType(new MapType(new CollectionType(ScalarType.STRING))),
@@ -224,14 +226,14 @@ class ExternalSymbolContainerSnapshotTest {
         exact.put("b", "second");
         exact.put("a", "first");
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .maxMaterializedSize(2)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .externalSymbol("values", exact, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
         assertThat(keys((Map<?, ?>) defaultValue(environment, "values")))
                 .containsExactly("a", "b");
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .maxMaterializedSize(2)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .externalSymbol(
                         "values",
                         new MapType(ScalarType.STRING),
@@ -295,7 +297,7 @@ class ExternalSymbolContainerSnapshotTest {
             }
         };
         ExpressionEnvironment exactEnvironment = ExpressionEnvironment.builder()
-                .maxMaterializedSize(2)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .externalSymbol("values", exact, ExternalSymbolOverwritePolicy.FIXED)
                 .build();
 
@@ -325,14 +327,15 @@ class ExternalSymbolContainerSnapshotTest {
         CollectionWithUnderreportedSize values = new CollectionWithUnderreportedSize();
 
         assertThatThrownBy(() -> ExpressionEnvironment.builder()
-                .maxMaterializedSize(2)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .externalSymbol("values", values, ExternalSymbolOverwritePolicy.FIXED)
                 .build())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("maxMaterializedSize 2");
 
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .maxMaterializedSize(2)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .externalSymbol(
                         "values",
                         new MapType(ScalarType.STRING),

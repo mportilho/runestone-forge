@@ -1,5 +1,7 @@
 package com.runestone.expeval_mk3.internal.semantics;
 
+import com.runestone.expeval_mk3.api.ExpressionTrustMode;
+
 import com.runestone.expeval_mk3.api.CollectionOperationCatalog;
 import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
@@ -404,10 +406,11 @@ public final class SemanticResolver {
         }
 
         private Resolution resolveCollection(CollectionLiteralNode collection, ExpressionType expectedType) {
-            if (collection.elements().size() > environment.maxMaterializedSize()) {
+            if (environment.trustMode() != ExpressionTrustMode.UNSAFE
+                    && collection.elements().size() > environment.resourceLimits().maxMaterializedSize()) {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_MATERIALIZATION_LIMIT_EXCEEDED,
-                        "Collection literal exceeds maxMaterializedSize " + environment.maxMaterializedSize(),
+                        "Collection literal exceeds maxMaterializedSize " + environment.resourceLimits().maxMaterializedSize(),
                         collection.sourceSpan());
                 return Resolution.invalidResolution();
             }
@@ -802,10 +805,11 @@ public final class SemanticResolver {
                     diagnostic(DiagnosticCode.SEMANTIC_FACTORIAL_NEGATIVE, "Factorial requires a non-negative value", occurrenceSpan);
                     return false;
                 }
-                if (constant.compareTo(BigDecimal.valueOf(environment.maxFactorialInput())) > 0) {
+                if (environment.trustMode() != ExpressionTrustMode.UNSAFE
+                        && constant.compareTo(BigDecimal.valueOf(environment.resourceLimits().maxFactorialInput())) > 0) {
                     diagnostic(
                             DiagnosticCode.SEMANTIC_FACTORIAL_EXCEEDS_MAXIMUM,
-                            "Factorial exceeds maxFactorialInput " + environment.maxFactorialInput(),
+                            "Factorial exceeds maxFactorialInput " + environment.resourceLimits().maxFactorialInput(),
                             occurrenceSpan);
                     return false;
                 }
@@ -813,7 +817,10 @@ public final class SemanticResolver {
             }
             deferredChecks.add(new FactorialIntegralDeferredCheck(nodeId, occurrenceSpan));
             deferredChecks.add(new FactorialNonNegativeDeferredCheck(nodeId, occurrenceSpan));
-            deferredChecks.add(new FactorialMaxBoundDeferredCheck(nodeId, occurrenceSpan, environment.maxFactorialInput()));
+            if (environment.trustMode() == ExpressionTrustMode.SAFE) {
+                deferredChecks.add(new FactorialMaxBoundDeferredCheck(
+                        nodeId, occurrenceSpan, environment.resourceLimits().maxFactorialInput()));
+            }
             return true;
         }
 
@@ -1280,10 +1287,11 @@ public final class SemanticResolver {
                         filter.sourceSpan());
                 return LinkResolution.invalidResolution();
             }
-            if (currentItemBindings.size() >= environment.maxCurrentItemDepth()) {
+            if (environment.trustMode() != ExpressionTrustMode.UNSAFE
+                    && currentItemBindings.size() >= environment.resourceLimits().maxCurrentItemDepth()) {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_CURRENT_ITEM_DEPTH_EXCEEDED,
-                        "Filter exceeds maxCurrentItemDepth " + environment.maxCurrentItemDepth(),
+                        "Filter exceeds maxCurrentItemDepth " + environment.resourceLimits().maxCurrentItemDepth(),
                         filter.sourceSpan());
                 return LinkResolution.invalidResolution();
             }
@@ -1357,11 +1365,12 @@ public final class SemanticResolver {
                     return LinkResolution.invalidResolution();
                 }
                 objectChildren = descriptor.wildcardChildren();
-                if (objectChildren.size() > environment.maxMaterializedSize()) {
+                if (environment.trustMode() != ExpressionTrustMode.UNSAFE
+                        && objectChildren.size() > environment.resourceLimits().maxMaterializedSize()) {
                     diagnostic(
                             DiagnosticCode.SEMANTIC_MATERIALIZATION_LIMIT_EXCEEDED,
                             "Object wildcard navigation exceeds maxMaterializedSize "
-                                    + environment.maxMaterializedSize(),
+                                    + environment.resourceLimits().maxMaterializedSize(),
                             wildcard.sourceSpan());
                     return LinkResolution.invalidResolution();
                 }
@@ -1374,9 +1383,9 @@ public final class SemanticResolver {
                         wildcard.sourceSpan());
                 return LinkResolution.invalidResolution();
             }
-            if (!resultShape.fixed()) {
+            if (!resultShape.fixed() && environment.trustMode() == ExpressionTrustMode.SAFE) {
                 deferredChecks.add(new MaterializationLimitDeferredCheck(
-                        wildcard.id(), wildcard.sourceSpan(), environment.maxMaterializedSize()));
+                        wildcard.id(), wildcard.sourceSpan(), environment.resourceLimits().maxMaterializedSize()));
             }
             RuntimeNullability resultNullability = wildcard.safe()
                     ? RuntimeNullability.MAY_BE_NULL
@@ -1741,10 +1750,11 @@ public final class SemanticResolver {
                 CollectionOperationCatalog.ArgumentContract contract,
                 ExpressionType receiverType,
                 List<ExpressionType> valueArgumentTypes) {
-            if (currentItemBindings.size() >= environment.maxCurrentItemDepth()) {
+            if (environment.trustMode() != ExpressionTrustMode.UNSAFE
+                    && currentItemBindings.size() >= environment.resourceLimits().maxCurrentItemDepth()) {
                 diagnostic(
                         DiagnosticCode.SEMANTIC_CURRENT_ITEM_DEPTH_EXCEEDED,
-                        "Lambda exceeds maxCurrentItemDepth " + environment.maxCurrentItemDepth(),
+                        "Lambda exceeds maxCurrentItemDepth " + environment.resourceLimits().maxCurrentItemDepth(),
                         lambda.sourceSpan());
                 return LambdaResolution.invalidResolution();
             }

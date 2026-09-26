@@ -228,7 +228,8 @@ class ExpressionEngineTest {
 
     @Test
     void enforcesTheMaterializationLimitAtCompilation() {
-        ExpressionEnvironment environment = ExpressionEnvironment.builder().maxMaterializedSize(2).build();
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build()).build();
 
         assertThat(ExpressionEngine.defaultEngine().compileOrThrow("[1, 2]", environment).asResult().compute()).isEqualTo(List.of(
                 new BigDecimal("1"), new BigDecimal("2")));
@@ -590,7 +591,8 @@ class ExpressionEngineTest {
         CountingFunctions functions = new CountingFunctions();
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
-                .maxMaterializedSize(2)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .externalSymbol(
                         "items",
                         new CollectionType(ScalarType.NUMBER),
@@ -635,7 +637,7 @@ class ExpressionEngineTest {
                 .isEqualTo(List.of(BigDecimal.ONE, BigDecimal.ONE));
 
         ExpressionEnvironment shallowEnvironment = ExpressionEnvironment.builder()
-                .maxCurrentItemDepth(1)
+                .resourceLimits(ExpressionResourceLimits.builder().maxCurrentItemDepth(1).build())
                 .build();
         assertThat(ExpressionEngine.defaultEngine().compile("outer := [[1]]; outer.map(@ -> @.map(@ -> @))", shallowEnvironment))
                 .isInstanceOfSatisfying(ExpressionCompilationResult.Failure.class, failure ->
@@ -688,7 +690,8 @@ class ExpressionEngineTest {
         CountingFunctions functions = new CountingFunctions();
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
                 .functionsFrom(functions, FunctionPurity.IMPURE)
-                .maxMaterializedSize(2)
+                .trustMode(ExpressionTrustMode.SAFE)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(2).build())
                 .externalSymbol(
                         "items",
                         new CollectionType(ScalarType.NUMBER),
@@ -812,7 +815,7 @@ class ExpressionEngineTest {
                 .hasRootCauseMessage("first failed");
 
         ExpressionEnvironment limited = ExpressionEnvironment.builder()
-                .maxMaterializedSize(1)
+                .resourceLimits(ExpressionResourceLimits.builder().maxMaterializedSize(1).build())
                 .registerJavaTypeWildcardChildren(WildcardChildProvider.class, "first", "second")
                 .externalSymbol("object", new WildcardChildProvider(), ExternalSymbolOverwritePolicy.FIXED)
                 .build();
@@ -1013,7 +1016,7 @@ class ExpressionEngineTest {
     @Test
     void enforcesCurrentItemDepthForNestedFilters() {
         ExpressionEnvironment environment = ExpressionEnvironment.builder()
-                .maxCurrentItemDepth(1)
+                .resourceLimits(ExpressionResourceLimits.builder().maxCurrentItemDepth(1).build())
                 .build();
 
         assertThat(ExpressionEngine.defaultEngine().compile(

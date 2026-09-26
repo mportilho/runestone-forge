@@ -10,6 +10,7 @@ import com.runestone.expeval_mk3.internal.ast.UnaryOperator;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -55,6 +56,11 @@ public final class ConstantFolder {
     }
 
     public static ExecutableNode fold(ExecutableNode built, ExecutableNode... requiredConstantChildren) {
+        return fold(built, Integer.MAX_VALUE, requiredConstantChildren);
+    }
+
+    public static ExecutableNode fold(
+            ExecutableNode built, int maxMaterializedSize, ExecutableNode... requiredConstantChildren) {
         for (ExecutableNode child : requiredConstantChildren) {
             if (!(child instanceof ConstantExecutableNode)) {
                 return built;
@@ -73,7 +79,7 @@ public final class ConstantFolder {
         } catch (RuntimeException executionFailure) {
             return built;
         }
-        if (value == null) {
+        if (value == null || !withinMaterializationLimit(value, maxMaterializedSize)) {
             return built;
         }
         StaticCalculationGroup calculationGroup = foldScope.calculationGroup();
@@ -81,6 +87,32 @@ public final class ConstantFolder {
                 ? new ConstantExecutableNode(built.id(), built.sourceSpan(), value)
                 : new StaticCalculationConstantExecutableNode(
                         built.id(), built.sourceSpan(), value, calculationGroup);
+    }
+
+    private static boolean withinMaterializationLimit(Object value, int limit) {
+        if (limit == Integer.MAX_VALUE) {
+            return true;
+        }
+        if (value instanceof List<?> values) {
+            if (values.size() > limit) {
+                return false;
+            }
+            for (Object element : values) {
+                if (!withinMaterializationLimit(element, limit)) {
+                    return false;
+                }
+            }
+        } else if (value instanceof Map<?, ?> values) {
+            if (values.size() > limit) {
+                return false;
+            }
+            for (Object element : values.values()) {
+                if (!withinMaterializationLimit(element, limit)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private static boolean requiresCalculationCapture(
