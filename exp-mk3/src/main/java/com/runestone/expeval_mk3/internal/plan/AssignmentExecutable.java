@@ -66,6 +66,14 @@ public final class AssignmentExecutable {
         return minimumSizeCheck == null ? List.of() : List.of(minimumSizeCheck);
     }
 
+    ExecutableNode expression() {
+        return expression;
+    }
+
+    int frameSlotCount() {
+        return frameSlots.length;
+    }
+
     public void execute(ExecutionScope scope) {
         if (frameSlots.length == 1) {
             scope.write(frameSlots[0], expression.execute(scope));

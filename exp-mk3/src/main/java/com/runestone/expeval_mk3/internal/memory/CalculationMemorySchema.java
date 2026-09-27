@@ -10,6 +10,11 @@ import java.util.Objects;
 /** Standalone metadata used to capture and freeze one calculation-memory view. */
 public final class CalculationMemorySchema {
 
+    private static final int SCHEMA_UNITS = 96;
+    private static final int LIST_UNITS = 48;
+    private static final int REFERENCE_UNITS = 8;
+    private static final int CALCULATION_KEY_UNITS = 80;
+
     private final VariableMemorySchema variableSchema;
     private final List<CalculationKey> calculationKeys;
 
@@ -20,6 +25,13 @@ public final class CalculationMemorySchema {
 
     public CalculationRecorder newRecorder() {
         return calculationKeys.isEmpty() ? null : new CalculationRecorder(calculationKeys.size());
+    }
+
+    /** Conservative source-controlled payload retained by this schema's metadata. */
+    public int estimatedRetainedWeight() {
+        long units = SCHEMA_UNITS + variableSchema.estimatedRetainedWeight();
+        units += LIST_UNITS + (long) calculationKeys.size() * (REFERENCE_UNITS + CALCULATION_KEY_UNITS);
+        return (int) Math.min(Integer.MAX_VALUE, units);
     }
 
     public CalculationMemory freeze(ExecutionScope scope, CalculationRecorder recorder) {

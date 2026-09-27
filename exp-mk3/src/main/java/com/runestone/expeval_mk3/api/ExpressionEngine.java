@@ -27,8 +27,10 @@ public final class ExpressionEngine {
     private ExpressionEngine(CacheConfig cacheConfig, Clock clock) {
         ParserWarmUp.shared().ensureWarmedUp();
         RuntimeServices runtimeServices = RuntimeServices.withClock(clock);
-        this.cache = new CompilationCache(
-                cacheConfig, (source, environment) -> CompilationPipeline.compile(source, environment, runtimeServices));
+        this.cache = new CompilationCache(cacheConfig, (source, environment) -> {
+            ExpressionCompilationResult result = CompilationPipeline.compile(source, environment, runtimeServices);
+            return new CompilationCache.CachedCompilation(result, CompilationRetainedWeight.estimate(source, result));
+        });
     }
 
     public static ExpressionEngine defaultEngine() {

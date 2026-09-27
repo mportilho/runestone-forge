@@ -18,13 +18,12 @@ import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Issue #136: the capacity and expiration policies {@link CompilationCache} enforces on top of the
- * single-flight contract issue #135 already proved. Eviction and expiration must let a new generation be
- * compiled for the same key without invalidating a {@link CompiledExpression} an earlier generation
- * already delivered, and neither policy may depend on the number of nodes a compiled plan happens to
- * have. Caffeine's admission policy may reject an incoming entry instead of evicting a resident one, so
- * tests never assert which specific entry is gone; a pigeonhole count over a batch far larger than the
- * configured capacity is the only assertion that holds under any admission decision.
+ * Issue #136's capacity and expiration policies, extended by issue #171's retained-weight admission,
+ * sit on top of the single-flight contract issue #135 already proved. Eviction, expiration, and rejected
+ * admission must let a new generation be compiled without invalidating a {@link CompiledExpression} already
+ * delivered. Caffeine may reject an incoming entry instead of evicting a resident one, so tests never assert
+ * which specific entry is gone; a pigeonhole count over a batch far larger than the configured budget is the
+ * only assertion that holds under any admission decision.
  */
 class CompilationCacheCapacityAndExpirationTest {
 
@@ -69,9 +68,12 @@ class CompilationCacheCapacityAndExpirationTest {
     }
 
     @Test
-    void capacityCountsEntriesNotNodesSoWildlyDifferentlySizedExpressionsShareTheSameBudget() {
+    void configuredRetainedWeightBudgetKeepsOrdinaryExpressionsOfDifferentPlanSizesResident() {
         int capacity = 5;
-        CompilationCache cache = realPipelineCache(CacheConfig.builder().maximumEntries(capacity).build());
+        CompilationCache cache = realPipelineCache(CacheConfig.builder()
+                .maximumEntries(capacity)
+                .maximumRetainedWeight(5L * 1024 * 1024)
+                .build());
         ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
         List<String> sources = List.of(1, 10, 50, 150, 500).stream()
                 .map(termCount -> IntStream.range(0, termCount).mapToObj(ignored -> "1").collect(Collectors.joining(" + ")))
@@ -83,11 +85,100 @@ class CompilationCacheCapacityAndExpirationTest {
         for (int repeat = 0; repeat < 10; repeat++) {
             for (int index = 0; index < sources.size(); index++) {
                 assertThat(cache.get(sources.get(index), environment))
-                        .as("an entry with %d nodes is not weighed differently from the others; a node-count "
-                                        + "weigher with a budget sized for the smaller entries would have evicted it",
+                        .as("the configured retained-weight budget accommodates this ordinary expression with %d nodes",
                                 index)
                         .isSameAs(firstPass.get(index));
             }
+        }
+    }
+
+    @Test
+    void anIndividuallyOverweightSuccessIsDeliveredButNeverResidentInEveryTrustMode() {
+        CacheConfig config = CacheConfig.builder()
+                .maximumEntries(1)
+                .maximumRetainedWeight(1)
+                .build();
+        String source = "1 + 2";
+
+        for (ExpressionTrustMode trustMode : ExpressionTrustMode.values()) {
+            ExpressionEngine engine = ExpressionEngine.builder().cacheConfig(config).build();
+            ExpressionEnvironment environment = ExpressionEnvironment.builder().trustMode(trustMode).build();
+
+            ExpressionCompilationResult.Success first =
+                    (ExpressionCompilationResult.Success) engine.compile(source, environment);
+            ExpressionCompilationResult.Success second =
+                    (ExpressionCompilationResult.Success) engine.compile(source, environment);
+
+            assertThat(second)
+                    .as("%s still delivers successful compilation even when it cannot be resident", trustMode)
+                    .isNotSameAs(first);
+            assertThat((BigDecimal) first.compiledExpression().asResult().compute())
+                    .as("an already-delivered generation remains valid after rejected admission in %s", trustMode)
+                    .isEqualByComparingTo(BigDecimal.valueOf(3));
+        }
+    }
+
+    @Test
+    void entryCountLimitRemainsActiveInEveryTrustMode() {
+        int sourceCount = 12;
+        CacheConfig config = CacheConfig.builder()
+                .maximumEntries(1)
+                .maximumRetainedWeight(1024L * 1024)
+                .build();
+        List<String> sources = IntStream.range(0, sourceCount)
+                .mapToObj(index -> index + " + " + index)
+                .toList();
+
+        for (ExpressionTrustMode trustMode : ExpressionTrustMode.values()) {
+            ExpressionEngine engine = ExpressionEngine.builder().cacheConfig(config).build();
+            ExpressionEnvironment environment = ExpressionEnvironment.builder().trustMode(trustMode).build();
+            List<ExpressionCompilationResult> firstPass = sources.stream()
+                    .map(source -> engine.compile(source, environment))
+                    .toList();
+            List<ExpressionCompilationResult> secondPass = sources.stream()
+                    .map(source -> engine.compile(source, environment))
+                    .toList();
+
+            long changedGenerations = IntStream.range(0, sourceCount)
+                    .filter(index -> firstPass.get(index) != secondPass.get(index))
+                    .count();
+            assertThat(changedGenerations)
+                    .as("maximumEntries remains a one-entry bound in %s", trustMode)
+                    .isGreaterThanOrEqualTo(sourceCount - 1);
+        }
+    }
+
+    @Test
+    void retainedWeightLimitRemainsActiveInEveryTrustMode() {
+        List<String> sources = IntStream.range(0, 12)
+                .mapToObj(index -> index + " + " + index)
+                .toList();
+
+        for (ExpressionTrustMode trustMode : ExpressionTrustMode.values()) {
+            ExpressionEnvironment environment = ExpressionEnvironment.builder().trustMode(trustMode).build();
+            ExpressionEngine sizingEngine = ExpressionEngine.builder().build();
+            int lightestEntryWeight = sources.stream()
+                    .mapToInt(source -> CompilationRetainedWeight.estimate(source, sizingEngine.compile(source, environment)))
+                    .min()
+                    .orElseThrow();
+            CacheConfig config = CacheConfig.builder()
+                    .maximumEntries(100)
+                    .maximumRetainedWeight(2L * lightestEntryWeight)
+                    .build();
+            ExpressionEngine engine = ExpressionEngine.builder().cacheConfig(config).build();
+            List<ExpressionCompilationResult> firstPass = sources.stream()
+                    .map(source -> engine.compile(source, environment))
+                    .toList();
+            List<ExpressionCompilationResult> secondPass = sources.stream()
+                    .map(source -> engine.compile(source, environment))
+                    .toList();
+
+            long changedGenerations = IntStream.range(0, sources.size())
+                    .filter(index -> firstPass.get(index) != secondPass.get(index))
+                    .count();
+            assertThat(changedGenerations)
+                    .as("two entry weights admit at most two of twelve sources in %s", trustMode)
+                    .isGreaterThanOrEqualTo(sources.size() - 2);
         }
     }
 
@@ -148,7 +239,8 @@ class CompilationCacheCapacityAndExpirationTest {
         Clock fixedSemanticClock = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
         RuntimeServices runtimeServices = RuntimeServices.withClock(fixedSemanticClock);
         CompilationCache cache = new CompilationCache(
-                config, (source, environment) -> CompilationPipeline.compile(source, environment, runtimeServices), ticker);
+                config, (source, environment) -> weighted(
+                        source, CompilationPipeline.compile(source, environment, runtimeServices)), ticker);
         ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
 
         ExpressionCompilationResult.Success firstGeneration =
@@ -173,7 +265,12 @@ class CompilationCacheCapacityAndExpirationTest {
     private static CompilationCache realPipelineCache(CacheConfig config, MonotonicTicker ticker) {
         RuntimeServices runtimeServices = RuntimeServices.systemDefault();
         return new CompilationCache(
-                config, (source, environment) -> CompilationPipeline.compile(source, environment, runtimeServices), ticker);
+                config, (source, environment) -> weighted(
+                        source, CompilationPipeline.compile(source, environment, runtimeServices)), ticker);
+    }
+
+    private static CompilationCache.CachedCompilation weighted(String source, ExpressionCompilationResult result) {
+        return new CompilationCache.CachedCompilation(result, CompilationRetainedWeight.estimate(source, result));
     }
 
     /** No wall-clock or {@code sleep} dependency: time only moves when a test calls {@link #advance}. */

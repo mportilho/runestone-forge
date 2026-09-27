@@ -150,6 +150,14 @@ public final class ExecutionPlan {
     }
 
     /**
+     * Conservative source-controlled payload retained by this plan. Environment services and external
+     * defaults remain deliberately outside this measure because they are trusted shared components.
+     */
+    public int estimatedRetainedWeight() {
+        return PlanRetainedWeight.estimate(this);
+    }
+
+    /**
      * Every internal symbol reachable through the assignments view, in first-creation source order.
      * Reassignment reuses the same frame slot and does not move a symbol's position.
      */
@@ -167,6 +175,26 @@ public final class ExecutionPlan {
 
     List<AssignmentExecutable> assignments() {
         return assignments;
+    }
+
+    int externalBindingCount() {
+        return externalBindings.size();
+    }
+
+    int declaredSymbolCount() {
+        return declaredSymbolsInCanonicalOrder.size();
+    }
+
+    int frameTemplateLength() {
+        return frameTemplate.length;
+    }
+
+    CalculationMemorySchema fullCalculationMemorySchema() {
+        return fullCalculationMemorySchema;
+    }
+
+    CalculationMemorySchema assignmentCalculationMemorySchema() {
+        return assignmentCalculationMemorySchema;
     }
 
     ExecutableNode resultExpression() {

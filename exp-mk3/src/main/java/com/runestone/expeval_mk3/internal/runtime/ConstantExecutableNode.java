@@ -3,6 +3,7 @@ package com.runestone.expeval_mk3.internal.runtime;
 import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.ast.NodeId;
 
+import java.util.List;
 import java.util.Objects;
 
 /** A prepared or folded value, with any source calculations collapsed into it. */
@@ -30,6 +31,11 @@ public sealed class ConstantExecutableNode implements ExecutableNode permits Sta
 
     public Object value() {
         return value;
+    }
+
+    /** Values retained by this constant for cache-admission accounting. */
+    public List<Object> retainedValues() {
+        return List.of(value);
     }
 
     @Override

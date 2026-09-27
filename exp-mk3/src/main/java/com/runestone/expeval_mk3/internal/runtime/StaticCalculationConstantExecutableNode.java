@@ -23,6 +23,16 @@ final class StaticCalculationConstantExecutableNode extends ConstantExecutableNo
     }
 
     @Override
+    public java.util.List<Object> retainedValues() {
+        return calculationGroup.retainedValues(value());
+    }
+
+    void visitRetainedPayload(ExecutableNodeRetainedPayload.Visitor visitor) {
+        visitor.constant(this);
+        calculationGroup.visitRetainedPayload(visitor);
+    }
+
+    @Override
     StaticCalculationGroup calculationGroup() {
         return calculationGroup;
     }

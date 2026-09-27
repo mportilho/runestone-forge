@@ -58,6 +58,12 @@ public final class PostfixExecutableNode implements ExecutableNode {
         return deferredChecks;
     }
 
+    void visitRetainedPayload(ExecutableNodeRetainedPayload.Visitor visitor) {
+        visitor.node(operand);
+        visitor.value(operations);
+        visitor.value(deferredChecks);
+    }
+
     @Override
     public Object execute(ExecutionScope scope) {
         BigDecimal result = ExpressionRuntime.number(operand.execute(scope));

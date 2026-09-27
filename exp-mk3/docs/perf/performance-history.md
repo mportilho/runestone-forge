@@ -2225,3 +2225,29 @@ Gate verdicts:
 - **Startup/warm-up:** characterization only, no threshold. `coldParser` at ~623 µs for the very first parse in a fresh JVM versus `warmParser` at ~9.1 µs confirms `ParserWarmUp`'s one-time synchronous warm-up amortizes ANTLR's ATN/DFA construction cost, consistent with the Etapa 5 baseline's `fullUncachedCompilation` finding that most of a cold compile's cost is parser-side.
 
 `mvn -pl exp-mk3 -am test` was green (1102 tests, 0 failures/errors, 50 skipped) both immediately before this benchmark work and again after the `CompilationCache` executor change, confirming the async-executor fix did not alter single-flight, capacity/expiration, or non-retention behavior.
+
+## 2026-09-27 — Compilation retained-weight cache review (issue #171)
+
+Purpose: re-run the four binding Etapa 9 cache gates after adding retained-weight admission and making
+in-flight invalidation atomic with cache admission. The run used OpenJDK 21.0.8, JMH 1.37, three forks,
+5 × 500 ms warmup iterations, 10 × 500 ms measurement iterations, `-Xms1g -Xmx1g`, and `-prof gc`.
+
+| Benchmark | Score | Error | Units | B/op |
+|---|---:|---:|---|---:|
+| `pipelineUncached` | 12,429.893 | 493.027 | ns/op | 20,076.471 |
+| `engineMiss` | 15,750.450 | 3,270.602 | ns/op | 22,259.451 |
+| `engineHitPure` | 15.868 | 0.127 | ns/op | 24.000 |
+| `engineHitAsMath` | 22.657 | 0.199 | ns/op | 48.000 |
+
+Gate verdicts:
+
+- **Miss ≤ 10% slower outside error bands:** the central overhead is 26.7%, but the 10% threshold
+  (`13,672.882 ns/op`) lies inside the miss confidence interval (`[12,479.848, 19,021.052]`). **PASS**
+  under the declared confidence-band rule.
+- **Pure hit ≥ 20× faster and ≥ 99% less allocation:** approximately 783× faster with 99.88% less
+  allocation. **PASS**.
+- **Hit + `asMath()` ≥ 10× faster and ≥ 95% less allocation:** approximately 549× faster with 99.76%
+  less allocation. **PASS**.
+
+The JSON result is retained locally at `/tmp/opencode/exp-mk3-cache-issue-171-review.json`; it is not a
+repository artifact.

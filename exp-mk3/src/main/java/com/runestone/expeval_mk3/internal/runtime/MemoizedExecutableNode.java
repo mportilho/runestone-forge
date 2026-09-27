@@ -68,4 +68,10 @@ public final class MemoizedExecutableNode implements ExecutableNode {
     public List<DeferredCheck> deferredChecks() {
         return delegate.deferredChecks();
     }
+
+    void visitRetainedPayload(ExecutableNodeRetainedPayload.Visitor visitor) {
+        visitor.node(delegate);
+        visitor.value(calculationSlots);
+        visitor.value(replaySlots);
+    }
 }

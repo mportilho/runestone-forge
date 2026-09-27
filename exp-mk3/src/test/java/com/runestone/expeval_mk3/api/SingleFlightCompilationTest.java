@@ -87,7 +87,9 @@ class SingleFlightCompilationTest {
             compilerCalls.incrementAndGet();
             entered.countDown();
             awaitUninterruptibly(release);
-            return CompilationPipeline.compile(compiledSource, environment, runtimeServices);
+            ExpressionCompilationResult result = CompilationPipeline.compile(compiledSource, environment, runtimeServices);
+            return new CompilationCache.CachedCompilation(
+                    result, CompilationRetainedWeight.estimate(compiledSource, result));
         });
         ExpressionEnvironment environment = ExpressionEnvironment.standard();
         ExecutorService executor = Executors.newFixedThreadPool(callerCount);

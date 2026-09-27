@@ -22,6 +22,10 @@ public final class CompiledExpression {
         return compilationDiagnostics;
     }
 
+    int estimatedRetainedPlanWeight() {
+        return plan.estimatedRetainedWeight();
+    }
+
     public ResultExpression asResult() {
         return new ResultExpression(plan, runtimeServices);
     }

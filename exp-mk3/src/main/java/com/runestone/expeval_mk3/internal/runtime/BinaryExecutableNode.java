@@ -131,6 +131,13 @@ public final class BinaryExecutableNode implements ExecutableNode {
         return deferredChecks;
     }
 
+    void visitRetainedPayload(ExecutableNodeRetainedPayload.Visitor visitor) {
+        visitor.node(left);
+        visitor.node(right);
+        visitor.value(regexPattern);
+        visitor.value(deferredChecks);
+    }
+
     @Override
     public Object execute(ExecutionScope scope) {
         return switch (operator) {

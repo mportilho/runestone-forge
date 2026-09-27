@@ -205,10 +205,11 @@ class ExpressionEngineCacheTest {
     }
 
     @Test
-    void cacheConfigDefaultsAreOneThousandTwentyFourEntriesWithNoExpiration() {
+    void cacheConfigDefaultsCombineOneThousandTwentyFourEntriesWithSixtyFourMiRetainedWeightUnitsAndNoExpiration() {
         CacheConfig defaults = CacheConfig.defaults();
 
         assertThat(defaults.maximumEntries()).isEqualTo(1024);
+        assertThat(defaults.maximumRetainedWeight()).isEqualTo(64L * 1024 * 1024);
         assertThat(defaults.hasExpireAfterAccess()).isFalse();
         assertThatThrownBy(defaults::expireAfterAccess).isInstanceOf(IllegalStateException.class);
     }
@@ -218,6 +219,18 @@ class ExpressionEngineCacheTest {
         assertThatThrownBy(() -> CacheConfig.builder().maximumEntries(0))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> CacheConfig.builder().maximumEntries(-1))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> CacheConfig.builder().maximumEntries(65_537))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void cacheConfigBuilderRejectsWeightOutsideThePositiveApprovedRange() {
+        assertThatThrownBy(() -> CacheConfig.builder().maximumRetainedWeight(0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> CacheConfig.builder().maximumRetainedWeight(-1))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> CacheConfig.builder().maximumRetainedWeight(1024L * 1024 * 1024 + 1))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -232,13 +245,15 @@ class ExpressionEngineCacheTest {
     }
 
     @Test
-    void cacheConfigBuilderAcceptsAPositiveCapacityAndExpiration() {
+    void cacheConfigBuilderAcceptsPositiveCapacityWeightAndExpiration() {
         CacheConfig config = CacheConfig.builder()
                 .maximumEntries(16)
+                .maximumRetainedWeight(32L * 1024)
                 .expireAfterAccess(Duration.ofMinutes(5))
                 .build();
 
         assertThat(config.maximumEntries()).isEqualTo(16);
+        assertThat(config.maximumRetainedWeight()).isEqualTo(32L * 1024);
         assertThat(config.hasExpireAfterAccess()).isTrue();
         assertThat(config.expireAfterAccess()).isEqualTo(Duration.ofMinutes(5));
     }

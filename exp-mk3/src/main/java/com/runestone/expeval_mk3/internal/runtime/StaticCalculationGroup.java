@@ -1,5 +1,8 @@
 package com.runestone.expeval_mk3.internal.runtime;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 
 /** Immutable folded calculation values replayed when their replacement constant is reached. */
@@ -22,6 +25,20 @@ final class StaticCalculationGroup {
 
     boolean isEmpty() {
         return ordinals.length == 0;
+    }
+
+    List<Object> retainedValues(Object primaryValue) {
+        List<Object> retained = new ArrayList<>(values.length + 1);
+        retained.add(primaryValue);
+        for (Object value : values) {
+            retained.add(value);
+        }
+        return Collections.unmodifiableList(retained);
+    }
+
+    void visitRetainedPayload(ExecutableNodeRetainedPayload.Visitor visitor) {
+        visitor.value(ordinals);
+        visitor.value(replaySlots);
     }
 
     void capture(ExecutionScope scope) {

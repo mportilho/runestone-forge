@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.internal.memory;
 
 import com.runestone.expeval_mk3.api.VariableKey;
+import com.runestone.expeval_mk3.api.VariableOrigin;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 
 import java.util.List;
@@ -8,6 +9,13 @@ import java.util.Objects;
 
 /** Standalone variable metadata that cannot retain the executable plan or an execution frame. */
 public final class VariableMemorySchema {
+
+    private static final int SCHEMA_UNITS = 80;
+    private static final int LIST_UNITS = 48;
+    private static final int REFERENCE_UNITS = 8;
+    private static final int VARIABLE_KEY_UNITS = 48;
+    private static final int ARRAY_UNITS = 32;
+    private static final int STRING_UNITS = 48;
 
     private final List<VariableKey> keys;
     private final int[] frameSlots;
@@ -37,6 +45,19 @@ public final class VariableMemorySchema {
 
     List<VariableKey> keys() {
         return keys;
+    }
+
+    int estimatedRetainedWeight() {
+        long units = SCHEMA_UNITS;
+        units += LIST_UNITS + (long) keys.size() * REFERENCE_UNITS;
+        for (VariableKey key : keys) {
+            units += VARIABLE_KEY_UNITS;
+            if (key.origin() == VariableOrigin.INTERNAL) {
+                units += STRING_UNITS + (long) key.name().length() * Character.BYTES;
+            }
+        }
+        units += ARRAY_UNITS + (long) frameSlots.length * Integer.BYTES;
+        return (int) Math.min(Integer.MAX_VALUE, units);
     }
 
     Object[] copyValues(ExecutionScope scope) {

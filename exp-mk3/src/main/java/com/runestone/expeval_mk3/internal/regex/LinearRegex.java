@@ -12,16 +12,22 @@ import java.util.function.IntConsumer;
 /** The single RE2/J-backed regular-expression seam used by the expression language. */
 public final class LinearRegex {
 
-    private final Pattern pattern;
+    private static final int REGEX_UNITS = 256;
+    private static final int COMPILED_UNITS_PER_SOURCE_CHARACTER = 32;
 
-    private LinearRegex(Pattern pattern) {
+    private final Pattern pattern;
+    private final int estimatedRetainedWeight;
+
+    private LinearRegex(Pattern pattern, int sourceLength) {
         this.pattern = pattern;
+        estimatedRetainedWeight = Math.toIntExact(Math.min(
+                Integer.MAX_VALUE, REGEX_UNITS + (long) sourceLength * COMPILED_UNITS_PER_SOURCE_CHARACTER));
     }
 
     public static LinearRegex compile(String source) {
         Objects.requireNonNull(source, "source");
         try {
-            return new LinearRegex(Pattern.compile(source));
+            return new LinearRegex(Pattern.compile(source), source.length());
         } catch (PatternSyntaxException exception) {
             throw new InvalidRegexPatternException("invalid linear regex pattern: " + exception.getMessage(), exception);
         }
@@ -29,6 +35,11 @@ public final class LinearRegex {
 
     public boolean matches(String value) {
         return pattern.matcher(Objects.requireNonNull(value, "value")).matches();
+    }
+
+    /** Conservative source-controlled payload retained by this compiled RE2/J pattern. */
+    public int estimatedRetainedWeight() {
+        return estimatedRetainedWeight;
     }
 
     public String replaceAll(String value, String replacement) {

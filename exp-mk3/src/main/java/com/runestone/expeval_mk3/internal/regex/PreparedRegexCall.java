@@ -7,6 +7,7 @@ import java.util.Objects;
 /** A literal regex compiled together with the exact official built-in operation that consumes it. */
 public final class PreparedRegexCall {
 
+    private static final int CALL_UNITS = 64;
     private final Operation operation;
     private final LinearRegex pattern;
 
@@ -32,6 +33,11 @@ public final class PreparedRegexCall {
 
     public boolean requiresReplacement() {
         return operation == Operation.REPLACE_ALL;
+    }
+
+    /** Conservative payload retained by the operation marker and its prepared pattern. */
+    public int estimatedRetainedWeight() {
+        return (int) Math.min(Integer.MAX_VALUE, (long) CALL_UNITS + pattern.estimatedRetainedWeight());
     }
 
     private enum Operation {
