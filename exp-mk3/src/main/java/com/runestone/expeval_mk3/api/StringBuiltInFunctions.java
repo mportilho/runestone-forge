@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.api;
 
 import com.runestone.expeval_mk3.internal.regex.LinearRegex;
+import com.runestone.expeval_mk3.internal.runtime.TraversalStepContext;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -27,6 +28,7 @@ final class StringBuiltInFunctions {
         Objects.requireNonNull(values, "values");
         StringBuilder builder = new StringBuilder();
         for (String value : values) {
+            TraversalStepContext.visit();
             builder.append(BuiltInFunctionSupport.requireString(value, "value"));
         }
         return builder.toString();
@@ -202,6 +204,7 @@ final class StringBuiltInFunctions {
         Objects.requireNonNull(values, "values");
         StringJoiner joiner = new StringJoiner(BuiltInFunctionSupport.requireString(delimiter, "delimiter"));
         for (String value : values) {
+            TraversalStepContext.visit();
             joiner.add(BuiltInFunctionSupport.requireString(value, "value"));
         }
         return joiner.toString();

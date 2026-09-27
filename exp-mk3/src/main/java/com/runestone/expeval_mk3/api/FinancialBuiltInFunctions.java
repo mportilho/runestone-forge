@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.api;
 
 import ch.obermuhlner.math.big.BigDecimalMath;
+import com.runestone.expeval_mk3.internal.runtime.TraversalStepContext;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -81,6 +82,7 @@ final class FinancialBuiltInFunctions {
         BigDecimal ratePlusOne = rate.add(ONE);
         BigDecimal currentRate = ratePlusOne;
         for (BigDecimal cashFlow : BuiltInFunctionSupport.numbers(cashFlows)) {
+            TraversalStepContext.visit();
             npv = npv.add(cashFlow.divide(currentRate, mathContext));
             currentRate = currentRate.multiply(ratePlusOne, mathContext);
         }

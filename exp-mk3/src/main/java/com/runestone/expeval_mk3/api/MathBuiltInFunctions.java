@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.api;
 
 import ch.obermuhlner.math.big.BigDecimalMath;
+import com.runestone.expeval_mk3.internal.runtime.TraversalStepContext;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -54,6 +55,7 @@ final class MathBuiltInFunctions {
         }
         BigDecimal sum = ZERO;
         for (BigDecimal number : numbers) {
+            TraversalStepContext.visit();
             sum = sum.add(number);
         }
         return sum.divide(BigDecimal.valueOf(size), mathContext);
@@ -66,6 +68,7 @@ final class MathBuiltInFunctions {
         }
         BigDecimal product = ONE;
         for (BigDecimal number : numbers) {
+            TraversalStepContext.visit();
             product = product.multiply(number, mathContext);
         }
         return BigDecimalMath.root(product, BigDecimal.valueOf(numbers.length), mathContext);
@@ -75,6 +78,7 @@ final class MathBuiltInFunctions {
         BigDecimal[] numbers = BuiltInFunctionSupport.numbers(values);
         BigDecimal reciprocalSum = ZERO;
         for (BigDecimal number : numbers) {
+            TraversalStepContext.visit();
             reciprocalSum = reciprocalSum.add(ONE.divide(number, mathContext));
         }
         return BigDecimal.valueOf(numbers.length).divide(reciprocalSum, mathContext);
@@ -93,6 +97,7 @@ final class MathBuiltInFunctions {
             double sumCompensation = 0.0;
             double squareCompensation = 0.0;
             for (BigDecimal number : numbers) {
+                TraversalStepContext.visit();
                 double value = number.doubleValue();
                 double correctedSum = value - sumCompensation;
                 double nextSum = sum + correctedSum;
@@ -112,6 +117,7 @@ final class MathBuiltInFunctions {
         BigDecimal sum = ZERO;
         BigDecimal sumSquares = ZERO;
         for (BigDecimal number : numbers) {
+            TraversalStepContext.visit();
             sum = sum.add(number);
             sumSquares = sumSquares.add(number.multiply(number, mathContext));
         }
@@ -137,11 +143,13 @@ final class MathBuiltInFunctions {
         }
         BigDecimal sum = ZERO;
         for (BigDecimal number : numbers) {
+            TraversalStepContext.visit();
             sum = sum.add(number);
         }
         BigDecimal mean = sum.divide(BigDecimal.valueOf(size), mathContext);
         BigDecimal deviation = ZERO;
         for (BigDecimal number : numbers) {
+            TraversalStepContext.visit();
             deviation = deviation.add(number.subtract(mean).abs());
         }
         return deviation.divide(BigDecimal.valueOf(size), mathContext);
@@ -171,6 +179,7 @@ final class MathBuiltInFunctions {
         if (currentValue.compareTo(ZERO) >= 0) {
             if (direction.compareTo(ZERO) >= 0) {
                 for (int index = 0; index < targets.length; index++) {
+                    TraversalStepContext.visit();
                     currentValue = positiveDistribution(currentValue, targets[index], limits[index], index, distributed);
                     if (currentValue.compareTo(ZERO) == 0) {
                         break;
@@ -178,6 +187,7 @@ final class MathBuiltInFunctions {
                 }
             } else {
                 for (int index = targets.length - 1; index >= 0; index--) {
+                    TraversalStepContext.visit();
                     currentValue = positiveDistribution(currentValue, targets[index], limits[index], index, distributed);
                     if (currentValue.compareTo(ZERO) == 0) {
                         break;
@@ -188,6 +198,7 @@ final class MathBuiltInFunctions {
             currentValue = currentValue.abs();
             if (direction.compareTo(ZERO) >= 0) {
                 for (int index = 0; index < targets.length; index++) {
+                    TraversalStepContext.visit();
                     currentValue = negativeDistribution(currentValue, targets[index], limits[index], index, distributed);
                     if (currentValue.compareTo(ZERO) == 0) {
                         break;
@@ -195,6 +206,7 @@ final class MathBuiltInFunctions {
                 }
             } else {
                 for (int index = targets.length - 1; index >= 0; index--) {
+                    TraversalStepContext.visit();
                     currentValue = negativeDistribution(currentValue, targets[index], limits[index], index, distributed);
                     if (currentValue.compareTo(ZERO) == 0) {
                         break;
@@ -218,6 +230,7 @@ final class MathBuiltInFunctions {
         }
         BigDecimal total = ZERO;
         for (BigDecimal reference : references) {
+            TraversalStepContext.visit();
             total = total.add(reference);
         }
         BigDecimal[] distributed = new BigDecimal[references.length];
@@ -225,6 +238,7 @@ final class MathBuiltInFunctions {
         if (total.compareTo(ZERO) != 0) {
             BigDecimal factor = value.divide(total, mathContext);
             for (int index = 0; index < references.length; index++) {
+                TraversalStepContext.visit();
                 BigDecimal distributedValue = references[index].multiply(factor).setScale(scale, HALF_EVEN);
                 distributed[index] = distributedValue;
                 distributedSum = distributedSum.add(distributedValue);
@@ -240,6 +254,7 @@ final class MathBuiltInFunctions {
             int adjustmentIndex = -1;
             if (direction.compareTo(ZERO) >= 0) {
                 for (int index = 0; index < references.length; index++) {
+                    TraversalStepContext.visit();
                     if (references[index].compareTo(ZERO) != 0) {
                         adjustmentIndex = index;
                         break;
@@ -250,6 +265,7 @@ final class MathBuiltInFunctions {
                 }
             } else {
                 for (int index = distributed.length - 1; index >= 0; index--) {
+                    TraversalStepContext.visit();
                     if (references[index].compareTo(ZERO) != 0) {
                         adjustmentIndex = index;
                         break;

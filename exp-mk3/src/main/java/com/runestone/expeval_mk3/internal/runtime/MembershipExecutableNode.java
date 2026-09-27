@@ -32,7 +32,9 @@ public record MembershipExecutableNode(
         if (collectionType instanceof CollectionType type) {
             contains = false;
             for (Object value : (List<?>) collection.execute(scope)) {
-                if (ExpressionRuntime.structuralEquals(evaluatedElement, value, type.elementType())) {
+                scope.visitTraversalStep(sourceSpan);
+                if (ExpressionRuntime.structuralEquals(
+                        evaluatedElement, value, type.elementType(), scope, sourceSpan)) {
                     contains = true;
                     break;
                 }

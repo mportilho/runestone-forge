@@ -78,22 +78,7 @@ public final class ConstantFolder {
         if (limits != null && built instanceof BinaryExecutableNode binary) {
             binary.validateConstantExpansion(limits);
         }
-        if (limits != null && built instanceof FunctionCallExecutableNode call
-                && call.descriptor().implementationMetadata().owner().equals(
-                        "com.runestone.expeval_mk3.api.StringBuiltInFunctions")) {
-            // The SAFE execution seam enforces the same pre-allocation checks for constant expansions.
-            // Do not execute a custom provider during this preflight.
-            SafeExecutionScope preflight = new SafeExecutionScope(ExecutionScope.blankFrame(0),
-                    ZoneOffset.UTC, Clock.systemUTC(), null, limits);
-            try {
-                call.execute(preflight);
-            } catch (ExpressionExecutionException violation) {
-                if (violation.diagnostic().code().equals("RUNTIME_VALUE_SHAPE_EXCEEDED")
-                        || violation.diagnostic().code().equals("RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED")) {
-                    throw new ConstantShapeException(violation.diagnostic().message(), call.sourceSpan());
-                }
-            }
-        }
+        preflightConstantExpansion(built, limits, requiredConstantChildren);
         Object value;
         ConstantFoldSentinelScope foldScope = requiresCalculationCapture(built, requiredConstantChildren)
                 ? ConstantFoldSentinelScope.capturing()
@@ -121,6 +106,31 @@ public final class ConstantFolder {
                 ? new ConstantExecutableNode(built.id(), built.sourceSpan(), value)
                 : new StaticCalculationConstantExecutableNode(
                         built.id(), built.sourceSpan(), value, calculationGroup);
+    }
+
+    public static void preflightConstantExpansion(
+            ExecutableNode built, ExpressionResourceLimits limits, ExecutableNode... requiredConstantChildren) {
+        if (limits == null || !(built instanceof FunctionCallExecutableNode call)
+                || !call.descriptor().implementationMetadata().owner().equals(
+                        "com.runestone.expeval_mk3.api.StringBuiltInFunctions")) {
+            return;
+        }
+        for (ExecutableNode child : requiredConstantChildren) {
+            if (!(child instanceof ConstantExecutableNode)) {
+                return;
+            }
+        }
+        SafeExecutionScope preflight = new SafeExecutionScope(ExecutionScope.blankFrame(0),
+                ZoneOffset.UTC, Clock.systemUTC(), null, limits);
+        try {
+            ExpressionRuntime.validateConstantFunctionExpansion(
+                    call.descriptor(), call.arguments(), preflight, call.sourceSpan());
+        } catch (ExpressionExecutionException violation) {
+            if (violation.diagnostic().code().equals("RUNTIME_VALUE_SHAPE_EXCEEDED")
+                    || violation.diagnostic().code().equals("RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED")) {
+                throw new ConstantShapeException(violation.diagnostic().message(), call.sourceSpan());
+            }
+        }
     }
 
     private static boolean withinMaterializationLimit(Object value, int limit) {

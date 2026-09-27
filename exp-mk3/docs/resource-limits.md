@@ -8,6 +8,7 @@ ExpressionResourceLimits limits = ExpressionResourceLimits.builder()
         .maxCurrentItemDepth(32)
         .maxMaterializedSize(10_000)
         .maxFactorialInput(1_000)
+        .maxTraversalSteps(1_000_000)
         .build();
 ExpressionEnvironment environment = ExpressionEnvironment.builder()
         .trustMode(ExpressionTrustMode.SAFE)
@@ -45,9 +46,16 @@ the inclusive range from zero to the documented absolute ceiling, reporting the 
 value and accepted range. This validation applies in every trust mode. Zero allows zero capacity;
 there is no public unlimited sentinel.
 
-The remaining enforcement increments are tracked separately: source/token/syntax/AST budgets in
-#168, value shape and expansions in #169, and runtime traversal steps in #170. Their configuration
-properties are validated by this contract; their enforcement belongs to those increments.
+`maxTraversalSteps` is enforced only at runtime in `SAFE`. Each evaluator-controlled collection item
+or map entry reached by iteration, recursive conversion, validation, or materialization consumes one
+step from the execution-local allowance; nested traversals and lambdas share it, while lazy operations
+consume only visits they actually reach. Zero therefore rejects the first such visit. Every execution,
+including a reentrant execution started by a provider, receives a fresh allowance.
+
+Traversal steps deliberately do **not** estimate CPU time, elapsed time, invocation count, algorithmic
+complexity, provider work, or financial cost. Built-ins and providers are not charged merely for being
+called, custom-provider internals remain trusted, and expensive isolated operations use their local
+shape limits instead. `TRUSTED` and `UNSAFE` have no runtime traversal counter.
 
 The corpus environment adapter builds the same aggregate from its existing limit fields. Historical
 cases with an environment retain `SAFE` behavior; `trustMode` selects another policy explicitly.

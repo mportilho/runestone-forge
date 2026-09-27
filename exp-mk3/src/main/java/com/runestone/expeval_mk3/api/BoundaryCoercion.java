@@ -5,6 +5,7 @@ import com.runestone.converters.PreparedDataConversion;
 import com.runestone.converters.impl.stable.DefaultDataConversionService;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.diagnostics.ProviderReturnViolation;
+import com.runestone.expeval_mk3.internal.runtime.TraversalStepContext;
 
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
@@ -13,6 +14,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -145,6 +147,8 @@ public final class BoundaryCoercion {
                     targetType,
                     maxMaterializedSize,
                     true);
+        } catch (ExpressionExecutionException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             throw new BoundaryCoercionFailure(
                     "external symbol '" + symbolName + "' override cannot be converted to "
@@ -307,11 +311,12 @@ public final class BoundaryCoercion {
         if (sourceValue instanceof List<?> values) {
             requireWithinLimit(valueName, diagnosticContext, values.size(), maxMaterializedSize);
             ArrayList<Object> convertedValues = null;
-            int index = 0;
-            for (Object element : values) {
+            for (int index = 0; index < values.size(); index++) {
                 if (index == maxMaterializedSize) {
                     throw materializationLimitExceeded(valueName, diagnosticContext, maxMaterializedSize);
                 }
+                TraversalStepContext.visit();
+                Object element = values.get(index);
                 Object converted = convertElement(
                         valueName,
                         diagnosticContext,
@@ -326,7 +331,6 @@ public final class BoundaryCoercion {
                 if (convertedValues != null) {
                     convertedValues.add(converted);
                 }
-                index++;
             }
             return convertedValues == null ? List.copyOf(values) : Collections.unmodifiableList(convertedValues);
         }
@@ -344,6 +348,7 @@ public final class BoundaryCoercion {
             requireWithinLimit(valueName, diagnosticContext, length, maxMaterializedSize);
             ArrayList<Object> convertedValues = new ArrayList<>(length);
             for (int index = 0; index < length; index++) {
+                TraversalStepContext.visit();
                 convertedValues.add(convertElement(
                         valueName,
                         diagnosticContext,
@@ -356,7 +361,10 @@ public final class BoundaryCoercion {
         }
         if (iterableAllowed && sourceValue instanceof Iterable<?> values) {
             ArrayList<Object> convertedValues = new ArrayList<>(Math.min(maxMaterializedSize, 10));
-            for (Object element : values) {
+            Iterator<?> iterator = values.iterator();
+            while (iterator.hasNext()) {
+                TraversalStepContext.visit();
+                Object element = iterator.next();
                 if (convertedValues.size() == maxMaterializedSize) {
                     throw materializationLimitExceeded(valueName, diagnosticContext, maxMaterializedSize);
                 }
@@ -382,10 +390,13 @@ public final class BoundaryCoercion {
             boolean iterableAllowed) {
         requireWithinLimit(valueName, diagnosticContext, values.size(), maxMaterializedSize);
         ArrayList<Object> convertedValues = new ArrayList<>(values.size());
-        for (Object element : values) {
+        Iterator<?> iterator = values.iterator();
+        while (iterator.hasNext()) {
             if (convertedValues.size() == maxMaterializedSize) {
                 throw materializationLimitExceeded(valueName, diagnosticContext, maxMaterializedSize);
             }
+            TraversalStepContext.visit();
+            Object element = iterator.next();
             convertedValues.add(convertElement(
                     valueName,
                     diagnosticContext,
@@ -426,7 +437,10 @@ public final class BoundaryCoercion {
         requireWithinLimit(valueName, diagnosticContext, values.size(), maxMaterializedSize);
         TreeMap<String, Object> sortedValues = new TreeMap<>();
         int entryCount = 0;
-        for (Map.Entry<?, ?> entry : values.entrySet()) {
+        Iterator<? extends Map.Entry<?, ?>> iterator = values.entrySet().iterator();
+        while (iterator.hasNext()) {
+            TraversalStepContext.visit();
+            Map.Entry<?, ?> entry = iterator.next();
             if (entryCount == maxMaterializedSize) {
                 throw materializationLimitExceeded(valueName, diagnosticContext, maxMaterializedSize);
             }

@@ -5,6 +5,7 @@ import com.runestone.expeval_mk3.api.ExpressionResourceLimits;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -14,6 +15,11 @@ public final class ValueShapeValidator {
     }
 
     public static Violation check(Object value, ExpressionResourceLimits limits) {
+        return check(value, limits, null, null);
+    }
+
+    public static Violation check(Object value, ExpressionResourceLimits limits,
+                                  ExecutionScope scope, com.runestone.expeval_mk3.api.SourceSpan span) {
         Violation scalarViolation = checkScalar(value, limits);
         if (scalarViolation != null || !(value instanceof List<?> || value instanceof Map<?, ?>)) {
             return scalarViolation;
@@ -42,6 +48,7 @@ public final class ValueShapeValidator {
                 }
                 deepestVisited.put(current, depth);
                 for (int index = list.size() - 1; index >= 0; index--) {
+                    visit(scope, span);
                     Object child = list.get(index);
                     if (child == null) {
                         return new Violation(Kind.FORBIDDEN_NULL, "null container member", 0);
@@ -60,7 +67,10 @@ public final class ValueShapeValidator {
                     continue;
                 }
                 deepestVisited.put(current, depth);
-                for (Map.Entry<?, ?> child : map.entrySet()) {
+                Iterator<? extends Map.Entry<?, ?>> iterator = map.entrySet().iterator();
+                while (iterator.hasNext()) {
+                    visit(scope, span);
+                    Map.Entry<?, ?> child = iterator.next();
                     if (child.getKey() == null || child.getValue() == null) {
                         return new Violation(Kind.FORBIDDEN_NULL, "null container member", 0);
                     }
@@ -70,6 +80,12 @@ public final class ValueShapeValidator {
             }
         }
         return null;
+    }
+
+    private static void visit(ExecutionScope scope, com.runestone.expeval_mk3.api.SourceSpan span) {
+        if (scope != null) {
+            scope.visitTraversalStep(span);
+        }
     }
 
     private static Violation checkScalar(Object value, ExpressionResourceLimits limits) {

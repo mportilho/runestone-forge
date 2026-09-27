@@ -21,7 +21,7 @@ class ExpressionResourceLimitsTest {
             "maxFactorialInput,1000,10000", "maxTextLength,1048576,8388608",
             "maxValueDepth,64,256", "maxNumericPrecision,10000,100000",
             "maxNumericScaleMagnitude,10000,100000", "maxRegexPatternLength,1024,8192",
-            "maxEvaluationWork,1000000,100000000"
+            "maxTraversalSteps,1000000,100000000"
     })
     void validatesEveryPublicPropertyAtTheMutatorAndBuildsIndependentSnapshots(
             String property, int defaultValue, int ceiling) throws ReflectiveOperationException {
@@ -69,6 +69,9 @@ class ExpressionResourceLimitsTest {
         for (Class<?> type : new Class<?>[]{ExpressionEnvironment.class, ExpressionEnvironment.Builder.class}) {
             assertThat(type.getMethods()).extracting(Method::getName)
                     .doesNotContain("maxCurrentItemDepth", "maxMaterializedSize", "maxFactorialInput");
+        }
+        for (Class<?> type : new Class<?>[]{ExpressionResourceLimits.class, ExpressionResourceLimits.Builder.class}) {
+            assertThat(type.getMethods()).extracting(Method::getName).doesNotContain("maxEvaluationWork");
         }
     }
 }

@@ -15,6 +15,8 @@ import com.runestone.expeval_mk3.internal.runtime.ExecutableNode;
 import com.runestone.expeval_mk3.internal.runtime.ExecutionScope;
 import com.runestone.expeval_mk3.internal.runtime.PublicMaterialization;
 import com.runestone.expeval_mk3.internal.runtime.SafeExecutionScope;
+import com.runestone.expeval_mk3.internal.runtime.TraversalLimitedExecutionScope;
+import com.runestone.expeval_mk3.internal.runtime.TraversalStepContext;
 import com.runestone.expeval_mk3.internal.runtime.ValueShapeValidator;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 
@@ -22,6 +24,7 @@ import java.time.Clock;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +59,7 @@ public final class ExecutionPlan {
     private final ZoneId zoneId;
     private final int maxMaterializedSize;
     private final ExpressionResourceLimits valueLimits;
+    private final boolean traversalLimited;
 
     ExecutionPlan(
             ExecutableNode resultExpression,
@@ -75,7 +79,7 @@ public final class ExecutionPlan {
         this(resultExpression, resultType, assignments, externalBindings, declaredSymbolsInCanonicalOrder,
                 assignedSymbolsInCreationOrder, foldedVariableReads, fullCalculationMemorySchema,
                 assignmentCalculationMemorySchema, frameSize, replaySlotCount, boundaryCoercion,
-                zoneId, maxMaterializedSize, null);
+                zoneId, maxMaterializedSize, null, false);
     }
 
     ExecutionPlan(
@@ -85,7 +89,7 @@ public final class ExecutionPlan {
             CalculationMemorySchema fullCalculationMemorySchema,
             CalculationMemorySchema assignmentCalculationMemorySchema, int frameSize, int replaySlotCount,
             BoundaryCoercion boundaryCoercion, ZoneId zoneId, int maxMaterializedSize,
-            ExpressionResourceLimits valueLimits) {
+            ExpressionResourceLimits valueLimits, boolean traversalLimited) {
         if ((resultExpression == null) != (resultType == null)) {
             throw new IllegalStateException("resultType must be present if and only if resultExpression is present");
         }
@@ -116,6 +120,7 @@ public final class ExecutionPlan {
         this.zoneId = Objects.requireNonNull(zoneId, "zoneId");
         this.maxMaterializedSize = maxMaterializedSize;
         this.valueLimits = valueLimits;
+        this.traversalLimited = traversalLimited;
     }
 
     public boolean hasResult() {
@@ -178,12 +183,19 @@ public final class ExecutionPlan {
         return executeResult(scope);
     }
 
+    public Object computeMaterializedResult(Map<String, ?> overrides, Clock clock) {
+        ExecutionScope scope = executeAssignments(overrides, clock);
+        Object value = executeResult(scope);
+        return PublicMaterialization.materialize(
+                value, resultType, maxMaterializedSize, resultSourceSpan(), valueLimits, scope);
+    }
+
     public ComputationWithMemory<Object> computeWithMemory(Map<String, ?> overrides, Clock clock) {
         CalculationRecorder recorder = fullCalculationMemorySchema.newRecorder();
         ExecutionScope scope = executeAssignments(overrides, clock, recorder);
         Object value = executeResult(scope);
         Object result = PublicMaterialization.materialize(
-                value, resultType, maxMaterializedSize, resultSourceSpan(), valueLimits);
+                value, resultType, maxMaterializedSize, resultSourceSpan(), valueLimits, scope);
         CalculationMemory memory = fullCalculationMemorySchema.freeze(scope, recorder);
         return new ComputationWithMemory<>(result, memory);
     }
@@ -201,14 +213,28 @@ public final class ExecutionPlan {
         return values;
     }
 
+    public Map<String, Object> computeMaterializedAssignments(Map<String, ?> overrides, Clock clock) {
+        ExecutionScope scope = executeAssignments(overrides, clock);
+        Map<String, Object> materialized = new LinkedHashMap<>();
+        for (AssignedSymbol symbol : assignedSymbolsInCreationOrder) {
+            scope.visitTraversalStep(symbol.sourceSpan());
+            materialized.put(symbol.name(), PublicMaterialization.materialize(
+                    scope.read(symbol.frameSlot()), symbol.type(), maxMaterializedSize,
+                    symbol.sourceSpan(), valueLimits, scope));
+        }
+        return Collections.unmodifiableMap(materialized);
+    }
+
     public ComputationWithMemory<Map<String, Object>> computeAssignmentsWithMemory(
             Map<String, ?> overrides, Clock clock) {
         CalculationRecorder recorder = assignmentCalculationMemorySchema.newRecorder();
         ExecutionScope scope = executeAssignments(overrides, clock, recorder);
         Map<String, Object> materialized = new LinkedHashMap<>();
         for (AssignedSymbol symbol : assignedSymbolsInCreationOrder) {
+            scope.visitTraversalStep(symbol.sourceSpan());
             materialized.put(symbol.name(), PublicMaterialization.materialize(
-                    scope.read(symbol.frameSlot()), symbol.type(), maxMaterializedSize, symbol.sourceSpan(), valueLimits));
+                    scope.read(symbol.frameSlot()), symbol.type(), maxMaterializedSize,
+                    symbol.sourceSpan(), valueLimits, scope));
         }
         Map<String, Object> result = Collections.unmodifiableMap(materialized);
         CalculationMemory memory = assignmentCalculationMemorySchema.freeze(scope, recorder);
@@ -232,32 +258,42 @@ public final class ExecutionPlan {
         } else {
             frame = ExecutionScope.extendFrame(frameTemplate, memoryFrameSize);
         }
+        ExecutionScope scope = newScope(frame, clock, calculationRecorder, !overrides.isEmpty());
         if (!overrides.isEmpty()) {
             if (everyDeclaredSymbolHasFrameSlot) {
-                applyOverridesWithFrameSlots(overrides, frame);
+                applyOverridesWithFrameSlots(overrides, frame, scope);
             } else {
-                applyOverridesToPartiallyBoundPlan(overrides, frame);
+                applyOverridesToPartiallyBoundPlan(overrides, frame, scope);
             }
         }
-
-        ExecutionScope scope = valueLimits != null
-                ? new SafeExecutionScope(frame, zoneId, clock, calculationRecorder, valueLimits)
-                : calculationRecorder == null
-                        ? new ExecutionScope(frame, zoneId, clock)
-                        : new ExecutionScope(frame, zoneId, clock, calculationRecorder);
         for (AssignmentExecutable assignment : assignments) {
             assignment.execute(scope);
         }
         return scope;
     }
 
-    private void applyOverridesWithFrameSlots(Map<String, ?> overrides, Object[] frame) {
+    private ExecutionScope newScope(
+            Object[] frame, Clock clock, CalculationRecorder recorder, boolean hasOverrides) {
+        if (valueLimits != null) {
+            return traversalLimited || hasOverrides
+                    ? new TraversalLimitedExecutionScope(frame, zoneId, clock, recorder, valueLimits)
+                    : new SafeExecutionScope(frame, zoneId, clock, recorder, valueLimits);
+        }
+        return recorder == null
+                ? new ExecutionScope(frame, zoneId, clock)
+                : new ExecutionScope(frame, zoneId, clock, recorder);
+    }
+
+    private void applyOverridesWithFrameSlots(Map<String, ?> overrides, Object[] frame, ExecutionScope scope) {
         for (int index = 0; index < externalBindings.size(); index++) {
             frame[externalBindings.get(index).frameSlot()] = NO_OVERRIDE;
         }
 
         String smallestUndeclared = null;
-        for (Map.Entry<?, ?> entry : overrides.entrySet()) {
+        Iterator<? extends Map.Entry<?, ?>> iterator = overrides.entrySet().iterator();
+        while (iterator.hasNext()) {
+            scope.visitTraversalStep(null);
+            Map.Entry<?, ?> entry = iterator.next();
             String name = requireTextOverrideKey(entry.getKey());
             ExternalBindingPlan binding = bindingsByName.get(name);
             if (binding == null) {
@@ -280,12 +316,13 @@ public final class ExecutionPlan {
             }
             ExternalSymbol symbol = binding.symbol();
             requireOverridable(symbol, symbol.name());
-            frame[frameSlot] = coerceOverride(symbol, override);
+            frame[frameSlot] = coerceOverride(symbol, override, scope);
         }
     }
 
-    private void applyOverridesToPartiallyBoundPlan(Map<String, ?> overrides, Object[] frame) {
-        rejectSmallestUndeclaredOverride(overrides);
+    private void applyOverridesToPartiallyBoundPlan(
+            Map<String, ?> overrides, Object[] frame, ExecutionScope scope) {
+        rejectSmallestUndeclaredOverride(overrides, scope);
         for (int index = 0; index < declaredSymbolsInCanonicalOrder.size(); index++) {
             ExternalSymbol symbol = declaredSymbolsInCanonicalOrder.get(index);
             String name = symbol.name();
@@ -293,8 +330,9 @@ public final class ExecutionPlan {
             if (override == null && !overrides.containsKey(name)) {
                 continue;
             }
+            scope.visitTraversalStep(null);
             requireOverridable(symbol, name);
-            Object coerced = coerceOverride(symbol, override);
+            Object coerced = coerceOverride(symbol, override, scope);
             ExternalBindingPlan binding = bindingsByName.get(name);
             if (binding != null) {
                 frame[binding.frameSlot()] = coerced;
@@ -306,9 +344,12 @@ public final class ExecutionPlan {
         return resultExpression == null ? null : resultExpression.execute(scope);
     }
 
-    private void rejectSmallestUndeclaredOverride(Map<String, ?> overrides) {
+    private void rejectSmallestUndeclaredOverride(Map<String, ?> overrides, ExecutionScope scope) {
         String smallestUndeclared = null;
-        for (Object key : overrides.keySet()) {
+        Iterator<?> iterator = overrides.keySet().iterator();
+        while (iterator.hasNext()) {
+            scope.visitTraversalStep(null);
+            Object key = iterator.next();
             String name = requireTextOverrideKey(key);
             if (declaredSymbolNames.contains(name)) {
                 continue;
@@ -348,14 +389,24 @@ public final class ExecutionPlan {
         throw RuntimeFailures.invalidExternalInput(cause.getMessage(), cause);
     }
 
-    private Object coerceOverride(ExternalSymbol symbol, Object override) {
+    private Object coerceOverride(ExternalSymbol symbol, Object override, ExecutionScope scope) {
         if (valueLimits != null) {
-            requireValueShape(override);
+            requireValueShape(override, scope);
         }
         try {
-            Object value = symbol.coerceOverride(override, boundaryCoercion);
+            Object value;
+            if (scope.enforcesTraversalStepLimit()) {
+                TraversalStepContext.push(scope, null);
+                try {
+                    value = symbol.coerceOverride(override, boundaryCoercion);
+                } finally {
+                    TraversalStepContext.pop();
+                }
+            } else {
+                value = symbol.coerceOverride(override, boundaryCoercion);
+            }
             if (valueLimits != null) {
-                requireValueShape(value);
+                requireValueShape(value, scope);
             }
             return value;
         } catch (IllegalArgumentException cause) {
@@ -366,8 +417,8 @@ public final class ExecutionPlan {
         }
     }
 
-    private void requireValueShape(Object value) {
-        ValueShapeValidator.Violation violation = ValueShapeValidator.check(value, valueLimits);
+    private void requireValueShape(Object value, ExecutionScope scope) {
+        ValueShapeValidator.Violation violation = ValueShapeValidator.check(value, valueLimits, scope, null);
         if (violation != null) {
             if (violation.kind() == ValueShapeValidator.Kind.MATERIALIZATION
                     || violation.kind() == ValueShapeValidator.Kind.FORBIDDEN_NULL) {

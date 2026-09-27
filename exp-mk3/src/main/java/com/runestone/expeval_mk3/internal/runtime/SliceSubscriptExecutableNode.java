@@ -29,6 +29,6 @@ public record SliceSubscriptExecutableNode(
     @Override
     public Object execute(ExecutionScope scope) {
         return ExpressionRuntime.slicedValues(
-                receiver.execute(scope), startBound, endBound, safe, maxMaterializedSize, sourceSpan);
+                receiver.execute(scope), startBound, endBound, safe, maxMaterializedSize, scope, sourceSpan);
     }
 }

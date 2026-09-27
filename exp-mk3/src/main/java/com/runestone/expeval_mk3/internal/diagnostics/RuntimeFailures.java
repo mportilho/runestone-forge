@@ -84,6 +84,12 @@ public final class RuntimeFailures {
                 diagnostic(DiagnosticCode.RUNTIME_MATERIALIZATION_LIMIT_EXCEEDED, message, span));
     }
 
+    public static ExpressionExecutionException traversalStepLimitExceeded(int maximum, SourceSpan span) {
+        return ExpressionExecutionException.of(diagnostic(
+                DiagnosticCode.RUNTIME_TRAVERSAL_STEP_LIMIT_EXCEEDED,
+                "maxTraversalSteps " + maximum + " exceeded", span));
+    }
+
     public static ExpressionExecutionException destructuringInsufficient(int required, int actual, SourceSpan span) {
         String message = "destructuring source does not contain enough elements: expected at least "
                 + required + " but found " + actual;

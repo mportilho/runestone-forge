@@ -39,6 +39,7 @@ import java.util.stream.BaseStream;
 
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 import com.runestone.expeval_mk3.internal.diagnostics.ProviderReturnViolation;
+import com.runestone.expeval_mk3.internal.runtime.TraversalStepContext;
 
 final class ProviderMethodAdapter {
 
@@ -317,7 +318,9 @@ final class ProviderMethodAdapter {
                     DiagnosticCode.RUNTIME_RETURN_INVALID_CONTAINER, "canonical collection values must be lists");
         }
         ArrayList<Object> converted = new ArrayList<>(values.size());
-        for (Object item : values) {
+        for (int index = 0; index < values.size(); index++) {
+            TraversalStepContext.visit();
+            Object item = values.get(index);
             converted.add(element.convert(item));
         }
         return converted;
@@ -330,7 +333,10 @@ final class ProviderMethodAdapter {
                     DiagnosticCode.RUNTIME_RETURN_INVALID_CONTAINER, "canonical map values must be maps");
         }
         LinkedHashMap<String, Object> converted = new LinkedHashMap<>(values.size());
-        for (Map.Entry<?, ?> entry : values.entrySet()) {
+        Iterator<? extends Map.Entry<?, ?>> iterator = values.entrySet().iterator();
+        while (iterator.hasNext()) {
+            TraversalStepContext.visit();
+            Map.Entry<?, ?> entry = iterator.next();
             if (!(entry.getKey() instanceof String key)) {
                 throw new ProviderReturnViolation(
                         DiagnosticCode.RUNTIME_RETURN_INVALID_CONTAINER, "provider maps must have non-null String keys");
@@ -348,6 +354,7 @@ final class ProviderMethodAdapter {
         }
         Object array = Array.newInstance(componentType, values.size());
         for (int index = 0; index < values.size(); index++) {
+            TraversalStepContext.visit();
             Array.set(array, index, element.convert(values.get(index)));
         }
         return array;
@@ -359,6 +366,7 @@ final class ProviderMethodAdapter {
         requireWithinLimit(length, maxMaterializedSize);
         ArrayList<Object> converted = new ArrayList<>(length);
         for (int index = 0; index < length; index++) {
+            TraversalStepContext.visit();
             converted.add(element.convert(Array.get(value, index)));
         }
         return Collections.unmodifiableList(converted);
@@ -376,6 +384,7 @@ final class ProviderMethodAdapter {
         ArrayList<Object> converted = new ArrayList<>();
         Iterator<?> iterator = iterable.iterator();
         while (iterator.hasNext()) {
+            TraversalStepContext.visit();
             Object next = iterator.next();
             if (converted.size() == maxMaterializedSize) {
                 throw materializationLimitExceeded(maxMaterializedSize);
@@ -394,7 +403,10 @@ final class ProviderMethodAdapter {
         requireWithinLimit(values.size(), maxMaterializedSize);
         TreeMap<String, Object> converted = new TreeMap<>();
         int entryCount = 0;
-        for (Map.Entry<?, ?> entry : values.entrySet()) {
+        Iterator<? extends Map.Entry<?, ?>> iterator = values.entrySet().iterator();
+        while (iterator.hasNext()) {
+            TraversalStepContext.visit();
+            Map.Entry<?, ?> entry = iterator.next();
             if (entryCount == maxMaterializedSize) {
                 throw materializationLimitExceeded(maxMaterializedSize);
             }

@@ -153,7 +153,7 @@ public final class BinaryExecutableNode implements ExecutableNode {
             case LESS_THAN -> compare(scope) < 0;
             case LESS_THAN_OR_EQUAL -> compare(scope) <= 0;
             case EQUAL, NOT_EQUAL -> ExpressionRuntime.structuralEquals(
-                    left.execute(scope), right.execute(scope), operandType) != negated;
+                    left.execute(scope), right.execute(scope), operandType, scope, sourceSpan) != negated;
             case REGEX_MATCH, REGEX_NOT_MATCH -> regexPattern.matches((String) left.execute(scope)) != negated;
         };
     }

@@ -284,7 +284,14 @@ public final class ExecutionPlanBuilder {
                 environment.boundaryCoercion(),
                 environment.zoneId(),
                 runtimeMaterializedSize(environment),
-                environment.trustMode() == ExpressionTrustMode.SAFE ? environment.resourceLimits() : null);
+                environment.trustMode() == ExpressionTrustMode.SAFE ? environment.resourceLimits() : null,
+                environment.trustMode() == ExpressionTrustMode.SAFE && (
+                        !model.ast().assignments().isEmpty()
+                                || model.resolvedTypes().values().stream().anyMatch(ExecutionPlanBuilder::isContainerType)));
+    }
+
+    private static boolean isContainerType(ExpressionType type) {
+        return type instanceof CollectionType || type instanceof MapType;
     }
 
     private static VariableMemorySchema buildVariableMemorySchema(
@@ -727,6 +734,8 @@ public final class ExecutionPlanBuilder {
         if (assertionElided != built) {
             return assertionElided;
         }
+        ConstantFolder.preflightConstantExpansion(
+                built, foldValueLimits, arguments.toArray(ExecutableNode[]::new));
         // TRUSTED provider adapters are deliberately unbounded at runtime. Do not invoke such an
         // adapter during folding: even obtaining its result may materialize an unbounded iterable.
         if (!canFoldJavaResult(environment, descriptor.returnType())) {

@@ -1,5 +1,7 @@
 package com.runestone.expeval_mk3.api;
 
+import com.runestone.expeval_mk3.internal.runtime.TraversalStepContext;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +18,7 @@ final class BuiltInFunctionSupport {
         Objects.requireNonNull(values, "values");
         BigDecimal[] numbers = new BigDecimal[values.size()];
         for (int index = 0; index < values.size(); index++) {
+            TraversalStepContext.visit();
             Object value = values.get(index);
             if (!(value instanceof BigDecimal number)) {
                 throw new IllegalArgumentException("value at index " + index + " is not a number");
@@ -31,15 +34,19 @@ final class BuiltInFunctionSupport {
             throw new IllegalArgumentException("comparable collection must not be empty");
         }
         ArrayList<T> typedValues = new ArrayList<>(values.size());
-        for (Object value : values) {
+        for (int index = 0; index < values.size(); index++) {
+            TraversalStepContext.visit();
+            Object value = values.get(index);
             typedValues.add(valueType.cast(value));
         }
         return typedValues;
     }
 
     static <T extends Comparable<? super T>> T max(List<T> values) {
+        TraversalStepContext.visit();
         T result = values.getFirst();
         for (int index = 1; index < values.size(); index++) {
+            TraversalStepContext.visit();
             T value = values.get(index);
             if (result.compareTo(value) < 0) {
                 result = value;
@@ -49,8 +56,10 @@ final class BuiltInFunctionSupport {
     }
 
     static <T extends Comparable<? super T>> T min(List<T> values) {
+        TraversalStepContext.visit();
         T result = values.getFirst();
         for (int index = 1; index < values.size(); index++) {
+            TraversalStepContext.visit();
             T value = values.get(index);
             if (result.compareTo(value) > 0) {
                 result = value;
@@ -98,6 +107,7 @@ final class BuiltInFunctionSupport {
         double sum = 0.0;
         double compensation = 0.0;
         for (BigDecimal value : values) {
+            TraversalStepContext.visit();
             double corrected = value.doubleValue() - compensation;
             double next = sum + corrected;
             compensation = (next - sum) - corrected;
@@ -110,6 +120,7 @@ final class BuiltInFunctionSupport {
         double sum = 0.0;
         double compensation = 0.0;
         for (BigDecimal value : values) {
+            TraversalStepContext.visit();
             double corrected = Math.abs(value.doubleValue() - mean) - compensation;
             double next = sum + corrected;
             compensation = (next - sum) - corrected;

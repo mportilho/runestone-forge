@@ -19,7 +19,7 @@ public final class ExpressionResourceLimits {
     private final int maxNumericPrecision;
     private final int maxNumericScaleMagnitude;
     private final int maxRegexPatternLength;
-    private final int maxEvaluationWork;
+    private final int maxTraversalSteps;
 
     private ExpressionResourceLimits(Builder builder) {
         maxSourceLength = builder.maxSourceLength;
@@ -34,7 +34,7 @@ public final class ExpressionResourceLimits {
         maxNumericPrecision = builder.maxNumericPrecision;
         maxNumericScaleMagnitude = builder.maxNumericScaleMagnitude;
         maxRegexPatternLength = builder.maxRegexPatternLength;
-        maxEvaluationWork = builder.maxEvaluationWork;
+        maxTraversalSteps = builder.maxTraversalSteps;
     }
 
     public static ExpressionResourceLimits defaults() {
@@ -93,8 +93,12 @@ public final class ExpressionResourceLimits {
         return maxRegexPatternLength;
     }
 
-    public int maxEvaluationWork() {
-        return maxEvaluationWork;
+    /**
+     * Maximum item or entry visits shared by one {@link ExpressionTrustMode#SAFE SAFE} execution.
+     * This is not an estimate of CPU time, invocation count, algorithmic complexity, or financial cost.
+     */
+    public int maxTraversalSteps() {
+        return maxTraversalSteps;
     }
 
     /** Mutable configuration builder; each build produces an independent immutable snapshot. */
@@ -111,7 +115,7 @@ public final class ExpressionResourceLimits {
         private int maxNumericPrecision = 10_000;
         private int maxNumericScaleMagnitude = 10_000;
         private int maxRegexPatternLength = 1_024;
-        private int maxEvaluationWork = 1_000_000;
+        private int maxTraversalSteps = 1_000_000;
 
         private Builder() {
         }
@@ -164,8 +168,8 @@ public final class ExpressionResourceLimits {
             maxRegexPatternLength = requireRange("maxRegexPatternLength", value, 8_192);
             return this;
         }
-        public Builder maxEvaluationWork(int value) {
-            maxEvaluationWork = requireRange("maxEvaluationWork", value, 100_000_000);
+        public Builder maxTraversalSteps(int value) {
+            maxTraversalSteps = requireRange("maxTraversalSteps", value, 100_000_000);
             return this;
         }
         public ExpressionResourceLimits build() {

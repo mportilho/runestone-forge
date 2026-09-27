@@ -70,6 +70,8 @@ public enum DiagnosticCode {
             DiagnosticCategory.RUNTIME, DiagnosticSeverity.ERROR, SourceSpanPolicy.OPTIONAL, SuggestionPolicy.FORBIDDEN),
     RUNTIME_VALUE_SHAPE_EXCEEDED("RUNTIME_VALUE_SHAPE_EXCEEDED",
             DiagnosticCategory.RUNTIME, DiagnosticSeverity.ERROR, SourceSpanPolicy.OPTIONAL, SuggestionPolicy.FORBIDDEN),
+    RUNTIME_TRAVERSAL_STEP_LIMIT_EXCEEDED("RUNTIME_TRAVERSAL_STEP_LIMIT_EXCEEDED",
+            DiagnosticCategory.RUNTIME, DiagnosticSeverity.ERROR, SourceSpanPolicy.OPTIONAL, SuggestionPolicy.FORBIDDEN),
     RUNTIME_INVALID_EXTERNAL_INPUT("RUNTIME_INVALID_EXTERNAL_INPUT",
             DiagnosticCategory.RUNTIME, DiagnosticSeverity.ERROR, SourceSpanPolicy.FORBIDDEN, SuggestionPolicy.FORBIDDEN),
     RUNTIME_UNDEFINED_OPERATION("RUNTIME_UNDEFINED_OPERATION", DiagnosticCategory.RUNTIME),

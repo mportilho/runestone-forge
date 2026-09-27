@@ -13,7 +13,7 @@ import java.time.ZoneId;
 import java.util.List;
 
 /** Execution-local resource policy, absent from the layout and path of normal scopes. */
-public final class SafeExecutionScope extends ExecutionScope {
+public class SafeExecutionScope extends ExecutionScope {
     private final ExpressionResourceLimits limits;
 
     public SafeExecutionScope(Object[] frame, ZoneId zoneId, Clock clock,
@@ -24,7 +24,7 @@ public final class SafeExecutionScope extends ExecutionScope {
 
     @Override
     public void validateValue(Object value, SourceSpan span) {
-        ValueShapeValidator.Violation violation = ValueShapeValidator.check(value, limits);
+        ValueShapeValidator.Violation violation = ValueShapeValidator.check(value, limits, this, span);
         if (violation != null) {
             if (violation.kind() == ValueShapeValidator.Kind.FORBIDDEN_NULL) {
                 throw RuntimeFailures.forbiddenNull("value container must not contain null", span);

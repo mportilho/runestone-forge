@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -50,8 +51,13 @@ public final class PublicMaterialization {
 
     public static Object materialize(Object value, ExpressionType type, int maxMaterializedSize,
                                      SourceSpan span, ExpressionResourceLimits limits) {
+        return materialize(value, type, maxMaterializedSize, span, limits, null);
+    }
+
+    public static Object materialize(Object value, ExpressionType type, int maxMaterializedSize,
+                                     SourceSpan span, ExpressionResourceLimits limits, ExecutionScope scope) {
         if (limits != null) {
-            ValueShapeValidator.Violation violation = ValueShapeValidator.check(value, limits);
+            ValueShapeValidator.Violation violation = ValueShapeValidator.check(value, limits, scope, span);
             if (violation != null) {
                 if (violation.kind() == ValueShapeValidator.Kind.FORBIDDEN_NULL) {
                     throw RuntimeFailures.forbiddenNull("public value container must not contain null", span);
@@ -63,7 +69,22 @@ public final class PublicMaterialization {
                         violation.message(), span);
             }
         }
-        return materialize(value, type, maxMaterializedSize, span);
+        return materialize(value, type, maxMaterializedSize, span, scope);
+    }
+
+    private static Object materialize(Object value, ExpressionType type, int maxMaterializedSize,
+                                      SourceSpan span, ExecutionScope scope) {
+        if (value == null) {
+            throw RuntimeFailures.forbiddenNull("public expression result must not be null", span);
+        }
+        return switch (type) {
+            case ScalarType scalarType -> materializeScalar(value, scalarType);
+            case CollectionType collectionType -> materializeCollection(
+                    value, collectionType, maxMaterializedSize, span, scope);
+            case MapType mapType -> materializeMap(value, mapType, maxMaterializedSize, span, scope);
+            case ObjectType ignored -> throw new IllegalStateException(
+                    "ObjectType must not cross the public materialization boundary");
+        };
     }
 
     private static Object materializeScalar(Object value, ScalarType scalarType) {
@@ -84,28 +105,43 @@ public final class PublicMaterialization {
 
     private static List<Object> materializeCollection(
             Object value, CollectionType type, int maxMaterializedSize, SourceSpan span) {
+        return materializeCollection(value, type, maxMaterializedSize, span, null);
+    }
+
+    private static List<Object> materializeCollection(
+            Object value, CollectionType type, int maxMaterializedSize, SourceSpan span, ExecutionScope scope) {
         if (!(value instanceof List<?> elements)) {
             throw new IllegalStateException("expected a List for CollectionType but found " + value.getClass());
         }
         requireWithinLimit(elements.size(), maxMaterializedSize, span);
         List<Object> snapshot = new ArrayList<>(elements.size());
-        for (Object element : elements) {
+        for (int index = 0; index < elements.size(); index++) {
+            visit(scope, span);
+            Object element = elements.get(index);
             if (element == null) {
                 throw RuntimeFailures.forbiddenNull("public collection element must not be null", span);
             }
-            snapshot.add(materialize(element, type.elementType(), maxMaterializedSize, span));
+            snapshot.add(materialize(element, type.elementType(), maxMaterializedSize, span, scope));
         }
         return List.copyOf(snapshot);
     }
 
     private static Map<String, Object> materializeMap(
             Object value, MapType type, int maxMaterializedSize, SourceSpan span) {
+        return materializeMap(value, type, maxMaterializedSize, span, null);
+    }
+
+    private static Map<String, Object> materializeMap(
+            Object value, MapType type, int maxMaterializedSize, SourceSpan span, ExecutionScope scope) {
         if (!(value instanceof Map<?, ?> entries)) {
             throw new IllegalStateException("expected a Map for MapType but found " + value.getClass());
         }
         requireWithinLimit(entries.size(), maxMaterializedSize, span);
         TreeMap<String, Object> canonicalOrder = new TreeMap<>();
-        for (Map.Entry<?, ?> entry : entries.entrySet()) {
+        Iterator<? extends Map.Entry<?, ?>> iterator = entries.entrySet().iterator();
+        while (iterator.hasNext()) {
+            visit(scope, span);
+            Map.Entry<?, ?> entry = iterator.next();
             if (!(entry.getKey() instanceof String key)) {
                 throw new IllegalStateException("expected text-keyed entries for MapType but found " + entry.getKey());
             }
@@ -113,9 +149,15 @@ public final class PublicMaterialization {
             if (entryValue == null) {
                 throw RuntimeFailures.forbiddenNull("public map value must not be null", span);
             }
-            canonicalOrder.put(key, materialize(entryValue, type.valueType(), maxMaterializedSize, span));
+            canonicalOrder.put(key, materialize(entryValue, type.valueType(), maxMaterializedSize, span, scope));
         }
         return Collections.unmodifiableMap(canonicalOrder);
+    }
+
+    private static void visit(ExecutionScope scope, SourceSpan span) {
+        if (scope != null) {
+            scope.visitTraversalStep(span);
+        }
     }
 
     private static void requireWithinLimit(int size, int maxMaterializedSize, SourceSpan span) {
