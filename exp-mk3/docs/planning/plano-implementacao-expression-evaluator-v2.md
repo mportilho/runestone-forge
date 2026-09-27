@@ -283,7 +283,7 @@ integrador. O plano detalhado em `docs/planning/etapa-12/` e o ADR 0024 são nor
 
 **Entregas**
 - `ExpressionTrustMode` (`UNSAFE`, `TRUSTED` default e `SAFE`) e `ExpressionResourceLimits` com limites
-  e tetos para compilação, forma de valores e Orcamento de Trabalho de Avaliação; cada modo aplica o
+  e tetos para compilação, forma de valores e Limite de Passos de Percurso em runtime `SAFE`; cada modo aplica o
   escopo de enforcement definido no ADR 0024.
 - Regex Linear por RE2/J em operadores e built-ins, sem fallback backtracking.
 - Revisão de exaustividade dos diagnósticos com registro, ordem canônica, spans UTF-16, lista completa e
@@ -297,7 +297,7 @@ integrador. O plano detalhado em `docs/planning/etapa-12/` e o ADR 0024 são nor
 
 **Critérios de aceite:** suíte cotidiana, perfil de stress e script integral verdes no Temurin 21 de
 referência; `UNSAFE` e `TRUSTED` com zero B/op adicional e delta pareado em ±1% em escalares e coleções;
-`SAFE` com zero B/op e ±1% em escalares, e coleções sem alocação por débito e até 5% de regressão; cache
+`SAFE` com zero B/op e ±1% em escalares, e coleções sem alocação por passo de percurso e até 5% de regressão; cache
 e Memoria de Calculo preservam seus gates; documentação revisada e nenhuma decisão aberta.
 
 **Depende de:** Etapas 0–10. A Etapa 11 foi cancelada.

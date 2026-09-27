@@ -1,7 +1,7 @@
 # Etapa 12 Pre-hardening Implementation Inventory
 
 This inventory freezes the implementation frontier observed for issue #160 before resource limits,
-work debits, diagnostic metadata, or linear regex change production paths. Paths are relative to
+traversal-step debits, diagnostic metadata, or linear regex change production paths. Paths are relative to
 `exp-mk3/src/main/java`. Line numbers are intentionally omitted because later Etapa 12 increments will
 move code; named types and methods are the stable review anchors.
 
@@ -36,13 +36,15 @@ the exact overload sets are declared by `expectedSignatures`, `financialExpected
 `23c1dee61bfce4f778e1f10ab5e04c2b2b7a23265007e3ab49805dfb0dfde315`.
 
 Implementations are in `api/{Math,Transcendental,String,DateTime,Comparable,Financial,Assertion}BuiltInFunctions.java`.
-Every official descriptor must later receive a `WorkCostPolicy` classification; custom reflected
-providers are outside that classification and remain trusted/unmetered.
+Official built-ins do not receive an invocation cost classification. Only their evaluator-controlled
+collection/map loops belong to the traversal-step audit; custom reflected providers remain trusted and
+unmetered internally.
 
-## Variable-work loops
+## Traversal amplification boundaries
 
-The following production seams perform input-dependent traversal and therefore form the initial work
-budget audit list:
+The following production seams perform input-dependent traversal and therefore form the initial
+traversal-step audit list. This list identifies item/entry visits, not invocation boundaries or weighted
+cost formulas:
 
 | Area | Runtime seam | Work represented |
 |---|---|---|

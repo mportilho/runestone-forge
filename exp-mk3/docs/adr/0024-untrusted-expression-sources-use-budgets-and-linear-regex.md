@@ -1,4 +1,4 @@
-# ADR 0024: Resource Enforcement Uses Trust Modes and Linear Regex
+# ADR 0024: Resource Enforcement Uses Trust Modes, Traversal Steps, and Linear Regex
 
 ## Status
 
@@ -18,9 +18,9 @@ Java providers as hostile would require a process sandbox outside the evaluator'
 
 - `TRUSTED` is the default. It enforces compilation-time resource limits (source length, tokens,
   projected syntax depth, AST nodes, Current Item depth, constant/value shape checks, literal regex
-  limits, and folding work), but does not enforce runtime resource limits.
+  limits, and preflight of constant expansion), but does not enforce runtime resource limits.
 - `SAFE` enforces the complete resource policy, including runtime value shape, materialization,
-  dynamic regex, factorial/deferred checks, and evaluation-work budgets. Resource exhaustion is terminal
+  dynamic regex, factorial/deferred checks, and traversal-step limits. Resource exhaustion is terminal
   for the affected phase or execution.
 - `UNSAFE` enforces none of the expression resource limits. It is for formulas and values whose resource
   behavior is wholly trusted by the integrator.
@@ -34,6 +34,21 @@ diagnostics only in `TRUSTED`, and all applicable diagnostics in `SAFE`.
 The evaluator does not implement an internal wall-clock timeout and does not catch fatal JVM errors;
 call deadlines belong to the integrator. Registered environments, function providers and Java members
 remain trusted components rather than sandboxed code.
+
+The cumulative execution guard rail is a Traversal Step Limit used only at runtime in `SAFE`, not a cost
+model. A step is charged for each item or entry reached while iterating a collection or map or while
+recursively converting, validating or materializing one. Nested traversals share the same counter and
+lazy operations charge only reached items. Built-in invocations, constant scalar nodes,
+algorithm-specific complexity, numeric precision, regex input products, output length and work inside
+trusted providers are not translated into steps.
+
+An individually expensive operation is bounded by its local structural limit instead: text and output
+length, regex pattern and input size, collection cardinality, numeric shape, factorial input, or another
+explicit parameter governing growth. Those local limits must make one accepted invocation safe. Under
+`TRUSTED` and `SAFE`, folding does not execute function calls or collection operations whose work is
+input-dependent; constant expansion is checked before allocation. Every `SAFE` execution receives a fresh
+traversal allowance. An over-limit traversal fails before its next item or entry. Previous provider
+effects are not rolled back.
 
 The Expression Engine cache combines an exact entry-count limit with a conservative retained-weight
 budget for source-controlled keys and compilation results. Weight is calibrated from JVM layouts but
@@ -49,10 +64,11 @@ as backreferences and lookaround fail through stable structured diagnostics, wit
 
 ## Consequences
 
-The accepted regex language is intentionally narrower than Java regex and must be documented. Where a
-resource limit is active, optimized plans must fail at the same semantic budget boundary as the Oraculo
-Sem Otimizacoes. `TRUSTED` and `UNSAFE` must add zero B/op and stay within ±1% of the baseline for scalar
+The accepted regex language is intentionally narrower than Java regex and must be documented. Traversal
+step counts are an operational guard rail and are not part of semantic equivalence with the Oraculo Sem
+Otimizacoes: an optimization may eliminate protected steps, and callers must not depend on an exact
+count. `TRUSTED` and `UNSAFE` must add zero B/op and stay within ±1% of the baseline for scalar
 and collection execution; `SAFE` retains the scalar gate and permits up to 5% paired collection
-regression with zero allocation per budget debit. Trusted provider code can still block, allocate without
+regression with zero allocation per traversal-step debit. Trusted provider code can still block, allocate without
 bound or violate its concurrency contract; containing that code requires isolation by the embedding
 application and is outside `exp-mk3`.

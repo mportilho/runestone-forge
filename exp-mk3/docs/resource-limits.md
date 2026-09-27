@@ -29,14 +29,15 @@ does not change an earlier snapshot.
 The migration in #167 applies this policy to current-item nesting, container materialization and
 factorial inputs. Defaults are compilation inputs, whereas overrides, Java provider results and
 public results use the runtime policy. Folding uses compilation limits: an over-limit folding
-attempt remains executable, with the runtime policy selected by the environment. All modes retain
+attempt remains executable, with the runtime policy selected by the environment. In `TRUSTED` and
+`SAFE`, folding does not invoke functions or collection operations whose work depends on input. All modes retain
 typing, non-null boundaries, immutable public snapshots, numeric-domain checks, bounded engine
 caching and parser-context cleanup.
 
-In `TRUSTED`, container-returning functions and Java properties/methods remain unfolded: their runtime adapters are
-unbounded, so invoking them to attempt a fold could consume an entire provider iterable before
-checking its size. `SAFE` retains bounded folding of these calls; `UNSAFE` retains unrestricted
-folding. Scalar function folding remains available in all modes.
+In `TRUSTED` and `SAFE`, function calls and collection operations with input-dependent work remain
+unfolded; this avoids a compilation work meter and prevents providers or large traversals from running
+during folding. `UNSAFE` retains unrestricted folding. Scalar operators whose work is bounded by source,
+AST and value-shape limits remain foldable.
 
 All thirteen properties from the [stage 12 limits table](planning/etapa-12/etapa-12-endurecimento-verificacao.md#defaults-e-tetos-iniciais)
 are available through `defaults()`, `builder()` and property getters. Mutators reject values outside
@@ -45,7 +46,7 @@ value and accepted range. This validation applies in every trust mode. Zero allo
 there is no public unlimited sentinel.
 
 The remaining enforcement increments are tracked separately: source/token/syntax/AST budgets in
-#168, value shape and expansions in #169, and evaluation/folding work in #170. Their configuration
+#168, value shape and expansions in #169, and runtime traversal steps in #170. Their configuration
 properties are validated by this contract; their enforcement belongs to those increments.
 
 The corpus environment adapter builds the same aggregate from its existing limit fields. Historical

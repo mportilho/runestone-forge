@@ -79,7 +79,7 @@ ExpressionResourceLimits limits = ExpressionResourceLimits.builder()
         .maxNumericPrecision(10_000)
         .maxNumericScaleMagnitude(10_000)
         .maxRegexPatternLength(1_024)
-        .maxEvaluationWork(1_000_000)
+        .maxTraversalSteps(1_000_000)
         .build();
 
 ExpressionEnvironment environment = ExpressionEnvironment.builder()
@@ -95,7 +95,7 @@ de M4; nao ha ponte deprecada para a API pre-GA.
 
 `ExpressionTrustMode` e um enum publico escolhido por `ExpressionEnvironment.Builder` e exposto pelo
 Ambiente. `TRUSTED` e o default: aplica limites de compilacao (fonte, tokens, profundidade, AST, Item
-Atual, forma de constantes, regex literal e trabalho de folding), mas nao aplica limites de recurso no
+Atual, forma de constantes, regex literal e preflight de expansoes constantes), mas nao aplica limites de recurso no
 runtime. `SAFE` aplica todos os limites. `UNSAFE` nao aplica limites de recurso. Os tres mantem contratos
 funcionais, RE2/J, cache limitado e limpeza do contexto do parser. `resourceLimits(...)` continua valido
 e validado em todos os modos; `SAFE` sem configuracao explicita usa `ExpressionResourceLimits.defaults()`.
@@ -116,7 +116,7 @@ e validado em todos os modos; `SAFE` sem configuracao explicita usa `ExpressionR
 | `maxNumericPrecision` | 10.000 | 100.000 | digitos de `BigDecimal.precision()` |
 | `maxNumericScaleMagnitude` | 10.000 | 100.000 | `abs((long) scale())` |
 | `maxRegexPatternLength` | 1.024 | 8.192 | unidades UTF-16 decodificadas |
-| `maxEvaluationWork` | 1.000.000 | 100.000.000 | unidades abstratas de trabalho |
+| `maxTraversalSteps` | 1.000.000 | 100.000.000 | itens/entradas visitados por execucao `SAFE` |
 
 Zero e valido e desabilita efetivamente a capacidade correspondente. Nao existe sentinela de
 "ilimitado". Mensagens de builder informam propriedade, valor fornecido e intervalo aceito. O corpus e
@@ -134,10 +134,11 @@ fase cara antes de seu guard rail:
 5. `SemanticAstBuilder` conta nos durante a construcao, antes de criar a arvore acima do limite;
    `AstNodeIdAssigner` verifica defensivamente o total.
 6. Resolver valida forma de constantes e pre-condicoes provaveis antes do folding.
-7. Folding de built-ins oficiais recebe um saldo proprio de `maxEvaluationWork`.
-8. Preparacao de inputs valida todos os overrides, forma e saldo antes do primeiro efeito da expressao.
-9. Runtime debita trabalho imediatamente antes da unidade que o executara.
-10. Materializacao Publica e freeze da Memoria de Calculo terminam usando o mesmo escopo/saldo local.
+7. Em `TRUSTED` e `SAFE`, folding nao executa chamadas de funcao nem Operacoes de Colecao de trabalho
+   dependente da entrada; expansoes constantes sao prevalidadas antes de alocar.
+8. Preparacao de inputs valida todos os overrides e sua forma antes do primeiro efeito da expressao.
+9. Runtime `SAFE` debita um passo imediatamente antes de cada item ou entrada que visitar.
+10. Materializacao Publica termina usando o mesmo saldo local de percurso.
 
 Fonte acima de `maxSourceLength` nao cria `CompilationCacheKey` e nao e cacheada. Outros resultados
 deterministicos dentro do limite continuam sujeitos ao single-flight/cache normal. Esgotamento de
@@ -178,51 +179,48 @@ no aritmetico. Bordas e resultados publicos sempre validam; operacoes expansoras
 operacoes cuja metadata, limite de entrada, quantidade de nos e `MathContext` provam teto seguro podem
 omitir a checagem intermediaria. O gate JMH decide qualquer duvida no caminho financeiro.
 
-## Orcamento de Trabalho de Avaliacao
+## Limite de Passos de Percurso
 
-`maxEvaluationWork` e operacional nos modos que o aplicam: mede trabalho variavel efetivamente realizado
-pelo tier. `TRUSTED` e `SAFE` atribuem saldo novo ao folding; somente `SAFE` atribui saldo a cada
-execucao. Nao existe contador por tenant, engine ou thread. Reentrancia iniciada por provider em `SAFE`
-cria outro escopo e outro saldo.
+`maxTraversalSteps` e um guard rail de runtime contra amplificacao cumulativa de percursos, nao uma
+estimativa de CPU, tempo, chamadas ou "custo" financeiro. Somente `SAFE` atribui saldo a cada execucao.
+Nao existe contador de compilacao, folding, tenant, engine ou thread. Reentrancia iniciada por provider
+em `SAFE` cria outro escopo e outro saldo.
 
-### Modulo e escopo
+### Escopo simples
 
-- `WorkCostPolicy` concentra formulas saturadas e classificacao `CONSTANT`, `METERED` ou
-  `TRUSTED_UNMETERED`.
-- Toda Operacao de Colecao e todo built-in oficial aparece no registro; ausencia falha teste de
-  exaustividade.
-- Provider customizado e implicitamente `TRUSTED_UNMETERED`; apenas conversao/validacao feita pelo
-  evaluator e medida.
-- `ExecutionScope` escalar preserva o layout atual.
-- `BudgetedExecutionScope` adiciona um `int remainingWork` somente em `SAFE`, quando a Visao executada
-  pode alcancar trabalho medido. O teto de 100 milhoes cabe em `int`; formulas usam `long` saturado antes
-  do debito.
-- Debito que excederia o saldo falha antes de iniciar aquela unidade. Efeitos anteriores permanecem;
-  nao ha rollback.
+- Nao existe `WorkCostPolicy`, classificacao exaustiva de built-ins nem formula ponderada por algoritmo.
+- Um passo representa um item ou entrada visitado, e nao uma unidade abstrata de custo.
+- Percursos aninhados e lambdas compartilham o mesmo saldo; operacoes lazy debitam apenas itens
+  efetivamente alcancados.
+- Chamadas de built-ins e providers nao debitam por si; providers customizados permanecem confiaveis e
+  nao sao medidos internamente.
+- `ExecutionScope` escalar preserva o layout atual. Uma variante com contador `int` e criada somente
+  quando o plano pode percorrer colecoes ou mapas.
+- Debito que excederia o saldo falha antes do proximo item ou entrada. Efeitos
+  anteriores permanecem; nao ha rollback.
 
-### Matriz minima de debito
+### Fronteiras de debito
 
-| Familia | Debito |
+| Fronteira | Debito |
 |---|---|
-| `all`, `any`, filtro, `map`, `reduce` | uma unidade antes de cada item alcancado; trabalho da lambda soma no mesmo saldo |
-| `sum`, `avg`, igualdade estrutural | uma unidade por item/par realmente visitado |
-| slice, wildcard, `keys`, `values`, snapshots e materializacao | uma unidade por entrada lida/copiada |
-| `count` sobre container canonico | constante; `size()` nao simula percurso |
-| membership generico | uma unidade por candidato visitado ate curto-circuito |
-| membership hash/binario | custo estimado do lookup realmente usado, sem varredura ficticia |
-| `sortBy` | chaves incrementalmente; custo fixo saturado baseado em `n * ceil(log2(n))`; copia por item |
-| regex | compilacao por tamanho do padrao; match por produto saturado padrao x texto |
-| `replaceAll`/`split` | regex + match/segmento + unidades de output, respeitando limites de texto/container |
-| expansao textual | unidades proporcionais ao output previsto/produzido |
-| fatorial | uma unidade por multiplicacao autorizada |
-| potencia, raiz e built-ins caros | estimativa conservadora baseada em argumento, precisao e algoritmo oficial |
-| adapter Java | uma unidade por valor que o evaluator converte/valida/materializa |
+| percursos de colecao, mapa, filtro, lambda, membership e igualdade estrutural | um passo antes de cada item ou par alcancado |
+| conversao, validacao ou materializacao recursiva de container | um passo antes de cada entrada visitada |
+| acesso constante como `size()` ou lookup especializado sem percurso | nenhum passo ficticio |
+| no escalar de custo constante | nenhum passo |
+| codigo interno de provider customizado | nenhum passo; permanece confiavel |
 
-As formulas sao deterministicas e documentadas, mas a passagem exatamente na fronteira nao e contrato
-entre otimizacoes. Folding paga durante compilacao e nao novamente em runtime; um lookup otimizado paga
-seu custo otimizado. Por isso apenas `*_WORK_EXCEEDED` fica fora da equivalencia estrita do ADR 0019.
-Testes gerais de equivalencia usam saldo amplo; testes de trabalho provam ausencia de subcontagem em
-cada tier.
+Regex, expansao textual, ordenacao, fatorial e operacoes numericas caras nao recebem passos ou pesos derivados de
+tamanho, precisao ou algoritmo. Cada chamada isolada e contida pelos limites locais que governam seu
+crescimento: texto e output, padrao e entrada regex, cardinalidade de container, forma numerica,
+fatorial e parametros equivalentes. Antes do fechamento, stress deve provar que os tetos locais tornam
+uma chamada aceita segura; teto inseguro e reduzido em vez de compensado por uma formula de custo.
+
+O numero exato de passos nao e contrato entre otimizacoes. Folding nao possui saldo e, quando limites de
+compilacao estao ativos, nao executa chamadas ou Operacoes de Colecao dependentes da entrada.
+Especializacoes de runtime podem eliminar percursos. Por isso o diagnostico de
+esgotamento fica fora da equivalencia estrita do ADR 0019. Testes gerais usam saldo amplo; testes de
+hardening provam termino de composicoes, compartilhamento do saldo aninhado, curto-circuito e falha antes
+do proximo callback, sem oraculo de custo por tier.
 
 ## Regex Linear
 
@@ -291,14 +289,14 @@ severidade e politica de span ficam estaveis depois de M4.
 6. offset final como desempate.
 
 Parser, AST e resolver aplicam o mesmo comparador. Erros semanticos independentes continuam acumulados;
-`Tipo Invalido` suprime apenas cascatas dependentes. Orcamento esgotado, quando o modo o aplica, e
+`Tipo Invalido` suprime apenas cascatas dependentes. Limite de recurso esgotado, quando o modo o aplica, e
 terminal e nao participa da acumulacao posterior.
 
 ### Familias novas minimas
 
 - parsing/estrutura: fonte, tokens, profundidade e nos excedidos;
-- semantica/valor constante: texto, profundidade, precisao, escala, regex e trabalho excedidos;
-- runtime: texto, profundidade, precisao, escala, materializacao e trabalho excedidos;
+- semantica/valor constante: texto, profundidade, precisao, escala e regex excedidos;
+- runtime: texto, profundidade, precisao, escala, materializacao e passos de percurso excedidos;
 - cache/configuracao nao produz Diagnostico de Expressao; builder invalido usa `IllegalArgumentException`.
 
 Cada dimensao/fase possui codigo especifico; nao ha codigo por operador. Entrada externa nula ou
@@ -352,10 +350,10 @@ complementam e nunca decidem o build.
 - propriedades volumosas usam pelo menos 10.000 no perfil de stress;
 - o gerador de AST deixa de escolher apenas formas preconstruidas e passa a ser recursivo e limitado;
 - geradores cobrem fontes validas/invalidas, Unicode suplementar, valores profundos, limites e
-  operacoes de custo variavel;
+  composicoes de percursos;
 - plano otimizado/oraculo compara valor, escala, falha nao operacional, span, efeitos e Memoria de
   Calculo com saldo amplo;
-- propriedades especificas comparam debito com um oraculo simples de custo;
+- propriedades especificas provam saldo compartilhado, curto-circuito e termino sem oraculo de custo;
 - seed de falha fica no relatorio; o caso minimizado entra no Corpus de Expressoes como regressao;
 - o smoke de soma de inteiros e removido, pois nao prova comportamento do produto.
 
@@ -398,7 +396,7 @@ de warm-up, 10 x 500 ms de medicao, heap fixo e mesma JVM/maquina, salvo justifi
 | Familia | Cobertura vinculante | Gate |
 |---|---|---|
 | escalar | `Phase5BaselineBenchmark.arithmeticCompute`, `logicalCompute`, funcao registrada e Memoria sem colecao, nos tres modos | zero B/op adicional; delta pareado dentro de +/-1% |
-| colecao | `map`, `mapThenSum`, `allShortCircuit`, `sortBy`, `reduce`, wildcard, filtro e lambda aninhada | `UNSAFE`/`TRUSTED`: zero B/op adicional e +/-1%; `SAFE`: zero alocacao por debito e regressao pareada <=5% |
+| colecao | `map`, `mapThenSum`, `allShortCircuit`, `sortBy`, `reduce`, wildcard, filtro e lambda aninhada | `UNSAFE`/`TRUSTED`: zero B/op adicional e +/-1%; `SAFE`: zero alocacao por passo de percurso e regressao pareada <=5% |
 | compilacao | parse warm, compilacao sem cache e fontes proximas dos limites aceitos | sem regressao >5% fora da banda; rejeicao limitada caracterizada separadamente |
 | cache | pipeline, miss, hit puro e hit+visao da Etapa 9 | miss <=10%; hit >=20x/99%; hit+visao >=10x/95% |
 | regex | literal, dinamica, replace/split e serie adversarial crescente | sem fallback; crescimento aproximadamente linear; latencia simples registrada |
@@ -474,14 +472,15 @@ Cada incremento comeca por teste direcionado e termina com `mvn -pl exp-mk3 -am 
 - Prevalidar expansoes constantes antes de folding.
 - Integrar RE2/J no operador e built-ins; remover Java Pattern do caminho da linguagem.
 - Implementar replace/split limitados.
-- Criar `WorkCostPolicy` e meter folding de built-ins oficiais.
+- Aplicar limites locais a chamadas isoladas e impedir folding de chamadas/operacoes dependentes da
+  entrada em `TRUSTED` e `SAFE`.
 
-### Incremento 6 - Runtime medido
+### Incremento 6 - Passos de percurso no runtime
 
-- Criar `BudgetedExecutionScope` sem alterar layout escalar.
-- Instrumentar matriz de colecao, regex, texto, numerico e adapters.
+- Criar `TraversalLimitedExecutionScope` sem alterar layout escalar.
+- Instrumentar somente itens/entradas visitados em percursos e visitas recursivas.
 - Manter escopo ate Materializacao Publica/freeze, sem holder intermediario.
-- Provar ordem de efeitos, isolamento concorrente e ausencia de subcontagem.
+- Provar ordem de efeitos, saldo compartilhado em composicoes e termino sem oraculo de custo.
 - Repetir JMH escalar/colecao antes de seguir.
 
 ### Incremento 7 - Cache ponderado
@@ -513,8 +512,8 @@ Cada incremento comeca por teste direcionado e termina com `mvn -pl exp-mk3 -am 
 - Defaults aceitam corpus e benchmarks; tetos passam stress na JVM filha configurada.
 - Regex da linguagem usa somente RE2/J e rejeita subset incompatível por diagnostico.
 - Valores de borda e publicos respeitam texto, profundidade, precisao, escala e container.
-- Debito de trabalho e isolado por compilacao/execucao, sem estado global ou por thread.
-- Providers customizados permanecem confiaveis e nao medidos; adapters continuam medidos.
+- Passos de percurso sao isolados por execucao `SAFE`, sem estado global ou por thread.
+- Providers customizados permanecem confiaveis; entradas visitadas por adapters debitam passos simples.
 - Falhas de limite possuem codigo/span corretos e nao escapam como excecao crua.
 
 ### Diagnosticos
@@ -522,13 +521,13 @@ Cada incremento comeca por teste direcionado e termina com `mvn -pl exp-mk3 -am 
 - Todo codigo emitido esta no registro e possui teste emissor.
 - Categoria, severidade, span e sugestao obedecem metadata.
 - Ordem e lista completa sao deterministicas.
-- Erros semanticos independentes acumulam; budget terminal nao continua.
+- Erros semanticos independentes acumulam; esgotamento de passos e terminal.
 - Unicode suplementar preserva offsets/colunas UTF-16.
 - Nao resta categoria, fase ou codigo de migracao.
 
 ### Concorrencia e retencao
 
-- Plano, Memoria de Calculo, Item Atual, tempo e work budget permanecem isolados.
+- Plano, Memoria de Calculo, Item Atual, tempo e saldo de percurso permanecem isolados.
 - Parser concorrente nao mistura estado nem retem fonte, tokens, parse tree ou error strategy.
 - Threads de plataforma e virtuais sao corretas; desempenho relativo apenas documentado.
 - Cache respeita quantidade/peso e nao retem AST, Modelo Semantico ou fonte duplicada.
@@ -536,7 +535,7 @@ Cada incremento comeca por teste direcionado e termina com `mvn -pl exp-mk3 -am 
 ### Desempenho e alocacao
 
 - Caminho escalar: zero `B/op` adicional e delta dentro de +/-1%.
-- Colecoes: zero alocacao por debito e regressao <=5% ou excecao documentada depois de perfil.
+- Colecoes: zero alocacao por passo de percurso e regressao <=5% ou excecao documentada depois de perfil.
 - Cache preserva os gates da Etapa 9.
 - Memoria de Calculo preserva os gates de software aceitos da Etapa 10.
 - Regex prova escala aproximadamente linear; nao ha gate de contador de hardware.
@@ -553,8 +552,8 @@ Cada incremento comeca por teste direcionado e termina com `mvn -pl exp-mk3 -am 
 
 ## Impacto na Etapa 13
 
-Pratt, Tier 1 e fusao de colecoes devem consumir `ExpressionResourceLimits`, `WorkCostPolicy`, registro
-diagnostico e gates deste plano. Um tier novo pode reduzir trabalho operacional e, portanto, alterar a
-fronteira `*_WORK_EXCEEDED`, mas continua obrigado a equivalencia semantica do ADR 0019 e a testes de
-nao subcontagem. Nenhuma trilha pode reintroduzir regex backtracking, bypass de forma, plano mutavel ou
-estado global de budget.
+Pratt, Tier 1 e fusao de colecoes devem consumir `ExpressionResourceLimits`, as visitas simples de
+percurso, o registro diagnostico e os gates deste plano. Um tier novo pode eliminar visitas e,
+portanto, alterar o ponto de esgotamento, mas continua obrigado a equivalencia semantica do ADR 0019 e
+aos testes de hardening. Nenhuma trilha pode reintroduzir regex backtracking, bypass de forma, plano
+mutavel ou estado global de saldo.

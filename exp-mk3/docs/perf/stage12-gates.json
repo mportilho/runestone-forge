@@ -28,7 +28,7 @@
       "id": "collections",
       "classification": "binding",
       "metrics": ["score", "gc.alloc.rate.norm"],
-      "thresholds": ["no allocation per work-budget debit", "paired latency regression <=5%"],
+      "thresholds": ["no allocation per traversal-step debit", "paired latency regression <=5%"],
       "benchmarks": [
         "com.runestone.expeval_mk3.perf.jmh.CollectionOperationsBenchmark.map",
         "com.runestone.expeval_mk3.perf.jmh.CollectionOperationsBenchmark.mapThenSum",

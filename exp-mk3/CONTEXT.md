@@ -96,9 +96,9 @@ _Avoid_: Vector, Java collection implementation, raw iterable
 An Ambiente de Expressao guard rail that bounds every container snapshot materialized at an external boundary or by the language, including collection literals, maps, operation results, function-provider results, and public results.
 _Avoid_: Parser size limit, result-only collection limit
 
-**Orcamento de Trabalho de Avaliacao**:
-A per-compilation or per-execution allowance for cumulative variable-cost work controlled by the evaluator, including collection traversal, regex, text expansion, expensive official numeric operations, and boundary materialization. Constant-cost scalar nodes do not consume it, and work inside registered Java provider code remains trusted and unmetered.
-_Avoid_: Node counter, wall-clock timeout, provider execution quota, collection-size limit
+**Limite de Passos de Percurso**:
+A per-execution guard rail used only in `SAFE` against cumulative traversal amplification controlled by the evaluator. One step represents an item or entry reached while iterating, recursively converting, validating, or materializing a collection or map; nested traversals share the same allowance. It is deliberately not an estimate of CPU, elapsed time, operation count, numeric complexity, regex complexity, or provider cost.
+_Avoid_: Processing price, compilation budget, wall-clock timeout, provider execution quota, built-in invocation count
 
 **Regex Linear**:
 The regular-expression subset accepted by the language and executed without backtracking through RE2/J, including regex operators and regex-taking built-ins. Unsupported constructs fail through structured diagnostics and never fall back to Java backtracking regex.

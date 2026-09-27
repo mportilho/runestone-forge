@@ -22,7 +22,7 @@ de planejamento.
 - O evaluator nao e um sandbox para codigo Java registrado pelo integrador. Ambientes de Expressao,
   Provedores de Funcoes e membros Java registrados continuam sendo componentes confiaveis e devem
   cumprir seus contratos de concorrencia, terminacao, nulidade e pureza.
-- A protecao usa orcamentos deterministas de estrutura e trabalho. Nao ha timeout interno nem captura
+- A protecao usa limites deterministas de estrutura, operacao e passos de percurso. Nao ha timeout interno nem captura
   de `StackOverflowError`, `OutOfMemoryError` ou outro erro fatal da JVM; deadlines de chamada pertencem
   ao integrador.
 - A compilacao limita tamanho UTF-16 da fonte, quantidade de tokens, profundidade sintatica geral e
@@ -39,22 +39,24 @@ de planejamento.
 - Valores nao confiaveis tambem serao limitados por comprimento textual, profundidade de valor,
   precisao numerica e magnitude de escala numerica em todas as bordas e resultados controlados pelo
   evaluator.
-- A hipotese inicial `default/teto` para valores e trabalho e: texto 1.048.576/8.388.608 unidades
+- A hipotese inicial `default/teto` para valores e percurso e: texto 1.048.576/8.388.608 unidades
   UTF-16, profundidade de valor 64/256, precisao numerica 10.000/100.000 digitos, magnitude de escala
-  10.000/100.000, padrao regex 1.024/8.192 unidades UTF-16 e trabalho de avaliacao
-  1.000.000/100.000.000 unidades.
+  10.000/100.000, padrao regex 1.024/8.192 unidades UTF-16 e passos de percurso
+  1.000.000/100.000.000.
 - Zero continua valido e desabilita efetivamente a capacidade correspondente. Configuracoes
   estruturais do cache permanecem estritamente positivas.
-- `maxEvaluationWork` limita cumulativamente, por compilacao ou execucao, trabalho de custo variavel
-  controlado pelo evaluator: visitas/copias de colecao, regex, expansao textual, fatorial, potencia,
-  raiz, built-ins matematicos caros e conversoes/materializacoes de borda. Aritmetica simples e nos
-  escalares de custo constante nao debitam. Trabalho interno de codigo Java confiavel registrado pelo
-  integrador nao entra nessa contagem.
-- O debito de colecao e incremental nas operacoes lazy ou com callbacks potencialmente efetivos. Nas
-  operacoes puras em que uma otimizacao evita o percurso, como membership constante, usa custo
-  semantico deterministico igual no plano otimizado e no Oraculo Sem Otimizacoes. `sortBy` combina
-  extracao incremental de chaves com custo deterministico da ordenacao. Materializacao publica e
-  conversoes de containers controladas pelo evaluator consomem o mesmo orcamento.
+- `maxTraversalSteps` limita cumulativamente, somente por execucao `SAFE`, a amplificacao de percursos
+  controlados pelo evaluator. Um passo e debitado por item alcancado em loops e por entrada visitada em
+  conversao, validacao ou materializacao recursiva. Percursos aninhados compartilham o mesmo saldo.
+  Chamadas de built-ins, aritmetica simples, nos escalares e trabalho interno de codigo Java confiavel
+  nao entram nessa contagem.
+- Nao existe precificacao por precisao, produto regex, tamanho de output, complexidade de sort ou outra
+  formula algoritmica. Operacoes individuais caras sao contidas por limites locais de texto/output,
+  regex, cardinalidade, forma numerica, fatorial e parametros equivalentes. O stress reduz qualquer teto
+  local que nao torne uma chamada isolada segura.
+- O debito de colecao e incremental e ocorre somente para itens efetivamente alcancados. Otimizacoes que
+  evitam um percurso nao pagam passos ficticios; o numero exato de passos nao e contrato semantico entre
+  o plano otimizado e o Oraculo Sem Otimizacoes.
 - Esgotamento de qualquer orcamento emite um unico diagnostico terminal no primeiro ponto excedido e
   interrompe a fase ou execucao. A acumulacao continua obrigatoria para erros semanticos independentes
   que nao representem esgotamento de recurso.
@@ -62,10 +64,10 @@ de planejamento.
   interno sem cache repete a validacao como defesa em profundidade.
 - Violacao provavel sem executar codigo impuro e diagnostico de compilacao anterior ao folding;
   violacao dependente de entrada ou de execucao usa Checagem Diferida e diagnostico runtime.
-- Constant folding de built-ins oficiais consome o mesmo Orcamento de Trabalho de Avaliacao por
-  compilacao. Esgotamento e diagnostico terminal, nao tentativa de alocacao nem fallback para runtime.
-  Provedores customizados foldable permanecem confiaveis e nao medidos; argumentos e resultados ainda
-  obedecem aos limites de forma.
+- Compilacao e folding nao possuem contador cumulativo. Em `TRUSTED` e `SAFE`, folding nao executa
+  chamadas de funcao nem Operacoes de Colecao cujo trabalho depende da entrada; expansoes constantes
+  continuam prevalidadas antes de alocar. Provedores customizados nao sao executados por folding nesses
+  modos. Argumentos e resultados constantes ainda obedecem aos limites de forma.
 - Validacao numerica e orientada por prova: ocorre em bordas, antes de provedores, em operacoes
   expansoras nao limitadas pelo `MathContext` e no resultado publico. Nos intermediarios cuja metadata
   ja prova um teto seguro nao recebem checagem generica de precisao/escala.
@@ -74,41 +76,37 @@ de planejamento.
 
 - `UNSAFE` nao aplica limites de recurso na compilacao ou no runtime, nem emite diagnosticos de recurso.
 - `TRUSTED` aplica limites de compilacao: fonte, tokens, profundidade, nos AST, Item Atual, forma de
-  constantes, regex literal e trabalho de folding. Ele nao aplica limites de recurso no runtime nem emite
+  constantes, regex literal e preflight de expansoes. Ele nao aplica limites de recurso no runtime nem emite
   seus diagnosticos; contratos funcionais de tipo, nulidade e Coercao de Borda permanecem ativos.
 - `SAFE` aplica todos os limites de compilacao e runtime. Seus diagnósticos de recurso permanecem
   terminais.
 - RE2/J, limites por quantidade/peso do cache e a limpeza do contexto parser permanecem em todos os
   modos; sao contratos da linguagem ou do ciclo de vida do Engine, nao enforcement runtime da expressao.
 
-## Custo no Caminho Quente
+## Passos de Percurso no Caminho Quente
 
 - Nao existe contador em todo `ExecutableNode`. O `ExecutionScope` escalar preserva seu layout; em
-  `SAFE`, uma variante interna `BudgetedExecutionScope` com contador `int` e usada somente quando a
-  Visao de Expressao executada pode percorrer containers.
-- Operacoes puras de custo conhecido debitam em bloco. Somente loops lazy ou com callbacks debitam por
-  item. Nenhum debito aloca.
+  `SAFE`, uma variante interna `TraversalLimitedExecutionScope` com contador `int` e usada somente quando
+  a Visao de Expressao executada pode percorrer colecoes ou mapas.
+- Percursos debitam um passo por item ou entrada antes de alcanca-lo. Chamadas nao debitam por si.
+  Nenhum debito aloca.
 - Nos tres modos, o caminho escalar deve manter zero `B/op` adicional e delta pareado dentro de +/-1%.
   Em `UNSAFE` e `TRUSTED`, colecoes tambem devem manter zero `B/op` adicional e +/-1%; em `SAFE`, devem
   manter zero alocacao por visita e no maximo 5% de regressao pareada. Acima disso, perfil e tentativa de
   simplificacao sao obrigatorios; a protecao nao e removida silenciosamente.
 - Se o subtipo de escopo alterar o layout escalar ou impedir inlining suficiente, o desenho deve ser
   refeito antes do fechamento.
-- Um modulo interno `WorkCostPolicy` concentra formulas saturadas, debito e associacao com codigo/span.
-  Toda operacao oficial de colecao e todo built-in oficial e classificado exaustivamente como
-  `CONSTANT`, `METERED` ou `TRUSTED_UNMETERED`; a ultima categoria e automatica apenas para providers
-  customizados.
-- Regex debita custo saturado proporcional a padrao x texto; `replaceAll` e `split` debitam tambem
-  matches e saida. Expansao para ao atingir comprimento textual ou materializacao, antes de publicar o
-  resultado.
-- O Orcamento de Trabalho de Avaliacao mede trabalho efetivamente realizado pelo tier. Folding paga na
-  compilacao e nao novamente em runtime; lookup otimizado paga seu custo otimizado, sem varredura
-  ficticia. Falhas `*_WORK_EXCEEDED` sao, portanto, excecao explicita a equivalencia estrita entre plano
-  otimizado e Oraculo Sem Otimizacoes.
-- Testes de equivalencia usam saldo amplo; suites proprias provam que cada tier nao subestima trabalho.
-  Codigos e dimensoes gerais do orcamento sao estaveis, mas passar exatamente na fronteira nao e
-  garantia entre otimizacoes ou trocas internas de algoritmo. A documentacao recomenda margem.
-- Cada compilacao e execucao recebe saldo novo. Quota agregada, rate limiting e concorrencia por tenant
+- Nao existe `WorkCostPolicy`, classificacao exaustiva de built-ins, declaracao de fronteira de chamada
+  nem formula saturada de custo. O audit cobre apenas loops e travessias recursivas controladas pelo
+  evaluator.
+- Regex e expansao textual param ao atingir seus limites locais antes de publicar o resultado. Seus
+  tamanhos nao sao convertidos em passos ponderados.
+- Folding nao possui passos. Lookup otimizado nao simula varredura em runtime. Esgotamento de percurso e,
+  portanto, excecao explicita a equivalencia estrita entre plano otimizado e Oraculo Sem Otimizacoes.
+- Testes de equivalencia usam saldo amplo; suites proprias provam termino de composicoes, debito
+  compartilhado, curto-circuito e falha antes do proximo callback. Nao existe oraculo de custo por tier.
+  Passar exatamente na fronteira nao e garantia entre otimizacoes; a documentacao recomenda margem.
+- Cada execucao `SAFE` recebe saldo novo. Quota agregada, rate limiting e concorrencia por tenant
   pertencem a aplicacao hospedeira, sem contador global no evaluator.
 - Execucao reentrante iniciada por Provedor de Funcoes recebe novo Escopo de Execucao e novo saldo; nao
   ha propagacao implicita por thread. O provider confiavel controla sua propria recursao.
@@ -210,7 +208,7 @@ de planejamento.
 3. `ExpressionResourceLimits` e registro diagnostico.
 4. Limites de fonte/tokens/profundidade/AST, spans UTF-16 e correcao da retencao LL.
 5. Forma de valores, checks anteriores ao folding e RE2/J.
-6. `BudgetedExecutionScope`, matriz de debito e materializacao no mesmo escopo.
+6. Escopo runtime `SAFE` com Passos de Percurso e materializacao no mesmo saldo.
 7. Peso Retido de Compilacao no cache.
 8. Stress, concorrencia e propriedades ampliadas.
 9. Gates finais de desempenho/alocacao, documentacao e reconciliacao.
