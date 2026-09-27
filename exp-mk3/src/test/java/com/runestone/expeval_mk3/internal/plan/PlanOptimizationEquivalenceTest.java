@@ -14,6 +14,9 @@ import com.runestone.expeval_mk3.internal.semantics.SemanticResolutionSuccess;
 import com.runestone.expeval_mk3.internal.semantics.SemanticResolver;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
+import net.jqwik.api.Report;
+import net.jqwik.api.Reporting;
+import net.jqwik.api.ShrinkingMode;
 import net.jqwik.api.constraints.BigRange;
 import net.jqwik.api.constraints.Scale;
 
@@ -48,7 +51,8 @@ class PlanOptimizationEquivalenceTest {
     private static final String COMPARISON_AND_EQUALITY_SOURCE =
             "(x > y) = (y < x) and (x >= y) = (y <= x) and (x = x) and (x <> y or x = y)";
 
-    @Property
+    @Property(tries = 1_000, shrinking = ShrinkingMode.FULL)
+    @Report(Reporting.FALSIFIED)
     void buildAndBuildOracleAgreeOnValueFailureOrderAndEffects(
             @ForAll @BigRange(min = "-20", max = "20") @Scale(2) BigDecimal x,
             @ForAll @BigRange(min = "-20", max = "20") @Scale(2) BigDecimal y) {

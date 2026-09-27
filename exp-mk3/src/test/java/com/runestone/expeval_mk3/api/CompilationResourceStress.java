@@ -1,15 +1,13 @@
 package com.runestone.expeval_mk3.api;
 
-import org.junit.jupiter.api.Test;
+import com.runestone.expeval_mk3.internal.ast.SemanticAstBuilder;
+import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildFailure;
+import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildSuccess;
 import com.runestone.expeval_mk3.internal.parser.ExpressionParser;
 import com.runestone.expeval_mk3.internal.parser.ParseSuccess;
-import com.runestone.expeval_mk3.internal.ast.SemanticAstBuilder;
-import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildSuccess;
-import com.runestone.expeval_mk3.internal.ast.SemanticAstBuildFailure;
+import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
-import java.nio.file.Files;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,23 +16,19 @@ class CompilationResourceStress {
 
     @Test
     void ceilingsSurviveConstrainedChildJvm() throws Exception {
-        Path output = Path.of("target", "stage12", "compilation-resource-stress.log");
-        Files.createDirectories(output.getParent());
-        Process child = new ProcessBuilder(
-                Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                "-Xms512m", "-Xmx512m", "-Xss1m", "-cp", System.getProperty("java.class.path"),
-                CompilationResourceStress.class.getName())
-                .redirectErrorStream(true).redirectOutput(output.toFile()).start();
-        try {
-            assertThat(child.waitFor(90, TimeUnit.SECONDS)).as("stress child timeout; see %s", output).isTrue();
-            assertThat(child.exitValue()).as("stress child; see %s", output).isZero();
-        } finally {
-            child.destroyForcibly();
-        }
+        Stage12StressSupport.runInConstrainedTemurinChild(
+                CompilationResourceStress.class,
+                Path.of("target", "stage12", "compilation-resource-stress.log"));
     }
 
     public static void main(String[] arguments) {
+        Stage12StressSupport.requireTemurin21();
         System.out.println(System.getProperty("java.runtime.version"));
+        runCeilingChecks();
+        System.out.println("Compilation resource ceilings passed");
+    }
+
+    static void runCeilingChecks() {
         for (ExpressionTrustMode mode : new ExpressionTrustMode[] {ExpressionTrustMode.TRUSTED, ExpressionTrustMode.SAFE}) {
             var limits = ExpressionResourceLimits.builder().maxSourceLength(262_144).maxTokenCount(65_536)
                     .maxSyntaxDepth(256).maxAstNodeCount(65_536).maxMaterializedSize(100_000).build();
@@ -109,7 +103,6 @@ class CompilationResourceStress {
                 assertThat(result).isInstanceOf(SemanticAstBuildSuccess.class);
             }
         }
-        System.out.println("Compilation resource ceilings passed");
     }
 
     private static void success(ExpressionEngine engine, ExpressionEnvironment environment, String source) {

@@ -49,6 +49,12 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <version>1.10.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
             <version>${assertj-core.version}</version>
@@ -137,6 +143,49 @@
                             <includes>
                                 <include>**/*Test.java</include>
                                 <include>**/CompilationResourceStress.java</include>
+                            </includes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>stage12-stress</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <version>3.5.0</version>
+                        <executions>
+                            <execution>
+                                <id>require-temurin-21-for-stage12-stress</id>
+                                <goals>
+                                    <goal>enforce</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <requireJavaVersion>
+                                            <version>[21,22)</version>
+                                        </requireJavaVersion>
+                                        <requireProperty>
+                                            <property>java.vendor</property>
+                                            <regex>Eclipse Adoptium</regex>
+                                            <message>stage12-stress requires Maven to run on Temurin 21</message>
+                                        </requireProperty>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes>
+                                <include>**/*Test.java</include>
+                                <include>**/Stage12Stress.java</include>
+                                <include>**/Stage12HardeningProperties.java</include>
                             </includes>
                         </configuration>
                     </plugin>
