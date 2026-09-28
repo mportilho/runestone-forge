@@ -4,6 +4,7 @@ import com.runestone.expeval_mk3.api.DiagnosticCategory;
 import com.runestone.expeval_mk3.api.DiagnosticSeverity;
 import com.runestone.expeval_mk3.api.ExpressionDiagnostic;
 import com.runestone.expeval_mk3.api.SourceSpan;
+import com.runestone.expeval_mk3.support.DocumentationPaths;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -12,7 +13,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -95,6 +98,29 @@ class DiagnosticContractTest {
     }
 
     @Test
+    void publicDiagnosticReferenceExactlyMatchesTheInternalRegistry() throws IOException {
+        Path reference = DocumentationPaths.moduleRoot().resolve("docs/reference/diagnostics.md");
+        List<DocumentedDiagnostic> documented = Files.readAllLines(reference).stream()
+                .map(String::trim)
+                .filter(line -> line.matches("\\| `[A-Z0-9_]+` \\| [A-Z]+ \\| [A-Z]+ \\| [A-Z]+ \\| [A-Z]+ \\|"))
+                .map(DocumentedDiagnostic::parse)
+                .toList();
+        Map<String, DocumentedDiagnostic> byCode = documented.stream()
+                .collect(java.util.stream.Collectors.toMap(DocumentedDiagnostic::code, Function.identity()));
+
+        assertThat(documented).hasSize(DiagnosticCode.values().length);
+        assertThat(byCode).hasSize(documented.size());
+        for (DiagnosticCode code : DiagnosticCode.values()) {
+            assertThat(byCode.get(code.code())).as(code.code()).isEqualTo(new DocumentedDiagnostic(
+                    code.code(),
+                    code.category().name(),
+                    code.severity().name(),
+                    code.sourceSpanPolicy().name(),
+                    code.suggestionPolicy().name()));
+        }
+    }
+
+    @Test
     void canonicalOrderUsesSpanPresenceOffsetsSeverityCategoryCodeAndEndOffset() {
         ExpressionDiagnostic unpositioned = ExpressionDiagnostic.error(
                 DiagnosticCategory.RUNTIME, "A", "message", null);
@@ -121,6 +147,24 @@ class DiagnosticContractTest {
             return Files.readString(path);
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read " + path, exception);
+        }
+    }
+
+    private record DocumentedDiagnostic(
+            String code,
+            String category,
+            String severity,
+            String sourceSpanPolicy,
+            String suggestionPolicy) {
+
+        private static DocumentedDiagnostic parse(String row) {
+            String[] cells = row.substring(1, row.length() - 1).split("\\|");
+            return new DocumentedDiagnostic(
+                    cells[0].trim().replace("`", ""),
+                    cells[1].trim(),
+                    cells[2].trim(),
+                    cells[3].trim(),
+                    cells[4].trim());
         }
     }
 }
