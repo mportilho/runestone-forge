@@ -10,7 +10,8 @@
     "measurementIterations": 10,
     "measurementTime": "500ms",
     "threads": 1,
-    "profiler": "gc"
+    "profiler": "gc",
+    "traversalBaselineCommit": "17ccc49bfdc2ac5c11c0aa2db610f38d1154bb7a"
   },
   "families": [
     {
@@ -19,6 +20,8 @@
       "metrics": ["score", "gc.alloc.rate.norm"],
       "thresholds": ["no additional B/op", "paired latency delta within +/-1%"],
       "benchmarks": [
+        "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalar",
+        "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalarAllocation",
         "com.runestone.expeval_mk3.perf.jmh.Phase5BaselineBenchmark.arithmeticCompute",
         "com.runestone.expeval_mk3.perf.jmh.Phase5BaselineBenchmark.logicalCompute",
         "com.runestone.expeval_mk3.perf.jmh.FunctionInvocationBenchmark.arityOneOptimized"
@@ -30,6 +33,8 @@
       "metrics": ["score", "gc.alloc.rate.norm"],
       "thresholds": ["no allocation per traversal-step debit", "paired latency regression <=5%"],
       "benchmarks": [
+        "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collection",
+        "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collectionAllocation",
         "com.runestone.expeval_mk3.perf.jmh.CollectionOperationsBenchmark.map",
         "com.runestone.expeval_mk3.perf.jmh.CollectionOperationsBenchmark.mapThenSum",
         "com.runestone.expeval_mk3.perf.jmh.CollectionOperationsBenchmark.allShortCircuit",
@@ -54,6 +59,7 @@
       "id": "cache",
       "classification": "binding",
       "metrics": ["score", "gc.alloc.rate.norm"],
+      "jmhArguments": ["-wi", "12"],
       "comparisons": [
         {"candidate": "engineMiss", "control": "pipelineUncached", "threshold": "latency overhead <=10%"},
         {"candidate": "engineHitPure", "control": "pipelineUncached", "threshold": "latency >=20x lower and allocation >=99% lower"},
@@ -94,6 +100,160 @@
         "com.runestone.expeval_mk3.perf.jmh.CalculationMemoryProductionBenchmark.traverseIndexed",
         "com.runestone.expeval_mk3.perf.jmh.CalculationMemoryProductionBenchmark.traverseListsByIndex"
       ]
+    }
+  ],
+  "gates": [
+    {
+      "id": "unsafe-scalar-allocation",
+      "type": "max-additional",
+      "metric": "gc.alloc.rate.norm",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalarAllocation", "params": {"mode": "UNSAFE"}},
+      "control": {"run": "baseline", "benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalarAllocation", "params": {"mode": "UNSAFE"}},
+      "limit": 0.01
+    },
+    {
+      "id": "trusted-scalar-allocation",
+      "type": "max-additional",
+      "metric": "gc.alloc.rate.norm",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalarAllocation", "params": {"mode": "TRUSTED"}},
+      "control": {"run": "baseline", "benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalarAllocation", "params": {"mode": "TRUSTED"}},
+      "limit": 0.01
+    },
+    {
+      "id": "safe-scalar-allocation",
+      "type": "max-additional",
+      "metric": "gc.alloc.rate.norm",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalarAllocation", "params": {"mode": "SAFE"}},
+      "control": {"run": "baseline", "benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalarAllocation", "params": {"mode": "SAFE"}},
+      "limit": 0.01
+    },
+    {
+      "id": "unsafe-scalar-latency",
+      "type": "max-regression",
+      "metric": "score",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalar", "params": {"mode": "UNSAFE"}},
+      "control": {"run": "baseline", "benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalar", "params": {"mode": "UNSAFE"}},
+      "limit": 0.01
+    },
+    {
+      "id": "trusted-scalar-latency",
+      "type": "max-regression",
+      "metric": "score",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalar", "params": {"mode": "TRUSTED"}},
+      "control": {"run": "baseline", "benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalar", "params": {"mode": "TRUSTED"}},
+      "limit": 0.01
+    },
+    {
+      "id": "safe-scalar-latency",
+      "type": "max-regression",
+      "metric": "score",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalar", "params": {"mode": "SAFE"}},
+      "control": {"run": "baseline", "benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.scalar", "params": {"mode": "SAFE"}},
+      "limit": 0.01
+    },
+    {
+      "id": "unsafe-collection-allocation",
+      "type": "max-additional",
+      "metric": "gc.alloc.rate.norm",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collectionAllocation", "params": {"mode": "UNSAFE", "itemCount": "8"}},
+      "control": {"run": "baseline", "benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collectionAllocation", "params": {"mode": "UNSAFE", "itemCount": "8"}},
+      "limit": 0.01
+    },
+    {
+      "id": "trusted-collection-allocation",
+      "type": "max-additional",
+      "metric": "gc.alloc.rate.norm",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collectionAllocation", "params": {"mode": "TRUSTED", "itemCount": "8"}},
+      "control": {"run": "baseline", "benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collectionAllocation", "params": {"mode": "TRUSTED", "itemCount": "8"}},
+      "limit": 0.01
+    },
+    {
+      "id": "safe-collection-debit-allocation",
+      "type": "max-additional-slope",
+      "metric": "gc.alloc.rate.norm",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collectionAllocation", "params": {"mode": "SAFE"}},
+      "control": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collectionAllocation", "params": {"mode": "TRUSTED"}},
+      "parameter": "itemCount",
+      "limit": 0.01
+    },
+    {
+      "id": "unsafe-collection-latency",
+      "type": "max-regression",
+      "metric": "score",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collection", "params": {"mode": "UNSAFE", "itemCount": "8"}},
+      "control": {"run": "baseline", "benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collection", "params": {"mode": "UNSAFE", "itemCount": "8"}},
+      "limit": 0.01
+    },
+    {
+      "id": "trusted-collection-latency",
+      "type": "max-regression",
+      "metric": "score",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collection", "params": {"mode": "TRUSTED", "itemCount": "8"}},
+      "control": {"run": "baseline", "benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collection", "params": {"mode": "TRUSTED", "itemCount": "8"}},
+      "limit": 0.01
+    },
+    {
+      "id": "safe-collection-latency",
+      "type": "max-regression",
+      "metric": "score",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collection", "params": {"mode": "SAFE", "itemCount": "8"}},
+      "control": {"run": "baseline", "benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12TraversalBenchmark.collection", "params": {"mode": "SAFE", "itemCount": "8"}},
+      "limit": 0.05
+    },
+    {
+      "id": "cache-miss-latency",
+      "type": "max-ratio",
+      "metric": "score",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.engineMiss"},
+      "control": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.pipelineUncached"},
+      "limit": 1.10
+    },
+    {
+      "id": "cache-pure-hit-latency",
+      "type": "min-ratio",
+      "metric": "score",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.engineHitPure"},
+      "control": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.pipelineUncached"},
+      "limit": 20.0
+    },
+    {
+      "id": "cache-pure-hit-allocation",
+      "type": "max-ratio",
+      "metric": "gc.alloc.rate.norm",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.engineHitPure"},
+      "control": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.pipelineUncached"},
+      "limit": 0.01
+    },
+    {
+      "id": "cache-view-hit-latency",
+      "type": "min-ratio",
+      "metric": "score",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.engineHitAsMath"},
+      "control": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.pipelineUncached"},
+      "limit": 10.0
+    },
+    {
+      "id": "cache-view-hit-allocation",
+      "type": "max-ratio",
+      "metric": "gc.alloc.rate.norm",
+      "candidate": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.engineHitAsMath"},
+      "control": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.CompilationCacheBenchmark.pipelineUncached"},
+      "limit": 0.05
+    },
+    {
+      "id": "regex-linear-growth",
+      "type": "linear-growth",
+      "metric": "score",
+      "selector": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.Stage12RegexBenchmark.adversarialNonMatch"},
+      "parameter": "inputLength",
+      "limit": 1.25
+    },
+    {
+      "id": "calculation-memory-indexed-allocation",
+      "type": "absolute-max",
+      "metric": "gc.alloc.rate.norm",
+      "selector": {"benchmark": "com.runestone.expeval_mk3.perf.jmh.CalculationMemoryProductionBenchmark.traverseIndexed", "params": {"scenario": "DENSE"}},
+      "limit": 0.01
     }
   ]
 }

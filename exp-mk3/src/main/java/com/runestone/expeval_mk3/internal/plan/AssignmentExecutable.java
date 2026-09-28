@@ -84,7 +84,7 @@ public final class AssignmentExecutable {
             throw RuntimeFailures.destructuringInsufficient(frameSlots.length, values.size(), sourceSpan);
         }
         for (int index = 0; index < frameSlots.length; index++) {
-            scope.visitTraversalStep(sourceSpan);
+            com.runestone.expeval_mk3.internal.runtime.TraversalSteps.visit(scope, sourceSpan);
             scope.write(frameSlots[index], values.get(index));
         }
     }

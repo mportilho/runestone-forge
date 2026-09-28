@@ -2,11 +2,13 @@ package com.runestone.expeval_mk3.internal.plan;
 
 import com.runestone.expeval_mk3.api.BoundaryCoercion;
 import com.runestone.expeval_mk3.api.CalculationMemory;
+import com.runestone.expeval_mk3.api.CollectionType;
 import com.runestone.expeval_mk3.api.ComputationWithMemory;
 import com.runestone.expeval_mk3.api.ExpressionType;
 import com.runestone.expeval_mk3.api.ExpressionResourceLimits;
 import com.runestone.expeval_mk3.api.ExternalSymbol;
 import com.runestone.expeval_mk3.api.ExternalSymbolOverwritePolicy;
+import com.runestone.expeval_mk3.api.MapType;
 import com.runestone.expeval_mk3.api.SourceSpan;
 import com.runestone.expeval_mk3.internal.diagnostics.RuntimeFailures;
 import com.runestone.expeval_mk3.internal.memory.CalculationMemorySchema;
@@ -17,6 +19,7 @@ import com.runestone.expeval_mk3.internal.runtime.PublicMaterialization;
 import com.runestone.expeval_mk3.internal.runtime.SafeExecutionScope;
 import com.runestone.expeval_mk3.internal.runtime.TraversalLimitedExecutionScope;
 import com.runestone.expeval_mk3.internal.runtime.TraversalStepContext;
+import com.runestone.expeval_mk3.internal.runtime.TraversalSteps;
 import com.runestone.expeval_mk3.internal.runtime.ValueShapeValidator;
 import com.runestone.expeval_mk3.internal.diagnostics.DiagnosticCode;
 
@@ -215,7 +218,8 @@ public final class ExecutionPlan {
         ExecutionScope scope = executeAssignments(overrides, clock);
         Object value = executeResult(scope);
         return PublicMaterialization.materialize(
-                value, resultType, maxMaterializedSize, resultSourceSpan(), valueLimits, scope);
+                value, resultType, maxMaterializedSize, resultSourceSpan(), valueLimits,
+                publicMaterializationScope(resultType, scope));
     }
 
     public ComputationWithMemory<Object> computeWithMemory(Map<String, ?> overrides, Clock clock) {
@@ -223,7 +227,8 @@ public final class ExecutionPlan {
         ExecutionScope scope = executeAssignments(overrides, clock, recorder);
         Object value = executeResult(scope);
         Object result = PublicMaterialization.materialize(
-                value, resultType, maxMaterializedSize, resultSourceSpan(), valueLimits, scope);
+                value, resultType, maxMaterializedSize, resultSourceSpan(), valueLimits,
+                publicMaterializationScope(resultType, scope));
         CalculationMemory memory = fullCalculationMemorySchema.freeze(scope, recorder);
         return new ComputationWithMemory<>(result, memory);
     }
@@ -245,7 +250,7 @@ public final class ExecutionPlan {
         ExecutionScope scope = executeAssignments(overrides, clock);
         Map<String, Object> materialized = new LinkedHashMap<>();
         for (AssignedSymbol symbol : assignedSymbolsInCreationOrder) {
-            scope.visitTraversalStep(symbol.sourceSpan());
+            TraversalSteps.visit(scope, symbol.sourceSpan());
             materialized.put(symbol.name(), PublicMaterialization.materialize(
                     scope.read(symbol.frameSlot()), symbol.type(), maxMaterializedSize,
                     symbol.sourceSpan(), valueLimits, scope));
@@ -259,7 +264,7 @@ public final class ExecutionPlan {
         ExecutionScope scope = executeAssignments(overrides, clock, recorder);
         Map<String, Object> materialized = new LinkedHashMap<>();
         for (AssignedSymbol symbol : assignedSymbolsInCreationOrder) {
-            scope.visitTraversalStep(symbol.sourceSpan());
+            TraversalSteps.visit(scope, symbol.sourceSpan());
             materialized.put(symbol.name(), PublicMaterialization.materialize(
                     scope.read(symbol.frameSlot()), symbol.type(), maxMaterializedSize,
                     symbol.sourceSpan(), valueLimits, scope));
@@ -312,6 +317,10 @@ public final class ExecutionPlan {
                 : new ExecutionScope(frame, zoneId, clock, recorder);
     }
 
+    private ExecutionScope publicMaterializationScope(ExpressionType type, ExecutionScope scope) {
+        return valueLimits != null && (type instanceof CollectionType || type instanceof MapType) ? scope : null;
+    }
+
     private void applyOverridesWithFrameSlots(Map<String, ?> overrides, Object[] frame, ExecutionScope scope) {
         for (int index = 0; index < externalBindings.size(); index++) {
             frame[externalBindings.get(index).frameSlot()] = NO_OVERRIDE;
@@ -320,7 +329,7 @@ public final class ExecutionPlan {
         String smallestUndeclared = null;
         Iterator<? extends Map.Entry<?, ?>> iterator = overrides.entrySet().iterator();
         while (iterator.hasNext()) {
-            scope.visitTraversalStep(null);
+            TraversalSteps.visit(scope, null);
             Map.Entry<?, ?> entry = iterator.next();
             String name = requireTextOverrideKey(entry.getKey());
             ExternalBindingPlan binding = bindingsByName.get(name);
@@ -358,7 +367,7 @@ public final class ExecutionPlan {
             if (override == null && !overrides.containsKey(name)) {
                 continue;
             }
-            scope.visitTraversalStep(null);
+            TraversalSteps.visit(scope, null);
             requireOverridable(symbol, name);
             Object coerced = coerceOverride(symbol, override, scope);
             ExternalBindingPlan binding = bindingsByName.get(name);
@@ -376,7 +385,7 @@ public final class ExecutionPlan {
         String smallestUndeclared = null;
         Iterator<?> iterator = overrides.keySet().iterator();
         while (iterator.hasNext()) {
-            scope.visitTraversalStep(null);
+            TraversalSteps.visit(scope, null);
             Object key = iterator.next();
             String name = requireTextOverrideKey(key);
             if (declaredSymbolNames.contains(name)) {
@@ -423,7 +432,7 @@ public final class ExecutionPlan {
         }
         try {
             Object value;
-            if (scope.enforcesTraversalStepLimit()) {
+            if (TraversalSteps.isLimited(scope)) {
                 TraversalStepContext.push(scope, null);
                 try {
                     value = symbol.coerceOverride(override, boundaryCoercion);

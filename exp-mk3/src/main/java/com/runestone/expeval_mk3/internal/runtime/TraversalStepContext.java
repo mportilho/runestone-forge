@@ -53,7 +53,7 @@ public final class TraversalStepContext {
 
         private void visit() {
             if (depth != 0) {
-                scopes[depth - 1].visitTraversalStep(spans[depth - 1]);
+                TraversalSteps.visit(scopes[depth - 1], spans[depth - 1]);
             }
         }
     }

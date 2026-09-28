@@ -1,5 +1,52 @@
 # Performance History
 
+## 2026-09-28 - Etapa 12 final gates and M4 closure (issue #174)
+
+Purpose: reconcile the final hardening gates after traversal-step accounting, retained-weight cache
+admission, linear regex, diagnostic/resource limits, and the stress suites. The run used Eclipse
+Temurin 21.0.8+9-LTS, Maven 3.9.16, JMH 1.37, Linux x86_64 on an Intel Core i7-7700HQ, `-Xms1g
+-Xmx1g`, one thread, three forks, the GC profiler, and 99.9% confidence intervals. Normal families used
+5x500 ms warm-up and 10x500 ms measurement; cache used twelve warm-up iterations after profiling showed
+tier compilation continuing beyond the fifth. The dirty worktree was based on commit `afb51c7`.
+
+The everyday reactor run passed 343 toolkit tests and 1,413 MK3 tests. The stress profile passed 343
+toolkit tests and 1,415 MK3 tests. Both reported zero failures, errors, and skips. The automatic final
+verdict contains 20 PASS results:
+
+| Gate area | Final evidence |
+|---|---:|
+| Scalar allocation, `UNSAFE` / `TRUSTED` / `SAFE` | no additional B/op (within 0.00001 B/op) |
+| Scalar latency ratios | 0.97230 / 0.98500 / 0.98444 |
+| Collection allocation, `UNSAFE` / `TRUSTED` | no additional B/op (within 0.00008 B/op) |
+| `SAFE` collection additional allocation slope | 0.0000096 B/item |
+| Collection latency ratios, `UNSAFE` / `TRUSTED` / `SAFE` | 0.99949 / 0.96762 / 1.03253 |
+| Cache miss / uncached pipeline | 1.06078 (limit 1.10) |
+| Pure cache hit / uncached pipeline | 651.32x faster; 24.000 B/op |
+| Cache hit plus math view / uncached pipeline | 473.74x faster; 48.000 B/op |
+| Adversarial regex worst normalized growth | 1.00935 (limit 1.25) |
+| Calculation Memory indexed traversal | 0.00050 B/op |
+
+The integral run initially classified `UNSAFE` and `TRUSTED` collection latency as `INCONCLUSIVE`, not
+as regressions: their confidence bands still included the 1% threshold. Per the versioned protocol,
+only those affected scenarios were repeated immediately against the exported pre-debit baseline
+`17ccc49bfdc2ac5c11c0aa2db610f38d1154bb7a`. `TRUSTED` passed in the adjacent repeat; an order-reversed
+`UNSAFE` repeat measured 0.99949. The original verdict, raw repeats, reconciled inputs, commands, and
+final 20/20 PASS verdict are retained together under `target/stage12/`.
+
+JOL retained the production layout report, including a 32-byte shallow `ExecutionScope` and empty,
+dense, prefix, and gapped Calculation Memory graphs. Dynamic attach and the Serviceability Agent were
+unavailable, so compressed-reference addresses remain inferred as documented in the artifact. JFR
+successfully recorded the controlled arithmetic JMH fork at
+`target/stage12/jfr/.../profile.jfr`.
+
+Verdict: **ACCEPT; ETAPA 12 AND M4 COMPLETE.** Functional, stress, allocation, latency, cache, regex,
+JOL, and JFR evidence satisfy the closure criteria. No commit, tag, publication, release, or issue
+closure was performed.
+
+Command: `exp-mk3/scripts/run-stage12-gates.sh`, followed only by the protocol-required affected-gate
+repetitions. Final report: `exp-mk3/target/stage12/verdict.{json,txt}`; complete inventory:
+`exp-mk3/target/stage12/artifacts.txt`.
+
 ## 2026-09-07 - Linear regex through RE2/J (issue #165)
 
 Purpose: replace every language-controlled backtracking regex path with RE2/J, characterize the cost

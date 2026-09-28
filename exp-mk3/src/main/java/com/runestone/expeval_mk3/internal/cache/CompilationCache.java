@@ -6,11 +6,11 @@ import com.runestone.expeval_mk3.api.CacheConfig;
 import com.runestone.expeval_mk3.api.ExpressionCompilationResult;
 import com.runestone.expeval_mk3.api.ExpressionEnvironment;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 
 /**
@@ -30,8 +30,7 @@ public final class CompilationCache {
 
     private final Cache<CompilationCacheKey, CachedCompilation> cache;
     private final BiFunction<String, ExpressionEnvironment, CachedCompilation> compiler;
-    private final Object[] inFlightLocks = newInFlightLocks();
-    private final Map<CompilationCacheKey, InFlightCompilation> inFlightCompilations = new ConcurrentHashMap<>();
+    private final InFlightStripe[] inFlightStripes = newInFlightStripes();
 
     public CompilationCache(
             CacheConfig config, BiFunction<String, ExpressionEnvironment, CachedCompilation> compiler) {
@@ -85,6 +84,8 @@ public final class CompilationCache {
     public ExpressionCompilationResult get(String source, ExpressionEnvironment environment) {
         CompilationCacheKey key = new CompilationCacheKey(source, environment.environmentId());
         while (true) {
+            InFlightStripe stripe = inFlightStripe(key);
+            long observedCompletion = stripe.completionVersion;
             CachedCompilation resident = cache.getIfPresent(key);
             if (resident != null) {
                 return resident.result();
@@ -93,23 +94,24 @@ public final class CompilationCache {
             InFlightCompilation inFlight;
             boolean leader;
             boolean waitForInvalidatedGeneration;
-            Object inFlightLock = inFlightLock(key);
-            synchronized (inFlightLock) {
-                resident = cache.getIfPresent(key);
-                if (resident != null) {
-                    return resident.result();
+            synchronized (stripe) {
+                if (stripe.completionVersion != observedCompletion) {
+                    resident = cache.getIfPresent(key);
+                    if (resident != null) {
+                        return resident.result();
+                    }
                 }
-                inFlight = inFlightCompilations.get(key);
+                inFlight = stripe.get(key);
                 waitForInvalidatedGeneration = inFlight != null && inFlight.isInvalidated();
                 if (inFlight == null) {
-                    inFlight = new InFlightCompilation();
-                    inFlightCompilations.put(key, inFlight);
+                    inFlight = stripe.newCompilation();
+                    stripe.put(key, inFlight);
                     leader = true;
                 } else {
                     leader = false;
                 }
                 if (!waitForInvalidatedGeneration) {
-                    inFlight.join();
+                    inFlight.join(leader);
                 }
             }
 
@@ -118,29 +120,29 @@ public final class CompilationCache {
                 continue;
             }
 
+            if (!leader) {
+                return inFlight.await();
+            }
             try {
-                if (!leader) {
-                    return inFlight.await();
-                }
                 CachedCompilation compiled = compiler.apply(source, environment);
                 ExpressionCompilationResult result = compiled.result();
-                synchronized (inFlightLock) {
+                synchronized (stripe) {
                     if (!inFlight.isInvalidated()) {
                         cache.put(key, compiled);
+                        stripe.completionVersion++;
                     }
                     inFlight.succeed(result);
+                    stripe.remove(key, inFlight);
+                    inFlight.finish();
                 }
                 return result;
             } catch (RuntimeException | Error exception) {
-                inFlight.fail(exception);
-                throw exception;
-            } finally {
-                if (leader) {
-                    synchronized (inFlightLock) {
-                        inFlightCompilations.remove(key, inFlight);
-                    }
+                synchronized (stripe) {
+                    inFlight.fail(exception);
+                    stripe.remove(key, inFlight);
                     inFlight.finish();
                 }
+                throw exception;
             }
         }
     }
@@ -153,10 +155,10 @@ public final class CompilationCache {
     public void invalidate(String source, ExpressionEnvironment environment) {
         CompilationCacheKey key = new CompilationCacheKey(source, environment.environmentId());
         InFlightCompilation inFlight;
-        Object inFlightLock = inFlightLock(key);
-        synchronized (inFlightLock) {
+        InFlightStripe stripe = inFlightStripe(key);
+        synchronized (stripe) {
             cache.invalidate(key);
-            inFlight = inFlightCompilations.get(key);
+            inFlight = stripe.get(key);
             if (inFlight != null) {
                 inFlight.invalidate();
             }
@@ -169,8 +171,9 @@ public final class CompilationCache {
     /** Test-only seam for deterministically coordinating callers already joined to one miss. */
     int inFlightParticipantCount(String source, ExpressionEnvironment environment) {
         CompilationCacheKey key = new CompilationCacheKey(source, environment.environmentId());
-        synchronized (inFlightLock(key)) {
-            InFlightCompilation inFlight = inFlightCompilations.get(key);
+        InFlightStripe stripe = inFlightStripe(key);
+        synchronized (stripe) {
+            InFlightCompilation inFlight = stripe.get(key);
             return inFlight == null ? 0 : inFlight.participantCount();
         }
     }
@@ -178,22 +181,23 @@ public final class CompilationCache {
     /** Test-only seam for observing that invalidation has ended admission for an active generation. */
     boolean isInFlightInvalidated(String source, ExpressionEnvironment environment) {
         CompilationCacheKey key = new CompilationCacheKey(source, environment.environmentId());
-        synchronized (inFlightLock(key)) {
-            InFlightCompilation inFlight = inFlightCompilations.get(key);
+        InFlightStripe stripe = inFlightStripe(key);
+        synchronized (stripe) {
+            InFlightCompilation inFlight = stripe.get(key);
             return inFlight != null && inFlight.isInvalidated();
         }
     }
 
-    private static Object[] newInFlightLocks() {
-        Object[] locks = new Object[IN_FLIGHT_STRIPE_COUNT];
-        for (int index = 0; index < locks.length; index++) {
-            locks[index] = new Object();
+    private static InFlightStripe[] newInFlightStripes() {
+        InFlightStripe[] stripes = new InFlightStripe[IN_FLIGHT_STRIPE_COUNT];
+        for (int index = 0; index < stripes.length; index++) {
+            stripes[index] = new InFlightStripe();
         }
-        return locks;
+        return stripes;
     }
 
-    private Object inFlightLock(CompilationCacheKey key) {
-        return inFlightLocks[key.hashCode() & (IN_FLIGHT_STRIPE_COUNT - 1)];
+    private InFlightStripe inFlightStripe(CompilationCacheKey key) {
+        return inFlightStripes[key.hashCode() & (IN_FLIGHT_STRIPE_COUNT - 1)];
     }
 
     /** Compiler result paired with its one-time admission estimate. */
@@ -210,26 +214,35 @@ public final class CompilationCache {
     /** Result handoff that exists only while a miss is being compiled. */
     private static final class InFlightCompilation {
 
-        private final CompletableFuture<ExpressionCompilationResult> result = new CompletableFuture<>();
-        private final CompletableFuture<Void> finished = new CompletableFuture<>();
+        private CompletableFuture<ExpressionCompilationResult> resultSignal;
+        private CompletableFuture<Void> finishedSignal;
         private int participants;
         private boolean invalidated;
 
-        private void join() {
+        private void join(boolean leader) {
             participants++;
+            if (!leader && resultSignal == null) {
+                resultSignal = new CompletableFuture<>();
+            }
         }
 
         private void succeed(ExpressionCompilationResult compilationResult) {
-            result.complete(compilationResult);
+            CompletableFuture<ExpressionCompilationResult> signal = resultSignal;
+            if (signal != null) {
+                signal.complete(compilationResult);
+            }
         }
 
         private void fail(Throwable exception) {
-            result.completeExceptionally(exception);
+            CompletableFuture<ExpressionCompilationResult> signal = resultSignal;
+            if (signal != null) {
+                signal.completeExceptionally(exception);
+            }
         }
 
         private ExpressionCompilationResult await() {
             try {
-                return result.join();
+                return resultSignal.join();
             } catch (CompletionException exception) {
                 Throwable cause = exception.getCause();
                 if (cause instanceof RuntimeException runtimeException) {
@@ -248,6 +261,9 @@ public final class CompilationCache {
 
         private void invalidate() {
             invalidated = true;
+            if (finishedSignal == null) {
+                finishedSignal = new CompletableFuture<>();
+            }
         }
 
         private boolean isInvalidated() {
@@ -255,11 +271,77 @@ public final class CompilationCache {
         }
 
         private void finish() {
-            finished.complete(null);
+            CompletableFuture<Void> signal = finishedSignal;
+            if (signal != null) {
+                signal.complete(null);
+            }
         }
 
         private void awaitFinished() {
-            finished.join();
+            finishedSignal.join();
+        }
+
+        private boolean reusable() {
+            return participants == 1 && resultSignal == null && finishedSignal == null;
+        }
+
+        private void reset() {
+            participants = 0;
+            invalidated = false;
+        }
+    }
+
+    /**
+     * Allocation-free common-case flight slot guarded by the stripe monitor. Hash-map storage is created
+     * only when unrelated active keys collide in the same stripe.
+     */
+    private static final class InFlightStripe {
+
+        private CompilationCacheKey primaryKey;
+        private InFlightCompilation primary;
+        private Map<CompilationCacheKey, InFlightCompilation> collisions;
+        private InFlightCompilation reusableCompilation;
+        private volatile long completionVersion;
+
+        private InFlightCompilation get(CompilationCacheKey key) {
+            if (key.equals(primaryKey)) {
+                return primary;
+            }
+            return collisions == null ? null : collisions.get(key);
+        }
+
+        private void put(CompilationCacheKey key, InFlightCompilation compilation) {
+            if (primary == null) {
+                primaryKey = key;
+                primary = compilation;
+                return;
+            }
+            if (collisions == null) {
+                collisions = new HashMap<>();
+            }
+            collisions.put(key, compilation);
+        }
+
+        private InFlightCompilation newCompilation() {
+            InFlightCompilation compilation = reusableCompilation;
+            if (compilation == null) {
+                return new InFlightCompilation();
+            }
+            reusableCompilation = null;
+            compilation.reset();
+            return compilation;
+        }
+
+        private void remove(CompilationCacheKey key, InFlightCompilation compilation) {
+            if (compilation == primary && key.equals(primaryKey)) {
+                primaryKey = null;
+                primary = null;
+            } else if (collisions != null) {
+                collisions.remove(key, compilation);
+            }
+            if (compilation.reusable() && reusableCompilation == null) {
+                reusableCompilation = compilation;
+            }
         }
     }
 }

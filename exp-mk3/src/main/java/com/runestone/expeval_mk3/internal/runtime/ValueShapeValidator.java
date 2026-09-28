@@ -84,7 +84,7 @@ public final class ValueShapeValidator {
 
     private static void visit(ExecutionScope scope, com.runestone.expeval_mk3.api.SourceSpan span) {
         if (scope != null) {
-            scope.visitTraversalStep(span);
+            TraversalSteps.visit(scope, span);
         }
     }
 

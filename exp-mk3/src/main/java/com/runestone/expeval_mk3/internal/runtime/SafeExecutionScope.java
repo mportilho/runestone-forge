@@ -13,7 +13,7 @@ import java.time.ZoneId;
 import java.util.List;
 
 /** Execution-local resource policy, absent from the layout and path of normal scopes. */
-public class SafeExecutionScope extends ExecutionScope {
+public final class SafeExecutionScope extends ExecutionScope {
     private final ExpressionResourceLimits limits;
 
     public SafeExecutionScope(Object[] frame, ZoneId zoneId, Clock clock,

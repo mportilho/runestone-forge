@@ -17,6 +17,7 @@ import java.time.temporal.Temporal;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -25,6 +26,8 @@ import java.util.Set;
  * describe admission pressure rather than exact heap bytes: fixed units cover immutable node layouts and
  * recursive units cover source-controlled values downloaded into the plan. It never traverses bindings,
  * descriptors, runtime services, or external defaults because those belong to trusted shared environments.
+ * Shared immutable payload reached by multiple plan edges is conservatively charged per edge; executable
+ * plans are acyclic, so this avoids miss-path identity tables without risking unbounded traversal.
  */
 final class PlanRetainedWeight {
 
@@ -72,13 +75,16 @@ final class PlanRetainedWeight {
 
     private static final class Estimator implements ExecutableNodeRetainedPayload.Visitor {
 
-        private final Set<ExecutableNode> visitedNodes = Collections.newSetFromMap(new IdentityHashMap<>());
-        private final Set<Object> visitedValues = Collections.newSetFromMap(new IdentityHashMap<>());
         private final Set<NodeId> environmentFoldedReadIds;
         private final Set<Object> environmentFoldedValues;
         private long units;
 
-        private Estimator(Iterable<FoldedRead> foldedReads) {
+        private Estimator(List<FoldedRead> foldedReads) {
+            if (foldedReads.isEmpty()) {
+                environmentFoldedReadIds = Set.of();
+                environmentFoldedValues = Set.of();
+                return;
+            }
             Set<NodeId> ids = Collections.newSetFromMap(new IdentityHashMap<>());
             for (FoldedRead foldedRead : foldedReads) {
                 ids.add(foldedRead.nodeId());
@@ -93,7 +99,7 @@ final class PlanRetainedWeight {
 
         @Override
         public void node(ExecutableNode node) {
-            if (node == null || !visitedNodes.add(node)) {
+            if (node == null) {
                 return;
             }
             add(EXECUTABLE_NODE_UNITS);
@@ -133,9 +139,6 @@ final class PlanRetainedWeight {
             }
             if (value instanceof PreparedRegexCall preparedRegexCall) {
                 add(preparedRegexCall.estimatedRetainedWeight());
-                return;
-            }
-            if (!visitedValues.add(value)) {
                 return;
             }
             if (value instanceof String string) {

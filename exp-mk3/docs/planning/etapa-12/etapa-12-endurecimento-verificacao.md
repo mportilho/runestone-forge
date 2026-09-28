@@ -504,6 +504,11 @@ Cada incremento comeca por teste direcionado e termina com `mvn -pl exp-mk3 -am 
 - Escrever documentacao publica e testes de drift.
 - Registrar veredito em `performance-history.md`, fechar decisoes e reconciliar todos os documentos.
 
+Estado em 2026-09-28: concluido. Suite cotidiana e stress passaram sem skips no Temurin 21; o
+veredito reconciliado, depois das repeticoes exigidas para dois resultados inicialmente inconclusivos,
+registrou 20/20 gates PASS. As evidencias JMH/GC, JOL e JFR estao registradas em
+`docs/perf/performance-history.md`.
+
 ## Criterios de Aceite
 
 ### Funcionais e de seguranca

@@ -156,7 +156,7 @@ public final class PublicMaterialization {
 
     private static void visit(ExecutionScope scope, SourceSpan span) {
         if (scope != null) {
-            scope.visitTraversalStep(span);
+            TraversalSteps.visit(scope, span);
         }
     }
 

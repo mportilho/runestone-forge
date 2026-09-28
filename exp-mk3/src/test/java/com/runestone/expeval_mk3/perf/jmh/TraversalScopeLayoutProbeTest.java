@@ -17,7 +17,8 @@ class TraversalScopeLayoutProbeTest {
         assertThat(SafeExecutionScope.class.getDeclaredFields()).extracting(java.lang.reflect.Field::getName)
                 .doesNotContain("remaining", "maximum");
         assertThat(TraversalLimitedExecutionScope.class.getDeclaredFields())
-                .extracting(java.lang.reflect.Field::getName).containsExactlyInAnyOrder("remaining", "maximum");
+                .extracting(java.lang.reflect.Field::getName)
+                .containsExactlyInAnyOrder("limits", "remaining", "maximum");
         assertThat(ClassLayout.parseClass(TraversalLimitedExecutionScope.class).instanceSize())
                 .isGreaterThanOrEqualTo(ClassLayout.parseClass(SafeExecutionScope.class).instanceSize());
     }

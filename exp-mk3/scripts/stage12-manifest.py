@@ -31,6 +31,9 @@ def load_manifest(path: Path) -> dict:
     for name in ("jdkVendor", "profiler"):
         if not isinstance(protocol.get(name), str) or not protocol[name]:
             raise ValueError(f"protocol {name} must be a non-empty string")
+    baseline_commit = protocol.get("traversalBaselineCommit")
+    if not isinstance(baseline_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", baseline_commit):
+        raise ValueError("protocol traversalBaselineCommit must be a full Git commit")
     seen_ids: set[str] = set()
     seen_benchmarks: set[str] = set()
     for family in families:
@@ -53,6 +56,38 @@ def load_manifest(path: Path) -> dict:
             if not isinstance(benchmark, str) or benchmark in seen_benchmarks:
                 raise ValueError(f"invalid or duplicate benchmark: {benchmark!r}")
             seen_benchmarks.add(benchmark)
+    gates = manifest.get("gates")
+    if not isinstance(gates, list) or not gates:
+        raise ValueError("manifest requires at least one automatic gate")
+    seen_gate_ids: set[str] = set()
+    comparison_types = {"max-additional", "max-additional-slope", "max-regression", "max-ratio", "min-ratio"}
+    for gate in gates:
+        gate_id = gate.get("id")
+        gate_type = gate.get("type")
+        if not isinstance(gate_id, str) or not re.fullmatch(r"[a-z][a-z0-9-]*", gate_id):
+            raise ValueError(f"invalid gate id: {gate_id!r}")
+        if gate_id in seen_gate_ids:
+            raise ValueError(f"duplicate gate id: {gate_id}")
+        seen_gate_ids.add(gate_id)
+        if gate_type not in comparison_types | {"absolute-max", "linear-growth"}:
+            raise ValueError(f"invalid gate type for {gate_id}: {gate_type!r}")
+        if gate.get("metric") not in {"score", "gc.alloc.rate.norm"}:
+            raise ValueError(f"invalid metric for {gate_id}: {gate.get('metric')!r}")
+        limit = gate.get("limit")
+        if not isinstance(limit, (int, float)) or isinstance(limit, bool) or limit < 0:
+            raise ValueError(f"gate {gate_id} limit must be a non-negative number")
+        selectors = ("candidate", "control") if gate_type in comparison_types else ("selector",)
+        for selector_name in selectors:
+            selector = gate.get(selector_name)
+            if not isinstance(selector, dict) or selector.get("benchmark") not in seen_benchmarks:
+                raise ValueError(f"gate {gate_id} has invalid {selector_name} selector")
+            params = selector.get("params", {})
+            if not isinstance(params, dict) or not all(isinstance(name, str) for name in params):
+                raise ValueError(f"gate {gate_id} has invalid {selector_name} parameters")
+            if selector.get("run", "candidate") not in {"candidate", "baseline"}:
+                raise ValueError(f"gate {gate_id} has invalid {selector_name} run")
+        if gate_type in {"linear-growth", "max-additional-slope"} and not isinstance(gate.get("parameter"), str):
+            raise ValueError(f"gate {gate_id} requires a parameter")
     return manifest
 
 

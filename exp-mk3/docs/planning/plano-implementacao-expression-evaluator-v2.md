@@ -300,6 +300,10 @@ referência; `UNSAFE` e `TRUSTED` com zero B/op adicional e delta pareado em ±1
 `SAFE` com zero B/op e ±1% em escalares, e coleções sem alocação por passo de percurso e até 5% de regressão; cache
 e Memoria de Calculo preservam seus gates; documentação revisada e nenhuma decisão aberta.
 
+**Estado em 2026-09-28:** concluída. A execução final no Temurin 21 passou as suítes cotidiana e de
+stress sem skips; após repetir somente dois gates de coleção inicialmente inconclusivos, o avaliador
+registrou 20/20 PASS. JMH com GC, JOL e JFR estão reconciliados em `docs/perf/performance-history.md`.
+
 **Depende de:** Etapas 0–10. A Etapa 11 foi cancelada.
 
 ---

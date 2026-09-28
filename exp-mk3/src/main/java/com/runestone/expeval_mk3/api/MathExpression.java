@@ -1,6 +1,7 @@
 package com.runestone.expeval_mk3.api;
 
 import com.runestone.expeval_mk3.internal.plan.ExecutionPlan;
+import com.runestone.expeval_mk3.internal.runtime.PublicMaterialization;
 import com.runestone.expeval_mk3.internal.runtime.RuntimeServices;
 
 import java.math.BigDecimal;
@@ -31,7 +32,9 @@ public final class MathExpression {
     }
 
     public BigDecimal compute(Map<String, ?> overrides) {
-        return (BigDecimal) plan.computeMaterializedResult(overrides, runtimeServices.clock());
+        Object value = plan.compute(overrides, runtimeServices.clock());
+        return (BigDecimal) PublicMaterialization.materialize(
+                value, ScalarType.NUMBER, plan.maxMaterializedSize(), resultSourceSpan, plan.valueLimits());
     }
 
     public ComputationWithMemory<BigDecimal> computeWithMemory() {

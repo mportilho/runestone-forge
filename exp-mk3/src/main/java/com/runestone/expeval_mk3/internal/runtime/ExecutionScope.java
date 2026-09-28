@@ -108,15 +108,6 @@ public class ExecutionScope {
         return false;
     }
 
-    /** Called immediately before an evaluator-controlled item or map-entry visit. */
-    public void visitTraversalStep(SourceSpan span) {
-    }
-
-    /** Whether Java boundary adapters should bind to a traversal allowance for this execution. */
-    public boolean enforcesTraversalStepLimit() {
-        return false;
-    }
-
     public void validateRegexPattern(String pattern, SourceSpan span) {
     }
 

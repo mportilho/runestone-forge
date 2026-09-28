@@ -47,7 +47,7 @@ public final class ExpressionRuntime {
             List<ExecutableNode> argumentNodes,
             ExecutionScope scope,
             SourceSpan callSpan) {
-        if (!scope.enforcesTraversalStepLimit()) {
+        if (!TraversalSteps.isLimited(scope)) {
             return invokeFunctionBound(descriptor, argumentNodes, scope, callSpan);
         }
         TraversalStepContext.push(scope, callSpan);
@@ -81,7 +81,7 @@ public final class ExpressionRuntime {
                 if (scope.enforcesResourceLimits() && officialStringFunction(descriptor, "concat")) {
                     long size = 0;
                     for (Object element : (List<?>) argument0) {
-                        scope.visitTraversalStep(callSpan);
+                        TraversalSteps.visit(scope, callSpan);
                         size = saturatedAdd(size, ((String) element).length());
                     }
                     scope.validateTextLength(size, callSpan);
@@ -361,7 +361,7 @@ public final class ExpressionRuntime {
             long size = 0;
             List<?> values = (List<?>) first;
             for (Object value : values) {
-                scope.visitTraversalStep(span);
+                TraversalSteps.visit(scope, span);
                 size = saturatedAdd(size, ((String) value).length());
             }
             scope.validateTextLength(saturatedAdd(size, saturatedMultiply(
@@ -411,7 +411,7 @@ public final class ExpressionRuntime {
     public static List<Object> materialize(List<ExecutableNode> elements, ExecutionScope scope, SourceSpan sourceSpan) {
         ArrayList<Object> values = new ArrayList<>(elements.size());
         for (ExecutableNode element : elements) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             values.add(requiredElement(element.execute(scope), sourceSpan));
         }
         return List.copyOf(values);
@@ -512,7 +512,7 @@ public final class ExpressionRuntime {
         List<?> values = (List<?>) receiver;
         ArrayList<Object> result = new ArrayList<>();
         for (Object value : values) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             Object item = requiredElement(value, sourceSpan);
             Object previous = scope.replace(currentItemSlot, item);
             try {
@@ -554,7 +554,7 @@ public final class ExpressionRuntime {
         requireMaterializedSize(values.size(), maxMaterializedSize, sourceSpan);
         ArrayList<Object> result = new ArrayList<>(values.size());
         for (Object value : values) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             result.add(requiredElement(value, sourceSpan));
         }
         return List.copyOf(result);
@@ -566,13 +566,13 @@ public final class ExpressionRuntime {
         requireMaterializedSize(values.size(), maxMaterializedSize, sourceSpan);
         ArrayList<String> keys = new ArrayList<>(values.size());
         for (Object key : values.keySet()) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             keys.add((String) requiredMapKey(key, sourceSpan));
         }
         Collections.sort(keys);
         ArrayList<Object> result = new ArrayList<>(keys.size());
         for (String key : keys) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             result.add(requiredMapValue(values.get(key), sourceSpan));
         }
         return List.copyOf(result);
@@ -588,7 +588,7 @@ public final class ExpressionRuntime {
         requireMaterializedSize(children.size(), maxMaterializedSize, sourceSpan);
         ArrayList<Object> result = new ArrayList<>(children.size());
         for (JavaWildcardChildDescriptor child : children) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             Object value;
             try {
                 value = child.accessorHandle().invoke(receiver);
@@ -1249,7 +1249,7 @@ public final class ExpressionRuntime {
             SourceSpan sourceSpan) {
         if (receiverType instanceof CollectionType) {
             for (Object value : (List<?>) receiver) {
-                scope.visitTraversalStep(sourceSpan);
+                TraversalSteps.visit(scope, sourceSpan);
                 if (!bool(lambda.execute(scope, requiredElement(value, sourceSpan)))) {
                     return false;
                 }
@@ -1257,7 +1257,7 @@ public final class ExpressionRuntime {
             return true;
         }
         for (Map.Entry<?, ?> entry : ((Map<?, ?>) receiver).entrySet()) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             if (!bool(lambda.execute(scope, mapEntryValue(entry, sourceSpan)))) {
                 return false;
             }
@@ -1273,7 +1273,7 @@ public final class ExpressionRuntime {
             SourceSpan sourceSpan) {
         if (receiverType instanceof CollectionType) {
             for (Object value : (List<?>) receiver) {
-                scope.visitTraversalStep(sourceSpan);
+                TraversalSteps.visit(scope, sourceSpan);
                 if (bool(lambda.execute(scope, requiredElement(value, sourceSpan)))) {
                     return true;
                 }
@@ -1281,7 +1281,7 @@ public final class ExpressionRuntime {
             return false;
         }
         for (Map.Entry<?, ?> entry : ((Map<?, ?>) receiver).entrySet()) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             if (bool(lambda.execute(scope, mapEntryValue(entry, sourceSpan)))) {
                 return true;
             }
@@ -1303,13 +1303,13 @@ public final class ExpressionRuntime {
         ArrayList<Object> result = new ArrayList<>(size);
         if (receiverType instanceof CollectionType) {
             for (Object value : (List<?>) receiver) {
-                scope.visitTraversalStep(sourceSpan);
+                TraversalSteps.visit(scope, sourceSpan);
                 result.add(requiredLambdaResult(
                         lambda.execute(scope, requiredElement(value, sourceSpan)), "map", sourceSpan));
             }
         } else {
             for (Map.Entry<?, ?> entry : ((Map<?, ?>) receiver).entrySet()) {
-                scope.visitTraversalStep(sourceSpan);
+                TraversalSteps.visit(scope, sourceSpan);
                 result.add(requiredLambdaResult(
                         lambda.execute(scope, mapEntryValue(entry, sourceSpan)), "map", sourceSpan));
             }
@@ -1329,7 +1329,7 @@ public final class ExpressionRuntime {
         Object accumulator = initialValue;
         List<?> values = (List<?>) receiver;
         for (int index = 0; index < values.size(); index++) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             Object item = requiredElement(values.get(index), sourceSpan);
             accumulator = requiredLambdaResult(
                     lambda.execute(scope, new ReductionItemValue(accumulator, item)), "reduce", sourceSpan);
@@ -1360,7 +1360,7 @@ public final class ExpressionRuntime {
         requireMaterializedSize(values.size(), maxMaterializedSize, sourceSpan);
         ArrayList<SortItem> keyedValues = new ArrayList<>(values.size());
         for (int index = 0; index < values.size(); index++) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             Object item = requiredElement(values.get(index), sourceSpan);
             Object key = requiredLambdaResult(lambda.execute(scope, item), "sortBy selector", sourceSpan);
             keyedValues.add(new SortItem(item, key));
@@ -1370,7 +1370,7 @@ public final class ExpressionRuntime {
                 : compareValues(right.key(), left.key(), keyType));
         ArrayList<Object> result = new ArrayList<>(keyedValues.size());
         for (int index = 0; index < keyedValues.size(); index++) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             SortItem keyedValue = keyedValues.get(index);
             result.add(keyedValue.value());
         }
@@ -1395,7 +1395,7 @@ public final class ExpressionRuntime {
         requireMaterializedSize(values.size(), maxMaterializedSize, sourceSpan);
         ArrayList<Object> result = new ArrayList<>(values.size());
         for (Object key : values.keySet()) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             result.add(requiredMapKey(key, sourceSpan));
         }
         return List.copyOf(result);
@@ -1407,7 +1407,7 @@ public final class ExpressionRuntime {
         requireMaterializedSize(values.size(), maxMaterializedSize, sourceSpan);
         ArrayList<Object> result = new ArrayList<>(values.size());
         for (Object value : values.values()) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             result.add(requiredMapValue(value, sourceSpan));
         }
         return List.copyOf(result);
@@ -1416,7 +1416,7 @@ public final class ExpressionRuntime {
     private static BigDecimal sum(Object receiver, ExecutionScope scope, SourceSpan sourceSpan) {
         BigDecimal result = BigDecimal.ZERO;
         for (Object value : (List<?>) receiver) {
-            scope.visitTraversalStep(sourceSpan);
+            TraversalSteps.visit(scope, sourceSpan);
             result = result.add(number(requiredElement(value, sourceSpan)));
         }
         return result;
@@ -1526,7 +1526,7 @@ public final class ExpressionRuntime {
 
     private static void visit(ExecutionScope scope, SourceSpan span) {
         if (scope != null) {
-            scope.visitTraversalStep(span);
+            TraversalSteps.visit(scope, span);
         }
     }
 

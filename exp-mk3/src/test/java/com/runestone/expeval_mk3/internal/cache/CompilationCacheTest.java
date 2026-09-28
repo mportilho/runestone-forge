@@ -13,6 +13,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 
@@ -131,6 +132,44 @@ class CompilationCacheTest {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    void unrelatedKeysCollidingInAFlightStripeCompileConcurrently() throws Exception {
+        CountDownLatch compilersEntered = new CountDownLatch(2);
+        CountDownLatch releaseCompilers = new CountDownLatch(1);
+        CompilationCache cache = new CompilationCache(CacheConfig.defaults(), (source, environment) -> {
+            compilersEntered.countDown();
+            await(releaseCompilers);
+            return compilation(failure(source));
+        });
+        ExpressionEnvironment environment = ExpressionEnvironment.builder().build();
+        String firstSource = "source-0";
+        int stripe = stripe(firstSource, environment);
+        String secondSource = java.util.stream.IntStream.range(1, 10_000)
+                .mapToObj(index -> "source-" + index)
+                .filter(source -> stripe(source, environment) == stripe)
+                .findFirst()
+                .orElseThrow();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<ExpressionCompilationResult> first = executor.submit(() -> cache.get(firstSource, environment));
+            Future<ExpressionCompilationResult> second = executor.submit(() -> cache.get(secondSource, environment));
+
+            assertThat(compilersEntered.await(10, TimeUnit.SECONDS))
+                    .as("a stripe collision must not serialize compilation outside the short stripe lock")
+                    .isTrue();
+            releaseCompilers.countDown();
+
+            assertThat(first.get()).isNotSameAs(second.get());
+        } finally {
+            releaseCompilers.countDown();
+            executor.shutdownNow();
+        }
+    }
+
+    private static int stripe(String source, ExpressionEnvironment environment) {
+        return new CompilationCacheKey(source, environment.environmentId()).hashCode() & 63;
     }
 
     private static CompilationCache.CachedCompilation compilation(ExpressionCompilationResult result) {
