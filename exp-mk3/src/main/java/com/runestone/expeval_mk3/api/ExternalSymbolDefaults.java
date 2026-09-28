@@ -9,6 +9,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
@@ -22,18 +23,34 @@ final class ExternalSymbolDefaults {
             String name,
             Object value,
             BoundaryCoercion boundaryCoercion,
-            int maxMaterializedSize) {
+            int maxMaterializedSize,
+            int maxValueDepth) {
+        return prepare(name, value, boundaryCoercion, maxMaterializedSize,
+                maxValueDepth, 0, new IdentityHashMap<>());
+    }
+
+    private static PreparedDefault prepare(
+            String name,
+            Object value,
+            BoundaryCoercion boundaryCoercion,
+            int maxMaterializedSize,
+            int maxValueDepth,
+            int depth,
+            IdentityHashMap<Object, Boolean> ancestors) {
         if (value == null) {
             throw new IllegalArgumentException("external symbol '" + name + "' default must not be null");
         }
         if (value.getClass().isArray()) {
-            return prepareArray(name, value, boundaryCoercion, maxMaterializedSize);
+            return prepareArray(name, value, boundaryCoercion, maxMaterializedSize,
+                    maxValueDepth, depth, ancestors);
         }
         if (value instanceof Map<?, ?> values) {
-            return prepareMap(name, values, boundaryCoercion, maxMaterializedSize);
+            return prepareMap(name, values, boundaryCoercion, maxMaterializedSize,
+                    maxValueDepth, depth, ancestors);
         }
         if (value instanceof Iterable<?> values) {
-            return prepareIterable(name, values, boundaryCoercion, maxMaterializedSize);
+            return prepareIterable(name, values, boundaryCoercion, maxMaterializedSize,
+                    maxValueDepth, depth, ancestors);
         }
         ExpressionType type = inferScalarOrObjectType(name, value);
         Object canonicalValue = boundaryCoercion.convertDefault(name, value, type, maxMaterializedSize);
@@ -44,80 +61,123 @@ final class ExternalSymbolDefaults {
             String name,
             Object values,
             BoundaryCoercion boundaryCoercion,
-            int maxMaterializedSize) {
-        int length = Array.getLength(values);
-        requireWithinLimit(name, length, maxMaterializedSize);
-        ArrayList<Object> snapshot = new ArrayList<>(length);
-        ExpressionType elementType = null;
-        for (int index = 0; index < length; index++) {
-            PreparedDefault element = prepare(name, Array.get(values, index), boundaryCoercion, maxMaterializedSize);
-            elementType = commonElementType(name, elementType, element.type(), "collection");
-            snapshot.add(element.value());
+            int maxMaterializedSize,
+            int maxValueDepth,
+            int depth,
+            IdentityHashMap<Object, Boolean> ancestors) {
+        enterContainer(name, values, depth, maxValueDepth, ancestors);
+        try {
+            int length = Array.getLength(values);
+            requireWithinLimit(name, length, maxMaterializedSize);
+            ArrayList<Object> snapshot = new ArrayList<>(length);
+            ExpressionType elementType = null;
+            for (int index = 0; index < length; index++) {
+                PreparedDefault element = prepare(name, Array.get(values, index), boundaryCoercion,
+                        maxMaterializedSize, maxValueDepth, depth + 1, ancestors);
+                elementType = commonElementType(name, elementType, element.type(), "collection");
+                snapshot.add(element.value());
+            }
+            if (elementType == null) {
+                elementType = inferClassType(values.getClass().getComponentType());
+            }
+            return new PreparedDefault(
+                    new CollectionType(elementType),
+                    Collections.unmodifiableList(snapshot));
+        } finally {
+            ancestors.remove(values);
         }
-        if (elementType == null) {
-            elementType = inferClassType(values.getClass().getComponentType());
-        }
-        return new PreparedDefault(
-                new CollectionType(elementType),
-                Collections.unmodifiableList(snapshot));
     }
 
     private static PreparedDefault prepareIterable(
             String name,
             Iterable<?> values,
             BoundaryCoercion boundaryCoercion,
-            int maxMaterializedSize) {
-        if (values instanceof Collection<?> collection) {
-            requireWithinLimit(name, collection.size(), maxMaterializedSize);
-        }
-        ArrayList<Object> snapshot = new ArrayList<>(initialCapacity(values, maxMaterializedSize));
-        ExpressionType elementType = null;
-        for (Object value : values) {
-            if (snapshot.size() == maxMaterializedSize) {
-                throw materializationLimitExceeded(name, maxMaterializedSize);
+            int maxMaterializedSize,
+            int maxValueDepth,
+            int depth,
+            IdentityHashMap<Object, Boolean> ancestors) {
+        enterContainer(name, values, depth, maxValueDepth, ancestors);
+        try {
+            if (values instanceof Collection<?> collection) {
+                requireWithinLimit(name, collection.size(), maxMaterializedSize);
             }
-            PreparedDefault element = prepare(name, value, boundaryCoercion, maxMaterializedSize);
-            elementType = commonElementType(name, elementType, element.type(), "collection");
-            snapshot.add(element.value());
+            ArrayList<Object> snapshot = new ArrayList<>(initialCapacity(values, maxMaterializedSize));
+            ExpressionType elementType = null;
+            for (Object value : values) {
+                if (snapshot.size() == maxMaterializedSize) {
+                    throw materializationLimitExceeded(name, maxMaterializedSize);
+                }
+                PreparedDefault element = prepare(name, value, boundaryCoercion,
+                        maxMaterializedSize, maxValueDepth, depth + 1, ancestors);
+                elementType = commonElementType(name, elementType, element.type(), "collection");
+                snapshot.add(element.value());
+            }
+            if (elementType == null) {
+                throw new IllegalArgumentException(
+                        "external symbol '" + name + "' cannot infer a type from an empty collection default");
+            }
+            return new PreparedDefault(
+                    new CollectionType(elementType),
+                    Collections.unmodifiableList(snapshot));
+        } finally {
+            ancestors.remove(values);
         }
-        if (elementType == null) {
-            throw new IllegalArgumentException(
-                    "external symbol '" + name + "' cannot infer a type from an empty collection default");
-        }
-        return new PreparedDefault(
-                new CollectionType(elementType),
-                Collections.unmodifiableList(snapshot));
     }
 
     private static PreparedDefault prepareMap(
             String name,
             Map<?, ?> values,
             BoundaryCoercion boundaryCoercion,
-            int maxMaterializedSize) {
-        requireWithinLimit(name, values.size(), maxMaterializedSize);
-        TreeMap<String, Object> snapshot = new TreeMap<>();
-        ExpressionType valueType = null;
-        int entryCount = 0;
-        for (Map.Entry<?, ?> entry : values.entrySet()) {
-            if (entryCount == maxMaterializedSize) {
-                throw materializationLimitExceeded(name, maxMaterializedSize);
+            int maxMaterializedSize,
+            int maxValueDepth,
+            int depth,
+            IdentityHashMap<Object, Boolean> ancestors) {
+        enterContainer(name, values, depth, maxValueDepth, ancestors);
+        try {
+            requireWithinLimit(name, values.size(), maxMaterializedSize);
+            TreeMap<String, Object> snapshot = new TreeMap<>();
+            ExpressionType valueType = null;
+            int entryCount = 0;
+            for (Map.Entry<?, ?> entry : values.entrySet()) {
+                if (entryCount == maxMaterializedSize) {
+                    throw materializationLimitExceeded(name, maxMaterializedSize);
+                }
+                entryCount++;
+                if (!(entry.getKey() instanceof String key)) {
+                    throw new IllegalArgumentException(
+                            "MapType defaults must be text-keyed for external symbol '" + name + "'");
+                }
+                PreparedDefault value = prepare(name, entry.getValue(), boundaryCoercion,
+                        maxMaterializedSize, maxValueDepth, depth + 1, ancestors);
+                valueType = commonElementType(name, valueType, value.type(), "map");
+                snapshot.put(key, value.value());
             }
-            entryCount++;
-            if (!(entry.getKey() instanceof String key)) {
+            if (valueType == null) {
                 throw new IllegalArgumentException(
-                        "MapType defaults must be text-keyed for external symbol '" + name + "'");
+                        "external symbol '" + name + "' cannot infer a type from an empty map default");
             }
-            PreparedDefault value = prepare(name, entry.getValue(), boundaryCoercion, maxMaterializedSize);
-            valueType = commonElementType(name, valueType, value.type(), "map");
-            snapshot.put(key, value.value());
+            return new PreparedDefault(
+                    new MapType(valueType),
+                    Collections.unmodifiableMap(new LinkedHashMap<>(snapshot)));
+        } finally {
+            ancestors.remove(values);
         }
-        if (valueType == null) {
+    }
+
+    private static void enterContainer(
+            String name,
+            Object value,
+            int depth,
+            int maxValueDepth,
+            IdentityHashMap<Object, Boolean> ancestors) {
+        if (depth >= maxValueDepth) {
             throw new IllegalArgumentException(
-                    "external symbol '" + name + "' cannot infer a type from an empty map default");
+                    "external symbol '" + name + "' default exceeds maxValueDepth " + maxValueDepth);
         }
-        return new PreparedDefault(
-                new MapType(valueType),
-                Collections.unmodifiableMap(new LinkedHashMap<>(snapshot)));
+        if (ancestors.put(value, Boolean.TRUE) != null) {
+            throw new IllegalArgumentException(
+                    "external symbol '" + name + "' default contains a cyclic container");
+        }
     }
 
     private static ExpressionType inferScalarOrObjectType(String name, Object value) {

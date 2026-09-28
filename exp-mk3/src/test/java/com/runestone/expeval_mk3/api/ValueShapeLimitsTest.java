@@ -80,6 +80,32 @@ class ValueShapeLimitsTest {
     }
 
     @Test
+    void cyclicInferredDefaultsAreRejectedAsInvalidConfigurationBeforeSnapshotting() {
+        List<Object> cycle = new ArrayList<>();
+        cycle.add(cycle);
+
+        assertThatThrownBy(() -> ExpressionEnvironment.builder()
+                .externalSymbol("cycle", cycle, ExternalSymbolOverwritePolicy.FIXED)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("cycle")
+                .hasMessageContaining("cyclic container");
+    }
+
+    @Test
+    void deepAcyclicDefaultsRemainCompilationResourceDiagnostics() {
+        Object deepDefault = List.of(List.of(BigDecimal.ONE));
+        ExpressionEnvironment environment = ExpressionEnvironment.builder()
+                .trustMode(ExpressionTrustMode.TRUSTED)
+                .resourceLimits(ExpressionResourceLimits.builder().maxValueDepth(1).build())
+                .externalSymbol("deep", deepDefault, ExternalSymbolOverwritePolicy.FIXED)
+                .build();
+        assertThat(((ExpressionCompilationResult.Failure) engine.compile("1", environment)).diagnostics())
+                .extracting(ExpressionDiagnostic::code)
+                .contains("SEMANTIC_VALUE_SHAPE_EXCEEDED");
+    }
+
+    @Test
     void minimumIntegerScaleCannotOverflowMagnitudeCheck() {
         ExpressionResourceLimits limits = ExpressionResourceLimits.defaults();
         assertThat(ValueShapeValidator.check(new BigDecimal(java.math.BigInteger.ONE, Integer.MIN_VALUE), limits)

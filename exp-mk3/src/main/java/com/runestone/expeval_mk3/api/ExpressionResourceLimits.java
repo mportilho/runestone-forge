@@ -5,6 +5,7 @@ package com.runestone.expeval_mk3.api;
  * there is no unlimited configuration sentinel. Enforcement follows {@link ExpressionTrustMode}.
  */
 public final class ExpressionResourceLimits {
+    static final int ABSOLUTE_MAX_VALUE_DEPTH = 256;
     private static final ExpressionResourceLimits DEFAULTS = builder().build();
 
     private final int maxSourceLength;
@@ -153,7 +154,7 @@ public final class ExpressionResourceLimits {
             return this;
         }
         public Builder maxValueDepth(int value) {
-            maxValueDepth = requireRange("maxValueDepth", value, 256);
+            maxValueDepth = requireRange("maxValueDepth", value, ABSOLUTE_MAX_VALUE_DEPTH);
             return this;
         }
         public Builder maxNumericPrecision(int value) {

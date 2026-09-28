@@ -47,10 +47,12 @@ public final class ExpressionEnvironment {
         conversionProfileHash = boundaryCoercion.profileHash();
         int compilationMaterializedSize = trustMode == ExpressionTrustMode.UNSAFE
                 ? Integer.MAX_VALUE : resourceLimits.maxMaterializedSize();
+        int compilationValueDepth = trustMode == ExpressionTrustMode.UNSAFE
+                ? Integer.MAX_VALUE : ExpressionResourceLimits.ABSOLUTE_MAX_VALUE_DEPTH;
         int runtimeMaterializedSize = trustMode == ExpressionTrustMode.SAFE
                 ? resourceLimits.maxMaterializedSize() : Integer.MAX_VALUE;
         externalSymbols = builder.externalSymbols.build(
-                boundaryCoercion, compilationMaterializedSize, runtimeMaterializedSize);
+                boundaryCoercion, compilationMaterializedSize, compilationValueDepth, runtimeMaterializedSize);
         javaTypes = builder.javaTypes.build();
         functions = FunctionCatalogAssembly.assemble(
                 boundaryCoercion,

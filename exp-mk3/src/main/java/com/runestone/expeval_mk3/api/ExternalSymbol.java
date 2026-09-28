@@ -36,7 +36,8 @@ public final class ExternalSymbol {
                 value,
                 overwritePolicy,
                 BoundaryCoercion.standard(),
-                BoundaryCoercion.DEFAULT_MAX_MATERIALIZED_SIZE);
+                BoundaryCoercion.DEFAULT_MAX_MATERIALIZED_SIZE,
+                ExpressionResourceLimits.defaults().maxValueDepth());
     }
 
     public static ExternalSymbol withDefault(
@@ -58,10 +59,11 @@ public final class ExternalSymbol {
             Object value,
             ExternalSymbolOverwritePolicy overwritePolicy,
             BoundaryCoercion boundaryCoercion,
-            int maxMaterializedSize) {
+            int maxMaterializedSize,
+            int maxValueDepth) {
         String validatedName = ExternalSymbolNames.validate(name);
         ExternalSymbolDefaults.PreparedDefault preparedDefault = ExternalSymbolDefaults.prepare(
-                validatedName, value, boundaryCoercion, maxMaterializedSize);
+                validatedName, value, boundaryCoercion, maxMaterializedSize, maxValueDepth);
         return create(
                 validatedName,
                 preparedDefault.type(),

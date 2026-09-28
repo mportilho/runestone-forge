@@ -108,18 +108,26 @@ public final class ExternalSymbolCatalog {
         }
 
         public ExternalSymbolCatalog build() {
-            return build(BoundaryCoercion.standard(), BoundaryCoercion.DEFAULT_MAX_MATERIALIZED_SIZE);
-        }
-
-        ExternalSymbolCatalog build(BoundaryCoercion boundaryCoercion, int maxMaterializedSize) {
-            return build(boundaryCoercion, maxMaterializedSize, maxMaterializedSize);
+            ExpressionResourceLimits limits = ExpressionResourceLimits.defaults();
+            return build(BoundaryCoercion.standard(), limits.maxMaterializedSize(), limits.maxValueDepth());
         }
 
         ExternalSymbolCatalog build(
-                BoundaryCoercion boundaryCoercion, int maxMaterializedSize, int runtimeMaterializedSize) {
+                BoundaryCoercion boundaryCoercion,
+                int maxMaterializedSize,
+                int maxValueDepth) {
+            return build(boundaryCoercion, maxMaterializedSize, maxValueDepth, maxMaterializedSize);
+        }
+
+        ExternalSymbolCatalog build(
+                BoundaryCoercion boundaryCoercion,
+                int maxMaterializedSize,
+                int maxValueDepth,
+                int runtimeMaterializedSize) {
             Map<String, ExternalSymbol> builtSymbols = new LinkedHashMap<>();
             for (ExternalSymbolDeclaration declaration : symbols.values()) {
-                ExternalSymbol externalSymbol = declaration.toExternalSymbol(boundaryCoercion, maxMaterializedSize);
+                ExternalSymbol externalSymbol = declaration.toExternalSymbol(
+                        boundaryCoercion, maxMaterializedSize, maxValueDepth);
                 builtSymbols.put(externalSymbol.name(), externalSymbol.withRuntimeMaterializedSize(runtimeMaterializedSize));
             }
             return ExternalSymbolCatalog.from(builtSymbols);
@@ -164,10 +172,14 @@ public final class ExternalSymbolCatalog {
                 return new ExternalSymbolDeclaration(name, null, defaultValue, overwritePolicy, true);
             }
 
-            private ExternalSymbol toExternalSymbol(BoundaryCoercion boundaryCoercion, int maxMaterializedSize) {
+            private ExternalSymbol toExternalSymbol(
+                    BoundaryCoercion boundaryCoercion,
+                    int maxMaterializedSize,
+                    int maxValueDepth) {
                 if (inferred) {
                     return ExternalSymbol.withInferredDefault(
-                            name, defaultValue, overwritePolicy, boundaryCoercion, maxMaterializedSize);
+                            name, defaultValue, overwritePolicy, boundaryCoercion,
+                            maxMaterializedSize, maxValueDepth);
                 }
                 return ExternalSymbol.withDefault(
                         name, type, defaultValue, overwritePolicy, boundaryCoercion, maxMaterializedSize);
