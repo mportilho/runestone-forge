@@ -2,12 +2,11 @@
 
 ## Project Shape
 - Java 21 Maven reactor; there is no Maven wrapper, so use local `mvn`.
-- Root modules are `runestone-toolkit`, `dynamic-filter-resolver`, `expression-evaluator`, and `exp-mk3`.
+- Root modules are `runestone-toolkit`, `dynamic-filter-resolver`, and `expression-evaluator`.
 - `runestone-toolkit` provides shared assertions, memoization, date utilities, and `DataConversionService`; converter implementations are discovered through `src/main/resources/META-INF/services/com.runestone.converters.DataConverter`, so add new converters there.
 - Keep `DataConverter` and `RuntimeDataConverter` implementations in their related implementation packages, such as `com.runestone.converters.impl.stable` for foldable converters and `com.runestone.converters.impl.runtime` for runtime converters; do not move concrete converter implementations into the public `com.runestone.converters` package.
 - `dynamic-filter-resolver` depends on `runestone-toolkit`; Spring/JPA/WebMVC/Springdoc dependencies are `provided`, with H2/Spring Boot only in tests.
-- `expression-evaluator` depends on `runestone-toolkit`; public entrypoints are in `com.runestone.expeval.api` and compiler/runtime internals are under `com.runestone.expeval.internal`.
-- `exp-mk3` is a rebuild of `expression-evaluator` and is now under active development; when working on it, follow `exp-mk3/docs/planning/plano-implementacao-expression-evaluator-v2.md`, keep maximum performance as the implementation focus, and do not consult or read `expression-evaluator` under any circumstances except when the user asks to do it by prompt or issue. Build `exp-mk3` only from its own module contents and its dependencies.
+- `expression-evaluator` depends on `runestone-toolkit`; public entrypoints are in `com.runestone.expeval.api` and compiler/runtime internals are under `com.runestone.expeval.internal`. Follow `expression-evaluator/docs/planning/plano-implementacao-expression-evaluator-v2.md` and keep maximum performance as the implementation focus.
 
 ## Commands
 - Full verification: `mvn test`.
@@ -24,9 +23,8 @@
 - JMH benchmark/profiling classes live under `src/test/java`, but their `*Benchmark` names are not selected by Surefire defaults unless explicitly targeted.
 
 ## Generated Grammar Files
-- `expression-evaluator/src/main/antlr4/.../ExpressionEvaluator.g4` and `exp-mk3/src/main/antlr4/.../ExpressionEvaluator.g4` are grammar sources.
-- `expression-evaluator` has no ANTLR Maven plugin; its generated parser/lexer files are committed under `src/main/java/com/runestone/expeval/internal/grammar`. If its grammar changes, regenerate and review the committed parser/lexer/token/interp files rather than assuming Maven will generate them during `test`.
-- `exp-mk3` uses the `antlr4-maven-plugin` (declared in `exp-mk3/pom.xml`); its generated parser/lexer sources are produced at build time under `target/generated-sources` and are intentionally not committed.
+- `expression-evaluator/src/main/antlr4/.../ExpressionEvaluator.g4` is the grammar source.
+- `expression-evaluator` uses the `antlr4-maven-plugin` (declared in `expression-evaluator/pom.xml`); its generated parser/lexer sources are produced at build time under `target/generated-sources` and are intentionally not committed.
 
 ## Dynamic Filter Notes
 - Spring setup is opt-in through `@EnableDynamicFilterServletConfiguration`; there is no Spring Boot `AutoConfiguration.imports` or `spring.factories` resource.

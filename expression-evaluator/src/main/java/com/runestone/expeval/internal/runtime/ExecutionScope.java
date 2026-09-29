@@ -1,220 +1,204 @@
 package com.runestone.expeval.internal.runtime;
 
-import com.runestone.expeval.internal.semantic.SymbolKind;
-import com.runestone.expeval.internal.semantic.SymbolRef;
+import com.runestone.expeval.internal.memory.CalculationRecorder;
+import com.runestone.expeval.api.SourceSpan;
+import com.runestone.expeval.internal.regex.LinearRegex;
 
+import java.time.Clock;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.Objects;
+import java.util.List;
 
-final class ExecutionScope {
+public class ExecutionScope {
 
-    /**
-     * Sentinel returned by {@link #find} when the symbol is not present in this scope.
-     * Distinct from {@code null}, which is a valid bound value.
-     */
-    static final Object UNBOUND = new Object();
+    private static final Object UNBOUND = new Object();
+    private static final int[] NO_REPLAY_SLOTS = new int[0];
 
-    /**
-     * Layer 1. In mutable scopes: internal assignment results.
-     * In read-only scopes with single layer: provided values.
-     * In read-only scopes with two layers: provided overrides.
-     */
-    private final Object[] layer1;
-    /**
-     * Layer 2. In mutable scopes: external overrides.
-     * In read-only scopes with two layers: default values.
-     */
-    private final Object[] layer2;
-    /**
-     * Layer 3. In mutable scopes: default values.
-     */
-    private final Object[] layer3;
-    
-    private final boolean mutable;
-    private final AuditCollector audit;
-    private EnumMap<DynamicInstant, Object> dynamicCache;
+    private final Object[] frame;
+    private final ZoneId zoneId;
+    private final Clock clock;
+    private final CalculationRecorder calculationRecorder;
+    private ZonedDateTime currentInstant;
 
-    private ExecutionScope(Object[] layer1,
-                           Object[] layer2,
-                           Object[] layer3,
-                           boolean mutable,
-                           AuditCollector audit) {
-        this.layer1 = layer1;
-        this.layer2 = layer2;
-        this.layer3 = layer3;
-        this.mutable = mutable;
-        this.audit = audit;
+    /** Builds a frame template with every slot set to the {@code UNBOUND} sentinel, distinct from {@code null}. */
+    public static Object[] blankFrame(int frameSize) {
+        Object[] frame = new Object[frameSize];
+        Arrays.fill(frame, UNBOUND);
+        return frame;
+    }
+
+    public static Object[] extendFrame(Object[] template, int frameSize) {
+        Object[] frame = Arrays.copyOf(template, frameSize);
+        Arrays.fill(frame, template.length, frameSize, UNBOUND);
+        return frame;
+    }
+
+    public ExecutionScope(Object[] frame, ZoneId zoneId, Clock clock) {
+        this(frame, zoneId, clock, null);
+    }
+
+    public ExecutionScope(Object[] frame, ZoneId zoneId, Clock clock, CalculationRecorder calculationRecorder) {
+        this.frame = Objects.requireNonNull(frame, "frame");
+        this.zoneId = Objects.requireNonNull(zoneId, "zoneId");
+        this.clock = Objects.requireNonNull(clock, "clock");
+        this.calculationRecorder = calculationRecorder;
+    }
+
+    public Object read(int slot) {
+        Object value = frame[slot];
+        if (value == UNBOUND) {
+            throw new IllegalStateException("frame slot is unbound: " + slot);
+        }
+        return value;
+    }
+
+    /** Rejects {@code null}; see {@link #writeMemo} for the one frame-slot family that must accept it. */
+    public void write(int slot, Object value) {
+        frame[slot] = Objects.requireNonNull(value, "value");
+    }
+
+    public Object replace(int slot, Object value) {
+        Object previous = frame[slot];
+        frame[slot] = Objects.requireNonNull(value, "value");
+        return previous;
+    }
+
+    public void restore(int slot, Object previous) {
+        frame[slot] = Objects.requireNonNull(previous, "previous");
     }
 
     /**
-     * Mutable: internal results (layer1), external shared (layer2).
+     * Whether a Subexpressao Comum Memoizada slot still holds the {@code UNBOUND} sentinel, i.e. no
+     * occurrence has computed it yet for this call.
      */
-    static ExecutionScope from(Object[] sharedExternal, int internalCapacity) {
-        Object[] internal = new Object[internalCapacity];
-        Arrays.fill(internal, UNBOUND);
-        return new ExecutionScope(internal, sharedExternal, null, true, null);
+    public boolean isMemoUnbound(int slot) {
+        return frame[slot] == UNBOUND;
     }
 
     /**
-     * Mutable: internal results (layer1), overrides (layer2), defaults (layer3).
+     * Writes a memoized value in place, unlike {@link #write} this accepts {@code null}: an eligible
+     * memo subtree can legitimately evaluate to null (e.g. through safe navigation), and {@code null}
+     * remains distinct from the {@code UNBOUND} sentinel.
      */
-    static ExecutionScope from(Object[] overrides,
-                               Object[] defaults,
-                               int internalCapacity) {
-        Object[] internal = new Object[internalCapacity];
-        Arrays.fill(internal, UNBOUND);
-        return new ExecutionScope(internal, overrides, defaults, true, null);
+    public void writeMemo(int slot, Object value) {
+        frame[slot] = value;
     }
 
-    /**
-     * Read-only: shared values (layer1).
-     */
-    static ExecutionScope readOnly(Object[] sharedValues) {
-        return new ExecutionScope(sharedValues, null, null, false, null);
+    /** Reads a memoized value already known bound by a prior {@link #isMemoUnbound} check. */
+    public Object readMemo(int slot) {
+        return frame[slot];
     }
 
-    /**
-     * Read-only: overrides (layer1), defaults (layer2).
-     */
-    static ExecutionScope readOnly(Object[] overrides, Object[] defaults) {
-        return new ExecutionScope(overrides, defaults, null, false, null);
+    public void captureCalculation(int calculationSlot, Object value) {
+        captureCalculation(calculationSlot, NO_REPLAY_SLOTS, value);
     }
 
-    static ExecutionScope fromWithAudit(Object[] sharedExternal,
-                                        int internalCapacity, AuditCollector audit) {
-        Objects.requireNonNull(audit, "audit must not be null");
-        Object[] internal = new Object[internalCapacity];
-        Arrays.fill(internal, UNBOUND);
-        return new ExecutionScope(internal, sharedExternal, null, true, audit);
+    /** SAFE overrides this boundary; ordinary scopes do not perform resource checks. */
+    public void validateValue(Object value, SourceSpan span) {
     }
 
-    static ExecutionScope fromWithAudit(Object[] overrides,
-                                        Object[] defaults,
-                                        int internalCapacity,
-                                        AuditCollector audit) {
-        Objects.requireNonNull(audit, "audit must not be null");
-        Object[] internal = new Object[internalCapacity];
-        Arrays.fill(internal, UNBOUND);
-        return new ExecutionScope(internal, overrides, defaults, true, audit);
+    public boolean enforcesResourceLimits() {
+        return false;
     }
 
-    static ExecutionScope readOnlyWithAudit(Object[] sharedValues, AuditCollector audit) {
-        return new ExecutionScope(
-                sharedValues,
-                null,
-                null,
-                false,
-                Objects.requireNonNull(audit, "audit must not be null")
-        );
+    public void validateRegexPattern(String pattern, SourceSpan span) {
     }
 
-    static ExecutionScope readOnlyWithAudit(Object[] overrides,
-                                            Object[] defaults,
-                                            AuditCollector audit) {
-        Objects.requireNonNull(audit, "audit must not be null");
-        return new ExecutionScope(overrides, defaults, null, false, audit);
+    public void validateRepeat(String text, BigDecimal times, SourceSpan span) {
     }
 
-    boolean hasAudit() {
-        return audit != null;
+    public void validateTextLength(long length, SourceSpan span) {
     }
 
-    AuditCollector audit() {
-        return audit;
+    public String concatenate(String left, String right, SourceSpan span) {
+        return left + right;
     }
 
-    /**
-     * Looks up the value bound to {@code symbolRef} in this scope.
-     *
-     * <p>Returns {@link #UNBOUND} — not {@code null} — when the symbol has no value in this scope.
-     * {@code null} is a valid bound value (e.g., a nullable external parameter set to null by the
-     * caller) and is therefore distinct from the absence of a binding.
-     *
-     * <p><strong>Index contract:</strong> A {@code symbolRef} with {@code index() < 0} (the sentinel
-     * value present before {@code assignIndices()} runs in {@code ExecutionPlanBuilder}) always returns
-     * {@link #UNBOUND}. This prevents partially-constructed symbols from silently returning stale data.
-     *
-     * <p><strong>INTERNAL symbols:</strong>
-     * <ul>
-     *   <li>Mutable scope — layer 1 holds assignment results; returns the value at
-     *       {@code symbolRef.index()} in layer 1, or {@link #UNBOUND} if the slot has not been
-     *       written yet.</li>
-     *   <li>Read-only scope — always returns {@link #UNBOUND}. Internal symbols represent intermediate
-     *       results computed during an evaluation run; a read-only scope has no internal-result layer,
-     *       so there is nothing to look up.</li>
-     * </ul>
-     *
-     * <p><strong>EXTERNAL symbols:</strong>
-     * <ul>
-     *   <li>Mutable scope — layer 2 holds per-call overrides; layer 3 (when present) holds compiled
-     *       defaults. Layers are checked in that order; the first non-{@link #UNBOUND} value wins.</li>
-     *   <li>Read-only scope — layer 1 holds overrides; layer 2 (when present) holds defaults. Same
-     *       priority rule applies.</li>
-     * </ul>
-     *
-     * @param symbolRef the symbol to look up; must not be {@code null}
-     * @return the bound value, {@code null} if the symbol is explicitly bound to null,
-     *         or {@link #UNBOUND} if not bound in this scope
-     * @throws NullPointerException if {@code symbolRef} is {@code null}
-     */
-    Object find(SymbolRef symbolRef) {
-        Objects.requireNonNull(symbolRef, "symbolRef must not be null");
-        int idx = symbolRef.index();
-        if (idx < 0) return UNBOUND;
+    public String replaceAll(LinearRegex regex, String text, String replacement, SourceSpan span) {
+        return regex.replaceAll(text, replacement);
+    }
 
-        if (symbolRef.kind() == SymbolKind.INTERNAL) {
-            if (mutable) {
-                // Internal is always layer1 in mutable
-                return (layer1 != null && idx < layer1.length) ? layer1[idx] : UNBOUND;
-            } else {
-                return UNBOUND;
+    public List<String> split(LinearRegex regex, String text, SourceSpan span) {
+        return regex.split(text);
+    }
+
+    public void captureCalculation(int calculationSlot, int[] replaySlots, Object value) {
+        CalculationRecorder active = calculationRecorder;
+        if (active != null) {
+            for (int replaySlot : replaySlots) {
+                frame[replaySlot] = value;
             }
-        } else {
-            // EXTERNAL
-            if (mutable) {
-                // Layer 2 (overrides) then Layer 3 (defaults)
-                Object v = (layer2 != null && idx < layer2.length) ? layer2[idx] : UNBOUND;
-                if (v == UNBOUND && layer3 != null && idx < layer3.length) {
-                    v = layer3[idx];
-                }
-                return v;
-            } else {
-                // Read-only: Layer 1 then Layer 2
-                Object v = (layer1 != null && idx < layer1.length) ? layer1[idx] : UNBOUND;
-                if (v == UNBOUND && layer2 != null && idx < layer2.length) {
-                    v = layer2[idx];
-                }
-                return v;
+            if (calculationSlot >= 0) {
+                active.append(calculationSlot, value);
             }
         }
     }
 
-    void assign(SymbolRef symbolRef, Object value) {
-        if (!mutable) {
-            throw new IllegalStateException("assign() is not allowed on a read-only ExecutionScope");
+    void captureCalculations(int[] calculationSlots, Object[] values) {
+        CalculationRecorder active = calculationRecorder;
+        if (active == null) {
+            return;
         }
-        if (symbolRef.kind() != SymbolKind.INTERNAL) {
-            throw new IllegalStateException("cannot assign to external symbol: " + symbolRef.name());
+        for (int index = 0; index < calculationSlots.length; index++) {
+            active.append(calculationSlots[index], values[index]);
         }
-        int idx = symbolRef.index();
-        if (idx < 0 || idx >= layer1.length) {
-            throw new IllegalStateException("invalid internal symbol index: " + idx);
-        }
-        layer1[idx] = value;
     }
 
-    Object resolveDynamic(DynamicInstant kind) {
-        if (dynamicCache == null) {
-            dynamicCache = new EnumMap<>(DynamicInstant.class);
+    void captureCalculations(int[] calculationSlots, int[][] replaySlots, Object[] values) {
+        CalculationRecorder active = calculationRecorder;
+        if (active == null) {
+            return;
         }
-        return dynamicCache.computeIfAbsent(Objects.requireNonNull(kind, "kind must not be null"), k -> switch (k) {
-            case CURR_DATE     -> LocalDate.now();
-            case CURR_TIME     -> LocalTime.now();
-            case CURR_DATETIME -> LocalDateTime.now();
-        });
+        for (int index = 0; index < calculationSlots.length; index++) {
+            for (int replaySlot : replaySlots[index]) {
+                frame[replaySlot] = values[index];
+            }
+            if (calculationSlots[index] >= 0) {
+                active.append(calculationSlots[index], values[index]);
+            }
+        }
+    }
+
+    void replayCalculations(int[] calculationSlots, int[] replaySlots) {
+        CalculationRecorder active = calculationRecorder;
+        if (active == null) {
+            return;
+        }
+        for (int index = 0; index < calculationSlots.length; index++) {
+            Object value = frame[replaySlots[index]];
+            if (value != UNBOUND) {
+                active.append(calculationSlots[index], value);
+            }
+        }
+    }
+
+    public LocalDate currentDate() {
+        return currentZonedDateTime().toLocalDate();
+    }
+
+    public LocalTime currentTime() {
+        return currentZonedDateTime().toLocalTime();
+    }
+
+    public LocalDateTime currentDateTime() {
+        return currentZonedDateTime().toLocalDateTime();
+    }
+
+    /**
+     * Consults the clock at most once per scope, on first use, truncated to whole seconds so that
+     * {@code currDate}, {@code currTime}, and {@code currDateTime} observed in the same call are coherent.
+     */
+    private ZonedDateTime currentZonedDateTime() {
+        if (currentInstant == null) {
+            currentInstant = clock.instant().truncatedTo(ChronoUnit.SECONDS).atZone(zoneId);
+        }
+        return currentInstant;
     }
 }

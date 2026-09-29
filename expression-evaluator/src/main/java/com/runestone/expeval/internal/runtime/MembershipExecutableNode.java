@@ -1,0 +1,47 @@
+package com.runestone.expeval.internal.runtime;
+
+import com.runestone.expeval.api.CollectionType;
+import com.runestone.expeval.api.ExpressionType;
+import com.runestone.expeval.api.SourceSpan;
+import com.runestone.expeval.internal.ast.NodeId;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+public record MembershipExecutableNode(
+        NodeId id,
+        SourceSpan sourceSpan,
+        boolean negated,
+        ExecutableNode element,
+        ExecutableNode collection,
+        ExpressionType collectionType) implements ExecutableNode {
+
+    public MembershipExecutableNode {
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(sourceSpan, "sourceSpan");
+        Objects.requireNonNull(element, "element");
+        Objects.requireNonNull(collection, "collection");
+        Objects.requireNonNull(collectionType, "collectionType");
+    }
+
+    @Override
+    public Object execute(ExecutionScope scope) {
+        Object evaluatedElement = element.execute(scope);
+        boolean contains;
+        if (collectionType instanceof CollectionType type) {
+            contains = false;
+            for (Object value : (List<?>) collection.execute(scope)) {
+                TraversalSteps.visit(scope, sourceSpan);
+                if (ExpressionRuntime.structuralEquals(
+                        evaluatedElement, value, type.elementType(), scope, sourceSpan)) {
+                    contains = true;
+                    break;
+                }
+            }
+        } else {
+            contains = ((Map<?, ?>) collection.execute(scope)).containsKey(evaluatedElement);
+        }
+        return contains != negated;
+    }
+}

@@ -7,7 +7,7 @@ How the engineering skills should consume this repo's domain documentation when 
 This is a multi-context repo.
 
 - Read root `CONTEXT.md` first. In this repo, it is the context index.
-- Read the module `CONTEXT.md` relevant to the task. Current module contexts include `exp-mk3/CONTEXT.md`.
+- Read the module `CONTEXT.md` relevant to the task. Current module contexts include `expression-evaluator/CONTEXT.md`.
 - Read root `docs/adr/` for architecture decisions that touch the area being changed.
 - If a context later adds its own `docs/adr/`, read those context-scoped ADRs too.
 - If a future `CONTEXT-MAP.md` is added, treat it as the context index and use it to find the relevant context docs.
@@ -23,7 +23,7 @@ Current layout:
 +-- CONTEXT.md
 +-- docs/adr/
 |   `-- 0001-expression-corpus-as-executable-contract.md
-`-- exp-mk3/
+`-- expression-evaluator/
     `-- CONTEXT.md
 ```
 
