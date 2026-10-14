@@ -19,6 +19,7 @@ var records = repository.findAll(statement);
 
 Construction uses only core types. Use a `NoOpStatement` as the **ordinary** tree when there are no search conditions.
 The two-argument `ConditionalStatement(wrapper, decorator)` constructor still means no mandatory restrictions.
+For incremental composition and source-preserving rebuilds, use the [fluent core builder](conditional-statement-builder.md).
 
 ## Execution guarantees
 

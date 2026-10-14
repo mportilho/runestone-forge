@@ -27,6 +27,16 @@ public record ConditionalStatement(StatementWrapper statementWrapper, FilterDeco
         this(statementWrapper, filterDecorator, List.of());
     }
 
+    /** Creates a mutable, reusable builder with no ordinary conditions or mandatory restrictions. */
+    public static ConditionalStatementBuilder builder() {
+        return new ConditionalStatementBuilder();
+    }
+
+    /** Creates a builder preserving the source's ordinary expression, metadata, decorators and mandatory restrictions. */
+    public static ConditionalStatementBuilder builder(ConditionalStatement source) {
+        return new ConditionalStatementBuilder(source);
+    }
+
     public ConditionalStatement {
         if (statementWrapper == null) {
             throw new IllegalArgumentException("Statement Wrapper cannot be null");
@@ -40,7 +50,7 @@ public record ConditionalStatement(StatementWrapper statementWrapper, FilterDeco
         restrictions = List.copyOf(restrictions);
     }
 
-    private static void validateRestriction(AbstractStatement statement) {
+    static void validateRestriction(AbstractStatement statement) {
         if (statement == null || statement instanceof NoOpStatement) {
             throw new DynamicFilterConfigurationException("Mandatory restrictions cannot contain null or NoOpStatement nodes");
         }

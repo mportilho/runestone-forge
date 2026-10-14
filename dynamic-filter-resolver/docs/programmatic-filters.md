@@ -57,4 +57,8 @@ ConditionalStatement statement = new ConditionalStatement(
 var records = repository.findAll(statement);
 ```
 
-No additional builder is required. For multiple parameters or other general-purpose construction, keep using the unchanged `FilterData.of(String, String[], Class<?>, Class<? extends FilterOperation>, Object[])` factory. There are no scalar `of` overloads, so existing calls, including null arguments, keep their established compilation and validation behavior.
+Manual wrapping remains supported. For fluent composition or rebuilding a request statement with mandatory application scope,
+use the [conditional statement builder](conditional-statement-builder.md). For multiple parameters or other general-purpose
+construction, keep using the unchanged `FilterData.of(String, String[], Class<?>, Class<? extends FilterOperation>, Object[])`
+factory. There are no scalar `of` overloads, so existing calls, including null arguments, keep their established compilation and
+validation behavior.
