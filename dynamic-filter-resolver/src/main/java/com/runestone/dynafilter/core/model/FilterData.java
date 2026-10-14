@@ -87,6 +87,49 @@ public record FilterData(
     }
 
     /**
+     * Creates a filter with one path, one parameter and one outer value slot.
+     * The parameter name is metadata; it does not trigger request-value lookup.
+     * A null or array value remains one slot, and the value is shared without cloning.
+     * Conversion and operation-specific validation remain in the resolution flow.
+     * Negation is disabled, and modifiers and description are absent.
+     *
+     * @param path       the non-blank path to the attribute to be filtered
+     * @param parameter  the non-blank parameter name
+     * @param targetType the explicit target attribute type, not inferred from the value
+     * @param operation  the operation that will be used to build the filter
+     * @param value      the single value, possibly null or an array
+     * @return a new instance of {@link FilterData}
+     * @throws IllegalArgumentException if the path or parameter name is null or blank
+     */
+    public static FilterData single(String path, String parameter, Class<?> targetType,
+                                    @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation, Object value) {
+        if (path == null || path.isBlank()) {
+            throw new IllegalArgumentException("Path cannot be null or blank");
+        }
+        if (parameter == null || parameter.isBlank()) {
+            throw new IllegalArgumentException("Parameter cannot be null or blank");
+        }
+        return of(path, new String[]{parameter}, targetType, operation, new Object[]{value});
+    }
+
+    /**
+     * Creates a single-slot filter using the path as its parameter name.
+     * This has the same value-sharing, conversion and default semantics as
+     * {@link #single(String, String, Class, Class, Object)}.
+     *
+     * @param path       the non-blank path to the attribute and parameter name
+     * @param targetType the explicit target attribute type
+     * @param operation  the operation that will be used to build the filter
+     * @param value      the single value, possibly null or an array
+     * @return a new instance of {@link FilterData}
+     * @throws IllegalArgumentException if the path is null or blank
+     */
+    public static FilterData single(String path, Class<?> targetType,
+                                    @SuppressWarnings("rawtypes") Class<? extends FilterOperation> operation, Object value) {
+        return single(path, path, targetType, operation, value);
+    }
+
+    /**
      * @return the parameter's value if there's one provided from the first array
      * position. Returns null if none is found.
      * @throws MultipleFilterDataValuesException if there's more than one value in the first array position or if there's more than one array position

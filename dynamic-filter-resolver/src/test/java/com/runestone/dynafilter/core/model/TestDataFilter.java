@@ -96,6 +96,46 @@ public class TestDataFilter {
         Assertions.assertThat(filterDataName.hasModifier(UnnamedInterface.class)).isFalse();
     }
 
+    @Test
+    public void testGeneralFactoryNullArgumentValidationRemainsUnambiguous() {
+        Assertions.assertThatThrownBy(() -> FilterData.of("name", null, null, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("parameters cannot be null or empty");
+        Assertions.assertThatThrownBy(() -> FilterData.of("name", new String[]{"clientName"}, String.class, Like.class, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("values cannot be null or empty");
+    }
+
+    @Test
+    public void testGeneralFactoryKeepsItsExistingNameAndMetadataValidation() {
+        var filter = FilterData.of(null, new String[]{null, " "}, null, null, new Object[]{null, "John"});
+
+        Assertions.assertThat(filter.path()).containsExactly((String) null);
+        Assertions.assertThat(filter.parameters()).containsExactly(null, " ");
+        Assertions.assertThat(filter.targetType()).isNull();
+        Assertions.assertThat(filter.operation()).isNull();
+        Assertions.assertThat(filter.values()).containsExactly(null, "John");
+        Assertions.assertThat(filter.negate()).isFalse();
+        Assertions.assertThat(filter.modifiers()).isNull();
+        Assertions.assertThat(filter.description()).isNull();
+    }
+
+    @Test
+    public void testGeneralFactoryKeepsCallerOwnedArraysAndNullValueSlots() {
+        String[] parameters = {"clientName"};
+        String[] names = {"John", "Mary"};
+        Object[] values = {names};
+        var filter = FilterData.of("name", parameters, String.class, Like.class, values);
+
+        Assertions.assertThat(filter.parameters()).isSameAs(parameters);
+        Assertions.assertThat(filter.values()).isSameAs(values);
+        Assertions.assertThat(filter.<Object>findOneValue()).isSameAs(names);
+
+        var nullValue = FilterData.of("name", parameters, String.class, Like.class, new Object[]{null});
+        Assertions.assertThat(nullValue.values()).hasSize(1);
+        Assertions.assertThat(nullValue.<Object>findOneValue()).isNull();
+    }
+
     private interface UnnamedInterface extends FilterModifier {
     }
 
