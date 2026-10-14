@@ -1,6 +1,7 @@
 package com.runestone.dynafilter.modules.jpa.repository;
 
 import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
+import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
@@ -13,16 +14,20 @@ import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.core.operation.types.GreaterOrEquals;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
+import com.runestone.dynafilter.modules.jpa.api.JpaConditionalStatements;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.resolver.Fetching;
 import com.runestone.dynafilter.modules.jpa.resolver.FetchingFilterDecorator;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.InMemoryDatabaseApplication;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.PersonRepository;
+import com.runestone.dynafilter.modules.jpa.tools.app.database.PhoneRepository;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.jpamodels.Person;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.jpamodels.Phone;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Persistence;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,6 +45,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.lang.reflect.Constructor;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +67,8 @@ class TestMandatoryScopeRepositoryIntegration {
     @Autowired
     private PersonRepository repository;
     @Autowired
+    private PhoneRepository phoneRepository;
+    @Autowired
     private EntityManager entityManager;
 
     private Person aliceOld;
@@ -70,8 +78,10 @@ class TestMandatoryScopeRepositoryIntegration {
     @BeforeEach
     @SuppressWarnings({"unchecked", "rawtypes"})
     void setUp() {
-        repository.setDynamicFilterResolver((DynamicFilterResolver) new SpecificationDynamicFilterResolver(
-                new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard())));
+        var resolver = new SpecificationDynamicFilterResolver(
+                new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard()));
+        repository.setDynamicFilterResolver((DynamicFilterResolver) resolver);
+        phoneRepository.setDynamicFilterResolver((DynamicFilterResolver) resolver);
         repository.deleteAll();
         // Deliberately insert out of date order so translating a date alias into an ID alias is observable.
         aliceLater = save("alice", RECENT.plusHours(1), HEIGHT);
@@ -133,6 +143,153 @@ class TestMandatoryScopeRepositoryIntegration {
         assertThat(recentData.values()).containsExactly(RECENT.toString());
         assertThat(ownerData.parameters()).containsExactly("mandatoryOwner");
         assertThat(heightData.parameters()).containsExactly("mandatoryHeight");
+    }
+
+    @Test
+    void specificationExistsScopeIsRebuiltForContentAndCountAndIntersectsTheCompleteFunctionalFilter() {
+        save("alice", RECENT.plusHours(4), HEIGHT, "private");
+        entityManager.flush();
+        entityManager.clear();
+        var source = scoped(recent(), null);
+        var roots = new ArrayList<Root<?>>();
+        var queries = new ArrayList<CriteriaQuery<?>>();
+        var sharedPhones = sharedPhoneScope();
+        Specification<Person> scope = (root, query, builder) -> {
+            roots.add(root);
+            queries.add(query);
+            return sharedPhones.toPredicate(root, query, builder);
+        };
+        var statement = JpaConditionalStatements.restrict(source, scope);
+
+        var page = repository.findAll(statement, PageRequest.of(0, 1, Sort.by("since")));
+
+        assertThat(page.getContent()).extracting(Person::getId).containsExactly(aliceRecent.getId());
+        assertThat(page.getTotalElements()).isEqualTo(2);
+        assertThat(queries).hasSize(2);
+        assertThat(queries.getFirst().getResultType()).isEqualTo(Person.class);
+        assertThat(queries.getLast().getResultType()).isEqualTo(Long.class);
+        assertThat(queries.getFirst()).isNotSameAs(queries.getLast());
+        assertThat(roots.getFirst()).isNotSameAs(roots.getLast());
+        assertThat(repository.findAll(statement, Sort.by("since"))).extracting(Person::getId)
+                .containsExactly(aliceRecent.getId(), aliceLater.getId());
+        assertThat(source.restrictions()).hasSize(2);
+        assertThat(source.statementWrapper().allFilters()).containsExactlyElementsOf(DECLARED_FILTERS);
+    }
+
+    @Test
+    void specificationScopeSurvivesLaterReplacementDecoratorAndGraphPaginationWithoutLosingAliases() {
+        save("alice", RECENT.plusHours(4), HEIGHT, "private");
+        entityManager.flush();
+        entityManager.clear();
+        var source = scoped(equal("name", "searchOwner", String.class, "bob"), fetching());
+        var restricted = JpaConditionalStatements.restrict(source, sharedPhoneScope());
+        FilterDecorator<Specification<?>> replacement = (filter, wrapper) ->
+                (root, query, builder) -> builder.conjunction();
+        var statement = ConditionalStatement.builder(restricted).decorate(replacement).build();
+
+        var page = repository.findAll(statement, PageRequest.of(0, 1, Sort.by("since")), GRAPH);
+
+        assertThat(page.getContent()).extracting(Person::getId).containsExactly(aliceOld.getId());
+        assertThat(page.getTotalElements()).isEqualTo(3);
+        assertPhonesLoaded(page.getContent());
+        assertThat(repository.count(statement)).isEqualTo(3);
+        assertThat(repository.findAll(source)).isEmpty();
+        assertThat(statement.statementWrapper().allFilters()).containsExactlyElementsOf(DECLARED_FILTERS);
+        assertThatThrownBy(() -> repository.findAll(statement, Sort.by("mandatoryOwner")))
+                .isInstanceOf(RuntimeException.class).hasMessageContaining("mandatoryOwner");
+    }
+
+    @Test
+    void repeatedSpecificationRestrictionsAccumulateByAndWithoutChangingEarlierStatements() {
+        var source = scoped(new NoOpStatement(), null);
+        var first = JpaConditionalStatements.<Person>restrict(source, (root, query, builder) ->
+                builder.greaterThanOrEqualTo(root.get("registerDate"), RECENT));
+        var second = JpaConditionalStatements.<Person>restrict(first, (root, query, builder) ->
+                builder.lessThan(root.get("registerDate"), RECENT.plusHours(1)));
+        var conflict = JpaConditionalStatements.<Person>restrict(second, (root, query, builder) ->
+                builder.equal(root.get("name"), "bob"));
+
+        assertThat(repository.findAll(second)).extracting(Person::getId).containsExactly(aliceRecent.getId());
+        assertThat(repository.count(second)).isEqualTo(1);
+        assertThat(repository.findAll(conflict)).isEmpty();
+        assertThat(repository.count(first)).isEqualTo(2);
+        assertThat(repository.count(source)).isEqualTo(3);
+        assertThat(source.restrictions()).hasSize(2);
+        assertThat(first.restrictions()).hasSize(3);
+        assertThat(second.restrictions()).hasSize(4);
+    }
+
+    @ParameterizedTest(name = "explicit predicate is true: {0}")
+    @ValueSource(booleans = {false, true})
+    void specificationRestrictionsAcceptExplicitTrueAndFalse(boolean allowed) {
+        var statement = JpaConditionalStatements.<Person>restrict(scoped(recent(), null),
+                (root, query, builder) -> allowed ? builder.conjunction() : builder.disjunction());
+
+        assertThat(repository.findAll(statement)).hasSize(allowed ? 2 : 0);
+        assertThat(repository.count(statement)).isEqualTo(allowed ? 2 : 0);
+    }
+
+    @Test
+    void absentSpecificationPredicatesFailInContentAndInEffectiveCountRatherThanOmittingScope() {
+        var source = scoped(recent(), null);
+        var absent = JpaConditionalStatements.restrict(source, Specification.<Person>unrestricted());
+
+        assertThatThrownBy(() -> repository.findAll(absent))
+                .isInstanceOf(DynamicFilterConfigurationException.class).hasMessageContaining("predicate");
+        assertThatThrownBy(() -> repository.count(absent))
+                .isInstanceOf(DynamicFilterConfigurationException.class).hasMessageContaining("predicate");
+        var absentOnCount = JpaConditionalStatements.<Person>restrict(source, (root, query, builder) ->
+                query.getResultType() == Long.class ? null : builder.conjunction());
+        assertThatThrownBy(() -> repository.findAll(absentOnCount, PageRequest.of(0, 1, Sort.by("since"))))
+                .isInstanceOf(DynamicFilterConfigurationException.class).hasMessageContaining("predicate");
+    }
+
+    @Test
+    void onlyTheObservablePredicateOfAnOpaqueSpecificationIsValidated() {
+        Specification<Person> explicitFalse = (root, query, builder) -> builder.disjunction();
+        var composite = Specification.<Person>unrestricted().or(explicitFalse);
+        var statement = JpaConditionalStatements.restrict(scoped(recent(), null), composite);
+
+        assertThat(repository.findAll(statement)).isEmpty();
+        assertThat(repository.count(statement)).isZero();
+    }
+
+    @Test
+    void subresourceSpecificationCorrelatesAuthorizationWithItsOwnerInBothContentAndCount() {
+        save("alice", RECENT.plusHours(4), HEIGHT, "private");
+        entityManager.flush();
+        entityManager.clear();
+        var source = ConditionalStatement.builder()
+                .and(equal("number", "number", String.class, "shared"))
+                .restrict(equal("person.height", "ownerHeight", BigDecimal.class, HEIGHT))
+                .build();
+        var roots = new ArrayList<Root<?>>();
+        var queries = new ArrayList<CriteriaQuery<?>>();
+        Specification<Phone> ownerScope = (root, query, builder) -> {
+            roots.add(root);
+            queries.add(query);
+            var subquery = query.subquery(Integer.class);
+            var owner = subquery.from(Person.class);
+            subquery.select(builder.literal(1)).where(
+                    builder.equal(owner.get("id"), root.get("person").get("id")),
+                    builder.equal(owner.get("name"), "alice"),
+                    builder.greaterThanOrEqualTo(owner.get("registerDate"), RECENT));
+            return builder.exists(subquery);
+        };
+        var statement = JpaConditionalStatements.restrict(source, ownerScope);
+
+        var page = phoneRepository.findAll(statement, PageRequest.of(0, 2, Sort.by("person.registerDate", "id")));
+
+        var expectedFirstPage = aliceRecent.getPhones().stream().map(Phone::getId).sorted().toList();
+        assertThat(page.getContent()).extracting(Phone::getId).containsExactlyElementsOf(expectedFirstPage);
+        assertThat(page.getTotalElements()).isEqualTo(4);
+        assertThat(queries).hasSize(2);
+        assertThat(queries.getFirst().getResultType()).isEqualTo(Phone.class);
+        assertThat(queries.getLast().getResultType()).isEqualTo(Long.class);
+        assertThat(roots.getFirst()).isNotSameAs(roots.getLast());
+        assertThat(phoneRepository.findAll(statement)).extracting(phone -> phone.getPerson().getId())
+                .containsExactlyInAnyOrder(aliceRecent.getId(), aliceRecent.getId(), aliceLater.getId(), aliceLater.getId());
+        assertThat(phoneRepository.count(statement)).isEqualTo(4);
     }
 
     @ParameterizedTest(name = "replaces ordinary filter: {0}")
@@ -301,6 +458,17 @@ class TestMandatoryScopeRepositoryIntegration {
 
     private static FetchingFilterDecorator fetching() {
         return new FetchingFilterDecorator(List.of(FetchPhones.class.getAnnotation(Fetching.class)));
+    }
+
+    private static Specification<Person> sharedPhoneScope() {
+        return (root, query, builder) -> {
+            var subquery = query.subquery(Integer.class);
+            var phone = subquery.from(Phone.class);
+            subquery.select(builder.literal(1)).where(
+                    builder.equal(phone.get("person").get("id"), root.get("id")),
+                    builder.equal(phone.get("number"), "shared"));
+            return builder.exists(subquery);
+        };
     }
 
     private ConditionalStatement pluralScope(FilterDecorator<Specification<?>> decorator) {

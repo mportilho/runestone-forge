@@ -44,6 +44,10 @@ Native no-op descendants and missing native operands, operators or filter data a
 retain the existing extension contract. See [mandatory restrictions](mandatory-restrictions.md) for final execution, absence
 validation, supported repository entrypoints and the limits of application-supplied scope.
 
+For an existing Spring Data JPA `Specification<T>`, use the JPA-only
+[`JpaConditionalStatements.restrict(original, specification)` helper](mandatory-restrictions.md#existing-jpa-specifications).
+It appends an opaque mandatory restriction through this builder, without adding Spring Data dependencies to the core.
+
 ## Decorators and decorated data
 
 `decorate(FilterDecorator<?>)` appends an ordinary decorator. The source decorator runs first, followed by additions in order.
