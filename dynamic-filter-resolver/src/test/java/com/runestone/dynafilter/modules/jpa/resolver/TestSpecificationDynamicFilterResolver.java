@@ -25,6 +25,8 @@
 package com.runestone.dynafilter.modules.jpa.resolver;
 
 import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
+import com.runestone.dynafilter.core.exceptions.StatementGenerationException;
+import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
@@ -36,6 +38,7 @@ import org.mockito.Mockito;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.List;
 
 public class TestSpecificationDynamicFilterResolver {
 
@@ -71,6 +74,21 @@ public class TestSpecificationDynamicFilterResolver {
         Assertions.assertThat(specification).isNotNull();
         Mockito.verify(filterOperationService, Mockito.times(1)).createFilter(Mockito.eq(logicalStatementOnName.getFilterData()));
         Assertions.assertThat(decoratorCallCount.get()).isEqualTo(1);
+    }
+
+    @Test
+    void rejectsNullExecutableObjectsFromDirectAndCompositeDecoratorsAtBothEntrypoints() {
+        var resolver = new SpecificationDynamicFilterResolver(filterOperationService);
+        var wrapper = new StatementWrapper(MockStatementFactory.createLogicalStatementOnName(), null, null);
+        FilterDecorator<Specification<?>> absent = (filter, statement) -> null;
+        for (var decorator : List.of(absent, FilterDecorator.of(List.of(absent)))) {
+            Assertions.assertThatThrownBy(() -> resolver.createFilter(wrapper, decorator))
+                    .isExactlyInstanceOf(StatementGenerationException.class)
+                    .hasMessageContaining("Filter decorator returned null");
+            Assertions.assertThatThrownBy(() -> resolver.createFilter(new ConditionalStatement(wrapper, decorator)))
+                    .isExactlyInstanceOf(StatementGenerationException.class)
+                    .hasMessageContaining("Filter decorator returned null");
+        }
     }
 
 }

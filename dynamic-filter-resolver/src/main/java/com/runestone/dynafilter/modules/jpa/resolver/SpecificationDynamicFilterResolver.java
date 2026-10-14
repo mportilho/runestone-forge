@@ -24,20 +24,25 @@
 
 package com.runestone.dynafilter.modules.jpa.resolver;
 
+import com.runestone.dynafilter.core.exceptions.StatementGenerationException;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
+import com.runestone.dynafilter.core.model.statement.AbstractStatement;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.util.List;
 import java.util.Objects;
 
 public class SpecificationDynamicFilterResolver implements DynamicFilterResolver<Specification<?>> {
 
     private final SpecificationStatementAnalyser statementAnalyser;
+    private final MandatorySpecificationStatementAnalyser restrictionAnalyser;
 
     public SpecificationDynamicFilterResolver(FilterOperationService<Specification<?>> filterOperationService) {
         this.statementAnalyser = new SpecificationStatementAnalyser(filterOperationService);
+        this.restrictionAnalyser = new MandatorySpecificationStatementAnalyser(filterOperationService);
     }
 
     @Override
@@ -45,7 +50,23 @@ public class SpecificationDynamicFilterResolver implements DynamicFilterResolver
     public <R extends Specification<?>> R createFilter(StatementWrapper statementWrapper, FilterDecorator<Specification<?>> decorator) {
         Objects.requireNonNull(statementWrapper, "Statement wrapper cannot be null");
         Specification<?> specification = statementWrapper.statement().acceptAnalyser(statementAnalyser);
-        return (R) (decorator != null ? decorator.decorate(specification, statementWrapper) : specification);
+        if (decorator != null) {
+            specification = decorator.decorate(specification, statementWrapper);
+            if (specification == null) {
+                throw new StatementGenerationException("Filter decorator returned null: " + decorator.getClass().getName());
+            }
+        }
+        return (R) specification;
+    }
+
+    @Override
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public <R extends Specification<?>> R applyRestrictions(R filter, List<AbstractStatement> restrictions) {
+        Specification result = filter;
+        for (AbstractStatement restriction : restrictions) {
+            result = result.and(restrictionAnalyser.resolve(restriction));
+        }
+        return (R) result;
     }
 
 }

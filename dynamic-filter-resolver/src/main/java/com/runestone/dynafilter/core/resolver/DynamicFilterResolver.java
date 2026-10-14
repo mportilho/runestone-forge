@@ -24,8 +24,12 @@
 
 package com.runestone.dynafilter.core.resolver;
 
+import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
+import com.runestone.dynafilter.core.model.statement.AbstractStatement;
+
+import java.util.List;
 
 public interface DynamicFilterResolver<T> {
 
@@ -33,7 +37,21 @@ public interface DynamicFilterResolver<T> {
 
     @SuppressWarnings("unchecked")
     default <R extends T> R createFilter(ConditionalStatement conditionalStatement) {
-        return createFilter(conditionalStatement.statementWrapper(), (FilterDecorator<T>) conditionalStatement.filterDecorator());
+        R filter = createFilter(conditionalStatement.statementWrapper(), (FilterDecorator<T>) conditionalStatement.filterDecorator());
+        return conditionalStatement.restrictions().isEmpty() ? filter : applyRestrictions(filter, conditionalStatement.restrictions());
+    }
+
+    /**
+     * Intersects every mandatory expression with the already decorated ordinary filter, without ordinary decorators.
+     * Backends must reject absent executable restrictions and absent effective conditions. Implementations overriding
+     * complete-statement resolution must honor this final phase or fail explicitly, never discard restrictions.
+     * The wrapper-and-decorator entrypoint alone does not carry mandatory scope.
+     */
+    default <R extends T> R applyRestrictions(R filter, List<AbstractStatement> restrictions) {
+        if (!restrictions.isEmpty()) {
+            throw new DynamicFilterConfigurationException("This resolver does not support mandatory restrictions");
+        }
+        return filter;
     }
 
 }
