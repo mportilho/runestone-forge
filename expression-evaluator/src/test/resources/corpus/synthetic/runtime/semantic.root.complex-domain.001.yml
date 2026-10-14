@@ -1,0 +1,9 @@
+id: semantic.root.complex-domain.001
+phase: semantic
+kind: invalid
+source: '2 root (-8)'
+coverage: [root, unary, parentheses, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_ROOT_COMPLEX_DOMAIN

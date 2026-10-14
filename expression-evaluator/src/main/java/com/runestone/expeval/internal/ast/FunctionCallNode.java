@@ -1,18 +1,20 @@
 package com.runestone.expeval.internal.ast;
 
+import com.runestone.expeval.api.SourceSpan;
+
 import java.util.List;
+import java.util.Objects;
 
 public record FunctionCallNode(
-    NodeId nodeId,
-    SourceSpan sourceSpan,
-    String functionName,
-    List<ExpressionNode> arguments
-) implements ExpressionNode {
+        NodeId id,
+        SourceSpan sourceSpan,
+        FunctionName name,
+        List<CallArgument> arguments) implements ExpressionNode {
 
     public FunctionCallNode {
-        AstValidation.requireNodeId(nodeId);
-        AstValidation.requireSourceSpan(sourceSpan);
-        AstValidation.requireNonBlank(functionName, "functionName");
-        arguments = AstValidation.copyList(arguments, "arguments");
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(sourceSpan, "sourceSpan");
+        Objects.requireNonNull(name, "name");
+        arguments = List.copyOf(arguments);
     }
 }

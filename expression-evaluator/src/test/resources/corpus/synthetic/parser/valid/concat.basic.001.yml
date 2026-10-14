@@ -1,0 +1,5 @@
+id: parser.concat.basic.001
+phase: parser
+kind: valid
+source: '"a" || "b"'
+coverage: [concat, string-literal]

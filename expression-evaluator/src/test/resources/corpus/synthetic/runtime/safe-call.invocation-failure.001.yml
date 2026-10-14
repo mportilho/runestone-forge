@@ -1,0 +1,17 @@
+id: runtime.safe-call.invocation-failure.001
+phase: runtime
+kind: invalid
+source: 'provider?.fail() ?? "x"'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    provider:
+      type: OBJECT_NAVIGATION_CONTRACT_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, call, safe-navigation, coalesce, string-literal, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_MEMBER_ACCESS_FAILURE
+    span: {offset: 8, endOffset: 16, line: 1, column: 9}

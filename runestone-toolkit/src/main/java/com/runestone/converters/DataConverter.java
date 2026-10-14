@@ -26,6 +26,12 @@ package com.runestone.converters;
 
 public interface DataConverter<T, R> {
 
-    R convert(T data);
+    Class<T> sourceType();
+
+    Class<R> targetType();
+
+    String ruleIdentity();
+
+    R convert(T source, ConversionContext context);
 
 }

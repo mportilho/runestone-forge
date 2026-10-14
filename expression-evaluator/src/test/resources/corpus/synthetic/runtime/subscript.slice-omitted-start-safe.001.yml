@@ -1,0 +1,16 @@
+id: runtime.subscript.slice-omitted-start-safe.001
+phase: runtime
+kind: valid
+source: 'items?.[:2] ?? []'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    items:
+      type: COLLECTION_NUMBER
+      default: [{type: NUMBER, value: "10"}, {type: NUMBER, value: "20"}, {type: NUMBER, value: "30"}]
+      overwritePolicy: FIXED
+coverage: [identifier, subscript-slice, safe-navigation, coalesce, empty-collection]
+expected:
+  type: COLLECTION
+  result: [{type: NUMBER, value: "10"}, {type: NUMBER, value: "20"}]

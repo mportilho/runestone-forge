@@ -1,0 +1,16 @@
+id: runtime.collection.materialization-limit-filter.002
+phase: runtime
+kind: valid
+source: 'obj.itens()[?(@ > 3)]'
+environment:
+  maxMaterializedSize: 10
+  maxFactorialInput: 32
+  symbols:
+    obj:
+      type: OBJECT_COLLECTION_METHOD_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, call, filter, at-symbol]
+expected:
+  type: COLLECTION
+  result: [{type: NUMBER, value: "4"}, {type: NUMBER, value: "5"}]

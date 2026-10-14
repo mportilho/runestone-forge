@@ -1,0 +1,6 @@
+id: runtime.logical.or.001
+phase: runtime
+kind: valid
+source: 'true or false'
+coverage: [logical-or, boolean-literal]
+expected: {type: BOOLEAN, result: true}

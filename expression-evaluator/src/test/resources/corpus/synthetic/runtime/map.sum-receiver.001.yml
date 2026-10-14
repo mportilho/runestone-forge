@@ -1,0 +1,19 @@
+id: semantic.map.sum-receiver.001
+phase: semantic
+kind: invalid
+source: 'm.sum()'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    m:
+      type: MAP_NUMBER
+      default:
+        b: {type: NUMBER, value: "2"}
+        A: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+coverage: [identifier, call, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED

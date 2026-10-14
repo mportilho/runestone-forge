@@ -1,0 +1,8 @@
+id: runtime.subscript.index-safe-static-out-of-range.001
+phase: runtime
+kind: valid
+source: 'c := [10, 20, 30]; c?.[7] ?? 0'
+coverage: [assignment, collection-literal, identifier, subscript-index, safe-navigation, coalesce]
+expected:
+  type: NUMBER
+  result: "0"

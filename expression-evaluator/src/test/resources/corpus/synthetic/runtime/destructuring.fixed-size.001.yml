@@ -1,0 +1,7 @@
+id: semantic.destructuring.fixed-size.001
+phase: semantic
+kind: invalid
+source: '[a, b, c] := [1, 2]; a'
+coverage: [assignment, destructuring, collection-literal, identifier, diagnostic]
+expected:
+  diagnostic: {category: SEMANTIC, code: SEMANTIC_DESTRUCTURING_SIZE_MISMATCH}

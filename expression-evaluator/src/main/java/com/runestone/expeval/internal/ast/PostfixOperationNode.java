@@ -1,16 +1,24 @@
 package com.runestone.expeval.internal.ast;
 
+import com.runestone.expeval.api.SourceSpan;
+
+import java.util.List;
+import java.util.Objects;
+
 public record PostfixOperationNode(
-    NodeId nodeId,
-    SourceSpan sourceSpan,
-    PostfixOperator operator,
-    ExpressionNode operand
-) implements ExpressionNode {
+        NodeId id,
+        SourceSpan sourceSpan,
+        ExpressionNode operand,
+        List<PostfixOperatorOccurrence> operations) implements ExpressionNode {
 
     public PostfixOperationNode {
-        AstValidation.requireNodeId(nodeId);
-        AstValidation.requireSourceSpan(sourceSpan);
-        AstValidation.requireNonNull(operator, "operator");
-        AstValidation.requireNonNull(operand, "operand");
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(sourceSpan, "sourceSpan");
+        Objects.requireNonNull(operand, "operand");
+        Objects.requireNonNull(operations, "operations");
+        operations = List.copyOf(operations);
+        if (operations.isEmpty()) {
+            throw new IllegalArgumentException("postfix operations must not be empty");
+        }
     }
 }

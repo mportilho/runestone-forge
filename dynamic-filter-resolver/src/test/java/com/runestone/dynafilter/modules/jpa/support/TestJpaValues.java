@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.support;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,7 +43,7 @@ import static org.mockito.Mockito.when;
 class TestJpaValues {
 
     @Mock
-    private DataConversionService conversionService;
+    private RuntimeDataConversionService conversionService;
 
     @Test
     @DisplayName("asArray normalizes null, arrays, collections, and scalar values")

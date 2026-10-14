@@ -24,7 +24,15 @@
 
 package com.runestone.converters;
 
+import java.util.Objects;
+
 public interface DataConversionService {
+
+    ConversionContext conversionContext();
+
+    String conversionProfileIdentity();
+
+    String conversionProfileHash();
 
     /**
      * Indicates if this conversion service can convert a sourceType to a targetType
@@ -34,6 +42,16 @@ public interface DataConversionService {
      * @return an indication if there's a converter for the provided types
      */
     boolean canConvert(Class<?> sourceType, Class<?> targetType);
+
+    default boolean canPrepareConversion(Class<?> sourceType, Class<?> targetType) {
+        return false;
+    }
+
+    default PreparedDataConversion prepareConversion(Class<?> sourceType, Class<?> targetType) {
+        Objects.requireNonNull(sourceType, "Source Type must be provided");
+        Objects.requireNonNull(targetType, "Target Type must be provided");
+        throw new NoDataConverterFoundException(sourceType, targetType);
+    }
 
     /**
      * Converts an object to a target type
@@ -45,4 +63,6 @@ public interface DataConversionService {
      * @return the converted value
      */
     <S, T> T convert(S source, Class<T> targetType);
+
+    <T> T copyFoldableValue(T value);
 }

@@ -1,0 +1,16 @@
+id: runtime.collection.java-array-operation.004
+phase: runtime
+kind: valid
+source: 'obj.valores().avg()'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    obj:
+      type: OBJECT_COLLECTION_METHOD_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, call]
+expected:
+  type: NUMBER
+  result: "2"

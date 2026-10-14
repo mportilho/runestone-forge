@@ -1,14 +1,16 @@
 package com.runestone.expeval.internal.ast;
 
-public record IdentifierNode(
-    NodeId nodeId,
-    SourceSpan sourceSpan,
-    String name
-) implements ExpressionNode {
+import com.runestone.expeval.api.SourceSpan;
+import java.util.Objects;
+
+public record IdentifierNode(NodeId id, SourceSpan sourceSpan, String name) implements ExpressionNode {
 
     public IdentifierNode {
-        AstValidation.requireNodeId(nodeId);
-        AstValidation.requireSourceSpan(sourceSpan);
-        AstValidation.requireNonBlank(name, "name");
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(sourceSpan, "sourceSpan");
+        Objects.requireNonNull(name, "name");
+        if (name.isBlank()) {
+            throw new IllegalArgumentException("name must not be blank");
+        }
     }
 }

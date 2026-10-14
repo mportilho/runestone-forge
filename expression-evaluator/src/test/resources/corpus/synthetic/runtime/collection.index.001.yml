@@ -1,0 +1,8 @@
+id: runtime.collection.index.001
+phase: runtime
+kind: valid
+source: 'items := [10, 20, 30]; items[0]'
+coverage: [assignment, collection-literal, identifier, subscript-index]
+expected:
+  type: NUMBER
+  result: "10"

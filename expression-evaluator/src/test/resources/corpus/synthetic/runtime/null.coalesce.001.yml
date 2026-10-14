@@ -1,0 +1,6 @@
+id: runtime.null.coalesce.001
+phase: runtime
+kind: valid
+source: '"primary" ?? "fallback"'
+coverage: [coalesce, string-literal]
+expected: {type: STRING, result: "primary"}

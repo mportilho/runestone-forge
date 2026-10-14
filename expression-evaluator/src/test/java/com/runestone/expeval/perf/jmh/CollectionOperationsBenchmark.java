@@ -1,0 +1,112 @@
+package com.runestone.expeval.perf.jmh;
+
+import com.runestone.expeval.api.ExpressionEngine;
+import com.runestone.expeval.api.ExpressionEnvironment;
+import com.runestone.expeval.api.LogicalExpression;
+import com.runestone.expeval.api.MathExpression;
+import com.runestone.expeval.api.ResultExpression;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Level;
+import org.openjdk.jmh.annotations.Measurement;
+import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
+import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.Blackhole;
+
+import java.util.concurrent.TimeUnit;
+
+@BenchmarkMode(Mode.AverageTime)
+@Warmup(iterations = 3)
+@Measurement(iterations = 5)
+@Fork(1)
+@OutputTimeUnit(TimeUnit.NANOSECONDS)
+public class CollectionOperationsBenchmark {
+
+    @Benchmark
+    public void map(RuntimePlans plans, Blackhole blackhole) {
+        blackhole.consume(plans.map.compute());
+    }
+
+    @Benchmark
+    public void sum(RuntimePlans plans, Blackhole blackhole) {
+        blackhole.consume(plans.sum.compute());
+    }
+
+    @Benchmark
+    public void mapThenSum(RuntimePlans plans, Blackhole blackhole) {
+        blackhole.consume(plans.mapThenSum.compute());
+    }
+
+    @Benchmark
+    public void allShortCircuit(RuntimePlans plans, Blackhole blackhole) {
+        blackhole.consume(plans.allShortCircuit.compute());
+    }
+
+    @Benchmark
+    public void sortBy(RuntimePlans plans, Blackhole blackhole) {
+        blackhole.consume(plans.sortBy.compute());
+    }
+
+    @Benchmark
+    public void reduce(RuntimePlans plans, Blackhole blackhole) {
+        blackhole.consume(plans.reduce.compute());
+    }
+
+    @Benchmark
+    public void wildcardMaterialization(RuntimePlans plans, Blackhole blackhole) {
+        blackhole.consume(plans.wildcardMaterialization.compute());
+    }
+
+    @Benchmark
+    public void safeCall(RuntimePlans plans, Blackhole blackhole) {
+        blackhole.consume(plans.safeCall.compute());
+    }
+
+    @State(Scope.Benchmark)
+    public static class RuntimePlans {
+
+        private ResultExpression map;
+        private MathExpression sum;
+        private MathExpression mapThenSum;
+        private LogicalExpression allShortCircuit;
+        private ResultExpression sortBy;
+        private MathExpression reduce;
+        private ResultExpression wildcardMaterialization;
+        private ResultExpression safeCall;
+
+        @Setup(Level.Trial)
+        public void setUp() {
+            ExpressionEnvironment environment = ExpressionEnvironment.standard();
+            map = ExpressionEngine.defaultEngine().compileOrThrow(
+                            "items := [1, 2, 3, 4, 5, 6, 7, 8]; items.map(@ -> @ + 1)", environment)
+                    .asResult();
+            sum = ExpressionEngine.defaultEngine().compileOrThrow("items := [1, 2, 3, 4, 5, 6, 7, 8]; items.sum()", environment)
+                    .asMath();
+            mapThenSum = ExpressionEngine.defaultEngine().compileOrThrow(
+                            "items := [1, 2, 3, 4, 5, 6, 7, 8]; items.map(@ -> @ + 1).sum()", environment)
+                    .asMath();
+            allShortCircuit = ExpressionEngine.defaultEngine().compileOrThrow(
+                            "items := [0, 1, 2, 3, 4, 5, 6, 7]; items.all(@ -> @ > 0)", environment)
+                    .asLogical();
+            sortBy = ExpressionEngine.defaultEngine().compileOrThrow(
+                            "items := [8, 3, 5, 1, 7, 2, 6, 4]; items.sortBy(@ -> @, \"asc\")", environment)
+                    .asResult();
+            reduce = ExpressionEngine.defaultEngine().compileOrThrow(
+                            "items := [1, 2, 3, 4, 5, 6, 7, 8]; "
+                                    + "items.reduce(0, @ -> @.accumulator + @.item)",
+                            environment)
+                    .asMath();
+            wildcardMaterialization = ExpressionEngine.defaultEngine().compileOrThrow(
+                            "items := [1, 2, 3, 4, 5, 6, 7, 8]; items[*]", environment)
+                    .asResult();
+            safeCall = ExpressionEngine.defaultEngine().compileOrThrow(
+                            "items := [1, 2, 3, 4, 5, 6, 7, 8]; items?.map(@ -> @ + 1) ?? []", environment)
+                    .asResult();
+        }
+    }
+}

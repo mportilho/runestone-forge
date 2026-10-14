@@ -1,0 +1,21 @@
+id: runtime.optimization.cse-memory-branch.001
+phase: runtime
+kind: valid
+source: 'if(enabled; sqrt(x); 0) + sqrt(x)'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    enabled:
+      type: BOOLEAN
+      default: {type: BOOLEAN, value: false}
+      overwritePolicy: OVERRIDABLE
+    x:
+      type: NUMBER
+      default: {type: NUMBER, value: "9"}
+      overwritePolicy: OVERRIDABLE
+inputs:
+  enabled: {type: BOOLEAN, value: false}
+  x: {type: NUMBER, value: "16"}
+coverage: [function-call, identifier, additive, if-functional]
+expected: {type: NUMBER, result: "4"}

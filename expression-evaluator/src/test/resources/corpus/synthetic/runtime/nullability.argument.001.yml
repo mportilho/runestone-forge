@@ -1,0 +1,23 @@
+id: semantic.nullability.argument.001
+phase: semantic
+kind: invalid
+source: 'items.reduce(m?.["a"], @ -> @.accumulator + @.item)'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    items:
+      type: COLLECTION_NUMBER
+      default:
+        - {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+    m:
+      type: MAP_NUMBER
+      default:
+        a: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+coverage: [identifier, call, lambda, at-symbol, property-access, additive, safe-navigation, subscript-key, string-literal, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_NULLABLE_ARGUMENT_NOT_ALLOWED

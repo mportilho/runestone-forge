@@ -1,0 +1,10 @@
+id: parser.syntax.unclosed-collection.001
+phase: parser
+kind: invalid
+source: '[1, 2'
+coverage: [collection-literal, diagnostic]
+expected:
+  diagnostic:
+    category: PARSE
+    code: PARSE_MISSING_TOKEN
+    span: {offset: 5, endOffset: 5, line: 1, column: 6}

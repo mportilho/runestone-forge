@@ -1,0 +1,5 @@
+id: parser.multiplicative.basic.001
+phase: parser
+kind: valid
+source: 'a * b / 2 mod 3'
+coverage: [multiplicative, identifier]

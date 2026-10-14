@@ -1,0 +1,10 @@
+id: semantic.collection.reduce-item-method-call.001
+phase: semantic
+kind: invalid
+source: 'items := [1]; items.reduce(0, @ -> @.badMethod())'
+coverage: [assignment, collection-literal, identifier, call, lambda, at-symbol, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_UNKNOWN_MEMBER
+    span: {offset: 36, endOffset: 48, line: 1, column: 37}

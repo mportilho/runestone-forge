@@ -1,0 +1,8 @@
+id: runtime.collection.reduce-empty.001
+phase: runtime
+kind: valid
+source: 'one := [1]; empty := one[1:1]; empty.reduce(10, @ -> @.accumulator + @.item)'
+coverage: [assignment, collection-literal, identifier, subscript-slice, call, lambda, at-symbol, property-access, additive]
+expected:
+  type: NUMBER
+  result: "10"

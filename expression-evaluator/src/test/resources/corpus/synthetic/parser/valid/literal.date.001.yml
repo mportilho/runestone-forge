@@ -1,0 +1,5 @@
+id: parser.literal.date.001
+phase: parser
+kind: valid
+source: 'd"2026-07-05"'
+coverage: [date-literal]

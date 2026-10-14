@@ -1,0 +1,10 @@
+id: runtime.arithmetic.multiply.rounded.001
+phase: runtime
+kind: valid
+source: '1.5 * 2.222222'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  mathContext: {precision: 3, roundingMode: HALF_UP}
+coverage: [float-literal, multiplicative]
+expected: {type: NUMBER, result: "3.33"}

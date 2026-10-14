@@ -76,6 +76,9 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             if (!parameterAnnotations.isEmpty()) {
                 operation.getParameters().removeIf(p -> p.getName().equals(parameterName));
                 for (FilterRequestData spec : parameterAnnotations) {
+                    if (spec.hidden()) {
+                        continue;
+                    }
                     try {
                         customizeParameter(operation, methodParameter, spec);
                     } catch (Exception e) {
@@ -104,6 +107,8 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             throw new IllegalStateException("Dynamic filter operation cannot have two parameters");
         }
 
+        FilterOperationMetadata metadata = filterOperationService.findMetadata(filter.operation());
+
         for (String parameterName : filter.parameters()) {
             Optional<io.swagger.v3.oas.models.parameters.Parameter> optParameter = operation.getParameters().stream()
                     .filter(p -> p.getName().equals(parameterName)).findFirst();
@@ -112,7 +117,6 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
             io.swagger.v3.oas.models.parameters.Parameter parameter = optParameter.orElse(new io.swagger.v3.oas.models.parameters.Parameter());
             parameter.setName(parameterName);
 
-            FilterOperationMetadata metadata = filterOperationService.findMetadata(filter.operation());
             if (FilterValueShape.DYNAMIC.equals(metadata.valueShape())) {
                 parameter.setSchema(createArraySchema(new StringSchema(), 2, null));
             } else {

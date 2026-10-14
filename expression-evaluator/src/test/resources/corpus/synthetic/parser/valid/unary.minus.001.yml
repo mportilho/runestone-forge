@@ -1,0 +1,5 @@
+id: parser.unary.minus.001
+phase: parser
+kind: valid
+source: '-a'
+coverage: [unary, identifier]

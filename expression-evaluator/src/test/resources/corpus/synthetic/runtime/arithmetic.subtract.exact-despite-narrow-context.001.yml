@@ -1,0 +1,13 @@
+id: runtime.arithmetic.subtract.exact-despite-narrow-context.001
+phase: runtime
+kind: valid
+source: '5.555555 - 2.222222'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  mathContext: {precision: 3, roundingMode: HALF_UP}
+# ADR 0021: - is exact — its scale is max(scale1, scale2), bounded per operand and
+# not rounding-obligated. A narrow environment MathContext (precision 3) must not
+# truncate the exact difference, unlike * which always rounds under the same context.
+coverage: [float-literal, additive]
+expected: {type: NUMBER, result: "3.333333"}

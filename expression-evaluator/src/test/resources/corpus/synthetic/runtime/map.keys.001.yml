@@ -1,0 +1,20 @@
+id: runtime.map.keys.001
+phase: runtime
+kind: valid
+source: 'm.keys()'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    m:
+      type: MAP_NUMBER
+      default:
+        b: {type: NUMBER, value: "2"}
+        A: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+coverage: [identifier, call]
+expected:
+  type: COLLECTION
+  result:
+    - {type: STRING, value: "A"}
+    - {type: STRING, value: "b"}

@@ -1,0 +1,11 @@
+id: runtime.collection.wildcard.001
+phase: runtime
+kind: valid
+source: 'items := [1, 2, 3]; items[*]'
+coverage: [collection-literal, wildcard]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "1"}
+    - {type: NUMBER, value: "2"}
+    - {type: NUMBER, value: "3"}

@@ -1,0 +1,10 @@
+id: runtime.collection.slice.open-start.001
+phase: runtime
+kind: valid
+source: 'items := [10, 20, 30, 40]; items[:2]'
+coverage: [assignment, collection-literal, identifier, subscript-slice]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "10"}
+    - {type: NUMBER, value: "20"}

@@ -1,0 +1,7 @@
+id: parser.syntax.empty-program.001
+phase: semantic
+kind: invalid
+source: ''
+coverage: [diagnostic]
+expected:
+  diagnostic: {category: SEMANTIC, code: SEMANTIC_EMPTY_EXPRESSION}

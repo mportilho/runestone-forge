@@ -1,0 +1,5 @@
+id: parser.subscript.wildcard.001
+phase: parser
+kind: valid
+source: 'items[*]'
+coverage: [wildcard, identifier]

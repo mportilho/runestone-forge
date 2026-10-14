@@ -1,0 +1,5 @@
+id: parser.safe.property.001
+phase: parser
+kind: valid
+source: 'customer?.name'
+coverage: [safe-navigation, property-access, identifier]

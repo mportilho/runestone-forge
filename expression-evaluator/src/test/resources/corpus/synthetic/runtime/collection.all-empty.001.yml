@@ -1,0 +1,8 @@
+id: runtime.collection.all-empty.001
+phase: runtime
+kind: valid
+source: 'one := [1]; empty := one[1:1]; empty.all(@ -> @ > 0)'
+coverage: [assignment, collection-literal, identifier, subscript-slice, call, lambda, at-symbol, comparison]
+expected:
+  type: BOOLEAN
+  result: true

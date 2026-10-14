@@ -1,0 +1,5 @@
+id: parser.root.basic.001
+phase: parser
+kind: valid
+source: '3 root 27'
+coverage: [root]

@@ -1,0 +1,18 @@
+id: runtime.map.count.001
+phase: runtime
+kind: valid
+source: 'm.count()'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    m:
+      type: MAP_NUMBER
+      default:
+        b: {type: NUMBER, value: "2"}
+        A: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+coverage: [identifier, call]
+expected:
+  type: NUMBER
+  result: "2"

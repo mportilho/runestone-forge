@@ -1,0 +1,6 @@
+id: runtime.comparison.not-in.threshold-above-string.001
+phase: runtime
+kind: valid
+source: '"z" not in ["a", "b", "c", "d", "e", "f", "g", "h", "i"]'
+coverage: [not-in, collection-literal, string-literal]
+expected: {type: BOOLEAN, result: true}

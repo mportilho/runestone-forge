@@ -1,0 +1,7 @@
+id: semantic.function.lambda-argument-unsupported.001
+phase: semantic
+kind: invalid
+source: 'unknown(@ -> @)'
+coverage: [call, lambda, at-symbol, diagnostic]
+expected:
+  diagnostic: {category: SEMANTIC, code: SEMANTIC_LAMBDA_ARGUMENT_UNSUPPORTED}

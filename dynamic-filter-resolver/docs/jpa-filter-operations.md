@@ -1,6 +1,6 @@
 # Operacoes de filtro JPA
 
-Este guia descreve as operacoes de filtro JPA registradas por `SpecificationFilterOperationService`. Cada operacao usa a anotacao `@Filter` para produzir uma `Specification<?>` do Spring Data JPA.
+Este guia descreve as operacoes de filtro JPA registradas por `JpaFilterOperationService`. Cada operacao usa a anotacao `@Filter` para produzir uma `Specification<?>` do Spring Data JPA. A conversao de valores usa `RuntimeDataConversionService`.
 
 Os exemplos assumem os imports abaixo, conforme a necessidade de cada caso:
 
@@ -402,7 +402,7 @@ Exemplos:
 
 ## Pseudo-operacoes do gerador
 
-`Dynamic` e `Decorated` tambem estendem `FilterOperation`, mas nao sao registradas como operacoes JPA em `SpecificationFilterOperationService`.
+`Dynamic` e `Decorated` tambem estendem `FilterOperation`, mas nao sao registradas como operacoes JPA em `JpaFilterOperationService`.
 
 `Dynamic` e resolvida pelo gerador de statements antes da criacao da `Specification`. O primeiro valor recebido indica a operacao real: `EQ`, `LT`, `LE`, `GT`, `GE`, `LK`, `SW`, `EW`, `IN` ou `BT`. Prefixe com `N`, como `NEQ` ou `NLK`, para negar a operacao escolhida.
 

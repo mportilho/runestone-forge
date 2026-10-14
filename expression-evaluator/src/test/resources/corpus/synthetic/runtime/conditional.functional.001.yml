@@ -1,0 +1,6 @@
+id: runtime.conditional.functional.001
+phase: runtime
+kind: valid
+source: 'if(true; 1; 0)'
+coverage: [if-functional, boolean-literal]
+expected: {type: NUMBER, result: "1"}

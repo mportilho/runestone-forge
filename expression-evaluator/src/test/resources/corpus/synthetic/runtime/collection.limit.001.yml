@@ -1,0 +1,13 @@
+id: semantic.collection.limit.001
+phase: semantic
+kind: invalid
+source: '[1, 2, 3]'
+environment:
+  maxMaterializedSize: 2
+  maxFactorialInput: 32
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_MATERIALIZATION_LIMIT_EXCEEDED
+    span: {offset: 0, endOffset: 9, line: 1, column: 1}
+coverage: [collection-literal]

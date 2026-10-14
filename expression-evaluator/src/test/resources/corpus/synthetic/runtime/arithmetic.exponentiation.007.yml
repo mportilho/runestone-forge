@@ -1,0 +1,10 @@
+id: runtime.arithmetic.exponentiation.007
+phase: runtime
+kind: valid
+source: '(-3) ^ 0.2'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  mathContext: {precision: 6, roundingMode: CEILING}
+coverage: [exponentiation, unary, parentheses]
+expected: {type: NUMBER, result: "-1.24573"}

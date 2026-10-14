@@ -1,0 +1,6 @@
+id: runtime.comparison.in.scale-mismatch.001
+phase: runtime
+kind: valid
+source: '1.0 in [1, 2]'
+coverage: [in, collection-literal, float-literal, int-literal]
+expected: {type: BOOLEAN, result: true}

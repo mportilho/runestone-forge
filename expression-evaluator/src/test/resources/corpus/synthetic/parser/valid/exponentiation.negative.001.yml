@@ -1,0 +1,5 @@
+id: parser.exponentiation.negative.001
+phase: parser
+kind: valid
+source: '2 ^ -3'
+coverage: [exponentiation, unary]

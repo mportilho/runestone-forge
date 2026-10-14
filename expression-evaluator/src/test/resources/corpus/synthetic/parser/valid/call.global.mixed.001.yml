@@ -1,0 +1,5 @@
+id: parser.call.global.mixed.001
+phase: parser
+kind: valid
+source: 'reduce(values, 0, @ -> @.accumulator + @.item)'
+coverage: [function-call, lambda, at-symbol, additive, property-access, identifier]

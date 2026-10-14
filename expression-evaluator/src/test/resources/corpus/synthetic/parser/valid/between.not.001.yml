@@ -1,0 +1,5 @@
+id: parser.between.not.001
+phase: parser
+kind: valid
+source: 'x not between 1 and 10'
+coverage: [between, identifier]

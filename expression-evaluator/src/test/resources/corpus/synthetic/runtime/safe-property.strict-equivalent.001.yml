@@ -1,0 +1,16 @@
+id: runtime.safe-property.strict-equivalent.001
+phase: runtime
+kind: valid
+source: 'provider.name'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    provider:
+      type: OBJECT_NAVIGATION_CONTRACT_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, property-access]
+expected:
+  type: STRING
+  result: "Ana"

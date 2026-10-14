@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.support;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.operation.support.FilterDataRequirements;
 import jakarta.persistence.criteria.Expression;
@@ -33,6 +33,7 @@ import jakarta.persistence.metamodel.Bindable;
 import jakarta.persistence.metamodel.PluralAttribute;
 
 import java.util.Collection;
+import java.util.Objects;
 
 public final class JpaCollections {
 
@@ -41,12 +42,19 @@ public final class JpaCollections {
 
     @SuppressWarnings("unchecked")
     public static Expression<Collection<?>> requireCollectionExpression(Expression<?> expression, String operationName) {
-        Class<?> javaType = expression.getJavaType();
-        if (!Collection.class.isAssignableFrom(javaType)) {
+        if (!isCollectionExpression(expression)) {
+            Class<?> javaType = expression.getJavaType();
             throw new DynamicFilterConfigurationException("%s requires a collection path, but found %s"
                     .formatted(operationName, javaType.getCanonicalName()));
         }
         return (Expression<Collection<?>>) expression;
+    }
+
+    public static boolean isCollectionExpression(Expression<?> expression) {
+        if (Collection.class.isAssignableFrom(expression.getJavaType())) {
+            return true;
+        }
+        return expression instanceof Path<?> path && path.getModel() instanceof PluralAttribute<?, ?, ?>;
     }
 
     public static Class<?> findCollectionElementType(Expression<?> expression) {
@@ -61,10 +69,11 @@ public final class JpaCollections {
 
     public static int requireNonNegativeSize(
             Object value,
-            DataConversionService conversionService,
+            RuntimeDataConversionService conversionService,
             String operationName,
             String valueName
     ) {
+        Objects.requireNonNull(conversionService, "conversionService cannot be null");
         Object nonNullValue = FilterDataRequirements.requireValue(value, operationName, valueName);
         Integer converted = conversionService.convert(nonNullValue, Integer.class);
         if (converted == null || converted < 0) {

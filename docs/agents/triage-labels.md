@@ -11,3 +11,5 @@ The skills use five canonical triage roles. This table maps those roles to label
 | `wontfix` | `wontfix` | Will not be actioned |
 
 When a skill mentions a canonical role, use the corresponding tracker label.
+
+Create any missing canonical labels before applying them to issues.

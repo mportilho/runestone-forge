@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.support;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Path;
@@ -41,6 +41,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
@@ -55,7 +56,7 @@ class TestJpaCollections {
     private Path<?> path;
 
     @Mock
-    private DataConversionService conversionService;
+    private RuntimeDataConversionService conversionService;
 
     @Test
     @DisplayName("requireCollectionExpression accepts collection expressions")
@@ -116,6 +117,14 @@ class TestJpaCollections {
         assertThatThrownBy(() -> JpaCollections.requireNonNegativeSize(null, conversionService, "CollectionSize", "size"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("CollectionSize requires non-null size");
+    }
+
+    @Test
+    @DisplayName("requireNonNegativeSize rejects null conversion service")
+    void testRequireNonNegativeSizeRejectsNullConversionService() {
+        assertThatNullPointerException()
+                .isThrownBy(() -> JpaCollections.requireNonNegativeSize("3", null, "CollectionSize", "size"))
+                .withMessage("conversionService cannot be null");
     }
 
     @Test

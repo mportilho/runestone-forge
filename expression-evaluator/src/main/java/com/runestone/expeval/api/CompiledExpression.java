@@ -1,0 +1,44 @@
+package com.runestone.expeval.api;
+
+import com.runestone.expeval.internal.plan.ExecutionPlan;
+import com.runestone.expeval.internal.runtime.RuntimeServices;
+
+import java.util.List;
+import java.util.Objects;
+
+public final class CompiledExpression {
+
+    private final ExecutionPlan plan;
+    private final RuntimeServices runtimeServices;
+    private final List<ExpressionDiagnostic> compilationDiagnostics;
+
+    CompiledExpression(ExecutionPlan plan, RuntimeServices runtimeServices, List<ExpressionDiagnostic> compilationDiagnostics) {
+        this.plan = Objects.requireNonNull(plan, "plan");
+        this.runtimeServices = Objects.requireNonNull(runtimeServices, "runtimeServices");
+        this.compilationDiagnostics = List.copyOf(Objects.requireNonNull(compilationDiagnostics, "compilationDiagnostics"));
+    }
+
+    public List<ExpressionDiagnostic> compilationDiagnostics() {
+        return compilationDiagnostics;
+    }
+
+    int estimatedRetainedPlanWeight() {
+        return plan.estimatedRetainedWeight();
+    }
+
+    public ResultExpression asResult() {
+        return new ResultExpression(plan, runtimeServices);
+    }
+
+    public MathExpression asMath() {
+        return new MathExpression(plan, runtimeServices);
+    }
+
+    public LogicalExpression asLogical() {
+        return new LogicalExpression(plan, runtimeServices);
+    }
+
+    public AssignmentsExpression asAssignments() {
+        return new AssignmentsExpression(plan, runtimeServices);
+    }
+}

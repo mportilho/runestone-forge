@@ -1,0 +1,6 @@
+id: runtime.arithmetic.multiply-precedence.001
+phase: runtime
+kind: valid
+source: '1 + 2 * 3'
+coverage: [additive, multiplicative, precedence]
+expected: {type: NUMBER, result: "7"}

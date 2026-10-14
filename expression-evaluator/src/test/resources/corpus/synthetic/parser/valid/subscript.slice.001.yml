@@ -1,0 +1,5 @@
+id: parser.subscript.slice.001
+phase: parser
+kind: valid
+source: 'items[-10:20]'
+coverage: [subscript-slice, identifier]

@@ -1,0 +1,6 @@
+id: runtime.logical.and.001
+phase: runtime
+kind: valid
+source: 'true and false'
+coverage: [logical-and, boolean-literal]
+expected: {type: BOOLEAN, result: false}

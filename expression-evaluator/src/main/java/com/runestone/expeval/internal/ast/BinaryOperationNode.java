@@ -1,18 +1,23 @@
 package com.runestone.expeval.internal.ast;
 
+import com.runestone.expeval.api.SourceSpan;
+
+import java.util.Objects;
+
 public record BinaryOperationNode(
-    NodeId nodeId,
-    SourceSpan sourceSpan,
-    BinaryOperator operator,
-    ExpressionNode left,
-    ExpressionNode right
-) implements ExpressionNode {
+        NodeId id,
+        SourceSpan sourceSpan,
+        ExpressionNode left,
+        BinaryOperator operator,
+        SourceSpan operatorSpan,
+        ExpressionNode right) implements ExpressionNode {
 
     public BinaryOperationNode {
-        AstValidation.requireNodeId(nodeId);
-        AstValidation.requireSourceSpan(sourceSpan);
-        AstValidation.requireNonNull(operator, "operator");
-        AstValidation.requireNonNull(left, "left");
-        AstValidation.requireNonNull(right, "right");
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(sourceSpan, "sourceSpan");
+        Objects.requireNonNull(left, "left");
+        Objects.requireNonNull(operator, "operator");
+        Objects.requireNonNull(operatorSpan, "operatorSpan");
+        Objects.requireNonNull(right, "right");
     }
 }

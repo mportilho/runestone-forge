@@ -1,26 +1,33 @@
 package com.runestone.expeval.internal.ast;
 
+import com.runestone.expeval.api.SourceSpan;
+
 import java.util.List;
+import java.util.Objects;
 
 public record ConditionalNode(
-    NodeId nodeId,
-    SourceSpan sourceSpan,
-    List<ExpressionNode> conditions,
-    List<ExpressionNode> results,
-    ExpressionNode elseExpression
-) implements ExpressionNode {
+        NodeId id,
+        SourceSpan sourceSpan,
+        ConditionalSyntax syntax,
+        List<ConditionalBranchNode> branches,
+        List<ConditionalSeparatorOccurrence> separators,
+        ExpressionNode elseExpression) implements ExpressionNode {
 
     public ConditionalNode {
-        AstValidation.requireNodeId(nodeId);
-        AstValidation.requireSourceSpan(sourceSpan);
-        conditions = AstValidation.copyList(conditions, "conditions");
-        results = AstValidation.copyList(results, "results");
-        if (conditions.isEmpty()) {
-            throw new IllegalArgumentException("conditions must not be empty");
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(sourceSpan, "sourceSpan");
+        Objects.requireNonNull(syntax, "syntax");
+        Objects.requireNonNull(branches, "branches");
+        branches = List.copyOf(branches);
+        Objects.requireNonNull(separators, "separators");
+        separators = List.copyOf(separators);
+        Objects.requireNonNull(elseExpression, "elseExpression");
+        if (branches.isEmpty()) {
+            throw new IllegalArgumentException("conditional expression needs at least one branch");
         }
-        if (conditions.size() != results.size()) {
-            throw new IllegalArgumentException("conditions and results must have the same size");
+        int expectedSeparators = syntax == ConditionalSyntax.FUNCTIONAL ? branches.size() * 2 : 0;
+        if (separators.size() != expectedSeparators) {
+            throw new IllegalArgumentException("conditional separator count does not match its syntax");
         }
-        AstValidation.requireNonNull(elseExpression, "elseExpression");
     }
 }

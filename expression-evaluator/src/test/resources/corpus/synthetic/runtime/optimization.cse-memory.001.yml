@@ -1,0 +1,16 @@
+id: runtime.optimization.cse-memory.001
+phase: runtime
+kind: valid
+source: 'sqrt(x) + sqrt(x)'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    x:
+      type: NUMBER
+      default: {type: NUMBER, value: "9"}
+      overwritePolicy: OVERRIDABLE
+inputs:
+  x: {type: NUMBER, value: "16"}
+coverage: [function-call, identifier, additive]
+expected: {type: NUMBER, result: "8"}

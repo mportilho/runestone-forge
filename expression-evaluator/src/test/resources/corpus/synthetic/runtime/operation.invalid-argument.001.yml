@@ -1,0 +1,21 @@
+id: runtime.operation.invalid-argument.001
+phase: runtime
+kind: invalid
+source: 'items.sortBy(@ -> @, dir)'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    items:
+      type: COLLECTION_NUMBER
+      default: [{type: NUMBER, value: "10"}, {type: NUMBER, value: "20"}, {type: NUMBER, value: "30"}]
+      overwritePolicy: FIXED
+    dir:
+      type: STRING
+      default: {type: STRING, value: "cima"}
+      overwritePolicy: FIXED
+coverage: [identifier, call, lambda, at-symbol, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_INVALID_OPERATION_ARGUMENT
+    span: {offset: 5, endOffset: 25, line: 1, column: 6}

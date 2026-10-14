@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.api;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.operation.AbstractFilterOperationService;
 import com.runestone.dynafilter.core.operation.FilterArity;
 import com.runestone.dynafilter.core.operation.FilterOperation;
@@ -98,20 +98,20 @@ public class JpaFilterOperationService extends AbstractFilterOperationService<Sp
 
     private static final ZoneId DEFAULT_ZONE_ID = ZoneOffset.UTC;
 
-    public JpaFilterOperationService(DataConversionService conversionService) {
+    public JpaFilterOperationService(RuntimeDataConversionService conversionService) {
         this(conversionService, DEFAULT_ZONE_ID, List.of());
     }
 
-    public JpaFilterOperationService(DataConversionService conversionService, List<JpaFilterOperationContributor> contributors) {
+    public JpaFilterOperationService(RuntimeDataConversionService conversionService, List<JpaFilterOperationContributor> contributors) {
         this(conversionService, DEFAULT_ZONE_ID, contributors);
     }
 
-    public JpaFilterOperationService(DataConversionService conversionService, ZoneId zoneId) {
+    public JpaFilterOperationService(RuntimeDataConversionService conversionService, ZoneId zoneId) {
         this(conversionService, zoneId, List.of());
     }
 
     public JpaFilterOperationService(
-            DataConversionService conversionService,
+            RuntimeDataConversionService conversionService,
             ZoneId zoneId,
             List<JpaFilterOperationContributor> contributors
     ) {
@@ -119,7 +119,7 @@ public class JpaFilterOperationService extends AbstractFilterOperationService<Sp
     }
 
     private static FilterOperationRegistry<Specification<?>> createOperationRegistry(
-            DataConversionService conversionService,
+            RuntimeDataConversionService conversionService,
             ZoneId zoneId,
             List<JpaFilterOperationContributor> contributors
     ) {
@@ -193,7 +193,7 @@ public class JpaFilterOperationService extends AbstractFilterOperationService<Sp
 
     private record DefaultJpaFilterOperationRegistry(
             FilterOperationRegistry<Specification<?>> registry,
-            DataConversionService conversionService,
+            RuntimeDataConversionService conversionService,
             ZoneId zoneId
     ) implements JpaFilterOperationRegistry {
 

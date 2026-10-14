@@ -1,0 +1,17 @@
+id: runtime.subscript.index-safe-non-indexable.001
+phase: runtime
+kind: invalid
+source: 'n?.[0]'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    n:
+      type: NUMBER
+      default: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+coverage: [identifier, subscript-index, int-literal, safe-navigation, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED

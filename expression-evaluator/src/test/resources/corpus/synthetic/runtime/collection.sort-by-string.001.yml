@@ -1,0 +1,10 @@
+id: runtime.collection.sort-by-string.001
+phase: runtime
+kind: valid
+source: 'items := ["b", "a"]; items.sortBy(@ -> @, "asc")'
+coverage: [assignment, collection-literal, string-literal, identifier, call, lambda, at-symbol]
+expected:
+  type: COLLECTION
+  result:
+    - {type: STRING, value: "a"}
+    - {type: STRING, value: "b"}

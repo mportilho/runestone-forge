@@ -1,0 +1,5 @@
+id: parser.logical.or.001
+phase: parser
+kind: valid
+source: 'a or b'
+coverage: [logical-or, identifier]

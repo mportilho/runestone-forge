@@ -1,0 +1,6 @@
+id: runtime.comparison.less-than.001
+phase: runtime
+kind: valid
+source: '1 < 2'
+coverage: [comparison]
+expected: {type: BOOLEAN, result: true}

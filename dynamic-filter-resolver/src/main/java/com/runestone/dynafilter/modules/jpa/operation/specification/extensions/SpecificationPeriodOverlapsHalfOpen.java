@@ -24,13 +24,13 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.modules.jpa.support.IntervalBounds;
 
 public class SpecificationPeriodOverlapsHalfOpen<T> extends AbstractPeriodOverlapsSpecification<T> {
 
-    public SpecificationPeriodOverlapsHalfOpen(FilterData filterData, DataConversionService dataConversionService) {
+    public SpecificationPeriodOverlapsHalfOpen(FilterData filterData, RuntimeDataConversionService dataConversionService) {
         super(filterData, dataConversionService, IntervalBounds.START_INCLUSIVE_END_EXCLUSIVE);
     }
 

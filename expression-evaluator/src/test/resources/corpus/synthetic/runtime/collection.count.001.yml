@@ -1,0 +1,11 @@
+id: runtime.collection.count.001
+phase: runtime
+kind: valid
+source: 'items := [1, 2, 3]; items.count()'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+coverage: [assignment, collection-literal, identifier, call]
+expected:
+  type: NUMBER
+  result: "3"

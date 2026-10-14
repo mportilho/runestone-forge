@@ -24,9 +24,10 @@
 
 package com.runestone.dynafilter.modules.openapi;
 
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
+import com.runestone.dynafilter.core.generator.annotation.DisjunctionFrom;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.generator.annotation.FilterTarget;
 import com.runestone.dynafilter.core.operation.FilterOperation;
@@ -51,6 +52,7 @@ import io.swagger.v3.oas.models.parameters.Parameter;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.method.HandlerMethod;
 
@@ -106,6 +108,42 @@ public class TestDynaFilterOperationCustomizer {
         Assertions.assertThat(from.getSchema().getFormat()).isEqualTo("date");
         Assertions.assertThat(to.getSchema().getType()).isEqualTo("string");
         Assertions.assertThat(to.getSchema().getFormat()).isEqualTo("date");
+    }
+
+    @Test
+    @DisplayName("Filter metadata is resolved once for all parameters of a filter")
+    public void testBetweenFilterResolvesMetadataOnce() throws NoSuchMethodException {
+        JpaFilterOperationService service = Mockito.spy(operationService(List.of()));
+
+        Operation operation = customize("documentBetweenFilter", service);
+
+        Assertions.assertThat(operation.getParameters())
+                .extracting(Parameter::getName)
+                .containsExactly("registeredAtFrom", "registeredAtTo");
+        Mockito.verify(service, Mockito.times(1)).findMetadata(Between.class);
+    }
+
+    @Test
+    @DisplayName("DisjunctionFrom filters remain exposed as OpenAPI parameters")
+    public void testDisjunctionFromFilterCreatesTargetFieldSchema() throws NoSuchMethodException {
+        Operation operation = customize("documentDisjunctionFromFilter");
+
+        Parameter parameter = findParameter(operation, "name");
+
+        Assertions.assertThat(parameter.getSchema()).isInstanceOf(StringSchema.class);
+        Assertions.assertThat(parameter.getDescription()).isEqualTo("User name");
+        Assertions.assertThat(operation.getParameters())
+                .extracting(Parameter::getName)
+                .doesNotContain("filters");
+    }
+
+    @Test
+    @DisplayName("Built-in filters reject unresolved target fields instead of silently falling back to strings")
+    public void testBuiltInFilterWithoutResolvableFieldFails() {
+        Assertions.assertThatThrownBy(() -> customize("documentBuiltInFilterWithoutResolvableField"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Cannot build custom OpenAPI parameters")
+                .hasRootCauseInstanceOf(com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException.class);
     }
 
     @Test
@@ -216,7 +254,7 @@ public class TestDynaFilterOperationCustomizer {
     }
 
     private static JpaFilterOperationService operationService(List<JpaFilterOperationContributor> contributors) {
-        return new JpaFilterOperationService(new DefaultDataConversionService(), contributors);
+        return new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard(), contributors);
     }
 
     private static JpaFilterOperationContributor customOperationContributor(FilterOperationMetadata metadata) {
@@ -277,6 +315,22 @@ public class TestDynaFilterOperationCustomizer {
                 @io.swagger.v3.oas.annotations.Parameter(name = "filters")
                 @FilterTarget(OpenApiFilterTarget.class)
                 @Conjunction(@Filter(path = "name", parameters = "name", operation = Equals.class, description = "User name"))
+                ConditionalStatement filters
+        ) {
+        }
+
+        public void documentDisjunctionFromFilter(
+                @io.swagger.v3.oas.annotations.Parameter(name = "filters")
+                @FilterTarget(OpenApiFilterTarget.class)
+                @DisjunctionFrom(NameFilter.class)
+                ConditionalStatement filters
+        ) {
+        }
+
+        public void documentBuiltInFilterWithoutResolvableField(
+                @io.swagger.v3.oas.annotations.Parameter(name = "filters")
+                @FilterTarget(OpenApiFilterTarget.class)
+                @Conjunction(@Filter(path = "missing", parameters = "missing", operation = Equals.class))
                 ConditionalStatement filters
         ) {
         }
@@ -369,5 +423,12 @@ public class TestDynaFilterOperationCustomizer {
     }
 
     private interface CustomOperation<T> extends FilterOperation<T> {
+    }
+
+    @FilterTarget(OpenApiFilterTarget.class)
+    private record NameFilter(
+            @Filter(path = "name", parameters = "name", operation = Equals.class, description = "User name")
+            String name
+    ) {
     }
 }

@@ -24,13 +24,13 @@
 
 package com.runestone.dynafilter.modules.jpa.operation.specification.extensions;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.modules.jpa.support.ComparisonOperator;
 
 public class SpecificationNullOrGreaterOrEquals<T> extends AbstractNullOrComparisonSpecification<T> {
 
-    public SpecificationNullOrGreaterOrEquals(FilterData filterData, DataConversionService dataConversionService) {
+    public SpecificationNullOrGreaterOrEquals(FilterData filterData, RuntimeDataConversionService dataConversionService) {
         super(filterData, dataConversionService, ComparisonOperator.GREATER_THAN_OR_EQUAL_TO);
     }
 

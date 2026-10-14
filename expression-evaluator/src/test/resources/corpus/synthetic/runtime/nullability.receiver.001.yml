@@ -1,0 +1,18 @@
+id: semantic.nullability.receiver.001
+phase: semantic
+kind: invalid
+source: 'm?.["first"][0]'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    m:
+      type: MAP_COLLECTION_NUMBER
+      default:
+        first: [{type: NUMBER, value: "1"}]
+      overwritePolicy: FIXED
+coverage: [identifier, safe-navigation, subscript-key, subscript-index, string-literal, int-literal, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_NULLABLE_RECEIVER_NOT_ALLOWED

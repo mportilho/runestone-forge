@@ -1,0 +1,5 @@
+id: parser.postfix.factorial.001
+phase: parser
+kind: valid
+source: '5!'
+coverage: [postfix-factorial]

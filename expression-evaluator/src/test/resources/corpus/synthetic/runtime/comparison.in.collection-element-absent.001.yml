@@ -1,0 +1,6 @@
+id: runtime.comparison.in.collection-element-absent.001
+phase: runtime
+kind: valid
+source: '[1, 2] in [[3, 4], [5, 6]]'
+coverage: [in, collection-literal, int-literal]
+expected: {type: BOOLEAN, result: false}

@@ -24,8 +24,8 @@
 
 package com.runestone.dynafilter.modules.jpa.spring;
 
-import com.runestone.converters.DataConversionService;
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
@@ -46,6 +46,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringValueResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.util.Objects;
+
 public class DynamicFilterServletAutoConfiguration implements EmbeddedValueResolverAware, ApplicationContextAware {
 
     private ApplicationContext applicationContext;
@@ -63,16 +65,18 @@ public class DynamicFilterServletAutoConfiguration implements EmbeddedValueResol
 
     @Bean
     @ConditionalOnMissingBean
-    public DataConversionService dataConversionService() {
-        return new DefaultDataConversionService();
+    public RuntimeDataConversionService runtimeDataConversionService() {
+        return DefaultRuntimeDataConversionService.standard();
     }
 
     @Bean
     @ConditionalOnMissingBean
     public FilterOperationService<Specification<?>> specificationFilterOperationService(
-            DataConversionService dataConversionService,
+            RuntimeDataConversionService dataConversionService,
             ObjectProvider<JpaFilterOperationContributor> contributors
     ) {
+        Objects.requireNonNull(dataConversionService, "dataConversionService cannot be null");
+        Objects.requireNonNull(contributors, "contributors cannot be null");
         return new JpaFilterOperationService(dataConversionService, contributors.orderedStream().toList());
     }
 

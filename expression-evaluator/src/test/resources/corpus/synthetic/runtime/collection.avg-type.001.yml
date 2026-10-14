@@ -1,0 +1,13 @@
+id: semantic.collection.avg-type.001
+phase: semantic
+kind: invalid
+source: 'items := ["a"]; items.avg()'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+coverage: [assignment, collection-literal, string-literal, identifier, call, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_NAVIGATION_RECEIVER_NOT_SUPPORTED
+    span: {offset: 21, endOffset: 27, line: 1, column: 22}

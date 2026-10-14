@@ -1,0 +1,9 @@
+id: semantic.power.complex-domain.001
+phase: semantic
+kind: invalid
+source: '(-8) ^ 0.5'
+coverage: [exponentiation, unary, parentheses, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_POWER_COMPLEX_DOMAIN

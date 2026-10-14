@@ -1,0 +1,10 @@
+id: runtime.subscript.index-strict-static-out-of-range.001
+phase: runtime
+kind: invalid
+source: 'c := [10, 20, 30]; c[7]'
+coverage: [assignment, collection-literal, identifier, subscript-index, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_COLLECTION_INDEX_OUT_OF_BOUNDS
+    span: {offset: 20, endOffset: 23, line: 1, column: 21}

@@ -1,0 +1,20 @@
+id: semantic.map.entry-method-call.001
+phase: semantic
+kind: invalid
+source: 'm.map(@ -> @.badMethod())'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    m:
+      type: MAP_NUMBER
+      default:
+        b: {type: NUMBER, value: "2"}
+        A: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+coverage: [identifier, call, lambda, at-symbol, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_UNKNOWN_MEMBER
+    span: {offset: 12, endOffset: 24, line: 1, column: 13}

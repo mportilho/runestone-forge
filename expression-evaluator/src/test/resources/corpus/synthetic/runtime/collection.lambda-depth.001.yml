@@ -1,0 +1,13 @@
+id: semantic.collection.lambda-depth.001
+phase: semantic
+kind: invalid
+source: 'outer := [[1]]; outer.map(@ -> @.map(@ -> @))'
+environment:
+  maxMaterializedSize: 16
+  maxFactorialInput: 32
+  maxCurrentItemDepth: 1
+coverage: [assignment, collection-literal, identifier, call, lambda, at-symbol, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_CURRENT_ITEM_DEPTH_EXCEEDED

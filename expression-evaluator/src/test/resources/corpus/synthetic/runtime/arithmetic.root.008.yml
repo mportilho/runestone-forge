@@ -1,0 +1,19 @@
+id: runtime.arithmetic.root.008
+phase: runtime
+kind: invalid
+source: 'degree root 0'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    degree:
+      type: NUMBER
+      default: {type: NUMBER, value: "1"}
+      overwritePolicy: OVERRIDABLE
+inputs:
+  degree: {type: NUMBER, value: "-3"}
+coverage: [root, identifier, diagnostic]
+expected:
+  runtimeError:
+    code: RUNTIME_ROOT_UNDEFINED
+    span: {offset: 7, endOffset: 11, line: 1, column: 8}

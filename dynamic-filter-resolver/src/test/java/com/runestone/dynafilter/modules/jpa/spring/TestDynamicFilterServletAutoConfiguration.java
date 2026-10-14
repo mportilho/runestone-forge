@@ -24,7 +24,8 @@
 
 package com.runestone.dynafilter.modules.jpa.spring;
 
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.generator.ValueExpressionResolver;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
@@ -47,6 +48,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringValueResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.time.ZoneId;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 public class TestDynamicFilterServletAutoConfiguration {
@@ -81,12 +85,26 @@ public class TestDynamicFilterServletAutoConfiguration {
     }
 
     @Test
+    @DisplayName("Auto-configuration exposes the default runtime conversion service")
+    public void testRuntimeDataConversionServiceCreation() {
+        DynamicFilterServletAutoConfiguration servletConfig = new DynamicFilterServletAutoConfiguration();
+
+        RuntimeDataConversionService conversionService = servletConfig.runtimeDataConversionService();
+        StringBuilder runtimeValue = new StringBuilder("runtime");
+
+        Assertions.assertThat(conversionService).isInstanceOf(DefaultRuntimeDataConversionService.class);
+        Assertions.assertThat(conversionService.conversionContext().zoneId()).isEqualTo(ZoneId.systemDefault());
+        Assertions.assertThat(conversionService.conversionContext().locale()).isEqualTo(Locale.getDefault());
+        Assertions.assertThat(conversionService.convert(runtimeValue, CharSequence.class)).isSameAs(runtimeValue);
+    }
+
+    @Test
     @DisplayName("Auto-configuration creates a resolver backed by the default JPA operation service")
     public void testDynamicFilterResolverCreation() {
         DynamicFilterServletAutoConfiguration servletConfig = new DynamicFilterServletAutoConfiguration();
 
         FilterOperationService<Specification<?>> operationService = servletConfig.specificationFilterOperationService(
-                new DefaultDataConversionService(),
+                DefaultRuntimeDataConversionService.standard(),
                 emptyContributors()
         );
         DynamicFilterResolver<Specification<?>> resolver = servletConfig.dynamicFilterResolver(operationService);
@@ -102,12 +120,17 @@ public class TestDynamicFilterServletAutoConfiguration {
     @DisplayName("Auto-configuration creates an operation service with application contributors")
     public void testSpecificationFilterOperationServiceCreationWithContributors() {
         DynamicFilterServletAutoConfiguration servletConfig = new DynamicFilterServletAutoConfiguration();
+        RuntimeDataConversionService conversionService = DefaultRuntimeDataConversionService.standard();
         Specification<?> customSpecification = (root, query, builder) -> null;
+        AtomicReference<RuntimeDataConversionService> operationConversionService = new AtomicReference<>();
         JpaFilterOperationContributor contributor = registry ->
-                registry.register(CustomOperation.class, FilterOperationMetadata.targetField(), context -> customSpecification);
+                registry.register(CustomOperation.class, FilterOperationMetadata.targetField(), context -> {
+                    operationConversionService.set(context.conversionService());
+                    return customSpecification;
+                });
 
         FilterOperationService<Specification<?>> operationService = servletConfig.specificationFilterOperationService(
-                new DefaultDataConversionService(),
+                conversionService,
                 contributors(contributor)
         );
         FilterData filterData = FilterData.of("name", new String[]{"name"}, String.class, CustomOperation.class, new Object[]{"John"});
@@ -115,6 +138,7 @@ public class TestDynamicFilterServletAutoConfiguration {
         Specification<?> specification = operationService.createFilter(filterData);
 
         Assertions.assertThat(specification).isSameAs(customSpecification);
+        Assertions.assertThat(operationConversionService).hasValue(conversionService);
         Assertions.assertThat(operationService.supports(CustomOperation.class)).isTrue();
     }
 

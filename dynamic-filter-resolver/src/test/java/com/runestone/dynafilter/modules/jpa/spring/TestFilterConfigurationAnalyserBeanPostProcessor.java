@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.spring;
 
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
@@ -76,7 +76,7 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
         TypeAnnotationUtils.clearCaches();
         AnnotationStatementGenerator statementGenerator = Mockito.mock(AnnotationStatementGenerator.class);
         FilterConfigurationAnalyserBeanPostProcessor postProcessor = new FilterConfigurationAnalyserBeanPostProcessor(
-                new JpaFilterOperationService(new DefaultDataConversionService()), statementGenerator);
+                new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard()), statementGenerator);
 
         postProcessor.postProcessAfterInitialization(new ValidController(), "validController");
 
@@ -88,7 +88,7 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
     public void testWarmupCompilesPlanForNonPublicControllerMethod() {
         AnnotationStatementGenerator statementGenerator = Mockito.mock(AnnotationStatementGenerator.class);
         FilterConfigurationAnalyserBeanPostProcessor postProcessor = new FilterConfigurationAnalyserBeanPostProcessor(
-                new JpaFilterOperationService(new DefaultDataConversionService()), statementGenerator);
+                new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard()), statementGenerator);
 
         postProcessor.postProcessAfterInitialization(new NonPublicMethodController(), "nonPublicMethodController");
 
@@ -124,7 +124,7 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
         JpaFilterOperationContributor contributor = registry ->
                 registry.register(CustomOperation.class, FilterOperationMetadata.targetField(), context -> (root, query, builder) -> null);
         FilterConfigurationAnalyserBeanPostProcessor postProcessor = newPostProcessor(
-                new JpaFilterOperationService(new DefaultDataConversionService(), List.of(contributor))
+                new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard(), List.of(contributor))
         );
 
         Assertions.assertThatCode(() -> postProcessor.postProcessAfterInitialization(new UnregisteredOperationController(), "registeredOperationController"))
@@ -323,7 +323,7 @@ public class TestFilterConfigurationAnalyserBeanPostProcessor {
     }
 
     private static FilterConfigurationAnalyserBeanPostProcessor newPostProcessor() {
-        return newPostProcessor(new JpaFilterOperationService(new DefaultDataConversionService()));
+        return newPostProcessor(new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard()));
     }
 
     private static FilterConfigurationAnalyserBeanPostProcessor newPostProcessor(FilterOperationService<Specification<?>> filterOperationService) {

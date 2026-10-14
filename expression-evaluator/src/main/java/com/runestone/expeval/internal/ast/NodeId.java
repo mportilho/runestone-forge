@@ -1,13 +1,12 @@
 package com.runestone.expeval.internal.ast;
 
-import java.util.Objects;
+public record NodeId(int value) {
 
-public record NodeId(String value) {
+    static final NodeId UNASSIGNED = new NodeId(-1);
 
     public NodeId {
-        Objects.requireNonNull(value, "value must not be null");
-        if (value.isBlank()) {
-            throw new IllegalArgumentException("value must not be blank");
+        if (value < -1) {
+            throw new IllegalArgumentException("value must be -1 or greater");
         }
     }
 }

@@ -1,6 +1,6 @@
 package com.runestone.dynafilter.perf.jmh;
 
-import com.runestone.converters.impl.DefaultDataConversionService;
+import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGenerator;
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
@@ -62,7 +62,7 @@ public class FilterValueTransformerArgumentResolverBenchmark {
             generator.warmup(new AnnotationStatementInput(
                     parameter.getParameterType(), parameter.getParameterAnnotations()));
 
-            JpaFilterOperationService operationService = new JpaFilterOperationService(new DefaultDataConversionService());
+            JpaFilterOperationService operationService = new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard());
             resolver = new SpecificationDynamicFilterArgumentResolver(
                     generator, new SpecificationDynamicFilterResolver(operationService),
                     input -> FilterDecorator.of(List.of()));

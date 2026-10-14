@@ -1,0 +1,5 @@
+id: parser.unary.not.001
+phase: parser
+kind: valid
+source: '!flag'
+coverage: [unary, identifier]

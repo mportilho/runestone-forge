@@ -1,0 +1,6 @@
+id: runtime.arithmetic.exponentiation.004
+phase: runtime
+kind: valid
+source: '(-32) ^ 0.2'
+coverage: [exponentiation, unary, parentheses]
+expected: {type: NUMBER, result: "-2"}

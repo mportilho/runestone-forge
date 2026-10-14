@@ -1,0 +1,10 @@
+id: parser.syntax.hex-subscript.001
+phase: parser
+kind: invalid
+source: 'items[0x1F]'
+coverage: [subscript-index, diagnostic]
+expected:
+  diagnostic:
+    category: PARSE
+    code: PARSE_NO_VIABLE_ALTERNATIVE
+    span: {offset: 7, endOffset: 10, line: 1, column: 8}

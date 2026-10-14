@@ -1,0 +1,10 @@
+id: runtime.collection.sort-by-datetime.001
+phase: runtime
+kind: valid
+source: 'items := [dt"2024-01-02T10:30:00", dt"2024-01-01T09:15:00"]; items.sortBy(@ -> @, "asc")'
+coverage: [assignment, collection-literal, datetime-literal, identifier, call, lambda, at-symbol]
+expected:
+  type: COLLECTION
+  result:
+    - {type: DATETIME, value: "2024-01-01T09:15:00"}
+    - {type: DATETIME, value: "2024-01-02T10:30:00"}

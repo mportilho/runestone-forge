@@ -1,0 +1,8 @@
+id: runtime.collection.inequality.001
+phase: runtime
+kind: valid
+source: '[1, 2] <> [1, 3]'
+coverage: [collection-literal, comparison]
+expected:
+  type: BOOLEAN
+  result: true

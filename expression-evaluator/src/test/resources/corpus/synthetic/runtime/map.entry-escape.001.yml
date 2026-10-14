@@ -1,0 +1,19 @@
+id: semantic.map.entry-escape.001
+phase: semantic
+kind: invalid
+source: 'm.map(@ -> [@])'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    m:
+      type: MAP_NUMBER
+      default:
+        b: {type: NUMBER, value: "2"}
+        A: {type: NUMBER, value: "1"}
+      overwritePolicy: FIXED
+coverage: [identifier, call, lambda, at-symbol, collection-literal, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_OPERATION_ARGUMENT_MISMATCH

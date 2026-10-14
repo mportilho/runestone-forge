@@ -1,0 +1,12 @@
+id: semantic.collection.sort-by-limit.001
+phase: semantic
+kind: invalid
+source: 'items := [3, 1, 2]; items.sortBy(@ -> @, "asc")'
+environment:
+  maxMaterializedSize: 2
+  maxFactorialInput: 32
+coverage: [assignment, collection-literal, identifier, call, lambda, at-symbol, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_MATERIALIZATION_LIMIT_EXCEEDED

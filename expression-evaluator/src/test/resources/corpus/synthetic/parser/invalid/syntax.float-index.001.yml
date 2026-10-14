@@ -1,0 +1,10 @@
+id: parser.syntax.float-index.001
+phase: parser
+kind: invalid
+source: 'items[1.5]'
+coverage: [subscript-index, diagnostic]
+expected:
+  diagnostic:
+    category: PARSE
+    code: PARSE_NO_VIABLE_ALTERNATIVE
+    span: {offset: 6, endOffset: 9, line: 1, column: 7}

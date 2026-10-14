@@ -1,0 +1,17 @@
+id: runtime.nullability.chain-property.001
+phase: runtime
+kind: invalid
+source: 'provider?.catalog.itens()'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    provider:
+      type: OBJECT_NAVIGATION_CONTRACT_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, property-access, call, safe-navigation, diagnostic]
+expected:
+  diagnostic:
+    category: SEMANTIC
+    code: SEMANTIC_NULLABLE_RECEIVER_NOT_ALLOWED

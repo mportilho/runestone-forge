@@ -1,0 +1,18 @@
+id: runtime.external.default.001
+phase: runtime
+kind: valid
+source: 'a + b'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    a:
+      type: NUMBER
+      default: {type: NUMBER, value: "10"}
+      overwritePolicy: FIXED
+    b:
+      type: NUMBER
+      default: {type: NUMBER, value: "5"}
+      overwritePolicy: FIXED
+coverage: [identifier, additive]
+expected: {type: NUMBER, result: "15"}

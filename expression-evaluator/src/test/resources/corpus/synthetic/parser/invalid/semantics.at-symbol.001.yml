@@ -1,0 +1,7 @@
+id: parser.at.symbol.001
+phase: semantic
+kind: invalid
+source: '@'
+coverage: [at-symbol, diagnostic]
+expected:
+  diagnostic: {category: SEMANTIC, code: SEMANTIC_CURRENT_ITEM_OUT_OF_SCOPE}

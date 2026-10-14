@@ -1,29 +1,26 @@
 package com.runestone.expeval.internal.ast;
 
 public enum BinaryOperator {
+    LOGICAL_OR,
+    LOGICAL_AND,
+    LOGICAL_NAND,
+    LOGICAL_NOR,
+    LOGICAL_XOR,
+    LOGICAL_XNOR,
+    CONCATENATE,
     ADD,
     SUBTRACT,
     MULTIPLY,
     DIVIDE,
     MODULO,
-    POWER,
     ROOT,
-    AND,
-    OR,
-    XOR,
-    XNOR,
-    NAND,
-    NOR,
+    EXPONENTIATE,
     GREATER_THAN,
     GREATER_THAN_OR_EQUAL,
     LESS_THAN,
     LESS_THAN_OR_EQUAL,
     EQUAL,
     NOT_EQUAL,
-    NULL_COALESCE,
-    CONCATENATE,
     REGEX_MATCH,
-    REGEX_NOT_MATCH,
-    IN,
-    NOT_IN
+    REGEX_NOT_MATCH
 }

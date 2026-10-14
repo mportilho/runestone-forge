@@ -1,0 +1,11 @@
+id: runtime.collection.operations-lambda.001
+phase: runtime
+kind: valid
+source: 'items := [1, 2, 3]; items.map(@ -> @ + 10)'
+coverage: [assignment, collection-literal, identifier, call, lambda, at-symbol, additive]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "11"}
+    - {type: NUMBER, value: "12"}
+    - {type: NUMBER, value: "13"}

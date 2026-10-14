@@ -1,0 +1,19 @@
+id: runtime.collection.java-array-operation.008
+phase: runtime
+kind: valid
+source: 'obj.valores().sortBy(@ -> @, "desc")'
+environment:
+  maxMaterializedSize: 256
+  maxFactorialInput: 32
+  symbols:
+    obj:
+      type: OBJECT_COLLECTION_METHOD_PROVIDER
+      default: {}
+      overwritePolicy: FIXED
+coverage: [identifier, call, lambda, at-symbol]
+expected:
+  type: COLLECTION
+  result:
+    - {type: NUMBER, value: "3"}
+    - {type: NUMBER, value: "2"}
+    - {type: NUMBER, value: "1"}

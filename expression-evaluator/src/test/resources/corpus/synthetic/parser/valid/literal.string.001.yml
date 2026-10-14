@@ -1,0 +1,5 @@
+id: parser.literal.string.001
+phase: parser
+kind: valid
+source: '"runestone"'
+coverage: [string-literal]

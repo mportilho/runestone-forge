@@ -24,7 +24,7 @@
 
 package com.runestone.dynafilter.modules.jpa.api;
 
-import com.runestone.converters.DataConversionService;
+import com.runestone.converters.RuntimeDataConversionService;
 import com.runestone.dynafilter.core.model.FilterData;
 
 import java.time.ZoneId;
@@ -32,7 +32,7 @@ import java.util.Objects;
 
 public record JpaFilterOperationContext(
         FilterData filterData,
-        DataConversionService conversionService,
+        RuntimeDataConversionService conversionService,
         ZoneId zoneId
 ) {
 

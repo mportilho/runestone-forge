@@ -1,3 +1,0 @@
-score = if hasManualOverride(customerId) then approvedScore(customerId) else riskScore(customerId, currDateTime) endif;
-limits = [requestedAmount, minimumAmount(productId), currentExposure(customerId)];
-score >= approvalCutoff(productId) and currDate >= <date>campaignStart and !blacklisted(customerId)

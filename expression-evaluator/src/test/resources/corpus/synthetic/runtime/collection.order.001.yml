@@ -1,0 +1,8 @@
+id: runtime.collection.order.001
+phase: runtime
+kind: valid
+source: '[1, 2] = [2, 1]'
+coverage: [collection-literal, comparison]
+expected:
+  type: BOOLEAN
+  result: false
