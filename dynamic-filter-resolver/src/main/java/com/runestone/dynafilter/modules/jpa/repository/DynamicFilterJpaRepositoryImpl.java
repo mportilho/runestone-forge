@@ -99,7 +99,7 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
 
     @Override
     public Page<T> findAll(ConditionalStatement conditionalStatement, Pageable pageable, String entityGraphName) {
-        return findAll(conditionalStatement, updatePageableFilterPath(conditionalStatement, pageable), EntityGraph.EntityGraphType.FETCH, entityGraphName);
+        return findAll(conditionalStatement, pageable, EntityGraph.EntityGraphType.FETCH, entityGraphName);
     }
 
     @Override
@@ -112,7 +112,7 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
 
     @Override
     public List<T> findAll(ConditionalStatement conditionalStatement, Sort sort, String entityGraphName) {
-        return findAll(conditionalStatement, updateSortFilterPath(conditionalStatement, sort), EntityGraph.EntityGraphType.FETCH, entityGraphName);
+        return findAll(conditionalStatement, sort, EntityGraph.EntityGraphType.FETCH, entityGraphName);
     }
 
     @Override

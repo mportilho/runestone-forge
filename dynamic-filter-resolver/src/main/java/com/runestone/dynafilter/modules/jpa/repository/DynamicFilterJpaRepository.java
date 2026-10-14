@@ -43,6 +43,14 @@ import java.util.function.Function;
 /**
  * Interface to extend JPA repositories with dynamic filter capabilities.
  *
+ * <p>Supported query methods receiving a complete {@link ConditionalStatement}, or its converted specification,
+ * retain mandatory restrictions across content, counts and existence checks. Graph/fetch options do not remove scope;
+ * their existing query compatibility and pagination behavior still apply. Calls bypassing that input are not scoped
+ * automatically, and callers must not mutate shared filter values between content and count execution.
+ *
+ * <p>Statement-based sort/page overloads translate declared request aliases. Converted specifications and fluent-query
+ * callbacks use Spring Data entity paths for sorting instead.
+ *
  * @param <T> Entity type
  * @param <I> Entity ID type
  */
