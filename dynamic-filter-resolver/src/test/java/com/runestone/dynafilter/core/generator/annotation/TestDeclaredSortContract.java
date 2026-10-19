@@ -21,6 +21,30 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TestDeclaredSortContract {
     @Test
+    void policyCompositionUsesTheSameInterfacesMetaAnnotationsAndFromSourcesAsTheFilters() throws Exception {
+        var generator = new AnnotationStatementGenerator();
+        var parameter = PolicySources.class.getDeclaredMethod("search", Object.class).getParameters()[0];
+        var input = new AnnotationStatementInput(PolicyReusedSearch.class, parameter.getAnnotations());
+        var contract = generator.sortContract(input);
+
+        assertThat(contract.candidates()).contains(
+                new SortContract.Candidate("typeExtra", List.of(), true),
+                new SortContract.Candidate("metaExtra", List.of(), true),
+                new SortContract.Candidate("fromExtra", List.of(), true),
+                new SortContract.Candidate("nestedExtra", List.of("nestedAlias"), true),
+                new SortContract.Candidate("parameterExtra", List.of(), true));
+        assertThat(contract.exclusions()).containsExactlyInAnyOrder("typeExcluded", "fromExcluded", "nestedExcluded", "parameterExcluded");
+        assertThat(contract.candidates()).extracting(SortContract.Candidate::path).doesNotContain("unusedExtra");
+        assertThat(contract).isSameAs(generator.generateStatements(input, Map.of()).sortContract());
+
+        var disjunction = PolicySources.class.getDeclaredMethod("disjunction", Object.class).getParameters()[0];
+        var alternate = generator.sortContract(new AnnotationStatementInput(null, disjunction.getAnnotations()));
+        assertThat(alternate.candidates()).contains(new SortContract.Candidate("nestedExtra", List.of("nestedAlias"), true),
+                new SortContract.Candidate("fromExtra", List.of(), true));
+        assertThat(alternate.exclusions()).containsExactlyInAnyOrder("fromExcluded", "nestedExcluded");
+    }
+
+    @Test
     void intervalAndDynamicAliasesComeOnlyFromTheirDeclarations() {
         var generator = new AnnotationStatementGenerator();
         var input = new AnnotationStatementInput(IntervalSearch.class, null);
@@ -162,6 +186,38 @@ class TestDeclaredSortContract {
                     @Disjunction(conjunctions = @Statement(@Filter(path = "registerDate", parameters = "registered", operation = Equals.class)))
                     Object input) {
         }
+
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @SortPolicy(include = "metaExtra")
+    @interface MetaPolicy {
+    }
+
+    @MetaPolicy
+    @SortPolicy(include = "typeExtra", exclude = "typeExcluded")
+    interface PolicyReusedSearch extends Search {
+    }
+
+    @SortPolicy(include = "fromExtra", exclude = "fromExcluded")
+    static class PolicyFromSearch extends UnusedSource {
+    }
+
+    @SortPolicy(aliases = @SortAlias(name = "nestedAlias", path = "nestedExtra"), exclude = "nestedExcluded")
+    static class PolicyNestedSearch {
+    }
+
+    static class PolicySources {
+        void search(@SortPolicy(include = "parameterExtra", exclude = "parameterExcluded")
+                    @ConjunctionFrom(value = PolicyFromSearch.class, disjunctions = @StatementFrom(PolicyNestedSearch.class)) Object input) {
+        }
+
+        void disjunction(@DisjunctionFrom(value = PolicyNestedSearch.class, conjunctions = @StatementFrom(PolicyFromSearch.class)) Object input) {
+        }
+    }
+
+    @SortPolicy(include = "unusedExtra")
+    static class UnusedSource {
     }
 
     static class Root {

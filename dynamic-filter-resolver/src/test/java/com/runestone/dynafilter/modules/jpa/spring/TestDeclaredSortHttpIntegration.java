@@ -10,6 +10,8 @@ import com.runestone.dynafilter.core.generator.annotation.ConjunctionFrom;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.generator.annotation.FilterTarget;
 import com.runestone.dynafilter.core.generator.annotation.Disjunction;
+import com.runestone.dynafilter.core.generator.annotation.SortPolicy;
+import com.runestone.dynafilter.core.generator.annotation.SortAlias;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.core.operation.types.Between;
@@ -114,6 +116,7 @@ class TestDeclaredSortHttpIntegration {
                 case "Bob" -> "170";
                 default -> "180";
             }));
+            ReflectionTestUtils.setField(person, "weight", person.getHeight());
             repository.save(person);
         }
         entityManager.flush();
@@ -125,6 +128,49 @@ class TestDeclaredSortHttpIntegration {
         mvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(errorHandler, new GenericFallback())
                 .setCustomArgumentResolvers(resolvers.toArray(HandlerMethodArgumentResolver[]::new)).build();
+    }
+
+    @Test
+    void composedPoliciesPublishExactlyTheSortNamesAcceptedOverHttpAndNoAliasBypassesExclusions() throws Exception {
+        var handler = new HandlerMethod(controller, PeopleController.class.getDeclaredMethod("policy", ConditionalStatement.class, Pageable.class));
+        var operation = customizer.customize(new Operation().parameters(new ArrayList<>()), handler);
+        var order = operation.getParameters().stream().filter(value -> value.getName().equals("order")).findFirst().orElseThrow();
+        assertThat(order.getExtensions().get("x-sort-names")).isEqualTo(List.of("birthday", "name", "publicName", "term", "weight"));
+        for (String name : List.of("name", "publicName", "term", "weight")) {
+            mvc.perform(get("/policy").param("order", name + ":asc").param("size", "1"))
+                    .andExpect(status().isOk()).andExpect(content().string("3:Alice"));
+        }
+        mvc.perform(get("/policy").param("order", "birthday:desc")).andExpect(status().isOk());
+        // A policy publishes sort names, never new filter parameters or hidden aliases.
+        assertThat(operation.getParameters()).extracting(io.swagger.v3.oas.models.parameters.Parameter::getName)
+                .doesNotContain("weight", "publicName", "privateBirthday", "constantDate");
+        var statistics = entityManager.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.clear();
+        for (String name : List.of("height", "heightMin", "heightMax", "localHeight", "id", "registerDate", "constantDate", "privateBirthday")) {
+            mvc.perform(get("/policy").param("order", "term:asc", name + ":desc"))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_SORT"))
+                    .andExpect(jsonPath("$.rejectedNames[0]").value(name))
+                    .andExpect(jsonPath("$.allowedNames").doesNotExist());
+        }
+        assertThat(statistics.getPrepareStatementCount()).isZero();
+    }
+
+    @Test
+    void explicitPolicyErrorsFailWarmupAndDocumentationInsteadOfBecomingClientSortErrors() {
+        for (Object endpoint : List.of(new InvalidPolicyInclude(), new InvalidPolicyExclusion(), new InvalidPolicyAlias(),
+                new ConflictingPolicyAlias(), new ConflictingPolicySources())) {
+            var handler = new HandlerMethod(endpoint, endpoint.getClass().getDeclaredMethods()[0]);
+            assertThatThrownBy(() -> analyser.postProcessAfterInitialization(endpoint, "invalidPolicy"))
+                    .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
+            assertThatThrownBy(() -> customizer.customize(new Operation(), handler))
+                    .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
+        }
+    }
+
+    @Test
+    void policiesCreatedAfterWarmupStillFailAsServerConfigurationAtFirstUse() throws Exception {
+        mvc.perform(get("/late-policy").param("order", "name:asc"))
+                .andExpect(status().isInternalServerError()).andExpect(jsonPath("$.code").doesNotExist());
     }
 
     @Test
@@ -481,6 +527,49 @@ class TestDeclaredSortHttpIntegration {
     interface NameMatch extends FilterOperation<Specification<?>> {
     }
 
+    @FilterTarget(Person.class)
+    @SortPolicy(include = "weight", aliases = @SortAlias(name = "term", path = "name"), exclude = {"height", "registerDate"})
+    static class PolicySearch {
+        @Filter(path = {"id", "name"}, parameters = "term", operation = NameMatch.class)
+        String term;
+        @Filter(path = "height", parameters = {"heightMin", "heightMax"}, operation = Between.class)
+        String height;
+        @Filter(path = "birthday", parameters = "privateBirthday", operation = Equals.class, hidden = true)
+        String birthday;
+        @Filter(path = "registerDate", parameters = "constantDate", operation = Decorated.class, constantValues = "unused")
+        String date;
+    }
+
+    static class InvalidPolicyInclude {
+        public void search(@ConjunctionFrom(DeclaredNameSearch.class) @SortPolicy(include = "phones.number")
+                           ConditionalStatement statement, Pageable page) {
+        }
+    }
+
+    static class InvalidPolicyExclusion {
+        public void search(@ConjunctionFrom(DeclaredNameSearch.class) @SortPolicy(exclude = "naem")
+                           ConditionalStatement statement, Pageable page) {
+        }
+    }
+
+    static class InvalidPolicyAlias {
+        public void search(@ConjunctionFrom(DeclaredNameSearch.class) @SortPolicy(aliases = @SortAlias(name = "bad", path = "phones"))
+                           ConditionalStatement statement, Pageable page) {
+        }
+    }
+
+    static class ConflictingPolicyAlias {
+        public void search(@ConjunctionFrom(PolicySearch.class) @SortPolicy(aliases = @SortAlias(name = "name", path = "weight"))
+                           ConditionalStatement statement, Pageable page) {
+        }
+    }
+
+    static class ConflictingPolicySources {
+        public void search(@ConjunctionFrom(PolicySearch.class) @SortPolicy(aliases = @SortAlias(name = "term", path = "weight"))
+                           ConditionalStatement statement, Pageable page) {
+        }
+    }
+
     static class CollisionController {
         @GetMapping("/collision")
         void search(@FilterTarget(Person.class)
@@ -519,6 +608,25 @@ class TestDeclaredSortHttpIntegration {
         String discovery(@ConjunctionFrom(DiscoverySearch.class) ConditionalStatement statement, Pageable pageable) {
             var page = repository.findAll(statement, pageable);
             return page.getTotalElements() + ":" + page.stream().map(Person::getName).collect(Collectors.joining(","));
+        }
+
+        @GetMapping("/policy")
+        String policy(@ConjunctionFrom(PolicySearch.class)
+                      @SortPolicy(include = {"height", "birthday"}, exclude = "id", aliases = {
+                              @SortAlias(name = "publicName", path = "name"),
+                              @SortAlias(name = "localHeight", path = "height")
+                      }) ConditionalStatement statement, Pageable pageable) {
+            var page = repository.findAll(statement, pageable);
+            return page.getTotalElements() + ":" + page.stream().map(Person::getName).collect(Collectors.joining(","));
+        }
+
+        @GetMapping("/late-policy")
+        String latePolicy(Pageable pageable) throws Exception {
+            var parameter = InvalidPolicyExclusion.class.getDeclaredMethods()[0].getParameters()[0];
+            var statement = new ConditionalStatement(new AnnotationStatementGenerator().generateStatements(
+                    new AnnotationStatementInput(parameter.getType(), parameter.getAnnotations()), java.util.Map.of()), null);
+            repository.findAll(statement, pageable);
+            return "unreachable";
         }
 
         @GetMapping("/configuration-error")

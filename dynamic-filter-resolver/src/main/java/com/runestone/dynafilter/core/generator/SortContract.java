@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 /** Immutable declarative sort candidates, independent of active predicates and persistence adapters. */
-public record SortContract(List<Candidate> candidates, Class<?> declaredRoot) {
+public record SortContract(List<Candidate> candidates, Class<?> declaredRoot, List<String> exclusions) {
 
     public static final SortContract EMPTY = new SortContract(List.of());
 
@@ -14,8 +14,13 @@ public record SortContract(List<Candidate> candidates, Class<?> declaredRoot) {
         this(candidates, null);
     }
 
+    public SortContract(List<Candidate> candidates, Class<?> declaredRoot) {
+        this(candidates, declaredRoot, List.of());
+    }
+
     public SortContract {
         candidates = List.copyOf(candidates);
+        exclusions = List.copyOf(exclusions);
     }
 
     /** Creates a reusable builder for explicit public paths, independent of internal filter conditions. */
@@ -25,6 +30,7 @@ public record SortContract(List<Candidate> candidates, Class<?> declaredRoot) {
 
     public static final class Builder {
         private final List<Candidate> candidates = new ArrayList<>();
+        private final List<String> exclusions = new ArrayList<>();
         private Class<?> root;
 
         private Builder() {
@@ -36,6 +42,12 @@ public record SortContract(List<Candidate> candidates, Class<?> declaredRoot) {
             return this;
         }
 
+        /** Forbids exact canonical destinations and every alias referring to them. */
+        public Builder exclude(String... paths) {
+            exclusions.addAll(List.of(paths));
+            return this;
+        }
+
         /** Optionally limits reuse to this root or its persistence-adapter-compatible subtypes. */
         public Builder root(Class<?> root) {
             this.root = Objects.requireNonNull(root, "root is required");
@@ -43,7 +55,7 @@ public record SortContract(List<Candidate> candidates, Class<?> declaredRoot) {
         }
 
         public SortContract build() {
-            return new SortContract(candidates, root);
+            return new SortContract(candidates, root, exclusions);
         }
     }
 

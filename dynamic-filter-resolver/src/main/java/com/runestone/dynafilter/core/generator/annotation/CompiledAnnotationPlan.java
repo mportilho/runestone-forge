@@ -19,14 +19,14 @@ final class CompiledAnnotationPlan {
     private final SortContract sortContract;
 
     private CompiledAnnotationPlan(List<StatementPlan> statements, List<FilterPlan> decoratedFilters,
-                                   List<FilterRequestData> requestFilters, Class<?> declaredRoot) {
+                                   List<FilterRequestData> requestFilters, Class<?> declaredRoot, List<SortPolicy> policies) {
         this.statements = List.copyOf(statements);
         this.decoratedFilters = List.copyOf(decoratedFilters);
         this.requestFilters = requestFilters;
-        this.sortContract = compileSortContract(requestFilters, declaredRoot);
+        this.sortContract = compileSortContract(requestFilters, declaredRoot, policies);
     }
 
-    private static SortContract compileSortContract(List<FilterRequestData> filters, Class<?> declaredRoot) {
+    private static SortContract compileSortContract(List<FilterRequestData> filters, Class<?> declaredRoot, List<SortPolicy> policies) {
         List<SortContract.Candidate> candidates = new ArrayList<>();
         for (FilterRequestData filter : filters) {
             if (filter.hidden() || filter.constantValues().length > 0 || Decorated.class.equals(filter.operation())) {
@@ -39,7 +39,17 @@ final class CompiledAnnotationPlan {
                 candidates.add(new SortContract.Candidate(path, aliases));
             }
         }
-        return new SortContract(candidates, declaredRoot);
+        List<String> exclusions = new ArrayList<>();
+        for (SortPolicy policy : policies) {
+            exclusions.addAll(List.of(policy.exclude()));
+            for (String path : policy.include()) {
+                candidates.add(new SortContract.Candidate(path, List.of(), true));
+            }
+            for (SortAlias alias : policy.aliases()) {
+                candidates.add(new SortContract.Candidate(alias.path(), List.of(alias.name()), true));
+            }
+        }
+        return new SortContract(candidates, declaredRoot, exclusions);
     }
 
     SortContract sortContract() {
@@ -62,7 +72,7 @@ final class CompiledAnnotationPlan {
             }
             statements.add(new StatementPlan(data.logicOperator(), filters, nestedStatements, data.negate()));
         }
-        return new CompiledAnnotationPlan(statements, decoratedFilters, metadata.requestFilters(), metadata.declaredRoot());
+        return new CompiledAnnotationPlan(statements, decoratedFilters, metadata.requestFilters(), metadata.declaredRoot(), metadata.sortPolicies());
     }
 
     private static List<FilterPlan> compileFilters(List<Filter> filters, List<FilterPlan> decoratedFilters,

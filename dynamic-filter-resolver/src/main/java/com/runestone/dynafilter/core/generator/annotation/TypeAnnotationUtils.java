@@ -150,8 +150,38 @@ public class TypeAnnotationUtils {
                 annotationData.isEmpty() ? List.of() : List.copyOf(annotationData),
                 decorators.isEmpty() ? List.of() : List.copyOf(decorators),
                 filterRequestData.isEmpty() ? List.of() : List.copyOf(filterRequestData),
-                findDeclaredRoot(annotationStatementInput, statementAnnotations)
+                findDeclaredRoot(annotationStatementInput, statementAnnotations),
+                findSortPolicies(statementAnnotations)
         );
+    }
+
+    private static List<SortPolicy> findSortPolicies(List<Annotation> statementAnnotations) {
+        List<SortPolicy> policies = new ArrayList<>();
+        for (Annotation annotation : statementAnnotations) {
+            if (annotation instanceof SortPolicy policy) {
+                policies.add(policy);
+            } else if (annotation instanceof ConjunctionFrom from) {
+                addSortPolicies(policies, from.value());
+                for (StatementFrom nested : from.disjunctions()) {
+                    addSortPolicies(policies, nested.value());
+                }
+            } else if (annotation instanceof DisjunctionFrom from) {
+                addSortPolicies(policies, from.value());
+                for (StatementFrom nested : from.conjunctions()) {
+                    addSortPolicies(policies, nested.value());
+                }
+            }
+        }
+        return List.copyOf(policies);
+    }
+
+    private static void addSortPolicies(List<SortPolicy> policies, Class<?> source) {
+        // From declarations consume this type's fields, not unrelated inherited contracts.
+        for (Annotation annotation : extractFilterAnnotations(source)) {
+            if (annotation instanceof SortPolicy policy) {
+                policies.add(policy);
+            }
+        }
     }
 
     private static Class<?> findDeclaredRoot(AnnotationStatementInput input, List<Annotation> statementAnnotations) {
@@ -367,6 +397,7 @@ public class TypeAnnotationUtils {
             }
         }
         return annotation.annotationType() == Conjunction.class
+                || annotation.annotationType() == SortPolicy.class
                 || annotation.annotationType() == ConjunctionFrom.class
                 || annotation.annotationType() == Disjunction.class
                 || annotation.annotationType() == DisjunctionFrom.class;
@@ -455,7 +486,8 @@ public class TypeAnnotationUtils {
             List<FilterAnnotationData> statementData,
             List<Class<? extends FilterDecorator<?>>> decorators,
             List<FilterRequestData> requestFilters,
-            Class<?> declaredRoot
+            Class<?> declaredRoot,
+            List<SortPolicy> sortPolicies
     ) {
     }
 

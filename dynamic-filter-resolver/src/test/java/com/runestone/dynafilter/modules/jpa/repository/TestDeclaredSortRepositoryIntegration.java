@@ -22,6 +22,8 @@ import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGen
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
+import com.runestone.dynafilter.core.generator.annotation.SortPolicy;
+import com.runestone.dynafilter.core.generator.annotation.SortAlias;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
 import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
@@ -84,6 +86,74 @@ class TestDeclaredSortRepositoryIntegration {
         var graph = entityManager.createEntityGraph(Person.class);
         graph.addAttributeNodes("name");
         entityManager.getEntityManagerFactory().addNamedEntityGraph(GRAPH, graph);
+    }
+
+    @Test
+    void explicitSortOnlyPathsAndCompoundAliasesUseTheSharedCatalogWithoutFictitiousFilters() {
+        var statement = statement(ExplicitSearch.class);
+        assertThat(statement.statementWrapper().allFilters()).hasSize(1);
+        for (String name : List.of("name", "term")) {
+            assertThat(repository.findAll(statement, Sort.by(name))).extracting(Person::getName)
+                    .containsExactly("Alice", "Bob", "Zoe");
+        }
+        assertThat(repository.findAll(statement, Sort.by("height"))).extracting(Person::getName)
+                .containsExactly("Alice", "Bob", "Zoe");
+    }
+
+    @Test
+    void canonicalExclusionsRemoveEveryIntervalAliasAndCannotBeUndoneByTheEndpoint() throws Exception {
+        var parameter = PolicyEndpoint.class.getDeclaredMethod("search", ExcludedSearch.class).getParameters()[0];
+        var original = new ConditionalStatement(generator.generateStatements(
+                new AnnotationStatementInput(parameter.getType(), parameter.getAnnotations()), Map.of()), null);
+        var derived = JpaConditionalStatements.<Person>restrict(ConditionalStatement.builder(original)
+                        .and(FilterData.of("name", new String[]{"internal"}, String.class, Equals.class, new Object[]{"Alice"}))
+                        .decorate((com.runestone.dynafilter.core.resolver.FilterDecorator<Specification<?>>)
+                                (filter, wrapper) -> (root, query, builder) -> builder.conjunction()).build(),
+                (root, query, builder) -> builder.notEqual(root.get("name"), "Zoe"));
+        assertThat(derived.statementWrapper().sortContract()).isSameAs(original.statementWrapper().sortContract());
+        assertThat(original.statementWrapper().sortContract().exclusions()).containsExactly("height", "weight", "phones");
+        assertThat(repository.findAll(derived, PageRequest.of(0, 1, Sort.by("query"))).getTotalElements()).isEqualTo(2);
+        for (var statement : List.of(original, derived, ConditionalStatement.builder(derived).build())) {
+            for (String name : List.of("height", "heightMin", "heightMax", "localHeight", "weight", "phones")) {
+                assertThatThrownBy(() -> repository.findAll(statement, Sort.by(name))).isInstanceOf(InvalidSortException.class);
+            }
+        }
+        assertThat(repository.findAll(original, Sort.by("query"))).hasSize(3);
+    }
+
+    @Test
+    void explicitIncludesCanPublishOmittedRealPathsWithoutPublishingTheirHiddenOrConstantAliases() {
+        var statement = statement(ExplicitOmittedSearch.class);
+        assertThat(repository.findAll(statement, Sort.by("height"))).extracting(Person::getName)
+                .containsExactly("Alice", "Bob", "Zoe");
+        assertThat(repository.findAll(statement, Sort.by("name"))).extracting(Person::getName)
+                .containsExactly("Alice", "Bob", "Zoe");
+        for (String name : List.of("hiddenHeight", "constantName")) {
+            assertThatThrownBy(() -> repository.findAll(statement, Sort.by(name))).isInstanceOf(InvalidSortException.class);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "height.extra", "phones.missing", "", " height", "height.", "phones..number"})
+    void invalidPreventiveExclusionsAreConfigurationErrorsEvenWhenTheyWereNeverCandidates(String path) {
+        var statement = ConditionalStatement.builder().sortContract(SortContract.builder().include("name").exclude(path).build()).build();
+        assertThatThrownBy(() -> repository.findAll(statement, Sort.by("name")))
+                .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " ", " padded", "padded "})
+    void invalidExplicitAliasNamesAreConfigurationErrors(String alias) {
+        var statement = ConditionalStatement.builder().sortContract(SortContract.builder().include("name", alias).build()).build();
+        assertThatThrownBy(() -> repository.findAll(statement, Sort.by("name")))
+                .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
+    }
+
+    @Test
+    void explicitAliasesCannotRedefineAnEligibleLiteralPathEvenWithoutAnotherDeclaration() {
+        var statement = ConditionalStatement.builder().sortContract(SortContract.builder().include("name", "id").build()).build();
+        assertThatThrownBy(() -> repository.findAll(statement, Sort.by("id")))
+                .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
     }
 
     @Test
@@ -367,6 +437,30 @@ class TestDeclaredSortRepositoryIntegration {
 
     @Conjunction(@Filter(path = "name", parameters = "query", operation = Equals.class))
     interface Search {
+    }
+
+    @SortPolicy(include = "height", aliases = @SortAlias(name = "term", path = "name"))
+    @Conjunction(@Filter(path = {"id", "name"}, parameters = "term", operation = NameMatch.class))
+    interface ExplicitSearch {
+    }
+
+    @SortPolicy(include = {"height", "name"})
+    @Conjunction({
+            @Filter(path = "height", parameters = "hiddenHeight", operation = Equals.class, hidden = true),
+            @Filter(path = "name", parameters = "constantName", operation = Decorated.class, constantValues = "unused")
+    })
+    interface ExplicitOmittedSearch {
+    }
+
+    @SortPolicy(exclude = {"height", "weight", "phones"})
+    @Conjunction(@Filter(path = "height", parameters = {"heightMin", "heightMax"}, operation = Between.class))
+    interface ExcludedSearch extends Search {
+    }
+
+    static class PolicyEndpoint {
+        void search(@SortPolicy(include = {"height", "weight"}, aliases = @SortAlias(name = "localHeight", path = "height"))
+                    ExcludedSearch search) {
+        }
     }
 
     interface EmptySearch {

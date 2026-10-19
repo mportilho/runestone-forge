@@ -12,6 +12,7 @@ import jakarta.persistence.metamodel.EntityType;
 import jakarta.persistence.metamodel.IdentifiableType;
 import jakarta.persistence.metamodel.Metamodel;
 import jakarta.persistence.metamodel.SingularAttribute;
+import jakarta.persistence.metamodel.PluralAttribute;
 
 import java.lang.reflect.AnnotatedElement;
 import java.util.LinkedHashMap;
@@ -46,6 +47,11 @@ public final class JpaSortCatalog {
         var metamodel = factory.getMetamodel();
         var entity = metamodel.entity(key.entity());
         validateRoot(key.contract().declaredRoot(), entity, metamodel);
+        for (String exclusion : key.contract().exclusions()) {
+            if (resolveAttribute(entity, exclusion, false) == null) {
+                throw new DynamicFilterConfigurationException("Invalid sort exclusion '%s'".formatted(exclusion));
+            }
+        }
         Map<String, String> names = new LinkedHashMap<>();
         for (var candidate : key.contract().candidates()) {
             if (!isEligible(entity, candidate.path())) {
@@ -54,9 +60,16 @@ public final class JpaSortCatalog {
             }
             publish(names, candidate.path(), candidate.path());
             for (String alias : candidate.aliases()) {
+                if (candidate.explicit() && (alias.isBlank() || !alias.equals(alias.strip()))) {
+                    throw new DynamicFilterConfigurationException("Invalid explicit sort alias '%s'".formatted(alias));
+                }
+                if (candidate.explicit() && !alias.equals(candidate.path()) && isEligible(entity, alias)) {
+                    throw new DynamicFilterConfigurationException("Conflicting sort name '%s'".formatted(alias));
+                }
                 publish(names, alias, candidate.path());
             }
         }
+        names.values().removeAll(key.contract().exclusions());
         return Map.copyOf(names);
     }
 
@@ -85,6 +98,15 @@ public final class JpaSortCatalog {
     }
 
     private static boolean isEligible(ManagedType<?> root, String path) {
+        var attribute = resolveAttribute(root, path, true);
+        return attribute instanceof SingularAttribute<?, ?> singular
+                && singular.getPersistentAttributeType() == Attribute.PersistentAttributeType.BASIC
+                && !isBinary(singular.getJavaType())
+                && !(singular.getJavaMember() instanceof AnnotatedElement member && member.isAnnotationPresent(Lob.class));
+    }
+
+    /** One metamodel traversal for sortable paths and preventive existence-only exclusions. */
+    private static Attribute<?, ?> resolveAttribute(ManagedType<?> root, String path, boolean requireSingular) {
         String[] segments = path.split("\\.", -1);
         ManagedType<?> current = root;
         for (int i = 0; i < segments.length; i++) {
@@ -96,20 +118,20 @@ public final class JpaSortCatalog {
                     break;
                 }
             }
-            if (!(attribute instanceof SingularAttribute<?, ?> singular)) {
-                return false;
+            if (attribute == null || requireSingular && !(attribute instanceof SingularAttribute<?, ?>)) {
+                return null;
             }
             if (i == segments.length - 1) {
-                return singular.getPersistentAttributeType() == Attribute.PersistentAttributeType.BASIC
-                        && !isBinary(singular.getJavaType())
-                        && !(singular.getJavaMember() instanceof AnnotatedElement member && member.isAnnotationPresent(Lob.class));
+                return attribute;
             }
-            if (!(singular.getType() instanceof ManagedType<?> next)) {
-                return false;
+            var type = attribute instanceof SingularAttribute<?, ?> singular ? singular.getType()
+                    : ((PluralAttribute<?, ?, ?>) attribute).getElementType();
+            if (!(type instanceof ManagedType<?> next)) {
+                return null;
             }
             current = next;
         }
-        return false;
+        return null;
     }
 
     private static boolean isBinary(Class<?> type) {

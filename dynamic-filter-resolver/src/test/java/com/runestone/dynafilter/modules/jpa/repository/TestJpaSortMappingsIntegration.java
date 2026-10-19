@@ -90,6 +90,20 @@ class TestJpaSortMappingsIntegration {
     }
 
     @Test
+    void preventiveExclusionsValidateExistenceButDoNotRequireSortableTerminalsOrBlockDescendants() {
+        var source = statement(ExactExclusionSearch.class, Map.of());
+        assertThat(repository.findAll(source, Sort.by("owner.name", "details.city")))
+                .extracting(SortEntry::getId).containsExactly(2L, 3L, 4L, 1L);
+        for (String name : List.of("owner", "details", "lobText", "binaryValue", "owner.entries")) {
+            assertThatThrownBy(() -> repository.findAll(source, Sort.by(name))).isInstanceOf(InvalidSortException.class);
+        }
+    }
+
+    @SortPolicy(include = {"owner.name", "details.city"}, exclude = {"owner", "details", "lobText", "binaryValue", "owner.entries"})
+    interface ExactExclusionSearch {
+    }
+
+    @Test
     void openApiNamesMatchRepositoryAndHttpExecutionForNavigationAndPropertyAccess() throws Exception {
         var operations = new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard());
         var beans = new DefaultListableBeanFactory();

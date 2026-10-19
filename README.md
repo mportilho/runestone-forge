@@ -11,6 +11,7 @@ Java development toolkit
 - [Existing JPA Specifications as mandatory scope](dynamic-filter-resolver/docs/mandatory-restrictions.md#existing-jpa-specifications)
 - [Fluent conditional statement builder](dynamic-filter-resolver/docs/conditional-statement-builder.md)
 - [Declarative sorting](#declarative-sorting)
+- [Optional sort exceptions](#optional-sort-exceptions)
 - [Programmatic sorting](#programmatic-sorting)
 - [Sort associations and persistence contexts](dynamic-filter-resolver/docs/declarative-sort-contexts.md)
 
@@ -58,7 +59,61 @@ Hidden filters, constants and `Decorated` filters contribute no automatic sort n
 
 `ModIgnorePath` does not prohibit sorting a real eligible JPA path. Dynamic and custom operations follow the same structural discovery rules. Request values, dynamic opcodes, synthetic `From`/`To` aliases, value transformers and predicate modifiers such as `ModIgnoreCase` do not change the sort catalog or implicitly modify orders. Only declarations actually used by the search contract contribute, including supported interfaces, meta-annotations and `From` sources. Entity attributes alone do not publish new names.
 
-Conflicting accepted names with different destinations are server configuration errors, detected during warmup when context is available, or on first repository use for later contracts. Invalid requested names receive the specific HTTP 400 response without internal omission reasons. Singular JPA navigation, property access and special mappings are supported. Optional explicit sort policies and the global default change belong to later increments.
+Conflicting accepted names with different destinations are server configuration errors, detected during warmup when context is available, or on first repository use for later contracts. Invalid requested names receive the specific HTTP 400 response without internal omission reasons. Singular JPA navigation, property access and special mappings are supported. The global default change belongs to a later increment.
+
+### Optional sort exceptions
+
+Use `SortPolicy` and `SortAlias` from `com.runestone.dynafilter.core.generator.annotation`
+only when the automatic contract needs an exception. Put the policy on the search
+type or its endpoint parameter, not on an entity, repository or response DTO.
+It does not select the global `JpaSortPolicy` mode.
+
+For a product with persistent `name`, `code`, `description`, `price` and `internalNote`:
+
+```java
+@FilterTarget(Product.class)
+@SortPolicy(
+        include = "description",
+        aliases = @SortAlias(name = "term", path = "name"),
+        exclude = {"price", "internalNote"}
+)
+class ProductSearch {
+    @Filter(path = {"name", "code"}, parameters = "term", operation = AnyFieldLike.class)
+    String term;
+
+    @Filter(path = "price", parameters = {"priceMin", "priceMax"}, operation = Between.class)
+    String price;
+}
+
+@GetMapping("/products")
+Page<Product> products(@ConjunctionFrom(ProductSearch.class)
+                       @SortPolicy(include = "price", aliases = @SortAlias(name = "label", path = "name"))
+                       ConditionalStatement statement, Pageable pageable) {
+    return repository.findAll(statement, pageable);
+}
+```
+
+`description` is sort-only, without a fictitious filter. `term` deliberately sorts
+`name`, not relevance or a computed boolean. `label`, `name` and `code` are also
+accepted. `price`, `priceMin` and `priceMax` are forbidden despite the parameter's
+include. `internalNote` is a preventive exclusion, even though no filter publishes it.
+The policy creates no new filter parameters and does not inspect the response DTO.
+
+Includes, aliases and exclusions add up across the declarative sources actually
+used, including supported interfaces, meta-annotations and `From` sources. Canonical
+exclusions win globally and remove every name targeting that exact path. They do
+not block subtrees. For example, excluding `owner` does not forbid an otherwise
+published `owner.name`. Exclusions require a persistent path but need no sortable
+terminal, so an association, collection, LOB or binary attribute can be excluded
+preventively. Typos in exclusions are server configuration errors.
+
+An explicit include can publish a real path omitted from a hidden or constant
+declaration, but cannot bypass structural JPA limitations or canonical exclusions.
+Invalid explicit paths and aliases, conflicting destinations and aliases redefining
+eligible literal paths are configuration errors, not HTTP 400 errors. Validation
+runs during warmup when the sort context is available, otherwise on first ordered
+repository use. OpenAPI uses the same validated catalog, including these exceptions.
+
 ### Programmatic sorting
 
 Build a public sort contract independently of the conditions used to filter records:
@@ -95,6 +150,9 @@ paths and aliases with repeated `include` calls. An optional `.root(Person.class
 limits reuse to that JPA entity or a JPA entity subtype. Without a root, the adapter
 validates paths against the repository's effective entity. Explicit invalid paths
 and conflicting names are server configuration errors, not rejected client sorts.
+Use `.exclude("name", "phones")` for the same canonical exclusions as `@SortPolicy`.
+Exclusions are immutable, participate in contract equality and survive rebuilds,
+restrictions and decorators without automatically publishing internal conditions.
 
 `ConditionalStatement.builder(source)` preserves the same immutable contract through
 rebuilds, `and`, `or`, `restrict`, and decorators, including predicate replacement.
@@ -114,6 +172,6 @@ existing shared JPA policy configuration; the explicit setter above shows direct
 repository use. Programmatic paths use the same metamodel validation as declarative
 paths, including singular navigation, embeddables, inherited attributes and property
 access. Collections, binary attributes, LOBs and non-scalar terminals remain
-ineligible. `@SortPolicy` exceptions belong to a separate increment. Structural
+ineligible. Structural
 eligibility does not guarantee portable ordering semantics, indexing, or query cost
 across databases.

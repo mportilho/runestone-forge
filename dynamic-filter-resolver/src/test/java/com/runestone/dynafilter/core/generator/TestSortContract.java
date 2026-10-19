@@ -11,6 +11,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TestSortContract {
 
     @Test
+    void exclusionsAreImmutableSnapshotsAndParticipateInEqualityWithoutMutatingPreviousBuilds() {
+        String[] paths = {"name"};
+        var builder = SortContract.builder().include("name", "query").exclude(paths);
+        var original = builder.build();
+        paths[0] = "id";
+        var extended = builder.exclude("height").build();
+        assertThat(original.exclusions()).containsExactly("name");
+        assertThat(extended.exclusions()).containsExactly("name", "height");
+        assertThat(original).isNotEqualTo(extended).isNotEqualTo(SortContract.builder().include("name", "query").build());
+        assertThatThrownBy(() -> original.exclusions().clear()).isInstanceOf(UnsupportedOperationException.class);
+        var mutable = new ArrayList<>(List.of("name"));
+        var direct = new SortContract(original.candidates(), null, mutable);
+        mutable.clear();
+        assertThat(direct).isEqualTo(original);
+        assertThatThrownBy(() -> builder.exclude((String) null)).isInstanceOf(NullPointerException.class);
+        assertThat(builder.build()).isEqualTo(extended);
+    }
+
+    @Test
     void reusableConstructionSnapshotsPathsAliasesAndOptionalRootWithoutChangingPreviousContracts() {
         String[] aliases = {"publicName"};
         var builder = SortContract.builder().include("name", aliases);
