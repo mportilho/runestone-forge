@@ -173,7 +173,7 @@ final class TestConditionalStatementBuilderJpaIntegration {
     void preservesDeclaredSortAliasesWithoutRegisteringProgrammaticParameterNames(String undeclared) {
         var alias = new FilterRequestData(new String[]{"registerDate"}, new String[]{"declaredDate"}, LocalDateTime.class,
                 GreaterOrEquals.class, "false", null, null, null, false, false, List.of(), null);
-        var source = new ConditionalStatement(new StatementWrapper(new NoOpStatement(), Map.of(), List.of(alias)), null);
+        var source = new ConditionalStatement(new StatementWrapper(new NoOpStatement(), Map.of(), List.of(alias), null), null);
         var statement = ConditionalStatement.builder(source)
                 .and(filter("registerDate", "applicationDate", LocalDateTime.class, GreaterOrEquals.class, SINCE))
                 .restrict(owner("alice"))

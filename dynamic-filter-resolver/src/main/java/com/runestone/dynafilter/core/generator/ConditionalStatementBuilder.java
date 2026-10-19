@@ -29,6 +29,7 @@ public final class ConditionalStatementBuilder {
     private Map<String, FilterData> decoratedFilters = Map.of();
     private boolean ownsDecoratedFilters;
     private List<FilterRequestData> allFilters = List.of();
+    private SortContract sortContract = SortContract.EMPTY;
     private final List<AbstractStatement> restrictions = new ArrayList<>();
     private final List<FilterDecorator<?>> decorators = new ArrayList<>();
 
@@ -40,6 +41,7 @@ public final class ConditionalStatementBuilder {
         ordinary = source.statementWrapper().statement();
         decoratedFilters = source.statementWrapper().decoratedFilters();
         allFilters = source.statementWrapper().allFilters();
+        sortContract = source.statementWrapper().sortContract();
         restrictions.addAll(source.restrictions());
         if (source.filterDecorator() != null) {
             decorators.add(source.filterDecorator());
@@ -102,7 +104,7 @@ public final class ConditionalStatementBuilder {
     public ConditionalStatement build() {
         Map<String, FilterData> data = ownsDecoratedFilters
                 ? Collections.unmodifiableMap(new LinkedHashMap<>(decoratedFilters)) : decoratedFilters;
-        return new ConditionalStatement(new StatementWrapper(ordinary, data, allFilters), composeDecorators(), restrictions);
+        return new ConditionalStatement(new StatementWrapper(ordinary, data, allFilters, sortContract), composeDecorators(), restrictions);
     }
 
     @SuppressWarnings("unchecked")

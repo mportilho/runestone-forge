@@ -42,16 +42,47 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 import org.springframework.context.EmbeddedValueResolverAware;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ImportAware;
+import org.springframework.core.type.AnnotationMetadata;
+import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringValueResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.Objects;
 
-public class DynamicFilterServletAutoConfiguration implements EmbeddedValueResolverAware, ApplicationContextAware {
+public class DynamicFilterServletAutoConfiguration implements EmbeddedValueResolverAware, ApplicationContextAware, ImportAware {
 
     private ApplicationContext applicationContext;
     private StringValueResolver stringValueResolver;
+    private JpaSortPolicy sortPolicy = JpaSortPolicy.LEGACY;
+
+    @Override
+    public void setImportMetadata(AnnotationMetadata metadata) {
+        var attributes = metadata.getAnnotationAttributes(EnableDynamicFilterServletConfiguration.class.getName());
+        if (attributes != null) {
+            sortPolicy = (JpaSortPolicy) attributes.get("sortPolicy");
+        }
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public JpaSortPolicy jpaSortPolicy() {
+        return sortPolicy;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public InvalidSortExceptionHandler invalidSortExceptionHandler() {
+        return new InvalidSortExceptionHandler();
+    }
+
+    @Bean(destroyMethod = "clearCache")
+    @ConditionalOnMissingBean
+    public JpaSortContext jpaSortContext(AnnotationStatementGenerator generator,
+                                         ObjectProvider<jakarta.persistence.EntityManagerFactory> factories) {
+        return new JpaSortContext(generator, factories);
+    }
 
     @Override
     public void setEmbeddedValueResolver(StringValueResolver resolver) {

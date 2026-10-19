@@ -53,7 +53,7 @@ public class TestSpecificationDynamicFilterResolver {
     public void testSpecResolverWithoutDecorator() {
         SpecificationDynamicFilterResolver resolver = new SpecificationDynamicFilterResolver(filterOperationService);
         var logicalStatementOnName = MockStatementFactory.createLogicalStatementOnName();
-        Specification<?> specification = resolver.createFilter(new StatementWrapper(logicalStatementOnName, null, null), null);
+        Specification<?> specification = resolver.createFilter(new StatementWrapper(logicalStatementOnName, null, null, null), null);
 
         Assertions.assertThat(specification).isNotNull();
         Mockito.verify(filterOperationService, Mockito.times(1)).createFilter(Mockito.eq(logicalStatementOnName.getFilterData()));
@@ -69,7 +69,7 @@ public class TestSpecificationDynamicFilterResolver {
             return spec.and((root, query, builder) -> builder.equal(root.get("name"), "TestValue"));
         };
 
-        Specification<?> specification = resolver.createFilter(new StatementWrapper(logicalStatementOnName, null, null), decorator);
+        Specification<?> specification = resolver.createFilter(new StatementWrapper(logicalStatementOnName, null, null, null), decorator);
 
         Assertions.assertThat(specification).isNotNull();
         Mockito.verify(filterOperationService, Mockito.times(1)).createFilter(Mockito.eq(logicalStatementOnName.getFilterData()));
@@ -79,7 +79,7 @@ public class TestSpecificationDynamicFilterResolver {
     @Test
     void rejectsNullExecutableObjectsFromDirectAndCompositeDecoratorsAtBothEntrypoints() {
         var resolver = new SpecificationDynamicFilterResolver(filterOperationService);
-        var wrapper = new StatementWrapper(MockStatementFactory.createLogicalStatementOnName(), null, null);
+        var wrapper = new StatementWrapper(MockStatementFactory.createLogicalStatementOnName(), null, null, null);
         FilterDecorator<Specification<?>> absent = (filter, statement) -> null;
         for (var decorator : List.of(absent, FilterDecorator.of(List.of(absent)))) {
             Assertions.assertThatThrownBy(() -> resolver.createFilter(wrapper, decorator))

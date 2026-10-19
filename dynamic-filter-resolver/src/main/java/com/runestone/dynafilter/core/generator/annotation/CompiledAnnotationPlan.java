@@ -1,5 +1,6 @@
 package com.runestone.dynafilter.core.generator.annotation;
 
+import com.runestone.dynafilter.core.generator.SortContract;
 import com.runestone.dynafilter.core.model.FilterModifier;
 import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.model.statement.LogicOperator;
@@ -15,12 +16,33 @@ final class CompiledAnnotationPlan {
     private final List<StatementPlan> statements;
     private final List<FilterPlan> decoratedFilters;
     private final List<FilterRequestData> requestFilters;
+    private final SortContract sortContract;
 
     private CompiledAnnotationPlan(List<StatementPlan> statements, List<FilterPlan> decoratedFilters,
                                    List<FilterRequestData> requestFilters) {
         this.statements = List.copyOf(statements);
         this.decoratedFilters = List.copyOf(decoratedFilters);
         this.requestFilters = requestFilters;
+        this.sortContract = compileSortContract(requestFilters);
+    }
+
+    private static SortContract compileSortContract(List<FilterRequestData> filters) {
+        List<SortContract.Candidate> candidates = new ArrayList<>();
+        for (FilterRequestData filter : filters) {
+            if (filter.hidden() || filter.constantValues().length > 0 || Decorated.class.equals(filter.operation())) {
+                continue;
+            }
+            // This first increment publishes only declarations with a single destination.
+            String[] paths = filter.path();
+            if (paths.length == 1) {
+                candidates.add(new SortContract.Candidate(paths[0], List.of(filter.parameters())));
+            }
+        }
+        return new SortContract(candidates);
+    }
+
+    SortContract sortContract() {
+        return sortContract;
     }
 
     static CompiledAnnotationPlan compile(TypeAnnotationUtils.AnnotationMetadata metadata,

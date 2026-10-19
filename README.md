@@ -10,3 +10,4 @@ Java development toolkit
 - [Mandatory statement restrictions](dynamic-filter-resolver/docs/mandatory-restrictions.md)
 - [Existing JPA Specifications as mandatory scope](dynamic-filter-resolver/docs/mandatory-restrictions.md#existing-jpa-specifications)
 - [Fluent conditional statement builder](dynamic-filter-resolver/docs/conditional-statement-builder.md)
+- [Declarative sorting, first increment](dynamic-filter-resolver/docs/conditional-statement-builder.md#declarative-sorting-first-increment)

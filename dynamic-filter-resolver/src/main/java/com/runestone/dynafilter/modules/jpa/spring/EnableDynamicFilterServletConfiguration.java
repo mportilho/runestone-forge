@@ -15,4 +15,6 @@ import java.lang.annotation.*;
 @Target({ElementType.TYPE})
 @Import({DynamicFilterServletAutoConfiguration.class, DynamicFilterJpaRepositoryBeanPostProcessor.class, FilterConfigurationAnalyserBeanPostProcessor.class})
 public @interface EnableDynamicFilterServletConfiguration {
+    com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy sortPolicy()
+            default com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy.LEGACY;
 }

@@ -7,6 +7,7 @@
 - Keep `DataConverter` and `RuntimeDataConverter` implementations in their related implementation packages, such as `com.runestone.converters.impl.stable` for foldable converters and `com.runestone.converters.impl.runtime` for runtime converters; do not move concrete converter implementations into the public `com.runestone.converters` package.
 - `dynamic-filter-resolver` depends on `runestone-toolkit`; Spring/JPA/WebMVC/Springdoc dependencies are `provided`, with H2/Spring Boot only in tests.
 - `expression-evaluator` depends on `runestone-toolkit`; public entrypoints are in `com.runestone.expeval.api` and compiler/runtime internals are under `com.runestone.expeval.internal`. Follow `expression-evaluator/docs/planning/plano-implementacao-expression-evaluator-v2.md` and keep maximum performance as the implementation focus.
+- **Documentation file creation**: Create new files under `docs/` only with explicit user permission or an explicit task instruction requiring those files. Otherwise, ask for permission before creating them; do not infer permission from a request to change code.
 
 ## Commands
 - Full verification: `mvn test`.

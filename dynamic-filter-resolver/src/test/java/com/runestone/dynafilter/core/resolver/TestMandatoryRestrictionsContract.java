@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TestMandatoryRestrictionsContract {
 
-    private final StatementWrapper wrapper = new StatementWrapper(new NoOpStatement(), null, null);
+    private final StatementWrapper wrapper = new StatementWrapper(new NoOpStatement(), null, null, null);
 
     @Test
     void unsupportedBackendRejectsScopeButPreservesOldConstructionAndUnrestrictedResolution() {

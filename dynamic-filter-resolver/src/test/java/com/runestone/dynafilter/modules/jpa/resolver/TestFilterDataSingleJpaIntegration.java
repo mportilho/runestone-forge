@@ -78,7 +78,7 @@ final class TestFilterDataSingleJpaIntegration {
     }
 
     private static ConditionalStatement statement(FilterData filter) {
-        return new ConditionalStatement(new StatementWrapper(new LogicalStatement(filter), null, null), null);
+        return new ConditionalStatement(new StatementWrapper(new LogicalStatement(filter), null, null, null), null);
     }
 
     @Configuration(proxyBeanMethods = false)

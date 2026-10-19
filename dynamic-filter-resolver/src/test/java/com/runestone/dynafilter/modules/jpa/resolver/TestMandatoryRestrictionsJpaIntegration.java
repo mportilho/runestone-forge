@@ -198,7 +198,7 @@ class TestMandatoryRestrictionsJpaIntegration {
     void restrictionMetadataDoesNotCreateSortAliasesAndDeclaredAliasesStillWork() {
         var alias = new FilterRequestData(new String[]{"registerDate"}, new String[]{"since"}, LocalDateTime.class,
                 GreaterOrEquals.class, "false", null, null, null, false, false, List.of(), null);
-        var wrapper = new StatementWrapper(new NoOpStatement(), Map.of(), List.of(alias));
+        var wrapper = new StatementWrapper(new NoOpStatement(), Map.of(), List.of(alias), null);
         var scope = new ConditionalStatement(wrapper, null, List.of(owner("alice")));
 
         assertThat(repository.findAll(scope, Sort.by("since"))).extracting(Person::getId)
@@ -318,7 +318,7 @@ class TestMandatoryRestrictionsJpaIntegration {
 
     private static ConditionalStatement statement(AbstractStatement ordinary, FilterDecorator<Specification<?>> decorator,
                                                    AbstractStatement... restrictions) {
-        return new ConditionalStatement(new StatementWrapper(ordinary, null, null), decorator, List.of(restrictions));
+        return new ConditionalStatement(new StatementWrapper(ordinary, null, null, null), decorator, List.of(restrictions));
     }
 
     private static LogicalStatement owner(String owner) {

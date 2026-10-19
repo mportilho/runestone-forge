@@ -60,7 +60,7 @@ class TestConditionalStatementBuilder {
         var decorated = filter("input", true);
         var metadata = new FilterRequestData(new String[]{"a"}, new String[]{"declared"}, Boolean.class,
                 Equals.class, "false", null, null, null, false, false, List.of(), null);
-        var source = new ConditionalStatement(new StatementWrapper(grouped, Map.of("input", decorated), List.of(metadata)),
+        var source = new ConditionalStatement(new StatementWrapper(grouped, Map.of("input", decorated), List.of(metadata), null),
                 null, List.of(sourceRestriction));
         var builder = ConditionalStatement.builder(source);
         var unchanged = builder.build();
@@ -114,7 +114,7 @@ class TestConditionalStatementBuilder {
         var sourceData = filter("source", true);
         FilterDecorator<String> sourceDecorator = (result, wrapper) -> result + "/source:" +
                 wrapper.findDecoratedFilterByPath("source").orElseThrow().findOneValue();
-        var source = new ConditionalStatement(new StatementWrapper(new NoOpStatement(), Map.of("source", sourceData), null),
+        var source = new ConditionalStatement(new StatementWrapper(new NoOpStatement(), Map.of("source", sourceData), null, null),
                 sourceDecorator);
         var extra = new FilterData(new String[]{"extra", "alias"}, new String[]{"internal"}, Boolean.class, Equals.class,
                 false, new Object[]{false}, null, null);
@@ -140,7 +140,7 @@ class TestConditionalStatementBuilder {
     @ParameterizedTest(name = "{0}")
     @MethodSource("decoratedPathCollisions")
     void decoratedPathCollisionsAreRejectedWithoutPartiallyChangingTheBuilder(String scenario, FilterData collision) {
-        var source = new ConditionalStatement(new StatementWrapper(new NoOpStatement(), Map.of("source", filter("source", true)), null), null);
+        var source = new ConditionalStatement(new StatementWrapper(new NoOpStatement(), Map.of("source", filter("source", true)), null, null), null);
         var builder = ConditionalStatement.builder(source).decoratedFilter(filter("extra", true));
         assertThatThrownBy(() -> builder.decoratedFilter(collision)).isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("path");

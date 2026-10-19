@@ -40,15 +40,17 @@ import java.util.Optional;
  * @author Marcelo Portilho
  */
 public record StatementWrapper(AbstractStatement statement, Map<String, FilterData> decoratedFilters,
-                               List<FilterRequestData> allFilters) {
+                               List<FilterRequestData> allFilters, SortContract sortContract) {
 
-    public StatementWrapper(AbstractStatement statement, Map<String, FilterData> decoratedFilters, List<FilterRequestData> allFilters) {
+    public StatementWrapper(AbstractStatement statement, Map<String, FilterData> decoratedFilters, List<FilterRequestData> allFilters,
+                            SortContract sortContract) {
         if (statement == null) {
             throw new IllegalArgumentException("Statement cannot be null");
         }
         this.statement = statement;
         this.decoratedFilters = decoratedFilters != null ? decoratedFilters : Map.of();
         this.allFilters = allFilters != null ? allFilters : List.of();
+        this.sortContract = sortContract != null ? sortContract : SortContract.EMPTY;
     }
 
     public Optional<FilterData> findDecoratedFilterByPath(String path) {

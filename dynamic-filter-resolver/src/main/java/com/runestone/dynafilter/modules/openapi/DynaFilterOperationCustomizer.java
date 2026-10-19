@@ -43,6 +43,15 @@ import org.springdoc.core.customizers.OperationCustomizer;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.web.method.HandlerMethod;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.BeanFactoryAware;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.SortHandlerMethodArgumentResolver;
+import org.springframework.util.ReflectionUtils;
+import com.runestone.dynafilter.core.generator.ConditionalStatement;
+import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
+import com.runestone.dynafilter.modules.jpa.spring.JpaSortContext;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -51,10 +60,16 @@ import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
 
-public class DynaFilterOperationCustomizer implements OperationCustomizer {
+public class DynaFilterOperationCustomizer implements OperationCustomizer, BeanFactoryAware {
 
     private final ParameterNameDiscoverer parameterNameDiscoverer;
     private final FilterOperationService<?> filterOperationService;
+    private BeanFactory beanFactory;
+
+    @Override
+    public void setBeanFactory(BeanFactory beanFactory) {
+        this.beanFactory = beanFactory;
+    }
 
     public DynaFilterOperationCustomizer(ParameterNameDiscoverer parameterNameDiscoverer, FilterOperationService<?> filterOperationService) {
         this.parameterNameDiscoverer = parameterNameDiscoverer;
@@ -88,7 +103,55 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer {
                 }
             }
         }
+        customizeSort(operation, handlerMethod);
         return operation;
+    }
+
+    private void customizeSort(Operation operation, HandlerMethod handler) {
+        if (beanFactory == null || beanFactory.getBeanProvider(JpaSortPolicy.class).getIfAvailable() != JpaSortPolicy.DECLARED) {
+            return;
+        }
+        List<MethodParameter> contracts = java.util.Arrays.stream(handler.getMethodParameters())
+                .filter(parameter -> parameter.getParameterType() == ConditionalStatement.class).toList();
+        List<MethodParameter> ordering = java.util.Arrays.stream(handler.getMethodParameters())
+                .filter(parameter -> Pageable.class.isAssignableFrom(parameter.getParameterType())
+                        || Sort.class.isAssignableFrom(parameter.getParameterType())).toList();
+        // Association of multiple contracts/ordering arguments is delivered in a later increment.
+        if (contracts.size() != 1 || ordering.size() != 1) {
+            return;
+        }
+        var catalog = beanFactory.getBean(JpaSortContext.class).catalog(contracts.getFirst().getParameter());
+        var resolver = beanFactory.getBeanProvider(SortHandlerMethodArgumentResolver.class).getIfUnique();
+        if (resolver == null) {
+            throw new DynamicFilterConfigurationException("A configured Spring Data sort resolver is required for sort documentation");
+        }
+        // Spring Data exposes its configured delimiter, but its parameter-name accessor is protected.
+        // Reuse that accessor so qualifiers and custom parameter names follow the actual resolver, not another parser.
+        var accessor = ReflectionUtils.findMethod(SortHandlerMethodArgumentResolver.class, "getSortParameter", MethodParameter.class);
+        if (accessor == null) {
+            throw new DynamicFilterConfigurationException("Cannot read the configured Spring Data sort parameter");
+        }
+        ReflectionUtils.makeAccessible(accessor);
+        String name = (String) ReflectionUtils.invokeMethod(accessor, resolver, ordering.getFirst());
+        if (operation.getParameters() == null) {
+            operation.setParameters(new java.util.ArrayList<>());
+        }
+        var parameter = operation.getParameters().stream().filter(value -> name.equals(value.getName())).findFirst()
+                .orElseGet(() -> {
+                    var value = new io.swagger.v3.oas.models.parameters.Parameter().name(name).in("query");
+                    operation.addParametersItem(value);
+                    return value;
+                });
+        List<String> names = catalog.keySet().stream().sorted().toList();
+        String delimiter = resolver.getPropertyDelimiter();
+        parameter.setDescription("Repeat this parameter to preserve sort precedence. Use property" + delimiter
+                + "asc or property" + delimiter + "desc; optional " + delimiter + "ignorecase. Available names: "
+                + String.join(", ", names) + ".");
+        parameter.setSchema(new ArraySchema().items(new StringSchema()));
+        parameter.addExtension("x-sort-names", names);
+        if (!names.isEmpty()) {
+            parameter.setExample(List.of(names.getFirst() + delimiter + "asc"));
+        }
     }
 
     /**

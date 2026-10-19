@@ -25,15 +25,20 @@
 package com.runestone.dynafilter.modules.jpa.repository;
 
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
+import com.runestone.dynafilter.core.exceptions.InvalidSortException;
+import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
+import com.runestone.dynafilter.modules.jpa.support.JpaSortCatalog;
 import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.domain.JpaSort;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.support.JpaEntityInformation;
 import org.springframework.data.jpa.repository.support.SimpleJpaRepository;
@@ -56,10 +61,13 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
 
     private final EntityManager em;
     private DynamicFilterResolver<Specification<T>> dynamicFilterResolver;
+    private JpaSortPolicy sortPolicy = JpaSortPolicy.LEGACY;
+    private final JpaSortCatalog sortCatalog;
 
     public DynamicFilterJpaRepositoryImpl(JpaEntityInformation<T, ?> entityInformation, EntityManager em) {
         super(entityInformation, em);
         this.em = em;
+        this.sortCatalog = new JpaSortCatalog(em.getEntityManagerFactory());
         this.dynamicFilterResolver = null;
     }
 
@@ -75,12 +83,19 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
 
     @Override
     public Page<T> findAll(ConditionalStatement conditionalStatement, Pageable pageable) {
-        return findAll(dynamicFilterResolver.<Specification<T>>createFilter(conditionalStatement), updatePageableFilterPath(conditionalStatement, pageable));
+        Pageable translated = updatePageableFilterPath(conditionalStatement, pageable);
+        Specification<T> spec = dynamicFilterResolver.createFilter(conditionalStatement);
+        if (translated.isUnpaged()) {
+            List<T> content = getQuery(spec, translated.getSort()).getResultList();
+            return new PageImpl<>(content, translated, content.size());
+        }
+        return findAll(spec, translated);
     }
 
     @Override
     public List<T> findAll(ConditionalStatement conditionalStatement, Sort sort) {
-        return findAll(dynamicFilterResolver.<Specification<T>>createFilter(conditionalStatement), updateSortFilterPath(conditionalStatement, sort));
+        Sort translated = updateSortFilterPath(conditionalStatement, sort);
+        return findAll(dynamicFilterResolver.<Specification<T>>createFilter(conditionalStatement), translated);
     }
 
     @Override
@@ -94,6 +109,10 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
         Specification<T> spec = dynamicFilterResolver.createFilter(conditionalStatement);
         TypedQuery<T> query = getQuery(spec, updatedPageable.getSort());
         query.setHint(entityGraphType.getKey(), em.getEntityGraph(entityGraphName));
+        if (updatedPageable.isUnpaged()) {
+            List<T> content = query.getResultList();
+            return new PageImpl<>(content, updatedPageable, content.size());
+        }
         return readPage(query, getDomainClass(), updatedPageable, spec);
     }
 
@@ -104,8 +123,9 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
 
     @Override
     public List<T> findAll(ConditionalStatement conditionalStatement, Sort sort, EntityGraph.EntityGraphType entityGraphType, String entityGraphName) {
+        Sort translated = updateSortFilterPath(conditionalStatement, sort);
         Specification<T> spec = dynamicFilterResolver.createFilter(conditionalStatement);
-        TypedQuery<T> query = getQuery(spec, updateSortFilterPath(conditionalStatement, sort));
+        TypedQuery<T> query = getQuery(spec, translated);
         query.setHint(entityGraphType.getKey(), em.getEntityGraph(entityGraphName));
         return query.getResultList();
     }
@@ -152,12 +172,36 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
         if (!pageable.getSort().isSorted()) {
             return pageable;
         }
-        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), updateSortFilterPath(conditionalStatement, pageable.getSort()));
+        Sort translated = updateSortFilterPath(conditionalStatement, pageable.getSort());
+        return pageable.isUnpaged() ? Pageable.unpaged(translated)
+                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), translated);
+    }
+
+    @Override
+    public void setSortPolicy(JpaSortPolicy policy) {
+        this.sortPolicy = java.util.Objects.requireNonNull(policy, "sort policy is required");
     }
 
     private Sort updateSortFilterPath(ConditionalStatement conditionalStatement, Sort sort) {
         if (!sort.isSorted()) {
             return sort;
+        }
+        if (sortPolicy == JpaSortPolicy.DECLARED) {
+            Map<String, String> catalog = sortCatalog.resolve(conditionalStatement.statementWrapper().sortContract(), getDomainClass());
+            List<String> rejected = new ArrayList<>();
+            List<Sort.Order> translated = new ArrayList<>();
+            for (Sort.Order order : sort) {
+                String path = catalog.get(order.getProperty());
+                if (path == null || order instanceof JpaSort.JpaOrder jpaOrder && jpaOrder.isUnsafe()) {
+                    rejected.add(order.getProperty());
+                } else {
+                    translated.add(order.withProperty(path));
+                }
+            }
+            if (!rejected.isEmpty()) {
+                throw new InvalidSortException(rejected);
+            }
+            return Sort.by(translated);
         }
         return updateSortFilterPath(sort, conditionalStatement.statementWrapper().allFilters());
     }

@@ -117,7 +117,7 @@ class TestMandatoryScopeRepositoryIntegration {
         var heightData = FilterData.of("height", new String[]{"mandatoryHeight"}, BigDecimal.class, Equals.class, new Object[]{HEIGHT});
         var recentData = FilterData.of("registerDate", new String[]{"since"}, LocalDateTime.class,
                 GreaterOrEquals.class, new Object[]{RECENT.toString()});
-        var wrapper = new StatementWrapper(new LogicalStatement(recentData), Map.of(), DECLARED_FILTERS);
+        var wrapper = new StatementWrapper(new LogicalStatement(recentData), Map.of(), DECLARED_FILTERS, null);
         var statement = new ConditionalStatement(wrapper, null,
                 List.of(new LogicalStatement(ownerData), new LogicalStatement(heightData)));
         var pageable = PageRequest.of(0, 1, Sort.by("since"));
@@ -359,7 +359,7 @@ class TestMandatoryScopeRepositoryIntegration {
     void ordinaryMatchesOutsideEitherRestrictionCannotBeObservedByResultsOrAggregates(int hourOffset) {
         var ordinary = equal("registerDate", "date", LocalDateTime.class, RECENT.plusHours(hourOffset));
         // One date matches Alice with a different height; the other matches Bob with the allowed height.
-        var unrestricted = new ConditionalStatement(new StatementWrapper(ordinary, Map.of(), DECLARED_FILTERS), null);
+        var unrestricted = new ConditionalStatement(new StatementWrapper(ordinary, Map.of(), DECLARED_FILTERS, null), null);
         assertThat(repository.exists(unrestricted)).isTrue();
         var statement = scoped(ordinary, null);
 
@@ -509,7 +509,7 @@ class TestMandatoryScopeRepositoryIntegration {
     }
 
     private static ConditionalStatement scoped(AbstractStatement ordinary, FilterDecorator<Specification<?>> decorator) {
-        return new ConditionalStatement(new StatementWrapper(ordinary, Map.of(), DECLARED_FILTERS), decorator,
+        return new ConditionalStatement(new StatementWrapper(ordinary, Map.of(), DECLARED_FILTERS, null), decorator,
                 List.of(equal("name", "mandatoryOwner", String.class, "alice"),
                         equal("height", "mandatoryHeight", BigDecimal.class, HEIGHT)));
     }

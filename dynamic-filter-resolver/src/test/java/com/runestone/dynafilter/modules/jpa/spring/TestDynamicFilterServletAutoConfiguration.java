@@ -47,6 +47,8 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringValueResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 
 import java.time.ZoneId;
 import java.util.Locale;
@@ -54,6 +56,21 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 public class TestDynamicFilterServletAutoConfiguration {
+
+    @Test
+    void defaultPolicyRemainsLegacyDuringTheFirstIncrementAndTheErrorHandlerCanBeReplaced() {
+        var replacement = new InvalidSortExceptionHandler();
+        new ApplicationContextRunner()
+                .withBean("consumerSortHandler", InvalidSortExceptionHandler.class, () -> replacement)
+                .withUserConfiguration(DynamicFilterServletAutoConfiguration.class)
+                .run(context -> {
+                    Assertions.assertThat(context).hasSingleBean(InvalidSortExceptionHandler.class);
+                    Assertions.assertThat(context.getBean(InvalidSortExceptionHandler.class)).isSameAs(replacement);
+                    Assertions.assertThat(context.getBean(JpaSortPolicy.class)).isEqualTo(JpaSortPolicy.LEGACY);
+                    Assertions.assertThat(context.getBeanFactory().getBeanDefinition("jpaSortContext").getDestroyMethodName())
+                            .isEqualTo("clearCache");
+                });
+    }
 
     @Test
     public void testServletConfigurationCreation() {
@@ -109,7 +126,7 @@ public class TestDynamicFilterServletAutoConfiguration {
         );
         DynamicFilterResolver<Specification<?>> resolver = servletConfig.dynamicFilterResolver(operationService);
         FilterData filterData = FilterData.of("name", new String[]{"name"}, String.class, Like.class, new Object[]{"John"});
-        StatementWrapper statementWrapper = new StatementWrapper(new LogicalStatement(filterData), null, null);
+        StatementWrapper statementWrapper = new StatementWrapper(new LogicalStatement(filterData), null, null, null);
 
         Specification<?> specification = resolver.createFilter(statementWrapper, null);
 

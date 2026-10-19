@@ -31,7 +31,7 @@ class TestJpaConditionalStatements {
         var decorated = FilterData.of("name", new String[]{"decoration"}, String.class, Equals.class, new Object[]{"alice"});
         var alias = new FilterRequestData(new String[]{"name"}, new String[]{"search"}, String.class,
                 Equals.class, "false", null, null, null, false, false, List.of(), null);
-        var wrapper = new StatementWrapper(ordinary, Map.of("name", decorated), List.of(alias));
+        var wrapper = new StatementWrapper(ordinary, Map.of("name", decorated), List.of(alias), null);
         FilterDecorator<Specification<?>> decorator = (filter, metadata) -> filter;
         var source = new ConditionalStatement(wrapper, decorator, List.of(previous));
         Specification<Object> scope = (root, query, builder) -> builder.conjunction();

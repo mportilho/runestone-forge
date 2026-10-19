@@ -99,15 +99,15 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
         Map<String, FilterData> decoratedFilters = createDecoratedFiltersData(plan.decoratedFilters(), parametersMap);
 
         if (statementList.isEmpty()) {
-            return new StatementWrapper(NO_OP_STATEMENT, decoratedFilters, plan.requestFilters());
+            return new StatementWrapper(NO_OP_STATEMENT, decoratedFilters, plan.requestFilters(), plan.sortContract());
         } else if (statementList.size() == 1) {
-            return new StatementWrapper(statementList.getFirst(), decoratedFilters, plan.requestFilters());
+            return new StatementWrapper(statementList.getFirst(), decoratedFilters, plan.requestFilters(), plan.sortContract());
         } else {
             AbstractStatement finalStatement = statementList.getFirst();
             for (int i = 1; i < statementList.size(); i++) {
                 finalStatement = new CompoundStatement(finalStatement, statementList.get(i), LogicOperator.CONJUNCTION);
             }
-            return new StatementWrapper(finalStatement, decoratedFilters, plan.requestFilters());
+            return new StatementWrapper(finalStatement, decoratedFilters, plan.requestFilters(), plan.sortContract());
         }
     }
 
@@ -117,6 +117,12 @@ public class AnnotationStatementGenerator extends DefaultStatementGenerator<Anno
     public void warmup(AnnotationStatementInput filterInputs) {
         Objects.requireNonNull(filterInputs, "annotationStatementInput is required");
         planCache.get(filterInputs, this::compilePlan);
+    }
+
+    /** Returns declarative metadata without evaluating required, constant or transformed filter values. */
+    public com.runestone.dynafilter.core.generator.SortContract sortContract(AnnotationStatementInput filterInputs) {
+        Objects.requireNonNull(filterInputs, "annotationStatementInput is required");
+        return planCache.get(filterInputs, this::compilePlan).sortContract();
     }
 
     /**

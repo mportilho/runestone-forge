@@ -27,12 +27,21 @@ package com.runestone.dynafilter.modules.jpa.repository;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.BeanFactoryAware;
+import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.jpa.domain.Specification;
 
-public class DynamicFilterJpaRepositoryBeanPostProcessor implements BeanPostProcessor {
+public class DynamicFilterJpaRepositoryBeanPostProcessor implements BeanPostProcessor, BeanFactoryAware {
 
     private final DynamicFilterResolver<Specification<?>> dynamicFilterResolver;
+    private BeanFactory beanFactory;
+
+    @Override
+    public void setBeanFactory(BeanFactory beanFactory) {
+        this.beanFactory = beanFactory;
+    }
 
     @Lazy
     public DynamicFilterJpaRepositoryBeanPostProcessor(DynamicFilterResolver<Specification<?>> dynamicFilterResolver) {
@@ -44,6 +53,10 @@ public class DynamicFilterJpaRepositoryBeanPostProcessor implements BeanPostProc
     public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
         if (DynamicFilterJpaRepository.class.isAssignableFrom(bean.getClass())) {
             ((DynamicFilterJpaRepository) bean).setDynamicFilterResolver(dynamicFilterResolver);
+            if (beanFactory != null) {
+                ((DynamicFilterJpaRepository) bean).setSortPolicy(
+                        beanFactory.getBeanProvider(JpaSortPolicy.class).getIfAvailable(() -> JpaSortPolicy.LEGACY));
+            }
         }
         return bean;
     }

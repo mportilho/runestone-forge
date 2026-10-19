@@ -26,6 +26,7 @@ package com.runestone.dynafilter.modules.jpa.repository;
 
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
+import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -198,5 +199,8 @@ public interface DynamicFilterJpaRepository<T, I> extends JpaRepository<T, I>, J
      * @param dynamicFilterResolver Dynamic filter resolver
      */
     void setDynamicFilterResolver(DynamicFilterResolver<Specification<T>> dynamicFilterResolver);
+
+    /** Selects the application-wide policy. For integration wiring, not endpoint-specific configuration. */
+    void setSortPolicy(JpaSortPolicy policy);
 
 }
