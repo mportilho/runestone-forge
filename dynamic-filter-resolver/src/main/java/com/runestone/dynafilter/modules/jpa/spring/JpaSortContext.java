@@ -8,6 +8,8 @@ import com.runestone.dynafilter.modules.jpa.support.JpaSortCatalog;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.metamodel.EntityType;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.core.MethodParameter;
+import org.springframework.core.annotation.AnnotatedMethod;
 
 import java.lang.reflect.Parameter;
 import java.util.ArrayList;
@@ -41,11 +43,19 @@ public final class JpaSortContext {
 
     /** Resolves catalog and persistent schema metadata together using the compiled contract's root. */
     public ResolvedJpaSortContract resolve(Parameter parameter) {
-        var input = new AnnotationStatementInput(parameter.getType(), parameter.getAnnotations());
+        var argument = MethodParameter.forParameter(parameter);
+        return resolve(argument.getMethod() != null
+                ? new AnnotatedMethod(argument.getMethod()).getMethodParameters()[argument.getParameterIndex()] : argument);
+    }
+
+    /** Uses the same inherited parameter annotations as Spring MVC's argument resolvers. */
+    public ResolvedJpaSortContract resolve(MethodParameter argument) {
+        var parameter = argument.getParameter();
+        var input = new AnnotationStatementInput(argument.getParameterType(), argument.getParameterAnnotations());
         var contract = generator.sortContract(input);
         Class<?> entity = contract.declaredRoot();
         if (entity == null) {
-            entity = TypeAnnotationUtils.findFilterTargetClass(parameter);
+            entity = TypeAnnotationUtils.findFilterTargetClass(parameter, argument.getParameterAnnotations());
         }
         if (entity == null) {
             throw new DynamicFilterConfigurationException("Cannot determine JPA root for sort contract at " + parameter);

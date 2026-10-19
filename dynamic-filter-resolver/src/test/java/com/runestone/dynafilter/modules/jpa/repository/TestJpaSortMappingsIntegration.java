@@ -233,6 +233,20 @@ class TestJpaSortMappingsIntegration {
     }
 
     @Test
+    void servletInitializationAcceptsCompatibleSubtypeRootsWithAndWithoutSortInBothPolicies() {
+        for (var policy : JpaSortPolicy.values()) {
+            try (var context = new AnnotationConfigApplicationContext()) {
+                context.getBeanFactory().registerSingleton("entityManagerFactory", entityManager.getEntityManagerFactory());
+                context.registerBean(JpaSortPolicy.class, () -> policy);
+                context.register(ServletConfiguration.class);
+                context.registerBean(CompatibleRootController.class);
+
+                assertThatCode(context::refresh).doesNotThrowAnyException();
+            }
+        }
+    }
+
+    @Test
     void servletInitializationAcceptsPersistentGettersAndValidVirtualFilters() {
         try (var context = new AnnotationConfigApplicationContext()) {
             context.getBeanFactory().registerSingleton("entityManagerFactory", entityManager.getEntityManagerFactory());
@@ -404,6 +418,27 @@ class TestJpaSortMappingsIntegration {
         assertThat(repository.findAll(active, Sort.by(Sort.Direction.DESC, "details.city")))
                 .extracting(SortEntry::getId).containsExactly(3L, 2L);
         assertThat(repository.count(active)).isEqualTo(2L);
+    }
+
+    @Test
+    void sortingUsesThePersistentAssociationRatherThanAPredicateJoinWithAnOnCondition() {
+        var source = statement(Search.class, Map.of());
+        var statement = JpaConditionalStatements.<SortEntry>restrict(source, (root, query, builder) -> {
+            var owner = root.join("owner", jakarta.persistence.criteria.JoinType.LEFT);
+            owner.on(builder.equal(owner.get("name"), "Alice"));
+            return builder.equal(root.get("scope"), "allowed");
+        });
+        var sort = Sort.by("ownerName", "propertyName");
+        var graph = entityManager.createEntityGraph(SortEntry.class);
+        graph.addAttributeNodes("owner");
+        entityManager.getEntityManagerFactory().addNamedEntityGraph("predicate-sort-owner", graph);
+
+        assertThat(repository.findAll(statement, sort)).extracting(SortEntry::getId).containsExactly(2L, 3L, 1L);
+        for (var page : List.of(repository.findAll(statement, PageRequest.of(0, 1, sort)),
+                repository.findAll(statement, PageRequest.of(0, 1, sort), "predicate-sort-owner"))) {
+            assertThat(page.getContent()).extracting(SortEntry::getId).containsExactly(2L);
+            assertThat(page.getTotalElements()).isEqualTo(3L);
+        }
     }
 
     @Test
@@ -582,6 +617,21 @@ class TestJpaSortMappingsIntegration {
     static class InvalidPropertyController {
         @GetMapping("/invalid-property-operation")
         String entries(@ConjunctionFrom(InvalidPropertySearch.class) ConditionalStatement statement, Pageable pageable) {
+            return "unused";
+        }
+    }
+
+    @RestController
+    static class CompatibleRootController {
+        @GetMapping("/compatible-root-sorted")
+        public String sorted(@ConjunctionFrom(IdSearch.class) @FilterTarget(SpecialSortEntry.class)
+                             ConditionalStatement statement, Pageable pageable) {
+            return "unused";
+        }
+
+        @GetMapping("/compatible-root-unsorted")
+        public String unsorted(@ConjunctionFrom(IdSearch.class) @FilterTarget(SpecialSortEntry.class)
+                               ConditionalStatement statement) {
             return "unused";
         }
     }

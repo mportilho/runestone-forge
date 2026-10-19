@@ -4,6 +4,7 @@ import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationExcept
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.MethodParameter;
+import org.springframework.core.annotation.AnnotatedMethod;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
@@ -19,8 +20,7 @@ public record SortContractAssociation(MethodParameter contract, MethodParameter 
     public static List<SortContractAssociation> forMethod(Method method) {
         List<MethodParameter> contracts = new ArrayList<>();
         List<MethodParameter> ordering = new ArrayList<>();
-        for (int i = 0; i < method.getParameterCount(); i++) {
-            var parameter = new MethodParameter(method, i);
+        for (var parameter : new AnnotatedMethod(method).getMethodParameters()) {
             if (parameter.getParameterType() == ConditionalStatement.class) {
                 contracts.add(parameter);
             } else if (Pageable.class.isAssignableFrom(parameter.getParameterType())

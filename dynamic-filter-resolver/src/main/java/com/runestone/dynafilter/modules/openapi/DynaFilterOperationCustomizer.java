@@ -109,7 +109,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
         Map<Parameter, ResolvedJpaSortContract> sortContexts = new HashMap<>();
         for (var association : associations) {
             var parameter = association.contract().getParameter();
-            sortContexts.put(parameter, beanFactory.getBean(JpaSortContext.class).resolve(parameter));
+            sortContexts.put(parameter, beanFactory.getBean(JpaSortContext.class).resolve(association.contract()));
         }
         for (MethodParameter methodParameter : handlerMethod.getMethodParameters()) {
             if (!methodParameter.hasParameterAnnotation(Conjunction.class) && !methodParameter.hasParameterAnnotation(ConjunctionFrom.class)
@@ -268,7 +268,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
             }
             // Nonpersistent filters keep their independent schema rules, never sort publication.
             Class<?> filterTargetClass = sortContext != null ? sortContext.entity().getJavaType()
-                    : TypeAnnotationUtils.findFilterTargetClass(methodParameter.getParameter());
+                    : TypeAnnotationUtils.findFilterTargetClass(methodParameter.getParameter(), methodParameter.getParameterAnnotations());
             if (filterTargetClass == null) {
                 if (isCustomOperation(filter.operation())) {
                     return null;

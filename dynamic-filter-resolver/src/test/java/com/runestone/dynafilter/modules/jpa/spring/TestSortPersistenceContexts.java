@@ -35,6 +35,7 @@ import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.persistenceunit.PersistenceManagedTypes;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.bind.annotation.GetMapping;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -220,15 +221,18 @@ class TestSortPersistenceContexts {
     }
 
     static class Endpoint {
+        @GetMapping("/storage-context")
         public void search(@ConjunctionFrom(Search.class) ConditionalStatement statement, Pageable pageable) {
         }
 
+        @GetMapping("/paired-storage-contexts")
         public void paired(@Qualifier("left") @ConjunctionFrom(Search.class) ConditionalStatement left, @Qualifier("left") Pageable leftPage,
                            @Qualifier("right") @ConjunctionFrom(Search.class) ConditionalStatement right, @Qualifier("right") Pageable rightPage) {
         }
     }
 
     static class NoRootEndpoint {
+        @GetMapping("/missing-storage-root")
         public void search(ConditionalStatement statement, Pageable pageable) {
         }
     }

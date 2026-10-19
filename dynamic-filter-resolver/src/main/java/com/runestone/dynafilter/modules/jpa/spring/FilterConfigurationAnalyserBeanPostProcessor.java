@@ -19,9 +19,12 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.data.jpa.domain.Specification;
 import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.annotation.AnnotatedMethod;
+import org.springframework.core.MethodParameter;
 import org.springframework.stereotype.Controller;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.service.annotation.HttpExchange;
 
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
@@ -75,41 +78,47 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanFactory
     private void validateControllerType(Class<?> controllerType) {
         for (Method method : ReflectionUtils.getUniqueDeclaredMethods(controllerType)) {
             if (!Modifier.isPublic(method.getModifiers())
-                    && !AnnotatedElementUtils.hasAnnotation(method, RequestMapping.class)) {
+                    && !isMappedEndpoint(method)) {
                 continue;
             }
             var sortContexts = resolveSortContexts(method);
-            for (Parameter parameter : method.getParameters()) {
-                warmupAndCheckFilterConfiguration(parameter, sortContexts.get(parameter));
+            for (var parameter : new AnnotatedMethod(method).getMethodParameters()) {
+                warmupAndCheckFilterConfiguration(parameter, sortContexts.get(parameter.getParameter()));
             }
         }
     }
 
+    private static boolean isMappedEndpoint(Method method) {
+        return AnnotatedElementUtils.hasAnnotation(method, RequestMapping.class)
+                || AnnotatedElementUtils.hasAnnotation(method, HttpExchange.class);
+    }
+
     private Map<Parameter, ResolvedJpaSortContract> resolveSortContexts(Method method) {
-        if (beanFactory == null || beanFactory.getBeanProvider(JpaSortPolicy.class)
+        if (!isMappedEndpoint(method)
+                || beanFactory == null || beanFactory.getBeanProvider(JpaSortPolicy.class)
                 .getIfAvailable(() -> JpaSortPolicy.DECLARED) != JpaSortPolicy.DECLARED) {
             return Map.of();
         }
         Map<Parameter, ResolvedJpaSortContract> contexts = new HashMap<>();
         for (var association : SortContractAssociation.forMethod(method)) {
             var parameter = association.contract().getParameter();
-            contexts.put(parameter, beanFactory.getBean(JpaSortContext.class).resolve(parameter));
+            contexts.put(parameter, beanFactory.getBean(JpaSortContext.class).resolve(association.contract()));
         }
         return contexts;
     }
 
-    private void warmupAndCheckFilterConfiguration(Parameter parameter, ResolvedJpaSortContract sortContext) {
+    private void warmupAndCheckFilterConfiguration(MethodParameter parameter, ResolvedJpaSortContract sortContext) {
         if (!isDynamicFilterParameter(parameter)) {
             return;
         }
 
-        AnnotationStatementInput input = new AnnotationStatementInput(parameter.getType(), parameter.getAnnotations());
+        AnnotationStatementInput input = new AnnotationStatementInput(parameter.getParameterType(), parameter.getParameterAnnotations());
         List<FilterRequestData> allFilters = listAllFilterRequestData(input);
-        validateUniqueFilterParameters(allFilters, parameter);
+        validateUniqueFilterParameters(allFilters, parameter.getParameter());
         allFilters.forEach(FilterOperationConfigurationValidator::validateOperationSpecificConfiguration);
 
         Class<?> entityClass = sortContext != null ? sortContext.entity().getJavaType()
-                : TypeAnnotationUtils.findFilterTargetClass(parameter);
+                : TypeAnnotationUtils.findFilterTargetClass(parameter.getParameter(), parameter.getParameterAnnotations());
         if (entityClass != null) {
             allFilters.forEach(filter -> FilterOperationConfigurationValidator.validateEntityConfiguration(filter, entityClass, sortContext));
         }
@@ -163,8 +172,8 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanFactory
         FilterOperationConfigurationValidator.validateMetadata(filter, metadata);
     }
 
-    private static boolean isDynamicFilterParameter(Parameter parameter) {
-        Class<?> parameterType = parameter.getType();
+    private static boolean isDynamicFilterParameter(MethodParameter parameter) {
+        Class<?> parameterType = parameter.getParameterType();
         return ConditionalStatement.class.equals(parameterType)
                || (parameterType.isInterface() && Specification.class.isAssignableFrom(parameterType));
     }

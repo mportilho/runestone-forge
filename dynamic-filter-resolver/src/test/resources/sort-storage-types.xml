@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<entity-mappings xmlns="https://jakarta.ee/xml/ns/persistence/orm" version="3.2">
+    <entity class="com.runestone.dynafilter.modules.jpa.repository.TestJpaSortStorageTypesIntegration$StoredEntry" name="SortStoredEntry" access="FIELD">
+        <attributes>
+            <basic name="title"><lob/></basic>
+        </attributes>
+    </entity>
+</entity-mappings>

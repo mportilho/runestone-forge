@@ -371,6 +371,53 @@ class TestDeclaredSortRepositoryIntegration {
                 Arguments.of("explicit graph type", EntityGraph.EntityGraphType.LOAD));
     }
 
+    @ParameterizedTest
+    @MethodSource("nullPrecedenceOrders")
+    void nullPrecedenceSurvivesAliasTranslationAcrossDirectOverloadsAndPolicies(Sort.Order order,
+                                                                              List<String> expected) throws Exception {
+        save(null);
+        entityManager.flush();
+        entityManager.clear();
+        var statement = statement(Search.class);
+        var sort = Sort.by(order);
+        var translated = Sort.by(order.withProperty("name"));
+        for (var policy : JpaSortPolicy.values()) {
+            repository.setSortPolicy(policy);
+            for (var graphType : new EntityGraph.EntityGraphType[]{null, EntityGraph.EntityGraphType.FETCH,
+                    EntityGraph.EntityGraphType.LOAD}) {
+                var results = graphType == null ? repository.findAll(statement, sort)
+                        : graphType == EntityGraph.EntityGraphType.FETCH ? repository.findAll(statement, sort, GRAPH)
+                        : repository.findAll(statement, sort, graphType, GRAPH);
+                assertThat(results).extracting(Person::getName).containsExactlyElementsOf(expected);
+
+                var pageable = PageRequest.of(0, 2, sort);
+                var page = graphType == null ? repository.findAll(statement, pageable)
+                        : graphType == EntityGraph.EntityGraphType.FETCH ? repository.findAll(statement, pageable, GRAPH)
+                        : repository.findAll(statement, pageable, graphType, GRAPH);
+                assertThat(page.getContent()).extracting(Person::getName).containsExactlyElementsOf(expected.subList(0, 2));
+                assertThat(page.getTotalElements()).isEqualTo(4);
+                assertThat(page.getSort()).isEqualTo(translated);
+
+                var unpaged = Pageable.unpaged(sort);
+                var all = graphType == null ? repository.findAll(statement, unpaged)
+                        : graphType == EntityGraph.EntityGraphType.FETCH ? repository.findAll(statement, unpaged, GRAPH)
+                        : repository.findAll(statement, unpaged, graphType, GRAPH);
+                assertThat(all.getContent()).extracting(Person::getName).containsExactlyElementsOf(expected);
+                assertThat(all.getTotalElements()).isEqualTo(4);
+                assertThat(all.getPageable().isUnpaged()).isTrue();
+                assertThat(all.getSort()).isEqualTo(translated);
+            }
+        }
+    }
+
+    private static Stream<Arguments> nullPrecedenceOrders() {
+        return Stream.of(
+                Arguments.of(Sort.Order.asc("query").nullsFirst(), java.util.Arrays.asList(null, "Alice", "Bob", "Zoe")),
+                Arguments.of(Sort.Order.asc("query").nullsLast(), java.util.Arrays.asList("Alice", "Bob", "Zoe", null)),
+                Arguments.of(Sort.Order.desc("query").nullsFirst(), java.util.Arrays.asList(null, "Zoe", "Bob", "Alice")),
+                Arguments.of(Sort.Order.desc("query").nullsLast(), java.util.Arrays.asList("Zoe", "Bob", "Alice", null)));
+    }
+
     @Test
     void everyDirectOverloadRejectsAllInvalidOrdersBeforeSqlIncludingUnsafeKnownNames() {
         var statement = statement(Search.class);
@@ -501,7 +548,7 @@ class TestDeclaredSortRepositoryIntegration {
         ReflectionTestUtils.setField(person, "height", new BigDecimal(switch (name) {
             case "Alice" -> "160";
             case "Bob" -> "170";
-            default -> "180";
+            case null, default -> "180";
         }));
         repository.save(person);
     }

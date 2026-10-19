@@ -13,6 +13,7 @@ import jakarta.persistence.metamodel.IdentifiableType;
 import jakarta.persistence.metamodel.Metamodel;
 import jakarta.persistence.metamodel.SingularAttribute;
 import jakarta.persistence.metamodel.PluralAttribute;
+import org.springframework.data.jpa.provider.PersistenceProvider;
 
 import java.lang.reflect.AnnotatedElement;
 import java.util.LinkedHashMap;
@@ -46,6 +47,8 @@ public final class JpaSortCatalog {
     private Map<String, String> validate(Key key) {
         var metamodel = factory.getMetamodel();
         var entity = metamodel.entity(key.entity());
+        var storage = PersistenceProvider.fromMetamodel(metamodel) == PersistenceProvider.HIBERNATE
+                ? new HibernateSortStorage(factory) : null;
         validateRoot(key.contract().declaredRoot(), entity, metamodel);
         for (String exclusion : key.contract().exclusions()) {
             if (resolveAttribute(entity, exclusion, false) == null) {
@@ -54,7 +57,7 @@ public final class JpaSortCatalog {
         }
         Map<String, String> names = new LinkedHashMap<>();
         for (var candidate : key.contract().candidates()) {
-            if (!isEligible(entity, candidate.path())) {
+            if (!isEligible(entity, candidate.path(), storage)) {
                 rejectExplicitOrOmit(candidate);
                 continue;
             }
@@ -63,7 +66,7 @@ public final class JpaSortCatalog {
                 if (candidate.explicit() && (alias.isBlank() || !alias.equals(alias.strip()))) {
                     throw new DynamicFilterConfigurationException("Invalid explicit sort alias '%s'".formatted(alias));
                 }
-                if (candidate.explicit() && !alias.equals(candidate.path()) && isEligible(entity, alias)) {
+                if (candidate.explicit() && !alias.equals(candidate.path()) && isEligible(entity, alias, storage)) {
                     throw new DynamicFilterConfigurationException("Conflicting sort name '%s'".formatted(alias));
                 }
                 publish(names, alias, candidate.path());
@@ -97,12 +100,14 @@ public final class JpaSortCatalog {
         throw new DynamicFilterConfigurationException("Effective JPA entity is incompatible with declared sort root " + declaredRoot.getName());
     }
 
-    private static boolean isEligible(ManagedType<?> root, String path) {
+    private static boolean isEligible(ManagedType<?> root, String path, HibernateSortStorage storage) {
         var attribute = resolveAttribute(root, path, true);
         return attribute instanceof SingularAttribute<?, ?> singular
                 && singular.getPersistentAttributeType() == Attribute.PersistentAttributeType.BASIC
                 && !isBinary(singular.getJavaType())
-                && !(singular.getJavaMember() instanceof AnnotatedElement member && member.isAnnotationPresent(Lob.class));
+                && !java.sql.Clob.class.isAssignableFrom(singular.getJavaType())
+                && (storage != null ? !storage.isLobOrBinary(root.getJavaType(), path)
+                    : !(singular.getJavaMember() instanceof AnnotatedElement member && member.isAnnotationPresent(Lob.class)));
     }
 
     /** One metamodel traversal for sortable paths and preventive existence-only exclusions. */

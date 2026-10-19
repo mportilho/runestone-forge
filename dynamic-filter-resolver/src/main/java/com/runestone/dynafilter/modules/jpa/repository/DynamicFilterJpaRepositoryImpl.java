@@ -34,7 +34,9 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.From;
+import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Nulls;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -181,14 +183,16 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
             var predicate = specification != null ? specification.toPredicate(root, query, builder) : null;
             List<jakarta.persistence.criteria.Order> orders = new ArrayList<>();
             for (Sort.Order order : sort) {
-                if (order.getNullHandling() != Sort.NullHandling.NATIVE) {
-                    throw new UnsupportedOperationException("Applying Null Precedence using Criteria Queries is not supported.");
-                }
                 Expression<?> expression = sortExpression(root, order.getProperty());
                 if (order.isIgnoreCase() && expression.getJavaType() == String.class) {
                     expression = builder.lower(expression.as(String.class));
                 }
-                orders.add(order.isAscending() ? builder.asc(expression) : builder.desc(expression));
+                Nulls nulls = switch (order.getNullHandling()) {
+                    case NATIVE -> Nulls.NONE;
+                    case NULLS_FIRST -> Nulls.FIRST;
+                    case NULLS_LAST -> Nulls.LAST;
+                };
+                orders.add(order.isAscending() ? builder.asc(expression, nulls) : builder.desc(expression, nulls));
             }
             query.orderBy(orders);
             return predicate;
@@ -204,14 +208,16 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
             String segment = segments[i];
             From<?, ?> next = null;
             for (var fetch : current.getFetches()) {
-                if (fetch instanceof From<?, ?> fetched && fetch.getAttribute().getName().equals(segment)) {
+                if (fetch instanceof From<?, ?> fetched && fetch.getAttribute().getName().equals(segment)
+                        && !(fetched instanceof Join<?, ?> joined && joined.getOn() != null)) {
                     next = fetched;
                     break;
                 }
             }
             if (next == null) {
                 for (var join : current.getJoins()) {
-                    if (join.getAttribute().getName().equals(segment)) {
+                    // An ON condition belongs to the predicate, not the persistent sort destination.
+                    if (join.getAttribute().getName().equals(segment) && join.getOn() == null) {
                         next = join;
                         break;
                     }

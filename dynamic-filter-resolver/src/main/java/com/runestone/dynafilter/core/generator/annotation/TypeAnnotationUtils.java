@@ -451,13 +451,25 @@ public class TypeAnnotationUtils {
      * @throws DynamicFilterConfigurationException if the target class is not found when required (e.g. when using ConjunctionFrom or DisjunctionFrom annotations or ConditionalStatement type)
      */
     public static Class<?> findFilterTargetClass(Parameter parameter) {
-        ConjunctionFrom conjunctionFrom = parameter.getAnnotation(ConjunctionFrom.class);
-        DisjunctionFrom disjunctionFrom = parameter.getAnnotation(DisjunctionFrom.class);
+        return findFilterTargetClass(parameter, parameter.getAnnotations());
+    }
+
+    /** Resolves target metadata using the parameter annotations selected by an entry adapter. */
+    public static Class<?> findFilterTargetClass(Parameter parameter, Annotation[] annotations) {
+        Objects.requireNonNull(annotations, "parameter annotations are required");
+        ConjunctionFrom conjunctionFrom = findAnnotation(annotations, ConjunctionFrom.class);
+        DisjunctionFrom disjunctionFrom = findAnnotation(annotations, DisjunctionFrom.class);
         Class<?> filterClass = conjunctionFrom != null ? conjunctionFrom.value()
                 : disjunctionFrom != null ? disjunctionFrom.value() : null;
-        FilterTarget parameterTarget = parameter.getAnnotation(FilterTarget.class);
+        FilterTarget parameterTarget = findAnnotation(annotations, FilterTarget.class);
         FilterTarget sourceTarget = (filterClass != null ? filterClass : parameter.getType()).getAnnotation(FilterTarget.class);
-        if (parameterTarget != null && sourceTarget != null && parameterTarget.value() != sourceTarget.value()) {
+        if (parameterTarget != null && sourceTarget != null) {
+            if (sourceTarget.value().isAssignableFrom(parameterTarget.value())) {
+                return parameterTarget.value();
+            }
+            if (parameterTarget.value().isAssignableFrom(sourceTarget.value())) {
+                return sourceTarget.value();
+            }
             throw new DynamicFilterConfigurationException("Conflicting FilterTarget declarations at " + parameter);
         }
         if (parameterTarget != null) {
@@ -476,8 +488,17 @@ public class TypeAnnotationUtils {
             throw new DynamicFilterConfigurationException("FilterTarget annotation is required when the external filter root cannot be inferred");
         }
         if (parameter.getType() == ConditionalStatement.class
-                && (parameter.isAnnotationPresent(Conjunction.class) || parameter.isAnnotationPresent(Disjunction.class))) {
+                && (findAnnotation(annotations, Conjunction.class) != null || findAnnotation(annotations, Disjunction.class) != null)) {
             throw new DynamicFilterConfigurationException("FilterTarget annotation is required for ConditionalStatement type parameters");
+        }
+        return null;
+    }
+
+    private static <A extends Annotation> A findAnnotation(Annotation[] annotations, Class<A> type) {
+        for (Annotation annotation : annotations) {
+            if (annotation.annotationType() == type) {
+                return type.cast(annotation);
+            }
         }
         return null;
     }

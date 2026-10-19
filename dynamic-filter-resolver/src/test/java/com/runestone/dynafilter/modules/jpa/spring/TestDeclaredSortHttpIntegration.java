@@ -56,6 +56,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.service.annotation.GetExchange;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -258,6 +259,45 @@ class TestDeclaredSortHttpIntegration {
             assertThatThrownBy(() -> analyser.postProcessAfterInitialization(endpoint, "invalid"))
                     .isInstanceOf(DynamicFilterConfigurationException.class).hasMessageContaining("@Qualifier");
         }
+    }
+
+    @Test
+    void inheritedHttpContractsUseTheSameAnnotationsForWarmupDocumentationAndMvc() throws Exception {
+        var endpoint = new InheritedController(repository);
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(
+                () -> analyser.postProcessAfterInitialization(endpoint, "inheritedController"))).isNull();
+        var handler = new HandlerMethod(endpoint, InheritedController.class.getDeclaredMethod("search", ConditionalStatement.class, Pageable.class));
+        var operation = customizer.customize(new Operation(), handler);
+        var sort = operation.getParameters().stream().filter(parameter -> parameter.getName().equals("order")).findFirst().orElseThrow();
+        assertThat(sort.getExtensions().get("x-sort-names")).isEqualTo(List.of("height", "name", "publicName", "query"));
+
+        List<HandlerMethodArgumentResolver> resolvers = new ArrayList<>();
+        webMvcConfigurer.addArgumentResolvers(resolvers);
+        resolvers.add(new PageableHandlerMethodArgumentResolver(sortResolver));
+        var inheritedMvc = MockMvcBuilders.standaloneSetup(endpoint).setControllerAdvice(errorHandler, new GenericFallback())
+                .setCustomArgumentResolvers(resolvers.toArray(HandlerMethodArgumentResolver[]::new)).build();
+        inheritedMvc.perform(get("/inherited-people").param("order", "publicName:asc").param("size", "1"))
+                .andExpect(status().isOk()).andExpect(content().string("3:Alice"));
+        inheritedMvc.perform(get("/inherited-people").param("order", "height:desc").param("size", "1"))
+                .andExpect(status().isOk()).andExpect(content().string("3:Zoe"));
+        inheritedMvc.perform(get("/inherited-people").param("order", "id:asc"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_SORT"));
+    }
+
+    @Test
+    void httpExchangeEndpointsValidateTheirSortConfigurationDuringWarmup() {
+        for (Object endpoint : List.of(new InvalidExchangeController(), new NonPublicInvalidExchangeController())) {
+            assertThatThrownBy(() -> analyser.postProcessAfterInitialization(endpoint, "exchangePolicy"))
+                    .isInstanceOf(DynamicFilterConfigurationException.class).hasMessageContaining("Invalid explicit sort path");
+        }
+    }
+
+    @Test
+    void publicControllerHelpersDoNotRequireAnHttpSortContext() {
+        var endpoint = new PublicHelperController();
+
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(
+                () -> analyser.postProcessAfterInitialization(endpoint, "publicHelper"))).isNull();
     }
 
     @Test
@@ -468,12 +508,14 @@ class TestDeclaredSortHttpIntegration {
     }
 
     static class MissingQualifier {
+        @GetMapping("/missing-qualifier")
         public void search(@ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement left, Pageable leftPage,
                            @ConjunctionFrom(DeclaredIdentifierSearch.class) ConditionalStatement right, Pageable rightPage) {
         }
     }
 
     static class DuplicateQualifier {
+        @GetMapping("/duplicate-qualifier")
         public void search(@Qualifier("same") @ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement left,
                            @Qualifier("same") @ConjunctionFrom(DeclaredIdentifierSearch.class) ConditionalStatement right,
                            @Qualifier("same") Pageable page) {
@@ -481,6 +523,7 @@ class TestDeclaredSortHttpIntegration {
     }
 
     static class MissingMatch {
+        @GetMapping("/missing-match")
         public void search(@Qualifier("left") @ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement left,
                            @Qualifier("right") @ConjunctionFrom(DeclaredIdentifierSearch.class) ConditionalStatement right,
                            @Qualifier("unknown") Pageable page) {
@@ -488,15 +531,67 @@ class TestDeclaredSortHttpIntegration {
     }
 
     static class DuplicateOrdering {
+        @GetMapping("/duplicate-ordering")
         public void search(@Qualifier("same") @ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement statement,
                            @Qualifier("same") Pageable page, @Qualifier("same") org.springframework.data.domain.Sort sort) {
         }
     }
 
     static class PartiallyAssociated {
+        @GetMapping("/partially-associated")
         public void search(ConditionalStatement noSortContext,
                            @Qualifier("selected") @ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement statement,
                            @Qualifier("selected") org.springframework.data.domain.Sort sort) {
+        }
+    }
+
+    @RestController
+    static class InheritedController implements InheritedApi {
+        private final PersonRepository repository;
+
+        InheritedController(PersonRepository repository) {
+            this.repository = repository;
+        }
+
+        @Override
+        public String search(ConditionalStatement statement, Pageable pageable) {
+            var page = repository.findAll(statement, pageable);
+            return page.getTotalElements() + ":" + page.stream().map(Person::getName).collect(Collectors.joining(","));
+        }
+    }
+
+    interface InheritedApi {
+        @GetExchange("/inherited-people")
+        String search(@ConjunctionFrom(DeclaredNameSearch.class)
+                      @SortPolicy(include = "height", aliases = @SortAlias(name = "publicName", path = "name"))
+                      ConditionalStatement statement, Pageable pageable);
+    }
+
+    @RestController
+    static class InvalidExchangeController {
+        @GetExchange("/invalid-exchange-policy")
+        public void search(@ConjunctionFrom(DeclaredNameSearch.class) @SortPolicy(include = "phones")
+                           ConditionalStatement statement, Pageable pageable) {
+        }
+    }
+
+    @RestController
+    static class NonPublicInvalidExchangeController {
+        @GetExchange("/non-public-invalid-exchange-policy")
+        void search(@ConjunctionFrom(DeclaredNameSearch.class) @SortPolicy(include = "phones")
+                    ConditionalStatement statement, Pageable pageable) {
+        }
+    }
+
+    @RestController
+    static class PublicHelperController {
+        @GetMapping("/public-helper-endpoint")
+        public String search(@ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement statement, Pageable pageable) {
+            return helper(statement, pageable);
+        }
+
+        public String helper(ConditionalStatement programmaticStatement, Pageable pageable) {
+            return "unused";
         }
     }
 
@@ -539,30 +634,35 @@ class TestDeclaredSortHttpIntegration {
     }
 
     static class InvalidPolicyInclude {
+        @GetMapping("/invalid-policy-include")
         public void search(@ConjunctionFrom(DeclaredNameSearch.class) @SortPolicy(include = "phones.number")
                            ConditionalStatement statement, Pageable page) {
         }
     }
 
     static class InvalidPolicyExclusion {
+        @GetMapping("/invalid-policy-exclusion")
         public void search(@ConjunctionFrom(DeclaredNameSearch.class) @SortPolicy(exclude = "naem")
                            ConditionalStatement statement, Pageable page) {
         }
     }
 
     static class InvalidPolicyAlias {
+        @GetMapping("/invalid-policy-alias")
         public void search(@ConjunctionFrom(DeclaredNameSearch.class) @SortPolicy(aliases = @SortAlias(name = "bad", path = "phones"))
                            ConditionalStatement statement, Pageable page) {
         }
     }
 
     static class ConflictingPolicyAlias {
+        @GetMapping("/conflicting-policy-alias")
         public void search(@ConjunctionFrom(PolicySearch.class) @SortPolicy(aliases = @SortAlias(name = "name", path = "weight"))
                            ConditionalStatement statement, Pageable page) {
         }
     }
 
     static class ConflictingPolicySources {
+        @GetMapping("/conflicting-policy-sources")
         public void search(@ConjunctionFrom(PolicySearch.class) @SortPolicy(aliases = @SortAlias(name = "term", path = "weight"))
                            ConditionalStatement statement, Pageable page) {
         }

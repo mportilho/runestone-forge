@@ -238,7 +238,7 @@ a graph, with a graph name, and with an explicit graph type plus name. This incl
 convenience graph overloads and sorted unpaged requests. All orders are validated
 before content or count SQL; unknown names, expressions and `JpaSort.unsafe` fail
 without partial execution. Direction, precedence, ignore-case and provider-supported
-options remain intact. Criteria null precedence remains unsupported. No default sort,
+options remain intact, including explicit null precedence through the JPA Criteria API. No default sort,
 id tie-breaker or page-size limit is added.
 
 Converted Specifications, fluent callbacks, inherited APIs without a statement and
@@ -252,6 +252,20 @@ implement `Comparable`. Provider-recognized `@Formula` and `@JoinFormula` mappin
 follow the same rules. Collections, plural traversals, binary attributes, LOBs and
 entity or embeddable terminals are not eligible. Structural eligibility does not
 promise portable SQL ordering, collation, index use or cost across databases.
+
+With Hibernate, LOB and binary checks use the persistence unit's effective JDBC
+mapping, including LOBs declared in `orm.xml` and scalar Java values converted to
+binary storage. Explicit includes and aliases cannot bypass these exclusions.
+The standard JPA metamodel does not expose JDBC storage types. Other providers use
+Java type and `@Lob` checks; exclude paths whose XML or provider-specific mappings
+hide LOB or binary storage from those checks.
+
+Sorting does not reuse joins with an `ON` condition from a filter or restriction.
+Such conditions must not replace a persistent association's sort key with null.
+HTTP sort-context warmup applies to mapped controller endpoints, including
+`@HttpExchange`, not public helpers.
+Warmup and OpenAPI also use the search and policy annotations inherited by MVC
+from controller interfaces.
 
 `StatementWrapper` remains a record, now with the fourth component `SortContract
 sortContract`. Direct construction must supply that argument; `null` becomes
