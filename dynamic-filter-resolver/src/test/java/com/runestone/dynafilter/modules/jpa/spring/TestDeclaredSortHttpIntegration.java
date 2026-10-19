@@ -9,8 +9,17 @@ import com.runestone.dynafilter.core.generator.annotation.Conjunction;
 import com.runestone.dynafilter.core.generator.annotation.ConjunctionFrom;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.generator.annotation.FilterTarget;
+import com.runestone.dynafilter.core.generator.annotation.Disjunction;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.operation.types.Equals;
+import com.runestone.dynafilter.core.operation.types.Between;
+import com.runestone.dynafilter.core.operation.types.Decorated;
+import com.runestone.dynafilter.core.operation.types.Dynamic;
+import com.runestone.dynafilter.core.operation.types.extensions.IsEmptyCollection;
+import com.runestone.dynafilter.core.operation.FilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
+import com.runestone.dynafilter.core.model.modifiers.ModIgnorePath;
+import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationContributor;
 import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.InMemoryDatabaseApplication;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.PersonRepository;
@@ -28,6 +37,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.data.web.SortHandlerMethodArgumentResolver;
 import org.springframework.http.HttpStatus;
@@ -46,6 +56,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.math.BigDecimal;
 import java.util.stream.Collectors;
 import java.util.concurrent.atomic.AtomicInteger;
 import jakarta.persistence.EntityManagerFactory;
@@ -93,6 +104,11 @@ class TestDeclaredSortHttpIntegration {
             constructor.setAccessible(true);
             var person = constructor.newInstance();
             ReflectionTestUtils.setField(person, "name", name);
+            ReflectionTestUtils.setField(person, "height", new BigDecimal(switch (name) {
+                case "Alice" -> "160";
+                case "Bob" -> "170";
+                default -> "180";
+            }));
             repository.save(person);
         }
         entityManager.flush();
@@ -140,8 +156,67 @@ class TestDeclaredSortHttpIntegration {
     }
 
     @Test
+    void openApiAndExecutionShareTheIntervalCompoundAndOmissionCatalog() throws Exception {
+        var operation = new Operation().parameters(new ArrayList<>());
+        var handler = new HandlerMethod(controller, PeopleController.class.getDeclaredMethod("discovery", ConditionalStatement.class, Pageable.class));
+        customizer.customize(operation, handler);
+        var order = operation.getParameters().stream().filter(value -> value.getName().equals("order")).findFirst().orElseThrow();
+        var names = List.of("dynamicHeight", "height", "heightMax", "heightMin", "id", "name");
+        assertThat(order.getExtensions().get("x-sort-names")).isEqualTo(names);
+        assertThat(operation.getParameters()).extracting(io.swagger.v3.oas.models.parameters.Parameter::getName)
+                .contains("heightMin", "heightMax", "term", "partial", "decorated", "emptyPhones", "special")
+                .doesNotContain("privateBirthday", "constantDate");
+
+        for (String name : names) {
+            String expected = name.equals("id") ? "3:Zoe,Bob,Alice" : "3:Alice,Bob,Zoe";
+            mvc.perform(get("/discovery").param("order", name + ":asc"))
+                    .andExpect(status().isOk()).andExpect(content().string(expected));
+        }
+        for (String bound : List.of("heightMin", "heightMax")) {
+            mvc.perform(get("/discovery").param("heightMin", "165").param("heightMax", "185").param("order", bound + ":desc"))
+                    .andExpect(status().isOk()).andExpect(content().string("2:Zoe,Bob"));
+        }
+        mvc.perform(get("/discovery").param("special", "Alice").param("order", "name:asc"))
+                .andExpect(status().isOk()).andExpect(content().string("1:Alice"));
+        mvc.perform(get("/discovery").param("emptyPhones", "false").param("order", "name:asc"))
+                .andExpect(status().isOk()).andExpect(content().string("0:"));
+    }
+
+    @Test
+    void omittedAndAmbiguousNamesReturnOnlyTheSpecificPublicErrorBeforeSql() throws Exception {
+        var statistics = entityManager.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.clear();
+        for (String name : List.of("term", "partial", "virtual", "special", "phones", "emptyPhones", "weight",
+                "decorated", "birthday", "privateBirthday", "registerDate", "constantDate", "dynamicHeightFrom", "dynamicHeightTo")) {
+            mvc.perform(get("/discovery").param("order", name + ":asc"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_SORT"))
+                    .andExpect(jsonPath("$.rejectedNames[0]").value(name))
+                    .andExpect(jsonPath("$.allowedNames").doesNotExist())
+                    .andExpect(jsonPath("$.reason").doesNotExist());
+        }
+        assertThat(statistics.getPrepareStatementCount()).isZero();
+    }
+
+    @Test
     void configurationErrorsAreNotMappedToClientErrors() throws Exception {
         mvc.perform(get("/configuration-error")).andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void warmupDetectsAliasVersusCompoundLiteralCollisionsInEitherDeclarationOrder() {
+        var beans = new DefaultListableBeanFactory();
+        beans.registerSingleton("factory", entityManager.getEntityManagerFactory());
+        beans.registerSingleton("policy", JpaSortPolicy.DECLARED);
+        beans.registerSingleton("catalog", new JpaSortContext(generator, beans.getBeanProvider(EntityManagerFactory.class)));
+        var analyser = new FilterConfigurationAnalyserBeanPostProcessor((FilterOperationService<Specification<?>>) operations, generator);
+        analyser.setBeanFactory(beans);
+
+        for (Object candidate : List.of(new CollisionController(), new ReversedCollisionController())) {
+            assertThatThrownBy(() -> analyser.postProcessAfterInitialization(candidate, "collision"))
+                    .isInstanceOf(DynamicFilterConfigurationException.class).hasMessageContaining("Conflicting sort name 'name'");
+        }
     }
 
     @Test
@@ -189,6 +264,51 @@ class TestDeclaredSortHttpIntegration {
         private String query;
     }
 
+    @FilterTarget(Person.class)
+    static class DiscoverySearch {
+        @Filter(path = "height", parameters = {"heightMin", "heightMax"}, operation = Between.class)
+        String height;
+        @Filter(path = {"id", "name"}, parameters = "term", operation = NameMatch.class)
+        String term;
+        @Filter(path = {"virtual", "name"}, parameters = "partial", operation = NameMatch.class, modifiers = ModIgnorePath.class)
+        String partial;
+        @Filter(path = "birthday", parameters = "privateBirthday", operation = Equals.class, hidden = true)
+        String privateBirthday;
+        @Filter(path = "registerDate", parameters = "constantDate", operation = Decorated.class, constantValues = "unused")
+        String constantDate;
+        @Filter(path = "weight", parameters = "decorated", operation = Decorated.class)
+        String decorated;
+        @Filter(path = "phones", parameters = "emptyPhones", operation = IsEmptyCollection.class)
+        String emptyPhones;
+        @Filter(path = "virtual", parameters = "special", operation = NameMatch.class, modifiers = ModIgnorePath.class)
+        String special;
+        @Filter(path = "height", parameters = "dynamicHeight", operation = Dynamic.class)
+        String dynamicHeight;
+    }
+
+    interface NameMatch extends FilterOperation<Specification<?>> {
+    }
+
+    static class CollisionController {
+        @GetMapping("/collision")
+        void search(@FilterTarget(Person.class)
+                    @Conjunction({
+                            @Filter(path = {"id", "name"}, parameters = "term", operation = NameMatch.class),
+                            @Filter(path = "height", parameters = "name", operation = Equals.class)
+                    }) ConditionalStatement statement, Pageable pageable) {
+        }
+    }
+
+    static class ReversedCollisionController {
+        @GetMapping("/collision")
+        void search(@FilterTarget(Person.class)
+                    @Disjunction({
+                            @Filter(path = "height", parameters = "name", operation = Equals.class),
+                            @Filter(path = {"name", "id"}, parameters = "term", operation = NameMatch.class)
+                    }) ConditionalStatement statement, Pageable pageable) {
+        }
+    }
+
     @RestController
     static class PeopleController {
         private final PersonRepository repository;
@@ -199,6 +319,12 @@ class TestDeclaredSortHttpIntegration {
 
         @GetMapping("/people")
         String people(@ConjunctionFrom(Search.class) ConditionalStatement statement, Pageable pageable) {
+            var page = repository.findAll(statement, pageable);
+            return page.getTotalElements() + ":" + page.stream().map(Person::getName).collect(Collectors.joining(","));
+        }
+
+        @GetMapping("/discovery")
+        String discovery(@ConjunctionFrom(DiscoverySearch.class) ConditionalStatement statement, Pageable pageable) {
             var page = repository.findAll(statement, pageable);
             return page.getTotalElements() + ":" + page.stream().map(Person::getName).collect(Collectors.joining(","));
         }
@@ -221,6 +347,12 @@ class TestDeclaredSortHttpIntegration {
     @Configuration(proxyBeanMethods = false)
     @EnableDynamicFilterServletConfiguration(sortPolicy = JpaSortPolicy.DECLARED)
     static class HttpConfiguration {
+        @Bean
+        JpaFilterOperationContributor nameMatchContributor() {
+            return registry -> registry.register(NameMatch.class, FilterOperationMetadata.stringValue(), context ->
+                    (root, query, builder) -> builder.equal(root.get("name"), context.filterData().values()[0]));
+        }
+
         @Bean
         PeopleController peopleController(PersonRepository repository) {
             return new PeopleController(repository);

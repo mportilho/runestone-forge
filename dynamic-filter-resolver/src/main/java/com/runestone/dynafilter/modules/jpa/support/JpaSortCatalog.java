@@ -43,6 +43,7 @@ public final class JpaSortCatalog {
         for (var candidate : key.contract().candidates()) {
             // Navigation and more mapping forms belong to subsequent increments.
             if (candidate.path().contains(".")) {
+                LOG.log(System.Logger.Level.DEBUG, "Omitting unsupported sort navigation candidate {0}", candidate.path());
                 continue;
             }
             Attribute<?, ?> attribute = attributes.get(candidate.path());
@@ -53,6 +54,7 @@ public final class JpaSortCatalog {
             if (attribute.isCollection() || attribute.getPersistentAttributeType() != Attribute.PersistentAttributeType.BASIC
                     || attribute.getJavaType().isArray()
                     || attribute.getJavaMember() instanceof AnnotatedElement member && member.isAnnotationPresent(Lob.class)) {
+                LOG.log(System.Logger.Level.DEBUG, "Omitting structurally ineligible sort candidate {0}", candidate.path());
                 continue;
             }
             publish(names, candidate.path(), candidate.path());

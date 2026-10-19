@@ -32,10 +32,11 @@ final class CompiledAnnotationPlan {
             if (filter.hidden() || filter.constantValues().length > 0 || Decorated.class.equals(filter.operation())) {
                 continue;
             }
-            // This first increment publishes only declarations with a single destination.
             String[] paths = filter.path();
-            if (paths.length == 1) {
-                candidates.add(new SortContract.Candidate(paths[0], List.of(filter.parameters())));
+            // Decide ambiguity before persistence validation can omit any destinations.
+            List<String> aliases = paths.length == 1 ? List.of(filter.parameters()) : List.of();
+            for (String path : paths) {
+                candidates.add(new SortContract.Candidate(path, aliases));
             }
         }
         return new SortContract(candidates);
