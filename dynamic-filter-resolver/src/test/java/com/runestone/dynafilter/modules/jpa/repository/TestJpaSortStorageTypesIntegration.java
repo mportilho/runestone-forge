@@ -16,9 +16,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Converter;
+import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.support.JpaEntityInformationSupport;
@@ -31,6 +33,8 @@ import java.util.Map;
 import java.util.List;
 import java.util.UUID;
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.sql.Blob;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -72,14 +76,17 @@ class TestJpaSortStorageTypesIntegration {
             var active = new ConditionalStatement(generator.generateStatements(input, Map.of("encoded", "Alice")), null);
 
             assertThat(repository.findAll(active)).extracting(entry -> entry.id).containsExactly(2L);
-            for (String name : List.of("encodedTitle", "encoded")) {
+            var statistics = factory.unwrap(SessionFactory.class).getStatistics();
+            statistics.clear();
+            for (String name : List.of("encodedTitle", "encoded", "buffer", "bufferAlias", "blob", "blobAlias")) {
                 assertThatThrownBy(() -> repository.findAll(absent, Sort.by(name))).isExactlyInstanceOf(InvalidSortException.class);
             }
-            for (String path : List.of("title", "encodedTitle")) {
+            for (String path : List.of("title", "encodedTitle", "buffer", "blob")) {
                 var explicit = ConditionalStatement.builder().sortContract(SortContract.builder().include("id").include(path, "extra").build()).build();
                 assertThatThrownBy(() -> repository.findAll(explicit, Sort.by("id")))
                         .isExactlyInstanceOf(DynamicFilterConfigurationException.class);
             }
+            assertThat(statistics.getPrepareStatementCount()).isZero();
         }
     }
 
@@ -121,7 +128,7 @@ class TestJpaSortStorageTypesIntegration {
         bean.setDataSource(new DriverManagerDataSource("jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", ""));
         bean.setManagedTypes(PersistenceManagedTypes.of(StoredEntry.class.getName()));
         bean.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
-        bean.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop"));
+        bean.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop", "hibernate.generate_statistics", "true"));
         if (xmlLob) {
             bean.setMappingResources("sort-storage-types.xml");
         }
@@ -132,6 +139,8 @@ class TestJpaSortStorageTypesIntegration {
     @Conjunction({
             @Filter(path = "title", parameters = "query", operation = Equals.class),
             @Filter(path = "encodedTitle", parameters = "encoded", operation = Equals.class),
+            @Filter(path = "buffer", parameters = "bufferAlias", operation = Equals.class),
+            @Filter(path = "blob", parameters = "blobAlias", operation = Equals.class),
             @Filter(path = "id", parameters = "id", operation = Equals.class)
     })
     interface Search {
@@ -144,6 +153,10 @@ class TestJpaSortStorageTypesIntegration {
         private String title;
         @Convert(converter = BinaryTitleConverter.class)
         private String encodedTitle;
+        @Convert(converter = BinaryBufferConverter.class)
+        private ByteBuffer buffer;
+        @Lob
+        private Blob blob;
 
         protected StoredEntry() {
         }
@@ -165,6 +178,24 @@ class TestJpaSortStorageTypesIntegration {
         @Override
         public String convertToEntityAttribute(byte[] value) {
             return value != null ? new String(value, StandardCharsets.UTF_8) : null;
+        }
+    }
+
+    @Converter
+    public static final class BinaryBufferConverter implements AttributeConverter<ByteBuffer, byte[]> {
+        @Override
+        public byte[] convertToDatabaseColumn(ByteBuffer value) {
+            if (value == null) {
+                return null;
+            }
+            var bytes = new byte[value.remaining()];
+            value.duplicate().get(bytes);
+            return bytes;
+        }
+
+        @Override
+        public ByteBuffer convertToEntityAttribute(byte[] value) {
+            return value != null ? ByteBuffer.wrap(value) : null;
         }
     }
 }

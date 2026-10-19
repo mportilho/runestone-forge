@@ -106,7 +106,7 @@ public final class JpaSortCatalog {
                 && singular.getPersistentAttributeType() == Attribute.PersistentAttributeType.BASIC
                 && !isBinary(singular.getJavaType())
                 && !java.sql.Clob.class.isAssignableFrom(singular.getJavaType())
-                && (storage != null ? !storage.isLobOrBinary(root.getJavaType(), path)
+                && (storage != null ? !storage.isLobOrUnsupportedBinary(root.getJavaType(), path)
                     : !(singular.getJavaMember() instanceof AnnotatedElement member && member.isAnnotationPresent(Lob.class)));
     }
 

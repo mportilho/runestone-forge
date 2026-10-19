@@ -9,6 +9,8 @@ import org.hibernate.metamodel.mapping.EntityAssociationMapping;
 import org.hibernate.metamodel.mapping.ModelPart;
 import org.hibernate.metamodel.mapping.ModelPartContainer;
 
+import java.util.UUID;
+
 /** Effective JDBC types supplement the JPA metamodel, which has no LOB or storage-type metadata. */
 final class HibernateSortStorage {
     private final SessionFactoryImplementor factory;
@@ -17,14 +19,17 @@ final class HibernateSortStorage {
         this.factory = factory.unwrap(SessionFactoryImplementor.class);
     }
 
-    boolean isLobOrBinary(Class<?> entity, String path) {
+    boolean isLobOrUnsupportedBinary(Class<?> entity, String path) {
         ModelPartContainer container = factory.getMappingMetamodel().getEntityDescriptor(entity);
         String[] segments = path.split("\\.", -1);
         for (int i = 0; i < segments.length; i++) {
             ModelPart part = container.findSubPart(segments[i], null);
             if (i == segments.length - 1 && part instanceof BasicValuedModelPart basic) {
-                var jdbcType = basic.getJdbcMapping().getJdbcType();
-                return jdbcType.isLob() || jdbcType.isBinary();
+                var mapping = basic.getJdbcMapping();
+                var jdbcType = mapping.getJdbcType();
+                // The domain descriptor stays UUID even when a converter's relational type is byte[].
+                return jdbcType.isLob() || jdbcType.isBinary()
+                        && mapping.getJavaTypeDescriptor().getJavaTypeClass() != UUID.class;
             }
             if (part instanceof EntityAssociationMapping association) {
                 container = association.getAssociatedEntityMappingType();

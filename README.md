@@ -249,13 +249,18 @@ converted Specification. Sorting never replaces authorization for content or cou
 JPA eligibility permits singular to-one navigation, embeddable scalar leaves,
 inherited attributes and property access. BASIC values and JPA converters need not
 implement `Comparable`. Provider-recognized `@Formula` and `@JoinFormula` mappings
-follow the same rules. Collections, plural traversals, binary attributes, LOBs and
+follow the same rules. Collections, plural traversals, binary Java attributes, LOBs and
 entity or embeddable terminals are not eligible. Structural eligibility does not
 promise portable SQL ordering, collation, index use or cost across databases.
 
 With Hibernate, LOB and binary checks use the persistence unit's effective JDBC
 mapping, including LOBs declared in `orm.xml` and scalar Java values converted to
 binary storage. Explicit includes and aliases cannot bypass these exclusions.
+UUID domain attributes are eligible with binary JDBC storage, including UUID-to-byte-array
+converters, but still require a declared sort path. This exception uses the effective
+mapping's domain type, not a converter's relational type, and never permits LOBs.
+The database defines UUID ordering; equivalence with CHAR storage or Java comparison
+is not guaranteed.
 The standard JPA metamodel does not expose JDBC storage types. Other providers use
 Java type and `@Lob` checks; exclude paths whose XML or provider-specific mappings
 hide LOB or binary storage from those checks.
