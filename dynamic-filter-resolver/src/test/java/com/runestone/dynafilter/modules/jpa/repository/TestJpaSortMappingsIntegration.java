@@ -272,6 +272,33 @@ class TestJpaSortMappingsIntegration {
     }
 
     @Test
+    void explicitProgrammaticContractsShareNavigationAndJpaRootValidation() {
+        for (var contract : List.of(SortContract.builder().include("owner.name", "ownerName").include("propertyName").build(),
+                SortContract.builder().root(SortEntry.class).include("owner.name", "ownerName").include("propertyName").build())) {
+            var source = ConditionalStatement.builder().sortContract(contract).build();
+            var statement = JpaConditionalStatements.<SortEntry>restrict(source,
+                    (root, query, builder) -> builder.equal(root.get("scope"), "allowed"));
+            var sort = Sort.by("ownerName", "propertyName");
+            assertThat(repository.findAll(statement, sort)).extracting(SortEntry::getId).containsExactly(2L, 3L, 1L);
+            var page = repository.findAll(statement, PageRequest.of(0, 1, sort));
+            assertThat(page.getContent()).extracting(SortEntry::getId).containsExactly(2L);
+            assertThat(page.getTotalElements()).isEqualTo(3L);
+            assertThat(repository(SpecialSortEntry.class).findAll(statement, sort))
+                    .extracting(SpecialSortEntry::getId).containsExactly(3L);
+            assertThat(source.statementWrapper().sortContract()).isSameAs(contract);
+        }
+        var rooted = ConditionalStatement.builder().sortContract(
+                SortContract.builder().root(SortEntry.class).include("id", "identifier").build()).build();
+        assertThatThrownBy(() -> repository(SortOwner.class).findAll(rooted, Sort.by("identifier")))
+                .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
+        for (String path : List.of("owner.entries.propertyName", "owner", "details", "lobText", "binaryValue")) {
+            var invalid = ConditionalStatement.builder().sortContract(SortContract.builder().include(path).build()).build();
+            assertThatThrownBy(() -> repository.findAll(invalid, Sort.by("propertyName")))
+                    .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
+        }
+    }
+
+    @Test
     void programmaticContractsWithoutDeclaredRootsUseOnlyTheEffectiveJpaEntity() {
         var statement = programmatic(new SortContract(List.of(new SortContract.Candidate("id", List.of("identifier")))));
         assertThat(repository.findAll(statement, Sort.by("identifier"))).extracting(SortEntry::getId).containsExactly(1L, 2L, 3L, 4L);

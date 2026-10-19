@@ -45,7 +45,7 @@ public final class JpaSortCatalog {
         Map<String, String> names = new LinkedHashMap<>();
         for (var candidate : key.contract().candidates()) {
             if (!isEligible(entity, candidate.path())) {
-                LOG.log(System.Logger.Level.DEBUG, "Omitting ineligible sort candidate {0}", candidate.path());
+                rejectExplicitOrOmit(candidate);
                 continue;
             }
             publish(names, candidate.path(), candidate.path());
@@ -54,6 +54,13 @@ public final class JpaSortCatalog {
             }
         }
         return Map.copyOf(names);
+    }
+
+    private static void rejectExplicitOrOmit(SortContract.Candidate candidate) {
+        if (candidate.explicit()) {
+            throw new DynamicFilterConfigurationException("Invalid explicit sort path '%s'".formatted(candidate.path()));
+        }
+        LOG.log(System.Logger.Level.DEBUG, "Omitting ineligible sort candidate {0}", candidate.path());
     }
 
     private static void validateRoot(Class<?> declaredRoot, EntityType<?> effective, Metamodel metamodel) {

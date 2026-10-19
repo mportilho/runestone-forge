@@ -2,7 +2,9 @@ package com.runestone.dynafilter.modules.jpa.repository;
 
 import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
+import com.runestone.dynafilter.core.exceptions.InvalidSortException;
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
+import com.runestone.dynafilter.core.generator.SortContract;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.model.FilterData;
@@ -16,6 +18,7 @@ import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
 import com.runestone.dynafilter.modules.jpa.api.JpaConditionalStatements;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
+import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import com.runestone.dynafilter.modules.jpa.resolver.Fetching;
 import com.runestone.dynafilter.modules.jpa.resolver.FetchingFilterDecorator;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
@@ -28,6 +31,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.Persistence;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,6 +40,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -63,6 +68,8 @@ class TestMandatoryScopeRepositoryIntegration {
     private static final String GRAPH = "mandatory-scope-repository-phones";
     private static final List<FilterRequestData> DECLARED_FILTERS = List.of(
             declaration("since"), declaration("identifier"));
+    private static final SortContract SORT_CONTRACT = SortContract.builder()
+            .include("registerDate", "since").include("id", "identifier").build();
 
     @Autowired
     private PersonRepository repository;
@@ -82,6 +89,8 @@ class TestMandatoryScopeRepositoryIntegration {
                 new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard()));
         repository.setDynamicFilterResolver((DynamicFilterResolver) resolver);
         phoneRepository.setDynamicFilterResolver((DynamicFilterResolver) resolver);
+        repository.setSortPolicy(JpaSortPolicy.DECLARED);
+        phoneRepository.setSortPolicy(JpaSortPolicy.DECLARED);
         repository.deleteAll();
         // Deliberately insert out of date order so translating a date alias into an ID alias is observable.
         aliceLater = save("alice", RECENT.plusHours(1), HEIGHT);
@@ -97,6 +106,65 @@ class TestMandatoryScopeRepositoryIntegration {
         var graph = entityManager.createEntityGraph(Person.class);
         graph.addAttributeNodes("phones");
         entityManager.getEntityManagerFactory().addNamedEntityGraph(GRAPH, graph);
+    }
+
+    @AfterEach
+    void restoreSharedRepositoryPolicies() {
+        // Spring caches this context across test classes; transaction rollback does not reset bean fields.
+        repository.setSortPolicy(JpaSortPolicy.LEGACY);
+        phoneRepository.setSortPolicy(JpaSortPolicy.LEGACY);
+    }
+
+    @ParameterizedTest(name = "replaces ordinary predicate: {0}")
+    @ValueSource(booleans = {false, true})
+    void explicitProgrammaticContractKeepsSortedScopedPagesCountsAndGraphsAfterDecoration(boolean replaces) {
+        var contract = SortContract.builder().include("registerDate", "since").build();
+        var source = ConditionalStatement.builder().sortContract(contract)
+                .and(equal("name", "internalOwner", String.class, "bob"))
+                .restrict(equal("name", "mandatoryOwner", String.class, "alice"))
+                .restrict(equal("height", "mandatoryHeight", BigDecimal.class, HEIGHT)).build();
+        var restricted = JpaConditionalStatements.restrict(source, sharedPhoneScope());
+        FilterDecorator<Specification<?>> decorator = replaces
+                ? (filter, wrapper) -> (root, query, builder) -> builder.conjunction()
+                : (filter, wrapper) -> filter.or((root, query, builder) -> builder.conjunction());
+        var derived = ConditionalStatement.builder(restricted)
+                .and(recent()).or(equal("name", "internalOr", String.class, "bob"))
+                .decorate(decorator).decorate(fetching()).build();
+        var statement = ConditionalStatement.builder(derived).build();
+        var expected = List.of(aliceOld.getId(), aliceRecent.getId(), aliceLater.getId());
+
+        assertThat(statement.statementWrapper().sortContract()).isSameAs(contract);
+        assertThat(statement.statementWrapper().allFilters()).isEmpty();
+        assertThat(repository.findAll(source)).isEmpty();
+        for (boolean graph : List.of(false, true)) {
+            entityManager.clear();
+            var pageable = PageRequest.of(0, 1, Sort.by("since"));
+            var page = graph ? repository.findAll(statement, pageable, GRAPH) : repository.findAll(statement, pageable);
+            assertThat(page.getContent()).extracting(Person::getId).containsExactly(aliceOld.getId());
+            assertThat(page.getTotalElements()).isEqualTo(3);
+            assertThat(page.getTotalPages()).isEqualTo(3);
+            assertPhonesLoaded(page.getContent());
+            var next = graph ? repository.findAll(statement, pageable.next(), GRAPH) : repository.findAll(statement, pageable.next());
+            assertThat(next.getContent()).extracting(Person::getId).containsExactly(aliceRecent.getId());
+            assertThat(next.getTotalElements()).isEqualTo(3);
+            var all = graph ? repository.findAll(statement, Sort.by("registerDate"), GRAPH)
+                    : repository.findAll(statement, Sort.by("registerDate"));
+            assertThat(all).extracting(Person::getId).containsExactlyElementsOf(expected);
+            assertPhonesLoaded(all);
+            var unpaged = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "since"));
+            var allPage = graph ? repository.findAll(statement, unpaged, GRAPH) : repository.findAll(statement, unpaged);
+            assertThat(allPage.getPageable().isUnpaged()).isTrue();
+            assertThat(allPage.getContent()).extracting(Person::getId)
+                    .containsExactly(aliceLater.getId(), aliceRecent.getId(), aliceOld.getId());
+            assertThat(allPage.getTotalElements()).isEqualTo(3);
+        }
+        assertThat(repository.count(statement)).isEqualTo(3);
+        assertThat(repository.findAll(source)).isEmpty();
+        assertThat(source.restrictions()).hasSize(2);
+        for (String internal : List.of("name", "height", "internalOwner", "internalOr", "mandatoryOwner", "mandatoryHeight")) {
+            assertThatThrownBy(() -> repository.findAll(statement, Sort.by("since", internal)))
+                    .isInstanceOf(InvalidSortException.class);
+        }
     }
 
     @Test
@@ -117,7 +185,7 @@ class TestMandatoryScopeRepositoryIntegration {
         var heightData = FilterData.of("height", new String[]{"mandatoryHeight"}, BigDecimal.class, Equals.class, new Object[]{HEIGHT});
         var recentData = FilterData.of("registerDate", new String[]{"since"}, LocalDateTime.class,
                 GreaterOrEquals.class, new Object[]{RECENT.toString()});
-        var wrapper = new StatementWrapper(new LogicalStatement(recentData), Map.of(), DECLARED_FILTERS, null);
+        var wrapper = new StatementWrapper(new LogicalStatement(recentData), Map.of(), DECLARED_FILTERS, SORT_CONTRACT);
         var statement = new ConditionalStatement(wrapper, null,
                 List.of(new LogicalStatement(ownerData), new LogicalStatement(heightData)));
         var pageable = PageRequest.of(0, 1, Sort.by("since"));
@@ -260,6 +328,7 @@ class TestMandatoryScopeRepositoryIntegration {
         entityManager.flush();
         entityManager.clear();
         var source = ConditionalStatement.builder()
+                .sortContract(SortContract.builder().include("person.registerDate").include("id").build())
                 .and(equal("number", "number", String.class, "shared"))
                 .restrict(equal("person.height", "ownerHeight", BigDecimal.class, HEIGHT))
                 .build();
@@ -359,7 +428,7 @@ class TestMandatoryScopeRepositoryIntegration {
     void ordinaryMatchesOutsideEitherRestrictionCannotBeObservedByResultsOrAggregates(int hourOffset) {
         var ordinary = equal("registerDate", "date", LocalDateTime.class, RECENT.plusHours(hourOffset));
         // One date matches Alice with a different height; the other matches Bob with the allowed height.
-        var unrestricted = new ConditionalStatement(new StatementWrapper(ordinary, Map.of(), DECLARED_FILTERS, null), null);
+        var unrestricted = new ConditionalStatement(new StatementWrapper(ordinary, Map.of(), DECLARED_FILTERS, SORT_CONTRACT), null);
         assertThat(repository.exists(unrestricted)).isTrue();
         var statement = scoped(ordinary, null);
 
@@ -509,7 +578,7 @@ class TestMandatoryScopeRepositoryIntegration {
     }
 
     private static ConditionalStatement scoped(AbstractStatement ordinary, FilterDecorator<Specification<?>> decorator) {
-        return new ConditionalStatement(new StatementWrapper(ordinary, Map.of(), DECLARED_FILTERS, null), decorator,
+        return new ConditionalStatement(new StatementWrapper(ordinary, Map.of(), DECLARED_FILTERS, SORT_CONTRACT), decorator,
                 List.of(equal("name", "mandatoryOwner", String.class, "alice"),
                         equal("height", "mandatoryHeight", BigDecimal.class, HEIGHT)));
     }
@@ -557,7 +626,7 @@ class TestMandatoryScopeRepositoryIntegration {
         @Filter(path = "registerDate", parameters = "since", targetType = LocalDateTime.class, operation = GreaterOrEquals.class)
         private LocalDateTime since;
 
-        @Filter(path = "id", parameters = "registerDate", targetType = Long.class, operation = Equals.class)
+        @Filter(path = "id", parameters = "identifier", targetType = Long.class, operation = Equals.class)
         private Long identifier;
     }
 }

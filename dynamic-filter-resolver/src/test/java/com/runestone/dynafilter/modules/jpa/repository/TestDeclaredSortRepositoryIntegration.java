@@ -2,6 +2,7 @@ package com.runestone.dynafilter.modules.jpa.repository;
 
 import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
+import com.runestone.dynafilter.core.generator.SortContract;
 import com.runestone.dynafilter.core.exceptions.InvalidSortException;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.model.FilterData;
@@ -27,9 +28,12 @@ import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.InMemoryDatabaseApplication;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.jpamodels.Person;
+import com.runestone.dynafilter.modules.jpa.tools.app.database.jpamodels.Phone;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.data.domain.Sort;
@@ -80,6 +84,43 @@ class TestDeclaredSortRepositoryIntegration {
         var graph = entityManager.createEntityGraph(Person.class);
         graph.addAttributeNodes("name");
         entityManager.getEntityManagerFactory().addNamedEntityGraph(GRAPH, graph);
+    }
+
+    @Test
+    void conflictingProgrammaticAliasesAndLiteralPathsUseTheSameConfigurationErrorContract() {
+        var contracts = List.of(SortContract.builder().include("name", "publicName").include("id", "publicName").build(),
+                SortContract.builder().include("name").include("id", "name").build());
+        for (var contract : contracts) {
+            var statement = ConditionalStatement.builder().sortContract(contract).build();
+            assertThatThrownBy(() -> repository.findAll(statement, Sort.by("name")))
+                    .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "name.extra", "phones", "phones.number", "", " name"})
+    void invalidExplicitPathsAreConfigurationErrorsNotSilentlyOmitted(String path) {
+        var statement = ConditionalStatement.builder().sortContract(SortContract.builder().include(path).build()).build();
+        assertThatThrownBy(() -> repository.findAll(statement, Sort.by("name")))
+                .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
+    }
+
+    @Test
+    void programmaticRootIsOptionalButWhenDeclaredMustBeACompatibleJpaEntity() {
+        for (var contract : List.of(SortContract.builder().include("name", "query").build(),
+                SortContract.builder().root(Person.class).include("name", "query").build())) {
+            var statement = ConditionalStatement.builder().sortContract(contract).build();
+            assertThat(repository.findAll(statement, Sort.by("query"))).extracting(Person::getName)
+                    .containsExactly("Alice", "Bob", "Zoe");
+        }
+        for (Class<?> root : List.of(Phone.class, Object.class)) {
+            // Phone and Person both have id, so path existence cannot substitute for root compatibility.
+            var statement = ConditionalStatement.builder().sortContract(
+                    SortContract.builder().root(root).include("id").build()).build();
+            assertThat(repository.findAll(statement, Sort.unsorted())).hasSize(3);
+            assertThatThrownBy(() -> repository.findAll(statement, Sort.by("id")))
+                    .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
+        }
     }
 
     @Test
@@ -219,7 +260,9 @@ class TestDeclaredSortRepositoryIntegration {
 
     @Test
     void emptyCatalogFailsClosedButUnsortedQueriesNeedNoCatalog() {
-        for (var statement : List.of(ConditionalStatement.builder().build(), statement(EmptySearch.class))) {
+        for (var statement : List.of(ConditionalStatement.builder().build(), statement(EmptySearch.class),
+                ConditionalStatement.builder().and(FilterData.of("name", new String[]{"internalName"}, String.class,
+                        IsIn.class, new Object[]{new String[]{"Alice", "Bob", "Zoe"}})).build())) {
             assertThat(repository.findAll(statement, Sort.unsorted())).hasSize(3);
             assertThat(repository.findAll(statement, Pageable.unpaged()).getTotalElements()).isEqualTo(3);
             assertThatThrownBy(() -> repository.findAll(statement, Sort.by("name"))).isInstanceOf(InvalidSortException.class);
