@@ -32,7 +32,7 @@
 - Built-in JPA operations are registered in `JpaFilterOperationService`; extension operations should go through `JpaFilterOperationContributor` rather than editing consumers.
 
 ## Instruction Sources
-- `CLAUDE.md` only includes `@AGENTS.md`; keep this file as the canonical agent instruction source.
+- Keep `AGENTS.md` as the canonical agent instruction source.
 - Always load the `java-guidelines` skill before doing any work in this project.
 
 ## Agent skills

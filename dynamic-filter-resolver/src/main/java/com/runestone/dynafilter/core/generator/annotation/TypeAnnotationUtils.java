@@ -149,8 +149,53 @@ public class TypeAnnotationUtils {
         return new AnnotationMetadata(
                 annotationData.isEmpty() ? List.of() : List.copyOf(annotationData),
                 decorators.isEmpty() ? List.of() : List.copyOf(decorators),
-                filterRequestData.isEmpty() ? List.of() : List.copyOf(filterRequestData)
+                filterRequestData.isEmpty() ? List.of() : List.copyOf(filterRequestData),
+                findDeclaredRoot(annotationStatementInput, statementAnnotations)
         );
+    }
+
+    private static Class<?> findDeclaredRoot(AnnotationStatementInput input, List<Annotation> statementAnnotations) {
+        List<Class<?>> roots = new ArrayList<>();
+        for (Class<?> type : extractProcessableInterfaces(input.type())) {
+            addDeclaredRoot(roots, type);
+        }
+        Annotation[] annotations = input.annotations();
+        if (annotations != null) {
+            for (Annotation annotation : annotations) {
+                if (annotation instanceof FilterTarget target) {
+                    roots.add(target.value());
+                }
+            }
+        }
+        for (Annotation annotation : statementAnnotations) {
+            if (annotation instanceof ConjunctionFrom from) {
+                addDeclaredRoot(roots, from.value());
+                for (StatementFrom nested : from.disjunctions()) {
+                    addDeclaredRoot(roots, nested.value());
+                }
+            } else if (annotation instanceof DisjunctionFrom from) {
+                addDeclaredRoot(roots, from.value());
+                for (StatementFrom nested : from.conjunctions()) {
+                    addDeclaredRoot(roots, nested.value());
+                }
+            }
+        }
+        Class<?> root = null;
+        for (Class<?> declared : roots) {
+            if (root == null || root.isAssignableFrom(declared)) {
+                root = declared;
+            } else if (!declared.isAssignableFrom(root)) {
+                throw new DynamicFilterConfigurationException("Incompatible declared roots in sort contract");
+            }
+        }
+        return root;
+    }
+
+    private static void addDeclaredRoot(List<Class<?>> roots, Class<?> source) {
+        FilterTarget target = source.getAnnotation(FilterTarget.class);
+        if (target != null) {
+            roots.add(target.value());
+        }
     }
 
     private static void validateAnnotationData(List<FilterAnnotationData> annotationData) {
@@ -409,7 +454,8 @@ public class TypeAnnotationUtils {
     record AnnotationMetadata(
             List<FilterAnnotationData> statementData,
             List<Class<? extends FilterDecorator<?>>> decorators,
-            List<FilterRequestData> requestFilters
+            List<FilterRequestData> requestFilters,
+            Class<?> declaredRoot
     ) {
     }
 

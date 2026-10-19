@@ -64,6 +64,12 @@ public final class ConditionalStatementBuilder {
         return append(statement, LogicOperator.DISJUNCTION);
     }
 
+    /** Attaches an explicit immutable sort contract without publishing paths from conditions or restrictions. */
+    public ConditionalStatementBuilder sortContract(SortContract contract) {
+        sortContract = Objects.requireNonNull(contract, "Sort contract cannot be null");
+        return this;
+    }
+
     public ConditionalStatementBuilder restrict(FilterData filter) {
         return restrict(expression(filter));
     }

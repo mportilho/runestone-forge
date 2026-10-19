@@ -52,11 +52,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import com.runestone.dynafilter.modules.jpa.spring.JpaSortContext;
 import com.runestone.dynafilter.modules.jpa.spring.SortContractAssociation;
+import com.runestone.dynafilter.modules.jpa.spring.ResolvedJpaSortContract;
 
+import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Field;
+import java.lang.reflect.Parameter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -100,6 +105,12 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
         if (operation.getParameters() == null) {
             operation.setParameters(new ArrayList<>());
         }
+        var associations = declaredSortIntegration() ? SortContractAssociation.forMethod(handlerMethod.getMethod()) : List.<SortContractAssociation>of();
+        Map<Parameter, ResolvedJpaSortContract> sortContexts = new HashMap<>();
+        for (var association : associations) {
+            var parameter = association.contract().getParameter();
+            sortContexts.put(parameter, beanFactory.getBean(JpaSortContext.class).resolve(parameter));
+        }
         for (MethodParameter methodParameter : handlerMethod.getMethodParameters()) {
             if (!methodParameter.hasParameterAnnotation(Conjunction.class) && !methodParameter.hasParameterAnnotation(ConjunctionFrom.class)
                 && !methodParameter.hasParameterAnnotation(Disjunction.class) && !methodParameter.hasParameterAnnotation(DisjunctionFrom.class)) {
@@ -117,7 +128,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
                         continue;
                     }
                     try {
-                        customizeParameter(operation, methodParameter, spec);
+                        customizeParameter(operation, methodParameter, spec, sortContexts.get(methodParameter.getParameter()));
                     } catch (Exception e) {
                         throw new IllegalStateException("Cannot build custom OpenAPI parameters from dynamic filter parameter on method: %s"
                                 .formatted(handlerMethod.getMethod().toString()), e);
@@ -125,15 +136,15 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
                 }
             }
         }
-        customizeSort(operation, handlerMethod);
+        customizeSort(operation, handlerMethod, associations, sortContexts);
         return operation;
     }
 
-    private void customizeSort(Operation operation, HandlerMethod handler) {
+    private void customizeSort(Operation operation, HandlerMethod handler, List<SortContractAssociation> associations,
+                               Map<Parameter, ResolvedJpaSortContract> sortContexts) {
         if (!declaredSortIntegration()) {
             return;
         }
-        var associations = SortContractAssociation.forMethod(handler.getMethod());
         var names = new HashSet<String>();
         for (var association : associations) {
             var resolver = SpringDataSortDocumentation.resolver(beanFactory, association.ordering());
@@ -141,7 +152,7 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
             if (!names.add(name)) {
                 throw new DynamicFilterConfigurationException("Sort arguments resolve to the same request parameter at " + handler.getMethod());
             }
-            customizeSortParameter(operation, association, resolver, name);
+            customizeSortParameter(operation, sortContexts.get(association.contract().getParameter()), resolver, name);
         }
         operation.getParameters().removeIf(parameter -> {
             boolean generated = parameter.getExtensions() != null && parameter.getExtensions().remove(GENERATED_SORT) != null;
@@ -168,9 +179,9 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
         return false;
     }
 
-    private void customizeSortParameter(Operation operation, SortContractAssociation association,
+    private void customizeSortParameter(Operation operation, ResolvedJpaSortContract context,
                                         SortHandlerMethodArgumentResolver resolver, String name) {
-        var catalog = beanFactory.getBean(JpaSortContext.class).catalog(association.contract().getParameter());
+        var catalog = context.catalog();
         var parameter = operation.getParameters().stream()
                 .filter(value -> name.equals(value.getName()) && (value.getIn() == null || "query".equals(value.getIn()))).findFirst()
                 .orElseGet(() -> {
@@ -196,7 +207,8 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
      * Applies necessary customization on the OpenAPI 3 {@link Operation}
      * representation
      */
-    private void customizeParameter(Operation operation, MethodParameter methodParameter, FilterRequestData filter) {
+    private void customizeParameter(Operation operation, MethodParameter methodParameter, FilterRequestData filter,
+                                    ResolvedJpaSortContract sortContext) {
         if (filter.hidden()) {
             return;
         }
@@ -225,8 +237,8 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
             if (FilterValueShape.DYNAMIC.equals(metadata.valueShape())) {
                 parameter.setSchema(createArraySchema(new StringSchema(), 2, null));
             } else {
-                Field field = findFilterField(methodParameter, filter);
-                createSchema(filter, field, methodParameter, parameter, metadata);
+                SchemaAttribute attribute = findFilterAttribute(methodParameter, filter, sortContext);
+                createSchema(filter, attribute, methodParameter, parameter, metadata);
             }
 
             parameter.required(filter.required());
@@ -243,9 +255,19 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
         }
     }
 
-    private Field findFilterField(MethodParameter methodParameter, FilterRequestData filter) {
+    private SchemaAttribute findFilterAttribute(MethodParameter methodParameter, FilterRequestData filter,
+                                               ResolvedJpaSortContract sortContext) {
         try {
-            Class<?> filterTargetClass = TypeAnnotationUtils.findFilterTargetClass(methodParameter.getParameter());
+            if (sortContext != null) {
+                var attribute = sortContext.findAttribute(filter.path()[0]);
+                if (attribute != null) {
+                    return new SchemaAttribute(attribute.getJavaType(),
+                            attribute.getJavaMember() instanceof AnnotatedElement member ? member : null);
+                }
+            }
+            // Nonpersistent filters keep their independent schema rules, never sort publication.
+            Class<?> filterTargetClass = sortContext != null ? sortContext.entity().getJavaType()
+                    : TypeAnnotationUtils.findFilterTargetClass(methodParameter.getParameter());
             if (filterTargetClass == null) {
                 if (isCustomOperation(filter.operation())) {
                     return null;
@@ -253,13 +275,17 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
                 throw new DynamicFilterConfigurationException("Cannot resolve target type for filter path(s) '%s'"
                         .formatted(StringHelper.formatPath(filter.path())));
             }
-            return TypeAnnotationUtils.findFilterField(filterTargetClass, filter.path()[0]);
+            var field = TypeAnnotationUtils.findFilterField(filterTargetClass, filter.path()[0]);
+            return new SchemaAttribute(field.getType(), field);
         } catch (DynamicFilterConfigurationException e) {
             if (isCustomOperation(filter.operation())) {
                 return null;
             }
             throw e;
         }
+    }
+
+    private record SchemaAttribute(Class<?> type, AnnotatedElement member) {
     }
 
     private static boolean isCustomOperation(@SuppressWarnings("rawtypes") Class<? extends FilterOperation> operationType) {
@@ -275,9 +301,9 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
     }
 
     @SuppressWarnings({"rawtypes"})
-    private void createSchema(FilterRequestData filter, Field field, MethodParameter methodParameter,
+    private void createSchema(FilterRequestData filter, SchemaAttribute attribute, MethodParameter methodParameter,
                               io.swagger.v3.oas.models.parameters.Parameter parameter, FilterOperationMetadata metadata) {
-        Schema schemaFromType = resolveSchemaFromField(field, methodParameter);
+        Schema schemaFromType = resolveSchemaFromAttribute(attribute, methodParameter);
 
         Schema newSchema = switch (metadata.valueShape()) {
             case BOOLEAN -> new BooleanSchema();
@@ -296,16 +322,16 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
             newSchema.setDefault(filter.defaultValues()[0]);
         }
         if (!metadata.valueShape().equals(FilterValueShape.ARRAY)) {
-            SchemaValidationUtils.applyValidations(newSchema, field);
+            SchemaValidationUtils.applyValidations(newSchema, attribute != null ? attribute.member() : null);
         }
     }
 
     @SuppressWarnings({"rawtypes"})
-    private Schema resolveSchemaFromField(Field field, MethodParameter methodParameter) {
-        if (field == null) {
+    private Schema resolveSchemaFromAttribute(SchemaAttribute attribute, MethodParameter methodParameter) {
+        if (attribute == null) {
             return new StringSchema();
         }
-        return AnnotationsUtils.resolveSchemaFromType(field.getType(), null, getJsonViewFromMethod(methodParameter));
+        return AnnotationsUtils.resolveSchemaFromType(attribute.type(), null, getJsonViewFromMethod(methodParameter));
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})

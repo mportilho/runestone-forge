@@ -2,9 +2,19 @@ package com.runestone.dynafilter.modules.jpa.repository;
 
 import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
+import com.runestone.dynafilter.core.generator.SortContract;
 import com.runestone.dynafilter.core.exceptions.InvalidSortException;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
 import com.runestone.dynafilter.core.model.FilterData;
+import com.runestone.dynafilter.core.model.modifiers.ModIgnoreCase;
+import com.runestone.dynafilter.core.model.modifiers.ModIgnorePath;
+import com.runestone.dynafilter.core.operation.FilterOperation;
+import com.runestone.dynafilter.core.operation.FilterOperationMetadata;
+import com.runestone.dynafilter.core.operation.types.Between;
+import com.runestone.dynafilter.core.operation.types.Dynamic;
+import com.runestone.dynafilter.core.operation.types.extensions.IsEmptyCollection;
+import com.runestone.dynafilter.core.transformer.FilterValueTransformer;
+import com.runestone.dynafilter.core.transformer.FilterValueContext;
 import com.runestone.dynafilter.core.operation.types.Decorated;
 import com.runestone.dynafilter.core.operation.types.IsIn;
 import com.runestone.dynafilter.modules.jpa.api.JpaConditionalStatements;
@@ -18,15 +28,19 @@ import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.InMemoryDatabaseApplication;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.jpamodels.Person;
+import com.runestone.dynafilter.modules.jpa.tools.app.database.jpamodels.Phone;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.JpaSort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.hibernate.SessionFactory;
 import org.springframework.data.jpa.repository.support.JpaEntityInformationSupport;
@@ -36,6 +50,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.Map;
 import java.util.List;
 import java.util.function.Function;
+import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -56,7 +71,9 @@ class TestDeclaredSortRepositoryIntegration {
         repository = new DynamicFilterJpaRepositoryImpl<>(
                 JpaEntityInformationSupport.getEntityInformation(Person.class, entityManager), entityManager);
         repository.setDynamicFilterResolver((com.runestone.dynafilter.core.resolver.DynamicFilterResolver)
-                new SpecificationDynamicFilterResolver(new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard())));
+                new SpecificationDynamicFilterResolver(new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard(), List.of(
+                        registry -> registry.register(NameMatch.class, FilterOperationMetadata.stringValue(), context ->
+                                (root, query, builder) -> builder.equal(root.get("name"), context.filterData().values()[0]))))));
         repository.setSortPolicy(JpaSortPolicy.DECLARED);
         repository.deleteAll();
         save("Zoe");
@@ -70,6 +87,43 @@ class TestDeclaredSortRepositoryIntegration {
     }
 
     @Test
+    void conflictingProgrammaticAliasesAndLiteralPathsUseTheSameConfigurationErrorContract() {
+        var contracts = List.of(SortContract.builder().include("name", "publicName").include("id", "publicName").build(),
+                SortContract.builder().include("name").include("id", "name").build());
+        for (var contract : contracts) {
+            var statement = ConditionalStatement.builder().sortContract(contract).build();
+            assertThatThrownBy(() -> repository.findAll(statement, Sort.by("name")))
+                    .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "name.extra", "phones", "phones.number", "", " name"})
+    void invalidExplicitPathsAreConfigurationErrorsNotSilentlyOmitted(String path) {
+        var statement = ConditionalStatement.builder().sortContract(SortContract.builder().include(path).build()).build();
+        assertThatThrownBy(() -> repository.findAll(statement, Sort.by("name")))
+                .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
+    }
+
+    @Test
+    void programmaticRootIsOptionalButWhenDeclaredMustBeACompatibleJpaEntity() {
+        for (var contract : List.of(SortContract.builder().include("name", "query").build(),
+                SortContract.builder().root(Person.class).include("name", "query").build())) {
+            var statement = ConditionalStatement.builder().sortContract(contract).build();
+            assertThat(repository.findAll(statement, Sort.by("query"))).extracting(Person::getName)
+                    .containsExactly("Alice", "Bob", "Zoe");
+        }
+        for (Class<?> root : List.of(Phone.class, Object.class)) {
+            // Phone and Person both have id, so path existence cannot substitute for root compatibility.
+            var statement = ConditionalStatement.builder().sortContract(
+                    SortContract.builder().root(root).include("id").build()).build();
+            assertThat(repository.findAll(statement, Sort.unsorted())).hasSize(3);
+            assertThatThrownBy(() -> repository.findAll(statement, Sort.by("id")))
+                    .isInstanceOf(DynamicFilterConfigurationException.class).isNotInstanceOf(InvalidSortException.class);
+        }
+    }
+
+    @Test
     void declaredAliasAndExactPathSortWithoutReceivingAFilterValue() {
         var statement = statement(Search.class);
 
@@ -77,6 +131,104 @@ class TestDeclaredSortRepositoryIntegration {
                 .containsExactly("Alice", "Bob", "Zoe");
         assertThat(repository.findAll(statement, Sort.by(Sort.Direction.DESC, "name"))).extracting(Person::getName)
                 .containsExactly("Zoe", "Bob", "Alice");
+    }
+
+    @Test
+    void bothIntervalBoundsSortTheSameAttributeInEitherDirectionWithAndWithoutValues() {
+        for (var values : List.<Map<String, Object>>of(Map.of(), Map.of("heightMin", "160", "heightMax", "180"))) {
+            var statement = statement(IntervalSearch.class, values);
+            for (String name : List.of("heightMin", "heightMax", "height")) {
+                assertThat(repository.findAll(statement, Sort.by(name))).extracting(Person::getName)
+                        .containsExactly("Alice", "Bob", "Zoe");
+                assertThat(repository.findAll(statement, Sort.by(Sort.Direction.DESC, name))).extracting(Person::getName)
+                        .containsExactly("Zoe", "Bob", "Alice");
+            }
+        }
+    }
+
+    @Test
+    void compoundPathsAreIndependentAndLiteralCoincidencesNeverSelectTheFirstPath() {
+        for (Class<?> contract : List.of(CompoundSearch.class, ReversedCompoundSearch.class)) {
+            var statement = statement(contract);
+            assertThat(repository.findAll(statement, Sort.by("name"))).extracting(Person::getName)
+                    .containsExactly("Alice", "Bob", "Zoe");
+            assertThat(repository.findAll(statement, Sort.by("id"))).extracting(Person::getName)
+                    .containsExactly("Zoe", "Alice", "Bob");
+            assertThatThrownBy(() -> repository.findAll(statement, Sort.by("term"))).isInstanceOf(InvalidSortException.class);
+        }
+        for (Class<?> contract : List.of(LiteralFirstSearch.class, LiteralLastSearch.class)) {
+            assertThat(repository.findAll(statement(contract), Sort.by("name"))).extracting(Person::getName)
+                    .containsExactly("Alice", "Bob", "Zoe");
+        }
+    }
+
+    @Test
+    void omittingAnIneligibleCompoundDestinationNeverPromotesItsAlias() {
+        var statement = statement(PartiallyEligibleSearch.class, Map.of("term", "Alice"));
+
+        assertThat(repository.findAll(statement, Sort.by("name"))).extracting(Person::getName).containsExactly("Alice");
+        for (String name : List.of("term", "virtual")) {
+            assertThatThrownBy(() -> repository.findAll(statement, Sort.by(name))).isInstanceOf(InvalidSortException.class);
+        }
+    }
+
+    @Test
+    void specialVirtualAndCollectionFiltersStillRunAfterTheirSortContributionsAreOmitted() {
+        var virtual = statement(VirtualSearch.class, Map.of("special", "Bob"));
+        assertThat(repository.findAll(virtual)).extracting(Person::getName).containsExactly("Bob");
+        assertThatThrownBy(() -> repository.findAll(virtual, Sort.by("special"))).isInstanceOf(InvalidSortException.class);
+        assertThatThrownBy(() -> repository.findAll(virtual, Sort.by("virtual"))).isInstanceOf(InvalidSortException.class);
+
+        assertThat(repository.findAll(statement(CollectionSearch.class, Map.of("emptyPhones", true)))).hasSize(3);
+        assertThat(repository.findAll(statement(CollectionSearch.class, Map.of("emptyPhones", false)))).isEmpty();
+        assertThatThrownBy(() -> repository.findAll(statement(CollectionSearch.class), Sort.by("phones")))
+                .isInstanceOf(InvalidSortException.class);
+    }
+
+    @Test
+    void dynamicOperationsAndSyntheticBetweenAliasesNeverChangeThePublicCatalog() {
+        var absent = statement(DynamicSearch.class);
+        var between = statement(DynamicSearch.class, Map.of("dynamicHeight", new String[]{"BT", "160", "180"}));
+        var equals = statement(DynamicSearch.class, Map.of("dynamicHeight", new String[]{"EQ", "170"}));
+
+        assertThat(between.statementWrapper().sortContract()).isSameAs(absent.statementWrapper().sortContract());
+        assertThat(repository.findAll(between, Sort.by("dynamicHeight"))).extracting(Person::getName)
+                .containsExactly("Alice", "Bob", "Zoe");
+        assertThat(repository.findAll(equals, Sort.by("height"))).extracting(Person::getName).containsExactly("Bob");
+        for (var statement : List.of(absent, between, equals)) {
+            for (String name : List.of("dynamicHeightFrom", "dynamicHeightTo", "BT", "EQ")) {
+                assertThatThrownBy(() -> repository.findAll(statement, Sort.by(name))).isInstanceOf(InvalidSortException.class);
+            }
+        }
+    }
+
+    @Test
+    void realIgnorePathAndCustomOperationsContributeStructurallyWithoutChangingSortSemantics() {
+        for (Class<?> contract : List.of(IgnorePathSearch.class, CustomSearch.class)) {
+            assertThat(repository.findAll(statement(contract), Sort.by("query"))).extracting(Person::getName)
+                    .containsExactly("Alice", "Bob", "Zoe");
+            assertThat(repository.findAll(statement(contract, Map.of("query", "Alice")), Sort.by("query")))
+                    .extracting(Person::getName).containsExactly("Alice");
+        }
+        // A lowercase-only value cannot match mixed-case names without the predicate modifier.
+        assertThat(repository.findAll(statement(IgnorePathSearch.class, Map.of("query", "alice")), Sort.by("query")))
+                .extracting(Person::getName).containsExactly("Alice");
+    }
+
+    @Test
+    void sortNeverInvokesFilterValueTransformers() {
+        var transformations = new java.util.concurrent.atomic.AtomicInteger();
+        var transformingGenerator = new AnnotationStatementGenerator(null, type -> (value, context) -> {
+            transformations.incrementAndGet();
+            return value.toString().trim();
+        });
+        var input = new AnnotationStatementInput(TransformedSearch.class, null);
+        var absent = new ConditionalStatement(transformingGenerator.generateStatements(input, Map.of()), null);
+        assertThat(repository.findAll(absent, Sort.by("query"))).hasSize(3);
+        assertThat(transformations.get()).isZero();
+        var active = new ConditionalStatement(transformingGenerator.generateStatements(input, Map.of("query", " Alice ")), null);
+        assertThat(repository.findAll(active, Sort.by("query"))).extracting(Person::getName).containsExactly("Alice");
+        assertThat(transformations.get()).isEqualTo(1);
     }
 
     @Test
@@ -108,7 +260,9 @@ class TestDeclaredSortRepositoryIntegration {
 
     @Test
     void emptyCatalogFailsClosedButUnsortedQueriesNeedNoCatalog() {
-        for (var statement : List.of(ConditionalStatement.builder().build(), statement(EmptySearch.class))) {
+        for (var statement : List.of(ConditionalStatement.builder().build(), statement(EmptySearch.class),
+                ConditionalStatement.builder().and(FilterData.of("name", new String[]{"internalName"}, String.class,
+                        IsIn.class, new Object[]{new String[]{"Alice", "Bob", "Zoe"}})).build())) {
             assertThat(repository.findAll(statement, Sort.unsorted())).hasSize(3);
             assertThat(repository.findAll(statement, Pageable.unpaged()).getTotalElements()).isEqualTo(3);
             assertThatThrownBy(() -> repository.findAll(statement, Sort.by("name"))).isInstanceOf(InvalidSortException.class);
@@ -191,7 +345,11 @@ class TestDeclaredSortRepositoryIntegration {
     }
 
     private ConditionalStatement statement(Class<?> contract) {
-        return new ConditionalStatement(generator.generateStatements(new AnnotationStatementInput(contract, null), Map.of()), null);
+        return statement(contract, Map.of());
+    }
+
+    private ConditionalStatement statement(Class<?> contract, Map<String, Object> values) {
+        return new ConditionalStatement(generator.generateStatements(new AnnotationStatementInput(contract, null), values), null);
     }
 
     private void save(String name) throws Exception {
@@ -199,6 +357,11 @@ class TestDeclaredSortRepositoryIntegration {
         constructor.setAccessible(true);
         var person = constructor.newInstance();
         ReflectionTestUtils.setField(person, "name", name);
+        ReflectionTestUtils.setField(person, "height", new BigDecimal(switch (name) {
+            case "Alice" -> "160";
+            case "Bob" -> "170";
+            default -> "180";
+        }));
         repository.save(person);
     }
 
@@ -233,5 +396,63 @@ class TestDeclaredSortRepositoryIntegration {
 
     @Conjunction(@Filter(path = {"name", "id"}, parameters = {"compound", "second"}, operation = Equals.class))
     interface LegacySearch {
+    }
+
+    @Conjunction(@Filter(path = "height", parameters = {"heightMin", "heightMax"}, operation = Between.class))
+    interface IntervalSearch {
+    }
+
+    @Conjunction(@Filter(path = {"id", "name"}, parameters = "term", operation = NameMatch.class))
+    interface CompoundSearch {
+    }
+
+    @Conjunction(@Filter(path = {"name", "id"}, parameters = "term", operation = NameMatch.class))
+    interface ReversedCompoundSearch {
+    }
+
+    @Conjunction(@Filter(path = {"name", "id"}, parameters = "name", operation = NameMatch.class))
+    interface LiteralFirstSearch {
+    }
+
+    @Conjunction(@Filter(path = {"id", "name"}, parameters = "name", operation = NameMatch.class))
+    interface LiteralLastSearch {
+    }
+
+    @Conjunction(@Filter(path = {"virtual", "name"}, parameters = "term", operation = NameMatch.class, modifiers = ModIgnorePath.class))
+    interface PartiallyEligibleSearch {
+    }
+
+    @Conjunction(@Filter(path = "virtual", parameters = "special", operation = NameMatch.class, modifiers = ModIgnorePath.class))
+    interface VirtualSearch {
+    }
+
+    @Conjunction(@Filter(path = "phones", parameters = "emptyPhones", operation = IsEmptyCollection.class))
+    interface CollectionSearch {
+    }
+
+    @Conjunction(@Filter(path = "height", parameters = "dynamicHeight", operation = Dynamic.class))
+    interface DynamicSearch {
+    }
+
+    @Conjunction(@Filter(path = "name", parameters = "query", operation = Equals.class, modifiers = {ModIgnorePath.class, ModIgnoreCase.class}))
+    interface IgnorePathSearch {
+    }
+
+    @Conjunction(@Filter(path = "name", parameters = "query", operation = NameMatch.class))
+    interface CustomSearch {
+    }
+
+    @Conjunction(@Filter(path = "name", parameters = "query", operation = Equals.class, transformers = Trim.class))
+    interface TransformedSearch {
+    }
+
+    interface NameMatch extends FilterOperation<Specification<?>> {
+    }
+
+    static final class Trim implements FilterValueTransformer {
+        @Override
+        public Object transform(Object value, FilterValueContext context) {
+            return value.toString().trim();
+        }
     }
 }

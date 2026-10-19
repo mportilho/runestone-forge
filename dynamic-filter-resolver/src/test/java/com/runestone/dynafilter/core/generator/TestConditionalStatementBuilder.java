@@ -31,6 +31,32 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class TestConditionalStatementBuilder {
 
     @Test
+    void explicitSortContractSurvivesCompositionWithoutPublishingInternalConditionsOrMutatingEarlierBuilds() {
+        var contracts = SortContract.builder().include("a", "publicA");
+        var contract = contracts.build();
+        var builder = ConditionalStatement.builder().sortContract(contract).and(filter("internal", true));
+        var source = builder.build();
+        var derived = ConditionalStatement.builder(source).and(filter("b", true)).or(filter("c", false))
+                .restrict(filter("owner", true)).decoratedFilter(filter("input", true))
+                .decorate((FilterDecorator<String>) (result, wrapper) -> "replacement").build();
+        var rebuilt = ConditionalStatement.builder(derived).build();
+        var laterContract = contracts.include("b").build();
+        var later = builder.sortContract(laterContract).build();
+
+        assertThat(source.statementWrapper().sortContract()).isSameAs(contract);
+        assertThat(derived.statementWrapper().sortContract()).isSameAs(contract);
+        assertThat(rebuilt.statementWrapper().sortContract()).isSameAs(contract);
+        assertThat(contract.candidates()).extracting(SortContract.Candidate::path).containsExactly("a");
+        assertThat(contract.candidates().getFirst().aliases()).containsExactly("publicA");
+        assertThat(later.statementWrapper().sortContract().candidates()).extracting(SortContract.Candidate::path)
+                .containsExactly("a", "b");
+        assertThat(source.statementWrapper().allFilters()).isEmpty();
+        assertThat(derived.statementWrapper().allFilters()).isEmpty();
+        assertThat(source.restrictions()).isEmpty();
+        assertThat(rebuilt.filterDecorator()).isSameAs(derived.filterDecorator());
+    }
+
+    @Test
     void buildsEmptyStatementsAndGroupsOrdinaryChainsFromLeftToRight() {
         var builder = ConditionalStatement.builder();
         var empty = builder.build();
@@ -173,7 +199,8 @@ class TestConditionalStatementBuilder {
                 nullArgument("restriction filter", builder -> builder.restrict((FilterData) null)),
                 nullArgument("restriction expression", builder -> builder.restrict((AbstractStatement) null)),
                 nullArgument("decorator", builder -> builder.decorate(null)),
-                nullArgument("decorated filter", builder -> builder.decoratedFilter(null)));
+                nullArgument("decorated filter", builder -> builder.decoratedFilter(null)),
+                nullArgument("sort contract", builder -> builder.sortContract(null)));
     }
 
     private static Arguments nullArgument(String scenario, Consumer<ConditionalStatementBuilder> invocation) {

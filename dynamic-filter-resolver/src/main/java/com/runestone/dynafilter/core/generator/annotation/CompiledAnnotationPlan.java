@@ -19,26 +19,27 @@ final class CompiledAnnotationPlan {
     private final SortContract sortContract;
 
     private CompiledAnnotationPlan(List<StatementPlan> statements, List<FilterPlan> decoratedFilters,
-                                   List<FilterRequestData> requestFilters) {
+                                   List<FilterRequestData> requestFilters, Class<?> declaredRoot) {
         this.statements = List.copyOf(statements);
         this.decoratedFilters = List.copyOf(decoratedFilters);
         this.requestFilters = requestFilters;
-        this.sortContract = compileSortContract(requestFilters);
+        this.sortContract = compileSortContract(requestFilters, declaredRoot);
     }
 
-    private static SortContract compileSortContract(List<FilterRequestData> filters) {
+    private static SortContract compileSortContract(List<FilterRequestData> filters, Class<?> declaredRoot) {
         List<SortContract.Candidate> candidates = new ArrayList<>();
         for (FilterRequestData filter : filters) {
             if (filter.hidden() || filter.constantValues().length > 0 || Decorated.class.equals(filter.operation())) {
                 continue;
             }
-            // This first increment publishes only declarations with a single destination.
             String[] paths = filter.path();
-            if (paths.length == 1) {
-                candidates.add(new SortContract.Candidate(paths[0], List.of(filter.parameters())));
+            // Decide ambiguity before persistence validation can omit any destinations.
+            List<String> aliases = paths.length == 1 ? List.of(filter.parameters()) : List.of();
+            for (String path : paths) {
+                candidates.add(new SortContract.Candidate(path, aliases));
             }
         }
-        return new SortContract(candidates);
+        return new SortContract(candidates, declaredRoot);
     }
 
     SortContract sortContract() {
@@ -61,7 +62,7 @@ final class CompiledAnnotationPlan {
             }
             statements.add(new StatementPlan(data.logicOperator(), filters, nestedStatements, data.negate()));
         }
-        return new CompiledAnnotationPlan(statements, decoratedFilters, metadata.requestFilters());
+        return new CompiledAnnotationPlan(statements, decoratedFilters, metadata.requestFilters(), metadata.declaredRoot());
     }
 
     private static List<FilterPlan> compileFilters(List<Filter> filters, List<FilterPlan> decoratedFilters,

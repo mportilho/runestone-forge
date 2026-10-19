@@ -6,6 +6,7 @@ import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInp
 import com.runestone.dynafilter.core.generator.annotation.TypeAnnotationUtils;
 import com.runestone.dynafilter.modules.jpa.support.JpaSortCatalog;
 import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.metamodel.EntityType;
 import org.springframework.beans.factory.ObjectProvider;
 
 import java.lang.reflect.Parameter;
@@ -35,19 +36,30 @@ public final class JpaSortContext {
     }
 
     public Map<String, String> catalog(Parameter parameter) {
-        Class<?> entity = TypeAnnotationUtils.findFilterTargetClass(parameter);
+        return resolve(parameter).catalog();
+    }
+
+    /** Resolves catalog and persistent schema metadata together using the compiled contract's root. */
+    public ResolvedJpaSortContract resolve(Parameter parameter) {
+        var input = new AnnotationStatementInput(parameter.getType(), parameter.getAnnotations());
+        var contract = generator.sortContract(input);
+        Class<?> entity = contract.declaredRoot();
+        if (entity == null) {
+            entity = TypeAnnotationUtils.findFilterTargetClass(parameter);
+        }
         if (entity == null) {
             throw new DynamicFilterConfigurationException("Cannot determine JPA root for sort contract at " + parameter);
         }
         EntityManagerFactory selected = persistenceUnitResolver != null ? persistenceUnitResolver.resolve(parameter, entity) : null;
-        List<Unit> matching = units().stream().filter(unit -> selected == null || unit.factory() == selected)
-                .filter(unit -> unit.factory().getMetamodel().getEntities().stream()
-                .anyMatch(type -> type.getJavaType().equals(entity))).toList();
+        Class<?> root = entity;
+        var matching = units().stream().filter(unit -> selected == null || unit.factory() == selected)
+                .flatMap(unit -> unit.factory().getMetamodel().getEntities().stream()
+                .filter(type -> type.getJavaType().equals(root)).map(type -> new Binding(unit, type))).toList();
         if (matching.size() != 1) {
             throw new DynamicFilterConfigurationException("Sort contract requires one determinable persistence unit at " + parameter);
         }
-        var input = new AnnotationStatementInput(parameter.getType(), parameter.getAnnotations());
-        return matching.getFirst().catalog().resolve(generator.sortContract(input), entity);
+        var binding = matching.getFirst();
+        return new ResolvedJpaSortContract(binding.unit().catalog().resolve(contract, root), binding.entity());
     }
 
     private List<Unit> units() {
@@ -72,4 +84,8 @@ public final class JpaSortContext {
 
     private record Unit(EntityManagerFactory factory, JpaSortCatalog catalog) {
     }
+
+    private record Binding(Unit unit, EntityType<?> entity) {
+    }
+
 }

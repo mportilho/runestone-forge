@@ -7,6 +7,11 @@ import com.runestone.dynafilter.core.generator.SortContract;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Lob;
 import jakarta.persistence.metamodel.Attribute;
+import jakarta.persistence.metamodel.ManagedType;
+import jakarta.persistence.metamodel.EntityType;
+import jakarta.persistence.metamodel.IdentifiableType;
+import jakarta.persistence.metamodel.Metamodel;
+import jakarta.persistence.metamodel.SingularAttribute;
 
 import java.lang.reflect.AnnotatedElement;
 import java.util.LinkedHashMap;
@@ -38,25 +43,13 @@ public final class JpaSortCatalog {
     }
 
     private Map<String, String> validate(Key key) {
-        var entity = factory.getMetamodel().entity(key.entity());
-        Map<String, Attribute<?, ?>> attributes = new java.util.HashMap<>();
-        for (Attribute<?, ?> attribute : entity.getAttributes()) {
-            attributes.put(attribute.getName(), attribute);
-        }
+        var metamodel = factory.getMetamodel();
+        var entity = metamodel.entity(key.entity());
+        validateRoot(key.contract().declaredRoot(), entity, metamodel);
         Map<String, String> names = new LinkedHashMap<>();
         for (var candidate : key.contract().candidates()) {
-            // Navigation and more mapping forms belong to subsequent increments.
-            if (candidate.path().contains(".")) {
-                continue;
-            }
-            Attribute<?, ?> attribute = attributes.get(candidate.path());
-            if (attribute == null) {
-                LOG.log(System.Logger.Level.DEBUG, "Omitting non-persistent sort candidate {0}", candidate.path());
-                continue;
-            }
-            if (attribute.isCollection() || attribute.getPersistentAttributeType() != Attribute.PersistentAttributeType.BASIC
-                    || attribute.getJavaType().isArray()
-                    || attribute.getJavaMember() instanceof AnnotatedElement member && member.isAnnotationPresent(Lob.class)) {
+            if (!isEligible(entity, candidate.path())) {
+                rejectExplicitOrOmit(candidate);
                 continue;
             }
             publish(names, candidate.path(), candidate.path());
@@ -65,6 +58,63 @@ public final class JpaSortCatalog {
             }
         }
         return Map.copyOf(names);
+    }
+
+    private static void rejectExplicitOrOmit(SortContract.Candidate candidate) {
+        if (candidate.explicit()) {
+            throw new DynamicFilterConfigurationException("Invalid explicit sort path '%s'".formatted(candidate.path()));
+        }
+        LOG.log(System.Logger.Level.DEBUG, "Omitting ineligible sort candidate {0}", candidate.path());
+    }
+
+    private static void validateRoot(Class<?> declaredRoot, EntityType<?> effective, Metamodel metamodel) {
+        if (declaredRoot == null) {
+            return;
+        }
+        try {
+            metamodel.entity(declaredRoot);
+        } catch (IllegalArgumentException exception) {
+            throw new DynamicFilterConfigurationException("Declared sort root is not a JPA entity: " + declaredRoot.getName(), exception);
+        }
+        for (IdentifiableType<?> type = effective; type != null; type = type.getSupertype()) {
+            if (type.getJavaType().equals(declaredRoot)) {
+                return;
+            }
+        }
+        throw new DynamicFilterConfigurationException("Effective JPA entity is incompatible with declared sort root " + declaredRoot.getName());
+    }
+
+    private static boolean isEligible(ManagedType<?> root, String path) {
+        String[] segments = path.split("\\.", -1);
+        ManagedType<?> current = root;
+        for (int i = 0; i < segments.length; i++) {
+            // getAttributes includes inherited attributes and honors the provider's access strategy.
+            Attribute<?, ?> attribute = null;
+            for (var persistent : current.getAttributes()) {
+                if (persistent.getName().equals(segments[i])) {
+                    attribute = persistent;
+                    break;
+                }
+            }
+            if (!(attribute instanceof SingularAttribute<?, ?> singular)) {
+                return false;
+            }
+            if (i == segments.length - 1) {
+                return singular.getPersistentAttributeType() == Attribute.PersistentAttributeType.BASIC
+                        && !isBinary(singular.getJavaType())
+                        && !(singular.getJavaMember() instanceof AnnotatedElement member && member.isAnnotationPresent(Lob.class));
+            }
+            if (!(singular.getType() instanceof ManagedType<?> next)) {
+                return false;
+            }
+            current = next;
+        }
+        return false;
+    }
+
+    private static boolean isBinary(Class<?> type) {
+        return type == byte[].class || type == Byte[].class || java.sql.Blob.class.isAssignableFrom(type)
+                || java.nio.ByteBuffer.class.isAssignableFrom(type);
     }
 
     private static void publish(Map<String, String> names, String name, String path) {
