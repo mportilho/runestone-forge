@@ -80,16 +80,16 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanFactory
                     && !AnnotatedElementUtils.hasAnnotation(method, RequestMapping.class)) {
                 continue;
             }
+            var sortContext = resolveSortContext(method);
             for (Parameter parameter : method.getParameters()) {
-                warmupAndCheckFilterConfiguration(parameter);
+                warmupAndCheckFilterConfiguration(parameter, sortContext);
             }
-            warmupSort(method);
         }
     }
 
-    private void warmupSort(Method method) {
+    private ResolvedJpaSortContract resolveSortContext(Method method) {
         if (beanFactory == null || beanFactory.getBeanProvider(JpaSortPolicy.class).getIfAvailable() != JpaSortPolicy.DECLARED) {
-            return;
+            return null;
         }
         var contracts = java.util.Arrays.stream(method.getParameters())
                 .filter(parameter -> parameter.getType() == ConditionalStatement.class).toList();
@@ -97,11 +97,12 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanFactory
                 .filter(parameter -> Pageable.class.isAssignableFrom(parameter.getType()) || Sort.class.isAssignableFrom(parameter.getType()))
                 .count();
         if (contracts.size() == 1 && ordering == 1) {
-            beanFactory.getBean(JpaSortContext.class).catalog(contracts.getFirst());
+            return beanFactory.getBean(JpaSortContext.class).resolve(contracts.getFirst());
         }
+        return null;
     }
 
-    private void warmupAndCheckFilterConfiguration(Parameter parameter) {
+    private void warmupAndCheckFilterConfiguration(Parameter parameter, ResolvedJpaSortContract sortContext) {
         if (!isDynamicFilterParameter(parameter)) {
             return;
         }
@@ -111,9 +112,10 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanFactory
         validateUniqueFilterParameters(allFilters, parameter);
         allFilters.forEach(FilterOperationConfigurationValidator::validateOperationSpecificConfiguration);
 
-        Class<?> entityClass = TypeAnnotationUtils.findFilterTargetClass(parameter);
+        Class<?> entityClass = sortContext != null ? sortContext.entity().getJavaType()
+                : TypeAnnotationUtils.findFilterTargetClass(parameter);
         if (entityClass != null) {
-            allFilters.forEach(filter -> FilterOperationConfigurationValidator.validateEntityConfiguration(filter, entityClass));
+            allFilters.forEach(filter -> FilterOperationConfigurationValidator.validateEntityConfiguration(filter, entityClass, sortContext));
         }
         allFilters.forEach(this::checkRegisteredOperation);
         statementGenerator.warmup(input);

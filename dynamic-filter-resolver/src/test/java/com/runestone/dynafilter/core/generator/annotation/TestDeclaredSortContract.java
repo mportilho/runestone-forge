@@ -2,6 +2,7 @@ package com.runestone.dynafilter.core.generator.annotation;
 
 import com.runestone.dynafilter.core.generator.SortContract;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
+import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.core.operation.types.Between;
 import com.runestone.dynafilter.core.operation.types.Decorated;
@@ -84,6 +85,22 @@ class TestDeclaredSortContract {
     }
 
     @Test
+    void declaredRootComesFromUsedSourcesAndSurvivesRebuildWithoutChangingRootlessContracts() throws Exception {
+        var generator = new AnnotationStatementGenerator();
+        var method = RootSources.class.getDeclaredMethod("search", ConditionalStatement.class);
+        var input = new AnnotationStatementInput(ConditionalStatement.class, method.getParameters()[0].getAnnotations());
+        var source = new ConditionalStatement(generator.generateStatements(input, Map.of()), null);
+
+        assertThat(source.statementWrapper().sortContract().declaredRoot()).isEqualTo(Root.class);
+        assertThat(ConditionalStatement.builder(source).build().statementWrapper().sortContract())
+                .isSameAs(source.statementWrapper().sortContract());
+        var candidates = source.statementWrapper().sortContract().candidates();
+        assertThat(new SortContract(candidates).declaredRoot()).isNull();
+        assertThat(new SortContract(candidates, Root.class)).isNotEqualTo(new SortContract(candidates));
+        assertThat(generator.sortContract(new AnnotationStatementInput(DeclaredSearch.class, null)).declaredRoot()).isEqualTo(Root.class);
+    }
+
+    @Test
     void recordEqualityIncludesTheContractAndCopiesMutableCollectionsAtItsBoundary() {
         var aliases = new ArrayList<>(List.of("query"));
         var candidates = new ArrayList<>(List.of(new SortContract.Candidate("name", aliases)));
@@ -144,6 +161,25 @@ class TestDeclaredSortContract {
         void search(@ConjunctionFrom(value = FromSearch.class, disjunctions = @StatementFrom(NestedFromSearch.class))
                     @Disjunction(conjunctions = @Statement(@Filter(path = "registerDate", parameters = "registered", operation = Equals.class)))
                     Object input) {
+        }
+    }
+
+    static class Root {
+    }
+
+    @FilterTarget(Root.class)
+    @Conjunction(@Filter(path = "name", parameters = "name", operation = Equals.class))
+    interface DeclaredSearch {
+    }
+
+    @FilterTarget(Root.class)
+    static class Source {
+        @Filter(path = "name", parameters = "query", operation = Equals.class)
+        private String query;
+    }
+
+    static class RootSources {
+        void search(@ConjunctionFrom(Source.class) ConditionalStatement statement) {
         }
     }
 }

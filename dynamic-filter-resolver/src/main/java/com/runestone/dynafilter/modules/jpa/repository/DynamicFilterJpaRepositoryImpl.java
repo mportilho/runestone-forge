@@ -32,6 +32,9 @@ import com.runestone.dynafilter.core.model.FilterRequestData;
 import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.From;
+import jakarta.persistence.criteria.JoinType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -86,16 +89,16 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
         Pageable translated = updatePageableFilterPath(conditionalStatement, pageable);
         Specification<T> spec = dynamicFilterResolver.createFilter(conditionalStatement);
         if (translated.isUnpaged()) {
-            List<T> content = getQuery(spec, translated.getSort()).getResultList();
+            List<T> content = getSortedQuery(spec, translated.getSort()).getResultList();
             return new PageImpl<>(content, translated, content.size());
         }
-        return findAll(spec, translated);
+        return readPage(getSortedQuery(spec, translated.getSort()), getDomainClass(), translated, spec);
     }
 
     @Override
     public List<T> findAll(ConditionalStatement conditionalStatement, Sort sort) {
         Sort translated = updateSortFilterPath(conditionalStatement, sort);
-        return findAll(dynamicFilterResolver.<Specification<T>>createFilter(conditionalStatement), translated);
+        return getSortedQuery(dynamicFilterResolver.<Specification<T>>createFilter(conditionalStatement), translated).getResultList();
     }
 
     @Override
@@ -107,7 +110,7 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
     public Page<T> findAll(ConditionalStatement conditionalStatement, Pageable pageable, EntityGraph.EntityGraphType entityGraphType, String entityGraphName) {
         Pageable updatedPageable = updatePageableFilterPath(conditionalStatement, pageable);
         Specification<T> spec = dynamicFilterResolver.createFilter(conditionalStatement);
-        TypedQuery<T> query = getQuery(spec, updatedPageable.getSort());
+        TypedQuery<T> query = getSortedQuery(spec, updatedPageable.getSort());
         query.setHint(entityGraphType.getKey(), em.getEntityGraph(entityGraphName));
         if (updatedPageable.isUnpaged()) {
             List<T> content = query.getResultList();
@@ -125,7 +128,7 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
     public List<T> findAll(ConditionalStatement conditionalStatement, Sort sort, EntityGraph.EntityGraphType entityGraphType, String entityGraphName) {
         Sort translated = updateSortFilterPath(conditionalStatement, sort);
         Specification<T> spec = dynamicFilterResolver.createFilter(conditionalStatement);
-        TypedQuery<T> query = getQuery(spec, translated);
+        TypedQuery<T> query = getSortedQuery(spec, translated);
         query.setHint(entityGraphType.getKey(), em.getEntityGraph(entityGraphName));
         return query.getResultList();
     }
@@ -166,6 +169,57 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
     @Override
     public void setDynamicFilterResolver(DynamicFilterResolver<Specification<T>> dynamicFilterResolver) {
         this.dynamicFilterResolver = dynamicFilterResolver;
+    }
+
+    private TypedQuery<T> getSortedQuery(Specification<T> specification, Sort sort) {
+        if (sortPolicy != JpaSortPolicy.DECLARED || sort.isUnsorted()) {
+            return getQuery(specification, sort);
+        }
+        // Spring Data's PropertyPath follows Java backing fields. Validated JPA paths must
+        // instead follow the persistent members, including getters with different field types.
+        Specification<T> ordered = (root, query, builder) -> {
+            var predicate = specification != null ? specification.toPredicate(root, query, builder) : null;
+            List<jakarta.persistence.criteria.Order> orders = new ArrayList<>();
+            for (Sort.Order order : sort) {
+                if (order.getNullHandling() != Sort.NullHandling.NATIVE) {
+                    throw new UnsupportedOperationException("Applying Null Precedence using Criteria Queries is not supported.");
+                }
+                Expression<?> expression = sortExpression(root, order.getProperty());
+                if (order.isIgnoreCase() && expression.getJavaType() == String.class) {
+                    expression = builder.lower(expression.as(String.class));
+                }
+                orders.add(order.isAscending() ? builder.asc(expression) : builder.desc(expression));
+            }
+            query.orderBy(orders);
+            return predicate;
+        };
+        // Only the content query uses this specification; count retains the original one.
+        return getQuery(ordered, Sort.unsorted());
+    }
+
+    private static Expression<?> sortExpression(From<?, ?> root, String path) {
+        String[] segments = path.split("\\.", -1);
+        From<?, ?> current = root;
+        for (int i = 0; i < segments.length - 1; i++) {
+            String segment = segments[i];
+            From<?, ?> next = null;
+            for (var fetch : current.getFetches()) {
+                if (fetch instanceof From<?, ?> fetched && fetch.getAttribute().getName().equals(segment)) {
+                    next = fetched;
+                    break;
+                }
+            }
+            if (next == null) {
+                for (var join : current.getJoins()) {
+                    if (join.getAttribute().getName().equals(segment)) {
+                        next = join;
+                        break;
+                    }
+                }
+            }
+            current = next != null ? next : current.join(segment, JoinType.LEFT);
+        }
+        return current.get(segments[segments.length - 1]);
     }
 
     private Pageable updatePageableFilterPath(ConditionalStatement conditionalStatement, Pageable pageable) {

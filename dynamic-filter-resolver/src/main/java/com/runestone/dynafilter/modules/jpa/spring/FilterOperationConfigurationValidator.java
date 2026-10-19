@@ -33,6 +33,7 @@ import com.runestone.dynafilter.core.operation.types.extensions.PeriodOverlapsCl
 import com.runestone.dynafilter.core.operation.types.extensions.PeriodOverlapsHalfOpen;
 import com.runestone.dynafilter.core.operation.types.extensions.PeriodOverlapsOpen;
 import com.runestone.dynafilter.core.operation.types.extensions.SizeBetween;
+import jakarta.persistence.metamodel.PluralAttribute;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
@@ -83,11 +84,15 @@ final class FilterOperationConfigurationValidator {
     }
 
     static void validateEntityConfiguration(FilterRequestData filter, Class<?> entityClass) {
+        validateEntityConfiguration(filter, entityClass, null);
+    }
+
+    static void validateEntityConfiguration(FilterRequestData filter, Class<?> entityClass, ResolvedJpaSortContract context) {
         if (filter.modifiers() != null && filter.modifiers().contains(ModIgnorePath.class)) {
             return;
         }
 
-        Field[] fields = resolveFields(filter, entityClass);
+        FilterPathType[] fields = resolveTypes(filter, entityClass, context);
         validateTextPaths(filter, fields);
         validateCollectionPaths(filter, fields);
         validateComparablePaths(filter, fields);
@@ -107,22 +112,34 @@ final class FilterOperationConfigurationValidator {
         }
     }
 
-    private static Field[] resolveFields(FilterRequestData filter, Class<?> entityClass) {
+    private static FilterPathType[] resolveTypes(FilterRequestData filter, Class<?> entityClass, ResolvedJpaSortContract context) {
         String[] paths = filter.path();
-        Field[] fields = new Field[paths.length];
+        FilterPathType[] fields = new FilterPathType[paths.length];
         for (int i = 0; i < paths.length; i++) {
-            fields[i] = findFilterField(entityClass, paths[i]);
+            var attribute = context != null ? context.findAttribute(paths[i]) : null;
+            if (attribute != null) {
+                Class<?> elementType = attribute instanceof PluralAttribute<?, ?, ?> plural
+                        ? plural.getElementType().getJavaType() : Object.class;
+                fields[i] = new FilterPathType(attribute.getJavaType(), elementType);
+            } else {
+                // Virtual filters keep the existing Java-field validation, independently of sort.
+                Field field = findFilterField(entityClass, paths[i]);
+                fields[i] = new FilterPathType(field.getType(), findCollectionElementType(field));
+            }
         }
         return fields;
     }
 
-    private static void validateTextPaths(FilterRequestData filter, Field[] fields) {
+    private record FilterPathType(Class<?> type, Class<?> elementType) {
+    }
+
+    private static void validateTextPaths(FilterRequestData filter, FilterPathType[] fields) {
         if (!isTextOperation(filter)) {
             return;
         }
 
         for (int i = 0; i < fields.length; i++) {
-            Class<?> fieldType = fields[i].getType();
+            Class<?> fieldType = fields[i].type();
             if (!String.class.equals(fieldType)) {
                 throw new DynamicFilterConfigurationException(
                         "Filter operation '%s' used on path '%s' requires a String path, but found %s"
@@ -132,13 +149,13 @@ final class FilterOperationConfigurationValidator {
         }
     }
 
-    private static void validateCollectionPaths(FilterRequestData filter, Field[] fields) {
+    private static void validateCollectionPaths(FilterRequestData filter, FilterPathType[] fields) {
         if (!isCollectionOperation(filter)) {
             return;
         }
 
         for (int i = 0; i < fields.length; i++) {
-            Class<?> fieldType = fields[i].getType();
+            Class<?> fieldType = fields[i].type();
             if (!Collection.class.isAssignableFrom(fieldType)) {
                 throw new DynamicFilterConfigurationException(
                         "Filter operation '%s' used on path '%s' requires a collection path, but found %s"
@@ -148,13 +165,13 @@ final class FilterOperationConfigurationValidator {
         }
     }
 
-    private static void validateComparablePaths(FilterRequestData filter, Field[] fields) {
+    private static void validateComparablePaths(FilterRequestData filter, FilterPathType[] fields) {
         if (!isComparableOperation(filter) && !isIntervalOperation(filter)) {
             return;
         }
 
         for (int i = 0; i < fields.length; i++) {
-            Class<?> fieldType = fields[i].getType();
+            Class<?> fieldType = fields[i].type();
             if (!isComparableType(fieldType)) {
                 String requirement = isIntervalOperation(filter) ? "requires comparable path(s)" : "requires a comparable path";
                 throw new DynamicFilterConfigurationException(
@@ -165,13 +182,13 @@ final class FilterOperationConfigurationValidator {
         }
     }
 
-    private static void validateOnDatePath(FilterRequestData filter, Field[] fields) {
+    private static void validateOnDatePath(FilterRequestData filter, FilterPathType[] fields) {
         if (!OnDate.class.equals(filter.operation())) {
             return;
         }
 
         for (int i = 0; i < fields.length; i++) {
-            Class<?> fieldType = fields[i].getType();
+            Class<?> fieldType = fields[i].type();
             if (!isDateLikeType(fieldType)) {
                 throw new DynamicFilterConfigurationException(
                         "Filter operation '%s' used on path '%s' supports LocalDate, LocalDateTime, Instant and Date paths, but found %s"
@@ -181,22 +198,22 @@ final class FilterOperationConfigurationValidator {
         }
     }
 
-    private static void validateIgnoreCasePaths(FilterRequestData filter, Field[] fields) {
+    private static void validateIgnoreCasePaths(FilterRequestData filter, FilterPathType[] fields) {
         if (filter.modifiers() == null || !filter.modifiers().contains(ModIgnoreCase.class) || !supportsIgnoreCase(filter)) {
             return;
         }
 
         for (int i = 0; i < fields.length; i++) {
-            Field field = fields[i];
-            if (String.class.equals(field.getType())) {
+            FilterPathType field = fields[i];
+            if (String.class.equals(field.type())) {
                 continue;
             }
-            if (IsIn.class.equals(filter.operation()) && Collection.class.isAssignableFrom(field.getType()) && String.class.equals(findCollectionElementType(field))) {
+            if (IsIn.class.equals(filter.operation()) && Collection.class.isAssignableFrom(field.type()) && String.class.equals(field.elementType())) {
                 continue;
             }
             throw new DynamicFilterConfigurationException(
                     "Filter operation '%s' used on path '%s' supports ModIgnoreCase only for String paths, but found %s"
-                            .formatted(filter.operation().getCanonicalName(), filter.path()[i], field.getType().getCanonicalName())
+                            .formatted(filter.operation().getCanonicalName(), filter.path()[i], field.type().getCanonicalName())
             );
         }
     }
