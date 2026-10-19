@@ -40,27 +40,31 @@ import io.swagger.v3.oas.models.media.BooleanSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import org.springdoc.core.customizers.OperationCustomizer;
+import org.springdoc.core.customizers.ParameterCustomizer;
+import org.springdoc.core.extractor.DelegatingMethodParameter;
 import org.springframework.core.MethodParameter;
 import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.web.SortHandlerMethodArgumentResolver;
-import org.springframework.util.ReflectionUtils;
-import com.runestone.dynafilter.core.generator.ConditionalStatement;
+import org.springframework.web.bind.annotation.RequestParam;
 import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import com.runestone.dynafilter.modules.jpa.spring.JpaSortContext;
+import com.runestone.dynafilter.modules.jpa.spring.SortContractAssociation;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
 import static java.util.Objects.requireNonNull;
 
-public class DynaFilterOperationCustomizer implements OperationCustomizer, BeanFactoryAware {
+public class DynaFilterOperationCustomizer implements OperationCustomizer, ParameterCustomizer, BeanFactoryAware {
+
+    private static final String GENERATED_SORT = "x-runestone-generated-sort";
 
     private final ParameterNameDiscoverer parameterNameDiscoverer;
     private final FilterOperationService<?> filterOperationService;
@@ -77,7 +81,25 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, BeanF
     }
 
     @Override
+    public io.swagger.v3.oas.models.parameters.Parameter customize(io.swagger.v3.oas.models.parameters.Parameter parameter,
+                                                                   MethodParameter methodParameter) {
+        if (declaredSortIntegration() && methodParameter instanceof DelegatingMethodParameter flattened) {
+            Field field = flattened.getField();
+            if (field != null && field.getName().equals("sort")
+                    && (field.getDeclaringClass() == org.springdoc.core.converters.models.Pageable.class
+                        || field.getDeclaringClass() == org.springdoc.core.converters.models.Sort.class)) {
+                // Preserve provenance through Springdoc's merge step instead of guessing from a parameter name or description.
+                parameter.addExtension(GENERATED_SORT, true);
+            }
+        }
+        return parameter;
+    }
+
+    @Override
     public Operation customize(Operation operation, HandlerMethod handlerMethod) {
+        if (operation.getParameters() == null) {
+            operation.setParameters(new ArrayList<>());
+        }
         for (MethodParameter methodParameter : handlerMethod.getMethodParameters()) {
             if (!methodParameter.hasParameterAnnotation(Conjunction.class) && !methodParameter.hasParameterAnnotation(ConjunctionFrom.class)
                 && !methodParameter.hasParameterAnnotation(Disjunction.class) && !methodParameter.hasParameterAnnotation(DisjunctionFrom.class)) {
@@ -108,35 +130,49 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, BeanF
     }
 
     private void customizeSort(Operation operation, HandlerMethod handler) {
-        if (beanFactory == null || beanFactory.getBeanProvider(JpaSortPolicy.class).getIfAvailable() != JpaSortPolicy.DECLARED) {
+        if (!declaredSortIntegration()) {
             return;
         }
-        List<MethodParameter> contracts = java.util.Arrays.stream(handler.getMethodParameters())
-                .filter(parameter -> parameter.getParameterType() == ConditionalStatement.class).toList();
-        List<MethodParameter> ordering = java.util.Arrays.stream(handler.getMethodParameters())
-                .filter(parameter -> Pageable.class.isAssignableFrom(parameter.getParameterType())
-                        || Sort.class.isAssignableFrom(parameter.getParameterType())).toList();
-        // Association of multiple contracts/ordering arguments is delivered in a later increment.
-        if (contracts.size() != 1 || ordering.size() != 1) {
-            return;
+        var associations = SortContractAssociation.forMethod(handler.getMethod());
+        var names = new HashSet<String>();
+        for (var association : associations) {
+            var resolver = SpringDataSortDocumentation.resolver(beanFactory, association.ordering());
+            String name = SpringDataSortDocumentation.parameterName(resolver, association.ordering());
+            if (!names.add(name)) {
+                throw new DynamicFilterConfigurationException("Sort arguments resolve to the same request parameter at " + handler.getMethod());
+            }
+            customizeSortParameter(operation, association, resolver, name);
         }
-        var catalog = beanFactory.getBean(JpaSortContext.class).catalog(contracts.getFirst().getParameter());
-        var resolver = beanFactory.getBeanProvider(SortHandlerMethodArgumentResolver.class).getIfUnique();
-        if (resolver == null) {
-            throw new DynamicFilterConfigurationException("A configured Spring Data sort resolver is required for sort documentation");
+        operation.getParameters().removeIf(parameter -> {
+            boolean generated = parameter.getExtensions() != null && parameter.getExtensions().remove(GENERATED_SORT) != null;
+            return generated && !associations.isEmpty() && !names.contains(parameter.getName())
+                    && !explicitQueryParameter(handler, parameter.getName());
+        });
+    }
+
+    private boolean declaredSortIntegration() {
+        return beanFactory != null && beanFactory.getBeanProvider(JpaSortPolicy.class).getIfAvailable() == JpaSortPolicy.DECLARED;
+    }
+
+    private static boolean explicitQueryParameter(HandlerMethod handler, String name) {
+        for (MethodParameter argument : handler.getMethodParameters()) {
+            RequestParam request = argument.getParameterAnnotation(RequestParam.class);
+            if (request != null) {
+                String requestName = !request.name().isEmpty() ? request.name()
+                        : !request.value().isEmpty() ? request.value() : argument.getParameter().getName();
+                if (name.equals(requestName)) {
+                    return true;
+                }
+            }
         }
-        // Spring Data exposes its configured delimiter, but its parameter-name accessor is protected.
-        // Reuse that accessor so qualifiers and custom parameter names follow the actual resolver, not another parser.
-        var accessor = ReflectionUtils.findMethod(SortHandlerMethodArgumentResolver.class, "getSortParameter", MethodParameter.class);
-        if (accessor == null) {
-            throw new DynamicFilterConfigurationException("Cannot read the configured Spring Data sort parameter");
-        }
-        ReflectionUtils.makeAccessible(accessor);
-        String name = (String) ReflectionUtils.invokeMethod(accessor, resolver, ordering.getFirst());
-        if (operation.getParameters() == null) {
-            operation.setParameters(new java.util.ArrayList<>());
-        }
-        var parameter = operation.getParameters().stream().filter(value -> name.equals(value.getName())).findFirst()
+        return false;
+    }
+
+    private void customizeSortParameter(Operation operation, SortContractAssociation association,
+                                        SortHandlerMethodArgumentResolver resolver, String name) {
+        var catalog = beanFactory.getBean(JpaSortContext.class).catalog(association.contract().getParameter());
+        var parameter = operation.getParameters().stream()
+                .filter(value -> name.equals(value.getName()) && (value.getIn() == null || "query".equals(value.getIn()))).findFirst()
                 .orElseGet(() -> {
                     var value = new io.swagger.v3.oas.models.parameters.Parameter().name(name).in("query");
                     operation.addParametersItem(value);
@@ -145,13 +181,15 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, BeanF
         List<String> names = catalog.keySet().stream().sorted().toList();
         String delimiter = resolver.getPropertyDelimiter();
         parameter.setDescription("Repeat this parameter to preserve sort precedence. Use property" + delimiter
-                + "asc or property" + delimiter + "desc; optional " + delimiter + "ignorecase. Available names: "
+                + "asc or property" + delimiter + "desc; multiple properties may precede the direction, separated by '"
+                + delimiter + "'. Direction is optional and defaults to asc; optional " + delimiter + "ignorecase. Available names: "
                 + String.join(", ", names) + ".");
         parameter.setSchema(new ArraySchema().items(new StringSchema()));
+        parameter.setIn("query");
+        parameter.setStyle(io.swagger.v3.oas.models.parameters.Parameter.StyleEnum.FORM);
+        parameter.setExplode(true);
         parameter.addExtension("x-sort-names", names);
-        if (!names.isEmpty()) {
-            parameter.setExample(List.of(names.getFirst() + delimiter + "asc"));
-        }
+        parameter.setExample(names.isEmpty() ? null : List.of(names.getFirst() + delimiter + "asc"));
     }
 
     /**
@@ -179,6 +217,10 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, BeanF
             boolean parameterExists = optParameter.isPresent();
             io.swagger.v3.oas.models.parameters.Parameter parameter = optParameter.orElse(new io.swagger.v3.oas.models.parameters.Parameter());
             parameter.setName(parameterName);
+            if (parameter.getExtensions() != null) {
+                // A reused parameter now describes a public filter, not generated-only ordering metadata.
+                parameter.getExtensions().remove(GENERATED_SORT);
+            }
 
             if (FilterValueShape.DYNAMIC.equals(metadata.valueShape())) {
                 parameter.setSchema(createArraySchema(new StringSchema(), 2, null));

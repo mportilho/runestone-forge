@@ -35,6 +35,20 @@ public class TestTypeAnnotationUtilsFindEntityClass {
     }
 
     @Test
+    public void externalContractsInferTheRootFromSpecificationMetadataWithoutFilterTarget() throws Exception {
+        Assertions.assertThat(TypeAnnotationUtils.findFilterTargetClass(ExternalConfigClass.class
+                .getMethod("genericExternal", Specification.class).getParameters()[0])).isEqualTo(Entity.class);
+        Assertions.assertThat(TypeAnnotationUtils.findFilterTargetClass(ExternalConfigClass.class
+                .getMethod("inheritedGeneric", EntitySearch.class).getParameters()[0])).isEqualTo(Entity.class);
+    }
+
+    @Test
+    public void anExplicitParameterTargetCanSupplyTheMissingExternalRoot() throws Exception {
+        Assertions.assertThat(TypeAnnotationUtils.findFilterTargetClass(ExternalConfigClass.class
+                .getMethod("parameterTarget", ConditionalStatement.class).getParameters()[0])).isEqualTo(Entity.class);
+    }
+
+    @Test
     public void testExternalConfigNoFilterClass() throws NoSuchMethodException {
         Assertions
                 .assertThatThrownBy(() -> TypeAnnotationUtils.findFilterTargetClass(ExternalConfigClass.class.getMethod("testConjunctionFromNoFilterClass", ConditionalStatement.class).getParameters()[0]))
@@ -70,6 +84,15 @@ public class TestTypeAnnotationUtilsFindEntityClass {
     }
 
     static class ExternalConfigClass {
+        public void genericExternal(@ConjunctionFrom(GetEntityNoFilterClass.class) Specification<Entity> specification) {
+        }
+
+        public void inheritedGeneric(EntitySearch specification) {
+        }
+
+        public void parameterTarget(@FilterTarget(Entity.class) @ConjunctionFrom(GetEntityNoFilterClass.class) ConditionalStatement statement) {
+        }
+
         public void testConjunctionFrom(@ConjunctionFrom(GetEntity.class) ConditionalStatement conditionalStatement) {
         }
 
@@ -81,6 +104,10 @@ public class TestTypeAnnotationUtilsFindEntityClass {
 
         public void testDisjunctionFromNoFilterClass(@DisjunctionFrom(GetEntityNoFilterClass.class) ConditionalStatement conditionalStatement) {
         }
+    }
+
+    @Conjunction(@Filter(path = "name", parameters = "name", operation = Like.class))
+    interface EntitySearch extends Specification<Entity> {
     }
 
     @FilterTarget(Entity.class)

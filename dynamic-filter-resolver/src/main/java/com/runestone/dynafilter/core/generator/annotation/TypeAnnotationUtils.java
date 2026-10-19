@@ -33,6 +33,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.runestone.dynafilter.helpers.StringHelper;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.core.ResolvableType;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -374,41 +375,35 @@ public class TypeAnnotationUtils {
      * @throws DynamicFilterConfigurationException if the target class is not found when required (e.g. when using ConjunctionFrom or DisjunctionFrom annotations or ConditionalStatement type)
      */
     public static Class<?> findFilterTargetClass(Parameter parameter) {
-        Class<?> filterClass;
-        Class<?> entityClass = null;
-
-        // Find from ConjunctionFrom or DisjunctionFrom annotations
-
         ConjunctionFrom conjunctionFrom = parameter.getAnnotation(ConjunctionFrom.class);
-        if (conjunctionFrom != null) {
-            filterClass = conjunctionFrom.value();
-        } else {
-            DisjunctionFrom disjunctionFrom = parameter.getAnnotation(DisjunctionFrom.class);
-            filterClass = disjunctionFrom != null ? disjunctionFrom.value() : null;
+        DisjunctionFrom disjunctionFrom = parameter.getAnnotation(DisjunctionFrom.class);
+        Class<?> filterClass = conjunctionFrom != null ? conjunctionFrom.value()
+                : disjunctionFrom != null ? disjunctionFrom.value() : null;
+        FilterTarget parameterTarget = parameter.getAnnotation(FilterTarget.class);
+        FilterTarget sourceTarget = (filterClass != null ? filterClass : parameter.getType()).getAnnotation(FilterTarget.class);
+        if (parameterTarget != null && sourceTarget != null && parameterTarget.value() != sourceTarget.value()) {
+            throw new DynamicFilterConfigurationException("Conflicting FilterTarget declarations at " + parameter);
+        }
+        if (parameterTarget != null) {
+            return parameterTarget.value();
+        }
+        if (sourceTarget != null) {
+            return sourceTarget.value();
+        }
+        if (Specification.class.isAssignableFrom(parameter.getType())) {
+            Class<?> entity = ResolvableType.forType(parameter.getParameterizedType()).as(Specification.class).getGeneric(0).resolve();
+            if (entity != null && entity != Object.class) {
+                return entity;
+            }
         }
         if (filterClass != null) {
-            FilterTarget filterTargetAnnotation = filterClass.getAnnotation(FilterTarget.class);
-            if (filterTargetAnnotation == null) {
-                throw new DynamicFilterConfigurationException("FilterTarget annotation is required for adding filter configuration from an external class");
-            }
-            entityClass = filterTargetAnnotation.value();
+            throw new DynamicFilterConfigurationException("FilterTarget annotation is required when the external filter root cannot be inferred");
         }
-
-        // if not found, search on Conjunction or Disjunction configuration
-
-        if (entityClass == null && (parameter.isAnnotationPresent(Conjunction.class) || parameter.isAnnotationPresent(Disjunction.class))) {
-            if (parameter.getType().isAssignableFrom(Specification.class)) {
-                entityClass = (Class<?>) ((ParameterizedType) parameter.getParameterizedType()).getActualTypeArguments()[0];
-            } else if (parameter.getType().equals(ConditionalStatement.class)) {
-                FilterTarget filterTargetAnnotation = parameter.getAnnotation(FilterTarget.class);
-                if (filterTargetAnnotation == null) {
-                    throw new DynamicFilterConfigurationException("FilterTarget annotation is required for ConditionalStatement type parameters");
-                }
-                entityClass = filterTargetAnnotation.value();
-            }
+        if (parameter.getType() == ConditionalStatement.class
+                && (parameter.isAnnotationPresent(Conjunction.class) || parameter.isAnnotationPresent(Disjunction.class))) {
+            throw new DynamicFilterConfigurationException("FilterTarget annotation is required for ConditionalStatement type parameters");
         }
-
-        return entityClass;
+        return null;
     }
 
     record AnnotationMetadata(

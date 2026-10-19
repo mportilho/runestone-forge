@@ -17,8 +17,6 @@ import org.springframework.beans.factory.BeanFactoryAware;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.stereotype.Controller;
@@ -91,13 +89,8 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanFactory
         if (beanFactory == null || beanFactory.getBeanProvider(JpaSortPolicy.class).getIfAvailable() != JpaSortPolicy.DECLARED) {
             return;
         }
-        var contracts = java.util.Arrays.stream(method.getParameters())
-                .filter(parameter -> parameter.getType() == ConditionalStatement.class).toList();
-        long ordering = java.util.Arrays.stream(method.getParameters())
-                .filter(parameter -> Pageable.class.isAssignableFrom(parameter.getType()) || Sort.class.isAssignableFrom(parameter.getType()))
-                .count();
-        if (contracts.size() == 1 && ordering == 1) {
-            beanFactory.getBean(JpaSortContext.class).catalog(contracts.getFirst());
+        for (var association : SortContractAssociation.forMethod(method)) {
+            beanFactory.getBean(JpaSortContext.class).catalog(association.contract().getParameter());
         }
     }
 

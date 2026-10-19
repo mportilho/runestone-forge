@@ -7,10 +7,7 @@ import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementGen
 import com.runestone.dynafilter.core.generator.annotation.AnnotationStatementInput;
 import com.runestone.dynafilter.core.generator.annotation.Conjunction;
 import com.runestone.dynafilter.core.generator.annotation.ConjunctionFrom;
-import com.runestone.dynafilter.core.generator.annotation.Filter;
-import com.runestone.dynafilter.core.generator.annotation.FilterTarget;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
-import com.runestone.dynafilter.core.operation.types.Equals;
 import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.InMemoryDatabaseApplication;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.PersonRepository;
@@ -22,6 +19,7 @@ import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -82,6 +80,10 @@ class TestDeclaredSortHttpIntegration {
     private AnnotationStatementGenerator generator;
     @Autowired
     private FilterOperationService<?> operations;
+    @Autowired
+    private FilterConfigurationAnalyserBeanPostProcessor analyser;
+    @Autowired
+    private org.springframework.beans.factory.config.AutowireCapableBeanFactory beanFactory;
 
     private MockMvc mvc;
 
@@ -123,6 +125,166 @@ class TestDeclaredSortHttpIntegration {
         }
         mvc.perform(get("/people").param("order", "query:desc", "name:asc").param("size", "2"))
                 .andExpect(status().isOk()).andExpect(content().string("3:Zoe,Bob"));
+    }
+
+    @Test
+    void qualifiedPageablesPublishOnlyTheirAssociatedCatalogAndUseConfiguredParser() throws Exception {
+        var handler = new HandlerMethod(controller, PeopleController.class.getDeclaredMethod("paired",
+                ConditionalStatement.class, Pageable.class, ConditionalStatement.class, Pageable.class));
+        var operation = customizer.customize(new Operation().parameters(new ArrayList<>()), handler);
+        var left = operation.getParameters().stream().filter(p -> p.getName().equals("left-order")).findFirst().orElseThrow();
+        var right = operation.getParameters().stream().filter(p -> p.getName().equals("right-order")).findFirst().orElseThrow();
+        assertThat(left.getExtensions().get("x-sort-names")).isEqualTo(List.of("name", "query"));
+        assertThat(right.getExtensions().get("x-sort-names")).isEqualTo(List.of("id", "identifier"));
+        assertThat(right.getExample()).isEqualTo(List.of("id:asc"));
+        assertThat(right.getStyle()).isEqualTo(io.swagger.v3.oas.models.parameters.Parameter.StyleEnum.FORM);
+        assertThat(right.getExplode()).isTrue();
+
+        mvc.perform(get("/paired").param("left-order", "query:asc", "name:desc")
+                        .param("right-order", "identifier:desc", "id:asc").param("left_size", "2").param("right_size", "2"))
+                .andExpect(status().isOk()).andExpect(content().string("Alice,Bob|Alice,Bob"));
+        mvc.perform(get("/paired").param("left-order", "identifier:asc"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.rejectedNames[0]").value("identifier"));
+        mvc.perform(get("/paired").param("right-order", "query:asc"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.rejectedNames[0]").value("query"));
+    }
+
+    @Test
+    void documentationUsesThePageableParserSelectedByMvcInsteadOfAnUnrelatedSortBean() throws Exception {
+        var nestedSort = new SortHandlerMethodArgumentResolver();
+        nestedSort.setSortParameter("nested");
+        nestedSort.setPropertyDelimiter(";");
+        var pageable = new PageableHandlerMethodArgumentResolver(nestedSort);
+        var adapter = new org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter();
+        adapter.setArgumentResolvers(List.of(pageable, sortResolver));
+        var beans = new DefaultListableBeanFactory();
+        beans.registerSingleton("adapter", adapter);
+        beans.registerSingleton("unrelatedSort", sortResolver);
+        beans.registerSingleton("policy", JpaSortPolicy.DECLARED);
+        beans.registerSingleton("context", new JpaSortContext(generator, factoryProvider()));
+        var documentation = new DynaFilterOperationCustomizer(null, operations);
+        documentation.setBeanFactory(beans);
+        var handler = new HandlerMethod(controller, PeopleController.class.getDeclaredMethod("people", ConditionalStatement.class, Pageable.class));
+        var operation = documentation.customize(new Operation().parameters(new ArrayList<>()), handler);
+        var parameter = operation.getParameters().stream().filter(p -> p.getName().equals("nested")).findFirst().orElseThrow();
+        assertThat(parameter.getExample()).isEqualTo(List.of("name;asc"));
+        assertThat(operation.getParameters()).noneMatch(p -> p.getName().equals("order"));
+
+        List<HandlerMethodArgumentResolver> filters = new ArrayList<>();
+        webMvcConfigurer.addArgumentResolvers(filters);
+        filters.add(pageable);
+        var configuredMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setCustomArgumentResolvers(filters.toArray(HandlerMethodArgumentResolver[]::new)).build();
+        configuredMvc.perform(get("/people").param("nested", "query;desc", "name;asc").param("size", "2"))
+                .andExpect(status().isOk()).andExpect(content().string("3:Zoe,Bob"));
+    }
+
+    private org.springframework.beans.factory.ObjectProvider<EntityManagerFactory> factoryProvider() {
+        var beans = new DefaultListableBeanFactory();
+        beans.registerSingleton("factory", entityManager.getEntityManagerFactory());
+        return beans.getBeanProvider(EntityManagerFactory.class);
+    }
+
+    @Test
+    void unresolvedAssociationsFailBothDocumentationAndWarmup() throws Exception {
+        for (Object endpoint : List.of(new MissingQualifier(), new DuplicateQualifier(), new MissingMatch(), new DuplicateOrdering())) {
+            var handler = new HandlerMethod(endpoint, endpoint.getClass().getDeclaredMethods()[0]);
+            assertThatThrownBy(() -> customizer.customize(new Operation().parameters(new ArrayList<>()), handler))
+                    .isInstanceOf(DynamicFilterConfigurationException.class).hasMessageContaining("@Qualifier");
+            assertThatThrownBy(() -> analyser.postProcessAfterInitialization(endpoint, "invalid"))
+                    .isInstanceOf(DynamicFilterConfigurationException.class).hasMessageContaining("@Qualifier");
+        }
+    }
+
+    @Test
+    void aContractWithoutAssociatedOrderingNeedsNoSortContext() throws Exception {
+        var endpoint = new PartiallyAssociated();
+        var handler = new HandlerMethod(endpoint, PartiallyAssociated.class.getDeclaredMethods()[0]);
+        var operation = customizer.customize(new Operation().parameters(new ArrayList<>()), handler);
+        assertThat(operation.getParameters().stream().filter(p -> p.getExtensions() != null && p.getExtensions().containsKey("x-sort-names")))
+                .singleElement().satisfies(p -> assertThat(p.getName()).isEqualTo("selected-order"));
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> analyser.postProcessAfterInitialization(endpoint, "valid"))).isNull();
+    }
+
+    @Test
+    void legacyDocumentationDoesNotPublishARestrictiveAllowlist() throws Exception {
+        var beans = new DefaultListableBeanFactory();
+        beans.registerSingleton("policy", JpaSortPolicy.LEGACY);
+        var documentation = new DynaFilterOperationCustomizer(null, operations);
+        documentation.setBeanFactory(beans);
+        var handler = new HandlerMethod(controller, PeopleController.class.getDeclaredMethod("people", ConditionalStatement.class, Pageable.class));
+        var operation = documentation.customize(new Operation().parameters(new ArrayList<>()), handler);
+        assertThat(operation.getParameters()).noneMatch(p -> p.getExtensions() != null && p.getExtensions().containsKey("x-sort-names"));
+    }
+
+    @Test
+    void aPreviouslyCompiledFrameworkClientKeepsTheConstructorAndReceivesAutomaticIntegration() throws Exception {
+        byte[] binary;
+        try (var stream = java.util.Objects.requireNonNull(getClass().getResourceAsStream("/compat/LegacyCustomizerClient.class.base64"))) {
+            binary = java.util.Base64.getMimeDecoder().decode(stream.readAllBytes());
+        }
+        var client = new ClassLoader(getClass().getClassLoader()) {
+            Class<?> defineClient() {
+                return defineClass("compat.LegacyCustomizerClient", binary, 0, binary.length);
+            }
+        }.defineClient();
+        var instance = (DynaFilterOperationCustomizer) client.getMethod("create", FilterOperationService.class).invoke(null, operations);
+        var managed = (DynaFilterOperationCustomizer) beanFactory.initializeBean(instance, "precompiledFrameworkCustomizer");
+        var handler = new HandlerMethod(controller, PeopleController.class.getDeclaredMethod("people", ConditionalStatement.class, Pageable.class));
+        var operation = managed.customize(new Operation(), handler);
+        assertThat(operation.getParameters().stream().filter(p -> p.getName().equals("order")).findFirst().orElseThrow()
+                .getExtensions().get("x-sort-names")).isEqualTo(List.of("name", "query"));
+    }
+
+    @Test
+    void springdocGeneratedSortIsReconciledWithoutRemovingUnrelatedParameters() throws Exception {
+        var handler = new HandlerMethod(controller, PeopleController.class.getDeclaredMethod("paired",
+                ConditionalStatement.class, Pageable.class, ConditionalStatement.class, Pageable.class));
+        var operation = springdocPageableParameters();
+        var audit = new io.swagger.v3.oas.models.parameters.Parameter().name("audit").in("query")
+                .description("Independent request parameter").schema(new io.swagger.v3.oas.models.media.StringSchema());
+        operation.addParametersItem(audit);
+        assertThat(operation.getParameters()).anyMatch(p -> p.getName().equals("sort"));
+        customizer.customize(operation, handler);
+        assertThat(operation.getParameters()).noneMatch(p -> p.getName().equals("sort"));
+        assertThat(operation.getParameters()).contains(audit);
+        assertThat(operation.getParameters()).extracting(io.swagger.v3.oas.models.parameters.Parameter::getName)
+                .contains("left-order", "right-order", "page", "size", "audit");
+        assertThat(operation.getParameters()).allSatisfy(p -> {
+            if (p.getExtensions() != null) {
+                assertThat(p.getExtensions()).doesNotContainKey("x-runestone-generated-sort");
+            }
+        });
+    }
+
+    private Operation springdocPageableParameters() throws Exception {
+        var properties = new org.springdoc.core.properties.SpringDocConfigProperties();
+        var modelBuilder = new org.springdoc.core.service.GenericParameterService(
+                new org.springdoc.core.utils.PropertyResolverUtils(new DefaultListableBeanFactory(),
+                        new org.springframework.context.support.StaticMessageSource(), properties),
+                java.util.Optional.empty(), new org.springdoc.core.providers.ObjectMapperProvider(properties), java.util.Optional.empty());
+        var method = SpringdocModel.class.getDeclaredMethods()[0];
+        var extracted = org.springdoc.core.extractor.DelegatingMethodParameter.customize(null,
+                new org.springframework.core.MethodParameter[]{new org.springframework.core.MethodParameter(method, 0)},
+                java.util.Optional.empty(), new org.springdoc.core.extractor.MethodParameterPojoExtractor(
+                        new org.springdoc.core.utils.SchemaUtils(java.util.Optional.empty())), false);
+        var operation = new Operation().parameters(new ArrayList<>());
+        for (var field : extracted) {
+            var parameter = modelBuilder.buildParameterFromDoc(field.getParameterAnnotation(io.swagger.v3.oas.annotations.Parameter.class),
+                    new io.swagger.v3.oas.models.Components(), null, java.util.Locale.ROOT);
+            parameter.setName(field.getParameterName());
+            parameter.setIn("query");
+            for (var callback : beanFactory.getBeanProvider(org.springdoc.core.customizers.ParameterCustomizer.class).stream().toList()) {
+                parameter = callback.customize(parameter, field);
+            }
+            operation.addParametersItem(parameter);
+        }
+        return operation;
+    }
+
+    static class SpringdocModel {
+        public void parameters(@org.springdoc.core.annotations.ParameterObject org.springdoc.core.converters.models.Pageable pageable) {
+        }
     }
 
     @Test
@@ -183,10 +345,37 @@ class TestDeclaredSortHttpIntegration {
         assertThat(calls.get() - beforeRediscovery).isEqualTo(2);
     }
 
-    @FilterTarget(Person.class)
-    static class Search {
-        @Filter(path = "name", parameters = "query", operation = Equals.class)
-        private String query;
+    static class MissingQualifier {
+        public void search(@ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement left, Pageable leftPage,
+                           @ConjunctionFrom(DeclaredIdentifierSearch.class) ConditionalStatement right, Pageable rightPage) {
+        }
+    }
+
+    static class DuplicateQualifier {
+        public void search(@Qualifier("same") @ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement left,
+                           @Qualifier("same") @ConjunctionFrom(DeclaredIdentifierSearch.class) ConditionalStatement right,
+                           @Qualifier("same") Pageable page) {
+        }
+    }
+
+    static class MissingMatch {
+        public void search(@Qualifier("left") @ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement left,
+                           @Qualifier("right") @ConjunctionFrom(DeclaredIdentifierSearch.class) ConditionalStatement right,
+                           @Qualifier("unknown") Pageable page) {
+        }
+    }
+
+    static class DuplicateOrdering {
+        public void search(@Qualifier("same") @ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement statement,
+                           @Qualifier("same") Pageable page, @Qualifier("same") org.springframework.data.domain.Sort sort) {
+        }
+    }
+
+    static class PartiallyAssociated {
+        public void search(ConditionalStatement noSortContext,
+                           @Qualifier("selected") @ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement statement,
+                           @Qualifier("selected") org.springframework.data.domain.Sort sort) {
+        }
     }
 
     @RestController
@@ -198,7 +387,7 @@ class TestDeclaredSortHttpIntegration {
         }
 
         @GetMapping("/people")
-        String people(@ConjunctionFrom(Search.class) ConditionalStatement statement, Pageable pageable) {
+        String people(@ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement statement, Pageable pageable) {
             var page = repository.findAll(statement, pageable);
             return page.getTotalElements() + ":" + page.stream().map(Person::getName).collect(Collectors.joining(","));
         }
@@ -206,6 +395,15 @@ class TestDeclaredSortHttpIntegration {
         @GetMapping("/configuration-error")
         String configurationError() {
             throw new DynamicFilterConfigurationException("server-only diagnostic");
+        }
+
+        @GetMapping("/paired")
+        String paired(@Qualifier("left") @ConjunctionFrom(DeclaredNameSearch.class) ConditionalStatement left,
+                      @Qualifier("left") Pageable leftPage,
+                      @Qualifier("right") @ConjunctionFrom(DeclaredIdentifierSearch.class) ConditionalStatement right,
+                      @Qualifier("right") Pageable rightPage) {
+            return repository.findAll(left, leftPage).stream().map(Person::getName).collect(Collectors.joining(","))
+                    + "|" + repository.findAll(right, rightPage).stream().map(Person::getName).collect(Collectors.joining(","));
         }
     }
 
@@ -231,6 +429,7 @@ class TestDeclaredSortHttpIntegration {
             var resolver = new SortHandlerMethodArgumentResolver();
             resolver.setSortParameter("order");
             resolver.setPropertyDelimiter(":");
+            resolver.setQualifierDelimiter("-");
             return resolver;
         }
 

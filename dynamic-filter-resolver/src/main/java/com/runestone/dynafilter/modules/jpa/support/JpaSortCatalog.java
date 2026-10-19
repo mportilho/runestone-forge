@@ -26,6 +26,10 @@ public final class JpaSortCatalog {
 
     public Map<String, String> resolve(SortContract contract, Class<?> entity) {
         Objects.requireNonNull(entity, "entity is required");
+        if (!factory.isOpen()) {
+            clearCache();
+            throw new DynamicFilterConfigurationException("Sort validation requires an open persistence unit");
+        }
         return catalogs.get(new Key(contract != null ? contract : SortContract.EMPTY, entity), this::validate);
     }
 

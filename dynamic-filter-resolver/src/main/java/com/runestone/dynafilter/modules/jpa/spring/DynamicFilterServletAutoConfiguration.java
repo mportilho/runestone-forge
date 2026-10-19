@@ -80,7 +80,13 @@ public class DynamicFilterServletAutoConfiguration implements EmbeddedValueResol
     @Bean(destroyMethod = "clearCache")
     @ConditionalOnMissingBean
     public JpaSortContext jpaSortContext(AnnotationStatementGenerator generator,
-                                         ObjectProvider<jakarta.persistence.EntityManagerFactory> factories) {
+                                          ObjectProvider<jakarta.persistence.EntityManagerFactory> factories,
+                                          ObjectProvider<JpaSortPersistenceUnitResolver> persistenceUnitResolver) {
+        return new JpaSortContext(generator, factories, persistenceUnitResolver.getIfAvailable());
+    }
+
+    public JpaSortContext jpaSortContext(AnnotationStatementGenerator generator,
+                                        ObjectProvider<jakarta.persistence.EntityManagerFactory> factories) {
         return new JpaSortContext(generator, factories);
     }
 
