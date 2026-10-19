@@ -6,7 +6,6 @@ import com.runestone.dynafilter.core.generator.annotation.Filter;
 import com.runestone.dynafilter.core.generator.annotation.FilterTarget;
 import com.runestone.dynafilter.core.operation.FilterOperationService;
 import com.runestone.dynafilter.core.operation.types.Equals;
-import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.InMemoryDatabaseApplication;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.PersonRepository;
 import com.runestone.dynafilter.modules.jpa.tools.app.database.jpamodels.Person;
@@ -119,7 +118,7 @@ class TestSortSpringdocIntegration {
     }
 
     @Configuration(proxyBeanMethods = false)
-    @EnableDynamicFilterServletConfiguration(sortPolicy = JpaSortPolicy.DECLARED)
+    @EnableDynamicFilterServletConfiguration
     static class WebConfiguration {
         @Bean
         Endpoint endpoint(PersonRepository repository) {

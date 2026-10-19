@@ -55,7 +55,7 @@ public class DynamicFilterServletAutoConfiguration implements EmbeddedValueResol
 
     private ApplicationContext applicationContext;
     private StringValueResolver stringValueResolver;
-    private JpaSortPolicy sortPolicy = JpaSortPolicy.LEGACY;
+    private JpaSortPolicy sortPolicy = JpaSortPolicy.DECLARED;
 
     @Override
     public void setImportMetadata(AnnotationMetadata metadata) {

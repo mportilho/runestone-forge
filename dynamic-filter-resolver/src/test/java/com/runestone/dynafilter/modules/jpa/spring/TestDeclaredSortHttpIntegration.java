@@ -215,7 +215,7 @@ class TestDeclaredSortHttpIntegration {
     }
 
     @Test
-    void documentationUsesThePageableParserSelectedByMvcInsteadOfAnUnrelatedSortBean() throws Exception {
+    void documentationWithoutAnExplicitPolicyUsesThePageableParserSelectedByMvc() throws Exception {
         var nestedSort = new SortHandlerMethodArgumentResolver();
         nestedSort.setSortParameter("nested");
         nestedSort.setPropertyDelimiter(";");
@@ -225,7 +225,6 @@ class TestDeclaredSortHttpIntegration {
         var beans = new DefaultListableBeanFactory();
         beans.registerSingleton("adapter", adapter);
         beans.registerSingleton("unrelatedSort", sortResolver);
-        beans.registerSingleton("policy", JpaSortPolicy.DECLARED);
         beans.registerSingleton("context", new JpaSortContext(generator, factoryProvider()));
         var documentation = new DynaFilterOperationCustomizer(null, operations);
         documentation.setBeanFactory(beans);
@@ -416,10 +415,9 @@ class TestDeclaredSortHttpIntegration {
 
     @Test
     @SuppressWarnings("unchecked")
-    void warmupDetectsAliasVersusCompoundLiteralCollisionsInEitherDeclarationOrder() {
+    void warmupWithoutAnExplicitPolicyDetectsAliasVersusCompoundLiteralCollisionsInEitherDeclarationOrder() {
         var beans = new DefaultListableBeanFactory();
         beans.registerSingleton("factory", entityManager.getEntityManagerFactory());
-        beans.registerSingleton("policy", JpaSortPolicy.DECLARED);
         beans.registerSingleton("catalog", new JpaSortContext(generator, beans.getBeanProvider(EntityManagerFactory.class)));
         var analyser = new FilterConfigurationAnalyserBeanPostProcessor((FilterOperationService<Specification<?>>) operations, generator);
         analyser.setBeanFactory(beans);
@@ -654,7 +652,7 @@ class TestDeclaredSortHttpIntegration {
     }
 
     @Configuration(proxyBeanMethods = false)
-    @EnableDynamicFilterServletConfiguration(sortPolicy = JpaSortPolicy.DECLARED)
+    @EnableDynamicFilterServletConfiguration
     static class HttpConfiguration {
         @Bean
         JpaFilterOperationContributor nameMatchContributor() {

@@ -18,7 +18,6 @@ import com.runestone.dynafilter.core.resolver.DynamicFilterResolver;
 import com.runestone.dynafilter.core.resolver.FilterDecorator;
 import com.runestone.dynafilter.modules.jpa.api.JpaConditionalStatements;
 import com.runestone.dynafilter.modules.jpa.api.JpaFilterOperationService;
-import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import com.runestone.dynafilter.modules.jpa.resolver.Fetching;
 import com.runestone.dynafilter.modules.jpa.resolver.FetchingFilterDecorator;
 import com.runestone.dynafilter.modules.jpa.resolver.SpecificationDynamicFilterResolver;
@@ -31,7 +30,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.Persistence;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -89,8 +87,6 @@ class TestMandatoryScopeRepositoryIntegration {
                 new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard()));
         repository.setDynamicFilterResolver((DynamicFilterResolver) resolver);
         phoneRepository.setDynamicFilterResolver((DynamicFilterResolver) resolver);
-        repository.setSortPolicy(JpaSortPolicy.DECLARED);
-        phoneRepository.setSortPolicy(JpaSortPolicy.DECLARED);
         repository.deleteAll();
         // Deliberately insert out of date order so translating a date alias into an ID alias is observable.
         aliceLater = save("alice", RECENT.plusHours(1), HEIGHT);
@@ -106,13 +102,6 @@ class TestMandatoryScopeRepositoryIntegration {
         var graph = entityManager.createEntityGraph(Person.class);
         graph.addAttributeNodes("phones");
         entityManager.getEntityManagerFactory().addNamedEntityGraph(GRAPH, graph);
-    }
-
-    @AfterEach
-    void restoreSharedRepositoryPolicies() {
-        // Spring caches this context across test classes; transaction rollback does not reset bean fields.
-        repository.setSortPolicy(JpaSortPolicy.LEGACY);
-        phoneRepository.setSortPolicy(JpaSortPolicy.LEGACY);
     }
 
     @ParameterizedTest(name = "replaces ordinary predicate: {0}")

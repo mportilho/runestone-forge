@@ -2,7 +2,9 @@ package com.runestone.dynafilter.modules.jpa.resolver;
 
 import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.exceptions.DynamicFilterConfigurationException;
+import com.runestone.dynafilter.core.exceptions.InvalidSortException;
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
+import com.runestone.dynafilter.core.generator.SortContract;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.FilterRequestData;
@@ -198,13 +200,14 @@ class TestMandatoryRestrictionsJpaIntegration {
     void restrictionMetadataDoesNotCreateSortAliasesAndDeclaredAliasesStillWork() {
         var alias = new FilterRequestData(new String[]{"registerDate"}, new String[]{"since"}, LocalDateTime.class,
                 GreaterOrEquals.class, "false", null, null, null, false, false, List.of(), null);
-        var wrapper = new StatementWrapper(new NoOpStatement(), Map.of(), List.of(alias), null);
+        var wrapper = new StatementWrapper(new NoOpStatement(), Map.of(), List.of(alias),
+                SortContract.builder().include("registerDate", "since").build());
         var scope = new ConditionalStatement(wrapper, null, List.of(owner("alice")));
 
         assertThat(repository.findAll(scope, Sort.by("since"))).extracting(Person::getId)
                 .containsExactly(aliceOld.getId(), aliceRecent.getId(), aliceRecentLater.getId());
         assertThatThrownBy(() -> repository.findAll(scope, Sort.by("owner")))
-                .isInstanceOf(RuntimeException.class).hasMessageContaining("owner");
+                .isInstanceOf(InvalidSortException.class).hasMessageContaining("owner");
     }
 
     @Test
@@ -318,7 +321,8 @@ class TestMandatoryRestrictionsJpaIntegration {
 
     private static ConditionalStatement statement(AbstractStatement ordinary, FilterDecorator<Specification<?>> decorator,
                                                    AbstractStatement... restrictions) {
-        return new ConditionalStatement(new StatementWrapper(ordinary, null, null, null), decorator, List.of(restrictions));
+        return new ConditionalStatement(new StatementWrapper(ordinary, null, null,
+                SortContract.builder().include("registerDate").build()), decorator, List.of(restrictions));
     }
 
     private static LogicalStatement owner(String owner) {

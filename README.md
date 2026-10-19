@@ -13,19 +13,20 @@ Java development toolkit
 - [Declarative sorting](#declarative-sorting)
 - [Optional sort exceptions](#optional-sort-exceptions)
 - [Programmatic sorting](#programmatic-sorting)
-- [Sort associations and persistence contexts](dynamic-filter-resolver/docs/declarative-sort-contexts.md)
+- [Sort associations and persistence contexts](#sort-associations-and-persistence-contexts)
+- [Sorting migration and API coverage](#sorting-migration-and-api-coverage)
 
 ### Declarative sorting
 
-The restrictive mode is currently a global opt-in. The default remains `JpaSortPolicy.LEGACY` until the final sorting increment. In servlet applications, select the mode on the existing configuration:
+`JpaSortPolicy.DECLARED` is the restrictive default. In servlet applications, keep the existing opt-in configuration without any new option:
 
 ```java
-@EnableDynamicFilterServletConfiguration(sortPolicy = JpaSortPolicy.DECLARED)
+@EnableDynamicFilterServletConfiguration
 class FilterConfiguration {
 }
 ```
 
-For repositories configured without servlet integration, set the same `JpaSortPolicy.DECLARED` policy on the dynamic filter repository factory or implementation. Sorting applies to direct repository overloads accepting `ConditionalStatement` with `Sort` or `Pageable`, including entity graphs. It does not replace record authorization or mandatory restrictions.
+Repository implementations also default to `DECLARED` outside MVC, even without policy injection. No setter, `@SortPolicy`, per-endpoint flag or second list of attributes is needed for the common case. The servlet integration remains opt-in; this default introduces no Spring Boot autodiscovery or new dependency. Sorting applies to direct repository overloads accepting `ConditionalStatement` with `Sort` or `Pageable`, including entity graphs. It does not replace record authorization or mandatory restrictions.
 
 For an entity `Product` with scalar attributes `price`, `name` and `description`, the search contract needs no second list of sortable attributes:
 
@@ -59,7 +60,7 @@ Hidden filters, constants and `Decorated` filters contribute no automatic sort n
 
 `ModIgnorePath` does not prohibit sorting a real eligible JPA path. Dynamic and custom operations follow the same structural discovery rules. Request values, dynamic opcodes, synthetic `From`/`To` aliases, value transformers and predicate modifiers such as `ModIgnoreCase` do not change the sort catalog or implicitly modify orders. Only declarations actually used by the search contract contribute, including supported interfaces, meta-annotations and `From` sources. Entity attributes alone do not publish new names.
 
-Conflicting accepted names with different destinations are server configuration errors, detected during warmup when context is available, or on first repository use for later contracts. Invalid requested names receive the specific HTTP 400 response without internal omission reasons. Singular JPA navigation, property access and special mappings are supported. The global default change belongs to a later increment.
+Conflicting accepted names with different destinations are server configuration errors, detected during warmup when context is available, or on first repository use for later contracts. Invalid requested names receive HTTP 400 with `ProblemDetail`, code `INVALID_SORT` and `rejectedNames`, without hidden fields, exclusions, SQL or internal omission reasons. The handler catches only `InvalidSortException`, not server configuration errors, and requires no BASA dependency. To replace it, register a bean extending `InvalidSortExceptionHandler` and override `handleInvalidSort`. Singular JPA navigation, property access and special mappings are supported.
 
 ### Optional sort exceptions
 
@@ -123,7 +124,6 @@ import com.runestone.dynafilter.core.generator.ConditionalStatement;
 import com.runestone.dynafilter.core.generator.SortContract;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.operation.types.Equals;
-import com.runestone.dynafilter.modules.jpa.api.JpaSortPolicy;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
@@ -136,7 +136,6 @@ var statement = ConditionalStatement.builder()
                 Equals.class, new Object[]{"alice"}))
         .build();
 
-repository.setSortPolicy(JpaSortPolicy.DECLARED);
 var page = repository.findAll(statement, PageRequest.of(0, 20, Sort.by("since")));
 ```
 
@@ -167,11 +166,99 @@ internal conditions. Direct repository overloads taking `ConditionalStatement` a
 same catalog. Converted Specifications, fluent callbacks, inherited APIs without
 `ConditionalStatement`, and internal `query.orderBy` calls are not intercepted.
 
-This increment keeps the existing `LEGACY` default. Select `DECLARED` through the
-existing shared JPA policy configuration; the explicit setter above shows direct
-repository use. Programmatic paths use the same metamodel validation as declarative
+Programmatic paths use the same metamodel validation as declarative
 paths, including singular navigation, embeddables, inherited attributes and property
 access. Collections, binary attributes, LOBs and non-scalar terminals remain
 ineligible. Structural
 eligibility does not guarantee portable ordering semantics, indexing, or query cost
 across databases.
+
+### Sort associations and persistence contexts
+
+One search contract and one `Pageable` or `Sort` argument associate automatically.
+If the search type already identifies the entity, no extra root declaration is needed;
+otherwise use `@FilterTarget(Product.class)` on the search contract or its parameter.
+No sort context is required for a contract without associated ordering.
+
+With multiple search or ordering arguments, match each pair using Spring's `@Qualifier`:
+
+```java
+Page<Product> products(@Qualifier("products") @ConjunctionFrom(ProductSearch.class) ConditionalStatement statement,
+                       @Qualifier("products") Pageable pageable) {
+    return repository.findAll(statement, pageable);
+}
+```
+
+With the standard parser this pair uses `products_sort`, for example
+`?products_sort=priceMax,desc&products_sort=name,asc`. Repeated parameters preserve
+precedence. Names and delimiters in OpenAPI follow the configured Spring Data resolver,
+including qualifiers. `x-sort-names` lists property names, not the complete sort grammar.
+Unresolved or duplicate associations are server configuration errors, never a union
+of catalogs. MVC still uses the Spring Data parser; validation occurs at the repository,
+not in a second MVC parser or validator.
+
+The JPA context selects the single open persistence unit managing the declared root.
+If several units manage that entity, provide a `JpaSortPersistenceUnitResolver` bean
+returning the registered `EntityManagerFactory` for each contract parameter. This
+selects metadata for warmup and documentation, not repository dispatch. Missing roots,
+missing units or unresolved ambiguity fail as server configuration errors rather than
+publishing an approximate catalog. Effective validation is cached per contract, entity
+and factory identity; closed units and context destruction release those caches.
+
+### Sorting migration and API coverage
+
+The default change is intentionally incompatible. Names previously forwarded to
+Spring Data now fail unless the effective catalog publishes them. Missing or empty
+catalogs reject ordered requests; unsorted queries still work without one. Internal
+conditions and authorization restrictions never supply implicit permissions.
+
+For temporary compatibility, choose legacy once for the application:
+
+```java
+@EnableDynamicFilterServletConfiguration(sortPolicy = JpaSortPolicy.LEGACY)
+class FilterConfiguration {
+}
+```
+
+The same `JpaSortPolicy` bean controls repository wiring, warmup and OpenAPI.
+A consumer-provided bean overrides the annotation's default. Outside servlet integration,
+the existing `DynamicFilterJpaRepositoryBeanPostProcessor` can consume a global
+`JpaSortPolicy.LEGACY` bean. For manually constructed repositories, apply the shared
+policy through `repository.setSortPolicy(JpaSortPolicy.LEGACY)` during application
+wiring, not in managers or per request. Omitting a selection never means legacy.
+
+Legacy preserves the original permissive translation: only the first parameter and
+first path of a filter are considered, the first translatable mapping wins, and
+unknown names pass through to Spring Data. It does not enforce a catalog or advertise
+a restrictive OpenAPI list. Both modes preserve sorted `Pageable.unpaged` requests.
+
+Restrictive validation covers all six direct `findAll` overloads whose first argument
+is `ConditionalStatement` and whose second argument is `Sort` or `Pageable`: without
+a graph, with a graph name, and with an explicit graph type plus name. This includes
+convenience graph overloads and sorted unpaged requests. All orders are validated
+before content or count SQL; unknown names, expressions and `JpaSort.unsafe` fail
+without partial execution. Direction, precedence, ignore-case and provider-supported
+options remain intact. Criteria null precedence remains unsupported. No default sort,
+id tie-breaker or page-size limit is added.
+
+Converted Specifications, fluent callbacks, inherited APIs without a statement and
+internal `query.orderBy` calls do not receive this sort validation. Existing mandatory
+scope guarantees still apply when those APIs consume the scoped statement or its
+converted Specification. Sorting never replaces authorization for content or count.
+
+JPA eligibility permits singular to-one navigation, embeddable scalar leaves,
+inherited attributes and property access. BASIC values and JPA converters need not
+implement `Comparable`. Provider-recognized `@Formula` and `@JoinFormula` mappings
+follow the same rules. Collections, plural traversals, binary attributes, LOBs and
+entity or embeddable terminals are not eligible. Structural eligibility does not
+promise portable SQL ordering, collation, index use or cost across databases.
+
+`StatementWrapper` remains a record, now with the fourth component `SortContract
+sortContract`. Direct construction must supply that argument; `null` becomes
+`SortContract.EMPTY`, which does not authorize sorting. The old three-argument
+constructor is not retained. Recompile direct consumers and update record
+deconstruction patterns, reflected record components and constructor lookups.
+Generated `equals`, `hashCode` and `toString` now include the sort contract, so
+wrappers with different contracts are not equal. Other compatibility commitments
+remain, including the existing two-argument `DynaFilterOperationCustomizer`
+constructor used by previously compiled framework clients.

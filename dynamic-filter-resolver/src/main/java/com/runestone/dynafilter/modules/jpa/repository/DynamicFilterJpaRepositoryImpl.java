@@ -64,7 +64,7 @@ public class DynamicFilterJpaRepositoryImpl<T, I> extends SimpleJpaRepository<T,
 
     private final EntityManager em;
     private DynamicFilterResolver<Specification<T>> dynamicFilterResolver;
-    private JpaSortPolicy sortPolicy = JpaSortPolicy.LEGACY;
+    private JpaSortPolicy sortPolicy = JpaSortPolicy.DECLARED;
     private final JpaSortCatalog sortCatalog;
 
     public DynamicFilterJpaRepositoryImpl(JpaEntityInformation<T, ?> entityInformation, EntityManager em) {

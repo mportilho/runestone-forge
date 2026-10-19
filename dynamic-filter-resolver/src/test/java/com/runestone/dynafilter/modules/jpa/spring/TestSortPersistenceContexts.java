@@ -169,7 +169,6 @@ class TestSortPersistenceContexts {
                     JpaEntityInformationSupport.getEntityInformation(UnitRecord.class, em), em);
             repository.setDynamicFilterResolver((com.runestone.dynafilter.core.resolver.DynamicFilterResolver)
                     new SpecificationDynamicFilterResolver(operations));
-            repository.setSortPolicy(JpaSortPolicy.DECLARED);
             em.getTransaction().begin();
             em.persist(new UnitRecord(1L, "Zoe"));
             em.persist(new UnitRecord(2L, "Alice"));
@@ -243,7 +242,7 @@ class TestSortPersistenceContexts {
     }
 
     @Configuration(proxyBeanMethods = false)
-    @EnableDynamicFilterServletConfiguration(sortPolicy = JpaSortPolicy.DECLARED)
+    @EnableDynamicFilterServletConfiguration
     static class ServletConfiguration {
     }
 }

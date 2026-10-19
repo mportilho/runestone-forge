@@ -49,8 +49,10 @@ import java.util.function.Function;
  * their existing query compatibility and pagination behavior still apply. Calls bypassing that input are not scoped
  * automatically, and callers must not mutate shared filter values between content and count execution.
  *
- * <p>Statement-based sort/page overloads translate declared request aliases. Converted specifications and fluent-query
- * callbacks use Spring Data entity paths for sorting instead.
+ * <p>Statement-based sort/page overloads validate and translate against the effective sort catalog by default.
+ * Ordered requests without a catalog fail closed; unsorted queries need no catalog. The permissive translation
+ * requires an explicit application-wide {@link JpaSortPolicy#LEGACY} selection. Converted specifications and
+ * fluent-query callbacks use Spring Data entity paths without this sort validation.
  *
  * @param <T> Entity type
  * @param <I> Entity ID type

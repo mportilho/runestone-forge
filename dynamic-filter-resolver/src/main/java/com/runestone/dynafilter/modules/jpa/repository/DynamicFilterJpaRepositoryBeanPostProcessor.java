@@ -55,7 +55,7 @@ public class DynamicFilterJpaRepositoryBeanPostProcessor implements BeanPostProc
             ((DynamicFilterJpaRepository) bean).setDynamicFilterResolver(dynamicFilterResolver);
             if (beanFactory != null) {
                 ((DynamicFilterJpaRepository) bean).setSortPolicy(
-                        beanFactory.getBeanProvider(JpaSortPolicy.class).getIfAvailable(() -> JpaSortPolicy.LEGACY));
+                        beanFactory.getBeanProvider(JpaSortPolicy.class).getIfAvailable(() -> JpaSortPolicy.DECLARED));
             }
         }
         return bean;

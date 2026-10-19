@@ -376,7 +376,6 @@ class TestJpaSortMappingsIntegration {
         var result = new DynamicFilterJpaRepositoryImpl<T, Long>(JpaEntityInformationSupport.getEntityInformation(entity, entityManager), entityManager);
         result.setDynamicFilterResolver((com.runestone.dynafilter.core.resolver.DynamicFilterResolver)
                 new SpecificationDynamicFilterResolver(new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard())));
-        result.setSortPolicy(JpaSortPolicy.DECLARED);
         return result;
     }
 
@@ -613,7 +612,7 @@ class TestJpaSortMappingsIntegration {
     }
 
     @Configuration(proxyBeanMethods = false)
-    @EnableDynamicFilterServletConfiguration(sortPolicy = JpaSortPolicy.DECLARED)
+    @EnableDynamicFilterServletConfiguration
     static class ServletConfiguration {
     }
 

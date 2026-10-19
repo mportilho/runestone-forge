@@ -35,6 +35,8 @@ import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -52,6 +54,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.Map;
 import java.util.List;
 import java.util.function.Function;
+import java.util.stream.Stream;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -76,7 +79,6 @@ class TestDeclaredSortRepositoryIntegration {
                 new SpecificationDynamicFilterResolver(new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard(), List.of(
                         registry -> registry.register(NameMatch.class, FilterOperationMetadata.stringValue(), context ->
                                 (root, query, builder) -> builder.equal(root.get("name"), context.filterData().values()[0]))))));
-        repository.setSortPolicy(JpaSortPolicy.DECLARED);
         repository.deleteAll();
         save("Zoe");
         save("Alice");
@@ -302,6 +304,74 @@ class TestDeclaredSortRepositoryIntegration {
     }
 
     @Test
+    void repositoryWiringWithoutAPolicyBeanKeepsTheRestrictiveDefault() {
+        var processor = new DynamicFilterJpaRepositoryBeanPostProcessor(new SpecificationDynamicFilterResolver(
+                new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard())));
+        processor.setBeanFactory(new org.springframework.beans.factory.support.DefaultListableBeanFactory());
+        processor.postProcessAfterInitialization(repository, "people");
+
+        assertThat(repository.findAll(statement(Search.class), Sort.by("query"))).extracting(Person::getName)
+                .containsExactly("Alice", "Bob", "Zoe");
+        assertThatThrownBy(() -> repository.findAll(ConditionalStatement.builder().build(), Sort.by("name")))
+                .isInstanceOf(InvalidSortException.class);
+    }
+
+    @Test
+    void repositoryWiringUsesTheExplicitGlobalLegacyPolicy() {
+        var processor = new DynamicFilterJpaRepositoryBeanPostProcessor(new SpecificationDynamicFilterResolver(
+                new JpaFilterOperationService(DefaultRuntimeDataConversionService.standard())));
+        var beans = new org.springframework.beans.factory.support.DefaultListableBeanFactory();
+        beans.registerSingleton("policy", JpaSortPolicy.LEGACY);
+        processor.setBeanFactory(beans);
+        processor.postProcessAfterInitialization(repository, "people");
+
+        assertThat(repository.findAll(statement(LegacySearch.class), Sort.by("compound"))).extracting(Person::getName)
+                .containsExactly("Alice", "Bob", "Zoe");
+        assertThat(repository.findAll(ConditionalStatement.builder().build(), Sort.by("name"))).extracting(Person::getName)
+                .containsExactly("Alice", "Bob", "Zoe");
+    }
+
+    @ParameterizedTest(name = "sort overload: {0}")
+    @MethodSource("graphOverloads")
+    void directSortOverloadsPreserveOrderOptionsPrecedenceAndGraphsByDefault(String overload,
+                                                                           EntityGraph.EntityGraphType graphType) throws Exception {
+        save("alice");
+        var statement = statement(IntervalSearch.class);
+        var sort = Sort.by(Sort.Order.desc("heightMax"), Sort.Order.asc("name").ignoreCase());
+        var results = graphType == null ? repository.findAll(statement, sort)
+                : graphType == EntityGraph.EntityGraphType.FETCH ? repository.findAll(statement, sort, GRAPH)
+                : repository.findAll(statement, sort, graphType, GRAPH);
+
+        assertThat(results).extracting(Person::getName).containsExactly("alice", "Zoe", "Bob", "Alice");
+    }
+
+    @ParameterizedTest(name = "pageable overload: {0}")
+    @MethodSource("graphOverloads")
+    void directPageableOverloadsPreserveOrderOptionsPrecedencePaginationAndGraphsByDefault(String overload,
+                                                                                         EntityGraph.EntityGraphType graphType) throws Exception {
+        save("alice");
+        var statement = statement(IntervalSearch.class);
+        var sort = Sort.by(Sort.Order.desc("heightMax"), Sort.Order.asc("name").ignoreCase());
+        var translated = Sort.by(Sort.Order.desc("height"), Sort.Order.asc("name").ignoreCase());
+        var pageable = PageRequest.of(1, 1, sort);
+        var page = graphType == null ? repository.findAll(statement, pageable)
+                : graphType == EntityGraph.EntityGraphType.FETCH ? repository.findAll(statement, pageable, GRAPH)
+                : repository.findAll(statement, pageable, graphType, GRAPH);
+
+        assertThat(page.getContent()).extracting(Person::getName).containsExactly("Zoe");
+        assertThat(page.getTotalElements()).isEqualTo(4);
+        assertThat(page.getNumber()).isEqualTo(1);
+        assertThat(page.getSize()).isEqualTo(1);
+        assertThat(page.getSort()).isEqualTo(translated);
+    }
+
+    private static Stream<Arguments> graphOverloads() {
+        return Stream.of(Arguments.of("without graph", null),
+                Arguments.of("graph name", EntityGraph.EntityGraphType.FETCH),
+                Arguments.of("explicit graph type", EntityGraph.EntityGraphType.LOAD));
+    }
+
+    @Test
     void everyDirectOverloadRejectsAllInvalidOrdersBeforeSqlIncludingUnsafeKnownNames() {
         var statement = statement(Search.class);
         List<Function<Sort, ?>> calls = List.of(
@@ -312,7 +382,8 @@ class TestDeclaredSortRepositoryIntegration {
                 sort -> repository.findAll(statement, PageRequest.of(0, 1, sort), GRAPH),
                 sort -> repository.findAll(statement, PageRequest.of(0, 1, sort), EntityGraph.EntityGraphType.LOAD, GRAPH),
                 sort -> repository.findAll(statement, Pageable.unpaged(sort)),
-                sort -> repository.findAll(statement, Pageable.unpaged(sort), GRAPH));
+                sort -> repository.findAll(statement, Pageable.unpaged(sort), GRAPH),
+                sort -> repository.findAll(statement, Pageable.unpaged(sort), EntityGraph.EntityGraphType.LOAD, GRAPH));
         var statistics = entityManager.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
         statistics.clear();
 
@@ -493,7 +564,7 @@ class TestDeclaredSortRepositoryIntegration {
     }
 
     @Conjunction(@Filter(path = "height", parameters = {"heightMin", "heightMax"}, operation = Between.class))
-    interface IntervalSearch {
+    interface IntervalSearch extends Search {
     }
 
     @Conjunction(@Filter(path = {"id", "name"}, parameters = "term", operation = NameMatch.class))

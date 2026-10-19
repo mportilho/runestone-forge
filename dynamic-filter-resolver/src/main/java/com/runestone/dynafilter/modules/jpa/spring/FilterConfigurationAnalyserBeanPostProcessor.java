@@ -86,7 +86,8 @@ public class FilterConfigurationAnalyserBeanPostProcessor implements BeanFactory
     }
 
     private Map<Parameter, ResolvedJpaSortContract> resolveSortContexts(Method method) {
-        if (beanFactory == null || beanFactory.getBeanProvider(JpaSortPolicy.class).getIfAvailable() != JpaSortPolicy.DECLARED) {
+        if (beanFactory == null || beanFactory.getBeanProvider(JpaSortPolicy.class)
+                .getIfAvailable(() -> JpaSortPolicy.DECLARED) != JpaSortPolicy.DECLARED) {
             return Map.of();
         }
         Map<Parameter, ResolvedJpaSortContract> contexts = new HashMap<>();

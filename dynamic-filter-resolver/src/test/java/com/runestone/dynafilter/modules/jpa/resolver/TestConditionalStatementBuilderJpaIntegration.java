@@ -2,6 +2,8 @@ package com.runestone.dynafilter.modules.jpa.resolver;
 
 import com.runestone.converters.impl.runtime.DefaultRuntimeDataConversionService;
 import com.runestone.dynafilter.core.generator.ConditionalStatement;
+import com.runestone.dynafilter.core.generator.SortContract;
+import com.runestone.dynafilter.core.exceptions.InvalidSortException;
 import com.runestone.dynafilter.core.generator.StatementWrapper;
 import com.runestone.dynafilter.core.model.FilterData;
 import com.runestone.dynafilter.core.model.FilterRequestData;
@@ -30,7 +32,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -82,7 +83,8 @@ final class TestConditionalStatementBuilderJpaIntegration {
 
     @Test
     void selectsTheRequestedPeriodAndOwnerThroughExistingRepositoryEntrypoints() {
-        var statement = ConditionalStatement.builder().and(period()).restrict(owner("alice")).build();
+        var statement = ConditionalStatement.builder().sortContract(SortContract.builder().include("registerDate").build())
+                .and(period()).restrict(owner("alice")).build();
 
         assertThat(repository.findAll(statement)).extracting(Person::getId)
                 .containsExactlyInAnyOrder(aliceRecent.getId(), aliceLater.getId());
@@ -173,7 +175,8 @@ final class TestConditionalStatementBuilderJpaIntegration {
     void preservesDeclaredSortAliasesWithoutRegisteringProgrammaticParameterNames(String undeclared) {
         var alias = new FilterRequestData(new String[]{"registerDate"}, new String[]{"declaredDate"}, LocalDateTime.class,
                 GreaterOrEquals.class, "false", null, null, null, false, false, List.of(), null);
-        var source = new ConditionalStatement(new StatementWrapper(new NoOpStatement(), Map.of(), List.of(alias), null), null);
+        var source = new ConditionalStatement(new StatementWrapper(new NoOpStatement(), Map.of(), List.of(alias),
+                SortContract.builder().include("registerDate", "declaredDate").build()), null);
         var statement = ConditionalStatement.builder(source)
                 .and(filter("registerDate", "applicationDate", LocalDateTime.class, GreaterOrEquals.class, SINCE))
                 .restrict(owner("alice"))
@@ -182,7 +185,7 @@ final class TestConditionalStatementBuilderJpaIntegration {
         assertThat(repository.findAll(statement, Sort.by(Sort.Direction.DESC, "declaredDate"))).extracting(Person::getId)
                 .containsExactly(aliceFuture.getId(), aliceLater.getId(), aliceRecent.getId());
         assertThatThrownBy(() -> repository.findAll(statement, Sort.by(undeclared)))
-                .isInstanceOf(PropertyReferenceException.class).hasMessageContaining(undeclared);
+                .isInstanceOf(InvalidSortException.class).hasMessageContaining(undeclared);
     }
 
     private static AbstractStatement period() {

@@ -58,7 +58,7 @@ import java.util.stream.Stream;
 public class TestDynamicFilterServletAutoConfiguration {
 
     @Test
-    void defaultPolicyRemainsLegacyDuringTheFirstIncrementAndTheErrorHandlerCanBeReplaced() {
+    void defaultPolicyIsRestrictiveAndTheErrorHandlerCanBeReplaced() {
         var replacement = new InvalidSortExceptionHandler();
         new ApplicationContextRunner()
                 .withBean("consumerSortHandler", InvalidSortExceptionHandler.class, () -> replacement)
@@ -66,10 +66,41 @@ public class TestDynamicFilterServletAutoConfiguration {
                 .run(context -> {
                     Assertions.assertThat(context).hasSingleBean(InvalidSortExceptionHandler.class);
                     Assertions.assertThat(context.getBean(InvalidSortExceptionHandler.class)).isSameAs(replacement);
-                    Assertions.assertThat(context.getBean(JpaSortPolicy.class)).isEqualTo(JpaSortPolicy.LEGACY);
+                    Assertions.assertThat(context.getBean(JpaSortPolicy.class)).isEqualTo(JpaSortPolicy.DECLARED);
                     Assertions.assertThat(context.getBeanFactory().getBeanDefinition("jpaSortContext").getDestroyMethodName())
                             .isEqualTo("clearCache");
                 });
+    }
+
+    @Test
+    void servletIntegrationRemainsOptIn() {
+        new ApplicationContextRunner().run(context -> {
+            Assertions.assertThat(context).doesNotHaveBean(JpaSortPolicy.class);
+            Assertions.assertThat(context).doesNotHaveBean(InvalidSortExceptionHandler.class);
+            Assertions.assertThat(context).doesNotHaveBean(AnnotationStatementGenerator.class);
+        });
+    }
+
+    @Test
+    void enablingAnnotationSelectsLegacyOnlyWhenExplicitlyRequested() {
+        new ApplicationContextRunner().withUserConfiguration(LegacyConfiguration.class).run(context ->
+                Assertions.assertThat(context.getBean(JpaSortPolicy.class)).isEqualTo(JpaSortPolicy.LEGACY));
+    }
+
+    @Test
+    void aConsumerPolicyBeanOverridesTheAnnotationDefault() {
+        new ApplicationContextRunner()
+                .withBean(JpaSortPolicy.class, () -> JpaSortPolicy.LEGACY)
+                .withUserConfiguration(DefaultConfiguration.class)
+                .run(context -> Assertions.assertThat(context.getBean(JpaSortPolicy.class)).isEqualTo(JpaSortPolicy.LEGACY));
+    }
+
+    @EnableDynamicFilterServletConfiguration
+    static class DefaultConfiguration {
+    }
+
+    @EnableDynamicFilterServletConfiguration(sortPolicy = JpaSortPolicy.LEGACY)
+    static class LegacyConfiguration {
     }
 
     @Test

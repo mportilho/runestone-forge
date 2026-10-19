@@ -162,7 +162,8 @@ public class DynaFilterOperationCustomizer implements OperationCustomizer, Param
     }
 
     private boolean declaredSortIntegration() {
-        return beanFactory != null && beanFactory.getBeanProvider(JpaSortPolicy.class).getIfAvailable() == JpaSortPolicy.DECLARED;
+        return beanFactory != null && beanFactory.getBeanProvider(JpaSortPolicy.class)
+                .getIfAvailable(() -> JpaSortPolicy.DECLARED) == JpaSortPolicy.DECLARED;
     }
 
     private static boolean explicitQueryParameter(HandlerMethod handler, String name) {
